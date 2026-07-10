@@ -34,10 +34,7 @@ fun ChromaAppScreen() {
             modifier = Modifier
                 .fillMaxSize()
                 .background(colors.gridLine) // TODO: implement the actual grid pattern later
-                .haze(
-                    state = hazeState,
-                    style = HazeStyle(backgroundColor = Color.Transparent, blurRadius = 30.dp)
-                )
+                .haze(state = hazeState)
         )
         
         Column(modifier = Modifier.fillMaxSize()) {
@@ -86,7 +83,7 @@ fun TopAppBar(hazeState: HazeState) {
             .height(64.dp)
             .hazeChild(
                 state = hazeState,
-                style = HazeStyle(backgroundColor = colors.glassBg, blurRadius = 30.dp)
+                style = HazeStyle(backgroundColor = colors.glassBg, tint = null, blurRadius = 30.dp)
             )
             .background(colors.glassBg, RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp))
             .border(1.dp, colors.glassBorder, RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp))
@@ -183,7 +180,7 @@ fun LeftPanel(modifier: Modifier = Modifier, hazeState: HazeState) {
         modifier = modifier
             .hazeChild(
                 state = hazeState,
-                style = HazeStyle(backgroundColor = colors.glassBg, blurRadius = 30.dp)
+                style = HazeStyle(backgroundColor = colors.glassBg, tint = null, blurRadius = 30.dp)
             )
             .background(colors.glassBg, RoundedCornerShape(16.dp))
             .border(1.dp, colors.glassBorder, RoundedCornerShape(16.dp))
@@ -274,7 +271,7 @@ fun CenterCanvas(modifier: Modifier = Modifier, hazeState: HazeState) {
         modifier = modifier
             .hazeChild(
                 state = hazeState,
-                style = HazeStyle(backgroundColor = colors.glassBg, blurRadius = 30.dp)
+                style = HazeStyle(backgroundColor = colors.glassBg, tint = null, blurRadius = 30.dp)
             )
             .background(colors.glassBg, RoundedCornerShape(16.dp))
             .border(1.dp, colors.glassBorder, RoundedCornerShape(16.dp))
@@ -308,7 +305,7 @@ fun RightPanel(modifier: Modifier = Modifier, hazeState: HazeState) {
         modifier = modifier
             .hazeChild(
                 state = hazeState,
-                style = HazeStyle(backgroundColor = colors.glassBg, blurRadius = 30.dp)
+                style = HazeStyle(backgroundColor = colors.glassBg, tint = null, blurRadius = 30.dp)
             )
             .background(colors.glassBg, RoundedCornerShape(16.dp))
             .border(1.dp, colors.glassBorder, RoundedCornerShape(16.dp))
