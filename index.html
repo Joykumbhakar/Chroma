@@ -1,0 +1,2849 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Chroma Studio</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Fonts & Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <style>
+        /* CSS VARIABLES */
+        :root {
+            --bg-color: #f8fafc;
+            --grid-line: rgba(0, 0, 0, 0.06);
+            
+            --glass-bg: rgba(255, 255, 255, 0.55);
+            --glass-bg-hover: rgba(255, 255, 255, 0.8);
+            --glass-border: rgba(255, 255, 255, 0.6);
+            --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05);
+            --glass-blur: blur(16px);
+            
+            --primary: #4F46E5;
+            --primary-hover: #4338CA;
+            --on-primary: #FFFFFF;
+            
+            --text-main: #111827;
+            --text-muted: #4B5563;
+            
+            --success: #10B981;
+            --error: #EF4444;
+            --warning: #F59E0B;
+
+            --radius-sm: 8px;
+            --radius-md: 16px;
+            --radius-lg: 24px;
+            --radius-pill: 9999px;
+            
+            --font: 'Inter', system-ui, sans-serif;
+            --mono: 'JetBrains Mono', monospace;
+            
+            --transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            --drawer-pb: 10vh;
+        }
+
+        body.dark {
+            --bg-color: #0d1117;
+            --grid-line: rgba(255, 255, 255, 0.05);
+            
+            --glass-bg: rgba(25, 28, 41, 0.55);
+            --glass-bg-hover: rgba(40, 44, 62, 0.8);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            
+            --primary: #818CF8;
+            --primary-hover: #6366F1;
+            --on-primary: #FFFFFF;
+            
+            --text-main: #F9FAFB;
+            --text-muted: #9CA3AF;
+        }
+
+        /* GLOBALS & SCROLLBAR */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25); }
+        body.dark ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); }
+        body.dark ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; height: 100dvh; overflow: hidden; }
+
+        body {
+            font-family: var(--font); color: var(--text-main); background-color: var(--bg-color);
+            transition: background-color 0.4s ease; line-height: 1.5; -webkit-font-smoothing: antialiased; user-select: none;
+        }
+
+        *:focus { outline: none; }
+        input[type="text"], input[type="number"], select { user-select: text; }
+        .flex-between { display: flex; align-items: center; justify-content: space-between; }
+
+        .grid-background {
+            position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: -1;
+            background-image: linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+                              linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+            background-size: 20px 30px;
+            mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 60%, transparent 100%);
+            -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 60%, transparent 100%);
+            pointer-events: none;
+        }
+
+        .glass-panel {
+            background: var(--glass-bg); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border); box-shadow: var(--glass-shadow);
+        }
+
+        /* HEADER & BUTTONS */
+        .app-bar {
+            height: 64px; display: flex; align-items: center; justify-content: space-between;
+            padding: 0 24px; flex-shrink: 0; z-index: 150; position: relative;
+            border-bottom-left-radius: var(--radius-md); border-bottom-right-radius: var(--radius-md);
+            border-top: none; border-left: none; border-right: none;
+        }
+
+        .btn-icon {
+            width: 36px; height: 36px; border-radius: 50%; border: 1px solid transparent; background: transparent;
+            color: var(--text-main); font-size: 18px; display: flex; align-items: center; justify-content: center;
+            cursor: pointer; transition: background-color 0.2s, border-color 0.2s;
+        }
+        .btn-icon:hover:not(:disabled) { background: var(--glass-bg-hover); border-color: var(--glass-border); }
+        .btn-icon:disabled { opacity: 0.3; cursor: not-allowed; }
+
+        .hc-pill {
+            padding: 6px 14px; border-radius: var(--radius-pill); font-size: 0.75rem; font-weight: 600; color: var(--text-muted);
+            cursor: pointer; transition: var(--transition); border: none; background: transparent;
+        }
+        .hc-pill.active { background: var(--primary); color: white; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4); }
+        .hc-pill:hover:not(.active) { color: var(--text-main); background: var(--glass-bg-hover); }
+
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+            padding: 8px 16px; font-size: 0.85rem; font-weight: 600; font-family: inherit;
+            border-radius: var(--radius-sm); cursor: pointer; border: 1px solid transparent;
+            transition: var(--transition); user-select: none;
+        }
+        .btn-primary { background: var(--primary); color: var(--on-primary); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3); }
+        .btn-primary:hover:not(:disabled) { background: var(--primary-hover); transform: translateY(-1px); }
+        .btn-ghost { background: var(--glass-bg); color: var(--text-main); border-color: var(--glass-border); }
+        .btn-ghost:hover:not(:disabled) { background: var(--glass-bg-hover); border-color: var(--text-muted); transform: translateY(-1px); }
+
+        /* INPUTS */
+        .field-label { display: block; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 6px; }
+        
+        .flat-input, .flat-select {
+            width: 100%; padding: 10px 12px; background: var(--glass-bg); color: var(--text-main);
+            font-family: var(--mono); font-size: 0.8rem; font-weight: 500;
+            border: 1px solid var(--glass-border); border-radius: var(--radius-sm);
+            transition: var(--transition); outline: none; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+        }
+        .flat-input:focus, .flat-select:focus { border-color: var(--primary); background: var(--glass-bg-hover); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15); }
+        .flat-select { font-family: var(--font); appearance: none; cursor: pointer; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2364748b' viewBox='0 0 256 256'%3E%3Cpath d='M213.66,101.66l-80,80a8,8,0,0,1-11.32,0l-80-80A8,8,0,0,1,53.66,90.34L128,164.69l74.34-74.35a8,8,0,0,1,11.32,11.32Z'%3E%3C/path%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
+        body.dark .flat-select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2394a3b8' viewBox='0 0 256 256'%3E%3Cpath d='M213.66,101.66l-80,80a8,8,0,0,1-11.32,0l-80-80A8,8,0,0,1,53.66,90.34L128,164.69l74.34-74.35a8,8,0,0,1,11.32,11.32Z'%3E%3C/path%3E%3C/svg%3E"); }
+
+        .range-wrap { position: relative; height: 20px; display: flex; align-items: center; width: 100%; }
+        input[type=range].range { -webkit-appearance: none; width: 100%; background: transparent; height: 32px; margin: 0; cursor: pointer; }
+        input[type=range].range::-webkit-slider-runnable-track { width: 100%; height: 6px; background: rgba(0,0,0,0.15); border-radius: var(--radius-pill); }
+        body.dark input[type=range].range::-webkit-slider-runnable-track { background: rgba(255,255,255,0.2); }
+        input[type=range].range::-webkit-slider-thumb {
+            height: 20px; width: 20px; border-radius: 50%; background: var(--primary);
+            -webkit-appearance: none; margin-top: -7px; transition: transform 0.1s, box-shadow 0.1s;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2); border: 2.5px solid white;
+        }
+        input[type=range].range:active::-webkit-slider-thumb { transform: scale(1.2); box-shadow: 0 0 0 4px rgba(59,130,246,0.3); }
+
+        /* Uiverse Toggle Switch */
+        .switch-container { display: flex; align-items: center; justify-content: space-between; padding: 12px 0;}
+        .switch {
+            --button-width: 36px;
+            --button-height: 20px;
+            --toggle-diameter: 14px;
+            --button-toggle-offset: calc((var(--button-height) - var(--toggle-diameter)) / 2);
+            --toggle-shadow-offset: 5px;
+            --toggle-wider: 22px;
+            --color-grey: rgba(0,0,0,0.15);
+            --color-green: var(--primary);
+            display: inline-block; cursor: pointer;
+        }
+        body.dark .switch { --color-grey: rgba(255,255,255,0.2); }
+        .slider {
+            display: inline-block; width: var(--button-width); height: var(--button-height);
+            background-color: var(--color-grey); border-radius: calc(var(--button-height) / 2);
+            position: relative; transition: 0.3s all ease-in-out;
+        }
+        .slider::after {
+            content: ""; display: inline-block; width: var(--toggle-diameter); height: var(--toggle-diameter);
+            background-color: #fff; border-radius: calc(var(--toggle-diameter) / 2); position: absolute;
+            top: var(--button-toggle-offset); transform: translateX(var(--button-toggle-offset));
+            box-shadow: var(--toggle-shadow-offset) 0 calc(var(--toggle-shadow-offset) * 4) rgba(0, 0, 0, 0.1);
+            transition: 0.3s all ease-in-out;
+        }
+        .switch input[type="checkbox"]:checked + .slider { background-color: var(--color-green); }
+        .switch input[type="checkbox"]:checked + .slider::after {
+            transform: translateX(calc(var(--button-width) - var(--toggle-diameter) - var(--button-toggle-offset)));
+            box-shadow: calc(var(--toggle-shadow-offset) * -1) 0 calc(var(--toggle-shadow-offset) * 4) rgba(0, 0, 0, 0.1);
+        }
+        .switch input[type="checkbox"] { display: none; }
+        .switch input[type="checkbox"]:active + .slider::after { width: var(--toggle-wider); }
+        .switch input[type="checkbox"]:checked:active + .slider::after { transform: translateX(calc(var(--button-width) - var(--toggle-wider) - var(--button-toggle-offset))); }
+
+        /* LAYER CARDS */
+        .layer-card { 
+            transition: opacity 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease; 
+            animation: slideInLayer 0.4s cubic-bezier(0.25, 0.8, 0.25, 1) forwards; transform-origin: top; 
+            will-change: transform; position: relative; background: var(--glass-bg);
+        }
+        @keyframes slideInLayer { from { opacity: 0; transform: translateY(-10px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        
+        .layer-body { display: none; opacity: 0; }
+        .layer-card.expanded .layer-body { display: flex; animation: expandBody 0.4s cubic-bezier(0.25, 0.8, 0.25, 1) forwards; }
+        @keyframes expandBody { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+        .layer-card.expanded { border-color: var(--primary); box-shadow: 0 4px 20px rgba(59, 130, 246, 0.15); transform: scale(1.01); }
+        
+        .layer-card.is-dragging {
+            opacity: 0.6 !important; background: var(--glass-bg-hover);
+            border-color: var(--primary); box-shadow: 0 10px 30px rgba(79, 70, 229, 0.2);
+            z-index: 50; 
+        }
+        .layer-card.is-dragging * { pointer-events: none; }
+        
+        .layer-drag-handle { cursor: grab; padding: 4px; color: var(--text-muted); transition: color 0.2s; display: flex; align-items: center; justify-content: center; margin-right: 4px;}
+        .layer-drag-handle:hover { color: var(--text-main); }
+        .layer-drag-handle:active { cursor: grabbing; }
+
+        .type-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+        .type-btn {
+            display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 4px;
+            background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius-sm);
+            color: var(--text-muted); cursor: pointer; transition: var(--transition);
+            font-size: 0.7rem; font-weight: 600; position: relative; overflow: hidden;
+        }
+        .type-btn.active { background: var(--primary); color: var(--on-primary); border-color: var(--primary); box-shadow: 0 4px 12px rgba(59,130,246,0.25); transform: translateY(-1px); }
+        .type-btn:hover:not(.active) { background: var(--glass-bg-hover); color: var(--text-main); }
+        .type-btn i { font-size: 18px; }
+
+        /* COLOR PICKERS */
+        .sat-val-area {
+            position: relative; cursor: crosshair; border-radius: var(--radius-sm); overflow: hidden;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.05); border: 1px solid var(--glass-border); height: 140px; width: 100%; 
+            touch-action: none; background-color: rgb(255, 0, 0);
+            background-image: linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent);
+        }
+        .sv-thumb {
+            width: 16px; height: 16px; border: 2.5px solid white; border-radius: 50%; position: absolute; transform: translate(-50%, -50%);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.5), 0 0 0 1px rgba(0,0,0,0.2); pointer-events: none; z-index: 10; will-change: left, top;
+        }
+        .slider-track { height: 14px; border-radius: var(--radius-pill); position: relative; cursor: pointer; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1); border: 1px solid var(--glass-border); touch-action: none; }
+        .hue-track { background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00); }
+        .alpha-track-bg { background: repeating-conic-gradient(#cbd5e1 0% 25%, #f8fafc 0% 50%) 0 0 / 10px 10px; border-radius: var(--radius-pill); }
+        body.dark .alpha-track-bg { background: repeating-conic-gradient(#334155 0% 25%, #0f172a 0% 50%) 0 0 / 10px 10px; }
+        .slider-thumb {
+            width: 20px; height: 20px; background: transparent; border: 2.5px solid white; border-radius: 50%;
+            position: absolute; top: 50%; transform: translate(-50%, -50%);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.4); pointer-events: none; z-index: 10; will-change: left;
+        }
+
+        .stops-track-container { position: relative; height: 32px; margin: 10px 0 16px 0; cursor: crosshair; touch-action: none;}
+        .stops-track-bg {
+            width: 100%; height: 100%; border-radius: var(--radius-sm); border: 1px solid var(--glass-border); position: relative; overflow: hidden;
+            background: repeating-conic-gradient(#cbd5e1 0% 25%, #f8fafc 0% 50%) 0 0 / 10px 10px;
+        }
+        body.dark .stops-track-bg { background: repeating-conic-gradient(#334155 0% 25%, #0f172a 0% 50%) 0 0 / 10px 10px; }
+        .stops-track { position: absolute; inset: 0; pointer-events: none; }
+        .stop-thumb {
+            position: absolute; top: -5px; width: 24px; height: 42px; transform: translateX(-50%);
+            cursor: grab; z-index: 10; display: flex; flex-direction: column; align-items: center; touch-action: none; background: transparent; border: none; will-change: left;
+        }
+        .stop-thumb::after { content: ''; position: absolute; top: 0; width: 2px; height: 42px; background: var(--text-main); border-radius: 2px; box-shadow: 0 0 2px rgba(0,0,0,0.5); pointer-events: none;}
+        body.dark .stop-thumb::after { background: white; }
+        .stop-thumb-dot { position: absolute; top: -2px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.4); z-index: 2; pointer-events: none; transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);}
+        .stop-thumb.active .stop-thumb-dot { border-color: var(--primary); transform: scale(1.3); box-shadow: 0 0 0 3px rgba(59,130,246,0.3), 0 2px 4px rgba(0,0,0,0.4); }
+
+        .blob-item {
+            display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+            border-radius: var(--radius-sm); background: var(--glass-bg); border: 1px solid transparent;
+            cursor: pointer; transition: var(--transition); margin-bottom: 6px;
+        }
+        .blob-item:hover { background: var(--glass-bg-hover); border-color: var(--glass-border); transform: translateX(4px); }
+        .blob-item.active { border-color: var(--primary); background: rgba(59, 130, 246, 0.08); box-shadow: inset 3px 0 0 var(--primary); }
+
+        /* CANVAS & OVERLAYS */
+        .canvas-area { background-image: radial-gradient(rgba(0,0,0,0.06) 1px, transparent 1px); background-size: 20px 20px; perspective: 1000px; }
+        body.dark .canvas-area { background-image: radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px); }
+        
+        .layer-node { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; transition: opacity 0.4s ease, transform 0.1s ease-out; }
+        
+        /* WebGL / Filter Overlays */
+        .fx-overlay {
+            position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+            mix-blend-mode: overlay; z-index: 100; transition: opacity 0.3s;
+        }
+        .post-fx-overlay {
+            position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 101; transition: opacity 0.3s; opacity: 0;
+        }
+        .post-fx-halftone {
+            background: radial-gradient(circle, #000 2px, transparent 2.5px);
+            background-size: 8px 8px; mix-blend-mode: overlay; opacity: 0.3;
+        }
+        .post-fx-dither {
+            background-image: repeating-linear-gradient(45deg, rgba(0,0,0,0.1) 25%, transparent 25%, transparent 75%, rgba(0,0,0,0.1) 75%, rgba(0,0,0,0.1)), repeating-linear-gradient(45deg, rgba(0,0,0,0.1) 25%, transparent 25%, transparent 75%, rgba(0,0,0,0.1) 75%, rgba(0,0,0,0.1));
+            background-position: 0 0, 2px 2px; background-size: 4px 4px; mix-blend-mode: multiply; opacity: 0.5;
+        }
+        
+        .text-mask-preview {
+            display: none; font-size: max(80px, 12vw); font-weight: 900; letter-spacing: -0.05em; color: white;
+            background-color: #050505; mix-blend-mode: multiply; position: absolute; z-index: 150;
+            text-align: center; width: 100%; height: 100%; align-items: center; justify-content: center;
+            caret-color: white; pointer-events: auto; outline: none; line-height: 1; transition: all 0.5s ease;
+        }
+        body.dark .text-mask-preview { background-color: #050505; color: white; mix-blend-mode: multiply; }
+        .shape-text .text-mask-preview { display: flex; animation: fadeMaskIn 0.5s ease; }
+        @keyframes fadeMaskIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+
+        .blob-handle-node {
+            position: absolute; width: 24px; height: 24px; border-radius: 50%; transform: translate(-50%,-50%);
+            cursor: grab; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.5), 0 0 0 1px rgba(0,0,0,0.2);
+            z-index: 10; transition: box-shadow 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.2s;
+            touch-action: none; will-change: left, top;
+        }
+        .blob-handle-node:active { cursor: grabbing; transform: translate(-50%,-50%) scale(0.9); }
+        .blob-handle-node.active-handle { box-shadow: 0 0 0 4px var(--primary), 0 4px 12px rgba(0,0,0,0.4); z-index: 20; transform: translate(-50%,-50%) scale(1.15); }
+        .blob-ring-node {
+            position: absolute; border-radius: 50%; border: 1px dashed rgba(0,0,0,0.25);
+            transform: translate(-50%,-50%); pointer-events: none; z-index: 9; transition: border-color 0.3s;
+            will-change: left, top, width, height;
+        }
+        body.dark .blob-ring-node { border-color: rgba(255,255,255,0.25); }
+
+        .code-block-area {
+            background: rgba(0,0,0,0.04); border: 1px solid var(--glass-border); border-radius: var(--radius-sm);
+            padding: 12px; font-family: var(--mono); font-size: 0.75rem; color: var(--text-main); font-weight: 500;
+            white-space: pre-wrap; word-break: break-all; line-height: 1.5; overflow-y: auto;
+        }
+        body.dark .code-block-area { background: rgba(0,0,0,0.25); color: #e2e8f0; }
+
+        /* WORKSPACE & DRAWER */
+        .workspace-area { display: flex; flex-direction: column; overflow: hidden; position: relative; width: 100%; height: 100%; }
+        
+        .left-panel { width: 300px; flex-shrink: 0; display: flex; flex-direction: column; z-index: 10; transition: transform 0.4s ease; }
+        .right-panel { display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden; border-radius: var(--radius-md); z-index: 50; }
+        
+        .panel-header {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            height: auto; padding: 16px; border-bottom: 1px solid var(--glass-border);
+            position: sticky; top: 0; z-index: 10; background: var(--glass-bg); backdrop-filter: var(--glass-blur);
+            border-top-left-radius: var(--radius-md); border-top-right-radius: var(--radius-md);
+            cursor: grab; touch-action: none; transition: background-color 0.3s;
+        }
+        .panel-header:active { cursor: grabbing; background: var(--glass-bg-hover); }
+        .drag-handle-mobile { display: block; width: 48px; height: 6px; border-radius: 3px; background: rgba(0, 0, 0, 0.2); margin-bottom: 12px; box-shadow: inset 0 1px 1px rgba(0,0,0,0.1); }
+        body.dark .drag-handle-mobile { background: rgba(255, 255, 255, 0.3); box-shadow: inset 0 1px 1px rgba(255,255,255,0.1); }
+
+        .panel-body { flex: 1; position: relative; overflow-y: auto; padding-bottom: var(--drawer-pb, 0px); transition: padding-bottom 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); }
+        
+        /* Uiverse Tabs */
+        .tab-container {
+            position: relative; display: flex; flex-direction: row; align-items: flex-start;
+            padding: 2px; background-color: rgba(0,0,0,0.06); border-radius: 24px; width: 264px; margin: 0 auto 12px auto;
+        }
+        body.dark .tab-container { background-color: rgba(255,255,255,0.1); }
+        .tab-indicator {
+            content: ""; width: 130px; height: 28px; background: var(--glass-bg);
+            position: absolute; top: 2px; left: 2px; z-index: 9; border: 0.5px solid rgba(0, 0, 0, 0.04);
+            box-shadow: 0px 3px 8px rgba(0, 0, 0, 0.12), 0px 3px 1px rgba(0, 0, 0, 0.04);
+            border-radius: 24px; transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        body.dark .tab-indicator { background: var(--glass-bg-hover); border-color: rgba(255,255,255,0.1); }
+        .tab-input { width: 130px; height: 28px; position: absolute; z-index: 99; outline: none; opacity: 0; cursor: pointer; margin: 0; padding: 0;}
+        .tab-input.tab--1 { left: 2px; }
+        .tab-input.tab--2 { left: 134px; }
+        .tab_label {
+            width: 130px; height: 28px; position: relative; z-index: 999;
+            display: flex; align-items: center; justify-content: center; border: 0; font-size: 0.75rem; font-weight: 700; opacity: 0.6; color: var(--text-main);
+            cursor: pointer; pointer-events: none; transition: opacity 0.2s;
+        }
+        .tab-input:checked + .tab_label { opacity: 1; }
+        .tab-input.tab--1:checked ~ .tab-indicator { left: 2px; }
+        .tab-input.tab--2:checked ~ .tab-indicator { left: calc(130px + 2px); }
+
+        @media(min-width: 1024px) {
+            .workspace-area { flex-direction: row; padding: 16px; gap: 16px; }
+            .left-panel, .right-panel { height: 100%; }
+            .right-panel { width: 360px; transform: none !important; border-radius: var(--radius-md); }
+            .panel-header { flex-direction: row; justify-content: space-between; padding: 16px; cursor: default; }
+            .panel-header:active { cursor: default; background: var(--glass-bg); }
+            .drag-handle-mobile, .tab-container { display: none !important; }
+            .canvas-area { border-radius: var(--radius-md); border: 1px solid var(--glass-border); box-shadow: inset 0 0 40px rgba(0,0,0,0.02); }
+            .panel-body { padding-bottom: 0 !important; }
+        }
+
+        @media(max-width: 1023px) {
+            .workspace-area { padding: 0; gap: 0; position: relative; overflow: hidden; }
+            .left-panel { display: none !important; } 
+            .canvas-area { border-radius: 0; margin-bottom: 90px; }
+            
+            .right-panel {
+                position: absolute; bottom: 0; left: 0; right: 0; width: 100%;
+                height: calc(100% - 16px); max-height: 100%;
+                border-bottom-left-radius: 0; border-bottom-right-radius: 0;
+                border-top-left-radius: var(--radius-lg); border-top-right-radius: var(--radius-lg);
+                z-index: 100;
+                transition: transform 0.4s cubic-bezier(0.32, 0.72, 0, 1);
+                box-shadow: 0 -10px 40px rgba(0,0,0,0.1);
+                transform: translateY(calc(100% - 90px)); 
+            }
+            body.dark .right-panel { box-shadow: 0 -10px 40px rgba(0,0,0,0.5); }
+            
+            .right-panel.drawer-collapsed { transform: translateY(calc(100% - 90px)); }
+            .right-panel.drawer-mid { transform: translateY(45%); }
+            .right-panel.drawer-full { transform: translateY(0); }
+            .right-panel.dragging { transition: none; }
+            
+            #desktop-layers-header { display: none !important; }
+        }
+
+        /* MODALS */
+        .modal-backdrop { opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0.3s ease; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+        .modal-backdrop.active { opacity: 1; visibility: visible; }
+        .modal-card-ui { transform: translateY(20px) scale(0.95); transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1); }
+        .modal-backdrop.active .modal-card-ui { transform: translateY(0) scale(1); }
+        
+        .ios-modal-card {
+            background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border-radius: 14px; width: 280px; text-align: center; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+        body.dark .ios-modal-card { background: rgba(30, 30, 30, 0.85); border-color: rgba(255, 255, 255, 0.1); color: white; }
+        .ios-modal-title { font-size: 17px; font-weight: 600; padding: 20px 16px 4px 16px; margin: 0; color: black; }
+        body.dark .ios-modal-title { color: white; }
+        .ios-modal-msg { font-size: 13px; font-weight: 400; padding: 0 16px 12px 16px; margin: 0; color: #333; }
+        body.dark .ios-modal-msg { color: #ccc; }
+        .ios-btn-row { display: flex; border-top: 1px solid rgba(0,0,0,0.1); }
+        body.dark .ios-btn-row { border-top-color: rgba(255,255,255,0.1); }
+        .ios-btn { flex: 1; padding: 12px; font-size: 17px; font-weight: 400; color: #007AFF; background: transparent; border: none; cursor: pointer; }
+        .ios-btn:active { background: rgba(0,0,0,0.05); }
+        body.dark .ios-btn:active { background: rgba(255,255,255,0.05); }
+        .ios-btn.confirm { font-weight: 600; border-left: 1px solid rgba(0,0,0,0.1); }
+        body.dark .ios-btn.confirm { border-left-color: rgba(255,255,255,0.1); }
+
+        .custom-checkbox-label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; color: #555; justify-content: center; margin-bottom: 16px; font-weight: 400; }
+        body.dark .custom-checkbox-label { color: #ccc; }
+        .custom-checkbox-input { display: none; }
+        .custom-checkbox-box {
+            width: 16px; height: 16px; border: 1.5px solid #a0a0a0; border-radius: 4px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; background: transparent; box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
+        }
+        .custom-checkbox-input:checked + .custom-checkbox-box { background: #007AFF; border-color: #007AFF; }
+        .custom-checkbox-input:checked + .custom-checkbox-box::after { content: ''; width: 4px; height: 8px; border: solid white; border-width: 0 1.5px 1.5px 0; transform: rotate(45deg); margin-top: -2px; }
+
+        .export-tab { padding: 8px 12px; font-size: 0.75rem; font-weight: 600; color: var(--text-muted); cursor: pointer; border: none; background: transparent; border-radius: var(--radius-sm); transition: var(--transition); text-align: left; }
+        .export-tab:hover { background: var(--glass-bg-hover); color: var(--text-main); transform: translateX(2px); }
+        .export-tab.active { background: var(--primary); color: white; transform: translateX(4px); box-shadow: 0 4px 12px rgba(59,130,246,0.3); }
+
+        /* Workspace Dropdown */
+        .workspace-dropdown {
+            position: absolute; top: calc(100% + 8px); right: 0; background: var(--glass-bg); backdrop-filter: var(--glass-blur); border: 1px solid var(--glass-border);
+            border-radius: var(--radius-md); padding: 8px; display: flex; flex-direction: column; gap: 4px; box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            opacity: 0; visibility: hidden; transform: translateY(-10px); transition: all 0.2s ease; min-width: 200px; z-index: 200;
+        }
+        .workspace-dropdown.show { opacity: 1; visibility: visible; transform: translateY(0); }
+        .ws-item { padding: 8px 12px; font-size: 0.8rem; font-weight: 600; color: var(--text-main); border-radius: var(--radius-sm); cursor: pointer; transition: background 0.2s; display: flex; justify-content: space-between; align-items: center; }
+        .ws-item:hover { background: var(--glass-bg-hover); color: var(--primary); }
+
+        /* SVG Color Blind Filters container */
+        .svg-filters { width: 0; height: 0; position: absolute; }
+    </style>
+</head>
+<body class="flex flex-col">
+
+    <!-- Color Blindness Filters -->
+    <svg class="svg-filters">
+        <defs>
+            <filter id="protanopia"><feColorMatrix type="matrix" values="0.567, 0.433, 0, 0, 0  0.558, 0.442, 0, 0, 0  0, 0.242, 0.758, 0, 0  0, 0, 0, 1, 0"/></filter>
+            <filter id="deuteranopia"><feColorMatrix type="matrix" values="0.625, 0.375, 0, 0, 0  0.7, 0.3, 0, 0, 0  0, 0.3, 0.7, 0, 0  0, 0, 0, 1, 0"/></filter>
+            <filter id="tritanopia"><feColorMatrix type="matrix" values="0.95, 0.05, 0, 0, 0  0, 0.433, 0.567, 0, 0  0, 0.475, 0.525, 0, 0  0, 0, 0, 1, 0"/></filter>
+        </defs>
+    </svg>
+
+    <div class="grid-background"></div>
+    
+    <header class="app-bar glass-panel shadow-sm">
+        <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded bg-gradient-to-br from-indigo-500 to-cyan-400 flex items-center justify-center text-white shadow-md transform transition hover:scale-110">
+                <i class="ph-bold ph-palette text-lg"></i>
+            </div>
+            <div class="flex flex-col leading-none">
+                <h1 class="text-sm font-bold m-0 tracking-tight" style="color: var(--text-main)">Chroma<span style="color: var(--primary)">Studio</span></h1>
+            </div>
+        </div>
+
+        <div class="hidden lg:flex p-1 bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-full shadow-inner transition-transform hover:scale-[1.02]">
+            <button class="hc-pill active" id="shape-rounded" onclick="app.setShape('rounded')">Card</button>
+            <button class="hc-pill" id="shape-circle" onclick="app.setShape('circle')">Circle</button>
+            <button class="hc-pill" id="shape-full" onclick="app.setShape('full')">Full</button>
+            <button class="hc-pill" id="shape-text" onclick="app.setShape('text')">Text</button>
+        </div>
+
+        <div class="flex items-center gap-1 lg:gap-3">
+            <div class="relative">
+                <button class="btn btn-ghost text-xs" onclick="document.getElementById('ws-dropdown').classList.toggle('show')"><i class="ph-bold ph-folder"></i> <span class="hidden sm:inline">Workspaces</span></button>
+                <div id="ws-dropdown" class="workspace-dropdown">
+                    <div class="field mb-2 px-1">
+                        <input type="text" id="ws-name" class="flat-input text-xs py-1.5" placeholder="Name current state...">
+                    </div>
+                    <button class="btn btn-primary text-xs w-full mb-2" onclick="app.saveWorkspace()"><i class="ph-bold ph-floppy-disk"></i> Save Current</button>
+                    <div class="w-full h-px bg-[var(--glass-border)] mb-2"></div>
+                    <div id="ws-list" class="flex flex-col gap-1 max-h-[200px] overflow-y-auto">
+                        <!-- Saved workspaces injected here -->
+                    </div>
+                </div>
+            </div>
+            
+            <button class="btn-icon" onclick="app.history.undo()" id="btn-undo" title="Undo (Ctrl+Z)" disabled><i class="ph-bold ph-arrow-u-up-left"></i></button>
+            <button class="btn-icon" onclick="app.history.redo()" id="btn-redo" title="Redo (Ctrl+Y)" disabled><i class="ph-bold ph-arrow-u-up-right"></i></button>
+            <div class="w-px h-5 bg-[var(--glass-border)] mx-1 hidden lg:block"></div>
+            <button class="btn btn-primary text-xs lg:text-sm" style="padding: 8px 16px;" onclick="app.ui.showExportModal()"><i class="ph-bold ph-code"></i> <span class="hidden sm:inline">Handoff</span></button>
+            <button class="btn-icon" onclick="toggleTheme()" id="themeBtn" title="Toggle Theme"><i class="ph-bold ph-moon"></i></button>
+        </div>
+    </header>
+
+    <div class="workspace-area">
+
+        <!-- DESKTOP LEFT PANEL (Global FX & Presets) -->
+        <aside id="desktop-left-panel" class="left-panel glass-panel">
+            <div class="flex items-center p-4 border-b border-[var(--glass-border)] bg-[var(--glass-bg)] shrink-0 z-10">
+                <h3 class="text-[10px] uppercase tracking-widest font-bold text-[var(--text-muted)] m-0">Global FX & Presets</h3>
+            </div>
+            
+            <div id="desktop-global-container" class="flex-1 overflow-hidden relative">
+                <div id="global-fx-content" class="p-4 flex flex-col gap-6 absolute inset-0 overflow-y-auto">
+                    
+                    <!-- AI & EXTRACT -->
+                    <div class="flex flex-col gap-3 shrink-0">
+                        <label class="field-label mb-0"><i class="ph-bold ph-sparkle text-[var(--primary)]"></i> AI Prompt-to-Palette</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="ai-prompt" class="flat-input text-xs" placeholder="e.g. Cyberpunk neon city..." onkeypress="if(event.key === 'Enter') app.generateFromPrompt()">
+                            <button class="btn btn-primary px-3" onclick="app.generateFromPrompt()"><i class="ph-bold ph-magic-wand"></i></button>
+                        </div>
+                        
+                        <label class="field-label mt-2 mb-0"><i class="ph-bold ph-image text-[var(--primary)]"></i> Extract from Image</label>
+                        <button class="btn btn-ghost text-xs w-full border-dashed" onclick="document.getElementById('img-upload').click()"><i class="ph-bold ph-upload-simple"></i> Upload Reference Image</button>
+                        <input type="file" id="img-upload" accept="image/*" class="hidden" onchange="app.extractFromImage(event)">
+                    </div>
+
+                    <div class="w-full h-px bg-[var(--glass-border)] shrink-0"></div>
+
+                    <!-- POST PROCESSING -->
+                    <div class="flex flex-col gap-3 shrink-0">
+                        <label class="field-label mb-0">Post-Processing FX</label>
+                        <select id="post-fx-select" class="flat-select text-xs py-1.5" onchange="app.setPostProcessing(this.value)">
+                            <option value="none">None (Clean)</option>
+                            <option value="grain">Film Grain</option>
+                            <option value="halftone">Retro Halftone</option>
+                            <option value="dither">Brutalist Dither</option>
+                        </select>
+                        <div class="range-wrap mt-1" id="fx-intensity-wrap" style="display: none;"><input type="range" class="range" id="global-fx-val" min="0" max="100" value="50" oninput="app.setFXIntensity(this.value)"></div>
+                    </div>
+
+                    <div class="w-full h-px bg-[var(--glass-border)] shrink-0"></div>
+
+                    <!-- INTERACTIVITY -->
+                    <div class="flex flex-col gap-2 shrink-0">
+                        <div class="switch-container py-0">
+                            <div>
+                                <span class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest block">Mouse Reactivity</span>
+                                <span class="text-[9px] text-[var(--text-muted)] block mt-0.5">Parallax effect on cursor move</span>
+                            </div>
+                            <label class="switch"><input type="checkbox" id="mouse-react" onchange="app.toggleReactivity(this.checked)"><span class="slider"></span></label>
+                        </div>
+                    </div>
+
+                    <div class="w-full h-px bg-[var(--glass-border)] shrink-0"></div>
+
+                    <!-- CSS ANIMATION -->
+                    <div class="flex flex-col gap-3 shrink-0">
+                        <div class="flex-between">
+                            <label class="field-label mb-0">CSS Animation</label>
+                            <div class="flex bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-md overflow-hidden shadow-inner">
+                                <button class="px-2.5 py-1 text-[var(--text-muted)] hover:bg-[var(--primary)] hover:text-white transition-colors border-r border-[var(--glass-border)]" id="btn-anim-stop" onclick="app.setAnimStatus('stopped')" title="Stop"><i class="ph-bold ph-stop text-xs"></i></button>
+                                <button class="px-2.5 py-1 text-[var(--text-muted)] hover:bg-[var(--primary)] hover:text-white transition-colors border-r border-[var(--glass-border)]" id="btn-anim-play" onclick="app.setAnimStatus('playing')" title="Play"><i class="ph-bold ph-play text-xs"></i></button>
+                                <button class="px-2.5 py-1 text-[var(--text-muted)] hover:bg-[var(--primary)] hover:text-white transition-colors" id="btn-anim-pause" onclick="app.setAnimStatus('paused')" title="Pause"><i class="ph-bold ph-pause text-xs"></i></button>
+                            </div>
+                        </div>
+                        <div class="field mb-0">
+                            <select id="anim-style" class="flat-select py-1.5 text-xs" onchange="app.setAnimStyle(this.value)">
+                                <option value="drift">Drift (Pan Position)</option>
+                                <option value="pulse">Pulse (Scale & Opacity)</option>
+                                <option value="hue">Hue Shift (Color Rotation)</option>
+                                <option value="breathe">Breathe (Size Expansion)</option>
+                            </select>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 mt-1">
+                            <div class="field mb-0">
+                                <label class="field-label flex-between text-[9px]">Speed <span id="val-anim-speed" class="font-mono text-[var(--text-main)] normal-case">50</span></label>
+                                <div class="range-wrap"><input type="range" class="range" id="anim-speed" min="1" max="100" value="50" oninput="app.setAnimSpeed(this.value, false)"></div>
+                            </div>
+                            <div class="field mb-0">
+                                <label class="field-label flex-between text-[9px]">Amount <span id="val-anim-intensity" class="font-mono text-[var(--text-main)] normal-case">50</span></label>
+                                <div class="range-wrap"><input type="range" class="range" id="anim-intensity" min="0" max="100" value="50" oninput="app.setAnimIntensity(this.value, false)"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="w-full h-px bg-[var(--glass-border)] shrink-0"></div>
+
+                    <!-- PRESETS -->
+                    <div class="flex flex-col gap-2 shrink-0">
+                        <label class="field-label mb-0">Apple Style Presets</label>
+                        <div class="grid grid-cols-4 gap-2" id="preset-grid"></div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- CENTER CANVAS AREA -->
+        <main id="panel-canvas" class="canvas-area flex-1 relative flex flex-col z-0 glass-panel">
+            <div class="flex lg:hidden p-2 gap-2 overflow-x-auto bg-[var(--glass-bg)] border-b border-[var(--glass-border)] hide-scrollbar shrink-0 absolute top-0 w-full z-20 shadow-sm transition-transform">
+                <button class="hc-pill active whitespace-nowrap text-xs py-1.5 px-4" id="m-shape-rounded" onclick="app.setShape('rounded')">Card</button>
+                <button class="hc-pill whitespace-nowrap text-xs py-1.5 px-4" id="m-shape-circle" onclick="app.setShape('circle')">Circle</button>
+                <button class="hc-pill whitespace-nowrap text-xs py-1.5 px-4" id="m-shape-full" onclick="app.setShape('full')">Full</button>
+                <button class="hc-pill whitespace-nowrap text-xs py-1.5 px-4" id="m-shape-text" onclick="app.setShape('text')">Text</button>
+            </div>
+
+            <div class="flex-1 relative flex items-center justify-center overflow-hidden" id="canvas-area" style="padding-top: 50px; padding-bottom: 20px;">
+                <div class="relative transition-all duration-500 ease-[cubic-bezier(0.25,0.8,0.25,1)] overflow-hidden shadow-[0_10px_40px_rgba(0,0,0,0.15)] border border-[var(--glass-border)] w-full max-w-[600px] aspect-[3/2] rounded-2xl" id="canvas-container">
+                    <div id="render-stack" class="absolute inset-0 w-full h-full pointer-events-none"></div>
+                    <!-- FX Overlays -->
+                    <div class="fx-overlay" id="fx-overlay"></div>
+                    <div class="post-fx-overlay post-fx-halftone" id="fx-halftone"></div>
+                    <div class="post-fx-overlay post-fx-dither" id="fx-dither"></div>
+                    
+                    <div id="blob-overlay" class="absolute inset-0 w-full h-full pointer-events-none z-[160]"></div>
+                    <div class="text-mask-preview focus:outline-none" id="text-mask-preview" contenteditable="true" spellcheck="false">CHROMA</div>
+                </div>
+            </div>
+            
+            <div class="absolute bottom-4 left-4 z-50 flex gap-2">
+                <!-- Color Blind Simulator -->
+                <div class="glass-panel px-3 py-1.5 rounded-full shadow-lg flex items-center gap-2">
+                    <i class="ph-bold ph-eyeglasses text-[var(--text-muted)] text-sm"></i>
+                    <select id="color-blind-sim" class="bg-transparent text-[10px] font-semibold text-[var(--text-main)] uppercase tracking-widest outline-none cursor-pointer" onchange="app.setSimulator(this.value)">
+                        <option value="none">Normal Vision</option>
+                        <option value="protanopia">Protanopia (Red-Blind)</option>
+                        <option value="deuteranopia">Deuteranopia (Green-Blind)</option>
+                        <option value="tritanopia">Tritanopia (Blue-Blind)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="contrast-checker" class="hidden absolute top-[60px] right-4 glass-panel px-3 py-1.5 rounded-full shadow-lg z-50 items-center gap-2 transition-opacity">
+                <i class="ph-bold ph-eye text-[var(--text-muted)] text-sm"></i>
+                <span class="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-widest">Ratio <span id="contrast-ratio" class="font-mono text-[var(--text-main)] ml-1 text-xs">4.5:1</span></span>
+                <span id="contrast-badge" class="px-1.5 py-0.5 rounded text-[9px] uppercase font-bold tracking-widest">AA</span>
+                <!-- Auto-Fix Wand -->
+                <button id="btn-fix-contrast" class="hidden btn-icon w-5 h-5 bg-[var(--primary)] text-white hover:scale-110 ml-1" onclick="app.autoFixContrast()" title="Auto-Fix Accessibility"><i class="ph-bold ph-magic-wand text-[10px]"></i></button>
+            </div>
+        </main>
+
+        <!-- RIGHT PANEL & MOBILE DRAWER -->
+        <aside id="right-panel" class="right-panel glass-panel z-50">
+            <div class="panel-header" id="panel-header">
+                <div class="drag-handle-mobile lg:hidden"></div>
+                
+                <div class="tab-container lg:hidden">
+                    <input type="radio" name="tab" id="tab1" class="tab-input tab--1" checked onchange="app.ui.switchMobileTab('layers')" />
+                    <label class="tab_label" for="tab1">Layers Stack</label>
+
+                    <input type="radio" name="tab" id="tab2" class="tab-input tab--2" onchange="app.ui.switchMobileTab('global')" />
+                    <label class="tab_label" for="tab2">Global FX</label>
+
+                    <div class="tab-indicator"></div>
+                </div>
+
+                <div class="w-full flex items-center justify-between" id="desktop-layers-header">
+                    <h3 class="text-[10px] uppercase tracking-widest font-bold text-[var(--text-muted)] m-0">Layers Stack</h3>
+                    <div class="flex gap-1" id="layer-actions">
+                        <button class="btn-icon w-8 h-8 text-sm bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] border-none shadow-sm" onclick="app.addLayer()" title="Add Layer"><i class="ph-bold ph-plus"></i></button>
+                        <button class="btn-icon w-8 h-8 text-sm bg-[var(--glass-bg)] border border-[var(--glass-border)] shadow-sm" onclick="app.randomize()" title="Randomize All"><i class="ph-bold ph-shuffle"></i></button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="panel-body">
+                <div class="flex lg:hidden justify-between items-center px-4 pt-4 pb-2" id="mobile-layer-actions" style="display: none;">
+                    <span class="text-[10px] uppercase tracking-widest font-bold text-[var(--text-muted)] m-0">Active Layers</span>
+                    <div class="flex gap-2">
+                        <button class="btn btn-primary text-xs py-1.5 px-3" onclick="app.addLayer()"><i class="ph-bold ph-plus"></i> Add Layer</button>
+                        <button class="btn btn-ghost text-xs py-1.5 px-3" onclick="app.randomize()"><i class="ph-bold ph-shuffle"></i></button>
+                    </div>
+                </div>
+
+                <div id="layers-stack-list" class="p-4 flex flex-col gap-4 relative"></div>
+
+                <div id="mobile-global-container" class="hidden absolute inset-0"></div>
+            </div>
+        </aside>
+
+    </div>
+
+    <!-- Delete Modal -->
+    <div id="delete-modal" class="modal-backdrop fixed inset-0 z-[2000] flex items-center justify-center p-4">
+        <div class="ios-modal-card modal-card-ui">
+            <h3 class="ios-modal-title">Delete Layer</h3>
+            <p class="ios-modal-msg" style="padding-bottom: 12px;">Are you sure you want to delete this layer? You can always undo with <b>Ctrl+Z</b>.</p>
+            <label class="custom-checkbox-label">
+                <input type="checkbox" id="chk-dont-ask-delete" class="custom-checkbox-input">
+                <div class="custom-checkbox-box"></div>
+                <span>Don't ask me again</span>
+            </label>
+            <div class="ios-btn-row">
+                <button class="ios-btn" onclick="app.ui.closeDeleteModal()">Cancel</button>
+                <button class="ios-btn confirm" id="btn-confirm-del" style="color: var(--error);">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export Modal -->
+    <div id="export-modal" class="modal-backdrop fixed inset-0 z-[1000] flex items-center justify-center p-2 lg:p-10">
+        <div class="modal-card-ui glass-panel border border-[var(--glass-border)] rounded-2xl w-full max-w-4xl h-full lg:h-auto lg:max-h-full flex flex-col shadow-2xl overflow-hidden bg-[var(--bg-color)]">
+            <div class="flex items-center justify-between h-14 px-4 lg:px-6 border-b border-[var(--glass-border)] shrink-0 bg-[var(--glass-bg)]">
+                <h3 class="text-xs font-bold text-[var(--text-main)] uppercase tracking-widest m-0 flex items-center gap-2"><i class="ph-bold ph-code text-lg"></i> Developer Handoff</h3>
+                <button class="btn-icon w-8 h-8" onclick="document.getElementById('export-modal').classList.remove('active')"><i class="ph-bold ph-x"></i></button>
+            </div>
+            
+            <div class="flex flex-col lg:flex-row flex-1 overflow-hidden min-h-0 lg:min-h-[500px]">
+                <div class="w-full lg:w-56 bg-[var(--glass-bg)] border-b lg:border-b-0 lg:border-r border-[var(--glass-border)] flex lg:flex-col py-3 px-3 gap-2 shrink-0 overflow-x-auto lg:overflow-y-auto">
+                    <div class="field-label px-2 pt-1 hidden lg:block">WEB</div>
+                    <button class="export-tab active shrink-0" data-target="css">CSS / SCSS</button>
+                    <button class="export-tab shrink-0" data-target="tailwind">Tailwind</button>
+                    <button class="export-tab shrink-0" data-target="react">React / Next.js</button>
+                    <button class="export-tab shrink-0" data-target="vue">Vue</button>
+                    <button class="export-tab shrink-0" data-target="svelte">Svelte</button>
+                    <button class="export-tab shrink-0" data-target="angular">Angular</button>
+                    <button class="export-tab shrink-0" data-target="canvas">Canvas JS</button>
+                    
+                    <div class="field-label px-2 pt-4 hidden lg:block">IOS & MAC</div>
+                    <button class="export-tab shrink-0" data-target="swiftui">SwiftUI</button>
+                    
+                    <div class="field-label px-2 pt-4 hidden lg:block">ANDROID</div>
+                    <button class="export-tab shrink-0" data-target="compose">Jetpack Compose</button>
+                    <button class="export-tab shrink-0" data-target="xml">XML Drawable</button>
+                    <button class="export-tab shrink-0" data-target="kotlin">Kotlin</button>
+                    <button class="export-tab shrink-0" data-target="java">Java</button>
+                    
+                    <div class="field-label px-2 pt-4 hidden lg:block">CROSS PLATFORM</div>
+                    <button class="export-tab shrink-0" data-target="flutter">Flutter</button>
+                    <button class="export-tab shrink-0" data-target="rn">React Native</button>
+                </div>
+                
+                <div class="flex-1 flex flex-col p-4 lg:p-6 relative overflow-hidden bg-[var(--bg-color)]">
+                    
+                    <div class="flex flex-wrap gap-3 pb-4 mb-4 border-b border-[var(--glass-border)] shrink-0 items-center justify-between">
+                        <div class="flex gap-2">
+                            <button class="btn btn-ghost px-4 py-2 rounded-full font-bold text-xs" onclick="app.exportEngine.downloadPNG()"><i class="ph-bold ph-image text-base"></i> PNG</button>
+                            <button class="btn btn-ghost px-4 py-2 rounded-full font-bold text-xs" onclick="app.exportEngine.downloadJPG()"><i class="ph-bold ph-image text-base"></i> JPG</button>
+                            <button class="btn btn-ghost px-4 py-2 rounded-full font-bold text-xs" onclick="app.exportEngine.downloadSVG()"><i class="ph-bold ph-file-svg text-base"></i> SVG</button>
+                        </div>
+                        <button class="btn btn-primary px-4 py-2 rounded-full font-bold text-xs shadow-md transition-all" onclick="app.exportEngine.downloadVideo()"><i class="ph-bold ph-video-camera text-base"></i> Record .webm (5s)</button>
+                    </div>
+                    
+                    <div class="flex-1 relative border border-[var(--glass-border)] rounded-xl overflow-hidden group shadow-inner">
+                        <pre class="w-full h-full p-4 m-0 font-mono text-[13px] whitespace-pre-wrap break-all code-block-area" id="export-code"></pre>
+                        
+                        <button class="absolute right-4 top-4 w-9 h-9 rounded-lg bg-[var(--glass-bg)] border border-[var(--glass-border)] text-[var(--primary)] shadow-sm opacity-0 group-hover:opacity-100 transition-all hover:scale-105 hover:bg-[var(--glass-bg-hover)] flex items-center justify-center backdrop-blur-md" onclick="app.ui.copyCode()" title="Copy Code">
+                            <i class="ph-bold ph-copy text-xl"></i>
+                        </button>
+                        
+                        <!-- CodePen Form -->
+                        <form id="codepen-form" action="https://codepen.io/pen/define" method="POST" target="_blank" class="hidden">
+                            <input type="hidden" name="data" id="codepen-data">
+                        </form>
+                        <button id="btn-codepen-launch" class="hidden absolute bottom-4 right-4 btn btn-primary shadow-xl rounded-full px-4 py-2 text-xs" onclick="document.getElementById('codepen-form').submit()">Launch Sandbox <i class="ph-bold ph-arrow-square-out"></i></button>
+                    </div>
+                    <p class="text-[var(--text-muted)] text-[10px] lg:text-xs mt-3 shrink-0 leading-tight flex items-center gap-1"><i class="ph-fill ph-info text-sm"></i> Note: For dynamic engines like Aurora or complex Blobs, standard CSS output will approximate with static gradients. Use <b>Canvas JS</b> for 1:1 Aurora rendering.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="fixed bottom-6 lg:bottom-10 left-1/2 -translate-x-1/2 translate-y-20 glass-panel px-6 py-3 rounded-full font-semibold text-sm transition-all duration-400 ease-[cubic-bezier(0.175,0.885,0.32,1.275)] z-[9999] opacity-0 pointer-events-none flex items-center gap-2 border-[var(--success)] text-[var(--success)] shadow-xl">
+        <i class="ph-fill ph-check-circle text-xl"></i> <span id="toast-msg">Copied!</span>
+    </div>
+
+    <!-- Hidden canvas for image extraction -->
+    <canvas id="hidden-canvas" style="display:none;"></canvas>
+
+    <script>
+        let app;
+
+        function toggleTheme() {
+            const isDark = document.body.classList.toggle('dark');
+            document.getElementById('themeBtn').innerHTML = isDark ? '<i class="ph-bold ph-sun text-lg"></i>' : '<i class="ph-bold ph-moon text-lg"></i>';
+        }
+        if(window.matchMedia('(prefers-color-scheme: dark)').matches) toggleTheme();
+
+        const Utils = {
+            id: () => Math.random().toString(36).substr(2, 9),
+            clamp: (v, min, max) => Math.min(Math.max(v, min), max),
+            hsv2rgb: (h, s, v) => {
+                let r, g, b, i = Math.floor(h * 6), f = h * 6 - i, p = v * (1 - s), q = v * (1 - f * s), t = v * (1 - (1 - f) * s);
+                switch (i % 6) {
+                    case 0: r = v; g = t; b = p; break; case 1: r = q; g = v; b = p; break;
+                    case 2: r = p; g = v; b = t; break; case 3: r = p; g = q; b = v; break;
+                    case 4: r = t; g = p; b = v; break; case 5: r = v; g = p; b = q; break;
+                }
+                return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+            },
+            rgb2hsv: (r, g, b) => {
+                r /= 255; g /= 255; b /= 255;
+                let max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min, s = max === 0 ? 0 : d / max, h = 0, v = max;
+                if (max !== min) {
+                    switch (max) { case r: h = (g - b) / d + (g < b ? 6 : 0); break; case g: h = (b - r) / d + 2; break; case b: h = (r - g) / d + 4; break; }
+                    h /= 6;
+                }
+                return [h, s, v];
+            },
+            rgb2hex: (r, g, b) => ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase(),
+            hex2rgb: (hex) => {
+                hex = hex.replace(/^#/, '');
+                if (hex.length === 3) hex = hex[0]+hex[0] + hex[1]+hex[1] + hex[2]+hex[2];
+                let m = hex.match(/^([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i);
+                return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : null;
+            },
+            toast: (msg) => {
+                const t = document.getElementById('toast');
+                document.getElementById('toast-msg').innerText = msg;
+                t.classList.remove('translate-y-20', 'opacity-0'); t.classList.add('translate-y-0', 'opacity-100');
+                setTimeout(() => { t.classList.add('translate-y-20', 'opacity-0'); t.classList.remove('translate-y-0', 'opacity-100'); }, 2500);
+            },
+            getLuminance: (r, g, b) => {
+                let a = [r, g, b].map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+                return a[0] * 0.2126 + a[1] * 0.7152 + a[2] * 0.0722;
+            }
+        };
+
+        const engineMap = [
+            { id: 'linear', icon: 'line-segment', name: 'Linear' },
+            { id: 'radial', icon: 'circle', name: 'Radial' },
+            { id: 'conic', icon: 'arrow-clockwise', name: 'Conic' },
+            { id: 'mesh', icon: 'grid-four', name: 'Mesh' },
+            { id: 'blob', icon: 'drop', name: 'Blob' },
+            { id: 'aurora', icon: 'waves', name: 'Aurora' },
+            { id: 'liquid', icon: 'drop-half-bottom', name: 'Liquid' }
+        ];
+
+        class Layer {
+            constructor(opts = {}) {
+                this.id = opts.id || Utils.id();
+                this.name = opts.name || "Layer";
+                this.visible = opts.visible !== undefined ? opts.visible : true;
+                this.type = opts.type || "linear"; 
+                this.blendMode = opts.blendMode || "normal";
+                this.opacity = opts.opacity !== undefined ? opts.opacity : 1;
+                
+                this.stops = opts.stops ? JSON.parse(JSON.stringify(opts.stops)) : [
+                    {r: 79, g: 70, b: 229, a: 1, pos: 0},
+                    {r: 0, g: 200, b: 232, a: 1, pos: 100}
+                ];
+
+                this.settings = opts.settings ? JSON.parse(JSON.stringify(opts.settings)) : {
+                    angle: 135, posX: 50, posY: 50, 
+                    width: 70, height: 70, repeat: false,
+                    speed: 50, complexity: 50, brightness: 70, waves: 4, 
+                    meshCols: 3, meshRows: 3,
+                    useBlobBg: false, blobBgHex: '#000000', blobBgAlpha: 1,
+                    blobs: [
+                        {x: 50, y: 30, width: 40, height: 40, feather: 100, opacity: 1},
+                        {x: 50, y: 70, width: 50, height: 50, feather: 100, opacity: 1}
+                    ]
+                };
+            }
+        }
+
+        class HistoryManager {
+            constructor(app) { this.app = app; this.undoStack = []; this.redoStack = []; this.isRestoring = false; }
+            save() {
+                if (this.isRestoring) return;
+                try {
+                    const state = JSON.stringify({ layers: this.app.layers, grain: this.app.globalGrain, activeId: this.app.activeLayerId, animState: this.app.animState });
+                    if(this.undoStack.length > 0 && this.undoStack[this.undoStack.length-1] === state) return;
+                    this.undoStack.push(state);
+                    if(this.undoStack.length > 30) this.undoStack.shift();
+                    this.redoStack = [];
+                    this.updateUI();
+                } catch(e) {}
+            }
+            undo() {
+                if (this.undoStack.length <= 1) return;
+                this.isRestoring = true;
+                this.redoStack.push(this.undoStack.pop());
+                this.app.restoreState(this.undoStack[this.undoStack.length - 1]);
+                this.isRestoring = false; this.updateUI();
+            }
+            redo() {
+                if (this.redoStack.length === 0) return;
+                this.isRestoring = true;
+                const state = this.redoStack.pop();
+                this.undoStack.push(state);
+                this.app.restoreState(state);
+                this.isRestoring = false; this.updateUI();
+            }
+            updateUI() {
+                const btnU = document.getElementById('btn-undo'), btnR = document.getElementById('btn-redo');
+                if(btnU) btnU.disabled = this.undoStack.length <= 1;
+                if(btnR) btnR.disabled = this.redoStack.length === 0;
+            }
+        }
+
+        class RenderEngine {
+            constructor(app) { this.app = app; this.auroraFrames = {}; this.auroraTimes = {}; this.resizeObserver = null; }
+
+            resetAuroraTimes() { this.auroraTimes = {}; this.render('render-stack'); }
+
+            getCSS(layer, forExport = false, isVideo = false) {
+                if(!layer.visible && !isVideo) return 'none';
+                const stopsStr = layer.stops.slice().sort((a,b)=>a.pos-b.pos).map(s => `rgba(${s.r},${s.g},${s.b},${s.a}) ${s.pos}%`).join(', ');
+                
+                switch(layer.type) {
+                    case 'linear': return `${layer.settings.repeat ? 'repeating-' : ''}linear-gradient(${layer.settings.angle}deg, ${stopsStr})`;
+                    case 'radial': 
+                        let rw = layer.settings.width !== undefined ? layer.settings.width : 70;
+                        let rh = layer.settings.height !== undefined ? layer.settings.height : 70;
+                        return `${layer.settings.repeat ? 'repeating-' : ''}radial-gradient(ellipse ${rw}% ${rh}% at ${layer.settings.posX}% ${layer.settings.posY}%, ${stopsStr})`;
+                    case 'conic': return `conic-gradient(from ${layer.settings.angle}deg at ${layer.settings.posX}% ${layer.settings.posY}%, ${stopsStr}, rgba(${layer.stops[0].r},${layer.stops[0].g},${layer.stops[0].b},${layer.stops[0].a}) 100%)`;
+                    case 'blob':
+                    case 'liquid':
+                        let bgStr = '';
+                        if(layer.settings.blobs && layer.settings.blobs.length > 0 && layer.stops.length > 0) {
+                            bgStr = layer.settings.blobs.map((b, i) => {
+                                let s = layer.stops[i] || layer.stops[0];
+                                let w = b.width !== undefined ? b.width : (b.size || 40);
+                                let h = b.height !== undefined ? b.height : (b.size || 40);
+                                let f = b.feather !== undefined ? b.feather : 100;
+                                let o = b.opacity !== undefined ? b.opacity : 1;
+                                let hardStop = 100 - f;
+                                return `radial-gradient(ellipse ${w}% ${h}% at ${b.x}% ${b.y}%, rgba(${s.r},${s.g},${s.b},${s.a * o}) 0%, rgba(${s.r},${s.g},${s.b},${s.a * o}) ${hardStop}%, transparent 100%)`;
+                            }).join(', ');
+                        }
+                        if (layer.settings.useBlobBg) {
+                            let [r,g,b] = Utils.hex2rgb(layer.settings.blobBgHex || '#000000');
+                            let a = layer.settings.blobBgAlpha !== undefined ? layer.settings.blobBgAlpha : 1;
+                            let bgCol = `rgba(${r},${g},${b},${a})`;
+                            bgStr = bgStr ? `${bgStr}, ${bgCol}` : bgCol;
+                        }
+                        return bgStr || 'none';
+                    case 'mesh':
+                        if(!layer.stops.length) return 'none';
+                        const c = layer.settings.meshCols || 3;
+                        const r = layer.settings.meshRows || 3;
+                        return layer.stops.map((s, i) => {
+                            const col = i % c, row = Math.floor(i / c);
+                            const x = (col / (c - 1) * 100).toFixed(0);
+                            const y = (row / (r - 1) * 100).toFixed(0);
+                            const sz = (150 / Math.max(c, r)).toFixed(0);
+                            return `radial-gradient(circle at ${x}% ${y}%, rgba(${s.r},${s.g},${s.b},${s.a}) 0%, transparent ${sz}%)`;
+                        }).join(', ');
+                    case 'aurora': return forExport ? `linear-gradient(135deg, ${stopsStr})` : 'none';
+                    default: return 'none';
+                }
+            }
+
+            updateLayerStyle(layerId) {
+                const l = this.app.getLayer(layerId); if(!l) return;
+                const targetDom = document.getElementById('layer-node-' + l.id);
+                if (targetDom) {
+                    targetDom.style.mixBlendMode = l.blendMode;
+                    targetDom.style.opacity = l.visible ? l.opacity : 0;
+                    if(l.type !== 'aurora') targetDom.style.background = this.getCSS(l);
+                }
+            }
+
+            updateLayerCSS(layerId) {
+                const l = this.app.getLayer(layerId); if(!l || l.type === 'aurora') return;
+                const targetDom = document.getElementById('layer-node-' + l.id);
+                if (targetDom && l.visible) targetDom.style.background = this.getCSS(l);
+            }
+
+            updateAnimations() {
+                let s = document.getElementById('dyn-keyframes');
+                let isPaused = this.app.animState.status === 'paused';
+                
+                if (this.app.animState.status === 'stopped') {
+                    if (s) s.remove();
+                    this.app.layers.forEach((l) => {
+                        const el = document.getElementById('layer-node-' + l.id);
+                        if(el && l.type !== 'aurora') { el.style.animation = 'none'; el.style.backgroundSize = ''; el.style.backgroundPosition = ''; }
+                    });
+                    return;
+                }
+
+                if (!s) { s = document.createElement('style'); s.id = 'dyn-keyframes'; document.head.appendChild(s); }
+                let intensity = this.app.animState.intensity;
+                s.innerHTML = `
+                    @keyframes anim-drift { 0% { background-position: 0% 50%; } 100% { background-position: 100% 50%; } }
+                    @keyframes anim-pulse { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(${1 + intensity/100}); opacity: ${Math.max(0.1, 1 - intensity/100)}; } }
+                    @keyframes anim-hue { 0% { filter: hue-rotate(0deg); } 100% { filter: hue-rotate(${intensity * 3.6}deg); } }
+                    @keyframes anim-breathe { 0% { background-size: 100% 100%; } 100% { background-size: ${100 + intensity}% ${100 + intensity}%; } }
+                `;
+
+                let dur = 30 - (this.app.animState.speed / 100) * 28;
+                let style = this.app.animState.style;
+
+                this.app.layers.forEach((l, i) => {
+                    if(l.visible && l.type !== 'blob' && l.type !== 'liquid' && l.type !== 'mesh' && l.type !== 'aurora') {
+                        const el = document.getElementById('layer-node-' + l.id);
+                        if(el) {
+                            let currentAnim = el.style.animationName;
+                            let targetAnim = `anim-${style}`;
+                            let randOffset = l.id.charCodeAt(0) % 5;
+                            
+                            if (currentAnim !== targetAnim || !el.style.animation) {
+                                if (style === 'drift') {
+                                    el.style.backgroundSize = `${120 + intensity}% ${120 + intensity}%`;
+                                    el.style.animation = `${targetAnim} ${dur + randOffset}s ease infinite alternate`;
+                                } else if (style === 'pulse' || style === 'hue') {
+                                    el.style.animation = `${targetAnim} ${dur}s ease-in-out infinite alternate`;
+                                } else if (style === 'breathe') {
+                                    el.style.backgroundSize = `100% 100%`; el.style.backgroundPosition = `center`;
+                                    el.style.animation = `${targetAnim} ${dur}s ease-in-out infinite alternate`;
+                                }
+                            } else {
+                                if (style === 'drift') { el.style.backgroundSize = `${120 + intensity}% ${120 + intensity}%`; el.style.animationDuration = `${dur + randOffset}s`; } 
+                                else { el.style.animationDuration = `${dur}s`; }
+                            }
+                            el.style.animationPlayState = isPaused ? 'paused' : 'running';
+                        }
+                    }
+                });
+            }
+
+            render(containerId) {
+                const container = document.getElementById(containerId);
+                if(!container) return;
+                
+                if(this.app.reactivityEnabled && !this.reactListenerAdded) {
+                    this.reactListenerAdded = true;
+                    container.addEventListener('mousemove', (e) => {
+                        if(this.app.animState.status === 'stopped') return;
+                        const rect = container.getBoundingClientRect();
+                        const nx = (e.clientX - rect.left) / rect.width;
+                        const ny = (e.clientY - rect.top) / rect.height;
+                        
+                        this.app.layers.forEach(l => {
+                            if(l.visible && l.type === 'blob' && l.settings.blobs) {
+                                const el = document.getElementById('layer-node-' + l.id);
+                                if(el) {
+                                    const ox = (nx - 0.5) * -20; 
+                                    const oy = (ny - 0.5) * -20;
+                                    el.style.backgroundPosition = `${ox}px ${oy}px`;
+                                }
+                            }
+                        });
+                    });
+                }
+
+                container.innerHTML = '';
+                
+                Object.values(this.auroraFrames).forEach(id => cancelAnimationFrame(id));
+                this.auroraFrames = {};
+
+                if (this.resizeObserver) this.resizeObserver.disconnect();
+                let resizeTimeout;
+                this.resizeObserver = new ResizeObserver(() => {
+                    clearTimeout(resizeTimeout);
+                    resizeTimeout = setTimeout(() => {
+                        window.requestAnimationFrame(() => {
+                            if(this.app.layers.some(l => l.type === 'aurora' && l.visible)) {
+                                const rect = container.getBoundingClientRect();
+                                const canvases = container.querySelectorAll('canvas.layer-node');
+                                canvases.forEach(c => { c.width = rect.width || 800; c.height = rect.height || 600; });
+                                if (this.app.animState.status === 'stopped') {
+                                    this.app.layers.filter(l => l.type === 'aurora' && l.visible).forEach(l => {
+                                        const canvas = document.getElementById('layer-node-' + l.id);
+                                        if (canvas) this.startAurora(canvas, l);
+                                    });
+                                }
+                            }
+                        });
+                    }, 50);
+                });
+                this.resizeObserver.observe(container);
+
+                const reversed = [...this.app.layers].reverse();
+                
+                let hasLiquid = reversed.some(l => l.type === 'liquid');
+                if (hasLiquid) {
+                    container.innerHTML += `
+                        <svg width="0" height="0" style="position:absolute;">
+                            <filter id="liquid-filter">
+                                <feGaussianBlur in="SourceGraphic" stdDeviation="10" result="blur" />
+                                <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -7" result="liquid" />
+                                <feBlend in="SourceGraphic" in2="liquid" />
+                            </filter>
+                        </svg>
+                    `;
+                }
+
+                reversed.forEach(layer => {
+                    const el = document.createElement(layer.type === 'aurora' ? 'canvas' : 'div');
+                    el.className = 'layer-node';
+                    el.id = 'layer-node-' + layer.id;
+                    el.style.mixBlendMode = layer.blendMode;
+                    el.style.opacity = layer.visible ? layer.opacity : 0;
+                    el.style.pointerEvents = layer.visible ? 'auto' : 'none';
+                    
+                    if (layer.type === 'liquid') el.style.filter = "url('#liquid-filter')";
+
+                    if (layer.type === 'aurora') {
+                        const rect = container.getBoundingClientRect();
+                        el.width = rect.width || 800; el.height = rect.height || 600;
+                        container.appendChild(el);
+                        if(layer.visible) this.startAurora(el, layer);
+                    } else {
+                        if(layer.visible) el.style.background = this.getCSS(layer);
+                        container.appendChild(el);
+                    }
+                });
+                
+                this.updateAnimations();
+                this.renderBlobOverlay();
+            }
+
+            renderBlobOverlay() {
+                const overlay = document.getElementById('blob-overlay');
+                if(!overlay) return;
+                const l = this.app.getActiveLayer();
+                if (!l || !l.visible || (l.type !== 'blob' && l.type !== 'liquid' && l.type !== 'radial' && l.type !== 'conic')) {
+                    overlay.innerHTML = ''; overlay.classList.add('pointer-events-none'); return;
+                }
+                overlay.classList.remove('pointer-events-none');
+                overlay.innerHTML = '';
+
+                if (l.type === 'radial' || l.type === 'conic') {
+                    let handle = document.createElement('div');
+                    handle.className = 'blob-handle-node active-handle';
+                    handle.style.left = `${l.settings.posX}%`; handle.style.top = `${l.settings.posY}%`;
+                    handle.style.pointerEvents = 'auto';
+                    
+                    handle.onpointerdown = (e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        const rect = overlay.getBoundingClientRect();
+                        const move = (ev) => {
+                            let newX = Utils.clamp(((ev.clientX - rect.left) / rect.width) * 100, -50, 150);
+                            let newY = Utils.clamp(((ev.clientY - rect.top) / rect.height) * 100, -50, 150);
+                            l.settings.posX = Math.round(newX); l.settings.posY = Math.round(newY);
+                            handle.style.left = `${newX}%`; handle.style.top = `${newY}%`;
+                            const targetDom = document.getElementById('layer-node-' + l.id);
+                            if (targetDom) targetDom.style.background = this.getCSS(l);
+                        };
+                        const up = (ev) => {
+                            window.removeEventListener('pointermove', move); 
+                            window.removeEventListener('pointerup', up);
+                            
+                            const inpX = document.getElementById(`${l.type}-pos-x-${l.id}`); const inpY = document.getElementById(`${l.type}-pos-y-${l.id}`);
+                            if (inpX) inpX.value = l.settings.posX; if (inpY) inpY.value = l.settings.posY;
+                            this.app.history.save(); 
+                        };
+                        window.addEventListener('pointermove', move, { passive: false }); 
+                        window.addEventListener('pointerup', up);
+                    };
+                    overlay.appendChild(handle);
+                    return;
+                }
+
+                if(!l.settings.blobs) return;
+                if (l.settings.activeBlobIdx === undefined) l.settings.activeBlobIdx = 0;
+                
+                l.settings.blobs.forEach((b, idx) => {
+                    let stop = l.stops[idx]; if (!stop) stop = l.stops[0] || {r:255,g:255,b:255,a:1};
+                    let o = b.opacity !== undefined ? b.opacity : 1;
+                    let color = `rgba(${stop.r},${stop.g},${stop.b},${stop.a * o})`;
+                    let isActive = l.settings.activeBlobIdx === idx;
+                    
+                    let ring = document.createElement('div');
+                    let bw = b.width !== undefined ? b.width : (b.size || 40);
+                    let bh = b.height !== undefined ? b.height : (b.size || 40);
+                    
+                    ring.className = `blob-ring-node ${isActive ? '!border-[var(--primary)] border-solid border-2' : ''}`;
+                    ring.style.left = `${b.x}%`; ring.style.top = `${b.y}%`;
+                    ring.style.width = `${bw * 2}%`; ring.style.height = `${bh * 2}%`;
+                    overlay.appendChild(ring);
+                    
+                    let handle = document.createElement('div');
+                    handle.className = `blob-handle-node ${isActive ? 'active-handle' : ''}`;
+                    handle.style.left = `${b.x}%`; handle.style.top = `${b.y}%`;
+                    handle.style.pointerEvents = 'auto'; handle.style.backgroundColor = color;
+                    
+                    handle.onpointerdown = (e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        this.app.setActiveBlob(l.id, idx);
+                        const rect = overlay.getBoundingClientRect();
+                        
+                        const move = (ev) => {
+                            let newX = Utils.clamp(((ev.clientX - rect.left) / rect.width) * 100, -50, 150);
+                            let newY = Utils.clamp(((ev.clientY - rect.top) / rect.height) * 100, -50, 150);
+                            b.x = newX; b.y = newY;
+                            handle.style.left = `${newX}%`; handle.style.top = `${newY}%`;
+                            ring.style.left = `${newX}%`; ring.style.top = `${newY}%`;
+                            const targetDom = document.getElementById('layer-node-' + l.id);
+                            if (targetDom) targetDom.style.background = this.getCSS(l);
+                        };
+                        const up = (ev) => {
+                            window.removeEventListener('pointermove', move); 
+                            window.removeEventListener('pointerup', up);
+                            b.x = Math.round(b.x); b.y = Math.round(b.y);
+                            this.app.history.save();
+                        };
+                        window.addEventListener('pointermove', move, { passive: false }); 
+                        window.addEventListener('pointerup', up);
+                    };
+                    overlay.appendChild(handle);
+                });
+            }
+
+            startAurora(canvas, layer) {
+                const ctx = canvas.getContext('2d');
+                if (this.auroraTimes[layer.id] === undefined) this.auroraTimes[layer.id] = 0;
+                
+                const baseSpeed = layer.settings.speed / 10000;
+                const nW = Math.min(layer.settings.waves || 4, layer.stops.length);
+                const bri = (layer.settings.brightness || 70) / 100;
+                const cmpl = layer.settings.complexity / 10;
+                
+                const loop = () => {
+                    if (this.app.animState.status === 'playing') {
+                        let speedMod = (this.app.animState.speed / 50);
+                        this.auroraTimes[layer.id] += baseSpeed * speedMod;
+                    }
+                    let time = this.auroraTimes[layer.id];
+                    let w = canvas.width, h = canvas.height;
+                    
+                    ctx.clearRect(0, 0, w, h);
+                    ctx.globalCompositeOperation = 'screen'; 
+                    
+                    for(let wi=0; wi<nW; wi++) {
+                        const stop = layer.stops[wi % layer.stops.length];
+                        if(!stop) continue;
+                        const phase = wi*(Math.PI*2/nW) + time*(0.5+wi*0.3);
+                        const yBase = h*(0.15+wi*0.14);
+                        
+                        ctx.beginPath(); ctx.moveTo(0, h);
+                        for(let x=0; x<=w; x+=3) {
+                            const xn = x/w; let y = yBase;
+                            for(let k=1; k<=cmpl; k++) {
+                                y += Math.sin(xn*Math.PI*2*k + phase + k*0.5)*h*(0.08+0.04/k);
+                                y += Math.cos(xn*Math.PI*3*k + time*(0.3+k*0.1))*h*(0.04/k);
+                            }
+                            ctx.lineTo(x, y);
+                        }
+                        ctx.lineTo(w, h); ctx.closePath();
+                        
+                        const grd = ctx.createLinearGradient(0, yBase-h*0.3, 0, yBase+h*0.5);
+                        grd.addColorStop(0, `rgba(${stop.r},${stop.g},${stop.b},0)`);
+                        grd.addColorStop(0.3, `rgba(${stop.r},${stop.g},${stop.b},${bri*0.85})`);
+                        grd.addColorStop(0.7, `rgba(${stop.r},${stop.g},${stop.b},${bri*0.35})`);
+                        grd.addColorStop(1, `rgba(${stop.r},${stop.g},${stop.b},0)`);
+                        
+                        ctx.fillStyle = grd; ctx.fill();
+                    }
+                    
+                    ctx.globalCompositeOperation = 'source-over';
+                    
+                    if (this.app.animState.status === 'playing') {
+                        this.auroraFrames[layer.id] = requestAnimationFrame(loop);
+                    }
+                };
+                if (this.app.animState.status !== 'stopped' || this.auroraTimes[layer.id] === 0) loop();
+            }
+        }
+
+        class ColorPickerUI {
+            constructor(app) {
+                this.app = app; this.dragging = null; this.activeCaptureEl = null;
+                this.bindEvents();
+            }
+            bindEvents() {
+                window.addEventListener('pointerdown', e => { 
+                    const svArea = e.target.closest('.sat-val-area');
+                    if (svArea) {
+                        this.dragging = 'sv'; this.app.activeLayerId = svArea.dataset.layerId; this.activeCaptureEl = svArea;
+                        try { svArea.setPointerCapture(e.pointerId); } catch(err){}
+                        this.update(e); return;
+                    }
+                    const hueTrack = e.target.closest('.hue-track');
+                    if (hueTrack) {
+                        this.dragging = 'hue'; this.app.activeLayerId = hueTrack.dataset.layerId; this.activeCaptureEl = hueTrack;
+                        try { hueTrack.setPointerCapture(e.pointerId); } catch(err){}
+                        this.update(e); return;
+                    }
+                    const alphaTrack = e.target.closest('.alpha-track-container');
+                    if (alphaTrack) {
+                        this.dragging = 'alpha'; this.app.activeLayerId = alphaTrack.dataset.layerId; this.activeCaptureEl = alphaTrack;
+                        try { alphaTrack.setPointerCapture(e.pointerId); } catch(err){}
+                        this.update(e); return;
+                    }
+                    const stopsTrack = e.target.closest('.stops-track-container');
+                    if (stopsTrack && !e.target.closest('.stop-thumb')) {
+                        const r = stopsTrack.getBoundingClientRect();
+                        let p = Utils.clamp((e.clientX - r.left)/r.width * 100, 0, 100);
+                        this.app.activeLayerId = stopsTrack.dataset.layerId;
+                        this.app.addStop(p); return;
+                    }
+                });
+                
+                window.addEventListener('pointermove', e => { if(this.dragging) this.update(e); });
+                window.addEventListener('pointerup', (e) => { 
+                    if(this.dragging) { 
+                        if(this.activeCaptureEl) {
+                            try { this.activeCaptureEl.releasePointerCapture(e.pointerId); } catch(err){}
+                            this.activeCaptureEl = null;
+                        }
+                        this.app.history.save(); this.dragging = null; 
+                    }
+                });
+
+                window.addEventListener('keydown', e => {
+                    if((e.key === 'Backspace' || e.key === 'Delete') && e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT' && !e.target.isContentEditable) {
+                        this.app.removeStop();
+                    }
+                });
+            }
+
+            update(e) {
+                let r;
+                const l = this.app.getActiveLayer();
+                if(!l) return;
+                let sIdx = l.settings.activeStopIdx || 0;
+                let s = l.stops[sIdx];
+                if(!s) return;
+                
+                let [h, sat, v] = s._hsv || Utils.rgb2hsv(s.r, s.g, s.b);
+
+                if(this.dragging === 'sv') {
+                    r = document.getElementById(`cp-sv-area-${l.id}`).getBoundingClientRect();
+                    sat = Utils.clamp((e.clientX - r.left)/r.width, 0, 1);
+                    v = 1 - Utils.clamp((e.clientY - r.top)/r.height, 0, 1);
+                } else if(this.dragging === 'hue') {
+                    r = document.getElementById(`cp-hue-track-${l.id}`).getBoundingClientRect();
+                    h = Utils.clamp((e.clientX - r.left)/r.width, 0, 1);
+                } else if(this.dragging === 'alpha') {
+                    r = document.getElementById(`cp-alpha-track-${l.id}`).getBoundingClientRect();
+                    s.a = Utils.clamp((e.clientX - r.left)/r.width, 0, 1);
+                    this.app.updateActiveStop(null, null, null, s.a, null);
+                    return;
+                } else if(this.dragging === 'stop') {
+                    r = document.getElementById(`stops-track-container-${l.id}`).getBoundingClientRect();
+                    let p = Utils.clamp((e.clientX - r.left)/r.width * 100, 0, 100);
+                    this.app.updateActiveStop(null, null, null, null, p);
+                    return;
+                }
+
+                s._hsv = [h, sat, v]; 
+                let [red, green, blue] = Utils.hsv2rgb(h, sat, v);
+                this.app.updateActiveStop(red, green, blue, s.a, null);
+            }
+
+            renderStops(layer, activeIdx) {
+                const cont = document.getElementById(`stops-thumbs-${layer.id}`);
+                if(!cont) return;
+                
+                if(!layer.stops || !layer.stops.length) {
+                    document.getElementById(`stops-track-${layer.id}`).style.background = 'transparent';
+                    return;
+                }
+                const bg = layer.stops.slice().sort((a,b)=>a.pos-b.pos).map(s=>`rgba(${s.r},${s.g},${s.b},${s.a}) ${s.pos}%`).join(',');
+                document.getElementById(`stops-track-${layer.id}`).style.background = `linear-gradient(to right, ${bg})`;
+
+                const existingThumbs = cont.querySelectorAll('.stop-thumb');
+                if (existingThumbs.length === layer.stops.length) {
+                    layer.stops.forEach((s, i) => {
+                        let th = existingThumbs[i];
+                        th.className = `stop-thumb ${i === activeIdx ? 'active' : ''}`;
+                        th.style.left = `${s.pos}%`;
+                        th.firstElementChild.style.backgroundColor = `rgba(${s.r},${s.g},${s.b},${s.a})`;
+                    });
+                    return;
+                }
+
+                cont.innerHTML = '';
+                layer.stops.forEach((s, i) => {
+                    let th = document.createElement('div');
+                    th.className = `stop-thumb ${i===activeIdx?'active':''}`;
+                    th.style.left = `${s.pos}%`;
+                    th.innerHTML = `<div class="stop-thumb-dot" style="background-color: rgba(${s.r},${s.g},${s.b},${s.a});"></div>`;
+                    th.onpointerdown = e => { 
+                        e.stopPropagation(); 
+                        layer.settings.activeStopIdx = i; 
+                        this.dragging = 'stop'; this.activeCaptureEl = th;
+                        this.app.activeLayerId = layer.id;
+                        try { th.setPointerCapture(e.pointerId); } catch(err){}
+                        this.renderPicker(layer);
+                        this.renderStops(layer, layer.settings.activeStopIdx);
+                    };
+                    cont.appendChild(th);
+                });
+            }
+
+            renderPicker(layer) {
+                let activeIdx = layer.settings.activeStopIdx || 0;
+                let s = layer.stops[activeIdx];
+                if(!s) return;
+
+                let [h, sat, v] = s._hsv || Utils.rgb2hsv(s.r, s.g, s.b);
+
+                let svThumb = document.getElementById(`cp-sv-thumb-${layer.id}`);
+                let hueThumb = document.getElementById(`cp-hue-thumb-${layer.id}`);
+                let alphaThumb = document.getElementById(`cp-alpha-thumb-${layer.id}`);
+                let svArea = document.getElementById(`cp-sv-area-${layer.id}`);
+                let alphaTrack = document.getElementById(`cp-alpha-track-${layer.id}`);
+                let hexInp = document.getElementById(`cp-hex-${layer.id}`);
+                let alphaInp = document.getElementById(`cp-alpha-val-${layer.id}`);
+
+                if(svThumb) { svThumb.style.left = `${sat*100}%`; svThumb.style.top = `${(1-v)*100}%`; }
+                if(hueThumb) hueThumb.style.left = `${h*100}%`;
+                if(alphaThumb) alphaThumb.style.left = `${s.a*100}%`;
+
+                const [hr,hg,hb] = Utils.hsv2rgb(h, 1, 1);
+                if(svArea) svArea.style.backgroundColor = `rgb(${hr},${hg},${hb})`;
+
+                if(alphaTrack) alphaTrack.style.background = `linear-gradient(to right, rgba(${s.r},${s.g},${s.b},0), rgba(${s.r},${s.g},${s.b},1))`;
+
+                if(hexInp && document.activeElement !== hexInp) hexInp.value = Utils.rgb2hex(s.r,s.g,s.b);
+                if(alphaInp && document.activeElement !== alphaInp) alphaInp.value = Math.round(s.a*100);
+            }
+        }
+
+        class ExportEngine {
+            constructor(app) { this.app = app; }
+            
+            getExportStrings(l, i, hasAnim, aStyle, aSpeed, intensity) {
+                const bg = this.app.renderer.getCSS(l, true);
+                let cssBlock = `  background: ${bg};\n  mix-blend-mode: ${l.blendMode};\n  opacity: ${l.opacity};\n`;
+                if(hasAnim && l.type!=='blob' && l.type!=='liquid' && l.type!=='mesh' && l.type!=='aurora') {
+                    if (aStyle === 'drift') cssBlock += `  background-size: ${120 + intensity}% ${120 + intensity}%;\n  animation: anim-drift ${aSpeed + i*2}s ease infinite alternate;\n`;
+                    else if (aStyle === 'pulse') cssBlock += `  animation: anim-pulse ${aSpeed + i*2}s ease-in-out infinite alternate;\n`;
+                    else if (aStyle === 'hue') cssBlock += `  animation: anim-hue ${aSpeed + i*2}s linear infinite alternate;\n`;
+                    else if (aStyle === 'breathe') cssBlock += `  background-size: 100% 100%; background-position: center;\n  animation: anim-breathe ${aSpeed + i*2}s ease-in-out infinite alternate;\n`;
+                }
+                
+                const stops = l.stops.slice().sort((a,b)=>a.pos-b.pos);
+                let reactColors = stops.map(s=> `'rgba(${s.r},${s.g},${s.b},${s.a})'`).join(', ');
+                let swiftUIColors = stops.map(s=> `Color(red: ${(s.r/255).toFixed(2)}, green: ${(s.g/255).toFixed(2)}, blue: ${(s.b/255).toFixed(2)}, opacity: ${s.a})`).join(', ');
+                let composeColors = stops.map(s=> `Color(0x${Math.round(s.a*255).toString(16).padStart(2,'0').toUpperCase()}${Utils.rgb2hex(s.r,s.g,s.b).toUpperCase()})`).join(', ');
+                
+                let flutterColors = stops.map(s=> `Color(0x${Math.round(s.a*255).toString(16).padStart(2,'0').toUpperCase()}${Utils.rgb2hex(s.r,s.g,s.b).toUpperCase()})`).join(', ');
+                let xmlColors = stops.length >= 2 ? `android:startColor="#${Math.round(stops[0].a*255).toString(16).padStart(2,'0').toUpperCase()}${Utils.rgb2hex(stops[0].r,stops[0].g,stops[0].b).toUpperCase()}"\n        android:endColor="#${Math.round(stops[stops.length-1].a*255).toString(16).padStart(2,'0').toUpperCase()}${Utils.rgb2hex(stops[stops.length-1].r,stops[stops.length-1].g,stops[stops.length-1].b).toUpperCase()}"` : '';
+                if(stops.length > 2) xmlColors += `\n        android:centerColor="#${Math.round(stops[Math.floor(stops.length/2)].a*255).toString(16).padStart(2,'0').toUpperCase()}${Utils.rgb2hex(stops[Math.floor(stops.length/2)].r,stops[Math.floor(stops.length/2)].g,stops[Math.floor(stops.length/2)].b).toUpperCase()}"`;
+                let kotlinColors = `intArrayOf(${stops.map(s=> `Color.parseColor("#${Math.round(s.a*255).toString(16).padStart(2,'0').toUpperCase()}${Utils.rgb2hex(s.r,s.g,s.b).toUpperCase()}")`).join(', ')})`;
+                let javaColors = `new int[]{${stops.map(s=> `Color.parseColor("#${Math.round(s.a*255).toString(16).padStart(2,'0').toUpperCase()}${Utils.rgb2hex(s.r,s.g,s.b).toUpperCase()}")`).join(', ')}}`;
+                
+                return { bg, cssBlock, reactColors, swiftUIColors, rnColors: reactColors, composeColors, flutterColors, xmlColors, kotlinColors, javaColors };
+            }
+
+            generateCode(type) {
+                let code = '';
+                let hasAnim = this.app.animState.status !== 'stopped';
+                let aStyle = this.app.animState.style;
+                let aSpeed = 30 - (this.app.animState.speed / 100) * 28;
+                let intensity = this.app.animState.intensity;
+                let layers = [...this.app.layers].reverse().filter(l=>l.visible);
+                let bgColor = document.body.classList.contains('dark') ? '#0d1117' : '#f8fafc';
+
+                // Check for Liquid code dependency
+                let hasLiquid = layers.some(l => l.type === 'liquid');
+
+                if (type === 'codepen') {
+                    const cssExport = this.generateCode('css');
+                    const htmlData = `
+<div class="chroma-bg">
+  <h1 style="color: white; position: absolute; inset:0; display:flex; align-items:center; justify-content:center; font-family: sans-serif; mix-blend-mode: overlay; font-size: 5rem;">CHROMA</h1>
+</div>
+${hasLiquid ? `
+<svg width="0" height="0" style="position:absolute;">
+  <filter id="liquid-filter">
+    <feGaussianBlur in="SourceGraphic" stdDeviation="10" result="blur" />
+    <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -7" result="liquid" />
+    <feBlend in="SourceGraphic" in2="liquid" />
+  </filter>
+</svg>` : ''}
+`;
+                    const payload = {
+                        title: "Chroma Studio Background",
+                        html: htmlData,
+                        css: cssExport
+                    };
+                    document.getElementById('codepen-data').value = JSON.stringify(payload);
+                    
+                    document.getElementById('btn-codepen-launch').classList.remove('hidden');
+                    return "Ready to launch in CodePen! Click the button below.";
+                } else {
+                    const launchBtn = document.getElementById('btn-codepen-launch');
+                    if(launchBtn) launchBtn.classList.add('hidden');
+                }
+
+                if (type === 'css') {
+                    code = `.chroma-bg {\n  width: 100%; height: 100vh;\n  position: relative;\n  background-color: ${bgColor};\n}\n`;
+                    layers.forEach((l, i) => {
+                        let exp = this.getExportStrings(l, i, hasAnim, aStyle, aSpeed, intensity);
+                        let liquidStr = l.type === 'liquid' ? `  filter: url('#liquid-filter');\n` : '';
+                        code += `.chroma-bg::before /* Layer: ${l.name} */ {\n  content: ""; position: absolute; inset: 0;\n${liquidStr}${exp.cssBlock}}\n`;
+                    });
+                    if(hasAnim) {
+                        code += `\n/* Animations */\n@keyframes anim-drift { 0% { background-position: 0% 50%; } 100% { background-position: 100% 50%; } }\n`;
+                        code += `@keyframes anim-pulse { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(${1 + intensity/100}); opacity: ${Math.max(0.1, 1 - intensity/100)}; } }\n`;
+                        code += `@keyframes anim-hue { 0% { filter: hue-rotate(0deg); } 100% { filter: hue-rotate(${intensity * 3.6}deg); } }\n`;
+                        code += `@keyframes anim-breathe { 0% { background-size: 100% 100%; } 100% { background-size: ${100 + intensity}% ${100 + intensity}%; } }\n`;
+                    }
+                    if(hasLiquid) {
+                        code += `\n/* Note: Liquid filter requires SVG definition in HTML */\n`;
+                    }
+                } else if (type === 'tailwind') {
+                    let bgs = {};
+                    layers.forEach((l,i) => bgs[`chroma-${i}`] = this.getExportStrings(l,i).bg.replace(/\n/g, ' '));
+                    code = `// tailwind.config.js\nmodule.exports = {\n  theme: {\n    extend: {\n      backgroundImage: \n${JSON.stringify(bgs, null, 8).replace(/}$/,'      }')}\n    }\n  }\n}`;
+                    code += `\n\n// HTML Usage:\n<div class="relative w-full h-screen ${document.body.classList.contains('dark') ? 'bg-gray-950' : 'bg-slate-50'}">\n`;
+                    layers.forEach((l,i) => {
+                        let liquidClass = l.type === 'liquid' ? `style="filter: url('#liquid-filter');" ` : '';
+                        code += `  <div class="absolute inset-0 bg-chroma-${i} mix-blend-${l.blendMode} opacity-[${l.opacity}]" ${liquidClass}></div>\n`;
+                    });
+                    code += `</div>`;
+                } else if (type === 'react') {
+                    code = `import React from 'react';\n\nexport const ChromaBackground = () => {\n  return (\n    <div style={{ position: 'relative', width: '100%', height: '100vh', backgroundColor: '${bgColor}' }}>\n`;
+                    if (hasLiquid) {
+                        code += `      <svg width="0" height="0" style={{position:'absolute'}}>\n        <filter id="liquid-filter">\n          <feGaussianBlur in="SourceGraphic" stdDeviation="10" result="blur" />\n          <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -7" result="liquid" />\n          <feBlend in="SourceGraphic" in2="liquid" />\n        </filter>\n      </svg>\n`;
+                    }
+                    layers.forEach((l,i) => {
+                        let exp = this.getExportStrings(l, i);
+                        let liquidStyle = l.type === 'liquid' ? `filter: 'url(#liquid-filter)', ` : '';
+                        code += `      <div style={{ position: 'absolute', inset: 0, mixBlendMode: '${l.blendMode}', opacity: ${l.opacity}, ${liquidStyle}background: '${exp.bg.replace(/\n/g, ' ')}' }} />\n`;
+                    });
+                    code += `    </div>\n  );\n};`;
+                } else if (type === 'vue') {
+                    code = `<template>\n  <div class="chroma-wrap">\n`;
+                    if(hasLiquid) code += `    <svg width="0" height="0" style="position:absolute;"><filter id="liquid-filter"><feGaussianBlur in="SourceGraphic" stdDeviation="10" result="blur" /><feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 18 -7" result="liquid" /><feBlend in="SourceGraphic" in2="liquid" /></filter></svg>\n`;
+                    layers.forEach((l,i) => code += `    <div class="chroma-layer layer-${i}"></div>\n`);
+                    code += `  </div>\n</template>\n\n<style scoped>\n.chroma-wrap { position: relative; width: 100%; height: 100vh; background-color: ${bgColor}; }\n.chroma-layer { position: absolute; inset: 0; }\n`;
+                    layers.forEach((l,i) => {
+                        let exp = this.getExportStrings(l, i);
+                        let liq = l.type === 'liquid' ? 'filter: url("#liquid-filter"); ' : '';
+                        code += `.layer-${i} { ${liq}background: ${exp.bg.replace(/\n/g,' ')}; mix-blend-mode: ${l.blendMode}; opacity: ${l.opacity}; }\n`;
+                    });
+                    code += `</style>`;
+                } else if (type === 'svelte') {
+                    code = `<div class="chroma-wrap">\n`;
+                    if(hasLiquid) code += `  <svg width="0" height="0" style="position:absolute;"><filter id="liquid-filter"><feGaussianBlur in="SourceGraphic" stdDeviation="10" result="blur" /><feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 18 -7" result="liquid" /><feBlend in="SourceGraphic" in2="liquid" /></filter></svg>\n`;
+                    layers.forEach((l,i) => code += `  <div class="chroma-layer layer-${i}"></div>\n`);
+                    code += `</div>\n\n<style>\n  .chroma-wrap { position: relative; width: 100%; height: 100vh; background-color: ${bgColor}; }\n  .chroma-layer { position: absolute; inset: 0; }\n`;
+                    layers.forEach((l,i) => {
+                        let exp = this.getExportStrings(l, i);
+                        let liq = l.type === 'liquid' ? 'filter: url("#liquid-filter"); ' : '';
+                        code += `  .layer-${i} { ${liq}background: ${exp.bg.replace(/\n/g,' ')}; mix-blend-mode: ${l.blendMode}; opacity: ${l.opacity}; }\n`;
+                    });
+                    code += `</style>`;
+                } else if (type === 'angular') {
+                    code = `<!-- component.html -->\n<div class="chroma-wrap">\n`;
+                    if(hasLiquid) code += `  <svg width="0" height="0" style="position:absolute;"><filter id="liquid-filter"><feGaussianBlur in="SourceGraphic" stdDeviation="10" result="blur" /><feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 18 -7" result="liquid" /><feBlend in="SourceGraphic" in2="liquid" /></filter></svg>\n`;
+                    layers.forEach((l,i) => code += `  <div class="chroma-layer layer-${i}"></div>\n`);
+                    code += `</div>\n\n/* component.css */\n.chroma-wrap { position: relative; width: 100%; height: 100vh; background-color: ${bgColor}; }\n.chroma-layer { position: absolute; inset: 0; }\n`;
+                    layers.forEach((l,i) => {
+                        let exp = this.getExportStrings(l, i);
+                        let liq = l.type === 'liquid' ? 'filter: url("#liquid-filter"); ' : '';
+                        code += `.layer-${i} { ${liq}background: ${exp.bg.replace(/\n/g,' ')}; mix-blend-mode: ${l.blendMode}; opacity: ${l.opacity}; }\n`;
+                    });
+                } else if (type === 'swiftui') {
+                    code = `import SwiftUI\n\nstruct ChromaBackground: View {\n    var body: some View {\n        ZStack {\n            Color(red: 0.97, green: 0.98, blue: 0.99).ignoresSafeArea()\n\n`;
+                    layers.forEach((l,i) => {
+                        let exp = this.getExportStrings(l, i);
+                        let gradientType = l.type === 'radial' ? `RadialGradient(gradient: Gradient(colors: [${exp.swiftUIColors}]), center: .center, startRadius: 0, endRadius: 300)` : 
+                                          l.type === 'conic' ? `AngularGradient(gradient: Gradient(colors: [${exp.swiftUIColors}]), center: .center, angle: .degrees(${l.settings.angle}))` : 
+                                         `LinearGradient(gradient: Gradient(colors: [${exp.swiftUIColors}]), startPoint: .topLeading, endPoint: .bottomTrailing)`;
+                        if (l.type === 'blob' || l.type === 'liquid' || l.type === 'aurora' || l.type === 'mesh') gradientType = `// Complex gradient requires custom drawing Canvas\n            Color.clear`;
+                        code += `            ${gradientType}\n                .blendMode(.${l.blendMode.replace('-','')})\n                .opacity(${l.opacity})\n                .ignoresSafeArea()\n\n`;
+                    });
+                    code += `        }\n    }\n}`;
+                } else if (type === 'compose') {
+                    code = `import androidx.compose.foundation.background\nimport androidx.compose.foundation.layout.*\nimport androidx.compose.ui.Modifier\nimport androidx.compose.ui.graphics.*\nimport androidx.compose.runtime.Composable\n\n@Composable\nfun ChromaBackground() {\n    Box(modifier = Modifier.fillMaxSize().background(Color(0xFFF8FAFC))) {\n`;
+                    layers.forEach((l,i) => {
+                        let exp = this.getExportStrings(l, i);
+                        let brush = l.type === 'radial' ? `Brush.radialGradient(colors = listOf(${exp.composeColors}))` : 
+                                   l.type === 'conic' ? `Brush.sweepGradient(colors = listOf(${exp.composeColors}))` : 
+                                  `Brush.linearGradient(colors = listOf(${exp.composeColors}))`;
+                        if (l.type === 'blob' || l.type === 'liquid' || l.type === 'aurora' || l.type === 'mesh') brush = `Brush.linearGradient(colors = listOf(Color.Transparent, Color.Transparent)) /* Complex gradients require Canvas draw phase */`;
+                        code += `        Box(\n            modifier = Modifier.fillMaxSize().background(${brush}, alpha = ${l.opacity}f)\n        )\n`;
+                    });
+                    code += `    }\n}`;
+                } else if (type === 'flutter') {
+                    code = `import 'package:flutter/material.dart';\n\nclass ChromaBackground extends StatelessWidget {\n  @override\n  Widget build(BuildContext context) {\n    return Stack(\n      children: [\n        Container(color: Color(${bgColor === '#0d1117' ? '0xFF0d1117' : '0xFFF8FAFC'})),\n`;
+                    layers.forEach((l,i) => {
+                        let exp = this.getExportStrings(l, i);
+                        let grad = l.type === 'radial' ? `RadialGradient(colors: [${exp.flutterColors}], center: Alignment.center, radius: 1.0)` : 
+                                  l.type === 'conic' ? `SweepGradient(colors: [${exp.flutterColors}], center: Alignment.center)` :
+                                 `LinearGradient(colors: [${exp.flutterColors}], begin: Alignment.topLeft, end: Alignment.bottomRight)`;
+                        if (l.type === 'blob' || l.type === 'liquid' || l.type === 'aurora' || l.type === 'mesh') grad = `LinearGradient(colors: [Color(0x00000000), Color(0x00000000)]) /* Complex gradients require CustomPaint Canvas API */`;
+                        code += `        Opacity(\n          opacity: ${l.opacity},\n          child: Container(\n            decoration: BoxDecoration(gradient: ${grad}),\n          ),\n        ),\n`;
+                    });
+                    code += `      ],\n    );\n  }\n}`;
+                } else if (type === 'rn') {
+                    code = `import React from 'react';\nimport { View, StyleSheet } from 'react-native';\nimport LinearGradient from 'react-native-linear-gradient';\n\nexport const ChromaBackground = () => {\n  return (\n    <View style={styles.container}>\n`;
+                    layers.forEach((l,i) => {
+                        let exp = this.getExportStrings(l, i);
+                        code += `      <LinearGradient colors={[${exp.rnColors}]} style={[StyleSheet.absoluteFill, { opacity: ${l.opacity} }]} />\n`;
+                    });
+                    code += `    </View>\n  );\n};\n\nconst styles = StyleSheet.create({\n  container: { flex: 1, backgroundColor: '${bgColor}' },\n});`;
+                } else if (type === 'xml') {
+                    code = `<!-- res/drawable/chroma_bg.xml -->\n<?xml version="1.0" encoding="utf-8"?>\n<layer-list xmlns:android="http://schemas.android.com/apk/res/android">\n  <item>\n    <shape android:shape="rectangle">\n      <solid android:color="${bgColor}"/>\n    </shape>\n  </item>\n`;
+                    layers.forEach((l,i) => {
+                        let exp = this.getExportStrings(l, i);
+                        let typeMap = l.type === 'radial' ? 'radial' : l.type === 'conic' ? 'sweep' : 'linear';
+                        if (l.type === 'blob' || l.type === 'liquid' || l.type === 'aurora' || l.type === 'mesh') return;
+                        code += `  <item>\n    <shape android:shape="rectangle">\n      <gradient\n        android:type="${typeMap}"\n        ${l.type === 'linear' ? `android:angle="${l.settings.angle}"\n        ` : l.type==='radial' ? `android:gradientRadius="300dp"\n        ` : ''}${exp.xmlColors} />\n    </shape>\n  </item>\n`;
+                    });
+                    code += `</layer-list>`;
+                } else if (type === 'kotlin') {
+                    code = `// Android Kotlin Programmatic Gradient\nval backgroundLayer = GradientDrawable()\nbackgroundLayer.setColor(Color.parseColor("${bgColor}"))\n\nval layers = mutableListOf<Drawable>(backgroundLayer)\n\n`;
+                    layers.forEach((l,i) => {
+                        let exp = this.getExportStrings(l, i);
+                        let shape = l.type === 'radial' ? 'GradientDrawable.RADIAL_GRADIENT' : l.type === 'conic' ? 'GradientDrawable.SWEEP_GRADIENT' : 'GradientDrawable.LINEAR_GRADIENT';
+                        if (l.type === 'blob' || l.type === 'liquid' || l.type === 'aurora' || l.type === 'mesh') return;
+                        code += `val layer${i} = GradientDrawable(GradientDrawable.Orientation.TL_BR, ${exp.kotlinColors})\nlayer${i}.gradientType = ${shape}\nlayer${i}.alpha = ${(l.opacity * 255).toFixed(0)}\nlayers.add(layer${i})\n\n`;
+                    });
+                    code += `val layerDrawable = LayerDrawable(layers.toTypedArray())\nview.background = layerDrawable`;
+                } else if (type === 'java') {
+                    code = `// Android Java Programmatic Gradient\nGradientDrawable backgroundLayer = new GradientDrawable();\nbackgroundLayer.setColor(Color.parseColor("${bgColor}"));\n\nDrawable[] layers = new Drawable[${layers.length + 1}];\nlayers[0] = backgroundLayer;\n\n`;
+                    layers.forEach((l,i) => {
+                        let exp = this.getExportStrings(l, i);
+                        let shape = l.type === 'radial' ? 'GradientDrawable.RADIAL_GRADIENT' : l.type === 'conic' ? 'GradientDrawable.SWEEP_GRADIENT' : 'GradientDrawable.LINEAR_GRADIENT';
+                        if (l.type === 'blob' || l.type === 'liquid' || l.type === 'aurora' || l.type === 'mesh') return;
+                        code += `GradientDrawable layer${i} = new GradientDrawable(GradientDrawable.Orientation.TL_BR, ${exp.javaColors});\nlayer${i}.setGradientType(${shape});\nlayer${i}.setAlpha(${(l.opacity * 255).toFixed(0)});\nlayers[${i+1}] = layer${i};\n\n`;
+                    });
+                    code += `LayerDrawable layerDrawable = new LayerDrawable(layers);\nview.setBackground(layerDrawable);`;
+                } else if (type === 'canvas') {
+                    code = `// Canvas JS rendering for accurate Aurora & Complex effects\nconst canvas = document.getElementById("chromaCanvas");\nconst ctx = canvas.getContext("2d");\nlet time = 0;\n\nfunction render() {\n  ctx.clearRect(0, 0, canvas.width, canvas.height);\n`;
+                    code += `  ctx.fillStyle = "${bgColor}";\n  ctx.fillRect(0, 0, canvas.width, canvas.height);\n`;
+                    layers.forEach((l,i) => {
+                        if (l.type === 'aurora') {
+                            code += `  // Aurora Math\n  const nW = Math.min(${l.settings.waves || 4}, ${l.stops.length});\n  ctx.globalCompositeOperation = "screen";\n  ctx.globalAlpha = ${l.opacity};\n`;
+                            code += `  for(let wi=0; wi<nW; wi++) {\n    const phase = wi*(Math.PI*2/nW) + time*(0.5+wi*0.3);\n    const yBase = canvas.height*(0.15+wi*0.14);\n    ctx.beginPath(); ctx.moveTo(0, canvas.height);\n    for(let x=0; x<=canvas.width; x+=3) {\n      let y = yBase;\n      for(let k=1; k<=${(l.settings.complexity||50)/10}; k++) {\n        y += Math.sin((x/canvas.width)*Math.PI*2*k + phase + k*0.5)*canvas.height*(0.08+0.04/k);\n      }\n      ctx.lineTo(x, y);\n    }\n    ctx.lineTo(canvas.width, canvas.height); ctx.closePath();\n    ctx.fillStyle = "rgba(255,255,255,0.2)"; // Set stops here based on layer.stops\n    ctx.fill();\n  }\n`;
+                        }
+                    });
+                    code += `  ctx.globalAlpha = 1.0;\n  ctx.globalCompositeOperation = "source-over";\n  time += 0.005;\n  requestAnimationFrame(render);\n}\nrender();`;
+                }
+                return code;
+            }
+
+            _generateSVGString() {
+                const stackClone = document.getElementById('render-stack').cloneNode(true);
+                const nodes = stackClone.querySelectorAll('.layer-node');
+                
+                nodes.forEach(node => {
+                    node.removeAttribute('class');
+                    node.style.position = 'absolute'; node.style.inset = '0';
+                    node.style.width = '100%'; node.style.height = '100%';
+                    if (node.tagName.toLowerCase() === 'canvas') {
+                        const orig = document.getElementById(node.id);
+                        if (orig) {
+                            const img = document.createElement('img'); img.src = orig.toDataURL('image/png');
+                            img.style.cssText = node.style.cssText; img.style.objectFit = 'cover';
+                            node.parentNode.replaceChild(img, node);
+                        }
+                    }
+                });
+
+                const serializer = new XMLSerializer(); let html = '';
+                Array.from(stackClone.childNodes).forEach(child => { html += serializer.serializeToString(child); });
+
+                let extraMask = '';
+                if (this.app.shape === 'text') {
+                    const textHTML = document.getElementById('text-mask-preview').innerHTML;
+                    extraMask = `<div style="font-family: 'Inter', system-ui, sans-serif; font-size: 360px; font-weight: 900; letter-spacing: -0.05em; color: white; background-color: #050505; mix-blend-mode: multiply; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; white-space: pre-wrap;" xmlns="http://www.w3.org/1999/xhtml">${textHTML}</div>`;
+                }
+                
+                let bgColor = document.body.classList.contains('dark') ? '#0d1117' : '#f8fafc';
+                
+                // Add color blind filters if active
+                let filterDefs = '';
+                const cbSim = document.getElementById('color-blind-sim')?.value;
+                if(cbSim && cbSim !== 'none') {
+                    filterDefs = document.querySelector('.svg-filters').innerHTML;
+                    html = `<g filter="url(#${cbSim})">${html}</g>`;
+                }
+                
+                // Post processing
+                const postFx = document.getElementById('post-fx-select')?.value;
+                let postFxHtml = '';
+                if (postFx === 'halftone') {
+                    postFxHtml = `<div xmlns="http://www.w3.org/1999/xhtml" style="position:absolute; inset:0; mix-blend-mode:overlay; opacity:0.3; background: radial-gradient(circle, #000 2px, transparent 2.5px); background-size: 8px 8px;"></div>`;
+                } else if (postFx === 'dither') {
+                    postFxHtml = `<div xmlns="http://www.w3.org/1999/xhtml" style="position:absolute; inset:0; mix-blend-mode:multiply; opacity:0.5; background-image: repeating-linear-gradient(45deg, rgba(0,0,0,0.1) 25%, transparent 25%, transparent 75%, rgba(0,0,0,0.1) 75%, rgba(0,0,0,0.1)), repeating-linear-gradient(45deg, rgba(0,0,0,0.1) 25%, transparent 25%, transparent 75%, rgba(0,0,0,0.1) 75%, rgba(0,0,0,0.1)); background-position: 0 0, 2px 2px; background-size: 4px 4px;"></div>`;
+                }
+                
+                return `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080">${filterDefs}<foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml" style="width:100%; height:100%; background: ${bgColor}; position:relative; overflow:hidden;">${html}${extraMask}${postFxHtml}</div></foreignObject></svg>`;
+            }
+
+            downloadSVG() {
+                const svg = this._generateSVGString();
+                this._triggerDownload("data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg), "chroma-studio.svg");
+            }
+            downloadPNG() { this._renderImage('png'); }
+            downloadJPG() { this._renderImage('jpeg'); }
+
+            _renderImage(format) {
+                Utils.toast(`Rendering ${format.toUpperCase()}...`);
+                const svg = this._generateSVGString(); const img = new Image();
+                img.onload = () => {
+                    const cvs = document.createElement('canvas'); cvs.width = 1920; cvs.height = 1080;
+                    const ctx = cvs.getContext('2d');
+                    if (format === 'jpeg') { ctx.fillStyle = document.body.classList.contains('dark') ? '#0d1117' : '#f8fafc'; ctx.fillRect(0, 0, 1920, 1080); }
+                    ctx.drawImage(img, 0, 0);
+                    this._triggerDownload(cvs.toDataURL(`image/${format}`, 1.0), `chroma-studio.${format === 'jpeg' ? 'jpg' : 'png'}`);
+                };
+                img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+            }
+            
+            downloadVideo() {
+                const container = document.getElementById('canvas-container');
+                const canvas = document.createElement('canvas');
+                canvas.width = 800; canvas.height = 600;
+                const ctx = canvas.getContext('2d');
+                
+                Utils.toast('Recording 5s Video... Please wait.');
+                
+                // Draw everything frame by frame
+                const svgStr = this._generateSVGString();
+                
+                const stream = canvas.captureStream(30);
+                const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+                const chunks = [];
+                recorder.ondataavailable = e => chunks.push(e.data);
+                recorder.onstop = () => {
+                    const blob = new Blob(chunks, { type: 'video/webm' });
+                    this._triggerDownload(URL.createObjectURL(blob), 'chroma-studio.webm');
+                    Utils.toast('Video Downloaded!');
+                };
+                
+                recorder.start();
+                
+                let frames = 0;
+                const drawFrame = () => {
+                    if(frames >= 150) { recorder.stop(); return; }
+                    
+                    const img = new Image();
+                    img.onload = () => {
+                        ctx.fillStyle = document.body.classList.contains('dark') ? '#0d1117' : '#f8fafc';
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        frames++;
+                        requestAnimationFrame(drawFrame);
+                    };
+                    // Slight tweak to svg to force CSS animation progression (simulated)
+                    const tickSvg = svgStr.replace('<svg', `<svg data-tick="${frames}"`);
+                    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(tickSvg);
+                };
+                drawFrame();
+            }
+            
+            _triggerDownload(uri, name) {
+                let a = document.createElement('a'); a.href = uri; a.download = name; a.click();
+            }
+        }
+
+        class ChromaApp {
+            constructor() {
+                this.layers = [];
+                this.activeLayerId = null;
+                this.pendingDeleteId = null;
+                this.skipDeleteConfirm = false;
+                this.globalGrain = 0;
+                this.shape = 'rounded';
+                this.animState = { status: 'playing', style: 'drift', speed: 50, intensity: 50 };
+                this.reactivityEnabled = false;
+                
+                this.history = new HistoryManager(this);
+                this.renderer = new RenderEngine(this);
+                this.colorPicker = new ColorPickerUI(this);
+                this.exportEngine = new ExportEngine(this);
+                
+                this.ui = this.buildUIController();
+            }
+
+            buildDynamicToolsHTML(l) {
+                let repeatToggle = `<div class="switch-container mt-3 pt-3 border-t border-[var(--glass-border)]">
+                    <span class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest">Repeat Pattern</span>
+                    <label class="switch"><input type="checkbox" id="repeat-${l.id}" ${l.settings.repeat ? 'checked' : ''} onchange="app.getLayer('${l.id}').settings.repeat = this.checked; app.renderer.updateLayerCSS('${l.id}'); app.history.save();"><span class="slider"></span></label>
+                </div>`;
+
+                if (l.type === 'linear') {
+                    return `<div class="field mb-0"><label class="field-label flex-between">Angle <span id="val-angle-${l.id}" class="font-mono text-[var(--text-main)] normal-case text-xs">${l.settings.angle}°</span></label><div class="range-wrap mt-1"><input type="range" class="range" min="0" max="360" value="${l.settings.angle}" oninput="app.getLayer('${l.id}').settings.angle = this.value; document.getElementById('val-angle-${l.id}').innerText=this.value+'°'; app.renderer.updateLayerCSS('${l.id}');" onchange="app.history.save()"></div></div>` + repeatToggle;
+                } else if (l.type === 'radial') {
+                    let w = l.settings.width !== undefined ? l.settings.width : 70;
+                    let h = l.settings.height !== undefined ? l.settings.height : 70;
+                    return `<div class="grid grid-cols-2 gap-3 mb-3"><div class="field mb-0"><label class="field-label">Center X (%)</label><input type="number" id="radial-pos-x-${l.id}" min="-50" max="150" value="${l.settings.posX}" class="flat-input text-xs" oninput="app.getLayer('${l.id}').settings.posX = this.value; app.renderer.updateLayerCSS('${l.id}');" onchange="app.history.save()"></div><div class="field mb-0"><label class="field-label">Center Y (%)</label><input type="number" id="radial-pos-y-${l.id}" min="-50" max="150" value="${l.settings.posY}" class="flat-input text-xs" oninput="app.getLayer('${l.id}').settings.posY = this.value; app.renderer.updateLayerCSS('${l.id}');" onchange="app.history.save()"></div></div>
+                    <div class="grid grid-cols-2 gap-3"><div class="field mb-0"><label class="field-label flex-between">Width X <span id="rad-val-w-${l.id}" class="font-mono text-[var(--text-main)] normal-case text-xs">${w}%</span></label><div class="range-wrap mt-1"><input type="range" class="range" min="10" max="300" value="${w}" ondragstart="event.preventDefault()" oninput="app.getLayer('${l.id}').settings.width = this.value; document.getElementById('rad-val-w-${l.id}').innerText=this.value+'%'; app.renderer.updateLayerCSS('${l.id}');" onchange="app.history.save()"></div></div>
+                    <div class="field mb-0"><label class="field-label flex-between">Height Y <span id="rad-val-h-${l.id}" class="font-mono text-[var(--text-main)] normal-case text-xs">${h}%</span></label><div class="range-wrap mt-1"><input type="range" class="range" min="10" max="300" value="${h}" ondragstart="event.preventDefault()" oninput="app.getLayer('${l.id}').settings.height = this.value; document.getElementById('rad-val-h-${l.id}').innerText=this.value+'%'; app.renderer.updateLayerCSS('${l.id}');" onchange="app.history.save()"></div></div></div>` + repeatToggle;
+                } else if (l.type === 'conic') {
+                    return `<div class="field mb-3"><label class="field-label flex-between">Angle <span id="val-angle-${l.id}" class="font-mono text-[var(--text-main)] normal-case text-xs">${l.settings.angle}°</span></label><div class="range-wrap mt-1"><input type="range" class="range" min="0" max="360" value="${l.settings.angle}" ondragstart="event.preventDefault()" oninput="app.getLayer('${l.id}').settings.angle = this.value; document.getElementById('val-angle-${l.id}').innerText=this.value+'°'; app.renderer.updateLayerCSS('${l.id}');" onchange="app.history.save()"></div></div>
+                    <div class="grid grid-cols-2 gap-3"><div class="field mb-0"><label class="field-label">Center X (%)</label><input type="number" id="conic-pos-x-${l.id}" min="-50" max="150" value="${l.settings.posX}" class="flat-input text-xs" oninput="app.getLayer('${l.id}').settings.posX = this.value; app.renderer.updateLayerCSS('${l.id}');" onchange="app.history.save()"></div><div class="field mb-0"><label class="field-label">Center Y (%)</label><input type="number" id="conic-pos-y-${l.id}" min="-50" max="150" value="${l.settings.posY}" class="flat-input text-xs" oninput="app.getLayer('${l.id}').settings.posY = this.value; app.renderer.updateLayerCSS('${l.id}');" onchange="app.history.save()"></div></div>`;
+                } else if (l.type === 'aurora') {
+                    return `<div class="grid grid-cols-2 gap-3"><div class="field mb-0"><label class="field-label flex-between">Wave Speed</label><div class="range-wrap mt-1"><input type="range" class="range" min="1" max="100" value="${l.settings.speed}" ondragstart="event.preventDefault()" oninput="app.getLayer('${l.id}').settings.speed = this.value;" onchange="app.history.save()"></div></div><div class="field mb-0"><label class="field-label flex-between">Complexity</label><div class="range-wrap mt-1"><input type="range" class="range" min="10" max="100" value="${l.settings.complexity}" ondragstart="event.preventDefault()" oninput="app.getLayer('${l.id}').settings.complexity = this.value;" onchange="app.history.save()"></div></div><div class="field mb-0 col-span-2"><label class="field-label flex-between">Brightness</label><div class="range-wrap mt-1"><input type="range" class="range" min="20" max="100" value="${l.settings.brightness||70}" ondragstart="event.preventDefault()" oninput="app.getLayer('${l.id}').settings.brightness = this.value;" onchange="app.history.save()"></div></div></div>`;
+                } else if (l.type === 'mesh') {
+                    return `<div class="grid grid-cols-2 gap-3"><div class="field mb-0"><label class="field-label">Columns</label><input type="number" min="2" max="5" value="${l.settings.meshCols||3}" class="flat-input text-xs" onchange="app.getLayer('${l.id}').settings.meshCols = parseInt(this.value); app.regenerateMesh('${l.id}');"></div><div class="field mb-0"><label class="field-label">Rows</label><input type="number" min="2" max="5" value="${l.settings.meshRows||3}" class="flat-input text-xs" onchange="app.getLayer('${l.id}').settings.meshRows = parseInt(this.value); app.regenerateMesh('${l.id}');"></div></div>`;
+                } else if (l.type === 'blob' || l.type === 'liquid') {
+                    if(!l.settings.blobs) l.settings.blobs = [];
+                    let actIdx = l.settings.activeBlobIdx || 0;
+                    let actB = l.settings.blobs[actIdx];
+
+                    let blobUI = `<div class="flex flex-col gap-3">
+                        <div class="bg-[rgba(79,70,229,0.08)] border border-[rgba(79,70,229,0.2)] rounded-lg p-2.5 flex gap-2 items-center text-[10px] text-[var(--text-muted)] leading-snug shadow-inner">
+                            <i class="ph-fill ph-cursor-click text-[var(--primary)] text-lg"></i>
+                            <p><b>Preview Canvas active:</b> Drag handles to move elements.</p>
+                        </div>`;
+
+                    if (actB) {
+                        let f = actB.feather !== undefined ? actB.feather : 100;
+                        let w = actB.width !== undefined ? actB.width : (actB.size || 40);
+                        let h = actB.height !== undefined ? actB.height : (actB.size || 40);
+                        
+                        blobUI += `
+                        <div class="glass-panel border border-[var(--glass-border)] rounded-xl p-3 flex flex-col gap-2 relative shadow-inner">
+                            <div class="grid grid-cols-2 gap-3 mt-1">
+                                <div class="field mb-0">
+                                    <label class="field-label flex-between">Width <span id="blob-val-width-${l.id}" class="font-mono text-[var(--text-main)] normal-case text-xs">${Math.round(w)}%</span></label>
+                                    <div class="range-wrap"><input type="range" class="range" id="blob-inp-width" min="10" max="200" value="${w}" ondragstart="event.preventDefault()" oninput="app.updateBlobParams('${l.id}', ${actIdx}, 'width', parseFloat(this.value))"></div>
+                                </div>
+                                <div class="field mb-0">
+                                    <label class="field-label flex-between">Height <span id="blob-val-height-${l.id}" class="font-mono text-[var(--text-main)] normal-case text-xs">${Math.round(h)}%</span></label>
+                                    <div class="range-wrap"><input type="range" class="range" id="blob-inp-height" min="10" max="200" value="${h}" ondragstart="event.preventDefault()" oninput="app.updateBlobParams('${l.id}', ${actIdx}, 'height', parseFloat(this.value))"></div>
+                                </div>
+                            </div>
+                            <div class="field mb-0 mt-2">
+                                <label class="field-label flex-between">Feather <span id="blob-val-feather-${l.id}" class="font-mono text-[var(--text-main)] normal-case text-xs">${Math.round(f)}%</span></label>
+                                <div class="range-wrap"><input type="range" class="range" id="blob-inp-feather" min="0" max="100" value="${f}" ondragstart="event.preventDefault()" oninput="app.updateBlobParams('${l.id}', ${actIdx}, 'feather', parseFloat(this.value))"></div>
+                            </div>
+                        </div>`;
+                    }
+
+                    blobUI += `<div class="flex flex-col gap-1.5 mt-1">
+                        <label class="field-label">Elements & Colors</label>
+                        <div class="flex flex-col gap-1">`;
+                        
+                    l.settings.blobs.forEach((b, idx) => {
+                        let stop = l.stops[idx]; if (!stop) stop = l.stops[0] || {r:255,g:255,b:255,a:1};
+                        let hex = Utils.rgb2hex(stop.r, stop.g, stop.b);
+                        let isActive = l.settings.activeBlobIdx === idx; let activeCls = isActive ? 'active' : '';
+                        
+                        blobUI += `
+                        <div class="blob-item ${activeCls} group py-1.5" onclick="app.setActiveBlob('${l.id}', ${idx})">
+                            <div class="w-5 h-5 rounded-full border border-[var(--glass-border)] shrink-0 shadow-sm" style="background: rgba(${stop.r},${stop.g},${stop.b},${stop.a})"></div>
+                            <div class="flex-1 flex flex-col min-w-0">
+                                <div class="flex justify-between items-center">
+                                    <span class="text-[10px] font-bold text-[var(--text-main)] font-mono truncate hex-lbl">#${hex}</span>
+                                    <button class="text-[var(--text-muted)] opacity-0 group-hover:opacity-100 hover:text-[var(--error)] transition-all p-0.5 rounded" onclick="event.stopPropagation(); app.removeBlob('${l.id}', ${idx})"><i class="ph-bold ph-x text-xs"></i></button>
+                                </div>
+                            </div>
+                        </div>`;
+                    });
+
+                    blobUI += `</div><button class="btn btn-ghost text-xs py-1.5 w-full mt-1 border-dashed" onclick="app.addBlob('${l.id}')"><i class="ph-bold ph-plus"></i> Add Element</button></div>`;
+
+                    let useBg = l.settings.useBlobBg || false;
+                    let bgHex = l.settings.blobBgHex || '#000000';
+                    let bgAlpha = l.settings.blobBgAlpha !== undefined ? l.settings.blobBgAlpha : 1;
+
+                    blobUI += `
+                    <div class="glass-panel border border-[var(--glass-border)] rounded-xl p-3 flex flex-col gap-2 mt-2 relative shadow-inner">
+                        <div class="switch-container">
+                            <span class="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest">Base Background</span>
+                            <label class="switch"><input type="checkbox" id="bg-chk-${l.id}" ${useBg ? 'checked' : ''} onchange="app.getLayer('${l.id}').settings.useBlobBg = this.checked; document.getElementById('bg-settings-${l.id}').style.display = this.checked ? 'grid' : 'none'; app.renderer.updateLayerCSS('${l.id}'); app.history.save();"><span class="slider"></span></label>
+                        </div>
+                        
+                        <div id="bg-settings-${l.id}" class="grid-cols-[auto_1fr] gap-3 mt-1 items-center" style="display: ${useBg ? 'grid' : 'none'};">
+                            <div class="w-8 h-8 rounded-md shadow-inner overflow-hidden border border-[var(--glass-border)] relative cursor-pointer">
+                                <input type="color" value="${bgHex}" class="absolute -top-2 -left-2 w-12 h-12 cursor-pointer" oninput="app.getLayer('${l.id}').settings.blobBgHex = this.value; app.renderer.updateLayerCSS('${l.id}');" onchange="app.history.save();">
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="range-wrap w-full"><input type="range" class="range" min="0" max="100" value="${bgAlpha*100}" ondragstart="event.preventDefault()" oninput="app.getLayer('${l.id}').settings.blobBgAlpha = parseInt(this.value)/100; document.getElementById('val-blob-bg-alpha-${l.id}').innerText = Math.round(this.value) + '%'; app.renderer.updateLayerCSS('${l.id}');" onchange="app.history.save()"></div>
+                                <span id="val-blob-bg-alpha-${l.id}" class="font-mono text-[9px] text-[var(--text-muted)] w-8 text-right">${Math.round(bgAlpha*100)}%</span>
+                            </div>
+                        </div>
+                    </div></div>`;
+
+                    return blobUI;
+                }
+                return '';
+            }
+
+            buildUIController() {
+                return {
+                    switchMobileTab: (tabId) => {
+                        const isLayers = tabId === 'layers';
+                        
+                        const listContainer = document.getElementById('layers-stack-list');
+                        const globalContainer = document.getElementById('mobile-global-container');
+                        const actionsContainer = document.getElementById('mobile-layer-actions');
+                        
+                        if(listContainer) listContainer.style.display = isLayers ? 'flex' : 'none';
+                        if(actionsContainer) actionsContainer.style.display = isLayers ? 'flex' : 'none';
+                        if(globalContainer) globalContainer.style.display = isLayers ? 'none' : 'block';
+
+                        // Sync radio button visually
+                        const t1 = document.getElementById('tab1');
+                        const t2 = document.getElementById('tab2');
+                        if (t1 && isLayers) t1.checked = true;
+                        if (t2 && !isLayers) t2.checked = true;
+
+                        if (window.innerWidth < 1024 && state.drawerLevel === 0 && typeof setDrawerLevel === 'function') {
+                            setDrawerLevel(1);
+                        }
+                    },
+                    
+                    toggleLayerCollapse: (id) => {
+                        this.activeLayerId = id;
+                        this.ui.renderLayersList();
+                        this.renderer.renderBlobOverlay();
+                    },
+
+                    renderLayersList: () => {
+                        const listContainer = document.getElementById('layers-stack-list');
+                        if(!listContainer) return;
+                        
+                        let html = '';
+                        this.layers.forEach((l, idx) => {
+                            let isExpanded = l.id === this.activeLayerId;
+                            let eng = engineMap.find(e => e.id === l.type) || engineMap[0];
+                            let visIcon = l.visible ? 'eye' : 'eye-closed';
+                            let opacityStyle = l.visible ? '1' : '0.5';
+                            
+                            html += `
+                            <div class="layer-card layer-item glass-panel rounded-xl border border-[var(--glass-border)] shadow-sm ${isExpanded ? 'expanded' : ''} shrink-0" id="layer-card-${l.id}" style="opacity: ${opacityStyle};" data-id="${l.id}">
+                                <!-- HEADER -->
+                                <div class="layer-header flex items-center justify-between p-3 bg-[var(--glass-bg)] border-b border-[var(--glass-border)] cursor-pointer hover:bg-[var(--glass-bg-hover)] transition-colors" onclick="app.ui.toggleLayerCollapse('${l.id}')">
+                                    <div class="flex items-center gap-2 flex-1 min-w-0 pr-2">
+                                        <div class="layer-drag-handle" title="Drag to reorder"><i class="ph-bold ph-dots-six-vertical text-lg"></i></div>
+                                        <button class="eye-btn text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors shrink-0 p-1" onclick="event.stopPropagation(); app.toggleLayer('${l.id}')">
+                                            <i class="ph-bold ph-${visIcon} text-lg"></i>
+                                        </button>
+                                        <div class="w-7 h-7 rounded bg-[var(--glass-bg)] border border-[var(--glass-border)] flex items-center justify-center text-[var(--primary)] text-sm shadow-sm transition-transform group-hover:scale-110 shrink-0">
+                                            <i class="ph-bold ph-${eng.icon}"></i>
+                                        </div>
+                                        <input type="text" value="${l.name}" class="bg-transparent border-none outline-none text-xs font-bold w-full text-[var(--text-main)] truncate" onclick="event.stopPropagation();" onchange="app.getLayer('${l.id}').name = this.value; app.history.save();">
+                                    </div>
+                                    <div class="flex items-center gap-1 shrink-0">
+                                        <button class="btn-icon w-7 h-7 text-xs hover:bg-[var(--glass-bg-hover)]" onclick="event.stopPropagation(); app.moveLayerUp('${l.id}')"><i class="ph-bold ph-caret-up"></i></button>
+                                        <button class="btn-icon w-7 h-7 text-xs hover:bg-[var(--glass-bg-hover)]" onclick="event.stopPropagation(); app.moveLayerDown('${l.id}')"><i class="ph-bold ph-caret-down"></i></button>
+                                        <button class="btn-icon w-7 h-7 text-xs text-[var(--error)] hover:bg-red-500/10 hover:border-red-500/20" onclick="event.stopPropagation(); app.confirmDelete('${l.id}')"><i class="ph-bold ph-trash"></i></button>
+                                    </div>
+                                </div>
+
+                                <!-- BODY INSPECTOR -->
+                                <div class="layer-body p-4 flex-col gap-4">
+                                    <div class="flex flex-col gap-2">
+                                        <label class="field-label mb-0">Engine Selection</label>
+                                        <div class="type-grid">
+                                            ${engineMap.map(e => `
+                                                <button class="type-btn ${l.type === e.id ? 'active' : ''}" onclick="app.updateActiveLayer({type: '${e.id}'}, '${l.id}')">
+                                                    <i class="ph-bold ph-${e.icon}"></i> <span>${e.name}</span>
+                                                </button>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+
+                                    <div class="grid grid-cols-2 gap-4 mt-1">
+                                        <div class="field mb-0">
+                                            <label class="field-label">Blend Mode</label>
+                                            <select class="flat-select text-xs py-2" onchange="app.getLayer('${l.id}').blendMode = this.value; app.renderer.updateLayerStyle('${l.id}'); app.history.save();">
+                                                <option value="normal" ${l.blendMode==='normal'?'selected':''}>Normal</option>
+                                                <option value="multiply" ${l.blendMode==='multiply'?'selected':''}>Multiply</option>
+                                                <option value="screen" ${l.blendMode==='screen'?'selected':''}>Screen</option>
+                                                <option value="overlay" ${l.blendMode==='overlay'?'selected':''}>Overlay</option>
+                                                <option value="color-dodge" ${l.blendMode==='color-dodge'?'selected':''}>Color Dodge</option>
+                                                <option value="soft-light" ${l.blendMode==='soft-light'?'selected':''}>Soft Light</option>
+                                                <option value="difference" ${l.blendMode==='difference'?'selected':''}>Difference</option>
+                                            </select>
+                                        </div>
+                                        <div class="field mb-0">
+                                            <label class="field-label flex-between">Opacity <span id="val-opacity-${l.id}" class="font-mono text-[var(--text-main)] normal-case">${Math.round(l.opacity*100)}%</span></label>
+                                            <div class="range-wrap mt-2"><input type="range" class="range" min="0" max="100" value="${l.opacity*100}" ondragstart="event.preventDefault()" oninput="app.getLayer('${l.id}').opacity = parseInt(this.value)/100; document.getElementById('val-opacity-${l.id}').innerText=this.value+'%'; app.renderer.updateLayerStyle('${l.id}');" onchange="app.history.save()"></div>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex flex-col gap-3">
+                                        ${this.buildDynamicToolsHTML(l)}
+                                    </div>
+
+                                    <div class="w-full h-px bg-[var(--glass-border)] my-1"></div>
+
+                                    <div class="flex flex-col gap-2">
+                                        ${(l.type !== 'blob' && l.type !== 'liquid') ? `
+                                        <div class="flex-between mb-1">
+                                            <label class="field-label mb-0">Color Stops</label>
+                                            ${l.type === 'mesh' ? `<button class="btn btn-ghost text-[9px] py-1 px-2 border-dashed font-bold hover:border-solid transition-all" onclick="app.regenerateMesh('${l.id}')">Regenerate Mesh</button>` : ''}
+                                        </div>
+                                        <div class="stops-track-container" data-layer-id="${l.id}" id="stops-track-container-${l.id}" ondragstart="event.preventDefault()">
+                                            <div class="stops-track-bg"><div class="stops-track" id="stops-track-${l.id}"></div></div>
+                                            <div id="stops-thumbs-${l.id}"></div>
+                                        </div>
+                                        <div class="flex-between text-[9px] uppercase tracking-widest text-[var(--text-muted)] font-bold mt-0 mb-1">
+                                            <span>Tap track to add</span><span>Del to remove</span>
+                                        </div>
+                                        ` : `<label class="field-label mb-1">Active Element Color</label>`}
+
+                                        <div class="glass-panel border border-[var(--glass-border)] rounded-xl p-4 flex flex-col gap-4 shadow-inner">
+                                            <div class="sat-val-area" data-layer-id="${l.id}" id="cp-sv-area-${l.id}" ondragstart="event.preventDefault()">
+                                                <div class="sv-thumb" id="cp-sv-thumb-${l.id}"></div>
+                                            </div>
+                                            <div class="flex flex-col gap-4 mt-1">
+                                                <div class="slider-track hue-track" data-layer-id="${l.id}" id="cp-hue-track-${l.id}"><div class="slider-thumb" id="cp-hue-thumb-${l.id}"></div></div>
+                                                <div class="alpha-track-bg"><div class="slider-track alpha-track-container" data-layer-id="${l.id}" id="cp-alpha-track-${l.id}" style="background: linear-gradient(to right, transparent, red);" ondragstart="event.preventDefault()"><div class="slider-thumb" id="cp-alpha-thumb-${l.id}"></div></div></div>
+                                            </div>
+                                            <div class="grid grid-cols-[2fr_1fr] gap-3 mt-1">
+                                                <div class="flex items-center bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-md px-3 shadow-inner hover:border-[var(--primary)] transition-colors">
+                                                    <span class="text-[var(--text-muted)] font-mono text-sm mr-1 font-bold">#</span>
+                                                    <input type="text" id="cp-hex-${l.id}" class="bg-transparent text-[var(--text-main)] font-mono py-2 text-sm w-full outline-none uppercase font-bold tracking-wider" oninput="app.updateHex('${l.id}', this.value, false)" onchange="app.updateHex('${l.id}', this.value, true); app.colorPicker.renderPicker(app.getLayer('${l.id}'));">
+                                                </div>
+                                                <div class="flex items-center bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-md px-3 shadow-inner hover:border-[var(--primary)] transition-colors">
+                                                    <input type="number" id="cp-alpha-val-${l.id}" class="bg-transparent text-[var(--text-main)] font-mono py-2 text-sm w-full outline-none text-right font-bold" oninput="app.updateAlpha('${l.id}', this.value, false)" onchange="app.updateAlpha('${l.id}', this.value, true)">
+                                                    <span class="text-[var(--text-muted)] font-mono text-sm ml-1 font-bold">%</span>
+                                                </div>
+                                            </div>
+                                            <button class="btn btn-glass w-full mt-1 text-xs py-2 hover:bg-[var(--primary)] hover:text-white transition-colors border-dashed hover:border-solid hover:border-[var(--primary)]" onclick="app.generateSmartPalette('${l.id}')">
+                                                <i class="ph-bold ph-magic-wand text-sm"></i> Auto-Harmony
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                </div>
+                            </div>
+                            `;
+                        });
+                        
+                        listContainer.innerHTML = html;
+
+                        this.layers.forEach(l => {
+                            if(l.stops.length > 0) {
+                                let sIdx = l.settings.activeStopIdx || 0;
+                                this.colorPicker.renderStops(l, sIdx);
+                                this.colorPicker.renderPicker(l);
+                            }
+                        });
+                        
+                        this.initDragAndDrop();
+                    },
+
+                    updateAll: () => {
+                        this.ui.renderLayersList();
+                        this.renderer.render('render-stack');
+                        this.checkContrast();
+                    },
+
+                    closeDeleteModal: () => { document.getElementById('delete-modal').classList.remove('active'); app.pendingDeleteId = null; },
+
+                    showExportModal: () => {
+                        const m = document.getElementById('export-modal'); m.classList.add('active');
+                        const tabs = document.querySelectorAll('.export-tab');
+                        tabs.forEach(t => t.onclick = (e) => {
+                            tabs.forEach(btn => btn.classList.remove('active')); e.target.classList.add('active');
+                            this.ui.renderExport(e.target.dataset.target);
+                        });
+                        this.ui.renderExport('css');
+                    },
+                    renderExport: (type) => { document.getElementById('export-code').innerText = this.exportEngine.generateCode(type); },
+                    copyCode: () => { navigator.clipboard.writeText(document.getElementById('export-code').innerText).then(()=>Utils.toast("Code Copied!")); }
+                };
+            }
+
+            init() {
+                this.loadWorkspaces();
+                this.loadPresets();
+                this.applyPreset({ name: 'iOS 18 Aura', colors: ['#FF2C55', '#007BFF', '#FFD60A'], type: 'aurora' }); 
+                this.history.save();
+                this.updateAnimUI();
+                setTimeout(() => this.setShape('rounded'), 50);
+                if(window.innerWidth < 1024) this.ui.switchMobileTab('layers');
+            }
+
+            /* AI & Extraction Logic */
+            generateFromPrompt() {
+                const prompt = document.getElementById('ai-prompt').value.trim().toLowerCase();
+                if(!prompt) return Utils.toast('Please enter a prompt');
+                
+                Utils.toast('✨ Generating palette for: ' + prompt);
+                
+                let colors = ['#4F46E5', '#818CF8'];
+                let type = 'linear';
+                
+                if (prompt.includes('cyberpunk') || prompt.includes('neon') || prompt.includes('synth')) {
+                    colors = ['#FF00EA', '#00E1FF', '#4300FF']; type = 'mesh';
+                } else if (prompt.includes('ocean') || prompt.includes('sea') || prompt.includes('water')) {
+                    colors = ['#0077be', '#00a3cc', '#00c1d4']; type = 'liquid';
+                } else if (prompt.includes('forest') || prompt.includes('nature') || prompt.includes('green')) {
+                    colors = ['#134e5e', '#71b280', '#228B22']; type = 'aurora';
+                } else if (prompt.includes('sunset') || prompt.includes('dusk') || prompt.includes('fire')) {
+                    colors = ['#ff512f', '#dd2476', '#f12711']; type = 'blob';
+                } else if (prompt.includes('calm') || prompt.includes('morning') || prompt.includes('fog')) {
+                    colors = ['#e0eafc', '#cfdef3', '#ffffff']; type = 'radial';
+                } else {
+                    // Random generation for generic text
+                    colors = [
+                        Utils.rgb2hex(...Utils.hsv2rgb(Math.random(), 0.8, 0.9)),
+                        Utils.rgb2hex(...Utils.hsv2rgb(Math.random(), 0.8, 0.9)),
+                        Utils.rgb2hex(...Utils.hsv2rgb(Math.random(), 0.8, 0.9))
+                    ];
+                    type = ['linear', 'mesh', 'blob', 'liquid', 'aurora'][Math.floor(Math.random() * 5)];
+                }
+
+                setTimeout(() => {
+                    this.applyPreset({ name: 'AI: ' + prompt.substring(0,10), colors: colors, type: type });
+                }, 600);
+            }
+
+            extractFromImage(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+                
+                Utils.toast('📸 Extracting colors...');
+                const img = new Image();
+                const reader = new FileReader();
+                
+                reader.onload = (e) => {
+                    img.src = e.target.result;
+                    img.onload = () => {
+                        const canvas = document.getElementById('hidden-canvas');
+                        const ctx = canvas.getContext('2d');
+                        canvas.width = 64; canvas.height = 64; 
+                        ctx.drawImage(img, 0, 0, 64, 64);
+                        
+                        const data = ctx.getImageData(0, 0, 64, 64).data;
+                        let colors = [];
+                        
+                        for(let i=0; i<4; i++) {
+                            let idx = Math.floor(Math.random() * (64*64)) * 4;
+                            colors.push(`#${Utils.rgb2hex(data[idx], data[idx+1], data[idx+2])}`);
+                        }
+                        
+                        this.applyPreset({ name: 'Extracted Palette', colors: colors, type: 'mesh' });
+                    };
+                };
+                reader.readAsDataURL(file);
+                event.target.value = ''; 
+            }
+
+            autoFixContrast() {
+                if(this.shape !== 'text' || this.layers.length === 0) return;
+                let baseLayer = this.layers[this.layers.length-1];
+                if (!baseLayer || !baseLayer.stops || baseLayer.stops.length === 0) return;
+                
+                Utils.toast('🪄 Magic fixing contrast...');
+                
+                let s = baseLayer.stops[0];
+                let lumBG = Utils.getLuminance(5, 5, 5); 
+                
+                let limit = 20;
+                while(limit > 0) {
+                    let lumTxt = Utils.getLuminance(s.r, s.g, s.b);
+                    let cr = (Math.max(lumBG, lumTxt) + 0.05) / (Math.min(lumBG, lumTxt) + 0.05);
+                    if(cr >= 4.5) break;
+                    
+                    let [h, sat, v] = Utils.rgb2hsv(s.r, s.g, s.b);
+                    v = Math.min(1.0, v + 0.05); 
+                    sat = Math.max(0.0, sat - 0.05); 
+                    let [nr, ng, nb] = Utils.hsv2rgb(h, sat, v);
+                    s.r = nr; s.g = ng; s.b = nb;
+                    
+                    limit--;
+                }
+                
+                this.renderer.updateLayerCSS(baseLayer.id);
+                this.checkContrast();
+                this.ui.renderLayersList();
+            }
+
+            /* Workspace Sync */
+            loadWorkspaces() {
+                const list = document.getElementById('ws-list');
+                const saved = JSON.parse(localStorage.getItem('chroma_workspaces') || '{}');
+                list.innerHTML = '';
+                
+                if (Object.keys(saved).length === 0) {
+                    list.innerHTML = '<span class="text-[10px] text-[var(--text-muted)] text-center block py-2">No saved spaces</span>';
+                    return;
+                }
+                
+                for(let name in saved) {
+                    const el = document.createElement('div');
+                    el.className = 'ws-item';
+                    el.innerHTML = `<span>${name}</span> <i class="ph-bold ph-trash text-[var(--error)] hover:scale-110 transition" onclick="event.stopPropagation(); app.deleteWorkspace('${name}')"></i>`;
+                    el.onclick = () => { this.restoreState(saved[name]); Utils.toast(`Loaded ${name}`); document.getElementById('ws-dropdown').classList.remove('show'); };
+                    list.appendChild(el);
+                }
+            }
+            
+            saveWorkspace() {
+                const name = document.getElementById('ws-name').value.trim() || 'My Workspace';
+                const saved = JSON.parse(localStorage.getItem('chroma_workspaces') || '{}');
+                
+                const state = JSON.stringify({ layers: this.layers, grain: this.globalGrain, activeId: this.activeLayerId, animState: this.animState });
+                saved[name] = state;
+                localStorage.setItem('chroma_workspaces', JSON.stringify(saved));
+                
+                document.getElementById('ws-name').value = '';
+                Utils.toast(`Saved ${name}`);
+                this.loadWorkspaces();
+            }
+            
+            deleteWorkspace(name) {
+                const saved = JSON.parse(localStorage.getItem('chroma_workspaces') || '{}');
+                delete saved[name];
+                localStorage.setItem('chroma_workspaces', JSON.stringify(saved));
+                this.loadWorkspaces();
+            }
+
+            setPostProcessing(type) {
+                const hf = document.getElementById('fx-halftone');
+                const dt = document.getElementById('fx-dither');
+                
+                hf.style.opacity = '0'; dt.style.opacity = '0';
+                if(type === 'halftone') hf.style.opacity = '0.3';
+                if(type === 'dither') dt.style.opacity = '0.5';
+            }
+
+            setSimulator(type) {
+                const c = document.getElementById('canvas-container');
+                c.style.filter = type === 'none' ? 'none' : `url(#${type})`;
+            }
+
+            toggleReactivity(enabled) {
+                this.reactivityEnabled = enabled;
+                if(!enabled) {
+                    this.layers.forEach(l => {
+                        const el = document.getElementById('layer-node-' + l.id);
+                        if(el && !el.style.animation) el.style.backgroundPosition = '';
+                    });
+                } else {
+                    this.renderer.render('render-stack'); 
+                }
+            }
+
+            /* */
+            initDragAndDrop() {
+                const list = document.getElementById('layers-stack-list');
+                const items = list.querySelectorAll('.layer-item');
+                let draggedItem = null;
+
+                items.forEach(item => {
+                    const handle = item.querySelector('.layer-drag-handle');
+                    if (handle) {
+                        handle.addEventListener('pointerdown', () => item.setAttribute('draggable', 'true'));
+                        handle.addEventListener('pointerup', () => item.setAttribute('draggable', 'false'));
+                        handle.addEventListener('pointerleave', () => item.setAttribute('draggable', 'false'));
+                    }
+
+                    item.addEventListener('dragstart', (e) => {
+                        draggedItem = item;
+                        setTimeout(() => item.classList.add('is-dragging'), 0);
+                        e.dataTransfer.effectAllowed = 'move';
+                    });
+
+                    item.addEventListener('dragend', () => {
+                        item.setAttribute('draggable', 'false');
+                        draggedItem.classList.remove('is-dragging');
+                        draggedItem = null;
+                        list.querySelectorAll('.layer-item').forEach(i => { i.style.transform = ''; i.style.transition = ''; });
+                        this.syncLayersFromDOM();
+                    });
+                });
+
+                list.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    if (!draggedItem) return;
+
+                    const afterElement = this.getDragAfterElement(list, e.clientY);
+                    const currentNextSibling = draggedItem.nextElementSibling;
+                    if (afterElement === currentNextSibling) return;
+
+                    // FLIP Logic
+                    const allItems = [...list.querySelectorAll('.layer-item')];
+                    const firstPositions = allItems.map(item => ({ item: item, top: item.getBoundingClientRect().top }));
+
+                    if (afterElement == null) { list.appendChild(draggedItem); } 
+                    else { list.insertBefore(draggedItem, afterElement); }
+
+                    firstPositions.forEach(({ item, top: firstTop }) => {
+                        if (item === draggedItem) return;
+                        const lastTop = item.getBoundingClientRect().top;
+                        const deltaY = firstTop - lastTop;
+
+                        if (deltaY !== 0) {
+                            item.style.transform = `translateY(${deltaY}px)`;
+                            item.style.transition = 'none';
+                            requestAnimationFrame(() => {
+                                item.offsetHeight; // force reflow
+                                item.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)';
+                                item.style.transform = '';
+                            });
+                        }
+                    });
+                });
+            }
+
+            getDragAfterElement(container, y) {
+                const draggableElements = [...container.querySelectorAll('.layer-item:not(.is-dragging)')];
+                return draggableElements.reduce((closest, child) => {
+                    const box = child.getBoundingClientRect();
+                    const offset = y - box.top - box.height / 2;
+                    if (offset < 0 && offset > closest.offset) {
+                        return { offset: offset, element: child };
+                    } else {
+                        return closest;
+                    }
+                }, { offset: Number.NEGATIVE_INFINITY }).element;
+            }
+
+            syncLayersFromDOM() {
+                const list = document.getElementById('layers-stack-list');
+                const domItems = [...list.querySelectorAll('.layer-item')];
+                const newOrderIds = domItems.map(el => el.dataset.id);
+                
+                let newLayersArray = [];
+                newOrderIds.forEach(id => {
+                    let l = this.getLayer(id);
+                    if(l) newLayersArray.push(l);
+                });
+                
+                this.layers = newLayersArray;
+                this.renderer.render('render-stack');
+                this.history.save();
+            }
+
+            /* */
+            getLayer(id) { return this.layers.find(l => l.id === id); }
+            getActiveLayer() { return this.getLayer(this.activeLayerId); }
+
+            addLayer() {
+                if (document.startViewTransition) {
+                    document.startViewTransition(() => this._performAddLayer());
+                } else { this._performAddLayer(); }
+            }
+            
+            _performAddLayer() {
+                const l = new Layer({ name: `Layer ${this.layers.length+1}` });
+                this.layers.unshift(l); this.activeLayerId = l.id;
+                this.history.save(); this.ui.updateAll();
+            }
+
+            confirmDelete(id) {
+                if (this.skipDeleteConfirm) {
+                    if (document.startViewTransition) {
+                        document.startViewTransition(() => this.deleteLayer(id));
+                    } else { this.deleteLayer(id); }
+                    return;
+                }
+
+                this.pendingDeleteId = id;
+                document.getElementById('delete-modal').classList.add('active');
+                
+                document.getElementById('btn-confirm-del').onclick = () => {
+                    if (document.getElementById('chk-dont-ask-delete').checked) {
+                        this.skipDeleteConfirm = true;
+                    }
+                    this.ui.closeDeleteModal();
+                    if (document.startViewTransition) {
+                        document.startViewTransition(() => this.deleteLayer(this.pendingDeleteId));
+                    } else { this.deleteLayer(this.pendingDeleteId); }
+                };
+            }
+
+            deleteLayer(id) {
+                if(this.layers.length<=1) return Utils.toast("Need at least 1 layer");
+                this.layers = this.layers.filter(l=>l.id!==id);
+                if(this.activeLayerId === id) this.activeLayerId = this.layers[0].id;
+                this.history.save(); this.ui.updateAll();
+            }
+
+            toggleLayer(id) {
+                let l = this.getLayer(id);
+                if(l) { 
+                    l.visible = !l.visible; 
+                    
+                    const targetDom = document.getElementById('layer-node-' + l.id);
+                    if(targetDom) {
+                        targetDom.style.opacity = l.visible ? l.opacity : 0;
+                        targetDom.style.pointerEvents = l.visible ? 'auto' : 'none';
+                    }
+                    
+                    const cardDom = document.getElementById('layer-card-' + l.id);
+                    if(cardDom) {
+                        const icon = cardDom.querySelector('.eye-btn i');
+                        if (icon) icon.className = l.visible ? 'ph-bold ph-eye text-lg' : 'ph-bold ph-eye-closed text-lg';
+                        cardDom.style.opacity = l.visible ? '1' : '0.5';
+                    }
+                    
+                    this.history.save(); 
+                }
+            }
+
+            moveLayerUp(id) {
+                let idx = this.layers.findIndex(l => l.id === id);
+                if(idx > 0) {
+                    let temp = this.layers[idx]; this.layers[idx] = this.layers[idx-1]; this.layers[idx-1] = temp;
+                    if (document.startViewTransition) document.startViewTransition(() => this.ui.updateAll());
+                    else this.ui.updateAll();
+                    this.history.save();
+                }
+            }
+
+            moveLayerDown(id) {
+                let idx = this.layers.findIndex(l => l.id === id);
+                if(idx < this.layers.length - 1) {
+                    let temp = this.layers[idx]; this.layers[idx] = this.layers[idx+1]; this.layers[idx+1] = temp;
+                    if (document.startViewTransition) document.startViewTransition(() => this.ui.updateAll());
+                    else this.ui.updateAll();
+                    this.history.save();
+                }
+            }
+
+            updateActiveLayer(updates, layerId) {
+                const l = this.getLayer(layerId || this.activeLayerId); if(!l) return;
+                Object.assign(l, updates);
+                if (updates.type === 'mesh' && l.stops.length < 9) { this.regenerateMesh(l.id); } 
+                else { this.history.save(); this.ui.updateAll(); }
+            }
+
+            updateHex(layerId, hexVal, save=true) {
+                const l = this.getLayer(layerId); if(!l) return;
+                const rgb = Utils.hex2rgb(hexVal); if(!rgb) return;
+                const [r,g,b] = rgb; let sIdx = l.settings.activeStopIdx || 0;
+                if(l.stops[sIdx]) {
+                    delete l.stops[sIdx]._hsv; 
+                    l.stops[sIdx].r = r; l.stops[sIdx].g = g; l.stops[sIdx].b = b;
+                    this.renderer.updateLayerCSS(l.id);
+                    this.colorPicker.renderStops(l, sIdx);
+                    if(save) this.history.save();
+                }
+            }
+
+            updateAlpha(layerId, alphaVal, save=true) {
+                const l = this.getLayer(layerId); if(!l) return;
+                let a = Utils.clamp(parseInt(alphaVal)/100, 0, 1);
+                let sIdx = l.settings.activeStopIdx || 0;
+                if(l.stops[sIdx]) {
+                    l.stops[sIdx].a = a;
+                    this.renderer.updateLayerCSS(l.id);
+                    this.colorPicker.renderStops(l, sIdx);
+                    if(save) this.history.save();
+                }
+            }
+
+            regenerateMesh(layerId) {
+                const l = this.getLayer(layerId || this.activeLayerId); if(!l || l.type !== 'mesh') return;
+                const c = l.settings.meshCols || 3; const r = l.settings.meshRows || 3;
+                const total = c * r; l.stops = [];
+                for(let i=0; i<total; i++) {
+                    const [red, g, b] = Utils.hsv2rgb(Math.random(), 0.6 + Math.random()*0.4, 0.8 + Math.random()*0.2);
+                    l.stops.push({r:red, g:g, b:b, a:1, pos: (i/(total-1))*100});
+                }
+                this.history.save(); this.ui.updateAll();
+            }
+
+            setActiveBlob(layerId, idx) {
+                const l = this.getLayer(layerId); if (!l || (l.type !== 'blob' && l.type !== 'liquid')) return;
+                this.activeLayerId = layerId; l.settings.activeBlobIdx = idx; l.settings.activeStopIdx = idx;
+                
+                const overlay = document.getElementById('blob-overlay');
+                if (overlay) {
+                    const handles = overlay.querySelectorAll('.blob-handle-node');
+                    const rings = overlay.querySelectorAll('.blob-ring-node');
+                    handles.forEach((h, i) => h.className = `blob-handle-node ${i === idx ? 'active-handle' : ''}`);
+                    rings.forEach((r, i) => r.className = `blob-ring-node ${i === idx ? '!border-[var(--primary)] border-solid border-2' : ''}`);
+                }
+                this.colorPicker.renderPicker(l); 
+                
+                const listItems = document.querySelectorAll(`#layer-card-${l.id} .blob-item`);
+                listItems.forEach((el, i) => { if (i === idx) el.classList.add('active'); else el.classList.remove('active'); });
+            }
+
+            addBlob(layerId) {
+                const l = this.getLayer(layerId); if(!l || (l.type !== 'blob' && l.type !== 'liquid')) return;
+                if(!l.settings.blobs) l.settings.blobs = [];
+                l.stops.push({ r: Math.random()*255, g: Math.random()*255, b: Math.random()*255, a: 1, pos: 100 });
+                let newIdx = l.stops.length - 1;
+                l.settings.blobs.push({ x: 20 + Math.random()*60, y: 20 + Math.random()*60, width: 30 + Math.random()*50, height: 30 + Math.random()*50, feather: 100, opacity: 1 });
+                this.history.save(); this.ui.updateAll(); this.setActiveBlob(layerId, newIdx);
+            }
+
+            removeBlob(layerId, idx) {
+                const l = this.getLayer(layerId); if(!l || (l.type !== 'blob' && l.type !== 'liquid')) return;
+                if(l.settings.blobs.length <= 1) return Utils.toast("Need at least 1 blob element");
+                l.settings.blobs.splice(idx, 1); l.stops.splice(idx, 1); 
+                this.history.save(); this.ui.updateAll(); this.setActiveBlob(layerId, Math.max(0, idx - 1));
+            }
+
+            updateBlobParams(layerId, idx, prop, val) {
+                const l = this.getLayer(layerId); if(!l || !l.settings.blobs || !l.settings.blobs[idx]) return;
+                l.settings.blobs[idx][prop] = val;
+                this.renderer.updateLayerCSS(l.id);
+                
+                if (prop === 'width' || prop === 'height') {
+                    const rings = document.getElementById('blob-overlay')?.querySelectorAll('.blob-ring-node');
+                    if (rings && rings[idx]) { 
+                        if (prop === 'width') rings[idx].style.width = `${val * 2}%`; 
+                        if (prop === 'height') rings[idx].style.height = `${val * 2}%`; 
+                    }
+                }
+                let label = document.getElementById(`blob-val-${prop}-${l.id}`);
+                if(label) label.innerText = Math.round(val) + (prop==='width'||prop==='height'||prop==='feather'?'%':'');
+            }
+
+            updateActiveStop(r, g, b, a, pos) {
+                const l = this.getActiveLayer(); if(!l) return;
+                let sIdx = l.settings.activeStopIdx || 0; let s = l.stops[sIdx]; if(!s) return;
+                if(r!==null) { s.r=r; s.g=g; s.b=b; s.a=a; }
+                if(pos!==null) s.pos = Math.round(pos);
+                
+                this.renderer.updateLayerCSS(l.id);
+                this.colorPicker.renderStops(l, sIdx);
+                this.colorPicker.renderPicker(l); 
+
+                if (l.type === 'blob' || l.type === 'liquid') {
+                    const overlay = document.getElementById('blob-overlay');
+                    if (overlay) {
+                        const handles = overlay.querySelectorAll('.blob-handle-node');
+                        if (handles[sIdx]) handles[sIdx].style.backgroundColor = `rgba(${s.r},${s.g},${s.b},${s.a})`;
+                    }
+                    const listItems = document.querySelectorAll(`#layer-card-${l.id} .blob-item`);
+                    if (listItems[sIdx]) {
+                        const circle = listItems[sIdx].querySelector('div:first-child');
+                        const textSpan = listItems[sIdx].querySelector('.hex-lbl');
+                        if (circle) circle.style.background = `rgba(${s.r},${s.g},${s.b},${s.a})`;
+                        if (textSpan) textSpan.innerText = `#${Utils.rgb2hex(s.r,s.g,s.b)}`;
+                    }
+                }
+            }
+
+            addStop(pos) {
+                const l = this.getActiveLayer(); if(!l) return;
+                let closest = l.stops.reduce((p,c) => Math.abs(c.pos-pos) < Math.abs(p.pos-pos) ? c : p);
+                let ns = {...closest, pos: Math.round(pos)};
+                l.stops.push(ns); l.stops.sort((a,b)=>a.pos-b.pos);
+                l.settings.activeStopIdx = l.stops.indexOf(ns);
+
+                if (l.type === 'blob' || l.type === 'liquid') {
+                    if(!l.settings.blobs) l.settings.blobs = [];
+                    l.settings.blobs.push({ x: 20 + Math.random()*60, y: 20 + Math.random()*60, width: 30 + Math.random()*50, height: 30 + Math.random()*50, feather: 100, opacity: 1 });
+                    l.settings.activeBlobIdx = l.settings.blobs.length - 1;
+                }
+                this.history.save(); this.renderer.updateLayerCSS(l.id); this.ui.renderLayersList();
+            }
+
+            removeStop() {
+                const l = this.getActiveLayer(); if(!l || l.stops.length<=2) return Utils.toast("Min 2 stops needed");
+                let sIdx = l.settings.activeStopIdx || 0;
+                l.stops.splice(sIdx, 1); l.settings.activeStopIdx = Math.max(0, sIdx-1);
+                
+                if ((l.type === 'blob' || l.type === 'liquid') && l.settings.blobs) {
+                    l.settings.blobs.splice(sIdx, 1);
+                    l.settings.activeBlobIdx = Math.max(0, Math.min(l.settings.activeBlobIdx, l.settings.blobs.length - 1));
+                }
+
+                this.history.save(); this.renderer.updateLayerCSS(l.id); this.ui.renderLayersList();
+            }
+
+            generateSmartPalette(layerId) {
+                const l = this.getLayer(layerId || this.activeLayerId); if(!l) return;
+                let sIdx = l.settings.activeStopIdx || 0;
+                let base = l.stops[sIdx] || (l.stops.length ? l.stops[0] : {r:255,g:0,b:0,a:1});
+                let [h,s,v] = Utils.rgb2hsv(base.r, base.g, base.b);
+                let type = Math.random();
+                if (type > 0.6) {
+                    l.stops = [ {...this._hsv2stop(h, s, v), pos: 0}, {...this._hsv2stop((h+0.08)%1, s, Math.min(1, v+0.1)), pos: 50}, {...this._hsv2stop((h+0.16)%1, Math.max(0, s-0.2), Math.min(1, v+0.2)), pos: 100} ];
+                } else if (type > 0.3) {
+                    l.stops = [ {...this._hsv2stop(h, s, v), pos: 0}, {...this._hsv2stop((h+0.33)%1, s, v), pos: 50}, {...this._hsv2stop((h+0.66)%1, s, v), pos: 100} ];
+                } else {
+                    l.stops = [ {...this._hsv2stop(h, s, v), pos: 0}, {...this._hsv2stop((h+0.45)%1, s, v), pos: 50}, {...this._hsv2stop((h+0.55)%1, s, v), pos: 100} ];
+                }
+                if (l.type === 'mesh') this.regenerateMesh(l.id); 
+                
+                l.settings.activeStopIdx = 0; this.history.save(); this.renderer.updateLayerCSS(l.id); this.ui.renderLayersList();
+            }
+            
+            _hsv2stop(h,s,v) { let [r,g,b] = Utils.hsv2rgb(h,s,v); return {r,g,b,a:1}; }
+
+            setShape(s) {
+                this.shape = s;
+                let cls = 'relative transition-all duration-500 ease-[cubic-bezier(0.25,0.8,0.25,1)] overflow-hidden shadow-[0_10px_40px_rgba(0,0,0,0.15)] border border-[var(--glass-border)] ';
+                if(s==='box') cls += 'w-full max-w-[600px] aspect-[3/2] rounded-none';
+                if(s==='rounded') cls += 'w-full max-w-[600px] aspect-[3/2] rounded-2xl';
+                if(s==='circle') cls += 'w-full max-w-[400px] aspect-square rounded-full';
+                if(s==='full') cls += 'w-full h-full rounded-none shadow-none border-none';
+                if(s==='text') cls += 'w-full max-w-[800px] aspect-[3/1] bg-transparent shadow-none border-none flex items-center justify-center shape-text';
+                
+                const cContainer = document.getElementById('canvas-container');
+                if (cContainer) cContainer.className = cls;
+                
+                ['rounded','circle','full','text'].forEach(x => {
+                    const b1 = document.getElementById(`shape-${x}`); const b2 = document.getElementById(`m-shape-${x}`);
+                    if(b1) b1.classList.toggle('active', x===s); if(b2) b2.classList.toggle('active', x===s);
+                });
+                
+                const contrastBtn = document.getElementById('contrast-checker');
+                if(contrastBtn) {
+                    if (s === 'text') { contrastBtn.classList.remove('hidden'); contrastBtn.style.opacity = '1'; }
+                    else { contrastBtn.style.opacity = '0'; setTimeout(()=>contrastBtn.classList.add('hidden'), 300); }
+                }
+                this.checkContrast(); this.history.save(); setTimeout(() => this.renderer.render('render-stack'), 400); 
+            }
+
+            setGrain(v) { this.globalGrain = v; document.getElementById('fx-overlay').style.opacity = v / 100; document.getElementById('val-grain').innerText = v + '%'; }
+
+            setAnimStatus(status) {
+                this.animState.status = status;
+                if(status === 'stopped') this.renderer.resetAuroraTimes();
+                this.updateAnimUI(); this.renderer.updateAnimations(); this.history.save();
+            }
+
+            setAnimStyle(style) { this.animState.style = style; this.renderer.updateAnimations(); this.history.save(); }
+            setAnimSpeed(val, save=true) { this.animState.speed = parseInt(val); document.getElementById('val-anim-speed').innerText = val; this.renderer.updateAnimations(); if(save) this.history.save(); }
+            setAnimIntensity(val, save=true) { this.animState.intensity = parseInt(val); document.getElementById('val-anim-intensity').innerText = val; this.renderer.updateAnimations(); if(save) this.history.save(); }
+
+            updateAnimUI() {
+                const bStop = document.getElementById('btn-anim-stop'), bPlay = document.getElementById('btn-anim-play'), bPause = document.getElementById('btn-anim-pause');
+                if(!bPlay) return;
+                [bStop, bPlay, bPause].forEach(b => { b.classList.remove('bg-[var(--primary)]', 'text-white'); b.classList.add('text-[var(--text-muted)]'); });
+                if (this.animState.status === 'playing') { bPlay.classList.add('bg-[var(--primary)]', 'text-white'); bPlay.classList.remove('text-[var(--text-muted)]'); }
+                else if (this.animState.status === 'paused') { bPause.classList.add('bg-[var(--primary)]', 'text-white'); bPause.classList.remove('text-[var(--text-muted)]'); }
+                else { bStop.classList.add('bg-[var(--primary)]', 'text-white'); bStop.classList.remove('text-[var(--text-muted)]'); }
+            }
+
+            checkContrast() {
+                if(this.shape !== 'text' || this.layers.length === 0) return;
+                let baseLayer = this.layers[this.layers.length-1];
+                if (!baseLayer || !baseLayer.stops || baseLayer.stops.length === 0) return;
+                
+                let lumBG = Utils.getLuminance(5, 5, 5);
+                let lumTxt = Utils.getLuminance(baseLayer.stops[0].r, baseLayer.stops[0].g, baseLayer.stops[0].b);
+                let cr = (Math.max(lumBG, lumTxt) + 0.05) / (Math.min(lumBG, lumTxt) + 0.05);
+                
+                const crText = document.getElementById('contrast-ratio'); if(crText) crText.innerText = cr.toFixed(2)+':1';
+                
+                let bge = document.getElementById('contrast-badge');
+                if(bge) {
+                    if(cr>=7) { bge.innerText = "AAA"; bge.className = "px-1.5 py-0.5 rounded text-[9px] bg-green-500/20 text-green-500 uppercase font-bold tracking-widest border border-green-500/30"; }
+                    else if(cr>=4.5) { bge.innerText = "AA"; bge.className = "px-1.5 py-0.5 rounded text-[9px] bg-green-500/20 text-green-500 uppercase font-bold tracking-widest border border-green-500/30"; }
+                    else { bge.innerText = "Fail"; bge.className = "px-1.5 py-0.5 rounded text-[9px] bg-red-500/20 text-red-500 uppercase font-bold tracking-widest border border-red-500/30"; }
+                }
+            }
+
+            restoreState(json) {
+                try {
+                    const s = JSON.parse(json);
+                    this.layers = s.layers.map(l => new Layer(l));
+                    this.activeLayerId = s.activeId;
+                    this.globalGrain = s.grain;
+                    if (s.animState) this.animState = s.animState;
+                    
+                    document.getElementById('global-grain').value = s.grain; this.setGrain(s.grain);
+                    const sel = document.getElementById('anim-style'); if(sel) sel.value = this.animState.style;
+                    const spd = document.getElementById('anim-speed'); if(spd) spd.value = this.animState.speed;
+                    const ints = document.getElementById('anim-intensity'); if(ints) ints.value = this.animState.intensity;
+                    const valSpd = document.getElementById('val-anim-speed'); if(valSpd) valSpd.innerText = this.animState.speed;
+                    const valInt = document.getElementById('val-anim-intensity'); if(valInt) valInt.innerText = this.animState.intensity;
+                    
+                    this.updateAnimUI(); this.ui.updateAll();
+                } catch(e) {}
+            }
+
+            loadPresets() {
+                const p = [
+                    { name: 'iOS 18 Aura', colors: ['#FF2C55', '#007BFF', '#FFD60A'], type: 'aurora' },
+                    { name: 'macOS Monterey', colors: ['#D8315B', '#FF6B6B', '#0A2463', '#3E92CC'], type: 'blob' },
+                    { name: 'Siri Glass', colors: ['#45D4FF', '#FF2C55', '#32D74B', '#5E5CE6'], type: 'mesh' },
+                    { name: 'Apple Card', colors: ['#E5E5EA', '#FFFFFF', '#D1D1D6'], type: 'linear' },
+                    { name: 'iPhone 15 Pro', colors: ['#434A54', '#1C1C1E'], type: 'radial' },
+                    { name: 'iMac Blue', colors: ['#29A1E6', '#EAF5FF'], type: 'linear' },
+                    { name: 'Vision Pro', colors: ['#171717', '#00F0FF', '#FF0055'], type: 'blob' },
+                    { name: 'Midnight', colors: ['#0F172A', '#000000'], type: 'radial' }
+                ];
+                const g = document.getElementById('preset-grid'); if(!g) return;
+                p.forEach(x => {
+                    let d = document.createElement('div');
+                    d.className = 'w-full aspect-square rounded-lg cursor-pointer border border-[var(--glass-border)] transition-transform hover:scale-105 shadow-sm'; 
+                    d.title = x.name;
+                    d.style.background = `linear-gradient(135deg, ${x.colors.join(',')})`;
+                    d.onclick = () => this.applyPreset(x);
+                    g.appendChild(d);
+                });
+            }
+
+            applyPreset(p) {
+                this.layers = [];
+                const l = new Layer({ name: p.name, type: p.type, blendMode: p.type==='aurora'?'screen':'normal' });
+                l.stops = p.colors.map((c,i) => {
+                    let [r,g,b] = Utils.hex2rgb(c);
+                    return {r,g,b,a:1, pos: (i/(p.colors.length-1))*100};
+                });
+                if (p.type === 'blob') {
+                    l.settings.blobs = [
+                        {x: 32, y: 31, width: 40, height: 40, feather: 100, opacity: 1},
+                        {x: 66, y: 62, width: 50, height: 50, feather: 100, opacity: 1}
+                    ];
+                    if (l.stops.length > 2) l.settings.blobs.push({x: 55, y: 62, width: 75, height: 75, feather: 100, opacity: 1});
+                    if (l.stops.length > 3) l.settings.blobs.push({x: 75, y: 30, width: 45, height: 45, feather: 100, opacity: 1});
+                }
+                this.layers.push(l); this.activeLayerId = l.id;
+                if (p.type === 'mesh') this.regenerateMesh(l.id);
+                this.history.save(); this.ui.updateAll();
+            }
+
+            randomize() {
+                if (document.startViewTransition) {
+                    document.startViewTransition(() => this._performRandomize());
+                } else { this._performRandomize(); }
+            }
+            
+            _performRandomize() {
+                this.layers = [];
+                let n = 2 + Math.floor(Math.random()*2);
+                let types = ['linear','radial','mesh','blob','conic','aurora'];
+                let blends = ['normal','multiply','screen','overlay'];
+                for(let i=0; i<n; i++) {
+                    let type = types[Math.floor(Math.random()*types.length)];
+                    let l = new Layer({ name: `Mix ${i+1}`, type: type, blendMode: i===0?'normal':blends[Math.floor(Math.random()*blends.length)] });
+                    let sCount = type === 'mesh' ? 9 : (type === 'blob' ? 3 : 3);
+                    l.stops = Array(sCount).fill(0).map((_,j)=>({r:Math.random()*255,g:Math.random()*255,b:Math.random()*255,a:1,pos:j*(100/(sCount-1))}));
+                    if(type === 'blob') {
+                        l.settings.blobs = Array(sCount).fill(0).map(() => ({x: 20+Math.random()*60, y: 20+Math.random()*60, width: 30+Math.random()*50, height: 30+Math.random()*50, feather: 100, opacity: 1}));
+                    }
+                    this.layers.push(l);
+                }
+                this.activeLayerId = this.layers[0].id;
+                this.history.save(); this.ui.updateAll();
+            }
+        }
+
+        const state = { drawerLevel: 1 };
+        
+        function getDrawerLevels() {
+            const rp = document.getElementById('right-panel');
+            if (!rp) return [0,0,0];
+            const panelH = rp.offsetHeight;
+            return [ panelH - 90, panelH * 0.45, 0 ];
+        }
+
+        function setDrawerLevel(level) {
+            const rp = document.getElementById('right-panel');
+            if (window.innerWidth >= 1024 || !rp) return;
+            state.drawerLevel = Math.max(0, Math.min(2, level));
+            
+            rp.classList.remove('drawer-collapsed', 'drawer-mid', 'drawer-full');
+            rp.style.transform = ''; 
+            
+            if (state.drawerLevel === 0) { rp.classList.add('drawer-collapsed'); document.documentElement.style.setProperty('--drawer-pb', '10vh'); }
+            if (state.drawerLevel === 1) { rp.classList.add('drawer-mid'); document.documentElement.style.setProperty('--drawer-pb', '55vh'); }
+            if (state.drawerLevel === 2) { rp.classList.add('drawer-full'); document.documentElement.style.setProperty('--drawer-pb', '10vh'); }
+        }
+
+        function initMobileDrawer() {
+            const rp = document.getElementById('right-panel');
+            const ph = document.getElementById('panel-header');
+            if (!ph || !rp) return;
+
+            let startY = 0, currentY = 0, isDraggingPanel = false, initialTranslateY = 0;
+
+            ph.addEventListener('touchstart', (e) => {
+                if (window.innerWidth >= 1024) return;
+                startY = e.touches[0].clientY;
+                isDraggingPanel = true;
+                rp.classList.add('dragging');
+                currentY = startY; 
+                const levels = getDrawerLevels();
+                initialTranslateY = levels[state.drawerLevel];
+            }, {passive: true});
+
+            ph.addEventListener('touchmove', (e) => {
+                if (!isDraggingPanel || window.innerWidth >= 1024) return;
+                currentY = e.touches[0].clientY;
+                let deltaY = currentY - startY;
+                let targetY = initialTranslateY + deltaY;
+                const levels = getDrawerLevels();
+                targetY = Math.max(0, Math.min(targetY, levels[0]));
+                rp.style.transform = `translateY(${targetY}px)`;
+            }, {passive: true});
+
+            ph.addEventListener('touchend', (e) => {
+                if (!isDraggingPanel || window.innerWidth >= 1024) return;
+                isDraggingPanel = false;
+                rp.classList.remove('dragging');
+                
+                if (Math.abs(currentY - startY) < 10) {
+                    rp.style.transform = '';
+                    return; 
+                }
+
+                let deltaY = currentY - startY;
+                let targetY = initialTranslateY + deltaY;
+                const levels = getDrawerLevels();
+                
+                let closestLevel = 0;
+                let minDiff = Infinity;
+                levels.forEach((lY, index) => {
+                    let diff = Math.abs(targetY - lY);
+                    if (diff < minDiff) { minDiff = diff; closestLevel = index; }
+                });
+                
+                if (deltaY > 40 && closestLevel === state.drawerLevel) closestLevel = Math.max(0, state.drawerLevel - 1);
+                else if (deltaY < -40 && closestLevel === state.drawerLevel) closestLevel = Math.min(2, state.drawerLevel + 1);
+
+                setDrawerLevel(closestLevel);
+            });
+
+            ph.addEventListener('click', (e) => {
+                if (window.innerWidth >= 1024) return;
+                if (e.target.closest('.tab-container') || e.target.closest('button')) return; 
+                if (Math.abs(currentY - startY) > 10 && currentY !== 0) { currentY = 0; startY = 0; return; }
+                let nextLevel = (state.drawerLevel + 1) % 3;
+                setDrawerLevel(nextLevel);
+                currentY = 0; startY = 0;
+            });
+        }
+
+        function handleResize() {
+            const isMobile = window.innerWidth < 1024;
+            const globalContent = document.getElementById('global-fx-content');
+            if (!globalContent) return;
+            
+            if (isMobile) {
+                document.getElementById('mobile-global-container').appendChild(globalContent);
+                if (app) {
+                    const isLayers = document.getElementById('tab1')?.checked !== false; 
+                    app.ui.switchMobileTab(isLayers ? 'layers' : 'global');
+                }
+            } else {
+                document.getElementById('desktop-global-container').appendChild(globalContent);
+                const rightPanel = document.getElementById('right-panel');
+                if(rightPanel) rightPanel.style.transform = ''; 
+                
+                document.getElementById('layers-stack-list').style.display = 'flex';
+                document.getElementById('mobile-global-container').style.display = 'none';
+                document.getElementById('mobile-layer-actions').style.display = 'none';
+            }
+            if (app) app.renderer.renderBlobOverlay();
+        }
+        window.addEventListener('resize', handleResize);
+
+        window.onload = () => { 
+            app = new ChromaApp(); 
+            initMobileDrawer();
+            handleResize(); 
+        };
+    </script>
+</body>
+</html>
