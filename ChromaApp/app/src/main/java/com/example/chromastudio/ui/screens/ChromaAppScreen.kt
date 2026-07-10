@@ -26,11 +26,16 @@ fun ChromaAppScreen() {
 
     // Main scaffold wrapper
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(colors.gridLine) // TODO: implement the actual grid pattern later
-            .haze(state = hazeState)
+        modifier = Modifier.fillMaxSize()
     ) {
+        // Background layer captured by Haze
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(colors.gridLine) // TODO: implement the actual grid pattern later
+                .haze(state = hazeState)
+        )
+        
         Column(modifier = Modifier.fillMaxSize()) {
             TopAppBar(hazeState)
 
