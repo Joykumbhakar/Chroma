@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.chromastudio.theme.LocalChromaColors
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.haze
 import dev.chrisbanes.haze.hazeChild
 
@@ -33,7 +34,10 @@ fun ChromaAppScreen() {
             modifier = Modifier
                 .fillMaxSize()
                 .background(colors.gridLine) // TODO: implement the actual grid pattern later
-                .haze(state = hazeState)
+                .haze(
+                    state = hazeState,
+                    style = HazeStyle(backgroundColor = Color.Transparent, blurRadius = 30.dp)
+                )
         )
         
         Column(modifier = Modifier.fillMaxSize()) {
