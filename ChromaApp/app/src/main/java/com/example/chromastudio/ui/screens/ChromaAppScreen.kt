@@ -84,7 +84,10 @@ fun TopAppBar(hazeState: HazeState) {
         modifier = Modifier
             .fillMaxWidth()
             .height(64.dp)
-            .hazeChild(state = hazeState)
+            .hazeChild(
+                state = hazeState,
+                style = HazeStyle(backgroundColor = colors.glassBg, blurRadius = 30.dp)
+            )
             .background(colors.glassBg, RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp))
             .border(1.dp, colors.glassBorder, RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp))
             .padding(horizontal = 24.dp),
@@ -178,7 +181,10 @@ fun LeftPanel(modifier: Modifier = Modifier, hazeState: HazeState) {
     val colors = LocalChromaColors.current
     Column(
         modifier = modifier
-            .hazeChild(state = hazeState)
+            .hazeChild(
+                state = hazeState,
+                style = HazeStyle(backgroundColor = colors.glassBg, blurRadius = 30.dp)
+            )
             .background(colors.glassBg, RoundedCornerShape(16.dp))
             .border(1.dp, colors.glassBorder, RoundedCornerShape(16.dp))
     ) {
@@ -266,7 +272,10 @@ fun CenterCanvas(modifier: Modifier = Modifier, hazeState: HazeState) {
     val colors = LocalChromaColors.current
     Box(
         modifier = modifier
-            .hazeChild(state = hazeState)
+            .hazeChild(
+                state = hazeState,
+                style = HazeStyle(backgroundColor = colors.glassBg, blurRadius = 30.dp)
+            )
             .background(colors.glassBg, RoundedCornerShape(16.dp))
             .border(1.dp, colors.glassBorder, RoundedCornerShape(16.dp))
             .padding(16.dp),
@@ -297,7 +306,10 @@ fun RightPanel(modifier: Modifier = Modifier, hazeState: HazeState) {
     val colors = LocalChromaColors.current
     Column(
         modifier = modifier
-            .hazeChild(state = hazeState)
+            .hazeChild(
+                state = hazeState,
+                style = HazeStyle(backgroundColor = colors.glassBg, blurRadius = 30.dp)
+            )
             .background(colors.glassBg, RoundedCornerShape(16.dp))
             .border(1.dp, colors.glassBorder, RoundedCornerShape(16.dp))
     ) {
