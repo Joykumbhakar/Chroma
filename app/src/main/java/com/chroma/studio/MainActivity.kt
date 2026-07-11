@@ -67,8 +67,10 @@ fun ChromaStudioApp(vm: ChromaViewModel) {
     val activeLayer = vm.layers.find { it.id == vm.activeLayerId }
     val hazeState = LocalHazeState.current
 
-    androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.fillMaxSize().background(colors.bg)) {
-        val isDesktop = maxWidth > 800.dp
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val isDesktop = configuration.screenWidthDp > 800
+
+    Box(modifier = Modifier.fillMaxSize().background(colors.bg)) {
 
         if (isDesktop) {
             // Desktop 3-column layout
