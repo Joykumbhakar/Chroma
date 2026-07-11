@@ -66,8 +66,10 @@ fun ColorStopEditor(
 
     var editingStopId by remember { mutableStateOf(sorted.firstOrNull()?.id) }
 
-    // Auto-select first stop if current is deleted
-    if (editingStopId != null && sorted.none { it.id == editingStopId }) {
+    // Auto-select first stop if current is deleted or null
+    if (editingStopId == null && sorted.isNotEmpty()) {
+        editingStopId = sorted.first().id
+    } else if (editingStopId != null && sorted.none { it.id == editingStopId }) {
         editingStopId = sorted.firstOrNull()?.id
     }
 
@@ -166,7 +168,9 @@ fun ColorStopEditor(
                                     onLongPress = {
                                         if (currentStops.size > 2) {
                                             currentOnStopsChange(currentStops.filterNot { it.id == stop.id })
-                                            if (editingStopId == stop.id) editingStopId = null
+                                            if (editingStopId == stop.id) {
+                                                editingStopId = currentStops.firstOrNull { it.id != stop.id }?.id
+                                            }
                                         }
                                     }
                                 )
