@@ -8,15 +8,24 @@
         android:theme="@style/Theme.ChromaStudio"
         android:supportsRtl="true">
 
+        <!-- Home Screen — the launcher entry point (shows splash) -->
         <activity
-            android:name=".MainActivity"
+            android:name=".HomeActivity"
             android:exported="true"
-            android:theme="@style/Theme.ChromaStudio"
+            android:theme="@style/Theme.ChromaStudio.Splash"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Editor — opened by HomeActivity via Intent -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="false"
+            android:theme="@style/Theme.ChromaStudio"
+            android:windowSoftInputMode="adjustResize" />
     </application>
+
 </manifest>

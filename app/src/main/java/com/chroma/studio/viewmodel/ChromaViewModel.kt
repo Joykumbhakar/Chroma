@@ -106,6 +106,56 @@ class ChromaViewModel : ViewModel() {
     var showExportModal by mutableStateOf(false)
         private set
 
+    // ── Saved Work tracking ──────────────────────────────────
+    var currentWorkId by mutableStateOf<String?>(null)
+        private set
+
+    var currentWorkName by mutableStateOf("Untitled")
+        private set
+
+    var currentWorkDescription by mutableStateOf("")
+        private set
+
+    var currentWorkCreatedAt by mutableStateOf(System.currentTimeMillis())
+        private set
+
+    fun loadFromWork(work: com.chroma.studio.model.ChromaWork, repository: com.chroma.studio.data.WorkRepository) {
+        currentWorkId = work.id
+        currentWorkName = work.name
+        currentWorkDescription = work.description
+        currentWorkCreatedAt = work.createdAt
+        canvasShape = work.canvasShape
+        val loaded = repository.deserializeLayers(work.layersJson)
+        if (loaded.isNotEmpty()) {
+            layers.clear()
+            layers.addAll(loaded)
+            activeLayerId = layers.first().id
+            undoStack.clear(); redoStack.clear()
+            canUndo = false; canRedo = false
+        }
+    }
+
+    fun setWorkMeta(name: String, description: String) {
+        currentWorkName = name.ifBlank { "Untitled" }
+        currentWorkDescription = description
+    }
+
+    fun saveWork(repository: com.chroma.studio.data.WorkRepository): com.chroma.studio.model.ChromaWork {
+        val id = currentWorkId ?: java.util.UUID.randomUUID().toString()
+        currentWorkId = id
+        val work = com.chroma.studio.model.ChromaWork(
+            id = id,
+            name = currentWorkName,
+            description = currentWorkDescription,
+            createdAt = currentWorkCreatedAt,
+            lastModifiedAt = System.currentTimeMillis(),
+            layersJson = repository.serializeLayers(layers.toList()),
+            canvasShape = canvasShape
+        )
+        repository.save(work)
+        return work
+    }
+
     // ---- history.save() port: simple undo/redo over full layer-stack snapshots ----
     private val undoStack = ArrayDeque<List<GradientLayer>>()
     private val redoStack = ArrayDeque<List<GradientLayer>>()

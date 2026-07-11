@@ -4,6 +4,19 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import java.util.UUID
 
+// ──────────────────────────────────────────────────────
+// Persisted work (saved in SharedPreferences)
+// ──────────────────────────────────────────────────────
+data class ChromaWork(
+    val id: String = UUID.randomUUID().toString(),
+    val name: String = "Untitled",
+    val description: String = "",
+    val createdAt: Long = System.currentTimeMillis(),
+    val lastModifiedAt: Long = System.currentTimeMillis(),
+    val layersJson: String = "[]",  // Gson-serialized List<GradientLayer>
+    val canvasShape: String = "rounded"
+)
+
 enum class LayerType(val label: String, val icon: String) {
     LINEAR("Linear", "ph-arrow-up-right"),
     RADIAL("Radial", "ph-circle"),

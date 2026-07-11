@@ -49,17 +49,55 @@ import com.chroma.studio.ui.theme.ChromaTheme
 import com.chroma.studio.ui.theme.LocalChromaColors
 import com.chroma.studio.viewmodel.ChromaViewModel
 
+import com.chroma.studio.data.WorkRepository
+import com.chroma.studio.model.ChromaWork
+
 class MainActivity : ComponentActivity() {
+
+    companion object {
+        const val EXTRA_WORK_ID = "work_id"
+        const val EXTRA_WORK_NAME = "work_name"
+        const val EXTRA_WORK_DESCRIPTION = "work_description"
+        const val EXTRA_LAYERS_JSON = "layers_json"
+        const val EXTRA_CANVAS_SHAPE = "canvas_shape"
+    }
+
+    private val vm: ChromaViewModel by viewModels()
+    private lateinit var repository: WorkRepository
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        repository = WorkRepository(applicationContext)
+
+        // If opened with an existing work, load it into the VM (only on first create)
+        if (savedInstanceState == null) {
+            val workId = intent.getStringExtra(EXTRA_WORK_ID)
+            if (workId != null) {
+                val work = ChromaWork(
+                    id = workId,
+                    name = intent.getStringExtra(EXTRA_WORK_NAME) ?: "Untitled",
+                    description = intent.getStringExtra(EXTRA_WORK_DESCRIPTION) ?: "",
+                    layersJson = intent.getStringExtra(EXTRA_LAYERS_JSON) ?: "[]",
+                    canvasShape = intent.getStringExtra(EXTRA_CANVAS_SHAPE) ?: "rounded"
+                )
+                vm.loadFromWork(work, repository)
+            }
+        }
+
         setContent {
-            val vm: ChromaViewModel by viewModels()
             ChromaTheme(darkTheme = vm.isDarkMode) {
                 ChromaStudioApp(vm)
             }
         }
     }
+
+    override fun onPause() {
+        super.onPause()
+        // Auto-save work whenever editor goes to background
+        vm.saveWork(repository)
+    }
 }
+
 
 @Composable
 fun ChromaStudioApp(vm: ChromaViewModel) {

@@ -53,5 +53,11 @@ dependencies {
     
     implementation("com.composables:icons-lucide:1.1.0")
 
+    // Android 12 Splash Screen API
+    implementation("androidx.core:core-splashscreen:1.0.1")
+
+    // Gson for work serialization
+    implementation("com.google.code.gson:gson:2.10.1")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
