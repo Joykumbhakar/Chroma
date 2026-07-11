@@ -58,6 +58,7 @@ fun HazeSourceRoot(modifier: Modifier = Modifier, content: @Composable () -> Uni
 fun GlassPanel(
     modifier: Modifier = Modifier,
     cornerRadius: Int = 16, // --radius-md
+    backgroundColor: androidx.compose.ui.graphics.Color? = null,
     content: @Composable () -> Unit
 ) {
     val colors = LocalChromaColors.current
@@ -69,7 +70,7 @@ fun GlassPanel(
             .shadow(elevation = 8.dp, shape = shape, ambientColor = Color(0x0D1F2687), spotColor = Color(0x0D1F2687))
             .clip(shape)
             .hazeChild(state = hazeState, shape = shape) // backdrop-filter: blur(16px)
-            .background(colors.glassBg, shape) // fallback tint if blur unsupported below API 31
+            .background(backgroundColor ?: colors.glassBg, shape) // fallback tint if blur unsupported below API 31
             .glossyBorder(shape, colors)
     ) {
         content()

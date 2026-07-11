@@ -77,7 +77,8 @@ fun DeveloperHandoffModal(vm: ChromaViewModel, onClose: () -> Unit) {
                 .pointerInput(Unit) {
                     detectTapGestures(onTap = { /* consume tap */ })
                 },
-            cornerRadius = 16
+            cornerRadius = 16,
+            backgroundColor = colors.glassBg.copy(alpha = 0.85f)
         ) {
             Column(
                 modifier = Modifier.fillMaxSize()
