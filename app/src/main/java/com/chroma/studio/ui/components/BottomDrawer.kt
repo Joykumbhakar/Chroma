@@ -163,7 +163,8 @@ private fun UiverseTabs(
             .padding(bottom = 12.dp, top = 4.dp)
             .size(width = 264.dp, height = 32.dp)
             .clip(RoundedCornerShape(24.dp))
-            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.06f))
+            .background(colors.glassBg)
+            .glossyBorder(RoundedCornerShape(24.dp), colors)
             .pointerInput(activeTab) {
                 var dragAmountTotal = 0f
                 detectHorizontalDragGestures(
