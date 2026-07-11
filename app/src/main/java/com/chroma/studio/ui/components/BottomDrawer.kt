@@ -4,6 +4,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -11,8 +12,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -103,21 +108,11 @@ fun BottomDrawer(vm: ChromaViewModel, modifier: Modifier = Modifier) {
             }
 
             if (vm.drawerLevel != DrawerLevel.COLLAPSED) {
-                // .mobile-tabs — segmented Layers / Global FX switcher
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(colors.glassBgHover, RoundedCornerShape(10.dp)),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    TabButton("Layers", vm.mobileTab == MobileTab.LAYERS, Modifier.weight(1f)) {
-                        vm.switchMobileTab(MobileTab.LAYERS)
-                    }
-                    TabButton("Global FX", vm.mobileTab == MobileTab.GLOBAL_FX, Modifier.weight(1f)) {
-                        vm.switchMobileTab(MobileTab.GLOBAL_FX)
-                    }
+                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    UiverseTabs(
+                        activeTab = vm.mobileTab,
+                        onTabSelected = { vm.switchMobileTab(it) }
+                    )
                 }
 
                 when (vm.mobileTab) {
@@ -135,20 +130,64 @@ fun BottomDrawer(vm: ChromaViewModel, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun TabButton(label: String, active: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+private fun UiverseTabs(
+    activeTab: MobileTab,
+    onTabSelected: (MobileTab) -> Unit
+) {
     val colors = LocalChromaColors.current
-    val bg by animateColorAsState(if (active) colors.primary else androidx.compose.ui.graphics.Color.Transparent, label = "tabBg")
-    Text(
-        text = label,
-        color = if (active) colors.onPrimary else colors.textMuted,
-        fontSize = 12.sp,
-        fontWeight = FontWeight.SemiBold,
-        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-        modifier = modifier
-            .padding(3.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(bg, RoundedCornerShape(8.dp))
-            .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { onClick() }
-            .padding(vertical = 8.dp)
+    val indicatorOffset by animateDpAsState(
+        targetValue = if (activeTab == MobileTab.LAYERS) 2.dp else 132.dp,
+        animationSpec = tween(200),
+        label = "tabIndicator"
     )
+
+    Box(
+        modifier = Modifier
+            .padding(bottom = 12.dp, top = 4.dp)
+            .size(width = 264.dp, height = 32.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.06f))
+    ) {
+        // Indicator
+        Box(
+            modifier = Modifier
+                .offset(x = indicatorOffset, y = 2.dp)
+                .size(width = 130.dp, height = 28.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(colors.glassBg)
+                .border(0.5.dp, androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.04f), RoundedCornerShape(24.dp))
+        )
+        
+        // Labels
+        Row(Modifier.fillMaxSize()) {
+            TabLabel(
+                text = "Layers Stack",
+                active = activeTab == MobileTab.LAYERS,
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                onClick = { onTabSelected(MobileTab.LAYERS) }
+            )
+            TabLabel(
+                text = "Global FX",
+                active = activeTab == MobileTab.GLOBAL_FX,
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                onClick = { onTabSelected(MobileTab.GLOBAL_FX) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun TabLabel(text: String, active: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val colors = LocalChromaColors.current
+    Box(
+        modifier = modifier.clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            color = colors.textMain.copy(alpha = if (active) 1f else 0.6f)
+        )
+    }
 }

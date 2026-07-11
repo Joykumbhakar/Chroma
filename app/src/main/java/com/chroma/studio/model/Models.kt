@@ -31,6 +31,23 @@ enum class ColorBlindMode(val label: String) {
     TRITANOPIA("Tritanopia (Blue-Blind)")
 }
 
+enum class PostProcessingFx(val label: String) {
+    NONE("None (Clean)"),
+    GRAIN("Film Grain"),
+    HALFTONE("Retro Halftone"),
+    DITHER("Brutalist Dither")
+}
+
+enum class AnimStyle(val label: String) {
+    DRIFT("Drift (Pan Position)"),
+    PULSE("Pulse (Scale & Opacity)"),
+    HUE("Hue Shift (Color Rotation)"),
+    BREATHE("Breathe (Size Expansion)")
+}
+
+enum class AnimStatus { STOPPED, PLAYING, PAUSED }
+
+
 data class ColorStop(
     val id: String = UUID.randomUUID().toString(),
     val color: Color,

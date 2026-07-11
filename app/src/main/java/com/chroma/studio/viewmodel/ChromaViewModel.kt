@@ -8,11 +8,14 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.lifecycle.ViewModel
+import com.chroma.studio.model.AnimStatus
+import com.chroma.studio.model.AnimStyle
 import com.chroma.studio.model.ChromaBlendMode
 import com.chroma.studio.model.ColorBlindMode
 import com.chroma.studio.model.ColorStop
 import com.chroma.studio.model.GradientLayer
 import com.chroma.studio.model.LayerType
+import com.chroma.studio.model.PostProcessingFx
 import kotlin.random.Random
 
 enum class MobileTab { LAYERS, GLOBAL_FX }
@@ -65,10 +68,28 @@ class ChromaViewModel : ViewModel() {
     var contrastCheckerEnabled by mutableStateOf(false)
         private set
 
-    var halftoneEnabled by mutableStateOf(false)
+    var postFxMode by mutableStateOf(PostProcessingFx.NONE)
         private set
 
-    var ditherEnabled by mutableStateOf(false)
+    val halftoneEnabled: Boolean get() = postFxMode == PostProcessingFx.HALFTONE
+    val ditherEnabled: Boolean get() = postFxMode == PostProcessingFx.DITHER
+
+    var mouseReactivity by mutableStateOf(false)
+        private set
+
+    var globalAnimStatus by mutableStateOf(AnimStatus.STOPPED)
+        private set
+
+    var globalAnimStyle by mutableStateOf(AnimStyle.DRIFT)
+        private set
+
+    var globalAnimSpeed by mutableStateOf(50f)
+        private set
+
+    var globalAnimAmount by mutableStateOf(50f)
+        private set
+
+    var promptText by mutableStateOf("")
         private set
 
     // id of the layer pending delete confirmation, null when the modal is hidden
@@ -136,8 +157,14 @@ class ChromaViewModel : ViewModel() {
 
     fun toggleContrastChecker() { contrastCheckerEnabled = !contrastCheckerEnabled }
 
-    fun toggleHalftone() { halftoneEnabled = !halftoneEnabled }
-    fun toggleDither() { ditherEnabled = !ditherEnabled }
+    fun updatePostFxMode(mode: PostProcessingFx) { postFxMode = mode }
+    
+    fun toggleMouseReactivity(enabled: Boolean) { mouseReactivity = enabled }
+    fun setAnimStatus(status: AnimStatus) { globalAnimStatus = status }
+    fun setAnimStyle(style: AnimStyle) { globalAnimStyle = style }
+    fun updateGlobalAnimSpeed(speed: Float) { globalAnimSpeed = speed }
+    fun updateGlobalAnimAmount(amount: Float) { globalAnimAmount = amount }
+    fun updatePromptText(text: String) { promptText = text }
 
     fun selectLayer(id: String) { activeLayerId = id }
 

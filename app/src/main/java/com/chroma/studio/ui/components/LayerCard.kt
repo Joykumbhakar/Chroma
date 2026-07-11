@@ -26,13 +26,28 @@ import androidx.compose.foundation.lazy.items as lazyRowItems
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Adjust
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Grid4x4
+import androidx.compose.material.icons.filled.IncompleteCircle
+import androidx.compose.material.icons.filled.NorthEast
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.WaterDrop
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -61,6 +76,9 @@ fun LayerCard(
     onOpacityChange: (Float) -> Unit,
     onAngleChange: (Float) -> Unit,
     onStopsChange: (List<com.chroma.studio.model.ColorStop>) -> Unit,
+    onToggleVisibility: () -> Unit,
+    onCenterXChange: (Float) -> Unit,
+    onCenterYChange: (Float) -> Unit,
     onDelete: () -> Unit
 ) {
     val colors = LocalChromaColors.current
@@ -89,20 +107,27 @@ fun LayerCard(
                 modifier = dragHandleModifier.size(18.dp)
             )
             Spacer(Modifier.padding(start = 8.dp))
-            Column(Modifier.weight(1f)) {
-                Text(layer.name, color = colors.textMain, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                Text(layer.type.label, color = colors.textMuted, fontSize = 11.sp)
-            }
-            // little swatch preview of the layer's own gradient
+            Icon(
+                imageVector = if (layer.visible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff,
+                contentDescription = "Toggle Visibility",
+                tint = colors.textMuted,
+                modifier = Modifier
+                    .size(18.dp)
+                    .clickable(indication = null, interactionSource = androidx.compose.runtime.remember { MutableInteractionSource() }) { onToggleVisibility() }
+            )
+            Spacer(Modifier.padding(start = 8.dp))
             val swatchColors = layer.stops.sortedBy { it.position }.map { it.color }
             androidx.compose.foundation.layout.Box(
                 modifier = Modifier
-                    .size(28.dp)
+                    .size(24.dp)
                     .clip(CircleShape)
                     .background(Brush.linearGradient(if (swatchColors.size >= 2) swatchColors else listOf(colors.primary, colors.primary)))
                     .border(1.dp, colors.glassBorder, CircleShape)
             )
             Spacer(Modifier.padding(start = 8.dp))
+            Column(Modifier.weight(1f)) {
+                Text(layer.name, color = colors.textMain, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+            }
             Icon(
                 imageVector = Icons.Filled.ExpandMore,
                 contentDescription = "Expand",
@@ -110,6 +135,15 @@ fun LayerCard(
                 modifier = Modifier
                     .size(18.dp)
                     .rotate(if (layer.expanded) 180f else 0f)
+            )
+            Spacer(Modifier.padding(start = 8.dp))
+            Icon(
+                imageVector = Icons.Filled.Delete,
+                contentDescription = "Delete",
+                tint = colors.error,
+                modifier = Modifier
+                    .size(16.dp)
+                    .clickable(indication = null, interactionSource = androidx.compose.runtime.remember { MutableInteractionSource() }) { onDelete() }
             )
         }
 
@@ -120,20 +154,48 @@ fun LayerCard(
         ) {
             Column(Modifier.padding(top = 12.dp)) {
                 // .type-grid: repeat(3, 1fr)
-                FieldLabel("Type")
+                FieldLabel("Engine Selection")
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(3),
-                    modifier = Modifier.height(88.dp),
+                    modifier = Modifier.height(100.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     items(LayerType.entries.toList()) { type ->
-                        TypeButton(label = type.label, active = layer.type == type) { onTypeChange(type) }
+                        TypeButton(
+                            label = type.label,
+                            icon = when (type) {
+                                LayerType.LINEAR -> Icons.Filled.NorthEast
+                                LayerType.RADIAL -> Icons.Filled.Adjust
+                                LayerType.CONIC -> Icons.Filled.IncompleteCircle
+                                LayerType.MESH -> Icons.Filled.Grid4x4
+                                LayerType.BLOB -> Icons.Filled.WaterDrop
+                                LayerType.AURORA -> Icons.Filled.AutoAwesome
+                            },
+                            active = layer.type == type
+                        ) { onTypeChange(type) }
                     }
                 }
 
                 Spacer(Modifier.padding(top = 12.dp))
                 ColorStopEditor(stops = layer.stops, onStopsChange = onStopsChange)
+
+                Spacer(Modifier.padding(top = 12.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(Modifier.weight(1f)) {
+                        FieldLabel("Blend Mode")
+                        BlendModeSelector(current = layer.blendMode, onChange = onBlendChange)
+                    }
+                    Column(Modifier.weight(1f)) {
+                        FieldLabel("Opacity", value = "${(layer.opacity * 100).toInt()}%")
+                        Slider(
+                            value = layer.opacity,
+                            onValueChange = onOpacityChange,
+                            valueRange = 0f..1f,
+                            colors = SliderDefaults.colors(thumbColor = colors.primary, activeTrackColor = colors.primary)
+                        )
+                    }
+                }
 
                 if (layer.type == LayerType.LINEAR) {
                     Spacer(Modifier.padding(top = 8.dp))
@@ -144,29 +206,37 @@ fun LayerCard(
                         valueRange = 0f..360f,
                         colors = SliderDefaults.colors(thumbColor = colors.primary, activeTrackColor = colors.primary)
                     )
+                } else if (layer.type != LayerType.AURORA) {
+                    Spacer(Modifier.padding(top = 8.dp))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Column(Modifier.weight(1f)) {
+                            FieldLabel("Center X (%)")
+                            OutlinedTextField(
+                                value = layer.centerX.toInt().toString(),
+                                onValueChange = { it.toFloatOrNull()?.let { v -> onCenterXChange(v) } },
+                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp, color = colors.textMain),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    unfocusedBorderColor = colors.glassBorder,
+                                    focusedBorderColor = colors.primary
+                                )
+                            )
+                        }
+                        Column(Modifier.weight(1f)) {
+                            FieldLabel("Center Y (%)")
+                            OutlinedTextField(
+                                value = layer.centerY.toInt().toString(),
+                                onValueChange = { it.toFloatOrNull()?.let { v -> onCenterYChange(v) } },
+                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp, color = colors.textMain),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    unfocusedBorderColor = colors.glassBorder,
+                                    focusedBorderColor = colors.primary
+                                )
+                            )
+                        }
+                    }
                 }
-
-                Spacer(Modifier.padding(top = 4.dp))
-                FieldLabel("Opacity", value = "${(layer.opacity * 100).toInt()}%")
-                Slider(
-                    value = layer.opacity,
-                    onValueChange = onOpacityChange,
-                    valueRange = 0f..1f,
-                    colors = SliderDefaults.colors(thumbColor = colors.primary, activeTrackColor = colors.primary)
-                )
-
-                Spacer(Modifier.padding(top = 4.dp))
-                FieldLabel("Blend Mode")
-                BlendModeSelector(current = layer.blendMode, onChange = onBlendChange)
-
-                Spacer(Modifier.padding(top = 10.dp))
-                Text(
-                    text = "Delete Layer",
-                    color = colors.error,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.clickable(indication = null, interactionSource = MutableInteractionSource()) { onDelete() }
-                )
             }
         }
     }
@@ -182,7 +252,7 @@ private fun FieldLabel(text: String, value: String? = null) {
 }
 
 @Composable
-private fun TypeButton(label: String, active: Boolean, onClick: () -> Unit) {
+private fun TypeButton(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, active: Boolean, onClick: () -> Unit) {
     val colors = LocalChromaColors.current
     val shape = RoundedCornerShape(8.dp)
     Column(
@@ -194,6 +264,13 @@ private fun TypeButton(label: String, active: Boolean, onClick: () -> Unit) {
             .padding(vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = if (active) colors.onPrimary else colors.textMuted,
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(Modifier.padding(top = 4.dp))
         Text(label, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = if (active) colors.onPrimary else colors.textMuted)
     }
 }
@@ -201,22 +278,39 @@ private fun TypeButton(label: String, active: Boolean, onClick: () -> Unit) {
 @Composable
 private fun BlendModeSelector(current: ChromaBlendMode, onChange: (ChromaBlendMode) -> Unit) {
     val colors = LocalChromaColors.current
-    androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        lazyRowItems(ChromaBlendMode.entries.toList()) { mode ->
-            val active = mode == current
-            val shape = RoundedCornerShape(50)
-            Text(
-                text = mode.label,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = if (active) colors.onPrimary else colors.textMuted,
-                modifier = Modifier
-                    .clip(shape)
-                    .background(if (active) colors.primary else colors.glassBg, shape)
-                    .border(1.dp, if (active) colors.primary else colors.glassBorder, shape)
-                    .clickable(indication = null, interactionSource = MutableInteractionSource()) { onChange(mode) }
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-            )
+    var expanded by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+
+    androidx.compose.foundation.layout.Box {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(colors.glassBg, RoundedCornerShape(8.dp))
+                .border(1.dp, colors.glassBorder, RoundedCornerShape(8.dp))
+                .clickable { expanded = true }
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(current.label, fontSize = 12.sp, color = colors.textMain)
+            Icon(Icons.Filled.ExpandMore, null, tint = colors.textMuted, modifier = Modifier.size(16.dp))
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.background(colors.glassBg)
+        ) {
+            ChromaBlendMode.entries.forEach { mode ->
+                DropdownMenuItem(
+                    text = { Text(mode.label, color = colors.textMain, fontSize = 12.sp) },
+                    onClick = {
+                        onChange(mode)
+                        expanded = false
+                    }
+                )
+            }
         }
     }
 }
