@@ -217,9 +217,10 @@ fun LayersPanel(
                                 alpha = 1f - liftProgress.value * 0.08f
                             }
                         }
-                        .pointerInput(layer.id, index) {
-                            detectDragGesturesAfterLongPress(
-                                onDragStart = {
+                        .pointerInput(layer.id, index, layer.expanded) {
+                            if (!layer.expanded) {
+                                detectDragGesturesAfterLongPress(
+                                    onDragStart = {
                                     draggingIndex = index
                                     coroutineScope.launch {
                                         dragOffsetAnim.snapTo(0f)
@@ -259,6 +260,7 @@ fun LayersPanel(
                                     }
                                 }
                             )
+                            }
                         },
                     onToggleExpand = { vm.selectLayer(layer.id); vm.toggleExpanded(layer.id) },
                     onTypeChange = { t -> vm.updateLayer(layer.id, recordHistory = true) { it.copy(type = t) } },
