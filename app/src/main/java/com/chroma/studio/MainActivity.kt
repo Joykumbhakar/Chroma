@@ -293,6 +293,7 @@ fun ChromaStudioApp(vm: ChromaViewModel) {
                     .padding(horizontal = 12.dp, vertical = 8.dp)
             )
         }
+        } // Closes Box(haze)
         
         if (vm.showExportModal) {
             DeveloperHandoffModal(
