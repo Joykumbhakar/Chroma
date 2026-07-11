@@ -70,6 +70,8 @@ fun ChromaStudioApp(vm: ChromaViewModel) {
     androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.fillMaxSize().background(colors.bg)) {
         val isDesktop = maxWidth > 800.dp
 
+        Box(modifier = Modifier.fillMaxSize().haze(hazeState)) {
+
         if (isDesktop) {
             // Desktop 3-column layout
             Row(modifier = Modifier.fillMaxSize().padding(top = 76.dp, bottom = 16.dp)) {
@@ -82,7 +84,7 @@ fun ChromaStudioApp(vm: ChromaViewModel) {
 
                 // Center: Canvas Area
                 Column(
-                    modifier = Modifier.weight(1f).fillMaxHeight().haze(hazeState),
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
                     verticalArrangement = Arrangement.Top,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
@@ -190,7 +192,6 @@ fun ChromaStudioApp(vm: ChromaViewModel) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .haze(hazeState)
                     .padding(top = 76.dp, bottom = 76.dp),
                 verticalArrangement = Arrangement.Top,
                 horizontalAlignment = Alignment.CenterHorizontally
