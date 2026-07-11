@@ -7,29 +7,26 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Nightlight
-import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chroma.studio.ui.theme.LocalChromaColors
+import com.composables.icons.lucide.*
 
 /**
  * .app-bar { height: 64px; display:flex; align-items:center; justify-content:space-between;
@@ -45,6 +42,7 @@ fun ChromaAppBar(
     canRedo: Boolean = false,
     onUndo: () -> Unit = {},
     onRedo: () -> Unit = {},
+    onExport: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val colors = LocalChromaColors.current
@@ -58,56 +56,101 @@ fun ChromaAppBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Box(
+            // ---- LEFT CONTROLS ----
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Start
+            ) {
+                // Workspace Button
+                Row(
                     modifier = Modifier
-                        .size(28.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(colors.primary)
+                        .height(32.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .glossyBorder(RoundedCornerShape(6.dp), colors)
+                        .clickable { /* TODO: Workspace Dropdown */ }
+                        .padding(horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(Lucide.Folder, contentDescription = "Workspaces", tint = colors.primary, modifier = Modifier.size(20.dp))
+                }
+            }
+
+            // ---- CENTER TITLE ----
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically, 
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = "Chroma",
+                    color = colors.textMain,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 17.sp,
+                    letterSpacing = (-0.4).sp
                 )
                 Text(
-                    text = "Chroma Studio",
-                    color = colors.textMain,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
+                    text = "Studio",
+                    color = colors.primary,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 17.sp,
+                    letterSpacing = (-0.4).sp
                 )
             }
 
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                IconGhostButton(icon = "↶", contentDesc = "Undo", disabled = !canUndo, onClick = onUndo)
-                IconGhostButton(icon = "↷", contentDesc = "Redo", disabled = !canRedo, onClick = onRedo)
-                IconGhostButton(icon = "🔀", contentDesc = "Randomize All", onClick = onRandomize)
-                IconGhostButton(icon = "＋", contentDesc = "Add Layer", filled = true, onClick = onAddLayer)
+            // ---- RIGHT CONTROLS ----
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically, 
+                horizontalArrangement = Arrangement.End
+            ) {
+                IconGhostButton(icon = Lucide.Undo, contentDesc = "Undo", disabled = !canUndo, onClick = onUndo)
+                IconGhostButton(icon = Lucide.Redo, contentDesc = "Redo", disabled = !canRedo, onClick = onRedo)
+                
+                // Divider
+                Box(modifier = Modifier.padding(horizontal = 4.dp).width(1.dp).height(20.dp).background(colors.glassBorder))
 
-                // .switch-container dark mode toggle, matching the pill/thumb from the CSS
-                Box(
-                    modifier = Modifier
-                        .size(width = 52.dp, height = 30.dp)
-                        .clip(RoundedCornerShape(50))
-                        .background(if (isDarkMode) colors.primary else colors.glassBgHover)
-                        .clickable(indication = null, interactionSource = MutableInteractionSource()) { onToggleDarkMode() }
-                        .padding(4.dp),
-                    contentAlignment = if (isDarkMode) Alignment.CenterEnd else Alignment.CenterStart
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(22.dp)
-                            .clip(CircleShape)
-                            .background(colors.onPrimary),
-                        contentAlignment = Alignment.Center
+                // More Menu
+                var menuExpanded by remember { androidx.compose.runtime.mutableStateOf(false) }
+                Box {
+                    IconGhostButton(
+                        icon = Lucide.Menu,
+                        contentDesc = "More options",
+                        onClick = { menuExpanded = true }
+                    )
+                    
+                    androidx.compose.material3.DropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false },
+                        modifier = Modifier.background(colors.bg)
                     ) {
-                        AnimatedContent(targetState = isDarkMode, label = "themeIcon") { dark ->
-                            Icon(
-                                imageVector = if (dark) Icons.Filled.Nightlight else Icons.Filled.WbSunny,
-                                contentDescription = null,
-                                tint = colors.primary,
-                                modifier = Modifier.size(14.dp)
-                            )
-                        }
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text("Developer Handoff", color = colors.textMain) },
+                            leadingIcon = { Icon(Lucide.Code, contentDescription = null, tint = colors.textMain, modifier = Modifier.size(16.dp)) },
+                            onClick = { 
+                                menuExpanded = false
+                                onExport() 
+                            }
+                        )
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text(if (isDarkMode) "Light Mode" else "Dark Mode", color = colors.textMain) },
+                            leadingIcon = { 
+                                Icon(
+                                    if (isDarkMode) Lucide.Sun else Lucide.Moon, 
+                                    contentDescription = null, 
+                                    tint = colors.textMain, 
+                                    modifier = Modifier.size(16.dp)
+                                ) 
+                            },
+                            onClick = { 
+                                menuExpanded = false
+                                onToggleDarkMode() 
+                            }
+                        )
                     }
                 }
             }
@@ -116,24 +159,31 @@ fun ChromaAppBar(
 }
 
 @Composable
-private fun IconGhostButton(icon: String, contentDesc: String, filled: Boolean = false, disabled: Boolean = false, onClick: () -> Unit) {
+private fun IconGhostButton(
+    icon: ImageVector,
+    contentDesc: String,
+    disabled: Boolean = false,
+    onClick: () -> Unit
+) {
     val colors = LocalChromaColors.current
     Box(
         modifier = Modifier
             .size(36.dp)
             .clip(CircleShape)
-            .background(if (filled) colors.primary else androidx.compose.ui.graphics.Color.Transparent)
-            .clickable(indication = null, interactionSource = MutableInteractionSource(), enabled = !disabled) { onClick() },
+            .glossyBorder(CircleShape, colors)
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() },
+                enabled = !disabled
+            ) { onClick() },
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = icon,
-            fontSize = 15.sp,
-            color = when {
-                disabled -> colors.textMuted.copy(alpha = 0.4f)
-                filled -> colors.onPrimary
-                else -> colors.textMain
-            }
+        val tint = if (disabled) colors.textMuted.copy(alpha = 0.4f) else colors.textMain
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDesc,
+            modifier = Modifier.size(18.dp),
+            tint = tint
         )
     }
 }

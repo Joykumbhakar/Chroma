@@ -49,5 +49,9 @@ dependencies {
     implementation("dev.chrisbanes.haze:haze:0.7.3")
     implementation("dev.chrisbanes.haze:haze-materials:0.7.3")
 
+    implementation("androidx.palette:palette-ktx:1.0.0")
+    
+    implementation("com.composables:icons-lucide:1.1.0")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

@@ -11,9 +11,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,9 +31,20 @@ import com.chroma.studio.ui.components.BottomDrawer
 import com.chroma.studio.ui.components.ChromaAppBar
 import com.chroma.studio.ui.components.CanvasPreview
 import com.chroma.studio.ui.components.ContrastCheckerBadge
+import com.chroma.studio.ui.components.DeveloperHandoffModal
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntSize
+import dev.chrisbanes.haze.haze
 import com.chroma.studio.ui.components.LocalHazeState
 import com.chroma.studio.ui.components.MeshBlobHandlesOverlay
-import dev.chrisbanes.haze.haze
 import com.chroma.studio.ui.theme.ChromaTheme
 import com.chroma.studio.ui.theme.LocalChromaColors
 import com.chroma.studio.viewmodel.ChromaViewModel
@@ -53,72 +67,238 @@ fun ChromaStudioApp(vm: ChromaViewModel) {
     val activeLayer = vm.layers.find { it.id == vm.activeLayerId }
     val hazeState = LocalHazeState.current
 
-    Box(modifier = Modifier.fillMaxSize().background(colors.bg)) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .haze(hazeState)
-                .padding(top = 76.dp, bottom = 76.dp),
-            verticalArrangement = Arrangement.Top,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            // mobile shape pills: Card / Circle / Full / Text
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(bottom = 12.dp)
-            ) {
-                listOf("rounded" to "Card", "circle" to "Circle", "full" to "Full", "text" to "Text")
-                    .forEach { (key, label) -> ShapePill(label, key == vm.canvasShape) { vm.setShape(key) } }
-            }
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.fillMaxSize().background(colors.bg)) {
+        val isDesktop = maxWidth > 800.dp
 
-            Box(modifier = Modifier.padding(horizontal = 8.dp)) {
-                CanvasPreview(
-                    layers = vm.layers,
-                    shape = vm.canvasShape,
-                    borderColor = colors.glassBorder,
-                    colorBlindMode = vm.colorBlindMode,
-                    halftoneEnabled = vm.halftoneEnabled,
-                    ditherEnabled = vm.ditherEnabled
-                )
-                // draggable mesh/blob handles for the active layer, absolutely
-                // positioned on top of the canvas
-                if (activeLayer != null) {
-                    MeshBlobHandlesOverlay(
-                        layer = activeLayer,
-                        onPointDrag = { index, newPos -> vm.setMeshPoint(activeLayer.id, index, newPos) },
-                        modifier = Modifier.fillMaxWidth()
+        if (isDesktop) {
+            // Desktop 3-column layout
+            Row(modifier = Modifier.fillMaxSize().padding(top = 76.dp, bottom = 16.dp)) {
+                // Left Panel: Global FX
+                Box(modifier = Modifier.width(320.dp).fillMaxHeight().padding(start = 16.dp, end = 8.dp)) {
+                    com.chroma.studio.ui.components.GlassPanel(modifier = Modifier.fillMaxSize(), cornerRadius = 16) {
+                        com.chroma.studio.ui.components.GlobalFxPanel(vm = vm, modifier = Modifier.fillMaxSize())
+                    }
+                }
+
+                // Center: Canvas Area
+                Column(
+                    modifier = Modifier.weight(1f).fillMaxHeight().haze(hazeState),
+                    verticalArrangement = Arrangement.Top,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    ) {
+                        listOf("rounded" to "Card", "circle" to "Circle", "full" to "Full", "text" to "Text")
+                            .forEach { (key, label) -> ShapePill(label, key == vm.canvasShape) { vm.setShape(key) } }
+                    }
+
+                    var reactOffset by remember { mutableStateOf(Offset.Zero) }
+                    var boxSize by remember { mutableStateOf(IntSize.Zero) }
+                    // Local drag state for zero-lag blob dragging — ViewModel only updated on drag end
+                    val blobDragOverrides = remember { mutableStateMapOf<Int, Offset>() }
+
+                    Box(
+                        modifier = Modifier
+                            .padding(horizontal = 8.dp)
+                            .onSizeChanged { boxSize = it }
+                            .pointerInput(vm.mouseReactivity) {
+                                if (!vm.mouseReactivity) {
+                                    reactOffset = Offset.Zero
+                                    return@pointerInput
+                                }
+                                awaitEachGesture {
+                                    awaitFirstDown(requireUnconsumed = false)
+                                    do {
+                                        val event = awaitPointerEvent()
+                                        val pos = event.changes.firstOrNull()?.position
+                                        if (pos != null && boxSize.width > 0 && boxSize.height > 0) {
+                                            val nx = pos.x / boxSize.width
+                                            val ny = pos.y / boxSize.height
+                                            reactOffset = Offset((nx - 0.5f) * -80f, (ny - 0.5f) * -80f)
+                                        }
+                                    } while (event.changes.any { it.pressed })
+                                    reactOffset = Offset.Zero
+                                }
+                            }
+                    ) {
+                        CanvasPreview(
+                            layers = vm.layers,
+                            shape = vm.canvasShape,
+                            borderColor = colors.glassBorder,
+                            colorBlindMode = vm.colorBlindMode,
+                            postFxMode = vm.postFxMode,
+                            reactOffset = reactOffset,
+                            blobDragOverrides = blobDragOverrides,
+                            textContent = vm.textPreviewContent,
+                            onTextContentChange = { vm.updateTextPreviewContent(it) }
+                        )
+                        if (activeLayer != null && (activeLayer.type == com.chroma.studio.model.LayerType.BLOB ||
+                                activeLayer.type == com.chroma.studio.model.LayerType.LIQUID ||
+                                activeLayer.type == com.chroma.studio.model.LayerType.MESH)) {
+                            MeshBlobHandlesOverlay(
+                                layer = activeLayer,
+                                onBlobDrag = { idx, pos ->
+                                    blobDragOverrides[idx] = pos  // local update only — no recompose of layer stack
+                                },
+                                onBlobDragEnd = { idx, finalPos ->
+                                    vm.setBlobPosition(activeLayer.id, idx, finalPos)
+                                    blobDragOverrides.remove(idx)
+                                },
+                                onPointDrag = { idx, pos -> vm.setMeshPoint(activeLayer.id, idx, pos) },
+                                modifier = Modifier.fillMaxWidth().aspectRatio(3f / 2f)
+                            )
+                        }
+                    }
+
+                    if (vm.contrastCheckerEnabled) {
+                        ContrastCheckerBadge(
+                            layers = vm.layers,
+                            onAutoFix = vm::autoFixContrast,
+                            modifier = Modifier.padding(top = 10.dp)
+                        )
+                    }
+                }
+
+                // Right Panel: Layers
+                Box(modifier = Modifier.width(320.dp).fillMaxHeight().padding(start = 8.dp, end = 16.dp)) {
+                    com.chroma.studio.ui.components.LayersPanel(
+                        layers = vm.layers,
+                        activeLayerId = vm.activeLayerId,
+                        vm = vm,
+                        modifier = Modifier.fillMaxSize()
                     )
                 }
             }
 
-            if (vm.contrastCheckerEnabled) {
-                ContrastCheckerBadge(
-                    layers = vm.layers,
-                    onAutoFix = vm::autoFixContrast,
-                    modifier = Modifier.padding(top = 10.dp)
-                )
+            ChromaAppBar(
+                isDarkMode = vm.isDarkMode,
+                onToggleDarkMode = vm::toggleDarkMode,
+                onAddLayer = vm::addLayer,
+                onRandomize = vm::randomize,
+                canUndo = vm.canUndo,
+                canRedo = vm.canRedo,
+                onUndo = vm::undo,
+                onRedo = vm::redo,
+                onExport = vm::toggleExportModal,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
+
+        } else {
+            // Mobile layout
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .haze(hazeState)
+                    .padding(top = 76.dp, bottom = 76.dp),
+                verticalArrangement = Arrangement.Top,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // mobile shape pills
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(bottom = 12.dp)
+                ) {
+                    listOf("rounded" to "Card", "circle" to "Circle", "full" to "Full", "text" to "Text")
+                        .forEach { (key, label) -> ShapePill(label, key == vm.canvasShape) { vm.setShape(key) } }
+                }
+
+                var reactOffset by remember { mutableStateOf(Offset.Zero) }
+                var boxSize by remember { mutableStateOf(IntSize.Zero) }
+                // Local drag state for zero-lag blob dragging
+                val blobDragOverrides = remember { mutableStateMapOf<Int, Offset>() }
+
+                Box(
+                    modifier = Modifier
+                        .padding(horizontal = 8.dp)
+                        .onSizeChanged { boxSize = it }
+                        .pointerInput(vm.mouseReactivity) {
+                            if (!vm.mouseReactivity) {
+                                reactOffset = Offset.Zero
+                                return@pointerInput
+                            }
+                            awaitEachGesture {
+                                awaitFirstDown(requireUnconsumed = false)
+                                do {
+                                    val event = awaitPointerEvent()
+                                    val pos = event.changes.firstOrNull()?.position
+                                    if (pos != null && boxSize.width > 0 && boxSize.height > 0) {
+                                        val nx = pos.x / boxSize.width
+                                        val ny = pos.y / boxSize.height
+                                        reactOffset = Offset((nx - 0.5f) * -80f, (ny - 0.5f) * -80f)
+                                    }
+                                } while (event.changes.any { it.pressed })
+                                reactOffset = Offset.Zero
+                            }
+                        }
+                ) {
+                    CanvasPreview(
+                        layers = vm.layers,
+                        shape = vm.canvasShape,
+                        borderColor = colors.glassBorder,
+                        colorBlindMode = vm.colorBlindMode,
+                        postFxMode = vm.postFxMode,
+                        reactOffset = reactOffset,
+                        blobDragOverrides = blobDragOverrides,
+                        textContent = vm.textPreviewContent,
+                        onTextContentChange = { vm.updateTextPreviewContent(it) }
+                    )
+                    if (activeLayer != null && (activeLayer.type == com.chroma.studio.model.LayerType.BLOB ||
+                            activeLayer.type == com.chroma.studio.model.LayerType.LIQUID ||
+                            activeLayer.type == com.chroma.studio.model.LayerType.MESH)) {
+                        MeshBlobHandlesOverlay(
+                            layer = activeLayer,
+                            onBlobDrag = { idx, pos ->
+                                blobDragOverrides[idx] = pos
+                            },
+                            onBlobDragEnd = { idx, finalPos ->
+                                vm.setBlobPosition(activeLayer.id, idx, finalPos)
+                                blobDragOverrides.remove(idx)
+                            },
+                            onPointDrag = { idx, pos -> vm.setMeshPoint(activeLayer.id, idx, pos) },
+                            modifier = Modifier.fillMaxWidth().aspectRatio(3f / 2f)
+                        )
+                    }
+                }
+
+                if (vm.contrastCheckerEnabled) {
+                    ContrastCheckerBadge(
+                        layers = vm.layers,
+                        onAutoFix = vm::autoFixContrast,
+                        modifier = Modifier.padding(top = 10.dp)
+                    )
+                }
             }
+
+            ChromaAppBar(
+                isDarkMode = vm.isDarkMode,
+                onToggleDarkMode = vm::toggleDarkMode,
+                onAddLayer = vm::addLayer,
+                onRandomize = vm::randomize,
+                canUndo = vm.canUndo,
+                canRedo = vm.canRedo,
+                onUndo = vm::undo,
+                onRedo = vm::redo,
+                onExport = vm::toggleExportModal,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
+
+            BottomDrawer(
+                vm = vm,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+            )
         }
-
-        ChromaAppBar(
-            isDarkMode = vm.isDarkMode,
-            onToggleDarkMode = vm::toggleDarkMode,
-            onAddLayer = vm::addLayer,
-            onRandomize = vm::randomize,
-            canUndo = vm.canUndo,
-            canRedo = vm.canRedo,
-            onUndo = vm::undo,
-            onRedo = vm::redo,
-            modifier = Modifier.align(Alignment.TopCenter)
-        )
-
-        BottomDrawer(
-            vm = vm,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp)
-        )
+        
+        if (vm.showExportModal) {
+            DeveloperHandoffModal(
+                vm = vm,
+                onClose = vm::toggleExportModal
+            )
+        }
     }
 }
 

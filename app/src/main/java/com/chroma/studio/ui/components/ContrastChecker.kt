@@ -6,8 +6,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoFixHigh
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.WandSparkles
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -83,7 +83,7 @@ fun ContrastCheckerBadge(
         )
         if (!passesAA) {
             Icon(
-                imageVector = Icons.Filled.AutoFixHigh,
+                imageVector = Lucide.WandSparkles,
                 contentDescription = "Auto-fix contrast",
                 tint = colors.primary,
                 modifier = Modifier

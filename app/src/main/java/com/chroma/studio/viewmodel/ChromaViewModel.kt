@@ -8,6 +8,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.lifecycle.ViewModel
+import androidx.palette.graphics.Palette
 import com.chroma.studio.model.AnimStatus
 import com.chroma.studio.model.AnimStyle
 import com.chroma.studio.model.ChromaBlendMode
@@ -92,8 +93,17 @@ class ChromaViewModel : ViewModel() {
     var promptText by mutableStateOf("")
         private set
 
+    var textPreviewContent by mutableStateOf("CHROMA")
+        private set
+
     // id of the layer pending delete confirmation, null when the modal is hidden
     var pendingDeleteLayerId by mutableStateOf<String?>(null)
+        private set
+
+    var dontAskDeleteAgain by mutableStateOf(false)
+        private set
+
+    var showExportModal by mutableStateOf(false)
         private set
 
     // ---- history.save() port: simple undo/redo over full layer-stack snapshots ----
@@ -165,6 +175,7 @@ class ChromaViewModel : ViewModel() {
     fun updateGlobalAnimSpeed(speed: Float) { globalAnimSpeed = speed }
     fun updateGlobalAnimAmount(amount: Float) { globalAnimAmount = amount }
     fun updatePromptText(text: String) { promptText = text }
+    fun updateTextPreviewContent(text: String) { textPreviewContent = text }
 
     fun selectLayer(id: String) { activeLayerId = id }
 
@@ -188,13 +199,27 @@ class ChromaViewModel : ViewModel() {
         activeLayerId = newLayer.id
     }
 
-    fun requestDeleteLayer(id: String) { pendingDeleteLayerId = id }
+    fun showDeleteLayerConfirmation(layerId: String) {
+        if (dontAskDeleteAgain) {
+            deleteLayer(layerId)
+        } else {
+            pendingDeleteLayerId = layerId
+        }
+    }
+
     fun cancelDeleteLayer() { pendingDeleteLayerId = null }
 
     fun confirmDeleteLayer() {
-        val id = pendingDeleteLayerId ?: return
-        deleteLayer(id)
+        pendingDeleteLayerId?.let { deleteLayer(it) }
         pendingDeleteLayerId = null
+    }
+
+    fun updateDontAskDeleteAgain(value: Boolean) {
+        dontAskDeleteAgain = value
+    }
+
+    fun toggleExportModal() {
+        showExportModal = !showExportModal
     }
 
     fun deleteLayer(id: String) {
@@ -244,6 +269,92 @@ class ChromaViewModel : ViewModel() {
             layer.copy(meshPoints = updated)
         }
     }
+
+    // ---- Blob engine methods — mirrors app.setActiveBlob / addBlob / removeBlob / updateBlobParams ----
+
+    fun setActiveBlob(layerId: String, idx: Int) {
+        updateLayer(layerId) { it.copy(activeBlobIdx = idx) }
+    }
+
+    fun addBlob(layerId: String) {
+        saveHistory()
+        updateLayer(layerId) { layer ->
+            val newBlob = com.chroma.studio.model.BlobPoint(
+                x = 20f + Random.nextFloat() * 60f,
+                y = 20f + Random.nextFloat() * 60f,
+                width = 30f + Random.nextFloat() * 50f,
+                height = 30f + Random.nextFloat() * 50f,
+                feather = 100f,
+                opacity = 1f
+            )
+            val newStop = com.chroma.studio.model.ColorStop(
+                color = randomColor(),
+                position = 100f
+            )
+            layer.copy(
+                blobs = layer.blobs + newBlob,
+                stops = layer.stops + newStop,
+                activeBlobIdx = layer.blobs.size
+            )
+        }
+    }
+
+    fun removeBlob(layerId: String, idx: Int) {
+        val layer = layers.firstOrNull { it.id == layerId } ?: return
+        if (layer.blobs.size <= 1) return
+        saveHistory()
+        updateLayer(layerId) { l ->
+            val newBlobs = l.blobs.toMutableList().also { it.removeAt(idx) }
+            val newStops = l.stops.toMutableList().also { if (idx in it.indices) it.removeAt(idx) }
+            l.copy(
+                blobs = newBlobs,
+                stops = newStops,
+                activeBlobIdx = maxOf(0, l.activeBlobIdx - 1).coerceAtMost(newBlobs.size - 1)
+            )
+        }
+    }
+
+    /** Update a single blob's position (called by drag handles) */
+    fun setBlobPosition(layerId: String, blobIdx: Int, newPos: Offset) {
+        updateLayer(layerId) { layer ->
+            val updated = layer.blobs.toMutableList()
+            if (blobIdx in updated.indices) {
+                updated[blobIdx] = updated[blobIdx].copy(x = newPos.x, y = newPos.y)
+            }
+            layer.copy(blobs = updated, activeBlobIdx = blobIdx)
+        }
+    }
+
+    /** Update a per-blob property (width, height, feather, opacity, rotation) */
+    fun updateBlobParam(layerId: String, blobIdx: Int, prop: String, value: Float) {
+        updateLayer(layerId) { layer ->
+            val updated = layer.blobs.toMutableList()
+            if (blobIdx in updated.indices) {
+                val b = updated[blobIdx]
+                updated[blobIdx] = when (prop) {
+                    "width"    -> b.copy(width = value)
+                    "height"   -> b.copy(height = value)
+                    "feather"  -> b.copy(feather = value)
+                    "opacity"  -> b.copy(opacity = value)
+                    "rotation" -> b.copy(rotation = value)
+                    else -> b
+                }
+            }
+            layer.copy(blobs = updated)
+        }
+    }
+
+
+    fun regenerateMesh(layerId: String) {
+        updateLayer(layerId) { layer ->
+            val random = java.util.Random()
+            val newPoints = List(layer.columns * layer.rows) {
+                androidx.compose.ui.geometry.Offset(random.nextFloat() * 100f, random.nextFloat() * 100f)
+            }
+            layer.copy(meshPoints = newPoints)
+        }
+    }
+
 
     /**
      * Port of autoFixContrast(): nudges the frontmost layer's first stop toward black/white
@@ -302,4 +413,60 @@ class ChromaViewModel : ViewModel() {
         blue = Random.nextFloat(),
         alpha = 1f
     )
+
+    fun generateAiPalette(prompt: String) {
+        if (prompt.isBlank()) return
+        saveHistory()
+        val lowerPrompt = prompt.lowercase()
+        val colors = when {
+            "cyberpunk" in lowerPrompt || "neon" in lowerPrompt -> listOf(Color(0xFFFF007F), Color(0xFF00FFFF), Color(0xFF7F00FF))
+            "sunset" in lowerPrompt -> listOf(Color(0xFFFF512F), Color(0xFFF09819), Color(0xFFDD2476))
+            "forest" in lowerPrompt || "nature" in lowerPrompt -> listOf(Color(0xFF11998E), Color(0xFF38EF7D), Color(0xFF006400))
+            "ocean" in lowerPrompt || "sea" in lowerPrompt -> listOf(Color(0xFF2E3192), Color(0xFF1BFFFF), Color(0xFF00008B))
+            "fire" in lowerPrompt || "flame" in lowerPrompt -> listOf(Color(0xFFF83600), Color(0xFFF9D423))
+            "space" in lowerPrompt || "galaxy" in lowerPrompt -> listOf(Color(0xFF000000), Color(0xFF434343), Color(0xFF8A2387), Color(0xFFE94057))
+            else -> listOf(randomColor(), randomColor(), randomColor())
+        }
+        
+        val newLayer = GradientLayer(
+            name = "AI: ${prompt.take(10)}",
+            type = LayerType.AURORA,
+            stops = colors.mapIndexed { i, c ->
+                ColorStop(color = c, position = if (colors.size <= 1) 0f else i * 100f / (colors.size - 1))
+            },
+            expanded = true
+        )
+        layers.add(0, newLayer)
+        activeLayerId = newLayer.id
+    }
+
+    fun generatePaletteFromImage(bitmap: android.graphics.Bitmap) {
+        androidx.palette.graphics.Palette.from(bitmap).generate { palette ->
+            palette?.let {
+                val extractedColors = mutableListOf<Color>()
+                it.vibrantSwatch?.rgb?.let { rgb -> extractedColors.add(Color(rgb)) }
+                it.darkVibrantSwatch?.rgb?.let { rgb -> extractedColors.add(Color(rgb)) }
+                it.lightVibrantSwatch?.rgb?.let { rgb -> extractedColors.add(Color(rgb)) }
+                it.mutedSwatch?.rgb?.let { rgb -> extractedColors.add(Color(rgb)) }
+                it.darkMutedSwatch?.rgb?.let { rgb -> extractedColors.add(Color(rgb)) }
+                
+                if (extractedColors.isEmpty()) {
+                    extractedColors.addAll(listOf(randomColor(), randomColor()))
+                }
+                
+                saveHistory()
+                val takenColors = extractedColors.take(4)
+                val newLayer = GradientLayer(
+                    name = "Extracted Image",
+                    type = LayerType.MESH,
+                    stops = takenColors.mapIndexed { i, c ->
+                        ColorStop(color = c, position = if (takenColors.size <= 1) 0f else i * 100f / (takenColors.size - 1))
+                    },
+                    expanded = true
+                )
+                layers.add(0, newLayer)
+                activeLayerId = newLayer.id
+            }
+        }
+    }
 }

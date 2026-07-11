@@ -208,8 +208,8 @@
         .layer-card.expanded { border-color: var(--primary); box-shadow: 0 4px 20px rgba(59, 130, 246, 0.15); transform: scale(1.01); }
         
         .layer-card.is-dragging {
-            opacity: 0.6 !important; background: var(--glass-bg-hover);
-            border-color: var(--primary); box-shadow: 0 10px 30px rgba(79, 70, 229, 0.2);
+            opacity: 0.95 !important; background: var(--glass-bg-hover);
+            border-color: var(--primary);
             z-index: 50; 
         }
         .layer-card.is-dragging * { pointer-events: none; }
@@ -2237,75 +2237,161 @@ ${hasLiquid ? `
             initDragAndDrop() {
                 const list = document.getElementById('layers-stack-list');
                 const items = list.querySelectorAll('.layer-item');
-                let draggedItem = null;
 
                 items.forEach(item => {
-                    const handle = item.querySelector('.layer-drag-handle');
-                    if (handle) {
-                        handle.addEventListener('pointerdown', () => item.setAttribute('draggable', 'true'));
-                        handle.addEventListener('pointerup', () => item.setAttribute('draggable', 'false'));
-                        handle.addEventListener('pointerleave', () => item.setAttribute('draggable', 'false'));
-                    }
+                    // Remove old HTML5 drag events if any
+                    item.removeAttribute('draggable');
 
-                    item.addEventListener('dragstart', (e) => {
-                        draggedItem = item;
-                        setTimeout(() => item.classList.add('is-dragging'), 0);
-                        e.dataTransfer.effectAllowed = 'move';
-                    });
-
-                    item.addEventListener('dragend', () => {
-                        item.setAttribute('draggable', 'false');
-                        draggedItem.classList.remove('is-dragging');
-                        draggedItem = null;
-                        list.querySelectorAll('.layer-item').forEach(i => { i.style.transform = ''; i.style.transition = ''; });
-                        this.syncLayersFromDOM();
-                    });
-                });
-
-                list.addEventListener('dragover', (e) => {
-                    e.preventDefault();
-                    if (!draggedItem) return;
-
-                    const afterElement = this.getDragAfterElement(list, e.clientY);
-                    const currentNextSibling = draggedItem.nextElementSibling;
-                    if (afterElement === currentNextSibling) return;
-
-                    // FLIP Logic
-                    const allItems = [...list.querySelectorAll('.layer-item')];
-                    const firstPositions = allItems.map(item => ({ item: item, top: item.getBoundingClientRect().top }));
-
-                    if (afterElement == null) { list.appendChild(draggedItem); } 
-                    else { list.insertBefore(draggedItem, afterElement); }
-
-                    firstPositions.forEach(({ item, top: firstTop }) => {
-                        if (item === draggedItem) return;
-                        const lastTop = item.getBoundingClientRect().top;
-                        const deltaY = firstTop - lastTop;
-
-                        if (deltaY !== 0) {
-                            item.style.transform = `translateY(${deltaY}px)`;
-                            item.style.transition = 'none';
-                            requestAnimationFrame(() => {
-                                item.offsetHeight; // force reflow
-                                item.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)';
-                                item.style.transform = '';
-                            });
+                    item.addEventListener('pointerdown', (e) => {
+                        // Only trigger for primary button (left click/touch)
+                        if (e.button !== 0) return;
+                        
+                        // Don't trigger on interactable elements
+                        if (e.target.closest('input, button, .slider-track, .stops-track-container, .sat-val-area, .layer-drag-handle')) {
+                            // Wait, if they click the drag handle, we CAN trigger immediately!
+                            // Let's allow long press on body OR immediate on handle.
                         }
+
+                        const isHandle = !!e.target.closest('.layer-drag-handle');
+                        if (!isHandle && e.target.closest('input, button, .slider-track, .stops-track-container, .sat-val-area, .expand-btn, .visibility-btn, .delete-btn')) {
+                            return; // Interactive elements consume the touch
+                        }
+
+                        const startY = e.clientY;
+                        const startX = e.clientX;
+                        
+                        let currentDrag = null;
+                        
+                        const startDragging = () => {
+                            timer = null;
+                            const initialRect = item.getBoundingClientRect();
+                            currentDrag = {
+                                item: item,
+                                pointerOffset: startY - initialRect.top,
+                                naturalTop: initialRect.top
+                            };
+                            
+                            item.classList.add('is-dragging');
+                            item.style.transform = `scale(1.02)`;
+                            item.style.transition = 'none';
+                            item.style.position = 'relative';
+                            item.style.zIndex = '999';
+                            
+                            if (navigator.vibrate) navigator.vibrate(50); // Haptic feedback
+                            
+                            // Prevent list scrolling while dragging
+                            list.style.overflow = 'hidden';
+                            list.style.touchAction = 'none';
+                        };
+
+                        let timer = isHandle ? null : setTimeout(startDragging, 300);
+                        if (isHandle) startDragging(); // Immediate drag for handle
+
+                        const moveHandler = (moveEvent) => {
+                            if (timer) {
+                                // Cancel long-press if user moves finger too much
+                                if (Math.abs(moveEvent.clientY - startY) > 5 || Math.abs(moveEvent.clientX - startX) > 5) {
+                                    clearTimeout(timer);
+                                    timer = null;
+                                    cleanup();
+                                }
+                            } else if (currentDrag) {
+                                moveEvent.preventDefault();
+                                
+                                const visualTop = moveEvent.clientY - currentDrag.pointerOffset;
+                                const translateY = visualTop - currentDrag.naturalTop;
+                                item.style.transform = `translateY(${translateY}px) scale(1.02)`;
+
+                                // FLIP Sorting Logic
+                                const siblings = [...list.querySelectorAll('.layer-item:not(.is-dragging)')];
+                                const box = item.getBoundingClientRect();
+                                const center = box.top + box.height / 2;
+
+                                for (const sib of siblings) {
+                                    const sibBox = sib.getBoundingClientRect();
+                                    if (center > sibBox.top && center < sibBox.bottom) {
+                                        // Found intersection
+                                        const allItems = [...list.querySelectorAll('.layer-item')];
+                                        const firstPositions = allItems.map(i => ({ i, top: i.getBoundingClientRect().top }));
+
+                                        // DOM Swap
+                                        const isAfter = (sib.compareDocumentPosition(item) & Node.DOCUMENT_POSITION_PRECEDING);
+                                        if (isAfter) {
+                                            list.insertBefore(item, sib); // Move up
+                                        } else {
+                                            list.insertBefore(item, sib.nextSibling); // Move down
+                                        }
+
+                                        // Recalculate natural top for the dragged item
+                                        item.style.transform = 'none';
+                                        currentDrag.naturalTop = item.getBoundingClientRect().top;
+                                        
+                                        // Reapply transform
+                                        const newTranslateY = visualTop - currentDrag.naturalTop;
+                                        item.style.transform = `translateY(${newTranslateY}px) scale(1.02)`;
+
+                                        // FLIP animate siblings
+                                        allItems.forEach(i => {
+                                            if (i === item) return;
+                                            const oldTop = firstPositions.find(x => x.i === i).top;
+                                            const newTop = i.getBoundingClientRect().top;
+                                            const dy = oldTop - newTop;
+                                            if (dy !== 0) {
+                                                i.style.transform = `translateY(${dy}px)`;
+                                                i.style.transition = 'none';
+                                                requestAnimationFrame(() => {
+                                                    i.offsetHeight; // Force reflow
+                                                    i.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)';
+                                                    i.style.transform = '';
+                                                });
+                                            }
+                                        });
+
+                                        if (navigator.vibrate) navigator.vibrate(10);
+                                        break; // Only swap one at a time
+                                    }
+                                }
+                            }
+                        };
+
+                        const upHandler = () => {
+                            if (timer) {
+                                clearTimeout(timer);
+                                timer = null;
+                            }
+                            if (currentDrag) {
+                                // Drop animation
+                                item.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), scale 0.3s ease';
+                                item.style.transform = 'translateY(0) scale(1)';
+                                
+                                setTimeout(() => {
+                                    item.classList.remove('is-dragging');
+                                    item.style.position = '';
+                                    item.style.zIndex = '';
+                                    item.style.transition = '';
+                                    item.style.transform = '';
+                                    
+                                    list.style.overflow = '';
+                                    list.style.touchAction = '';
+                                    
+                                    this.syncLayersFromDOM();
+                                }, 300);
+                                currentDrag = null;
+                            }
+                            cleanup();
+                        };
+
+                        const cleanup = () => {
+                            window.removeEventListener('pointermove', moveHandler);
+                            window.removeEventListener('pointerup', upHandler);
+                            window.removeEventListener('pointercancel', upHandler);
+                        };
+
+                        window.addEventListener('pointermove', moveHandler, { passive: false });
+                        window.addEventListener('pointerup', upHandler);
+                        window.addEventListener('pointercancel', upHandler);
                     });
                 });
-            }
-
-            getDragAfterElement(container, y) {
-                const draggableElements = [...container.querySelectorAll('.layer-item:not(.is-dragging)')];
-                return draggableElements.reduce((closest, child) => {
-                    const box = child.getBoundingClientRect();
-                    const offset = y - box.top - box.height / 2;
-                    if (offset < 0 && offset > closest.offset) {
-                        return { offset: offset, element: child };
-                    } else {
-                        return closest;
-                    }
-                }, { offset: Number.NEGATIVE_INFINITY }).element;
             }
 
             syncLayersFromDOM() {

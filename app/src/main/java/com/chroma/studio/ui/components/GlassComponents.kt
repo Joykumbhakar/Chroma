@@ -14,6 +14,25 @@ import com.chroma.studio.ui.theme.LocalChromaColors
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.haze
 import dev.chrisbanes.haze.hazeChild
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Shape
+import com.chroma.studio.ui.theme.ChromaPalette
+
+fun Modifier.glossyBorder(
+    shape: Shape,
+    colors: ChromaPalette,
+    width: androidx.compose.ui.unit.Dp = 1.dp
+): Modifier = this.border(
+    width = width,
+    brush = Brush.linearGradient(
+        colors = listOf(
+            colors.glassBorder.copy(alpha = (colors.glassBorder.alpha * 3f).coerceAtMost(1f)),
+            colors.glassBorder.copy(alpha = (colors.glassBorder.alpha * 0.2f).coerceAtMost(1f)),
+            colors.glassBorder.copy(alpha = (colors.glassBorder.alpha * 1.5f).coerceAtMost(1f))
+        )
+    ),
+    shape = shape
+)
 
 /**
  * Direct port of:
@@ -51,7 +70,7 @@ fun GlassPanel(
             .clip(shape)
             .hazeChild(state = hazeState, shape = shape) // backdrop-filter: blur(16px)
             .background(colors.glassBg, shape) // fallback tint if blur unsupported below API 31
-            .border(1.dp, colors.glassBorder, shape)
+            .glossyBorder(shape, colors)
     ) {
         content()
     }

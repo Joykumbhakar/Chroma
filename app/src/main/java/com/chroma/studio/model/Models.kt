@@ -10,7 +10,8 @@ enum class LayerType(val label: String, val icon: String) {
     CONIC("Conic", "ph-cone"),
     MESH("Mesh", "ph-grid-four"),
     BLOB("Blob", "ph-drop"),
-    AURORA("Aurora", "ph-sparkle")
+    AURORA("Aurora", "ph-sparkle"),
+    LIQUID("Liquid", "ph-drop")
 }
 
 enum class ChromaBlendMode(val label: String, val compose: BlendMode) {
@@ -54,6 +55,21 @@ data class ColorStop(
     val position: Float // 0f..100f, matches `pos` in the JS stop model
 )
 
+/**
+ * Mirrors the JS blob object: { x, y, width, height, feather, opacity }
+ * x/y are % positions (0..100), width/height are % of canvas size (10..200),
+ * feather is 0..100, opacity is 0..1, rotation is degrees.
+ */
+data class BlobPoint(
+    val x: Float = 50f,
+    val y: Float = 50f,
+    val width: Float = 40f,
+    val height: Float = 40f,
+    val feather: Float = 100f,
+    val opacity: Float = 1f,
+    val rotation: Float = 0f    // degrees, applied via canvas transform
+)
+
 data class GradientLayer(
     val id: String = UUID.randomUUID().toString(),
     val name: String,
@@ -61,16 +77,31 @@ data class GradientLayer(
     val blendMode: ChromaBlendMode = ChromaBlendMode.NORMAL,
     val opacity: Float = 1f,       // 0..1
     val angle: Float = 90f,        // degrees, used for LINEAR
-    val centerX: Float = 50f,      // % , used for RADIAL/CONIC/MESH/BLOB
+    val centerX: Float = 50f,      // % , used for RADIAL/CONIC
     val centerY: Float = 50f,      // %
     val visible: Boolean = true,
     val expanded: Boolean = false,
     val animated: Boolean = false,
-    val animSpeed: Float = 50f,     // 1..100, matches #anim-speed
-    val animIntensity: Float = 50f, // 0..100, matches #anim-intensity
-    // Simplified mesh/blob control points: each Offset is a % position (0..100) in the canvas.
-    // The real app has per-point feather/opacity/width/height; this keeps position editing
-    // (the highest-value interaction) while skipping the full gizmo inspector.
+    val animSpeed: Float = 50f,     // 1..100
+    val animIntensity: Float = 50f, // 0..100
+    val repeatPattern: Boolean = false,
+    val width: Float = 70f,         // for RADIAL width
+    val height: Float = 70f,        // for RADIAL height
+    val feather: Float = 100f,      // global fallback
+    val waveSpeed: Float = 50f,
+    val complexity: Float = 50f,
+    val brightness: Float = 50f,
+    val columns: Int = 3,
+    val rows: Int = 3,
+    val hasBaseBackground: Boolean = false,
+    val blobBgColor: Color = Color.Black,
+    val activeBlobIdx: Int = 0,
+    // Per-blob settings matching the JS { x, y, width, height, feather, opacity } structure
+    val blobs: List<BlobPoint> = listOf(
+        BlobPoint(x = 25f, y = 40f, width = 40f, height = 40f),
+        BlobPoint(x = 75f, y = 60f, width = 40f, height = 40f)
+    ),
+    // Mesh control points (non-blob layers still use this)
     val meshPoints: List<androidx.compose.ui.geometry.Offset> = listOf(
         androidx.compose.ui.geometry.Offset(25f, 40f),
         androidx.compose.ui.geometry.Offset(75f, 60f)
