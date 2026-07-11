@@ -68,8 +68,8 @@ fun DeveloperHandoffModal(vm: ChromaViewModel, onClose: () -> Unit) {
                 .fillMaxWidth(0.95f)
                 .fillMaxHeight(0.95f)
                 .clip(RoundedCornerShape(16.dp))
-                .background(colors.bg)
-                .border(1.dp, colors.glassBorder, RoundedCornerShape(16.dp))
+                .background(colors.glassBg)
+                .glossyBorder(RoundedCornerShape(16.dp), colors)
         ) {
             // Header
             Row(
@@ -119,14 +119,34 @@ fun DeveloperHandoffModal(vm: ChromaViewModel, onClose: () -> Unit) {
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(if (isSelected) colors.primary else Color.Transparent)
+                                .background(if (isSelected) colors.glassBg else Color.Transparent)
+                                .border(
+                                    width = if (isSelected) 2.dp else 1.dp,
+                                    brush = if (isSelected) {
+                                        androidx.compose.ui.graphics.Brush.linearGradient(
+                                            colors = listOf(
+                                                Color(0xFF60A5FA),
+                                                Color(0xFF3B82F6),
+                                                Color(0xFF2563EB)
+                                            )
+                                        )
+                                    } else {
+                                        androidx.compose.ui.graphics.Brush.linearGradient(
+                                            colors = listOf(
+                                                colors.glassBorder.copy(alpha = (colors.glassBorder.alpha * 3f).coerceAtMost(1f)),
+                                                colors.glassBorder.copy(alpha = (colors.glassBorder.alpha * 0.2f).coerceAtMost(1f))
+                                            )
+                                        )
+                                    },
+                                    shape = RoundedCornerShape(8.dp)
+                                )
                                 .clickable { selectedFramework = format }
                                 .padding(horizontal = 16.dp, vertical = 10.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = format,
-                                color = if (isSelected) colors.onPrimary else colors.textMuted,
+                                color = if (isSelected) colors.primary else colors.textMuted,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 12.sp
                             )
@@ -150,14 +170,25 @@ fun DeveloperHandoffModal(vm: ChromaViewModel, onClose: () -> Unit) {
                         modifier = Modifier
                             .height(36.dp)
                             .clip(RoundedCornerShape(18.dp))
-                            .background(colors.primary)
+                            .background(colors.glassBg)
+                            .border(
+                                width = 2.dp,
+                                brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                                    colors = listOf(
+                                        Color(0xFF60A5FA),
+                                        Color(0xFF3B82F6),
+                                        Color(0xFF2563EB)
+                                    )
+                                ),
+                                shape = RoundedCornerShape(18.dp)
+                            )
                             .clickable { },
                         contentAlignment = Alignment.Center
                     ) {
                         Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Lucide.Video, null, tint = colors.onPrimary, modifier = Modifier.size(16.dp))
+                            Icon(Lucide.Video, null, tint = colors.primary, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("Record .webm (5s)", color = colors.onPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text("Record .webm (5s)", color = colors.primary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -168,8 +199,8 @@ fun DeveloperHandoffModal(vm: ChromaViewModel, onClose: () -> Unit) {
                         .weight(1f)
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFFF1F3F5)) // light gray
-                        .border(1.dp, Color(0xFFE5E7EB), RoundedCornerShape(8.dp))
+                        .background(colors.glassBg)
+                        .glossyBorder(RoundedCornerShape(8.dp), colors)
                         .padding(16.dp)
                 ) {
                     val generatedCode = remember(selectedFramework, vm.layers, vm.globalAnimStatus, vm.globalAnimStyle, vm.globalAnimSpeed, vm.globalAnimAmount, vm.canvasShape, vm.textPreviewContent) {
@@ -191,7 +222,7 @@ fun DeveloperHandoffModal(vm: ChromaViewModel, onClose: () -> Unit) {
                                 text = generatedCode,
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = 12.sp,
-                                color = Color(0xFF374151),
+                                color = colors.textMain,
                                 lineHeight = 18.sp
                             )
                         }
@@ -226,7 +257,7 @@ private fun ExportButton(label: String, icon: androidx.compose.ui.graphics.vecto
         modifier = Modifier
             .height(36.dp)
             .clip(RoundedCornerShape(18.dp))
-            .background(Color.White)
+            .background(colors.glassBg)
             .glossyBorder(RoundedCornerShape(18.dp), colors)
             .clickable {
                 if (!isSaving) {

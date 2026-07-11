@@ -212,6 +212,7 @@ fun LayerCard(
             Column(Modifier.padding(top = 12.dp)) {
                 // .type-grid: repeat(3, 1fr)
                 FieldLabel("Engine Selection")
+                Spacer(Modifier.padding(top = 8.dp))
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(3),
                     modifier = Modifier.height(180.dp),
