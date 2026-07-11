@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import androidx.compose.animation.core.animateFloat
@@ -53,12 +55,6 @@ import androidx.compose.ui.window.DialogProperties
 import com.chroma.studio.ui.theme.LocalChromaColors
 import com.chroma.studio.utils.ExportEngine
 import com.chroma.studio.viewmodel.ChromaViewModel
-import dev.chrisbanes.haze.hazeChild
-import com.composables.icons.lucide.Copy
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.platform.LocalContext
-import android.widget.Toast
 
 @Composable
 fun DeveloperHandoffModal(vm: ChromaViewModel, onClose: () -> Unit) {
@@ -69,19 +65,23 @@ fun DeveloperHandoffModal(vm: ChromaViewModel, onClose: () -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.5f))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClose() },
+            .pointerInput(Unit) {
+                detectTapGestures(onTap = { onClose() })
+            },
         contentAlignment = Alignment.Center
     ) {
-        Column(
+        GlassPanel(
             modifier = Modifier
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
                 .fillMaxWidth(0.95f)
                 .fillMaxHeight(0.95f)
-                .clip(RoundedCornerShape(16.dp))
-                .hazeChild(state = LocalHazeState.current, shape = RoundedCornerShape(16.dp))
-                .background(colors.glassBg)
-                .glossyBorder(RoundedCornerShape(16.dp), colors)
+                .pointerInput(Unit) {
+                    detectTapGestures(onTap = { /* consume tap */ })
+                },
+            cornerRadius = 16
         ) {
+            Column(
+                modifier = Modifier.fillMaxSize()
+            ) {
             // Header
             Row(
                 modifier = Modifier
@@ -209,6 +209,10 @@ fun DeveloperHandoffModal(vm: ChromaViewModel, onClose: () -> Unit) {
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(colors.glassBg)
+                        .glossyBorder(RoundedCornerShape(8.dp), colors)
+                        .padding(16.dp)
                 ) {
                     val generatedCode = remember(selectedFramework, vm.layers, vm.globalAnimStatus, vm.globalAnimStyle, vm.globalAnimSpeed, vm.globalAnimAmount, vm.canvasShape, vm.textPreviewContent) {
                         ExportEngine.generateCode(
@@ -223,45 +227,16 @@ fun DeveloperHandoffModal(vm: ChromaViewModel, onClose: () -> Unit) {
                             textContent = vm.textPreviewContent
                         )
                     }
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(colors.glassBg)
-                            .glossyBorder(RoundedCornerShape(8.dp), colors)
-                            .padding(16.dp)
-                    ) {
-                        LazyColumn(modifier = Modifier.fillMaxSize()) {
-                            item {
-                                Text(
-                                    text = generatedCode,
-                                    fontFamily = FontFamily.Monospace,
-                                    fontSize = 12.sp,
-                                    color = colors.textMain,
-                                    lineHeight = 18.sp
-                                )
-                            }
+                    LazyColumn(modifier = Modifier.fillMaxSize()) {
+                        item {
+                            Text(
+                                text = generatedCode,
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 12.sp,
+                                color = colors.textMain,
+                                lineHeight = 18.sp
+                            )
                         }
-                    }
-
-                    val context = LocalContext.current
-                    val clipboard = LocalClipboardManager.current
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(8.dp)
-                            .size(36.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(colors.glassBg)
-                            .glossyBorder(RoundedCornerShape(8.dp), colors)
-                            .clickable {
-                                clipboard.setText(AnnotatedString(generatedCode))
-                                Toast.makeText(context, "Code copied to clipboard!", Toast.LENGTH_SHORT).show()
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Lucide.Copy, "Copy Code", tint = colors.textMain, modifier = Modifier.size(16.dp))
                     }
                 }
 
@@ -279,6 +254,7 @@ fun DeveloperHandoffModal(vm: ChromaViewModel, onClose: () -> Unit) {
                     )
                 }
             }
+            }
         }
     }
 }
@@ -288,7 +264,6 @@ private fun ExportButton(label: String, icon: androidx.compose.ui.graphics.vecto
     val colors = LocalChromaColors.current
     var isSaving by remember { mutableStateOf(false) }
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
-    val context = LocalContext.current
 
     Row(
         modifier = Modifier
@@ -303,7 +278,6 @@ private fun ExportButton(label: String, icon: androidx.compose.ui.graphics.vecto
                         onExport()
                         kotlinx.coroutines.delay(1500) // Simulate saving delay
                         isSaving = false
-                        Toast.makeText(context, "$label Exported Successfully", Toast.LENGTH_SHORT).show()
                     }
                 }
             }
