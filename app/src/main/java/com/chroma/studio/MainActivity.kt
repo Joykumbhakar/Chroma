@@ -84,9 +84,11 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        val workNameFromIntent = intent.getStringExtra(EXTRA_WORK_NAME) ?: "Untitled"
+
         setContent {
             ChromaTheme(darkTheme = vm.isDarkMode) {
-                ChromaStudioApp(vm)
+                ChromaStudioApp(vm, workNameFromIntent)
             }
         }
     }
@@ -100,7 +102,7 @@ class MainActivity : ComponentActivity() {
 
 
 @Composable
-fun ChromaStudioApp(vm: ChromaViewModel) {
+fun ChromaStudioApp(vm: ChromaViewModel, workName: String) {
     val colors = LocalChromaColors.current
     val activeLayer = vm.layers.find { it.id == vm.activeLayerId }
     val hazeState = LocalHazeState.current
@@ -185,6 +187,11 @@ fun ChromaStudioApp(vm: ChromaViewModel) {
                                 onBlobDragEnd = { idx, finalPos ->
                                     vm.setBlobPosition(activeLayer.id, idx, finalPos)
                                     blobDragOverrides.remove(idx)
+                                },
+                                onBlobScale = { idx, zoom ->
+                                    val b = activeLayer.blobs[idx]
+                                    vm.updateBlobParam(activeLayer.id, idx, "width", (b.width * zoom).coerceIn(10f, 300f))
+                                    vm.updateBlobParam(activeLayer.id, idx, "height", (b.height * zoom).coerceIn(10f, 300f))
                                 },
                                 onPointDrag = { idx, pos -> vm.setMeshPoint(activeLayer.id, idx, pos) },
                                 modifier = Modifier.fillMaxWidth().aspectRatio(3f / 2f)
@@ -296,6 +303,11 @@ fun ChromaStudioApp(vm: ChromaViewModel) {
                                 vm.setBlobPosition(activeLayer.id, idx, finalPos)
                                 blobDragOverrides.remove(idx)
                             },
+                            onBlobScale = { idx, zoom ->
+                                val b = activeLayer.blobs[idx]
+                                vm.updateBlobParam(activeLayer.id, idx, "width", (b.width * zoom).coerceIn(10f, 300f))
+                                vm.updateBlobParam(activeLayer.id, idx, "height", (b.height * zoom).coerceIn(10f, 300f))
+                            },
                             onPointDrag = { idx, pos -> vm.setMeshPoint(activeLayer.id, idx, pos) },
                             modifier = Modifier.fillMaxWidth().aspectRatio(3f / 2f)
                         )
@@ -336,9 +348,12 @@ fun ChromaStudioApp(vm: ChromaViewModel) {
         if (vm.showExportModal) {
             DeveloperHandoffModal(
                 vm = vm,
+                workName = workName,
                 onClose = vm::toggleExportModal
             )
         }
+        
+        com.chroma.studio.ui.components.ChromaToastHost()
     }
 }
 

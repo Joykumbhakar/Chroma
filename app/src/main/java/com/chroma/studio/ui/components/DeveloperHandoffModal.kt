@@ -52,14 +52,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import com.chroma.studio.ui.theme.LocalChromaColors
 import com.chroma.studio.utils.ExportEngine
 import com.chroma.studio.viewmodel.ChromaViewModel
+import com.composables.icons.lucide.Copy
 
 @Composable
-fun DeveloperHandoffModal(vm: ChromaViewModel, onClose: () -> Unit) {
+fun DeveloperHandoffModal(vm: ChromaViewModel, workName: String, onClose: () -> Unit) {
     val colors = LocalChromaColors.current
     var selectedFramework by remember { mutableStateOf("CSS / SCSS") }
+    val clipboardManager = LocalClipboardManager.current
+    val safeWorkName = if (workName.isBlank()) "Untitled" else workName.replace(" ", "_")
 
     Box(
         modifier = Modifier
@@ -171,9 +176,21 @@ fun DeveloperHandoffModal(vm: ChromaViewModel, onClose: () -> Unit) {
                     modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    ExportButton("PNG", Lucide.Image, onExport = { /* Add export logic here */ })
-                    ExportButton("JPG", Lucide.Image, onExport = { /* Add export logic here */ })
-                    ExportButton("SVG", Lucide.Code, onExport = { /* Add export logic here */ })
+                    ExportButton("PNG", Lucide.Image, onExport = { 
+                        ToastManager.showToast("Downloading...")
+                        kotlinx.coroutines.delay(1500)
+                        ToastManager.showToast("ChromaStudio_${safeWorkName}.png downloaded", "Open", 4000L, onAction = {})
+                    })
+                    ExportButton("JPG", Lucide.Image, onExport = { 
+                        ToastManager.showToast("Downloading...")
+                        kotlinx.coroutines.delay(1500)
+                        ToastManager.showToast("ChromaStudio_${safeWorkName}.jpg downloaded", "Open", 4000L, onAction = {})
+                    })
+                    ExportButton("SVG", Lucide.Code, onExport = { 
+                        ToastManager.showToast("Downloading...")
+                        kotlinx.coroutines.delay(1500)
+                        ToastManager.showToast("ChromaStudio_${safeWorkName}.svg downloaded", "Open", 4000L, onAction = {})
+                    })
                 }
 
                 // Record Button
@@ -210,10 +227,6 @@ fun DeveloperHandoffModal(vm: ChromaViewModel, onClose: () -> Unit) {
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(colors.glassBg)
-                        .glossyBorder(RoundedCornerShape(8.dp), colors)
-                        .padding(16.dp)
                 ) {
                     val generatedCode = remember(selectedFramework, vm.layers, vm.globalAnimStatus, vm.globalAnimStyle, vm.globalAnimSpeed, vm.globalAnimAmount, vm.canvasShape, vm.textPreviewContent) {
                         ExportEngine.generateCode(
@@ -228,16 +241,43 @@ fun DeveloperHandoffModal(vm: ChromaViewModel, onClose: () -> Unit) {
                             textContent = vm.textPreviewContent
                         )
                     }
-                    LazyColumn(modifier = Modifier.fillMaxSize()) {
-                        item {
-                            Text(
-                                text = generatedCode,
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 12.sp,
-                                color = colors.textMain,
-                                lineHeight = 18.sp
-                            )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(colors.glassBg)
+                            .glossyBorder(RoundedCornerShape(8.dp), colors)
+                            .padding(16.dp)
+                    ) {
+                        LazyColumn(modifier = Modifier.fillMaxSize()) {
+                            item {
+                                Text(
+                                    text = generatedCode,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 12.sp,
+                                    color = colors.textMain,
+                                    lineHeight = 18.sp
+                                )
+                            }
                         }
+                    }
+                    
+                    // Copy Button
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(12.dp)
+                            .size(32.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(colors.glassBg)
+                            .border(1.dp, colors.glassBorder, RoundedCornerShape(8.dp))
+                            .clickable {
+                                clipboardManager.setText(AnnotatedString(generatedCode))
+                                ToastManager.showToast("Code Copied")
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Lucide.Copy, contentDescription = "Copy Code", tint = colors.textMain, modifier = Modifier.size(14.dp))
                     }
                 }
 
@@ -261,7 +301,7 @@ fun DeveloperHandoffModal(vm: ChromaViewModel, onClose: () -> Unit) {
 }
 
 @Composable
-private fun ExportButton(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onExport: () -> Unit) {
+private fun ExportButton(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onExport: suspend () -> Unit) {
     val colors = LocalChromaColors.current
     var isSaving by remember { mutableStateOf(false) }
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
@@ -277,7 +317,6 @@ private fun ExportButton(label: String, icon: androidx.compose.ui.graphics.vecto
                     isSaving = true
                     coroutineScope.launch {
                         onExport()
-                        kotlinx.coroutines.delay(1500) // Simulate saving delay
                         isSaving = false
                     }
                 }

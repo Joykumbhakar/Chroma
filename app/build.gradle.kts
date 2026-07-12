@@ -42,6 +42,7 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.2")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.2")
+    implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("androidx.core:core-ktx:1.13.1")
 
     // Haze - glassmorphism / backdrop blur for Jetpack Compose
@@ -49,12 +50,13 @@ dependencies {
     implementation("dev.chrisbanes.haze:haze:0.7.3")
     implementation("dev.chrisbanes.haze:haze-materials:0.7.3")
 
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.navigation:navigation-compose:2.7.7")
+    implementation("androidx.compose.animation:animation-graphics")
+
     implementation("androidx.palette:palette-ktx:1.0.0")
     
     implementation("com.composables:icons-lucide:1.1.0")
-
-    // Android 12 Splash Screen API
-    implementation("androidx.core:core-splashscreen:1.0.1")
 
     // Gson for work serialization
     implementation("com.google.code.gson:gson:2.10.1")

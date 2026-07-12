@@ -292,7 +292,6 @@ fun InlineColorPicker(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(140.dp)
-                    .clip(RoundedCornerShape(8.dp))
             ) {
                 val pureHueColor by remember(hue) {
                     derivedStateOf { Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, 1f, 1f))) }
@@ -303,6 +302,7 @@ fun InlineColorPicker(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(140.dp)
+                        .clip(RoundedCornerShape(8.dp))
                         .pointerInput(Unit) {
                             detectDragGestures { change, _ ->
                                 change.consume()
@@ -347,8 +347,7 @@ fun InlineColorPicker(
             BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(12.dp)
-                    .clip(RoundedCornerShape(6.dp))
+                    .height(24.dp)
                     .pointerInput(Unit) {
                         detectDragGestures { change, _ ->
                             change.consume()
@@ -370,8 +369,10 @@ fun InlineColorPicker(
                 val hueColors = remember {
                     listOf(Color.Red, Color.Magenta, Color.Blue, Color.Cyan, Color.Green, Color.Yellow, Color.Red)
                 }
-                Canvas(modifier = Modifier.matchParentSize()) {
-                    drawRect(Brush.horizontalGradient(hueColors))
+                Box(modifier = Modifier.fillMaxWidth().height(12.dp).align(Alignment.Center).clip(RoundedCornerShape(6.dp))) {
+                    Canvas(modifier = Modifier.matchParentSize()) {
+                        drawRect(Brush.horizontalGradient(hueColors))
+                    }
                 }
                 // Thumb via graphicsLayer — no layout recomposition on hue drag
                 Box(
@@ -379,7 +380,7 @@ fun InlineColorPicker(
                         .size(20.dp)
                         .graphicsLayer {
                             translationX = maxWidth.toPx() * (hue / 360f) - 10.dp.toPx()
-                            translationY = -4.dp.toPx()
+                            translationY = 2.dp.toPx()
                         }
                         .shadow(4.dp, CircleShape)
                         .background(Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, 1f, 1f))))
@@ -393,9 +394,7 @@ fun InlineColorPicker(
             BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(12.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(checkerboardBrush())
+                    .height(24.dp)
                     .pointerInput(Unit) {
                         detectDragGestures { change, _ ->
                             change.consume()
@@ -417,15 +416,17 @@ fun InlineColorPicker(
                 val baseColor by remember(hue, sat, value) {
                     derivedStateOf { Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, sat, value))) }
                 }
-                Canvas(modifier = Modifier.matchParentSize()) {
-                    drawRect(Brush.horizontalGradient(listOf(Color.Transparent, baseColor)))
+                Box(modifier = Modifier.fillMaxWidth().height(12.dp).align(Alignment.Center).clip(RoundedCornerShape(6.dp)).background(checkerboardBrush())) {
+                    Canvas(modifier = Modifier.matchParentSize()) {
+                        drawRect(Brush.horizontalGradient(listOf(Color.Transparent, baseColor)))
+                    }
                 }
                 Box(
                     modifier = Modifier
                         .size(20.dp)
                         .graphicsLayer {
                             translationX = maxWidth.toPx() * alpha - 10.dp.toPx()
-                            translationY = -4.dp.toPx()
+                            translationY = 2.dp.toPx()
                         }
                         .shadow(4.dp, CircleShape)
                         .background(Color.White)

@@ -1,22 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Main editor theme -->
-    <style name="Theme.ChromaStudio" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:windowBackground">#f8fafc</item>
-        <item name="android:statusBarColor">@android:color/transparent</item>
-        <item name="android:windowLightStatusBar">true</item>
-    </style>
-
     <!-- Android 12 Splash Screen theme (used by HomeActivity) -->
     <style name="Theme.ChromaStudio.Splash" parent="Theme.SplashScreen">
         <!-- Solid white background -->
         <item name="windowSplashScreenBackground">#FFFFFF</item>
-        <!-- Animated icon — the JD logo in black -->
-        <item name="windowSplashScreenAnimatedIcon">@drawable/animated_logo</item>
+        <!-- Static icon — the JD logo in black -->
+        <item name="windowSplashScreenAnimatedIcon">@drawable/static_logo</item>
         <!-- Keep splash visible briefly -->
         <item name="windowSplashScreenAnimationDuration">1000</item>
         <!-- Theme to apply once splash exits -->
         <item name="postSplashScreenTheme">@style/Theme.ChromaStudio</item>
+
+        <!-- Android 12+ specific attributes -->
+        <item name="android:windowSplashScreenBackground">#FFFFFF</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/static_logo</item>
     </style>
-
-
 </resources>

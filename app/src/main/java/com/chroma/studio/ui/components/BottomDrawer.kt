@@ -41,6 +41,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.Color
 import com.chroma.studio.ui.theme.LocalChromaColors
 import com.chroma.studio.viewmodel.ChromaViewModel
 import com.chroma.studio.viewmodel.DrawerLevel
@@ -59,18 +60,17 @@ fun BottomDrawer(vm: ChromaViewModel, modifier: Modifier = Modifier) {
         DrawerLevel.MID -> 340.dp
         DrawerLevel.FULL -> 620.dp
     }
-    val animatedOffsetY by animateDpAsState(
-        targetValue = 620.dp - targetHeight, 
-        spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium), 
-        label = "drawerOffsetY"
+    val animatedHeight by animateDpAsState(
+        targetValue = targetHeight,
+        spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        label = "drawerHeight"
     )
     var dragAccum by remember { mutableStateOf(0f) }
 
     GlassPanel(
         modifier = modifier
-            .offset(y = animatedOffsetY)
             .fillMaxWidth()
-            .height(620.dp),
+            .height(animatedHeight),
         cornerRadius = 24
     ) {
         Column(Modifier.fillMaxWidth()) {
@@ -122,7 +122,8 @@ fun BottomDrawer(vm: ChromaViewModel, modifier: Modifier = Modifier) {
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 UiverseTabs(
                     activeTab = vm.mobileTab,
-                    onTabSelected = { vm.switchMobileTab(it) }
+                    onTabSelected = { vm.switchMobileTab(it) },
+                    isDarkMode = vm.isDarkMode
                 )
             }
 
@@ -142,10 +143,15 @@ fun BottomDrawer(vm: ChromaViewModel, modifier: Modifier = Modifier) {
 @Composable
 private fun UiverseTabs(
     activeTab: MobileTab,
-    onTabSelected: (MobileTab) -> Unit
+    onTabSelected: (MobileTab) -> Unit,
+    isDarkMode: Boolean
 ) {
-    val colors = LocalChromaColors.current
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+    
+    val containerColor = if (isDarkMode) Color(0xFF1E1E1E) else Color(0xFFF3F4F6)
+    val indicatorColor = if (isDarkMode) Color(0xFF333333) else Color.White
+    val activeTextColor = if (isDarkMode) Color.White else Color(0xFF111827)
+    val inactiveTextColor = if (isDarkMode) Color(0xFFA0A0A0) else Color(0xFF6B7280)
     
     // 1:1 interactive Animatable for the indicator
     val indicatorOffsetAnim = remember { androidx.compose.animation.core.Animatable(if (activeTab == MobileTab.LAYERS) 2f else 132f) }
@@ -161,10 +167,9 @@ private fun UiverseTabs(
     Box(
         modifier = Modifier
             .padding(bottom = 12.dp, top = 4.dp)
-            .size(width = 264.dp, height = 32.dp)
-            .clip(RoundedCornerShape(24.dp))
-            .background(colors.glassBg)
-            .glossyBorder(RoundedCornerShape(24.dp), colors)
+            .size(width = 264.dp, height = 36.dp)
+            .clip(RoundedCornerShape(50))
+            .background(containerColor)
             .pointerInput(activeTab) {
                 var dragAmountTotal = 0f
                 detectHorizontalDragGestures(
@@ -206,20 +211,10 @@ private fun UiverseTabs(
         Box(
             modifier = Modifier
                 .offset(x = indicatorOffsetAnim.value.dp, y = 2.dp)
-                .size(width = 130.dp, height = 28.dp)
-                .clip(RoundedCornerShape(24.dp))
-                .background(colors.glassBg)
-                .border(
-                    width = 2.dp,
-                    brush = androidx.compose.ui.graphics.Brush.linearGradient(
-                        colors = listOf(
-                            androidx.compose.ui.graphics.Color(0xFF60A5FA),
-                            androidx.compose.ui.graphics.Color(0xFF3B82F6),
-                            androidx.compose.ui.graphics.Color(0xFF2563EB)
-                        )
-                    ),
-                    shape = RoundedCornerShape(24.dp)
-                )
+                .size(width = 130.dp, height = 32.dp)
+                .shadow(elevation = 2.dp, shape = RoundedCornerShape(50))
+                .clip(RoundedCornerShape(50))
+                .background(indicatorColor)
         )
 
 
@@ -229,12 +224,16 @@ private fun UiverseTabs(
             TabLabel(
                 text = "Layers Stack",
                 active = activeTab == MobileTab.LAYERS,
+                activeColor = activeTextColor,
+                inactiveColor = inactiveTextColor,
                 modifier = Modifier.weight(1f).fillMaxHeight(),
                 onClick = { onTabSelected(MobileTab.LAYERS) }
             )
             TabLabel(
                 text = "Global FX",
                 active = activeTab == MobileTab.GLOBAL_FX,
+                activeColor = activeTextColor,
+                inactiveColor = inactiveTextColor,
                 modifier = Modifier.weight(1f).fillMaxHeight(),
                 onClick = { onTabSelected(MobileTab.GLOBAL_FX) }
             )
@@ -243,8 +242,7 @@ private fun UiverseTabs(
 }
 
 @Composable
-private fun TabLabel(text: String, active: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val colors = LocalChromaColors.current
+private fun TabLabel(text: String, active: Boolean, activeColor: androidx.compose.ui.graphics.Color, inactiveColor: androidx.compose.ui.graphics.Color, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Box(
         modifier = modifier.clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { onClick() },
         contentAlignment = Alignment.Center
@@ -253,7 +251,7 @@ private fun TabLabel(text: String, active: Boolean, modifier: Modifier = Modifie
             text = text,
             fontSize = 12.sp,
             fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
-            color = colors.textMain.copy(alpha = if (active) 1f else 0.6f)
+            color = if (active) activeColor else inactiveColor
         )
     }
 }

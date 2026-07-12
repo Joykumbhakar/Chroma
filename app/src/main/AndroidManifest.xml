@@ -8,7 +8,7 @@
         android:theme="@style/Theme.ChromaStudio"
         android:supportsRtl="true">
 
-        <!-- Home Screen — the launcher entry point (shows splash) -->
+        <!-- Home Screen -->
         <activity
             android:name=".HomeActivity"
             android:exported="true"

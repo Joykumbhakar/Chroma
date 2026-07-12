@@ -5,6 +5,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.offset
@@ -46,6 +47,8 @@ fun MeshBlobHandlesOverlay(
     onBlobDragEnd: (index: Int, finalPctPos: Offset) -> Unit = { _, _ -> },
     /** Mesh-only point drag (still commits each frame — mesh doesn't have 60fps issue) */
     onPointDrag: (index: Int, newPercentPos: Offset) -> Unit = { _, _ -> },
+    /** Called when two fingers pinch on a blob ring */
+    onBlobScale: (index: Int, scaleFactor: Float) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     if (layer.type != LayerType.MESH &&
@@ -63,7 +66,8 @@ fun MeshBlobHandlesOverlay(
                 containerW = w,
                 containerH = h,
                 onBlobDrag = onBlobDrag,
-                onBlobDragEnd = onBlobDragEnd
+                onBlobDragEnd = onBlobDragEnd,
+                onBlobScale = onBlobScale
             )
         } else {
             MeshHandles(
@@ -82,7 +86,8 @@ private fun BlobHandles(
     containerW: Dp,
     containerH: Dp,
     onBlobDrag: (Int, Offset) -> Unit,
-    onBlobDragEnd: (Int, Offset) -> Unit
+    onBlobDragEnd: (Int, Offset) -> Unit,
+    onBlobScale: (Int, Float) -> Unit
 ) {
     // Track which blob is being dragged for visual feedback (elevation, size)
     var draggingIdx by remember { mutableStateOf(-1) }
@@ -130,6 +135,13 @@ private fun BlobHandles(
                         else Color.White.copy(alpha = 0.35f),
                         shape = androidx.compose.foundation.shape.RoundedCornerShape(50)
                     )
+                    .pointerInput(layer.id, idx) {
+                        detectTransformGestures { _, _, zoom, _ ->
+                            if (zoom != 1f) {
+                                onBlobScale(idx, zoom)
+                            }
+                        }
+                    }
             )
 
             // Draggable handle dot

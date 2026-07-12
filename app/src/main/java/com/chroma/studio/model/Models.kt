@@ -14,7 +14,8 @@ data class ChromaWork(
     val createdAt: Long = System.currentTimeMillis(),
     val lastModifiedAt: Long = System.currentTimeMillis(),
     val layersJson: String = "[]",  // Gson-serialized List<GradientLayer>
-    val canvasShape: String = "rounded"
+    val canvasShape: String = "rounded",
+    val isDeleted: Boolean = false
 )
 
 enum class LayerType(val label: String, val icon: String) {

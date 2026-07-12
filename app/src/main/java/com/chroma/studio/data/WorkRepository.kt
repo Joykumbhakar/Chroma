@@ -53,13 +53,21 @@ class WorkRepository(context: Context) {
     private val prefs = context.getSharedPreferences("chroma_works", Context.MODE_PRIVATE)
     private val KEY_IDS = "work_ids"
 
-    /** Load all works, sorted newest first. */
-    fun loadAll(): List<ChromaWork> {
-        val ids = prefs.getString(KEY_IDS, "") ?: ""
-        if (ids.isBlank()) return emptyList()
-        return ids.split(",")
-            .filter { it.isNotBlank() }
-            .mapNotNull { id -> loadWork(id) }
+    /** Load all non-deleted works, sorted newest first. */
+    fun loadActiveWorks(): List<ChromaWork> {
+        val ids = getIds()
+        if (ids.isEmpty()) return emptyList()
+        return ids.mapNotNull { id -> loadWork(id) }
+            .filter { !it.isDeleted }
+            .sortedByDescending { it.lastModifiedAt }
+    }
+
+    /** Load all deleted works (Trash), sorted newest first. */
+    fun loadDeletedWorks(): List<ChromaWork> {
+        val ids = getIds()
+        if (ids.isEmpty()) return emptyList()
+        return ids.mapNotNull { id -> loadWork(id) }
+            .filter { it.isDeleted }
             .sortedByDescending { it.lastModifiedAt }
     }
 
@@ -73,8 +81,20 @@ class WorkRepository(context: Context) {
             .apply()
     }
 
-    /** Delete a work by id. */
-    fun delete(id: String) {
+    /** Soft-delete a work by id (moves to trash). */
+    fun softDelete(id: String) {
+        val work = loadWork(id) ?: return
+        save(work.copy(isDeleted = true, lastModifiedAt = System.currentTimeMillis()))
+    }
+
+    /** Restore a soft-deleted work. */
+    fun restore(id: String) {
+        val work = loadWork(id) ?: return
+        save(work.copy(isDeleted = false, lastModifiedAt = System.currentTimeMillis()))
+    }
+
+    /** Permanently delete a work by id. */
+    fun permanentDelete(id: String) {
         val ids = getIds().filter { it != id }
         prefs.edit()
             .putString(KEY_IDS, ids.joinToString(","))
