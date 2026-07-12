@@ -3,6 +3,7 @@ package com.chroma.studio
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -38,6 +39,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.layout.onSizeChanged
@@ -60,6 +62,7 @@ class MainActivity : ComponentActivity() {
         const val EXTRA_WORK_DESCRIPTION = "work_description"
         const val EXTRA_LAYERS_JSON = "layers_json"
         const val EXTRA_CANVAS_SHAPE = "canvas_shape"
+        const val EXTRA_IS_HOME_BACKGROUND = "is_home_background"
     }
 
     private val vm: ChromaViewModel by viewModels()
@@ -67,17 +70,33 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         repository = WorkRepository(applicationContext)
 
         // If opened with an existing work, load it into the VM (only on first create)
         if (savedInstanceState == null) {
+            val isHomeBackground = intent.getBooleanExtra(EXTRA_IS_HOME_BACKGROUND, false)
+            vm.isHomeBackgroundMode = isHomeBackground
+
             val workId = intent.getStringExtra(EXTRA_WORK_ID)
-            if (workId != null) {
+            val layersJson = intent.getStringExtra(EXTRA_LAYERS_JSON)
+            
+            if (isHomeBackground && layersJson != null) {
+                // Load existing custom home background
+                val work = ChromaWork(
+                    id = "home_background",
+                    name = "Home Background",
+                    description = "",
+                    layersJson = layersJson,
+                    canvasShape = intent.getStringExtra(EXTRA_CANVAS_SHAPE) ?: "full"
+                )
+                vm.loadFromWork(work, repository)
+            } else if (workId != null) {
                 val work = ChromaWork(
                     id = workId,
                     name = intent.getStringExtra(EXTRA_WORK_NAME) ?: "Untitled",
                     description = intent.getStringExtra(EXTRA_WORK_DESCRIPTION) ?: "",
-                    layersJson = intent.getStringExtra(EXTRA_LAYERS_JSON) ?: "[]",
+                    layersJson = layersJson ?: "[]",
                     canvasShape = intent.getStringExtra(EXTRA_CANVAS_SHAPE) ?: "rounded"
                 )
                 vm.loadFromWork(work, repository)
@@ -88,7 +107,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             ChromaTheme(darkTheme = vm.isDarkMode) {
-                ChromaStudioApp(vm, workNameFromIntent)
+                ChromaStudioApp(vm, workNameFromIntent, repository)
             }
         }
     }
@@ -96,19 +115,29 @@ class MainActivity : ComponentActivity() {
     override fun onPause() {
         super.onPause()
         // Auto-save work whenever editor goes to background
-        vm.saveWork(repository)
+        val prefs = getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
+        vm.saveWork(repository, prefs)
     }
 }
 
 
 @Composable
-fun ChromaStudioApp(vm: ChromaViewModel, workName: String) {
+fun ChromaStudioApp(vm: ChromaViewModel, workName: String, repository: com.chroma.studio.data.WorkRepository) {
     val colors = LocalChromaColors.current
-    val activeLayer = vm.layers.find { it.id == vm.activeLayerId }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    // derivedStateOf prevents the entire ChromaStudioApp from re-running just because
+    // vm.layers changed — only recomposes when the found activeLayer object itself changes.
+    val activeLayer by remember { derivedStateOf { vm.layers.find { it.id == vm.activeLayerId } } }
     val hazeState = LocalHazeState.current
+
+    // Hoist blobDragOverrides above layout branch so it isn't duplicated
+    val blobDragOverrides = remember { mutableStateMapOf<Int, Offset>() }
 
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val isDesktop = configuration.screenWidthDp > 800
+    
+    val initialShowAIGenerator = (context as? android.app.Activity)?.intent?.getBooleanExtra("EXTRA_START_AI_GENERATOR", false) == true
+    var showAIGenerator by remember { mutableStateOf(initialShowAIGenerator) }
 
     Box(modifier = Modifier.fillMaxSize().background(colors.bg)) {
 
@@ -132,14 +161,18 @@ fun ChromaStudioApp(vm: ChromaViewModel, workName: String) {
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.padding(bottom = 12.dp)
                     ) {
-                        listOf("rounded" to "Card", "circle" to "Circle", "full" to "Full", "text" to "Text")
-                            .forEach { (key, label) -> ShapePill(label, key == vm.canvasShape) { vm.setShape(key) } }
+                        val allShapes = listOf("rounded" to "Card", "circle" to "Circle", "full" to "Full", "text" to "Text")
+                        val shapes = if (vm.isHomeBackgroundMode) {
+                            allShapes.filter { it.first == "full" }
+                        } else {
+                            allShapes
+                        }
+                        val shapesState = remember { shapes }
+                        shapesState.forEach { (key, label) -> ShapePill(label, key == vm.canvasShape) { vm.setShape(key) } }
                     }
 
                     var reactOffset by remember { mutableStateOf(Offset.Zero) }
                     var boxSize by remember { mutableStateOf(IntSize.Zero) }
-                    // Local drag state for zero-lag blob dragging — ViewModel only updated on drag end
-                    val blobDragOverrides = remember { mutableStateMapOf<Int, Offset>() }
 
                     Box(
                         modifier = Modifier
@@ -163,7 +196,8 @@ fun ChromaStudioApp(vm: ChromaViewModel, workName: String) {
                                     } while (event.changes.any { it.pressed })
                                     reactOffset = Offset.Zero
                                 }
-                            }
+                            },
+                        contentAlignment = Alignment.Center
                     ) {
                         CanvasPreview(
                             layers = vm.layers,
@@ -171,29 +205,35 @@ fun ChromaStudioApp(vm: ChromaViewModel, workName: String) {
                             borderColor = colors.glassBorder,
                             colorBlindMode = vm.colorBlindMode,
                             postFxMode = vm.postFxMode,
+                            animStatus = vm.globalAnimStatus,
+                            animStyle = vm.globalAnimStyle,
+                            animSpeed = vm.globalAnimSpeed,
+                            animAmount = vm.globalAnimAmount,
                             reactOffset = reactOffset,
                             blobDragOverrides = blobDragOverrides,
                             textContent = vm.textPreviewContent,
                             onTextContentChange = { vm.updateTextPreviewContent(it) }
                         )
-                        if (activeLayer != null && (activeLayer.type == com.chroma.studio.model.LayerType.BLOB ||
-                                activeLayer.type == com.chroma.studio.model.LayerType.LIQUID ||
-                                activeLayer.type == com.chroma.studio.model.LayerType.MESH)) {
+                        val layer = activeLayer
+                        if (layer != null && (layer.type == com.chroma.studio.model.LayerType.BLOB ||
+                                layer.type == com.chroma.studio.model.LayerType.LIQUID ||
+                                layer.type == com.chroma.studio.model.LayerType.MESH)) {
                             MeshBlobHandlesOverlay(
-                                layer = activeLayer,
+                                layer = layer,
+                                onBlobTap = { idx -> vm.setActiveBlob(layer.id, idx) },
                                 onBlobDrag = { idx, pos ->
                                     blobDragOverrides[idx] = pos  // local update only — no recompose of layer stack
                                 },
                                 onBlobDragEnd = { idx, finalPos ->
-                                    vm.setBlobPosition(activeLayer.id, idx, finalPos)
+                                    vm.setBlobPosition(layer.id, idx, finalPos)
                                     blobDragOverrides.remove(idx)
                                 },
                                 onBlobScale = { idx, zoom ->
-                                    val b = activeLayer.blobs[idx]
-                                    vm.updateBlobParam(activeLayer.id, idx, "width", (b.width * zoom).coerceIn(10f, 300f))
-                                    vm.updateBlobParam(activeLayer.id, idx, "height", (b.height * zoom).coerceIn(10f, 300f))
+                                    val b = layer.blobs[idx]
+                                    vm.updateBlobParam(layer.id, idx, "width", (b.width * zoom).coerceIn(10f, 300f))
+                                    vm.updateBlobParam(layer.id, idx, "height", (b.height * zoom).coerceIn(10f, 300f))
                                 },
-                                onPointDrag = { idx, pos -> vm.setMeshPoint(activeLayer.id, idx, pos) },
+                                onPointDrag = { idx, pos -> vm.setMeshPoint(layer.id, idx, pos) },
                                 modifier = Modifier.fillMaxWidth().aspectRatio(3f / 2f)
                             )
                         }
@@ -247,14 +287,18 @@ fun ChromaStudioApp(vm: ChromaViewModel, workName: String) {
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.padding(bottom = 12.dp)
                 ) {
-                    listOf("rounded" to "Card", "circle" to "Circle", "full" to "Full", "text" to "Text")
-                        .forEach { (key, label) -> ShapePill(label, key == vm.canvasShape) { vm.setShape(key) } }
+                    val allShapes = listOf("rounded" to "Card", "circle" to "Circle", "full" to "Full", "text" to "Text")
+                    val shapes = if (vm.isHomeBackgroundMode) {
+                        allShapes.filter { it.first == "rounded" || it.first == "full" }
+                    } else {
+                        allShapes
+                    }
+                    val shapesState = remember { shapes }
+                    shapesState.forEach { (key, label) -> ShapePill(label, key == vm.canvasShape) { vm.setShape(key) } }
                 }
 
                 var reactOffset by remember { mutableStateOf(Offset.Zero) }
                 var boxSize by remember { mutableStateOf(IntSize.Zero) }
-                // Local drag state for zero-lag blob dragging
-                val blobDragOverrides = remember { mutableStateMapOf<Int, Offset>() }
 
                 Box(
                     modifier = Modifier
@@ -278,7 +322,8 @@ fun ChromaStudioApp(vm: ChromaViewModel, workName: String) {
                                 } while (event.changes.any { it.pressed })
                                 reactOffset = Offset.Zero
                             }
-                        }
+                        },
+                    contentAlignment = Alignment.Center
                 ) {
                     CanvasPreview(
                         layers = vm.layers,
@@ -286,29 +331,35 @@ fun ChromaStudioApp(vm: ChromaViewModel, workName: String) {
                         borderColor = colors.glassBorder,
                         colorBlindMode = vm.colorBlindMode,
                         postFxMode = vm.postFxMode,
+                        animStatus = vm.globalAnimStatus,
+                        animStyle = vm.globalAnimStyle,
+                        animSpeed = vm.globalAnimSpeed,
+                        animAmount = vm.globalAnimAmount,
                         reactOffset = reactOffset,
                         blobDragOverrides = blobDragOverrides,
                         textContent = vm.textPreviewContent,
                         onTextContentChange = { vm.updateTextPreviewContent(it) }
                     )
-                    if (activeLayer != null && (activeLayer.type == com.chroma.studio.model.LayerType.BLOB ||
-                            activeLayer.type == com.chroma.studio.model.LayerType.LIQUID ||
-                            activeLayer.type == com.chroma.studio.model.LayerType.MESH)) {
+                    val layer = activeLayer
+                    if (layer != null && (layer.type == com.chroma.studio.model.LayerType.BLOB ||
+                            layer.type == com.chroma.studio.model.LayerType.LIQUID ||
+                            layer.type == com.chroma.studio.model.LayerType.MESH)) {
                         MeshBlobHandlesOverlay(
-                            layer = activeLayer,
+                            layer = layer,
+                            onBlobTap = { idx -> vm.setActiveBlob(layer.id, idx) },
                             onBlobDrag = { idx, pos ->
                                 blobDragOverrides[idx] = pos
                             },
                             onBlobDragEnd = { idx, finalPos ->
-                                vm.setBlobPosition(activeLayer.id, idx, finalPos)
+                                vm.setBlobPosition(layer.id, idx, finalPos)
                                 blobDragOverrides.remove(idx)
                             },
                             onBlobScale = { idx, zoom ->
-                                val b = activeLayer.blobs[idx]
-                                vm.updateBlobParam(activeLayer.id, idx, "width", (b.width * zoom).coerceIn(10f, 300f))
-                                vm.updateBlobParam(activeLayer.id, idx, "height", (b.height * zoom).coerceIn(10f, 300f))
+                                val b = layer.blobs[idx]
+                                vm.updateBlobParam(layer.id, idx, "width", (b.width * zoom).coerceIn(10f, 300f))
+                                vm.updateBlobParam(layer.id, idx, "height", (b.height * zoom).coerceIn(10f, 300f))
                             },
-                            onPointDrag = { idx, pos -> vm.setMeshPoint(activeLayer.id, idx, pos) },
+                            onPointDrag = { idx, pos -> vm.setMeshPoint(layer.id, idx, pos) },
                             modifier = Modifier.fillMaxWidth().aspectRatio(3f / 2f)
                         )
                     }
@@ -333,6 +384,11 @@ fun ChromaStudioApp(vm: ChromaViewModel, workName: String) {
                 onUndo = vm::undo,
                 onRedo = vm::redo,
                 onExport = vm::toggleExportModal,
+                onSave = { 
+                    val prefs = context.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
+                    vm.saveWork(repository, prefs) 
+                    com.chroma.studio.ui.components.ToastManager.showToast("Project saved")
+                },
                 modifier = Modifier.align(Alignment.TopCenter)
             )
 
@@ -354,13 +410,22 @@ fun ChromaStudioApp(vm: ChromaViewModel, workName: String) {
         }
         
         com.chroma.studio.ui.components.ChromaToastHost()
+        
+        if (showAIGenerator) {
+            com.chroma.studio.ui.screens.AIGenerateModal(
+                onDismiss = { showAIGenerator = false },
+                onApplyLayers = { generatedLayers ->
+                    vm.setLayersFromAI(generatedLayers)
+                }
+            )
+        }
     }
 }
 
 @Composable
 private fun ShapePill(label: String, active: Boolean, onClick: () -> Unit) {
     val colors = LocalChromaColors.current
-    val shape = RoundedCornerShape(50)
+    val shape = remember { RoundedCornerShape(50) }
     Text(
         text = label,
         fontSize = 11.sp,

@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -68,14 +69,14 @@ fun ChromaToastHost() {
                     modifier = Modifier
                         .padding(horizontal = 16.dp)
                         .clip(RoundedCornerShape(50))
-                        .background(colors.glassBg)
+                        .background(Color.White)
                         .glossyBorder(RoundedCornerShape(50), colors)
                         .padding(horizontal = 20.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = toast.message,
-                        color = colors.textMain,
+                        color = Color.Black,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium
                     )

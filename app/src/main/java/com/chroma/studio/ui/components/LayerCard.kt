@@ -39,6 +39,7 @@ import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.Circle
 import com.composables.icons.lucide.Sparkles
 import com.composables.icons.lucide.Trash2
+import com.composables.icons.lucide.Copy
 import com.composables.icons.lucide.GripVertical
 import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.Grid3x3
@@ -95,6 +96,7 @@ fun LayerCard(
     onCenterXChange: (Float) -> Unit,
     onCenterYChange: (Float) -> Unit,
     onDelete: () -> Unit,
+    onDuplicate: () -> Unit,
     onRepeatPatternChange: (Boolean) -> Unit = {},
     onWidthChange: (Float) -> Unit = {},
     onHeightChange: (Float) -> Unit = {},
@@ -114,6 +116,26 @@ fun LayerCard(
 ) {
     val colors = LocalChromaColors.current
     val shape = RoundedCornerShape(16.dp)
+    val borderBrush = remember(isDragging, layer.expanded, colors.primary, colors.glassBorder) {
+        if (isDragging) {
+            Brush.linearGradient(
+                colors = listOf(
+                    Color(0xFF60A5FA),
+                    Color(0xFF3B82F6),
+                    Color(0xFF2563EB)
+                )
+            )
+        } else if (layer.expanded) {
+            SolidColor(colors.primary)
+        } else {
+            Brush.linearGradient(
+                colors = listOf(
+                    colors.glassBorder.copy(alpha = (colors.glassBorder.alpha * 3f).coerceAtMost(1f)),
+                    colors.glassBorder.copy(alpha = (colors.glassBorder.alpha * 0.2f).coerceAtMost(1f))
+                )
+            )
+        }
+    }
 
     Column(
         modifier = dragHandleModifier
@@ -123,24 +145,7 @@ fun LayerCard(
             .background(colors.glassBg, shape)
             .border(
                 width = if (isDragging) 2.dp else 1.dp,
-                brush = if (isDragging) {
-                    Brush.linearGradient(
-                        colors = listOf(
-                            Color(0xFF60A5FA),
-                            Color(0xFF3B82F6),
-                            Color(0xFF2563EB)
-                        )
-                    )
-                } else if (layer.expanded) {
-                    SolidColor(colors.primary)
-                } else {
-                    Brush.linearGradient(
-                        colors = listOf(
-                            colors.glassBorder.copy(alpha = (colors.glassBorder.alpha * 3f).coerceAtMost(1f)),
-                            colors.glassBorder.copy(alpha = (colors.glassBorder.alpha * 0.2f).coerceAtMost(1f))
-                        )
-                    )
-                },
+                brush = borderBrush,
                 shape = shape
             )
             .padding(12.dp)
@@ -192,6 +197,15 @@ fun LayerCard(
                     .clickable(indication = null, interactionSource = androidx.compose.runtime.remember { MutableInteractionSource() }) { onToggleExpand() }
                     .padding(3.dp)
                     .rotate(if (layer.expanded) 180f else 0f)
+            )
+            Spacer(Modifier.padding(start = 8.dp))
+            Icon(
+                imageVector = Lucide.Copy,
+                contentDescription = "Duplicate",
+                tint = colors.textMuted,
+                modifier = Modifier
+                    .size(16.dp)
+                    .clickable(indication = null, interactionSource = androidx.compose.runtime.remember { MutableInteractionSource() }) { onDuplicate() }
             )
             Spacer(Modifier.padding(start = 8.dp))
             Icon(

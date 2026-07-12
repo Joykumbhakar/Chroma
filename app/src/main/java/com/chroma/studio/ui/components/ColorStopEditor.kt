@@ -21,6 +21,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.WandSparkles
+import com.composables.icons.lucide.GripVertical
+import com.composables.icons.lucide.Trash2
+import com.composables.icons.lucide.Copy
+import kotlinx.coroutines.launch
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -87,15 +95,16 @@ fun ColorStopEditor(
         }
         Spacer(Modifier.padding(top = 8.dp))
 
-        BoxWithConstraints(
+        var trackWidthPx by remember { mutableFloatStateOf(1f) }
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(32.dp)
                 .clip(shape)
                 .background(checkerboardBrush())
                 .border(1.dp, colors.glassBorder, shape)
+                .onSizeChanged { trackWidthPx = it.width.toFloat() }
         ) {
-            val trackWidthDp = maxWidth
 
             // Gradient preview strip — key on sorted identities so it only recomposes when stop list changes
             val gradientBrush by remember(sorted) {
@@ -134,7 +143,7 @@ fun ColorStopEditor(
                         .size(width = 14.dp, height = 42.dp)
                         .graphicsLayer {
                             val pct = stop.position / 100f
-                            translationX = (trackWidthDp.toPx() * pct) - 7.dp.toPx()
+                            translationX = (trackWidthPx * pct) - 7.dp.toPx()
                             translationY = -6.dp.toPx()
                         }
                 ) {
@@ -151,11 +160,10 @@ fun ColorStopEditor(
                         modifier = Modifier
                             .align(Alignment.TopCenter)
                             .size(14.dp)
-                            .pointerInput(stop.id, trackWidthDp) {
-                                val trackPx = trackWidthDp.toPx()
+                            .pointerInput(stop.id) {
                                 detectDragGestures { change, dragAmount ->
                                     change.consume()
-                                    val deltaPct = (dragAmount.x / trackPx) * 100f
+                                    val deltaPct = (dragAmount.x / trackWidthPx) * 100f
                                     val newPos = (stop.position + deltaPct).coerceIn(0f, 100f)
                                     currentOnStopsChange(
                                         currentStops.map { if (it.id == stop.id) it.copy(position = newPos) else it }
@@ -191,6 +199,229 @@ fun ColorStopEditor(
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("TAP TRACK TO ADD", color = colors.textMuted, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
             Text("LONG PRESS TO REMOVE", color = colors.textMuted, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
+        }
+
+        Spacer(Modifier.padding(top = 16.dp))
+        Text("COLOR STOPS LIST", color = colors.textMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.padding(top = 8.dp))
+        
+        var draggingIndex by remember { androidx.compose.runtime.mutableIntStateOf(-1) }
+        val dragOffsetAnim = remember { androidx.compose.animation.core.Animatable(0f) }
+        var itemHeightPx by remember { androidx.compose.runtime.mutableIntStateOf(1) }
+        val liftProgress = remember { androidx.compose.animation.core.Animatable(0f) }
+        val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+
+        androidx.compose.runtime.LaunchedEffect(draggingIndex) {
+            if (draggingIndex >= 0) {
+                liftProgress.animateTo(1f, androidx.compose.animation.core.spring(stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow))
+            } else {
+                liftProgress.animateTo(0f, androidx.compose.animation.core.spring(stiffness = androidx.compose.animation.core.Spring.StiffnessHigh))
+            }
+        }
+
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            sorted.forEachIndexed { index, stop ->
+                val isSelected = stop.id == editingStopId
+                val itemBg = if (isSelected) colors.primary.copy(alpha = 0.12f) else colors.glassBg
+                val itemBorder = if (isSelected) colors.primary.copy(alpha = 0.4f) else colors.glassBorder
+                
+                val isDragging = index == draggingIndex
+                val flipOffset = remember { androidx.compose.animation.core.Animatable(0f) }
+                val density = androidx.compose.ui.platform.LocalDensity.current
+                val spacingPx = remember { with(density) { 6.dp.toPx() } }
+                val fullItemHeight = itemHeightPx + spacingPx
+
+                val targetFlipOffset = when {
+                    draggingIndex < 0 -> 0f
+                    isDragging -> 0f
+                    else -> {
+                        val steps = Math.round(dragOffsetAnim.value / fullItemHeight)
+                        val draggedToIndex = (draggingIndex + steps).coerceIn(0, sorted.size - 1)
+                        when {
+                            draggingIndex < draggedToIndex && index in (draggingIndex + 1)..draggedToIndex -> -fullItemHeight
+                            draggingIndex > draggedToIndex && index in draggedToIndex until draggingIndex -> fullItemHeight
+                            else -> 0f
+                        }
+                    }
+                }
+
+                androidx.compose.runtime.LaunchedEffect(targetFlipOffset) {
+                    if (!isDragging) {
+                        flipOffset.animateTo(
+                            targetValue = targetFlipOffset,
+                            animationSpec = androidx.compose.animation.core.spring(
+                                dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                                stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                            )
+                        )
+                    }
+                }
+                
+                androidx.compose.runtime.LaunchedEffect(draggingIndex) {
+                    if (draggingIndex < 0) flipOffset.snapTo(0f)
+                }
+
+                Row(
+                    modifier = Modifier
+                        .onGloballyPositioned { if (itemHeightPx <= 1) itemHeightPx = it.size.height }
+                        .zIndex(if (isDragging) 10f else 1f)
+                        .graphicsLayer {
+                            if (isDragging) {
+                                translationY = dragOffsetAnim.value
+                                scaleX = 1f + liftProgress.value * 0.02f
+                                scaleY = 1f + liftProgress.value * 0.02f
+                                shadowElevation = liftProgress.value * 12.dp.toPx()
+                                alpha = 0.96f
+                            } else {
+                                translationY = flipOffset.value
+                                scaleX = 1f - liftProgress.value * 0.01f
+                                scaleY = 1f - liftProgress.value * 0.01f
+                                alpha = 1f - liftProgress.value * 0.05f
+                            }
+                        }
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(itemBg)
+                        .border(1.dp, itemBorder, RoundedCornerShape(8.dp))
+                        .clickable { editingStopId = stop.id }
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Lucide.GripVertical,
+                            contentDescription = "Reorder",
+                            tint = colors.textMuted,
+                            modifier = Modifier
+                                .size(16.dp)
+                                .pointerInput(stop.id) {
+                                    detectDragGestures(
+                                        onDragStart = {
+                                            draggingIndex = index
+                                            coroutineScope.launch {
+                                                dragOffsetAnim.snapTo(0f)
+                                            }
+                                        },
+                                        onDrag = { change, dragAmount ->
+                                            change.consume()
+                                            coroutineScope.launch {
+                                                dragOffsetAnim.snapTo(dragOffsetAnim.value + dragAmount.y)
+                                            }
+                                        },
+                                        onDragEnd = {
+                                            val steps = Math.round(dragOffsetAnim.value / fullItemHeight)
+                                            val to = (draggingIndex + steps).coerceIn(0, sorted.size - 1)
+                                            
+                                            coroutineScope.launch {
+                                                val targetOffset = (to - draggingIndex) * fullItemHeight
+                                                dragOffsetAnim.animateTo(targetOffset, androidx.compose.animation.core.spring(stiffness = androidx.compose.animation.core.Spring.StiffnessMedium))
+                                                
+                                                if (to != draggingIndex) {
+                                                    val sortedMutable = sorted.toMutableList()
+                                                    val moved = sortedMutable.removeAt(draggingIndex)
+                                                    sortedMutable.add(to, moved)
+                                                    
+                                                    val oldPositions = sorted.map { it.position }
+                                                    val updatedStops = sortedMutable.mapIndexed { i, s ->
+                                                        s.copy(position = oldPositions[i])
+                                                    }
+                                                    
+                                                    val finalStops = currentStops.map { c ->
+                                                        updatedStops.find { it.id == c.id } ?: c
+                                                    }
+                                                    currentOnStopsChange(finalStops)
+                                                }
+                                                draggingIndex = -1
+                                                dragOffsetAnim.snapTo(0f)
+                                            }
+                                        },
+                                        onDragCancel = {
+                                            coroutineScope.launch {
+                                                dragOffsetAnim.animateTo(0f, androidx.compose.animation.core.spring(stiffness = androidx.compose.animation.core.Spring.StiffnessMedium))
+                                                draggingIndex = -1
+                                            }
+                                        }
+                                    )
+                                }
+                        )
+                        Spacer(Modifier.padding(start = 12.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(16.dp)
+                                .clip(CircleShape)
+                                .background(stop.color)
+                                .border(1.dp, colors.glassBorder, CircleShape)
+                        )
+                        Spacer(Modifier.padding(start = 10.dp))
+                        Text(
+                            text = String.format("#%06X", 0xFFFFFF and stop.color.toArgb()),
+                            color = colors.textMain,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "${stop.position.toInt()}%",
+                            color = colors.textMuted,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(Modifier.padding(start = 12.dp))
+                        
+                        // Copy Button
+                        Box(
+                            modifier = Modifier
+                                .size(20.dp)
+                                .clip(CircleShape)
+                                .clickable { 
+                                    val newPos = (stop.position + 5f).coerceAtMost(100f)
+                                    val newStop = ColorStop(color = stop.color, position = newPos)
+                                    currentOnStopsChange(currentStops + newStop)
+                                    editingStopId = newStop.id
+                                }
+                                .padding(2.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Lucide.Copy,
+                                contentDescription = "Copy",
+                                modifier = Modifier.size(12.dp),
+                                tint = colors.textMuted
+                            )
+                        }
+                        
+                        Spacer(Modifier.padding(start = 4.dp))
+                        
+                        // Delete Button
+                        val canDelete = currentStops.size > 2
+                        Box(
+                            modifier = Modifier
+                                .size(20.dp)
+                                .clip(CircleShape)
+                                .clickable(enabled = canDelete) { 
+                                    if (canDelete) {
+                                        currentOnStopsChange(currentStops.filterNot { it.id == stop.id })
+                                        if (editingStopId == stop.id) {
+                                            editingStopId = currentStops.firstOrNull { it.id != stop.id }?.id
+                                        }
+                                    }
+                                }
+                                .padding(2.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Lucide.Trash2,
+                                contentDescription = "Remove",
+                                modifier = Modifier.size(12.dp),
+                                tint = if (canDelete) colors.textMuted else colors.textMuted.copy(alpha = 0.3f)
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         val editing = sorted.find { it.id == editingStopId }
@@ -288,10 +519,12 @@ fun InlineColorPicker(
     ) {
         Column(Modifier.fillMaxWidth()) {
             // SV Picker area
-            BoxWithConstraints(
+            var svWidthPx by remember { mutableFloatStateOf(1f) }
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(140.dp)
+                    .onSizeChanged { svWidthPx = it.width.toFloat() }
             ) {
                 val pureHueColor by remember(hue) {
                     derivedStateOf { Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, 1f, 1f))) }
@@ -332,7 +565,7 @@ fun InlineColorPicker(
                     modifier = Modifier
                         .size(20.dp)
                         .graphicsLayer {
-                            translationX = maxWidth.toPx() * sat - 10.dp.toPx()
+                            translationX = svWidthPx * sat - 10.dp.toPx()
                             translationY = (140.dp.toPx() * (1f - value)) - 10.dp.toPx()
                         }
                         .shadow(4.dp, CircleShape)
@@ -344,10 +577,12 @@ fun InlineColorPicker(
             Spacer(Modifier.padding(top = 16.dp))
 
             // Hue Slider
-            BoxWithConstraints(
+            var hueWidthPx by remember { mutableFloatStateOf(1f) }
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(24.dp)
+                    .onSizeChanged { hueWidthPx = it.width.toFloat() }
                     .pointerInput(Unit) {
                         detectDragGestures { change, _ ->
                             change.consume()
@@ -367,7 +602,7 @@ fun InlineColorPicker(
                     }
             ) {
                 val hueColors = remember {
-                    listOf(Color.Red, Color.Magenta, Color.Blue, Color.Cyan, Color.Green, Color.Yellow, Color.Red)
+                    listOf(Color.Red, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Magenta, Color.Red)
                 }
                 Box(modifier = Modifier.fillMaxWidth().height(12.dp).align(Alignment.Center).clip(RoundedCornerShape(6.dp))) {
                     Canvas(modifier = Modifier.matchParentSize()) {
@@ -379,7 +614,7 @@ fun InlineColorPicker(
                     modifier = Modifier
                         .size(20.dp)
                         .graphicsLayer {
-                            translationX = maxWidth.toPx() * (hue / 360f) - 10.dp.toPx()
+                            translationX = hueWidthPx * (hue / 360f) - 10.dp.toPx()
                             translationY = 2.dp.toPx()
                         }
                         .shadow(4.dp, CircleShape)
@@ -391,10 +626,12 @@ fun InlineColorPicker(
             Spacer(Modifier.padding(top = 16.dp))
 
             // Alpha Slider
-            BoxWithConstraints(
+            var alphaWidthPx by remember { mutableFloatStateOf(1f) }
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(24.dp)
+                    .onSizeChanged { alphaWidthPx = it.width.toFloat() }
                     .pointerInput(Unit) {
                         detectDragGestures { change, _ ->
                             change.consume()
@@ -425,7 +662,7 @@ fun InlineColorPicker(
                     modifier = Modifier
                         .size(20.dp)
                         .graphicsLayer {
-                            translationX = maxWidth.toPx() * alpha - 10.dp.toPx()
+                            translationX = alphaWidthPx * alpha - 10.dp.toPx()
                             translationY = 2.dp.toPx()
                         }
                         .shadow(4.dp, CircleShape)

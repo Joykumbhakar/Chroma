@@ -15,12 +15,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.ChevronLeft
+import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.Lucide
 import com.chroma.studio.ui.components.SmallSwitch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onBack: () -> Unit) {
+fun SettingsScreen(
+    onResetHomeBackground: () -> Unit,
+    onBack: () -> Unit
+) {
     var toastsEnabled by remember { mutableStateOf(true) }
     var colorBlindMode by remember { mutableStateOf(0) }
 
@@ -48,6 +52,8 @@ fun SettingsScreen(onBack: () -> Unit) {
             item {
                 SettingsSection("Preferences") {
                     SettingsToggleRow("Enable Toast Messages", toastsEnabled) { toastsEnabled = it }
+                    HorizontalDivider(color = Color(0xFFF1F5F9))
+                    SettingsActionRow("Reset Home Background", onResetHomeBackground)
                 }
             }
 
@@ -94,6 +100,21 @@ fun SettingsToggleRow(label: String, checked: Boolean, onCheckedChange: (Boolean
             checked = checked, 
             onCheckedChange = onCheckedChange
         )
+    }
+}
+
+@Composable
+fun SettingsActionRow(label: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+        Icon(Lucide.ChevronRight, contentDescription = null, tint = Color(0xFF6B7280), modifier = Modifier.size(16.dp))
     }
 }
 

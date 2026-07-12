@@ -15,6 +15,7 @@ data class ChromaWork(
     val lastModifiedAt: Long = System.currentTimeMillis(),
     val layersJson: String = "[]",  // Gson-serialized List<GradientLayer>
     val canvasShape: String = "rounded",
+    val isHomeBackground: Boolean = false,
     val isDeleted: Boolean = false
 )
 

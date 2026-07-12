@@ -55,6 +55,15 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import com.chroma.studio.ui.theme.LocalChromaColors
+import android.content.Intent
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.graphics.drawscope.draw
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.foundation.layout.absoluteOffset
+import com.chroma.studio.utils.ExportHelper
 import com.chroma.studio.utils.ExportEngine
 import com.chroma.studio.viewmodel.ChromaViewModel
 import com.composables.icons.lucide.Copy
@@ -66,6 +75,10 @@ fun DeveloperHandoffModal(vm: ChromaViewModel, workName: String, onClose: () -> 
     val clipboardManager = LocalClipboardManager.current
     val safeWorkName = if (workName.isBlank()) "Untitled" else workName.replace(" ", "_")
 
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val picture = remember { android.graphics.Picture() }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -75,6 +88,33 @@ fun DeveloperHandoffModal(vm: ChromaViewModel, workName: String, onClose: () -> 
             },
         contentAlignment = Alignment.Center
     ) {
+        // Offscreen Canvas for Export (moved to root to avoid disrupting Column layout)
+        Box(
+            modifier = Modifier
+                .absoluteOffset(x = (-10000).dp)
+                .size(1080.dp, 1920.dp)
+                .drawWithCache {
+                    val width = this.size.width.toInt()
+                    val height = this.size.height.toInt()
+                    onDrawWithContent {
+                        val pictureCanvas = androidx.compose.ui.graphics.Canvas(picture.beginRecording(width, height))
+                        draw(this, this.layoutDirection, pictureCanvas, this.size) {
+                            this@onDrawWithContent.drawContent()
+                        }
+                        picture.endRecording()
+                        drawIntoCanvas { canvas -> canvas.nativeCanvas.drawPicture(picture) }
+                    }
+                }
+        ) {
+            CanvasPreview(
+                layers = vm.layers,
+                shape = vm.canvasShape,
+                borderColor = Color.Transparent,
+                textContent = vm.textPreviewContent,
+                isStatic = true
+            )
+        }
+
         GlassPanel(
             modifier = Modifier
                 .fillMaxWidth(0.95f)
@@ -126,7 +166,7 @@ fun DeveloperHandoffModal(vm: ChromaViewModel, workName: String, onClose: () -> 
                     .padding(24.dp)
             ) {
                 // Horizontal Scrollable Formats
-                val allFormats = listOf("CSS / SCSS", "Tailwind", "React / Next.js", "Vue", "Svelte", "Angular", "Canvas JS", "SwiftUI", "Jetpack Compose", "XML Drawable", "Kotlin", "Java", "Flutter", "React Native")
+                val allFormats = listOf("CSS / SCSS", "Tailwind", "React / Next.js", "Vue", "Svelte", "Angular", "Canvas JS", "SwiftUI", "Jetpack Compose", "XML Drawable", "Kotlin", "Java", "Flutter", "React Native", "JSON")
                 androidx.compose.foundation.lazy.LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)
@@ -177,47 +217,163 @@ fun DeveloperHandoffModal(vm: ChromaViewModel, workName: String, onClose: () -> 
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     ExportButton("PNG", Lucide.Image, onExport = { 
-                        ToastManager.showToast("Downloading...")
-                        kotlinx.coroutines.delay(1500)
-                        ToastManager.showToast("ChromaStudio_${safeWorkName}.png downloaded", "Open", 4000L, onAction = {})
+                        ToastManager.showToast("Generating PNG...")
+                        kotlinx.coroutines.delay(500)
+                        val bitmap = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                            android.graphics.Bitmap.createBitmap(picture)
+                        } else {
+                            val b = android.graphics.Bitmap.createBitmap(1080, 1920, android.graphics.Bitmap.Config.ARGB_8888)
+                            android.graphics.Canvas(b).drawPicture(picture)
+                            b
+                        }
+                        val uri = ExportHelper.saveBitmap(context, bitmap, "ChromaStudio_$safeWorkName", true)
+                        if (uri != null) {
+                            ToastManager.showToast("Saved to Gallery", "Open", 4000L, onAction = {
+                                val intent = Intent(Intent.ACTION_VIEW).apply {
+                                    setDataAndType(uri, "image/png")
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                context.startActivity(intent)
+                            })
+                        }
                     })
                     ExportButton("JPG", Lucide.Image, onExport = { 
-                        ToastManager.showToast("Downloading...")
-                        kotlinx.coroutines.delay(1500)
-                        ToastManager.showToast("ChromaStudio_${safeWorkName}.jpg downloaded", "Open", 4000L, onAction = {})
+                        ToastManager.showToast("Generating JPG...")
+                        kotlinx.coroutines.delay(500)
+                        val bitmap = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                            android.graphics.Bitmap.createBitmap(picture)
+                        } else {
+                            val b = android.graphics.Bitmap.createBitmap(1080, 1920, android.graphics.Bitmap.Config.ARGB_8888)
+                            android.graphics.Canvas(b).drawPicture(picture)
+                            b
+                        }
+                        val uri = ExportHelper.saveBitmap(context, bitmap, "ChromaStudio_$safeWorkName", false)
+                        if (uri != null) {
+                            ToastManager.showToast("Saved to Gallery", "Open", 4000L, onAction = {
+                                val intent = Intent(Intent.ACTION_VIEW).apply {
+                                    setDataAndType(uri, "image/jpeg")
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                context.startActivity(intent)
+                            })
+                        }
                     })
                     ExportButton("SVG", Lucide.Code, onExport = { 
-                        ToastManager.showToast("Downloading...")
-                        kotlinx.coroutines.delay(1500)
-                        ToastManager.showToast("ChromaStudio_${safeWorkName}.svg downloaded", "Open", 4000L, onAction = {})
+                        ToastManager.showToast("Generating SVG...")
+                        kotlinx.coroutines.delay(500)
+                        val svgCode = ExportEngine.generateCode(
+                            type = "SVG",
+                            layersRaw = vm.layers,
+                            isDarkTheme = false,
+                            hasAnim = vm.globalAnimStatus != com.chroma.studio.model.AnimStatus.STOPPED,
+                            aStyle = vm.globalAnimStyle,
+                            aSpeed = vm.globalAnimSpeed,
+                            intensity = vm.globalAnimAmount.toInt(),
+                            shape = vm.canvasShape,
+                            textContent = vm.textPreviewContent
+                        )
+                        val uri = ExportHelper.saveText(context, svgCode, "ChromaStudio_$safeWorkName", ".svg")
+                        if (uri != null) {
+                            ToastManager.showToast("Saved to Downloads", "Open", 4000L, onAction = {
+                                val intent = Intent(Intent.ACTION_VIEW).apply {
+                                    setDataAndType(uri, "image/svg+xml")
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                context.startActivity(intent)
+                            })
+                        }
                     })
                 }
 
-                // Record Button
+                // ZIP Export Button
                 Row(Modifier.fillMaxWidth().padding(bottom = 20.dp)) {
                     Box(
                         modifier = Modifier
-                            .height(36.dp)
-                            .clip(RoundedCornerShape(18.dp))
+                            .height(44.dp)
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(22.dp))
                             .background(colors.glassBg)
                             .border(
                                 width = 2.dp,
                                 brush = androidx.compose.ui.graphics.Brush.linearGradient(
                                     colors = listOf(
-                                        Color(0xFF60A5FA),
-                                        Color(0xFF3B82F6),
-                                        Color(0xFF2563EB)
+                                        Color(0xFF8B5CF6), // Purple
+                                        Color(0xFFD946EF), // Fuchsia
+                                        Color(0xFFF43F5E)  // Rose
                                     )
                                 ),
-                                shape = RoundedCornerShape(18.dp)
+                                shape = RoundedCornerShape(22.dp)
                             )
-                            .clickable { },
+                            .clickable {
+                                coroutineScope.launch {
+                                    ToastManager.showToast("Generating ZIP Archive...")
+                                    kotlinx.coroutines.delay(500)
+                                    
+                                    try {
+                                        val bitmap = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                                            android.graphics.Bitmap.createBitmap(picture)
+                                        } else {
+                                            val b = android.graphics.Bitmap.createBitmap(1080, 1920, android.graphics.Bitmap.Config.ARGB_8888)
+                                            android.graphics.Canvas(b).drawPicture(picture)
+                                            b
+                                        }
+                                        
+                                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                            val assets = mutableListOf<ExportHelper.ZipAsset>()
+                                            
+                                            val pngStream = java.io.ByteArrayOutputStream()
+                                            bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, pngStream)
+                                            assets.add(ExportHelper.ZipAsset("ChromaStudio_$safeWorkName.png", pngStream.toByteArray()))
+                                            
+                                            val jpgStream = java.io.ByteArrayOutputStream()
+                                            bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 100, jpgStream)
+                                            assets.add(ExportHelper.ZipAsset("ChromaStudio_$safeWorkName.jpg", jpgStream.toByteArray()))
+                                            
+                                            val formats = listOf("SVG", "CSS / SCSS", "Tailwind", "React / Next.js", "SwiftUI")
+                                            val extensions = listOf(".svg", ".css", ".tailwind.js", ".jsx", ".swift")
+                                            
+                                            for (i in formats.indices) {
+                                                val code = ExportEngine.generateCode(
+                                                    type = formats[i],
+                                                    layersRaw = vm.layers,
+                                                    isDarkTheme = false,
+                                                    hasAnim = vm.globalAnimStatus != com.chroma.studio.model.AnimStatus.STOPPED,
+                                                    aStyle = vm.globalAnimStyle,
+                                                    aSpeed = vm.globalAnimSpeed,
+                                                    intensity = vm.globalAnimAmount.toInt(),
+                                                    shape = vm.canvasShape,
+                                                    textContent = vm.textPreviewContent
+                                                )
+                                                assets.add(ExportHelper.ZipAsset("ChromaStudio_${safeWorkName}${extensions[i]}", code.toByteArray(Charsets.UTF_8)))
+                                            }
+                                            
+                                            val uri = ExportHelper.saveZip(context, "ChromaStudio_$safeWorkName", assets)
+                                            
+                                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                                if (uri != null) {
+                                                    ToastManager.showToast("Saved ZIP to Downloads", "Open", 4000L, onAction = {
+                                                        val intent = Intent(Intent.ACTION_VIEW).apply {
+                                                            setDataAndType(uri, "application/zip")
+                                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                        }
+                                                        context.startActivity(intent)
+                                                    })
+                                                } else {
+                                                    ToastManager.showToast("Failed to save ZIP")
+                                                }
+                                            }
+                                        }
+                                    } catch(e: Exception) {
+                                        ToastManager.showToast("Error: ${e.message}")
+                                    }
+                                }
+                            },
                         contentAlignment = Alignment.Center
                     ) {
-                        Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Lucide.Video, null, tint = colors.primary, modifier = Modifier.size(16.dp))
+                        Row(Modifier.padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Lucide.Copy, null, tint = colors.primary, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("Record .webm (5s)", color = colors.primary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text("Download All (.zip)", color = colors.primary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -229,17 +385,21 @@ fun DeveloperHandoffModal(vm: ChromaViewModel, workName: String, onClose: () -> 
                         .fillMaxWidth()
                 ) {
                     val generatedCode = remember(selectedFramework, vm.layers, vm.globalAnimStatus, vm.globalAnimStyle, vm.globalAnimSpeed, vm.globalAnimAmount, vm.canvasShape, vm.textPreviewContent) {
-                        ExportEngine.generateCode(
-                            type = selectedFramework,
-                            layersRaw = vm.layers,
-                            isDarkTheme = false, // You could pull this from theme later
-                            hasAnim = vm.globalAnimStatus != com.chroma.studio.model.AnimStatus.STOPPED,
-                            aStyle = vm.globalAnimStyle,
-                            aSpeed = vm.globalAnimSpeed,
-                            intensity = vm.globalAnimAmount.toInt(),
-                            shape = vm.canvasShape,
-                            textContent = vm.textPreviewContent
-                        )
+                        if (selectedFramework == "JSON") {
+                            com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(vm.layers)
+                        } else {
+                            ExportEngine.generateCode(
+                                type = selectedFramework,
+                                layersRaw = vm.layers,
+                                isDarkTheme = false, // You could pull this from theme later
+                                hasAnim = vm.globalAnimStatus != com.chroma.studio.model.AnimStatus.STOPPED,
+                                aStyle = vm.globalAnimStyle,
+                                aSpeed = vm.globalAnimSpeed,
+                                intensity = vm.globalAnimAmount.toInt(),
+                                shape = vm.canvasShape,
+                                textContent = vm.textPreviewContent
+                            )
+                        }
                     }
                     Box(
                         modifier = Modifier

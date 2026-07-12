@@ -242,7 +242,7 @@ fun TrashCard(
             ) {
                 val layers = remember(work.layersJson) { repository.deserializeLayers(work.layersJson) }
                 if (layers.isNotEmpty()) {
-                    CanvasPreview(layers = layers, shape = work.canvasShape, borderColor = Color.Transparent, modifier = Modifier.fillMaxSize())
+                    CanvasPreview(layers = layers, shape = work.canvasShape, borderColor = Color.Transparent, isStatic = true, modifier = Modifier.fillMaxSize())
                 }
                 
                 // Dark overlay to indicate it's deleted

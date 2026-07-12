@@ -140,17 +140,35 @@ class ChromaViewModel : ViewModel() {
         currentWorkDescription = description
     }
 
-    fun saveWork(repository: com.chroma.studio.data.WorkRepository): com.chroma.studio.model.ChromaWork {
+    var isHomeBackgroundMode by mutableStateOf(false)
+
+    fun saveWork(repository: com.chroma.studio.data.WorkRepository, prefs: android.content.SharedPreferences? = null): com.chroma.studio.model.ChromaWork? {
+        val layersJson = repository.serializeLayers(layers.toList())
+        
+        if (isHomeBackgroundMode && prefs != null) {
+            prefs.edit()
+                .putString("custom_home_background_layers", layersJson)
+                .putString("custom_home_background_shape", canvasShape)
+                .apply()
+        }
+
         val id = currentWorkId ?: java.util.UUID.randomUUID().toString()
         currentWorkId = id
+        
+        var nameToSave = currentWorkName
+        if (isHomeBackgroundMode && nameToSave == "Untitled") {
+            nameToSave = "Custom Background"
+        }
+        
         val work = com.chroma.studio.model.ChromaWork(
             id = id,
-            name = currentWorkName,
+            name = nameToSave,
             description = currentWorkDescription,
             createdAt = currentWorkCreatedAt,
             lastModifiedAt = System.currentTimeMillis(),
-            layersJson = repository.serializeLayers(layers.toList()),
-            canvasShape = canvasShape
+            layersJson = layersJson,
+            canvasShape = canvasShape,
+            isHomeBackground = isHomeBackgroundMode
         )
         repository.save(work)
         return work
@@ -247,6 +265,21 @@ class ChromaViewModel : ViewModel() {
         )
         layers.add(0, newLayer)
         activeLayerId = newLayer.id
+    }
+
+    fun duplicateLayer(id: String) {
+        val index = layers.indexOfFirst { it.id == id }
+        if (index < 0) return
+        val original = layers[index]
+        saveHistory()
+        
+        val duplicated = original.copy(
+            id = java.util.UUID.randomUUID().toString(),
+            name = "${original.name} Copy",
+            stops = original.stops.map { it.copy(id = java.util.UUID.randomUUID().toString()) }
+        )
+        layers.add(index, duplicated)
+        activeLayerId = duplicated.id
     }
 
     fun showDeleteLayerConfirmation(layerId: String) {
@@ -453,6 +486,13 @@ class ChromaViewModel : ViewModel() {
                 )
             )
         }
+        replaceAllLayers(newLayers)
+        activeLayerId = newLayers.first().id
+    }
+    
+    fun setLayersFromAI(newLayers: List<GradientLayer>) {
+        if (newLayers.isEmpty()) return
+        saveHistory()
         replaceAllLayers(newLayers)
         activeLayerId = newLayers.first().id
     }

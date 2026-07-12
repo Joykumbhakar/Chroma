@@ -3,9 +3,15 @@ package com.chroma.studio.viewmodel
 import android.app.Application
 import androidx.compose.runtime.mutableStateListOf
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import com.chroma.studio.data.WorkRepository
 import com.chroma.studio.model.ChromaWork
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import androidx.compose.runtime.snapshots.Snapshot
 
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -21,7 +27,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         private set
 
     val selectionMode: Boolean
-        get() = selectedWorkIds.isNotEmpty()
+        get() = derivedStateOf { selectedWorkIds.isNotEmpty() }.value
 
     // Trash Selection state
     var trashSelectedWorkIds by mutableStateOf<Set<String>>(emptySet())
@@ -33,17 +39,39 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     // Dark mode state
     var isDarkMode by mutableStateOf(false)
         private set
+        
+    var customHomeBgLayersJson by mutableStateOf<String?>(null)
+        private set
+        
+    var customHomeBgShape by mutableStateOf("full")
+        private set
 
     init {
         refresh()
     }
 
     fun refresh() {
-        works.clear()
-        works.addAll(repository.loadActiveWorks())
-        
-        deletedWorks.clear()
-        deletedWorks.addAll(repository.loadDeletedWorks())
+        viewModelScope.launch(Dispatchers.IO) {
+            val active = repository.loadActiveWorks()
+            val deleted = repository.loadDeletedWorks()
+            
+            val prefs = getApplication<Application>().getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
+            val customLayers = prefs.getString("custom_home_background_layers", null)
+            val customShape = prefs.getString("custom_home_background_shape", "full") ?: "full"
+            
+            withContext(Dispatchers.Main) {
+                Snapshot.withMutableSnapshot {
+                    works.clear()
+                    works.addAll(active)
+                }
+                Snapshot.withMutableSnapshot {
+                    deletedWorks.clear()
+                    deletedWorks.addAll(deleted)
+                }
+                customHomeBgLayersJson = customLayers
+                customHomeBgShape = customShape
+            }
+        }
     }
     
     fun updateDarkMode(dark: Boolean) {
@@ -59,6 +87,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             newSet.add(id)
         }
         selectedWorkIds = newSet
+    }
+
+    fun updateSelection(newSelection: Set<String>) {
+        selectedWorkIds = newSelection
     }
 
     fun clearSelection() {

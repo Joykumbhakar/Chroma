@@ -52,4 +52,78 @@ object ShaderEngines {
         }
     """
 
+    const val MESH_SHADER = """
+        uniform float2 resolution;
+        uniform int count;
+        // AGSL supports up to 16-element arrays for colors/positions
+        uniform half4 colors[16];
+        uniform float2 positions[16];
+
+        half4 main(float2 fragCoord) {
+            float2 uv = fragCoord / resolution;
+            float4 sumColor = float4(0.0);
+            float sumWeight = 0.0;
+            
+            for (int i = 0; i < 16; ++i) {
+                if (i >= count) break;
+                float d = distance(uv, positions[i]);
+                // Inverse distance weighting, power of 3 looks smooth and organic
+                float w = 1.0 / (pow(d, 3.0) + 0.001); 
+                sumColor += float4(colors[i]) * w;
+                sumWeight += w;
+            }
+            return half4(sumColor / sumWeight);
+        }
+    """
+
+    const val AURORA_SHADER = """
+        uniform float2 resolution;
+        uniform float time;
+        uniform float speed;
+        uniform float complexity;
+        uniform half4 color1;
+        uniform half4 color2;
+        uniform half4 color3;
+        uniform half4 color4;
+
+        // Smooth sweeping aurora beams
+        half4 main(float2 fragCoord) {
+            float2 uv = fragCoord / resolution;
+            
+            // Adjust time and speed
+            float t = time * speed * 0.05;
+            
+            // Generate multiple sine waves with different frequencies and phases
+            float wave1 = sin(uv.x * 3.0 + t * 1.5 + sin(uv.y * 2.0));
+            float wave2 = sin(uv.x * 4.0 - t * 1.2 + cos(uv.y * 3.0 + t));
+            float wave3 = sin(uv.x * 2.5 + t * 2.0 + sin(uv.y * 1.5 - t));
+            float wave4 = sin(uv.x * 5.0 - t * 0.8 + cos(uv.y * 2.5 + t * 1.1));
+            
+            // Map waves to [0, 1]
+            wave1 = wave1 * 0.5 + 0.5;
+            wave2 = wave2 * 0.5 + 0.5;
+            wave3 = wave3 * 0.5 + 0.5;
+            wave4 = wave4 * 0.5 + 0.5;
+            
+            // Combine waves into smooth fluid flow
+            float flow = (wave1 + wave2 + wave3 + wave4) / 4.0;
+            
+            // Apply complexity scaling
+            flow = pow(flow, 2.0 - complexity * 0.2);
+            
+            // Interpolate colors based on flow and Y position
+            float3 col = mix(float3(color1.rgb), float3(color2.rgb), smoothstep(0.0, 0.4, flow));
+            col = mix(col, float3(color3.rgb), smoothstep(0.3, 0.7, flow));
+            col = mix(col, float3(color4.rgb), smoothstep(0.6, 1.0, flow));
+            
+            // Add a vertical fade so it looks like it's sweeping up
+            float verticalFade = smoothstep(0.0, 1.0, 1.0 - uv.y);
+            col *= (0.5 + 0.5 * verticalFade);
+            
+            // Enhance contrast and glow
+            col = col * col * 1.5 + col * 0.5;
+            
+            return half4(clamp(col, 0.0, 1.0), 1.0);
+        }
+    """
 }

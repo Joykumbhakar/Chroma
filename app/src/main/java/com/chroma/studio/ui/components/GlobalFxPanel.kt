@@ -88,6 +88,15 @@ fun GlobalFxPanel(vm: ChromaViewModel, modifier: Modifier = Modifier) {
 
     val pickMedia = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) {
+            val usageManager = com.chroma.studio.data.UsageManager(context)
+            if (!usageManager.canGenerate()) {
+                android.widget.Toast.makeText(context, "Daily generation limit reached", android.widget.Toast.LENGTH_SHORT).show()
+                return@rememberLauncherForActivityResult
+            }
+            if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser == null) {
+                android.widget.Toast.makeText(context, "Please login to use AI", android.widget.Toast.LENGTH_SHORT).show()
+                return@rememberLauncherForActivityResult
+            }
             scope.launch(Dispatchers.IO) {
                 val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                     val source = ImageDecoder.createSource(context.contentResolver, uri)
@@ -99,7 +108,23 @@ fun GlobalFxPanel(vm: ChromaViewModel, modifier: Modifier = Modifier) {
                     @Suppress("DEPRECATION")
                     MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
                 }
-                launch(Dispatchers.Main) { vm.generatePaletteFromImage(bitmap) }
+                
+                val outputStream = java.io.ByteArrayOutputStream()
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, outputStream)
+                val base64Image = android.util.Base64.encodeToString(outputStream.toByteArray(), android.util.Base64.NO_WRAP)
+                
+                try {
+                    val prompt = vm.promptText.ifBlank { "Make this gradient better and try new color combinations" }
+                    val generated = com.chroma.studio.ai.AIGenerator.generateGradientLayers(prompt, base64Image)
+                    launch(Dispatchers.Main) { 
+                        vm.setLayersFromAI(generated)
+                        usageManager.incrementGeneration()
+                    }
+                } catch (e: Exception) {
+                    launch(Dispatchers.Main) {
+                        android.widget.Toast.makeText(context, "Error: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                    }
+                }
             }
         }
     }
@@ -114,34 +139,67 @@ fun GlobalFxPanel(vm: ChromaViewModel, modifier: Modifier = Modifier) {
 
             // ── AI PROMPT (kept as-is per request) ──────────────────────────
             item {
-                FxSectionCard(
-                    title = "AI PROMPT-TO-PALETTE",
-                    icon = Lucide.Sparkles,
-                    defaultExpanded = true
-                ) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(
-                            value = vm.promptText,
-                            onValueChange = { vm.updatePromptText(it) },
-                            placeholder = { Text("e.g., Cyberpunk sunset", color = colors.textMuted, fontSize = 12.sp) },
-                            modifier = Modifier.weight(1f).height(48.dp),
-                            textStyle = TextStyle(fontSize = 12.sp, color = colors.textMain),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                unfocusedBorderColor = colors.glassBorder,
-                                focusedBorderColor = colors.primary,
-                                unfocusedContainerColor = colors.glassBg,
-                                focusedContainerColor = colors.glassBg
-                            ),
-                            shape = RoundedCornerShape(8.dp)
-                        )
-                        Button(
-                            onClick = { vm.generateAiPalette(vm.promptText) },
-                            modifier = Modifier.size(48.dp).glossyBorder(RoundedCornerShape(8.dp), colors),
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = colors.primary, contentColor = colors.onPrimary)
-                        ) {
-                            Icon(Lucide.Sparkles, contentDescription = "Generate", modifier = Modifier.size(20.dp))
+                val generateButtonLayers = remember(com.chroma.studio.ui.screens.GENERATE_BUTTON_BG_JSON) {
+                    com.chroma.studio.data.WorkRepository(context).deserializeLayers(com.chroma.studio.ui.screens.GENERATE_BUTTON_BG_JSON)
+                }
+                
+                Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).border(2.dp, Color.White.copy(alpha = 0.5f), RoundedCornerShape(16.dp))) {
+                    com.chroma.studio.ui.components.CanvasPreview(layers = generateButtonLayers, shape = "full", borderColor = Color.Transparent, modifier = Modifier.fillMaxSize())
+                    Box(modifier = Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color.White.copy(alpha = 0.3f), Color.Transparent)))) // Glossy overlay
+                    
+                    FxSectionCard(
+                        title = "AI PROMPT-TO-PALETTE",
+                        icon = Lucide.Sparkles,
+                        defaultExpanded = true,
+                        backgroundColor = Color.Transparent
+                    ) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = vm.promptText,
+                                onValueChange = { vm.updatePromptText(it) },
+                                placeholder = { Text("e.g., Cyberpunk sunset", color = colors.textMuted, fontSize = 12.sp) },
+                                modifier = Modifier.weight(1f).height(48.dp),
+                                textStyle = TextStyle(fontSize = 12.sp, color = colors.textMain),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    unfocusedBorderColor = colors.glassBorder,
+                                    focusedBorderColor = colors.primary,
+                                    unfocusedContainerColor = colors.glassBg,
+                                    focusedContainerColor = colors.glassBg
+                                ),
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            Button(
+                                onClick = {
+                                    val usageManager = com.chroma.studio.data.UsageManager(context)
+                                    if (!usageManager.canGenerate()) {
+                                        android.widget.Toast.makeText(context, "Daily generation limit reached", android.widget.Toast.LENGTH_SHORT).show()
+                                        return@Button
+                                    }
+                                    if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser == null) {
+                                        android.widget.Toast.makeText(context, "Please login to use AI", android.widget.Toast.LENGTH_SHORT).show()
+                                        return@Button
+                                    }
+                                    scope.launch(Dispatchers.IO) {
+                                        try {
+                                            val generated = com.chroma.studio.ai.AIGenerator.generateGradientLayers(vm.promptText)
+                                            launch(Dispatchers.Main) {
+                                                vm.setLayersFromAI(generated)
+                                                usageManager.incrementGeneration()
+                                            }
+                                        } catch (e: Exception) {
+                                            launch(Dispatchers.Main) {
+                                                android.widget.Toast.makeText(context, "Error: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                                            }
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.size(48.dp).glossyBorder(RoundedCornerShape(8.dp), colors),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = colors.primary, contentColor = colors.onPrimary)
+                            ) {
+                                Icon(Lucide.Sparkles, contentDescription = "Generate", modifier = Modifier.size(20.dp))
+                            }
                         }
                     }
                 }
@@ -149,26 +207,39 @@ fun GlobalFxPanel(vm: ChromaViewModel, modifier: Modifier = Modifier) {
 
             // ── EXTRACT FROM IMAGE ───────────────────────────────────────────
             item {
-                FxSectionCard(title = "EXTRACT FROM IMAGE", icon = Lucide.Image) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(colors.glassBg)
-                            .glossyBorder(RoundedCornerShape(10.dp), colors)
-                            .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {
-                                pickMedia.launch(
-                                    androidx.activity.result.PickVisualMediaRequest(
-                                        ActivityResultContracts.PickVisualMedia.ImageOnly
-                                    )
-                                )
-                            },
-                        contentAlignment = Alignment.Center
+                val generateButtonLayers = remember(com.chroma.studio.ui.screens.GENERATE_BUTTON_BG_JSON) {
+                    com.chroma.studio.data.WorkRepository(context).deserializeLayers(com.chroma.studio.ui.screens.GENERATE_BUTTON_BG_JSON)
+                }
+                
+                Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).border(2.dp, Color.White.copy(alpha = 0.5f), RoundedCornerShape(16.dp))) {
+                    com.chroma.studio.ui.components.CanvasPreview(layers = generateButtonLayers, shape = "full", borderColor = Color.Transparent, modifier = Modifier.fillMaxSize())
+                    Box(modifier = Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color.White.copy(alpha = 0.3f), Color.Transparent)))) // Glossy overlay
+                    
+                    FxSectionCard(
+                        title = "EXTRACT FROM IMAGE", 
+                        icon = Lucide.Image,
+                        backgroundColor = Color.Transparent
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Icon(Lucide.Image, contentDescription = null, tint = colors.textMain, modifier = Modifier.size(18.dp))
-                            Text("Upload Reference Image", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = colors.textMain)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(colors.glassBg)
+                                .glossyBorder(RoundedCornerShape(10.dp), colors)
+                                .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {
+                                    pickMedia.launch(
+                                        androidx.activity.result.PickVisualMediaRequest(
+                                            ActivityResultContracts.PickVisualMedia.ImageOnly
+                                        )
+                                    )
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Icon(Lucide.Image, contentDescription = null, tint = colors.textMain, modifier = Modifier.size(18.dp))
+                                Text("Upload Reference Image", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = colors.textMain)
+                            }
                         }
                     }
                 }
@@ -404,6 +475,8 @@ private fun FxSectionCard(
     icon: ImageVector,
     collapsible: Boolean = true,
     defaultExpanded: Boolean = false,
+    modifier: Modifier = Modifier,
+    backgroundColor: Color = Color.Unspecified,
     content: @Composable () -> Unit
 ) {
     val colors = LocalChromaColors.current
@@ -411,10 +484,10 @@ private fun FxSectionCard(
     val shape = RoundedCornerShape(16.dp)
 
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(shape)
-            .background(colors.glassBg, shape)
+            .background(if (backgroundColor == Color.Unspecified) colors.glassBg else backgroundColor, shape)
             .border(
                 width = 1.dp,
                 brush = if (expanded && collapsible) {

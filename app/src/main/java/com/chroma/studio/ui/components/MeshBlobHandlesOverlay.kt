@@ -5,6 +5,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -49,6 +50,7 @@ fun MeshBlobHandlesOverlay(
     onPointDrag: (index: Int, newPercentPos: Offset) -> Unit = { _, _ -> },
     /** Called when two fingers pinch on a blob ring */
     onBlobScale: (index: Int, scaleFactor: Float) -> Unit = { _, _ -> },
+    onBlobTap: (index: Int) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     if (layer.type != LayerType.MESH &&
@@ -67,7 +69,8 @@ fun MeshBlobHandlesOverlay(
                 containerH = h,
                 onBlobDrag = onBlobDrag,
                 onBlobDragEnd = onBlobDragEnd,
-                onBlobScale = onBlobScale
+                onBlobScale = onBlobScale,
+                onBlobTap = onBlobTap
             )
         } else {
             MeshHandles(
@@ -87,7 +90,8 @@ private fun BlobHandles(
     containerH: Dp,
     onBlobDrag: (Int, Offset) -> Unit,
     onBlobDragEnd: (Int, Offset) -> Unit,
-    onBlobScale: (Int, Float) -> Unit
+    onBlobScale: (Int, Float) -> Unit,
+    onBlobTap: (Int) -> Unit
 ) {
     // Track which blob is being dragged for visual feedback (elevation, size)
     var draggingIdx by remember { mutableStateOf(-1) }
@@ -135,11 +139,16 @@ private fun BlobHandles(
                         else Color.White.copy(alpha = 0.35f),
                         shape = androidx.compose.foundation.shape.RoundedCornerShape(50)
                     )
-                    .pointerInput(layer.id, idx) {
+                    .pointerInput(layer.id, idx, "scale") {
                         detectTransformGestures { _, _, zoom, _ ->
                             if (zoom != 1f) {
                                 onBlobScale(idx, zoom)
                             }
+                        }
+                    }
+                    .pointerInput(layer.id, idx, "tapRing") {
+                        detectTapGestures {
+                            onBlobTap(idx)
                         }
                     }
             )
@@ -166,6 +175,11 @@ private fun BlobHandles(
                         else Color.White.copy(alpha = 0.7f),
                         shape = CircleShape
                     )
+                    .pointerInput(layer.id, idx, "tapHandle") {
+                        detectTapGestures {
+                            onBlobTap(idx)
+                        }
+                    }
                     .pointerInput(layer.id, idx, containerW, containerH) {
                         detectDragGestures(
                             onDragStart = { _ ->

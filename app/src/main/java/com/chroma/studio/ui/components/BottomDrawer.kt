@@ -56,7 +56,7 @@ import com.chroma.studio.viewmodel.MobileTab
 fun BottomDrawer(vm: ChromaViewModel, modifier: Modifier = Modifier) {
     val colors = LocalChromaColors.current
     val targetHeight = when (vm.drawerLevel) {
-        DrawerLevel.COLLAPSED -> 64.dp
+        DrawerLevel.COLLAPSED -> 96.dp
         DrawerLevel.MID -> 340.dp
         DrawerLevel.FULL -> 620.dp
     }

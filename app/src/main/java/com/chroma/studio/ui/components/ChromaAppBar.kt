@@ -43,6 +43,7 @@ fun ChromaAppBar(
     onUndo: () -> Unit = {},
     onRedo: () -> Unit = {},
     onExport: () -> Unit = {},
+    onSave: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val colors = LocalChromaColors.current
@@ -53,36 +54,23 @@ fun ChromaAppBar(
             .height(64.dp),
         cornerRadius = 0
     ) {
-        Row(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(horizontal = 16.dp)
         ) {
             // ---- LEFT CONTROLS ----
             Row(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.align(Alignment.CenterStart),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Start
             ) {
-                // Workspace Button
-                Row(
-                    modifier = Modifier
-                        .height(32.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .glossyBorder(RoundedCornerShape(6.dp), colors)
-                        .clickable { /* TODO: Workspace Dropdown */ }
-                        .padding(horizontal = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Icon(Lucide.Folder, contentDescription = "Workspaces", tint = colors.primary, modifier = Modifier.size(20.dp))
-                }
+                IconGhostButton(icon = Lucide.Save, contentDesc = "Save", onClick = onSave)
             }
 
             // ---- CENTER TITLE ----
             Row(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.align(Alignment.Center),
                 verticalAlignment = Alignment.CenterVertically, 
                 horizontalArrangement = Arrangement.Center
             ) {
@@ -104,7 +92,7 @@ fun ChromaAppBar(
 
             // ---- RIGHT CONTROLS ----
             Row(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.align(Alignment.CenterEnd),
                 verticalAlignment = Alignment.CenterVertically, 
                 horizontalArrangement = Arrangement.End
             ) {

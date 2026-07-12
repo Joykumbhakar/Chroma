@@ -272,6 +272,7 @@ fun LayersPanel(
                     onCenterXChange = { cx -> vm.updateLayer(layer.id) { it.copy(centerX = cx) } },
                     onCenterYChange = { cy -> vm.updateLayer(layer.id) { it.copy(centerY = cy) } },
                     onDelete = { vm.showDeleteLayerConfirmation(layer.id) },
+                    onDuplicate = { vm.duplicateLayer(layer.id) },
                     onRepeatPatternChange = { rp -> vm.updateLayer(layer.id) { it.copy(repeatPattern = rp) } },
                     onWidthChange = { w -> vm.updateLayer(layer.id) { it.copy(width = w) } },
                     onHeightChange = { h -> vm.updateLayer(layer.id) { it.copy(height = h) } },
@@ -279,8 +280,14 @@ fun LayersPanel(
                     onWaveSpeedChange = { ws -> vm.updateLayer(layer.id) { it.copy(waveSpeed = ws) } },
                     onComplexityChange = { c -> vm.updateLayer(layer.id) { it.copy(complexity = c) } },
                     onBrightnessChange = { br -> vm.updateLayer(layer.id) { it.copy(brightness = br) } },
-                    onColumnsChange = { col -> vm.updateLayer(layer.id) { it.copy(columns = col) } },
-                    onRowsChange = { r -> vm.updateLayer(layer.id) { it.copy(rows = r) } },
+                    onColumnsChange = { col -> 
+                        vm.updateLayer(layer.id) { it.copy(columns = col) }
+                        vm.regenerateMesh(layer.id)
+                    },
+                    onRowsChange = { r -> 
+                        vm.updateLayer(layer.id) { it.copy(rows = r) }
+                        vm.regenerateMesh(layer.id)
+                    },
                     onBaseBackgroundChange = { bb -> vm.updateLayer(layer.id) { it.copy(hasBaseBackground = bb) } },
                     onBlobBgColorChange = { color -> vm.updateLayer(layer.id) { it.copy(blobBgColor = color) } },
                     onRegenerateMesh = { vm.regenerateMesh(layer.id) },

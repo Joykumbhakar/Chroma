@@ -4,6 +4,7 @@ import com.chroma.studio.model.GradientLayer
 import com.chroma.studio.model.LayerType
 import com.chroma.studio.model.AnimStyle
 import kotlin.math.roundToInt
+import androidx.compose.ui.geometry.Offset
 
 object ExportEngine {
 
@@ -23,7 +24,7 @@ object ExportEngine {
             LayerType.LINEAR -> "linear-gradient(${layer.angle}deg, $stopString)"
             LayerType.RADIAL -> "radial-gradient(circle at ${layer.centerX}% ${layer.centerY}%, $stopString)"
             LayerType.CONIC -> "conic-gradient(from ${layer.angle}deg at ${layer.centerX}% ${layer.centerY}%, $stopString)"
-            LayerType.BLOB -> {
+            LayerType.BLOB, LayerType.LIQUID -> {
                 val bStops = layer.stops
                 val bg = if (layer.hasBaseBackground) {
                     val bc = layer.blobBgColor
@@ -40,9 +41,36 @@ object ExportEngine {
                 }.joinToString(", ")
                 if (bg.isNotEmpty()) "$bgs, linear-gradient(${bg}transparent)" else bgs
             }
-            LayerType.LIQUID -> "linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,0)) /* Liquid uses Blob internals */"
-            LayerType.AURORA -> "linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,0)) /* Aurora needs Canvas JS */"
-            LayerType.MESH -> "linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,0)) /* Mesh not supported in raw CSS */"
+            LayerType.AURORA -> {
+                val rads = mutableListOf<String>()
+                layer.stops.forEachIndexed { i, stop ->
+                    val r = (stop.color.red * 255).toInt()
+                    val g = (stop.color.green * 255).toInt()
+                    val b = (stop.color.blue * 255).toInt()
+                    val a = stop.color.alpha
+                    val px = (i * 35 + 10) % 100
+                    val py = 50 + (if (i%2==0) 20 else -20)
+                    rads.add("radial-gradient(ellipse at $px% $py%, rgba($r,$g,$b,$a) 0%, rgba($r,$g,$b,0) 60%)")
+                }
+                rads.joinToString(", ")
+            }
+            LayerType.MESH -> {
+                val c = layer.columns.coerceAtLeast(1)
+                val r = layer.rows.coerceAtLeast(1)
+                val rads = mutableListOf<String>()
+                for (i in layer.stops.indices) {
+                    val stop = layer.stops[i]
+                    val mp = layer.meshPoints.getOrNull(i)
+                    val px = mp?.x ?: if (c > 1) ((i % c).toFloat() / (c - 1)) * 100f else 50f
+                    val py = mp?.y ?: if (r > 1) ((i / c).toFloat() / (r - 1)) * 100f else 50f
+                    val colR = (stop.color.red * 255).toInt()
+                    val colG = (stop.color.green * 255).toInt()
+                    val colB = (stop.color.blue * 255).toInt()
+                    val a = stop.color.alpha
+                    rads.add("radial-gradient(circle at $px% $py%, rgba($colR,$colG,$colB,$a) 0%, rgba($colR,$colG,$colB,0) 70%)")
+                }
+                rads.joinToString(", ")
+            }
         }
     }
 
@@ -51,7 +79,6 @@ object ExportEngine {
         val cssBlock: String,
         val reactColors: String,
         val swiftUIColors: String,
-        val rnColors: String,
         val composeColors: String,
         val flutterColors: String,
         val xmlColors: String,
@@ -106,7 +133,7 @@ object ExportEngine {
             "Color.parseColor(\"#$a${rgb2hex(s.color.red, s.color.green, s.color.blue)}\")" 
         }}}"
 
-        return ExportStrings(bg, cssBlock, reactColors, swiftUIColors, reactColors, composeColors, flutterColors, xmlColors, kotlinColors, javaColors)
+        return ExportStrings(bg, cssBlock, reactColors, swiftUIColors, composeColors, flutterColors, xmlColors, kotlinColors, javaColors)
     }
 
     fun generateCode(
@@ -126,13 +153,14 @@ object ExportEngine {
         val hasLiquid = layers.any { it.type == LayerType.LIQUID }
 
         when (type) {
-            "CSS / SCSS" -> {
+            "SVG", "CSS / SCSS", "Vue", "Svelte", "Angular" -> {
                 val shapeCss = when(shape) {
                     "circle" -> "  border-radius: 50%; overflow: hidden;\n"
                     "rounded" -> "  border-radius: 24px; overflow: hidden;\n"
                     "text" -> "  background-clip: text; -webkit-background-clip: text; color: transparent; font-size: 15vw; font-weight: 900; text-align: center; line-height: 100vh;\n"
                     else -> ""
                 }
+                
                 code = ".chroma-bg {\n  width: 100%; height: 100vh;\n  position: relative;\n  background-color: $bgColor;\n$shapeCss}\n"
                 if (shape == "text") {
                     code += "/* HTML Usage: <div class=\"chroma-bg\">$textContent</div> */\n\n"
@@ -149,12 +177,16 @@ object ExportEngine {
                     code += "@keyframes anim-breathe { 0% { background-size: 100% 100%; } 100% { background-size: ${100 + intensity}% ${100 + intensity}%; } }\n"
                 }
                 if (hasLiquid) {
-                    code += "\n/* Note: Liquid filter requires SVG definition in HTML */\n"
+                    code += "\n/* Add this SVG in your HTML for Liquid effect: */\n/* <svg width=\"0\" height=\"0\" style=\"position:absolute;\"><filter id=\"liquid-filter\"><feGaussianBlur in=\"SourceGraphic\" stdDeviation=\"10\" result=\"blur\" /><feColorMatrix in=\"blur\" mode=\"matrix\" values=\"1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -7\" result=\"liquid\" /><feBlend in=\"SourceGraphic\" in2=\"liquid\" /></filter></svg> */\n"
+                }
+                if (type == "SVG") {
+                    val liquidDefs = if (hasLiquid) "<filter id=\"liquid-filter\"><feGaussianBlur in=\"SourceGraphic\" stdDeviation=\"10\" result=\"blur\" /><feColorMatrix in=\"blur\" mode=\"matrix\" values=\"1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -7\" result=\"liquid\" /><feBlend in=\"SourceGraphic\" in2=\"liquid\" /></filter>" else ""
+                    val contentHtml = if (shape == "text") "<div class=\"chroma-bg\">$textContent</div>" else "<div class=\"chroma-bg\"></div>"
+                    code = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1080\" height=\"1920\">\n<defs>\n<style>\n$code</style>\n$liquidDefs\n</defs>\n<foreignObject width=\"100%\" height=\"100%\">\n<div xmlns=\"http://www.w3.org/1999/xhtml\" style=\"width:100%;height:100%;\">\n$contentHtml\n</div>\n</foreignObject>\n</svg>"
                 }
             }
             "Tailwind" -> {
                 val bgs = layers.mapIndexed { i, l -> "\"chroma-\$i\": \"${getExportStrings(l, i, false, aStyle, aSpeed, intensity).bg.replace("\n", " ")}\"" }.joinToString(",\n      ")
-                code = "// tailwind.config.js\nmodule.exports = {\n  theme: {\n    extend: {\n      backgroundImage: {\n      $bgs\n      }\n    }\n  }\n}"
                 val shapeClasses = when(shape) {
                     "circle" -> " rounded-full overflow-hidden"
                     "rounded" -> " rounded-3xl overflow-hidden"
@@ -165,6 +197,9 @@ object ExportEngine {
                 code += "\n\n// HTML Usage:\n<div class=\"relative w-full h-screen ${if (isDarkTheme) "bg-gray-950" else "bg-slate-50"}$shapeClasses\">\n"
                 if (shape == "text") {
                     code += "  $textContent\n"
+                }
+                if (hasLiquid) {
+                    code += "  <svg width=\"0\" height=\"0\" className=\"absolute\"><filter id=\"liquid-filter\"><feGaussianBlur in=\"SourceGraphic\" stdDeviation=\"10\" result=\"blur\" /><feColorMatrix in=\"blur\" mode=\"matrix\" values=\"1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -7\" result=\"liquid\" /><feBlend in=\"SourceGraphic\" in2=\"liquid\" /></filter></svg>\n"
                 }
                 layers.forEachIndexed { i, l ->
                     val liquidClass = if (l.type == LayerType.LIQUID) "style=\"filter: url('#liquid-filter');\" " else ""
@@ -193,41 +228,6 @@ object ExportEngine {
                 }
                 code += "    </div>\n  );\n};"
             }
-            "Vue" -> {
-                code = "<template>\n  <div class=\"chroma-wrap\">\n"
-                if (hasLiquid) code += "    <svg width=\"0\" height=\"0\" style=\"position:absolute;\"><filter id=\"liquid-filter\"><feGaussianBlur in=\"SourceGraphic\" stdDeviation=\"10\" result=\"blur\" /><feColorMatrix in=\"blur\" mode=\"matrix\" values=\"1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 18 -7\" result=\"liquid\" /><feBlend in=\"SourceGraphic\" in2=\"liquid\" /></filter></svg>\n"
-                layers.forEachIndexed { i, _ -> code += "    <div class=\"chroma-layer layer-$i\"></div>\n" }
-                code += "  </div>\n</template>\n\n<style scoped>\n.chroma-wrap { position: relative; width: 100%; height: 100vh; background-color: $bgColor; }\n.chroma-layer { position: absolute; inset: 0; }\n"
-                layers.forEachIndexed { i, l ->
-                    val exp = getExportStrings(l, i, hasAnim, aStyle, aSpeed, intensity)
-                    val liq = if (l.type == LayerType.LIQUID) "filter: url(\"#liquid-filter\"); " else ""
-                    code += ".layer-$i { ${liq}background: ${exp.bg.replace("\n", " ")}; mix-blend-mode: ${l.blendMode.name.lowercase()}; opacity: ${l.opacity}; }\n"
-                }
-                code += "</style>"
-            }
-            "Svelte" -> {
-                code = "<div class=\"chroma-wrap\">\n"
-                if (hasLiquid) code += "  <svg width=\"0\" height=\"0\" style=\"position:absolute;\"><filter id=\"liquid-filter\"><feGaussianBlur in=\"SourceGraphic\" stdDeviation=\"10\" result=\"blur\" /><feColorMatrix in=\"blur\" mode=\"matrix\" values=\"1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 18 -7\" result=\"liquid\" /><feBlend in=\"SourceGraphic\" in2=\"liquid\" /></filter></svg>\n"
-                layers.forEachIndexed { i, _ -> code += "  <div class=\"chroma-layer layer-$i\"></div>\n" }
-                code += "</div>\n\n<style>\n  .chroma-wrap { position: relative; width: 100%; height: 100vh; background-color: $bgColor; }\n  .chroma-layer { position: absolute; inset: 0; }\n"
-                layers.forEachIndexed { i, l ->
-                    val exp = getExportStrings(l, i, hasAnim, aStyle, aSpeed, intensity)
-                    val liq = if (l.type == LayerType.LIQUID) "filter: url(\"#liquid-filter\"); " else ""
-                    code += "  .layer-$i { ${liq}background: ${exp.bg.replace("\n", " ")}; mix-blend-mode: ${l.blendMode.name.lowercase()}; opacity: ${l.opacity}; }\n"
-                }
-                code += "</style>"
-            }
-            "Angular" -> {
-                code = "<!-- component.html -->\n<div class=\"chroma-wrap\">\n"
-                if (hasLiquid) code += "  <svg width=\"0\" height=\"0\" style=\"position:absolute;\"><filter id=\"liquid-filter\"><feGaussianBlur in=\"SourceGraphic\" stdDeviation=\"10\" result=\"blur\" /><feColorMatrix in=\"blur\" mode=\"matrix\" values=\"1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 18 -7\" result=\"liquid\" /><feBlend in=\"SourceGraphic\" in2=\"liquid\" /></filter></svg>\n"
-                layers.forEachIndexed { i, _ -> code += "  <div class=\"chroma-layer layer-$i\"></div>\n" }
-                code += "</div>\n\n/* component.css */\n.chroma-wrap { position: relative; width: 100%; height: 100vh; background-color: $bgColor; }\n.chroma-layer { position: absolute; inset: 0; }\n"
-                layers.forEachIndexed { i, l ->
-                    val exp = getExportStrings(l, i, hasAnim, aStyle, aSpeed, intensity)
-                    val liq = if (l.type == LayerType.LIQUID) "filter: url(\"#liquid-filter\"); " else ""
-                    code += ".layer-$i { ${liq}background: ${exp.bg.replace("\n", " ")}; mix-blend-mode: ${l.blendMode.name.lowercase()}; opacity: ${l.opacity}; }\n"
-                }
-            }
             "SwiftUI" -> {
                 val shapeModifier = when(shape) {
                     "circle" -> ".clipShape(Circle())"
@@ -235,16 +235,38 @@ object ExportEngine {
                     "text" -> ".mask(Text(\"$textContent\").font(.system(size: 100, weight: .black)).multilineTextAlignment(.center))"
                     else -> ""
                 }
-                code = "import SwiftUI\n\nstruct ChromaBackground: View {\n    var body: some View {\n        ZStack {\n            Color(red: 0.97, green: 0.98, blue: 0.99).ignoresSafeArea()\n\n"
-                layers.forEachIndexed { i, l ->
-                    val exp = getExportStrings(l, i, hasAnim, aStyle, aSpeed, intensity)
+                code = "import SwiftUI\n\n@available(iOS 18.0, *)\nstruct ChromaBackground: View {\n    var body: some View {\n        ZStack {\n            Color(red: 0.97, green: 0.98, blue: 0.99).ignoresSafeArea()\n\n"
+                layers.forEachIndexed { _, l ->
+                    val exp = getExportStrings(l, 0, hasAnim, aStyle, aSpeed, intensity)
                     var gradientType = when (l.type) {
                         LayerType.RADIAL -> "RadialGradient(gradient: Gradient(colors: [${exp.swiftUIColors}]), center: .center, startRadius: 0, endRadius: 300)"
                         LayerType.CONIC -> "AngularGradient(gradient: Gradient(colors: [${exp.swiftUIColors}]), center: .center, angle: .degrees(${l.angle}))"
+                        LayerType.MESH -> {
+                            val c = l.columns.coerceAtLeast(1)
+                            val r = l.rows.coerceAtLeast(1)
+                            val pointsArr = mutableListOf<String>()
+                            val colorsArr = mutableListOf<String>()
+                            for (j in l.stops.indices) {
+                                val stop = l.stops[j]
+                                val mp = l.meshPoints.getOrNull(j)
+                                val px = (mp?.x ?: if (c > 1) ((j % c).toFloat() / (c - 1)) * 100f else 50f) / 100f
+                                val py = (mp?.y ?: if (r > 1) ((j / c).toFloat() / (r - 1)) * 100f else 50f) / 100f
+                                pointsArr.add("SIMD2<Float>($px, $py)")
+                                colorsArr.add("Color(red: ${stop.color.red}, green: ${stop.color.green}, blue: ${stop.color.blue}, opacity: ${stop.color.alpha})")
+                            }
+                            "MeshGradient(width: $c, height: $r, points: [\n                ${pointsArr.joinToString(", ")}\n            ], colors: [\n                ${colorsArr.joinToString(", ")}\n            ])"
+                        }
+                        LayerType.AURORA, LayerType.BLOB, LayerType.LIQUID -> {
+                            "// ${l.type.name} approximated with overlapping radial gradients\n            ZStack {\n                " + l.stops.mapIndexed { idx, s -> 
+                                val px = (idx * 35 + 10) % 100
+                                val py = 50 + (if (idx%2==0) 20 else -20)
+                                "RadialGradient(colors: [Color(red: ${s.color.red}, green: ${s.color.green}, blue: ${s.color.blue}, opacity: ${s.color.alpha}), .clear], center: UnitPoint(x: ${px/100.0}, y: ${py/100.0}), startRadius: 0, endRadius: 300)"
+                            }.joinToString("\n                ") + "\n            }"
+                        }
                         else -> "LinearGradient(gradient: Gradient(colors: [${exp.swiftUIColors}]), startPoint: .topLeading, endPoint: .bottomTrailing)"
                     }
-                    if (l.type == LayerType.BLOB || l.type == LayerType.LIQUID || l.type == LayerType.AURORA || l.type == LayerType.MESH) {
-                        gradientType = "// Complex gradient requires custom drawing Canvas\n            Color.clear"
+                    if (l.type == LayerType.LIQUID) {
+                        gradientType = "$gradientType\n                .blur(radius: 20)\n                // Note: Liquid filter in SwiftUI requires Canvas drawing"
                     }
                     code += "            $gradientType\n                .blendMode(.${l.blendMode.name.lowercase().replace("_", "")})\n                .opacity(${l.opacity})\n                .ignoresSafeArea()\n\n"
                 }
@@ -256,27 +278,33 @@ object ExportEngine {
                     "rounded" -> ".clip(RoundedCornerShape(24.dp))"
                     else -> ""
                 }
-                code = "import androidx.compose.foundation.background\nimport androidx.compose.foundation.layout.*\nimport androidx.compose.ui.Modifier\nimport androidx.compose.ui.graphics.*\nimport androidx.compose.ui.text.font.FontWeight\nimport androidx.compose.foundation.shape.*\nimport androidx.compose.ui.draw.clip\nimport androidx.compose.runtime.Composable\n\n@Composable\nfun ChromaBackground() {\n"
+                code = "import androidx.compose.foundation.background\nimport androidx.compose.foundation.layout.*\nimport androidx.compose.ui.Modifier\nimport androidx.compose.ui.graphics.*\nimport androidx.compose.foundation.shape.*\nimport androidx.compose.ui.draw.clip\nimport androidx.compose.runtime.Composable\nimport android.graphics.RuntimeShader\n\n@Composable\nfun ChromaBackground() {\n"
                 if (shape == "text") {
                     code += "    Box(modifier = Modifier.fillMaxSize().background(Color(0xFFF8FAFC)), contentAlignment = androidx.compose.ui.Alignment.Center) {\n"
                     code += "        androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {\n"
-                    code += "            // Draw Text with BlendMode.DstIn to mask the gradient!\n"
-                    code += "            // (Implement standard Compose drawText mask logic here)\n"
-                    code += "        }\n"
+                    code += "            // Draw Text with BlendMode.DstIn to mask the gradient!\n        }\n"
                 } else {
                     code += "    Box(modifier = Modifier.fillMaxSize().background(Color(0xFFF8FAFC))$clipModifier) {\n"
                 }
                 layers.forEachIndexed { i, l ->
                     val exp = getExportStrings(l, i, hasAnim, aStyle, aSpeed, intensity)
-                    var brush = when (l.type) {
-                        LayerType.RADIAL -> "Brush.radialGradient(colors = listOf(${exp.composeColors}))"
-                        LayerType.CONIC -> "Brush.sweepGradient(colors = listOf(${exp.composeColors}))"
-                        else -> "Brush.linearGradient(colors = listOf(${exp.composeColors}))"
+                    if (l.type == LayerType.MESH) {
+                        code += "        val meshShaderStr = \"\"\"\n            uniform float2 resolution;\n            uniform int count;\n            uniform float2 positions[16];\n            uniform half4 colors[16];\n            half4 main(in float2 fragCoord) {\n                float2 uv = fragCoord.xy / resolution.xy;\n                half4 outColor = half4(0.0);\n                float totalWeight = 0.0;\n                for (int i = 0; i < count; i++) {\n                    float dist = distance(uv, positions[i]);\n                    float weight = 1.0 / (dist * dist + 0.001);\n                    outColor += colors[i] * weight;\n                    totalWeight += weight;\n                }\n                return outColor / totalWeight;\n            }\n        \"\"\"\n"
+                        code += "        val shader = android.graphics.RuntimeShader(meshShaderStr)\n        // Set your uniforms here (resolution, count, positions array, colors array)\n"
+                        code += "        val brush = ShaderBrush(shader)\n"
+                    } else if (l.type == LayerType.AURORA) {
+                        code += "        val auroraShaderStr = \"\"\"\n            uniform float2 resolution;\n            uniform float time;\n            uniform half4 color1; uniform half4 color2; uniform half4 color3;\n            half4 main(in float2 fragCoord) {\n                float2 uv = fragCoord.xy / resolution.xy;\n                float wave = sin(uv.x * 6.28 + time) * 0.1;\n                float dist = abs(uv.y - 0.5 + wave);\n                return mix(color1, color2, smoothstep(0.0, 0.5, dist)); // Simplified export\n            }\n        \"\"\"\n"
+                        code += "        val shader = android.graphics.RuntimeShader(auroraShaderStr)\n        val brush = ShaderBrush(shader)\n"
+                    } else {
+                        val brushStr = when (l.type) {
+                            LayerType.RADIAL -> "Brush.radialGradient(colors = listOf(${exp.composeColors}))"
+                            LayerType.CONIC -> "Brush.sweepGradient(colors = listOf(${exp.composeColors}))"
+                            LayerType.BLOB, LayerType.LIQUID -> "Brush.radialGradient(colors = listOf(${exp.composeColors})) // Approximation for Blob"
+                            else -> "Brush.linearGradient(colors = listOf(${exp.composeColors}))"
+                        }
+                        code += "        val brush = $brushStr\n"
                     }
-                    if (l.type == LayerType.BLOB || l.type == LayerType.LIQUID || l.type == LayerType.AURORA || l.type == LayerType.MESH) {
-                        brush = "Brush.linearGradient(colors = listOf(Color.Transparent, Color.Transparent)) /* Complex gradients require Canvas draw phase */"
-                    }
-                    code += "        Box(\n            modifier = Modifier.fillMaxSize().background($brush, alpha = ${l.opacity}f)\n        )\n"
+                    code += "        Box(modifier = Modifier.fillMaxSize().background(brush, alpha = ${l.opacity}f))\n"
                 }
                 code += "    }\n}"
             }
@@ -285,7 +313,7 @@ object ExportEngine {
                 val clipStart = when(shape) {
                     "circle" -> "ClipOval(\n      child: "
                     "rounded" -> "ClipRRect(\n      borderRadius: BorderRadius.circular(24.0),\n      child: "
-                    "text" -> "ShaderMask(\n      blendMode: BlendMode.srcIn,\n      shaderCallback: (bounds) => const LinearGradient(colors: [Colors.white, Colors.white]).createShader(bounds),\n      // The actual masking requires complex setup in Flutter, here's a rough approximation:\n      child: "
+                    "text" -> "ShaderMask(\n      blendMode: BlendMode.srcIn,\n      shaderCallback: (bounds) => const LinearGradient(colors: [Colors.white, Colors.white]).createShader(bounds),\n      child: "
                     else -> ""
                 }
                 val clipEnd = when(shape) {
@@ -293,17 +321,17 @@ object ExportEngine {
                     else -> ""
                 }
                 code = "import 'package:flutter/material.dart';\n\nclass ChromaBackground extends StatelessWidget {\n  @override\n  Widget build(BuildContext context) {\n    return $clipStart Stack(\n      children: [\n        Container(color: Color($flutterBg)),\n"
-                layers.forEachIndexed { i, l ->
-                    val exp = getExportStrings(l, i, hasAnim, aStyle, aSpeed, intensity)
+                layers.forEachIndexed { _, l ->
+                    val exp = getExportStrings(l, 0, hasAnim, aStyle, aSpeed, intensity)
                     var grad = when (l.type) {
                         LayerType.RADIAL -> "RadialGradient(colors: [${exp.flutterColors}], center: Alignment.center, radius: 1.0)"
                         LayerType.CONIC -> "SweepGradient(colors: [${exp.flutterColors}], center: Alignment.center)"
                         else -> "LinearGradient(colors: [${exp.flutterColors}], begin: Alignment.topLeft, end: Alignment.bottomRight)"
                     }
                     if (l.type == LayerType.BLOB || l.type == LayerType.LIQUID || l.type == LayerType.AURORA || l.type == LayerType.MESH) {
-                        grad = "LinearGradient(colors: [Color(0x00000000), Color(0x00000000)]) /* Complex gradients require CustomPaint Canvas API */"
+                        grad = "RadialGradient(colors: [${exp.flutterColors}]) // Approximated"
                     }
-                    code += "        Opacity(\n          opacity: ${l.opacity},\n          child: Container(\n            decoration: BoxDecoration(gradient: $grad),\n          ),\n        ),\n"
+                    code += "        Opacity(\n          opacity: ${l.opacity},\n          child: Container(decoration: BoxDecoration(gradient: $grad)),\n        ),\n"
                 }
                 if (shape == "text") {
                     code += "        Center(child: Text('$textContent', style: TextStyle(fontSize: 100, fontWeight: FontWeight.w900))),\n"
@@ -320,7 +348,7 @@ object ExportEngine {
                 }
                 layers.forEachIndexed { i, l ->
                     val exp = getExportStrings(l, i, hasAnim, aStyle, aSpeed, intensity)
-                    code += "      <LinearGradient colors={[${exp.rnColors}]} style={[StyleSheet.absoluteFill, { opacity: ${l.opacity} }]} />\n"
+                    code += "      <LinearGradient colors={[${exp.reactColors}]} style={[StyleSheet.absoluteFill, { opacity: ${l.opacity} }]} />\n"
                 }
                 if (shape == "text") {
                     code += "      </View>\n    </MaskedView>\n  );\n};\n\nconst styles = StyleSheet.create({\n  container: { flex: 1, backgroundColor: '$bgColor' },\n  maskContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },\n  maskText: { fontSize: 100, fontWeight: '900', color: 'black' }\n});"
@@ -330,17 +358,16 @@ object ExportEngine {
             }
             "XML Drawable" -> {
                 code = "<!-- res/drawable/chroma_bg.xml -->\n<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<layer-list xmlns:android=\"http://schemas.android.com/apk/res/android\">\n  <item>\n    <shape android:shape=\"rectangle\">\n      <solid android:color=\"$bgColor\"/>\n    </shape>\n  </item>\n"
-                layers.forEachIndexed { i, l ->
-                    val exp = getExportStrings(l, i, hasAnim, aStyle, aSpeed, intensity)
+                layers.forEachIndexed { _, l ->
+                    val exp = getExportStrings(l, 0, hasAnim, aStyle, aSpeed, intensity)
                     val typeMap = when (l.type) {
-                        LayerType.RADIAL -> "radial"
+                        LayerType.RADIAL, LayerType.BLOB, LayerType.LIQUID, LayerType.MESH, LayerType.AURORA -> "radial"
                         LayerType.CONIC -> "sweep"
                         else -> "linear"
                     }
-                    if (l.type == LayerType.BLOB || l.type == LayerType.LIQUID || l.type == LayerType.AURORA || l.type == LayerType.MESH) return@forEachIndexed
-                    val extraAttr = when (l.type) {
-                        LayerType.LINEAR -> "android:angle=\"${l.angle}\"\n        "
-                        LayerType.RADIAL -> "android:gradientRadius=\"300dp\"\n        "
+                    val extraAttr = when (typeMap) {
+                        "linear" -> "android:angle=\"${l.angle}\"\n        "
+                        "radial" -> "android:gradientRadius=\"300dp\"\n        "
                         else -> ""
                     }
                     code += "  <item>\n    <shape android:shape=\"rectangle\">\n      <gradient\n        android:type=\"$typeMap\"\n        $extraAttr${exp.xmlColors} />\n    </shape>\n  </item>\n"
@@ -351,13 +378,12 @@ object ExportEngine {
                 code = "// Android Kotlin Programmatic Gradient\nval backgroundLayer = GradientDrawable()\nbackgroundLayer.setColor(Color.parseColor(\"$bgColor\"))\n\nval layers = mutableListOf<Drawable>(backgroundLayer)\n\n"
                 layers.forEachIndexed { i, l ->
                     val exp = getExportStrings(l, i, hasAnim, aStyle, aSpeed, intensity)
-                    val shape = when (l.type) {
-                        LayerType.RADIAL -> "GradientDrawable.RADIAL_GRADIENT"
+                    val shapeEnum = when (l.type) {
+                        LayerType.RADIAL, LayerType.BLOB, LayerType.LIQUID, LayerType.MESH, LayerType.AURORA -> "GradientDrawable.RADIAL_GRADIENT"
                         LayerType.CONIC -> "GradientDrawable.SWEEP_GRADIENT"
                         else -> "GradientDrawable.LINEAR_GRADIENT"
                     }
-                    if (l.type == LayerType.BLOB || l.type == LayerType.LIQUID || l.type == LayerType.AURORA || l.type == LayerType.MESH) return@forEachIndexed
-                    code += "val layer$i = GradientDrawable(GradientDrawable.Orientation.TL_BR, ${exp.kotlinColors})\nlayer$i.gradientType = $shape\nlayer$i.alpha = ${(l.opacity * 255).toInt()}\nlayers.add(layer$i)\n\n"
+                    code += "val layer$i = GradientDrawable(GradientDrawable.Orientation.TL_BR, ${exp.kotlinColors})\nlayer$i.gradientType = $shapeEnum\nlayer$i.alpha = ${(l.opacity * 255).toInt()}\nlayers.add(layer$i)\n\n"
                 }
                 code += "val layerDrawable = LayerDrawable(layers.toTypedArray())\nview.background = layerDrawable"
             }
@@ -365,29 +391,17 @@ object ExportEngine {
                 code = "// Android Java Programmatic Gradient\nGradientDrawable backgroundLayer = new GradientDrawable();\nbackgroundLayer.setColor(Color.parseColor(\"$bgColor\"));\n\nDrawable[] layers = new Drawable[${layers.size + 1}];\nlayers[0] = backgroundLayer;\n\n"
                 layers.forEachIndexed { i, l ->
                     val exp = getExportStrings(l, i, hasAnim, aStyle, aSpeed, intensity)
-                    val shape = when (l.type) {
-                        LayerType.RADIAL -> "GradientDrawable.RADIAL_GRADIENT"
+                    val shapeEnum = when (l.type) {
+                        LayerType.RADIAL, LayerType.BLOB, LayerType.LIQUID, LayerType.MESH, LayerType.AURORA -> "GradientDrawable.RADIAL_GRADIENT"
                         LayerType.CONIC -> "GradientDrawable.SWEEP_GRADIENT"
                         else -> "GradientDrawable.LINEAR_GRADIENT"
                     }
-                    if (l.type == LayerType.BLOB || l.type == LayerType.LIQUID || l.type == LayerType.AURORA || l.type == LayerType.MESH) return@forEachIndexed
-                    code += "GradientDrawable layer$i = new GradientDrawable(GradientDrawable.Orientation.TL_BR, ${exp.javaColors});\nlayer$i.setGradientType($shape);\nlayer$i.setAlpha(${(l.opacity * 255).toInt()});\nlayers[${i+1}] = layer$i;\n\n"
+                    code += "GradientDrawable layer$i = new GradientDrawable(GradientDrawable.Orientation.TL_BR, ${exp.javaColors});\nlayer$i.setGradientType($shapeEnum);\nlayer$i.setAlpha(${(l.opacity * 255).toInt()});\nlayers[${i+1}] = layer$i;\n\n"
                 }
                 code += "LayerDrawable layerDrawable = new LayerDrawable(layers);\nview.setBackground(layerDrawable);"
             }
-            "Canvas JS" -> {
-                code = "// Canvas JS rendering for accurate Aurora & Complex effects\nconst canvas = document.getElementById(\"chromaCanvas\");\nconst ctx = canvas.getContext(\"2d\");\nlet time = 0;\n\nfunction render() {\n  ctx.clearRect(0, 0, canvas.width, canvas.height);\n"
-                code += "  ctx.fillStyle = \"$bgColor\";\n  ctx.fillRect(0, 0, canvas.width, canvas.height);\n"
-                layers.forEachIndexed { _, l ->
-                    if (l.type == LayerType.AURORA) {
-                        code += "  // Aurora Math\n  const nW = Math.min(4, ${l.stops.size});\n  ctx.globalCompositeOperation = \"screen\";\n  ctx.globalAlpha = ${l.opacity};\n"
-                        code += "  for(let wi=0; wi<nW; wi++) {\n    const phase = wi*(Math.PI*2/nW) + time*(0.5+wi*0.3);\n    const yBase = canvas.height*(0.15+wi*0.14);\n    ctx.beginPath(); ctx.moveTo(0, canvas.height);\n    for(let x=0; x<=canvas.width; x+=3) {\n      let y = yBase;\n      for(let k=1; k<=5; k++) {\n        y += Math.sin((x/canvas.width)*Math.PI*2*k + phase + k*0.5)*canvas.height*(0.08+0.04/k);\n      }\n      ctx.lineTo(x, y);\n    }\n    ctx.lineTo(canvas.width, canvas.height); ctx.closePath();\n    ctx.fillStyle = \"rgba(255,255,255,0.2)\"; // Set stops here based on layer.stops\n    ctx.fill();\n  }\n"
-                    }
-                }
-                code += "  ctx.globalAlpha = 1.0;\n  ctx.globalCompositeOperation = \"source-over\";\n  time += 0.005;\n  requestAnimationFrame(render);\n}\nrender();"
-            }
             else -> {
-                code = "/* Code generation for $type is not yet implemented. */\n// Check back soon!"
+                code = "/* Code generation for $type is not yet implemented. */"
             }
         }
         return code
