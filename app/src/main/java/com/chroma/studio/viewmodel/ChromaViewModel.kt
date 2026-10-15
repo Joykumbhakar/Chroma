@@ -119,12 +119,34 @@ class ChromaViewModel : ViewModel() {
     var currentWorkCreatedAt by mutableStateOf(System.currentTimeMillis())
         private set
 
+    // Remix metadata — populated when opening a remixed work from Discover
+    var remixedFromPostId by mutableStateOf<String?>(null)
+        private set
+    var remixedFromAuthorId by mutableStateOf<String?>(null)
+        private set
+    var remixedFromAuthorUsername by mutableStateOf<String?>(null)
+        private set
+    var remixedFromAuthorDisplayName by mutableStateOf<String?>(null)
+        private set
+    var remixedFromAuthorAvatar by mutableStateOf<String?>(null)
+        private set
+    var remixedFromAuthorVerified by mutableStateOf(false)
+        private set
+
+    val isRemix: Boolean get() = !remixedFromPostId.isNullOrEmpty()
+
     fun loadFromWork(work: com.chroma.studio.model.ChromaWork, repository: com.chroma.studio.data.WorkRepository) {
         currentWorkId = work.id
         currentWorkName = work.name
         currentWorkDescription = work.description
         currentWorkCreatedAt = work.createdAt
         canvasShape = work.canvasShape
+        remixedFromPostId = work.remixedFromPostId
+        remixedFromAuthorId = work.remixedFromAuthorId
+        remixedFromAuthorUsername = work.remixedFromAuthorUsername
+        remixedFromAuthorDisplayName = work.remixedFromAuthorDisplayName
+        remixedFromAuthorAvatar = work.remixedFromAuthorAvatar
+        remixedFromAuthorVerified = work.remixedFromAuthorVerified
         val loaded = repository.deserializeLayers(work.layersJson)
         if (loaded.isNotEmpty()) {
             layers.clear()
@@ -141,6 +163,8 @@ class ChromaViewModel : ViewModel() {
     }
 
     var isHomeBackgroundMode by mutableStateOf(false)
+    var isPassCardMode by mutableStateOf(false)
+    var passUserProfile by mutableStateOf<com.chroma.studio.model.UserProfile?>(null)
 
     fun saveWork(repository: com.chroma.studio.data.WorkRepository, prefs: android.content.SharedPreferences? = null): com.chroma.studio.model.ChromaWork? {
         val layersJson = repository.serializeLayers(layers.toList())
@@ -152,12 +176,20 @@ class ChromaViewModel : ViewModel() {
                 .apply()
         }
 
+        if (isPassCardMode && prefs != null) {
+            prefs.edit()
+                .putString("custom_pass_card_layers", layersJson)
+                .apply()
+        }
+
         val id = currentWorkId ?: java.util.UUID.randomUUID().toString()
         currentWorkId = id
         
         var nameToSave = currentWorkName
         if (isHomeBackgroundMode && nameToSave == "Untitled") {
             nameToSave = "Custom Background"
+        } else if (isPassCardMode && nameToSave == "Untitled") {
+            nameToSave = "Profile Pass Background"
         }
         
         val work = com.chroma.studio.model.ChromaWork(
@@ -168,7 +200,13 @@ class ChromaViewModel : ViewModel() {
             lastModifiedAt = System.currentTimeMillis(),
             layersJson = layersJson,
             canvasShape = canvasShape,
-            isHomeBackground = isHomeBackgroundMode
+            isHomeBackground = isHomeBackgroundMode,
+            remixedFromPostId = remixedFromPostId,
+            remixedFromAuthorId = remixedFromAuthorId,
+            remixedFromAuthorUsername = remixedFromAuthorUsername,
+            remixedFromAuthorDisplayName = remixedFromAuthorDisplayName,
+            remixedFromAuthorAvatar = remixedFromAuthorAvatar,
+            remixedFromAuthorVerified = remixedFromAuthorVerified
         )
         repository.save(work)
         return work

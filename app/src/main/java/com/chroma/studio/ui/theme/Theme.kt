@@ -9,18 +9,18 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 
-val LocalChromaColors = compositionLocalOf { LightPalette }
+val LocalOscellionColors = compositionLocalOf { LightPalette }
 
 /**
  * body { transition: background-color 0.4s ease; } -> animate every color swap the
  * same way the CSS custom properties cross-fade when `.dark` is toggled on <body>.
  */
 @Composable
-fun ChromaTheme(darkTheme: Boolean, content: @Composable () -> Unit) {
+fun OscellionTheme(darkTheme: Boolean, content: @Composable () -> Unit) {
     val target = if (darkTheme) DarkPalette else LightPalette
     val animSpec = tween<androidx.compose.ui.graphics.Color>(durationMillis = 400)
 
-    val animated = ChromaPalette(
+    val animated = OscellionPalette(
         bg = animateColorAsState(target.bg, animSpec, label = "bg").value,
         gridLine = animateColorAsState(target.gridLine, animSpec, label = "grid").value,
         glassBg = animateColorAsState(target.glassBg, animSpec, label = "glassBg").value,
@@ -37,8 +37,36 @@ fun ChromaTheme(darkTheme: Boolean, content: @Composable () -> Unit) {
         isDark = darkTheme
     )
 
-    CompositionLocalProvider(LocalChromaColors provides animated) {
-        content()
+    val materialColorScheme = if (darkTheme) {
+        androidx.compose.material3.darkColorScheme(
+            primary = animated.primary,
+            onPrimary = animated.onPrimary,
+            background = animated.bg,
+            surface = animated.bg,
+            onBackground = animated.textMain,
+            onSurface = animated.textMain,
+            secondary = animated.primary,
+            tertiary = animated.primary
+        )
+    } else {
+        androidx.compose.material3.lightColorScheme(
+            primary = animated.primary,
+            onPrimary = animated.onPrimary,
+            background = animated.bg,
+            surface = animated.bg,
+            onBackground = animated.textMain,
+            onSurface = animated.textMain,
+            secondary = animated.primary,
+            tertiary = animated.primary
+        )
+    }
+
+    CompositionLocalProvider(LocalOscellionColors provides animated) {
+        androidx.compose.material3.MaterialTheme(
+            colorScheme = materialColorScheme
+        ) {
+            content()
+        }
     }
 }
 

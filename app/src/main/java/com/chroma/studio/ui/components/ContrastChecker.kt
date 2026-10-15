@@ -20,7 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chroma.studio.model.GradientLayer
-import com.chroma.studio.ui.theme.LocalChromaColors
+import com.chroma.studio.ui.theme.LocalOscellionColors
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
@@ -50,7 +50,7 @@ fun ContrastCheckerBadge(
     onAutoFix: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val colors = LocalChromaColors.current
+    val colors = LocalOscellionColors.current
     val top = layers.lastOrNull()?.stops?.firstOrNull()?.color ?: Color.White
     val bottomLayer = layers.firstOrNull()?.stops?.lastOrNull()?.color ?: Color.Black
     val ratio = remember(top, bottomLayer) { contrastRatio(top, bottomLayer) }

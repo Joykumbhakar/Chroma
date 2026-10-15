@@ -1,0 +1,64 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="800dp"
+    android:height="300dp"
+    android:viewportWidth="800"
+    android:viewportHeight="300">
+
+    <!-- Minimalist Slate Gradient -->
+    <path
+        android:pathData="M0,0 L800,0 L800,300 L0,300 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="0"
+                android:startY="0"
+                android:endX="800"
+                android:endY="300">
+                <item android:color="#FF1E293B" android:offset="0.0" />
+                <item android:color="#FF334155" android:offset="0.5" />
+                <item android:color="#FF475569" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Layered Geometric Prisms -->
+    <path
+        android:pathData="M200,0 L450,180 L200,300 Z"
+        android:alpha="0.15">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="200"
+                android:startY="0"
+                android:endX="450"
+                android:endY="300">
+                <item android:color="#FFFFFFFF" android:offset="0.0" />
+                <item android:color="#00FFFFFF" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <path
+        android:pathData="M400,0 L700,240 L350,300 Z"
+        android:alpha="0.12">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="400"
+                android:startY="0"
+                android:endX="700"
+                android:endY="300">
+                <item android:color="#FFFFFFFF" android:offset="0.0" />
+                <item android:color="#00FFFFFF" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Accent Sky Line -->
+    <path
+        android:pathData="M150,0 L650,300"
+        android:strokeWidth="1.5"
+        android:strokeAlpha="0.3"
+        android:strokeColor="#FF38BDF8" />
+</vector>

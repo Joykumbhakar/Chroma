@@ -54,7 +54,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
-import com.chroma.studio.ui.theme.LocalChromaColors
+import com.chroma.studio.ui.theme.LocalOscellionColors
 import android.content.Intent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.drawWithCache
@@ -70,7 +70,7 @@ import com.composables.icons.lucide.Copy
 
 @Composable
 fun DeveloperHandoffModal(vm: ChromaViewModel, workName: String, onClose: () -> Unit) {
-    val colors = LocalChromaColors.current
+    val colors = LocalOscellionColors.current
     var selectedFramework by remember { mutableStateOf("CSS / SCSS") }
     val clipboardManager = LocalClipboardManager.current
     val safeWorkName = if (workName.isBlank()) "Untitled" else workName.replace(" ", "_")
@@ -226,7 +226,7 @@ fun DeveloperHandoffModal(vm: ChromaViewModel, workName: String, onClose: () -> 
                             android.graphics.Canvas(b).drawPicture(picture)
                             b
                         }
-                        val uri = ExportHelper.saveBitmap(context, bitmap, "ChromaStudio_$safeWorkName", true)
+                        val uri = ExportHelper.saveBitmap(context, bitmap, "Oscellion_$safeWorkName", true)
                         if (uri != null) {
                             ToastManager.showToast("Saved to Gallery", "Open", 4000L, onAction = {
                                 val intent = Intent(Intent.ACTION_VIEW).apply {
@@ -247,7 +247,7 @@ fun DeveloperHandoffModal(vm: ChromaViewModel, workName: String, onClose: () -> 
                             android.graphics.Canvas(b).drawPicture(picture)
                             b
                         }
-                        val uri = ExportHelper.saveBitmap(context, bitmap, "ChromaStudio_$safeWorkName", false)
+                        val uri = ExportHelper.saveBitmap(context, bitmap, "Oscellion_$safeWorkName", false)
                         if (uri != null) {
                             ToastManager.showToast("Saved to Gallery", "Open", 4000L, onAction = {
                                 val intent = Intent(Intent.ACTION_VIEW).apply {
@@ -272,7 +272,7 @@ fun DeveloperHandoffModal(vm: ChromaViewModel, workName: String, onClose: () -> 
                             shape = vm.canvasShape,
                             textContent = vm.textPreviewContent
                         )
-                        val uri = ExportHelper.saveText(context, svgCode, "ChromaStudio_$safeWorkName", ".svg")
+                        val uri = ExportHelper.saveText(context, svgCode, "Oscellion_$safeWorkName", ".svg")
                         if (uri != null) {
                             ToastManager.showToast("Saved to Downloads", "Open", 4000L, onAction = {
                                 val intent = Intent(Intent.ACTION_VIEW).apply {
@@ -323,11 +323,11 @@ fun DeveloperHandoffModal(vm: ChromaViewModel, workName: String, onClose: () -> 
                                             
                                             val pngStream = java.io.ByteArrayOutputStream()
                                             bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, pngStream)
-                                            assets.add(ExportHelper.ZipAsset("ChromaStudio_$safeWorkName.png", pngStream.toByteArray()))
+                                            assets.add(ExportHelper.ZipAsset("Oscellion_$safeWorkName.png", pngStream.toByteArray()))
                                             
                                             val jpgStream = java.io.ByteArrayOutputStream()
                                             bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 100, jpgStream)
-                                            assets.add(ExportHelper.ZipAsset("ChromaStudio_$safeWorkName.jpg", jpgStream.toByteArray()))
+                                            assets.add(ExportHelper.ZipAsset("Oscellion_$safeWorkName.jpg", jpgStream.toByteArray()))
                                             
                                             val formats = listOf("SVG", "CSS / SCSS", "Tailwind", "React / Next.js", "SwiftUI")
                                             val extensions = listOf(".svg", ".css", ".tailwind.js", ".jsx", ".swift")
@@ -344,10 +344,10 @@ fun DeveloperHandoffModal(vm: ChromaViewModel, workName: String, onClose: () -> 
                                                     shape = vm.canvasShape,
                                                     textContent = vm.textPreviewContent
                                                 )
-                                                assets.add(ExportHelper.ZipAsset("ChromaStudio_${safeWorkName}${extensions[i]}", code.toByteArray(Charsets.UTF_8)))
+                                                assets.add(ExportHelper.ZipAsset("Oscellion_${safeWorkName}${extensions[i]}", code.toByteArray(Charsets.UTF_8)))
                                             }
                                             
-                                            val uri = ExportHelper.saveZip(context, "ChromaStudio_$safeWorkName", assets)
+                                            val uri = ExportHelper.saveZip(context, "Oscellion_$safeWorkName", assets)
                                             
                                             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                                                 if (uri != null) {
@@ -462,7 +462,7 @@ fun DeveloperHandoffModal(vm: ChromaViewModel, workName: String, onClose: () -> 
 
 @Composable
 private fun ExportButton(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onExport: suspend () -> Unit) {
-    val colors = LocalChromaColors.current
+    val colors = LocalOscellionColors.current
     var isSaving by remember { mutableStateOf(false) }
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
 

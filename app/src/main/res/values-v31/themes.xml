@@ -1,18 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Android 12 Splash Screen theme (used by HomeActivity) -->
-    <style name="Theme.ChromaStudio.Splash" parent="Theme.SplashScreen">
-        <!-- Solid white background -->
-        <item name="windowSplashScreenBackground">#FFFFFF</item>
-        <!-- Static icon — the JD logo in black -->
-        <item name="windowSplashScreenAnimatedIcon">@drawable/static_logo</item>
-        <!-- Keep splash visible briefly -->
-        <item name="windowSplashScreenAnimationDuration">1000</item>
+    <style name="Theme.Oscellion.Splash" parent="Theme.SplashScreen">
+        <!-- Cold-boot dark background matching Variation 3: Android Splash Screen (#0a0a0b) -->
+        <item name="windowSplashScreenBackground">#0a0a0b</item>
+        <!-- Animated icon — Oscellion logo -->
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_animated</item>
         <!-- Theme to apply once splash exits -->
-        <item name="postSplashScreenTheme">@style/Theme.ChromaStudio</item>
+        <item name="postSplashScreenTheme">@style/Theme.Oscellion</item>
 
         <!-- Android 12+ specific attributes -->
-        <item name="android:windowSplashScreenBackground">#FFFFFF</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/static_logo</item>
+        <item name="android:windowSplashScreenBackground">#0a0a0b</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_splash_animated</item>
     </style>
 </resources>

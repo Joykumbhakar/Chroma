@@ -1,0 +1,81 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportWidth="200"
+    android:viewportHeight="200">
+
+    <!-- Base Circle (Apple Space Gray / Dark Cobalt) -->
+    
+
+    <!-- Subtle Blue Ring Glow -->
+    
+
+    <!-- Robot Torso Base -->
+    <path
+        android:pathData="M32,185 C40,152 68,138 100,138 C132,138 160,152 168,185 C148,195 125,200 100,200 C75,200 52,195 32,185 Z"
+        android:fillColor="#E2E8F0"/>
+
+    <!-- Chest Armor Plate / Accent -->
+    <path
+        android:pathData="M80,150 L120,150 L112,180 L88,180 Z"
+        android:fillColor="#0EA5E9"/>
+
+    <!-- Robot Neck Joint -->
+    <path
+        android:pathData="M88,118 L112,118 L112,140 L88,140 Z"
+        android:fillColor="#64748B"/>
+
+    <!-- Antenna -->
+    <path
+        android:pathData="M100,26 L100,42"
+        android:strokeColor="#94A3B8"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"/>
+    <path
+        android:pathData="M100,24m-4,0a4,4 0,1 1,8 0a4,4 0,1 1,-8 0"
+        android:fillColor="#38BDF8"/>
+
+    <!-- Left Ear Sensor -->
+    <path
+        android:pathData="M52,72 L60,72 L60,96 L52,96 Z"
+        android:fillColor="#0EA5E9"/>
+
+    <!-- Right Ear Sensor -->
+    <path
+        android:pathData="M140,72 L148,72 L148,96 L140,96 Z"
+        android:fillColor="#0EA5E9"/>
+
+    <!-- Robot Rounded Head -->
+    <path
+        android:pathData="M60,60 C60,48 70,38 82,38 L118,38 C130,38 140,48 140,60 L140,98 C140,110 130,120 118,120 L82,120 C70,120 60,110 60,98 Z"
+        android:fillColor="#F8FAFC"/>
+
+    <!-- Head Gloss / Border -->
+    <path
+        android:pathData="M62,60 C62,50 71,40 82,40 L118,40 C129,40 138,50 138,60 L138,98 C138,108 129,118 118,118 L82,118 C71,118 62,108 62,98 Z"
+        android:strokeColor="#CBD5E1"
+        android:strokeWidth="1.5"/>
+
+    <!-- Visor Face Screen (Dark Gloss) -->
+    <path
+        android:pathData="M70,62 C70,54 76,48 84,48 L116,48 C124,48 130,54 130,62 L130,86 C130,94 124,100 116,100 L84,100 C76,100 70,94 70,86 Z"
+        android:fillColor="#0F172A"/>
+
+    <!-- Friendly Glowing Cyan Eye Left (Arc / Pill) -->
+    <path
+        android:pathData="M81,68 C81,65 84,65 87,68 L87,80 C87,83 84,83 81,80 Z"
+        android:fillColor="#38BDF8"/>
+
+    <!-- Friendly Glowing Cyan Eye Right (Arc / Pill) -->
+    <path
+        android:pathData="M113,68 C113,65 116,65 119,68 L119,80 C119,83 116,83 113,80 Z"
+        android:fillColor="#38BDF8"/>
+
+    <!-- Gentle Digital Smile -->
+    <path
+        android:pathData="M94,88 C97,91 103,91 106,88"
+        android:strokeColor="#38BDF8"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"/>
+
+</vector>

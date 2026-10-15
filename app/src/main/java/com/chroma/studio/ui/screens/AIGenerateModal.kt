@@ -1,4 +1,8 @@
 package com.chroma.studio.ui.screens
+import com.chroma.studio.ui.components.OscellionLoadingSpinner
+import com.chroma.studio.ui.components.GlassTextButton
+import com.chroma.studio.ui.components.GlassIconButton
+import com.chroma.studio.ui.components.GlassButton
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -27,7 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.chroma.studio.ai.AIGenerator
 import com.chroma.studio.model.GradientLayer
-import com.chroma.studio.ui.theme.LocalChromaColors
+import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.google.firebase.auth.FirebaseAuth
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.*
@@ -42,7 +46,7 @@ fun AIGenerateModal(
     onApplyLayers: (List<GradientLayer>) -> Unit
 ) {
     val context = LocalContext.current
-    val colors = LocalChromaColors.current
+    val colors = LocalOscellionColors.current
     val scope = rememberCoroutineScope()
     
     val auth = FirebaseAuth.getInstance()
@@ -140,7 +144,7 @@ fun AIGenerateModal(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Button(
+                    GlassButton(
                         onClick = {
                             photoPickerLauncher.launch(
                                 androidx.activity.result.PickVisualMediaRequest(
@@ -165,7 +169,7 @@ fun AIGenerateModal(
                                 .clip(RoundedCornerShape(8.dp))
                                 .border(1.dp, colors.glassBorder, RoundedCornerShape(8.dp))
                         )
-                        IconButton(onClick = { 
+                        GlassIconButton(onClick = { 
                             selectedBitmap = null
                             selectedImageUri = null
                         }) {
@@ -174,11 +178,11 @@ fun AIGenerateModal(
                     }
                 }
 
-                Button(
+                GlassButton(
                     onClick = {
                         if (generationsToday >= maxGenerations) {
                             errorMessage = "You have reached your daily limit of $maxGenerations generations."
-                            return@Button
+                            return@GlassButton
                         }
                         
                         isGenerating = true
@@ -215,11 +219,11 @@ fun AIGenerateModal(
                         }
                     },
                     modifier = Modifier.fillMaxWidth().height(48.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = colors.primary, contentColor = colors.bg),
+                    colors = ButtonDefaults.buttonColors(containerColor = colors.primary, contentColor = colors.onPrimary),
                     enabled = !isGenerating && prompt.isNotBlank() && generationsToday < maxGenerations
                 ) {
                     if (isGenerating) {
-                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = colors.bg)
+                        OscellionLoadingSpinner(modifier = Modifier.size(24.dp), color = colors.onPrimary)
                     } else {
                         Icon(Lucide.Sparkles, contentDescription = null, modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(8.dp))
@@ -227,7 +231,7 @@ fun AIGenerateModal(
                     }
                 }
                 
-                TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth(), enabled = !isGenerating) {
+                GlassTextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth(), enabled = !isGenerating) {
                     Text("Cancel", color = colors.textMuted)
                 }
             }

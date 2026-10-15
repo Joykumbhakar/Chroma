@@ -1,0 +1,109 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- Ambient Shadow -->
+    <path
+        android:pathData="M 54,26 C 68,26 80,38 80,54 C 80,70 68,82 54,82 C 40,82 28,70 28,54 C 28,38 40,26 54,26 Z"
+        android:fillColor="#330A84FF" />
+
+    <!-- Frosted Glass Backing Squircle -->
+    <path
+        android:pathData="M 38,27 C 48,26 60,26 70,27 C 78,28 82,32 83,40 C 84,50 84,58 83,68 C 82,76 78,80 70,81 C 60,82 48,82 38,81 C 30,80 26,76 25,68 C 24,58 24,50 25,40 C 26,32 30,28 38,27 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="25"
+                android:startY="26"
+                android:endX="83"
+                android:endY="82">
+                <item android:color="#24FFFFFF" android:offset="0.0" />
+                <item android:color="#0DFFFFFF" android:offset="0.4" />
+                <item android:color="#140A84FF" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Glass Rim -->
+    <path
+        android:pathData="M 38,27 C 48,26 60,26 70,27 C 78,28 82,32 83,40 C 84,50 84,58 83,68 C 82,76 78,80 70,81 C 60,82 48,82 38,81 C 30,80 26,76 25,68 C 24,58 24,50 25,40 C 26,32 30,28 38,27 Z"
+        android:strokeWidth="0.75">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:type="linear"
+                android:startX="54"
+                android:startY="26"
+                android:endX="54"
+                android:endY="82">
+                <item android:color="#80FFFFFF" android:offset="0.0" />
+                <item android:color="#20FFFFFF" android:offset="0.5" />
+                <item android:color="#10007AFF" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Apple Chromatic Aperture Ribbon -->
+    <path
+        android:pathData="M 68,36 C 75,43 76,55 71,64 C 66,73 54,77 44,73 C 35,69 31,58 34,48 C 36,41 42,35 50,33"
+        android:strokeWidth="7"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:type="linear"
+                android:startX="32"
+                android:startY="32"
+                android:endX="76"
+                android:endY="76">
+                <item android:color="#00F0FF" android:offset="0.0" />
+                <item android:color="#007AFF" android:offset="0.35" />
+                <item android:color="#7857FF" android:offset="0.7" />
+                <item android:color="#FF2D55" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Secondary Harmonic Arc -->
+    <path
+        android:pathData="M 40,42 C 37,49 38,58 43,64 C 48,70 57,72 64,68 C 70,64 73,56 70,49 C 68,43 62,39 55,39"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:type="linear"
+                android:startX="72"
+                android:startY="40"
+                android:endX="38"
+                android:endY="68">
+                <item android:color="#FF375F" android:offset="0.0" />
+                <item android:color="#FF9F0A" android:offset="0.55" />
+                <item android:color="#FFD60A" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Luminous Center Node -->
+    <path
+        android:pathData="M 54,50 C 56.2,50 58,51.8 58,54 C 58,56.2 56.2,58 54,58 C 51.8,58 50,56.2 50,54 C 50,51.8 51.8,50 54,50 Z"
+        android:fillColor="#FFFFFF" />
+
+    <!-- Specular Highlight Flare -->
+    <path
+        android:pathData="M 36,33 C 44,29 64,29 72,33 C 65,37 43,37 36,33 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="54"
+                android:startY="29"
+                android:endX="54"
+                android:endY="37">
+                <item android:color="#B3FFFFFF" android:offset="0.0" />
+                <item android:color="#00FFFFFF" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+</vector>

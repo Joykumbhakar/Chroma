@@ -1,0 +1,114 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportWidth="200"
+    android:viewportHeight="200">
+
+    <!-- Base Circle (Golden Amber / Warm Caramel) -->
+    
+
+    <!-- Subtle Glow Arc -->
+    
+
+    <!-- Background Glow Accent -->
+    
+
+    <!-- Big Wavy Hair Volume Behind Shoulders -->
+    <path
+        android:pathData="M46,70 C40,105 48,150 68,175 C80,160 84,138 84,115 L116,115 C116,138 120,160 132,175 C152,150 160,105 154,70 Z"
+        android:fillColor="#3F1D0B"/>
+
+    <!-- Shoulders & Upper Body / Emerald Top -->
+    <path
+        android:pathData="M24,185 C32,154 64,142 100,142 C136,142 168,154 176,185 C156,195 129,200 100,200 C71,200 44,195 24,185 Z"
+        android:fillColor="#065F46"/>
+
+    <!-- Gold Chain / Pendant Necklace -->
+    <path
+        android:pathData="M80,142 C85,158 115,158 120,142"
+        android:strokeColor="#FBBF24"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round"/>
+    <path
+        android:pathData="M100,154m-2.5,0a2.5,2.5 0,1 1,5 0a2.5,2.5 0,1 1,-5 0"
+        android:fillColor="#FBBF24"/>
+
+    <!-- Neck -->
+    <path
+        android:pathData="M86,108 L86,142 C90.5,145 95,146.5 100,146.5 C105,146.5 109.5,145 114,142 L114,108 Z"
+        android:fillColor="#FCD5B5"/>
+
+    <!-- Neck Shadow -->
+    <path
+        android:pathData="M86,108 C91,116 109,116 114,108 L114,116 C109,122 91,122 86,116 Z"
+        android:fillColor="#E8A982"/>
+
+    <!-- Head / Face -->
+    <path
+        android:pathData="M68,82 C68,58 82,44 100,44 C118,44 132,58 132,82 C132,106 118,124 100,124 C82,124 68,106 68,82 Z"
+        android:fillColor="#FEE4CC"/>
+
+    <!-- Left Ear with Gold Hoop -->
+    <path
+        android:pathData="M64,78 C64,74 66.5,71 69,71 L69,89 C66.5,89 64,86 64,82 Z"
+        android:fillColor="#FCD5B5"/>
+    <path
+        android:pathData="M64,86m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0"
+        android:strokeColor="#FBBF24"
+        android:strokeWidth="1.6"/>
+
+    <!-- Right Ear with Gold Hoop -->
+    <path
+        android:pathData="M136,78 C136,74 133.5,71 131,71 L131,89 C133.5,89 136,86 136,82 Z"
+        android:fillColor="#FCD5B5"/>
+    <path
+        android:pathData="M136,86m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0"
+        android:strokeColor="#FBBF24"
+        android:strokeWidth="1.6"/>
+
+    <!-- Big Wavy Hair Framing Curls -->
+    <path
+        android:pathData="M52,72 C50,42 70,28 100,28 C130,28 150,42 148,72 C146,90 140,118 136,134 C130,120 128,100 128,86 C128,64 114,52 100,52 C86,52 72,64 72,86 C72,100 70,120 64,134 C60,118 54,90 52,72 Z"
+        android:fillColor="#54260E"/>
+
+    <!-- Front Waves & Highlights -->
+    <path
+        android:pathData="M62,60 C72,44 86,38 100,38 C116,38 132,46 138,58 C126,48 114,46 100,50 C86,54 74,68 62,60 Z"
+        android:fillColor="#78350F"/>
+
+    <!-- Eyebrows -->
+    <path
+        android:pathData="M78,71 C82,68 87,68 91,70"
+        android:strokeColor="#3F1D0B"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round"/>
+    <path
+        android:pathData="M109,70 C113,68 118,68 122,71"
+        android:strokeColor="#3F1D0B"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round"/>
+
+    <!-- Eyes -->
+    <path
+        android:pathData="M84.5,78m-2.8,0a2.8,2.8 0,1 1,5.6 0a2.8,2.8 0,1 1,-5.6 0"
+        android:fillColor="#1C2129"/>
+    <path
+        android:pathData="M115.5,78m-2.8,0a2.8,2.8 0,1 1,5.6 0a2.8,2.8 0,1 1,-5.6 0"
+        android:fillColor="#1C2129"/>
+
+    <!-- Warm Cheek Blush -->
+    <path
+        android:pathData="M76,89m-4.5,0a4.5,3 0,1 1,9 0a4.5,3 0,1 1,-9 0"
+        android:fillColor="#25F59E0B"/>
+    <path
+        android:pathData="M124,89m-4.5,0a4.5,3 0,1 1,9 0a4.5,3 0,1 1,-9 0"
+        android:fillColor="#25F59E0B"/>
+
+    <!-- Coral Lips / Smile -->
+    <path
+        android:pathData="M92,98 C96,103 104,103 108,98"
+        android:strokeColor="#EA580C"
+        android:strokeWidth="2.4"
+        android:strokeLineCap="round"/>
+
+</vector>

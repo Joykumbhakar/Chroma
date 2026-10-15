@@ -1,25 +1,7 @@
 package com.chroma.studio.ui.components
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.chroma.studio.ui.theme.LocalChromaColors
-import kotlinx.coroutines.delay
+import androidx.compose.runtime.Composable
+import com.composables.icons.lucide.*
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 
@@ -31,71 +13,38 @@ object ToastManager {
         val durationMs: Long = 3000L
     )
 
-    private val _toasts = MutableSharedFlow<ToastData>(extraBufferCapacity = 1)
+    private val _toasts = MutableSharedFlow<ToastData>(extraBufferCapacity = 5)
     val toasts = _toasts.asSharedFlow()
 
     fun showToast(message: String, actionLabel: String? = null, durationMs: Long = 3000L, onAction: (() -> Unit)? = null) {
+        val icon = when {
+            message.contains("copied", ignoreCase = true) -> Lucide.Copy
+            message.contains("deleted", ignoreCase = true) || message.contains("removed", ignoreCase = true) -> Lucide.Trash2
+            message.contains("error", ignoreCase = true) || message.contains("failed", ignoreCase = true) -> Lucide.Info
+            message.contains("saved", ignoreCase = true) || message.contains("updated", ignoreCase = true) || message.contains("success", ignoreCase = true) -> Lucide.Check
+            message.contains("like", ignoreCase = true) -> Lucide.Heart
+            message.contains("follow", ignoreCase = true) -> Lucide.UserCheck
+            message.contains("banner", ignoreCase = true) -> Lucide.Image
+            message.contains("avatar", ignoreCase = true) -> Lucide.User
+            else -> Lucide.Sparkles
+        }
+
         _toasts.tryEmit(ToastData(message, actionLabel, onAction, durationMs))
+
+        DynamicIslandManager.showStatus(
+            title = message,
+            icon = icon,
+            actionLabel = actionLabel,
+            durationMs = durationMs,
+            onAction = onAction
+        )
     }
 }
 
+/**
+ * ChromaToastHost is replaced by IosDynamicIslandHost for unified Apple iOS Dynamic Island notifications.
+ */
 @Composable
 fun ChromaToastHost() {
-    val colors = LocalChromaColors.current
-    var currentToast by remember { mutableStateOf<ToastManager.ToastData?>(null) }
-    
-    LaunchedEffect(Unit) {
-        ToastManager.toasts.collect { toast ->
-            currentToast = toast
-            delay(toast.durationMs)
-            if (currentToast == toast) {
-                currentToast = null
-            }
-        }
-    }
-
-    AnimatedVisibility(
-        visible = currentToast != null,
-        enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(), // From top
-        exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
-        modifier = Modifier.fillMaxSize()
-    ) {
-        Box(
-            modifier = Modifier.fillMaxSize().padding(top = 16.dp).statusBarsPadding(), 
-            contentAlignment = Alignment.TopCenter
-        ) {
-            currentToast?.let { toast ->
-                Row(
-                    modifier = Modifier
-                        .padding(horizontal = 16.dp)
-                        .clip(RoundedCornerShape(50))
-                        .background(Color.White)
-                        .glossyBorder(RoundedCornerShape(50), colors)
-                        .padding(horizontal = 20.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = toast.message,
-                        color = Color.Black,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                    
-                    if (toast.actionLabel != null) {
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Text(
-                            text = toast.actionLabel,
-                            color = colors.primary,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.clickable {
-                                toast.onAction?.invoke()
-                                currentToast = null
-                            }
-                        )
-                    }
-                }
-            }
-        }
-    }
+    // Replaced by IosDynamicIslandHost for all toast and status notifications
 }

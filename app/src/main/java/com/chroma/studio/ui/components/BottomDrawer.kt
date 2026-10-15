@@ -42,7 +42,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.Color
-import com.chroma.studio.ui.theme.LocalChromaColors
+import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.chroma.studio.viewmodel.ChromaViewModel
 import com.chroma.studio.viewmodel.DrawerLevel
 import com.chroma.studio.viewmodel.MobileTab
@@ -54,7 +54,7 @@ import com.chroma.studio.viewmodel.MobileTab
  */
 @Composable
 fun BottomDrawer(vm: ChromaViewModel, modifier: Modifier = Modifier) {
-    val colors = LocalChromaColors.current
+    val colors = LocalOscellionColors.current
     val targetHeight = when (vm.drawerLevel) {
         DrawerLevel.COLLAPSED -> 96.dp
         DrawerLevel.MID -> 340.dp
@@ -67,11 +67,14 @@ fun BottomDrawer(vm: ChromaViewModel, modifier: Modifier = Modifier) {
     )
     var dragAccum by remember { mutableStateOf(0f) }
 
-    GlassPanel(
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(animatedHeight),
-        cornerRadius = 24
+            .height(animatedHeight)
+            .shadow(elevation = 16.dp, shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp), ambientColor = Color(0x14000000), spotColor = Color(0x14000000))
+            .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+            .background(Color.White)
+            .border(0.5.dp, Color(0xFFE5E7EB), RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
     ) {
         Column(Modifier.fillMaxWidth()) {
             // .drawer-handle — 36x4 grab bar, drag up/down cycles COLLAPSED/MID/FULL
@@ -115,7 +118,7 @@ fun BottomDrawer(vm: ChromaViewModel, modifier: Modifier = Modifier) {
                     Modifier
                         .size(width = 36.dp, height = 4.dp)
                         .clip(RoundedCornerShape(50))
-                        .background(colors.textMuted.copy(alpha = 0.4f))
+                        .background(Color(0xFFD1D5DB))
                 )
             }
 

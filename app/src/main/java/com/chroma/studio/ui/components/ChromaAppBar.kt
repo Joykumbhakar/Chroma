@@ -25,7 +25,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.chroma.studio.ui.theme.LocalChromaColors
+import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.composables.icons.lucide.*
 
 /**
@@ -44,9 +44,11 @@ fun ChromaAppBar(
     onRedo: () -> Unit = {},
     onExport: () -> Unit = {},
     onSave: () -> Unit = {},
+    isRemix: Boolean = false,
+    onPublish: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val colors = LocalChromaColors.current
+    val colors = LocalOscellionColors.current
 
     GlassPanel(
         modifier = modifier
@@ -63,9 +65,42 @@ fun ChromaAppBar(
             Row(
                 modifier = Modifier.align(Alignment.CenterStart),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Start
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 IconGhostButton(icon = Lucide.Save, contentDesc = "Save", onClick = onSave)
+                
+                // Show Publish button only when editing a remixed work
+                if (isRemix) {
+                    androidx.compose.foundation.layout.Row(
+                        modifier = Modifier
+                            .clip(androidx.compose.foundation.shape.RoundedCornerShape(50))
+                            .background(
+                                androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                    listOf(colors.primary, Color(0xFFEC4899))
+                                )
+                            )
+                            .clickable(
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() }
+                            ) { onPublish() }
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Icon(
+                            imageVector = Lucide.Globe,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            text = "Publish Remix",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
             }
 
             // ---- CENTER TITLE ----
@@ -153,7 +188,7 @@ private fun IconGhostButton(
     disabled: Boolean = false,
     onClick: () -> Unit
 ) {
-    val colors = LocalChromaColors.current
+    val colors = LocalOscellionColors.current
     Box(
         modifier = Modifier
             .size(36.dp)

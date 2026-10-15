@@ -1,0 +1,84 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportWidth="200"
+    android:viewportHeight="200">
+
+    <!-- Base Circle (Emerald / Forest Teal) -->
+    
+
+    <!-- Subtle Glow Arc -->
+    
+
+    <!-- Background Accent -->
+    
+
+    <!-- Denim / Charcoal Jacket -->
+    <path
+        android:pathData="M24,185 C32,152 64,138 100,138 C136,138 168,152 176,185 C156,195 129,200 100,200 C71,200 44,195 24,185 Z"
+        android:fillColor="#1F2937"/>
+
+    <!-- Mustard Shirt Collar -->
+    <path
+        android:pathData="M78,142 L100,172 L122,142 C115,145 108,146 100,146 C92,146 85,145 78,142 Z"
+        android:fillColor="#F59E0B"/>
+
+    <!-- Neck -->
+    <path
+        android:pathData="M84,110 L84,142 C89,145 94.5,147 100,147 C105.5,147 111,145 116,142 L116,110 Z"
+        android:fillColor="#F6C5A2"/>
+
+    <!-- Head / Face -->
+    <path
+        android:pathData="M66,80 C66,56 81.2,42 100,42 C118.8,42 134,56 134,80 C134,104 118.8,124 100,124 C81.2,124 66,104 66,80 Z"
+        android:fillColor="#FCD5B5"/>
+
+    <!-- Ears -->
+    <path
+        android:pathData="M62,76 C62,71 65,68 67,68 L67,90 C65,90 62,87 62,82 Z"
+        android:fillColor="#F6C5A2"/>
+    <path
+        android:pathData="M138,76 C138,71 135,68 133,68 L133,90 C135,90 138,87 138,82 Z"
+        android:fillColor="#F6C5A2"/>
+
+    <!-- Stylish Full Beard & Mustache -->
+    <path
+        android:pathData="M66,88 C66,116 78,134 100,134 C122,134 134,116 134,88 L126,88 C126,108 116,122 100,122 C84,122 74,108 74,88 Z"
+        android:fillColor="#292524"/>
+
+    <!-- Mustache -->
+    <path
+        android:pathData="M84,94 C92,94 98,99 100,102 C102,99 108,94 116,94 C120,94 122,96 118,100 C112,106 104,106 100,105 C96,106 88,106 82,100 C78,96 80,94 84,94 Z"
+        android:fillColor="#292524"/>
+
+    <!-- Beanie Cap (Burnt Orange/Terracotta) -->
+    <path
+        android:pathData="M60,66 C58,34 76,22 100,22 C124,22 142,34 140,66 L140,68 C130,70 70,70 60,68 Z"
+        android:fillColor="#EA580C"/>
+    <path
+        android:pathData="M58,64 L142,64 L142,70 L58,70 Z"
+        android:fillColor="#C2410C"/>
+
+    <!-- Round Wire Glasses -->
+    <path
+        android:pathData="M84.5,76.5m-9.5,0a9.5,9.5 0,1 1,19 0a9.5,9.5 0,1 1,-19 0"
+        android:strokeColor="#78716C"
+        android:strokeWidth="2"/>
+    <path
+        android:pathData="M115.5,76.5m-9.5,0a9.5,9.5 0,1 1,19 0a9.5,9.5 0,1 1,-19 0"
+        android:strokeColor="#78716C"
+        android:strokeWidth="2"/>
+    <path
+        android:pathData="M94,76.5 L106,76.5"
+        android:strokeColor="#78716C"
+        android:strokeWidth="2"/>
+
+    <!-- Eyes Behind Glasses -->
+    <path
+        android:pathData="M84.5,76.5m-2.5,0a2.5,2.5 0,1 1,5 0a2.5,2.5 0,1 1,-5 0"
+        android:fillColor="#1C2129"/>
+    <path
+        android:pathData="M115.5,76.5m-2.5,0a2.5,2.5 0,1 1,5 0a2.5,2.5 0,1 1,-5 0"
+        android:fillColor="#1C2129"/>
+
+</vector>

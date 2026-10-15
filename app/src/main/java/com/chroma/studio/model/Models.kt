@@ -5,7 +5,266 @@ import androidx.compose.ui.graphics.Color
 import java.util.UUID
 
 // ──────────────────────────────────────────────────────
-// Persisted work (saved in SharedPreferences)
+// Social Features / Firestore Models
+// ──────────────────────────────────────────────────────
+data class UserProfile(
+    val uid: String = "",
+    val username: String = "",
+    val displayName: String = "",
+    val bio: String = "",
+    val avatarUrl: String = "",
+    val publicKey: String = "",
+    val socialLinks: Map<String, String> = emptyMap(),
+    val dob: Long? = null,
+    val followersCount: Int = 0,
+    val followingCount: Int = 0,
+    val role: String = "",
+    val location: String = "",
+    val officeLocation: String = "",
+    val homeLocation: String = "",
+    val countryLocation: String = "",
+    val verified: Boolean = false,
+    val online: Boolean = false,
+    val showLocation: Boolean = false,
+    val lastSeen: Long? = null,
+    val bannerUrl: String = "",
+    val bannerWorkId: String? = null,
+    val createdAt: Any? = null,
+    val dateOfBirth: Any? = null,
+    val interests: List<String> = emptyList(),
+    val gender: String = "",
+    val agreedToTermsAt: Long? = null,
+    
+    // Account Center Preferences
+    @get:com.google.firebase.firestore.PropertyName("privateAccount")
+    @set:com.google.firebase.firestore.PropertyName("privateAccount")
+    var isPrivateAccount: Boolean = false,
+    val allowTagging: Boolean = true,
+    val showOnlineStatus: Boolean = true,
+    val pushNotificationsEnabled: Boolean = true,
+    val emailNotificationsEnabled: Boolean = true,
+    val quietModeEnabled: Boolean = false,
+    val unrecognizedLoginsEnabled: Boolean = false,
+    val contentTags: List<String> = emptyList(),
+    val dataVisibility: Map<String, String> = emptyMap()
+) {
+    @get:com.google.firebase.firestore.Exclude
+    val createdAtAsLong: Long?
+        get() = when (createdAt) {
+            is Long -> createdAt
+            is Double -> createdAt.toLong()
+            is com.google.firebase.Timestamp -> createdAt.seconds * 1000 + createdAt.nanoseconds / 1000000
+            is java.util.Date -> createdAt.time
+            else -> null
+        }
+
+    @get:com.google.firebase.firestore.Exclude
+    val dateOfBirthAsLong: Long?
+        get() = when (dateOfBirth) {
+            is Long -> dateOfBirth
+            is Double -> dateOfBirth.toLong()
+            is com.google.firebase.Timestamp -> dateOfBirth.seconds * 1000 + dateOfBirth.nanoseconds / 1000000
+            is java.util.Date -> dateOfBirth.time
+            else -> null
+        }
+
+}
+
+data class DiscoverPost(
+    val id: String = "",
+    val creatorId: String = "",
+    val authorUsername: String = "",
+    val authorDisplayName: String = "",
+    val authorAvatarUrl: String = "",
+    val authorVerified: Boolean = false,
+    val title: String = "",
+    val description: String = "",
+    val aspectRatio: String = "4:3",
+    val likesCount: Int = 0,
+    val remixCount: Int = 0,
+    val remixedBy: List<String> = emptyList(),
+    val downloadCount: Int = 0,
+    val downloadedBy: List<String> = emptyList(),
+    val shareCount: Int = 0,
+    val sharedBy: List<String> = emptyList(),
+    val saveCount: Int = 0,
+    val savedBy: List<String> = emptyList(),
+    val jsonUrl: String = "",
+    val imageUrl: String? = null,
+    val postType: String = "work", // "work" for JSON, "image" for standard posts
+    val tags: List<String> = emptyList(),
+    val mentions: List<String> = emptyList(),
+    val timestamp: Long = System.currentTimeMillis(),
+    
+    // Privacy & Visibility Controls for Action Counters
+    val hideLikesCount: Boolean = false,
+    val hideSharesCount: Boolean = false,
+    val hideRemixesCount: Boolean = false,
+    val hideDownloadsCount: Boolean = false,
+    val hideSavesCount: Boolean = false,
+    
+    // Remix Metadata
+    val remixedFromPostId: String? = null,
+    val remixedFromAuthorId: String? = null,
+    val remixedFromAuthorUsername: String? = null,
+    val remixedFromAuthorDisplayName: String? = null,
+    val remixedFromAuthorAvatar: String? = null,
+    val remixedFromAuthorVerified: Boolean = false,
+    
+    // Archive state
+    @get:com.google.firebase.firestore.PropertyName("archived")
+    @set:com.google.firebase.firestore.PropertyName("archived")
+    var isArchived: Boolean = false
+)
+
+data class ChatRoom(
+    val id: String = "",
+    val name: String? = null,
+    @get:com.google.firebase.firestore.PropertyName("isGroup")
+    @set:com.google.firebase.firestore.PropertyName("isGroup")
+    var isGroup: Boolean = false,
+    val avatarUrl: String? = null,
+    val participants: List<String> = emptyList(),
+    val admins: List<String> = emptyList(),
+    val createdBy: String? = null,
+    val groupDescription: String? = null,
+    val lastMessage: String = "",
+    val lastSender: String? = null,
+    val lastMessageTime: Long = 0L,
+    val unreadCount: Map<String, Int> = emptyMap(),
+    val favoritedBy: List<String> = emptyList(),
+    val deletedBy: List<String> = emptyList(),
+    // Per-user deletion timestamp: uid -> timestamp when they deleted the chat
+    // Messages before this timestamp are hidden for that user
+    val deletedAt: Map<String, Long> = emptyMap()
+)
+
+data class ChatMessage(
+    val id: String = UUID.randomUUID().toString(),
+    val senderId: String = "",
+    val text: String = "",
+    val timestamp: Long = System.currentTimeMillis(),
+    val isRead: Boolean = false,
+    val imageUrl: String? = null,
+    val mediaUrl: String? = null,
+    val mediaType: String? = null, // e.g., "video/mp4", "audio/mpeg", "image/jpeg"
+    val workId: String? = null,
+    @get:com.google.firebase.firestore.Exclude
+    val isPending: Boolean = false,
+    @get:com.google.firebase.firestore.Exclude
+    val isError: Boolean = false,
+    val messageType: String = "text", // "text", "image", "video", "audio", "system"
+    val iv: String = "", // Initialization Vector for AES
+    val encryptedAesKeys: Map<String, String> = emptyMap(), // participantId -> RSA Encrypted AES Key
+    val reactions: Map<String, String> = emptyMap(), // Maps userId -> emoji (e.g. "❤️", "👍")
+    val durationSeconds: Int? = null, // For audio voice notes
+    val replyToMessageId: String? = null
+)
+
+@kotlinx.serialization.Serializable
+data class EncryptedPayload(
+    val encryptedText: String,
+    val iv: String,
+    val encryptedAesKeys: Map<String, String>,
+    val imageUrl: String? = null
+)
+
+data class Story(
+    val id: String = UUID.randomUUID().toString(),
+    val userId: String = "",
+    val mediaUrl: String = "",
+    val textContent: String = "",
+    val textFormat: String = "{}", // JSON of text formatting
+    val backgroundColor: String = "",
+    val audienceType: String = "public", // "public", "followers", "custom"
+    val customAudienceIds: List<String> = emptyList(),
+    val timestamp: Long = System.currentTimeMillis(),
+    val expiresAt: Long = System.currentTimeMillis() + 86400000, // 24h
+    val views: Int = 0,
+    val likes: Int = 0,
+    val shares: Int = 0,
+    val viewedBy: List<String> = emptyList(),
+    val likedBy: List<String> = emptyList()
+)
+
+data class UserStoryGroup(
+    val userId: String = "",
+    val userProfile: UserProfile = UserProfile(),
+    val stories: List<Story> = emptyList(),
+    val allSeen: Boolean = false
+)
+
+// ──────────────────────────────────────────────────────
+// Flash Feed — Short video / photo posts (≤30 s)
+// ──────────────────────────────────────────────────────
+
+enum class FlashMediaType { VIDEO, PHOTO, SLIDESHOW }
+
+data class FlashComment(
+    val id: String = UUID.randomUUID().toString(),
+    val videoId: String = "",
+    val userId: String = "",
+    val username: String = "",
+    val displayName: String = "",
+    val avatarUrl: String = "",
+    val verified: Boolean = false,
+    val text: String = "",
+    val timestamp: Long = System.currentTimeMillis(),
+    val likesCount: Int = 0,
+    val likedBy: List<String> = emptyList(),
+    val replyToCommentId: String? = null,
+    val replyFlashVideoUrl: String? = null
+)
+
+data class FlashVideo(
+    val id: String = "",
+    val creatorId: String = "",
+    val authorUsername: String = "",
+    val authorDisplayName: String = "",
+    val authorAvatarUrl: String = "",
+    val authorVerified: Boolean = false,
+    val videoUrl: String = "",      // Cloudinary optimised URL
+    val thumbnailUrl: String = "",  // Cloudinary image URL
+    val caption: String = "",
+    val hashtags: List<String> = emptyList(),
+    val mentions: List<String> = emptyList(),
+    val likesCount: Int = 0,
+    val likedBy: List<String> = emptyList(),
+    val commentCount: Int = 0,
+    val remixCount: Int = 0,
+    val remixedBy: List<String> = emptyList(),
+    val shareCount: Int = 0,
+    val sharedBy: List<String> = emptyList(),
+    val saveCount: Int = 0,
+    val savedBy: List<String> = emptyList(),
+    val duration: Long = 0L,       // ms, capped at 30 000
+    val remixedFromPostId: String? = null,
+    val remixedFromAuthorUsername: String? = null,
+    val timestamp: Long = System.currentTimeMillis(),
+    @get:com.google.firebase.firestore.PropertyName("archived")
+    @set:com.google.firebase.firestore.PropertyName("archived")
+    var isArchived: Boolean = false
+)
+
+/** Locally persisted draft before publishing a Flash. */
+data class FlashDraft(
+    val id: String = UUID.randomUUID().toString(),
+    val localUri: String = "",           // content:// URI string
+    val mediaType: FlashMediaType = FlashMediaType.VIDEO,
+    val thumbnailUri: String = "",
+    val caption: String = "",
+    val trimStartMs: Long = 0L,
+    val trimEndMs: Long = 0L,
+    val filterName: String = "None",
+    val brightness: Float = 0f,
+    val contrast: Float = 1f,
+    val saturation: Float = 1f,
+    val hue: Float = 0f,
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+// ──────────────────────────────────────────────────────
+// Persisted work (saved locally in SharedPreferences)
 // ──────────────────────────────────────────────────────
 data class ChromaWork(
     val id: String = UUID.randomUUID().toString(),
@@ -16,9 +275,16 @@ data class ChromaWork(
     val layersJson: String = "[]",  // Gson-serialized List<GradientLayer>
     val canvasShape: String = "rounded",
     val isHomeBackground: Boolean = false,
-    val isDeleted: Boolean = false
+    val isDeleted: Boolean = false,
+    
+    // Remix Metadata
+    val remixedFromPostId: String? = null,
+    val remixedFromAuthorId: String? = null,
+    val remixedFromAuthorUsername: String? = null,
+    val remixedFromAuthorDisplayName: String? = null,
+    val remixedFromAuthorAvatar: String? = null,
+    val remixedFromAuthorVerified: Boolean = false
 )
-
 enum class LayerType(val label: String, val icon: String) {
     LINEAR("Linear", "ph-arrow-up-right"),
     RADIAL("Radial", "ph-circle"),

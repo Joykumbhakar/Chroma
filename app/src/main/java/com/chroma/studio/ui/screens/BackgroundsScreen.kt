@@ -1,4 +1,5 @@
 package com.chroma.studio.ui.screens
+import com.chroma.studio.ui.components.GlassIconButton
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -17,7 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chroma.studio.model.ChromaWork
 import com.chroma.studio.ui.components.CanvasPreview
-import com.chroma.studio.ui.theme.LocalChromaColors
+import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.composables.icons.lucide.ChevronLeft
 import com.composables.icons.lucide.Lucide
 import androidx.compose.ui.draw.clip
@@ -32,21 +33,16 @@ fun BackgroundsScreen(
     onBack: () -> Unit,
     onSetAsBackground: (ChromaWork) -> Unit
 ) {
-    val colors = LocalChromaColors.current
+    val colors = LocalOscellionColors.current
     val backgroundWorks = remember(works) { works.filter { it.isHomeBackground } }
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Backgrounds", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = colors.textMain) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Lucide.ChevronLeft, "Back", tint = colors.textMain)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = colors.bg
-                )
+            com.chroma.studio.ui.components.ChromaScreenHeader(
+                title = "Oscellion",
+                badgeText = "Backgrounds",
+                showBackButton = true,
+                onBack = onBack
             )
         },
         containerColor = colors.bg
@@ -87,7 +83,7 @@ private fun BackgroundCard(
     repository: com.chroma.studio.data.WorkRepository,
     onClick: () -> Unit
 ) {
-    val colors = LocalChromaColors.current
+    val colors = LocalOscellionColors.current
     
     Column(
         modifier = Modifier

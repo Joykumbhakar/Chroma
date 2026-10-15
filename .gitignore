@@ -1,13 +1,10 @@
 *.iml
 .gradle
 /local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
+/.idea/
 .DS_Store
+.kotlin/
+*.bak
 /build
 /captures
 .externalNativeBuild
@@ -15,3 +12,22 @@
 local.properties
 
 google-services.json
+serviceAccountKey.json
+firebase_backup*.json
+
+# Scratch files and temporary test scripts
+*.py
+*.txt
+temp_*/
+temp_*.kt
+test.kt
+build_log*.txt
+build_output*.txt
+*.zip
+node_modules/
+package-lock.json
+package.json
+result.json
+export_firebase.js
+wipe_and_init_database.js
+skills-lock.json

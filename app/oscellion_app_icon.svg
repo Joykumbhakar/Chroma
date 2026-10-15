@@ -1,0 +1,78 @@
+<svg viewBox="0 0 512 512" width="512" height="512" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <!-- Icon Background Gradient (Pure White to Silver Ice) -->
+        <linearGradient id="icon-light-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#ffffff" stop-opacity="1" />
+            <stop offset="100%" stop-color="#e2e4ec" stop-opacity="1" />
+        </linearGradient>
+
+        <!-- Base Fill Gradients -->
+        <linearGradient id="obsidian-base" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#4A4A52" />
+            <stop offset="50%" stop-color="#2C2C30" />
+            <stop offset="100%" stop-color="#1D1D1F" />
+        </linearGradient>
+
+        <linearGradient id="blue-base" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#8BAAFF" />
+            <stop offset="50%" stop-color="#0A84FF" />
+            <stop offset="100%" stop-color="#0051D5" />
+        </linearGradient>
+
+        <!-- Glass Border Gradients (Top Shine) -->
+        <linearGradient id="border-shine-obsidian" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="rgba(255, 255, 255, 0.7)" />
+            <stop offset="30%" stop-color="rgba(255, 255, 255, 0.2)" />
+            <stop offset="100%" stop-color="rgba(255, 255, 255, 0)" />
+        </linearGradient>
+
+        <linearGradient id="border-shine-blue" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="rgba(255, 255, 255, 0.9)" />
+            <stop offset="30%" stop-color="rgba(255, 255, 255, 0.3)" />
+            <stop offset="100%" stop-color="rgba(255, 255, 255, 0)" />
+        </linearGradient>
+
+        <!-- Harmonic Wireframe Ring Gradient (subtle context) -->
+        <linearGradient id="wire-grad-blue" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="rgba(10, 132, 255, 0)" />
+            <stop offset="50%" stop-color="rgba(10, 132, 255, 0.25)" />
+            <stop offset="100%" stop-color="rgba(10, 132, 255, 0)" />
+        </linearGradient>
+    </defs>
+
+    <!-- 1. Icon Background (Squircle with 4px Pure White Rim) -->
+    <rect x="0" y="0" width="512" height="512" rx="112" fill="url(#icon-light-grad)" stroke="#ffffff" stroke-width="4" />
+
+    <!-- 2. Harmonic Wireframe Orbital Rings (Optional subtle background elements) -->
+    <g opacity="0.5">
+        <ellipse cx="276" cy="256" rx="130" ry="190" stroke="url(#wire-grad-blue)" stroke-width="1" fill="none" />
+        <ellipse cx="276" cy="256" rx="190" ry="110" stroke="url(#wire-grad-blue)" stroke-width="1" fill="none" />
+    </g>
+
+    <!-- 3. Oscellion Core Signal (Clean VoiceGuard Style) -->
+    <g>
+        <!-- ── 1. OUTER ARC (Obsidian) ── -->
+        <!-- Sharp Glass Border (Slightly thicker) -->
+        <path d="M 276 116 C 198.68 116 136 178.68 136 256 C 136 333.32 198.68 396 276 396" 
+              fill="none" stroke="url(#border-shine-obsidian)" stroke-width="42" stroke-linecap="round" />
+        <!-- Flat Gradient Inner Fill -->
+        <path d="M 276 116 C 198.68 116 136 178.68 136 256 C 136 333.32 198.68 396 276 396" 
+              fill="none" stroke="url(#obsidian-base)" stroke-width="38" stroke-linecap="round" />
+
+        <!-- ── 2. MIDDLE ARC (Electric Blue) ── -->
+        <!-- Sharp Glass Border -->
+        <path d="M 276 168 C 324.60 168 364 207.40 364 256 C 364 304.60 324.60 344 276 344" 
+              fill="none" stroke="url(#border-shine-blue)" stroke-width="42" stroke-linecap="round" />
+        <!-- Flat Gradient Inner Fill -->
+        <path d="M 276 168 C 324.60 168 364 207.40 364 256 C 364 304.60 324.60 344 276 344" 
+              fill="none" stroke="url(#blue-base)" stroke-width="38" stroke-linecap="round" />
+
+        <!-- ── 3. INNER ARC (Focus Blue) ── -->
+        <!-- Sharp Glass Border -->
+        <path d="M 276 221 C 295.33 221 311 236.67 311 256 C 311 275.33 295.33 291 276 291" 
+              fill="none" stroke="url(#border-shine-blue)" stroke-width="42" stroke-linecap="round" />
+        <!-- Flat Gradient Inner Fill -->
+        <path d="M 276 221 C 295.33 221 311 236.67 311 256 C 311 275.33 295.33 291 276 291" 
+              fill="none" stroke="url(#blue-base)" stroke-width="38" stroke-linecap="round" />
+    </g>
+</svg>

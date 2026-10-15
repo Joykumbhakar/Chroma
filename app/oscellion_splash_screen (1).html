@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oscellion Splash Screen</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            background-color: #ffffff;
+            color: #1d1d1f;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .splash-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 1.5rem;
+        }
+
+        .svg-crisp {
+            shape-rendering: geometricPrecision;
+        }
+
+        .apple-fade-in {
+            opacity: 0;
+            transform: scale(0.96);
+            animation: appleEntry 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        @keyframes appleEntry {
+            0% {
+                opacity: 0;
+                transform: scale(0.96) translateY(8px);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        .silver-gradient-text {
+            background: linear-gradient(180deg, #1d1d1f 0%, #434345 50%, #86868b 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+    </style>
+</head>
+<body>
+
+    <main class="splash-container apple-fade-in">
+        
+        <!-- Core Signal Lockup -->
+        <svg class="w-24 h-24 svg-crisp" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <path d="M 50 10 A 40 40 0 0 0 50 90" fill="none" stroke="#1d1d1f" stroke-width="8" stroke-linecap="round"/>
+            <path d="M 50 25 A 25 25 0 0 1 50 75" fill="none" stroke="#3b82f6" stroke-width="8" stroke-linecap="round"/>
+            <path d="M 50 40 A 10 10 0 0 1 50 60" fill="none" stroke="#3b82f6" stroke-width="8" stroke-linecap="round"/>
+        </svg>
+
+        <!-- Brand Text -->
+        <h1 class="text-3xl font-semibold tracking-tight silver-gradient-text">Oscellion<span class="text-blue-500">.</span></h1>
+
+    </main>
+
+</body>
+</html>

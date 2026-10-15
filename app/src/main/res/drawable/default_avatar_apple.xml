@@ -1,0 +1,32 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="128dp"
+    android:height="128dp"
+    android:viewportWidth="128"
+    android:viewportHeight="128">
+
+    <!-- 1. Background Circle (Radius 56, Center 64,64) -->
+    
+
+    <!-- 2. Silhouette Clipped to Circle (Radius 56, Center 64,64) -->
+    <group>
+        <clip-path
+            android:pathData="M 64,8 A 56,56 0 1,1 63.99,8 Z" />
+
+        <!-- Head: cx=64, cy=46.7, r=18.2 -->
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M 64,28.5 A 18.2,18.2 0 1,1 63.99,28.5 Z" />
+
+        <!-- Body: Shoulders / Continuous Squircle Curvature -->
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M 22.5,120 C 22.5,90.1 39.7,76.6 64,76.6 C 88.3,76.6 105.5,90.1 105.5,120 Z" />
+    </group>
+
+    <!-- 3. Outer Blue Border (Radius 60, Center 64,64, Stroke 3) -->
+    
+
+    <!-- 4. Top Glossy Shine on Border -->
+    
+</vector>

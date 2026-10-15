@@ -9,6 +9,15 @@ import androidx.compose.ui.graphics.ShaderBrush
 
 object ShaderEngines {
 
+    @get:RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    val postFxShaderInstance by lazy { android.graphics.RuntimeShader(POST_FX_SHADER) }
+
+    @get:RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    val meshShaderInstance by lazy { android.graphics.RuntimeShader(MESH_SHADER) }
+
+    @get:RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    val auroraShaderInstance by lazy { android.graphics.RuntimeShader(AURORA_SHADER) }
+
     const val POST_FX_SHADER = """
         uniform float2 resolution;
         uniform float time;

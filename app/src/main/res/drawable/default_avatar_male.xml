@@ -1,0 +1,97 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportWidth="200"
+    android:viewportHeight="200">
+
+    <!-- Background Base Circle -->
+    
+
+    <!-- Subtle Background Gradient/Glow Shape -->
+    
+
+    <!-- Soft Glow Accent in Background -->
+    
+
+    <!-- Shoulders & Upper Body / Jacket (Male) -->
+    <path
+        android:pathData="M24,185 C32,152 64,138 100,138 C136,138 168,152 176,185 C156,195 129,200 100,200 C71,200 44,195 24,185 Z"
+        android:fillColor="#1E2B45"/>
+
+    <!-- Shirt / Collar Detail -->
+    <path
+        android:pathData="M78,142 L100,172 L122,142 C115,145 108,146 100,146 C92,146 85,145 78,142 Z"
+        android:fillColor="#FFFFFF"/>
+
+    <!-- Inner Collar Accent -->
+    <path
+        android:pathData="M92,146 L100,166 L108,146 C105.5,146.5 102.8,147 100,147 C97.2,147 94.5,146.5 92,146 Z"
+        android:fillColor="#E2E8F0"/>
+
+    <!-- Neck -->
+    <path
+        android:pathData="M84,110 L84,142 C89,145 94.5,147 100,147 C105.5,147 111,145 116,142 L116,110 Z"
+        android:fillColor="#F6C5A2"/>
+
+    <!-- Neck Shadow -->
+    <path
+        android:pathData="M84,110 C90,118 110,118 116,110 L116,120 C110,126 90,126 84,120 Z"
+        android:fillColor="#E5A882"/>
+
+    <!-- Head / Face -->
+    <path
+        android:pathData="M66,80 C66,56 81.2,42 100,42 C118.8,42 134,56 134,80 C134,104 118.8,124 100,124 C81.2,124 66,104 66,80 Z"
+        android:fillColor="#FCD5B5"/>
+
+    <!-- Left Ear -->
+    <path
+        android:pathData="M62,76 C62,71 65,68 67,68 L67,90 C65,90 62,87 62,82 Z"
+        android:fillColor="#F6C5A2"/>
+
+    <!-- Right Ear -->
+    <path
+        android:pathData="M138,76 C138,71 135,68 133,68 L133,90 C135,90 138,87 138,82 Z"
+        android:fillColor="#F6C5A2"/>
+
+    <!-- Male Hair - Modern Side-Part / Quiff -->
+    <path
+        android:pathData="M64,68 C64,48 76,32 100,32 C118,32 136,40 137,56 C138,62 134,68 130,68 C126,68 122,60 114,56 C104,51 86,54 74,66 C70,70 66,74 64,68 Z"
+        android:fillColor="#242B35"/>
+
+    <!-- Hair Texture / Volume Layer -->
+    <path
+        android:pathData="M68,54 C74,42 88,35 106,34 C124,33 138,42 136,54 C132,44 118,38 102,39 C88,40 76,46 68,54 Z"
+        android:fillColor="#363F4D"/>
+
+    <!-- Left Eyebrow -->
+    <path
+        android:pathData="M78,69 C82,67 87,67 91,69"
+        android:strokeColor="#242B35"
+        android:strokeWidth="2.8"
+        android:strokeLineCap="round"/>
+
+    <!-- Right Eyebrow -->
+    <path
+        android:pathData="M109,69 C113,67 118,67 122,69"
+        android:strokeColor="#242B35"
+        android:strokeWidth="2.8"
+        android:strokeLineCap="round"/>
+
+    <!-- Left Eye -->
+    <path
+        android:pathData="M84.5,77.5m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0"
+        android:fillColor="#1C2129"/>
+
+    <!-- Right Eye -->
+    <path
+        android:pathData="M115.5,77.5m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0"
+        android:fillColor="#1C2129"/>
+
+    <!-- Gentle Smile -->
+    <path
+        android:pathData="M92,97 C96,102 104,102 108,97"
+        android:strokeColor="#D48666"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round"/>
+
+</vector>

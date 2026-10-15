@@ -12,10 +12,15 @@
 #   public *;
 #}
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# Keep model classes for Gson and Firebase Firestore serialization/deserialization
+-keep class com.chroma.studio.model.** { *; }
+-keep class com.chroma.studio.data.CommunityWork { *; }
+-keep class com.chroma.studio.data.UserProfile { *; }
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Keep Compose attributes and related
+-keepattributes *Annotation*
+-keepattributes Signature
+-keepattributes EnclosingMethod
+
+# Keep line numbers for debugging
+-keepattributes SourceFile,LineNumberTable

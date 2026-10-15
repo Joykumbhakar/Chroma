@@ -1,0 +1,127 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportWidth="200"
+    android:viewportHeight="200">
+
+    <!-- Background Base Circle (Warm Rose/Violet) -->
+    
+
+    <!-- Subtle Top Glow Gradient Arc -->
+    
+
+    <!-- Soft Glow Accent in Background -->
+    
+
+    <!-- Back Hair Flow Behind Shoulders -->
+    <path
+        android:pathData="M52,78 C48,110 56,155 72,175 C82,158 84,136 84,115 L116,115 C116,136 118,158 128,175 C144,155 152,110 148,78 Z"
+        android:fillColor="#3D2314"/>
+
+    <!-- Shoulders & Upper Body / Blouse (Female) -->
+    <path
+        android:pathData="M24,185 C32,154 64,142 100,142 C136,142 168,154 176,185 C156,195 129,200 100,200 C71,200 44,195 24,185 Z"
+        android:fillColor="#4A1D4E"/>
+
+    <!-- Curved Elegant Neckline Accent -->
+    <path
+        android:pathData="M78,142 C84,158 116,158 122,142 C115,145 108,146 100,146 C92,146 85,145 78,142 Z"
+        android:fillColor="#FDF2F8"/>
+
+    <!-- Neck -->
+    <path
+        android:pathData="M86,108 L86,142 C90.5,145 95,146.5 100,146.5 C105,146.5 109.5,145 114,142 L114,108 Z"
+        android:fillColor="#FCD5B5"/>
+
+    <!-- Neck Shadow -->
+    <path
+        android:pathData="M86,108 C91,116 109,116 114,108 L114,116 C109,122 91,122 86,116 Z"
+        android:fillColor="#F6C5A2"/>
+
+    <!-- Head / Face -->
+    <path
+        android:pathData="M68,82 C68,58 82,44 100,44 C118,44 132,58 132,82 C132,106 118,124 100,124 C82,124 68,106 68,82 Z"
+        android:fillColor="#FEE4CC"/>
+
+    <!-- Left Ear -->
+    <path
+        android:pathData="M64,78 C64,74 66.5,71 69,71 L69,89 C66.5,89 64,86 64,82 Z"
+        android:fillColor="#FCD5B5"/>
+
+    <!-- Right Ear -->
+    <path
+        android:pathData="M136,78 C136,74 133.5,71 131,71 L131,89 C133.5,89 136,86 136,82 Z"
+        android:fillColor="#FCD5B5"/>
+
+    <!-- Left Earring Pearl -->
+    <path
+        android:pathData="M65.5,89m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0"
+        android:fillColor="#FFFFFF"/>
+
+    <!-- Right Earring Pearl -->
+    <path
+        android:pathData="M134.5,89m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0"
+        android:fillColor="#FFFFFF"/>
+
+    <!-- Female Hair - Top Volume and Side Locks -->
+    <path
+        android:pathData="M56,76 C54,48 72,32 100,32 C128,32 146,48 144,76 C143,90 137,114 134,128 C130,118 128,100 128,88 C128,66 114,54 100,54 C86,54 72,66 72,88 C72,100 70,118 66,128 C63,114 57,90 56,76 Z"
+        android:fillColor="#4A2C17"/>
+
+    <!-- Front Bangs / Hair Swirl -->
+    <path
+        android:pathData="M66,62 C74,48 88,42 102,42 C116,42 130,48 134,60 C122,50 110,48 98,52 C84,56 74,68 66,62 Z"
+        android:fillColor="#5C381E"/>
+
+    <!-- Left Eyebrow (Arched & Soft) -->
+    <path
+        android:pathData="M78,71 C82,68 87,68 91,70"
+        android:strokeColor="#3D2314"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round"/>
+
+    <!-- Right Eyebrow (Arched & Soft) -->
+    <path
+        android:pathData="M109,70 C113,68 118,68 122,71"
+        android:strokeColor="#3D2314"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round"/>
+
+    <!-- Left Eye with Subtle Eyelash Wing -->
+    <path
+        android:pathData="M84.5,78m-2.8,0a2.8,2.8 0,1 1,5.6 0a2.8,2.8 0,1 1,-5.6 0"
+        android:fillColor="#1C2129"/>
+    <path
+        android:pathData="M87,76 C89,74.5 91,75 91,75"
+        android:strokeColor="#1C2129"
+        android:strokeWidth="1.2"
+        android:strokeLineCap="round"/>
+
+    <!-- Right Eye with Subtle Eyelash Wing -->
+    <path
+        android:pathData="M115.5,78m-2.8,0a2.8,2.8 0,1 1,5.6 0a2.8,2.8 0,1 1,-5.6 0"
+        android:fillColor="#1C2129"/>
+    <path
+        android:pathData="M118,76 C120,74.5 122,75 122,75"
+        android:strokeColor="#1C2129"
+        android:strokeWidth="1.2"
+        android:strokeLineCap="round"/>
+
+    <!-- Soft Cheek Blush Left -->
+    <path
+        android:pathData="M76,89m-4.5,0a4.5,3 0,1 1,9 0a4.5,3 0,1 1,-9 0"
+        android:fillColor="#25F43F5E"/>
+
+    <!-- Soft Cheek Blush Right -->
+    <path
+        android:pathData="M124,89m-4.5,0a4.5,3 0,1 1,9 0a4.5,3 0,1 1,-9 0"
+        android:fillColor="#25F43F5E"/>
+
+    <!-- Rosy Lips / Smile -->
+    <path
+        android:pathData="M92,98 C96,103 104,103 108,98"
+        android:strokeColor="#E11D48"
+        android:strokeWidth="2.4"
+        android:strokeLineCap="round"/>
+
+</vector>

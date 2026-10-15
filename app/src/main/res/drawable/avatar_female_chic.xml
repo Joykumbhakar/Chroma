@@ -1,0 +1,83 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportWidth="200"
+    android:viewportHeight="200">
+
+    <!-- Base Circle (Purple / Violet) -->
+    
+
+    <!-- Glow Arc -->
+    
+
+    <!-- Background Accent -->
+    
+
+    <!-- Turtleneck Top (Midnight Black) -->
+    <path
+        android:pathData="M24,185 C32,154 64,142 100,142 C136,142 168,154 176,185 C156,195 129,200 100,200 C71,200 44,195 24,185 Z"
+        android:fillColor="#18181B"/>
+
+    <!-- Turtleneck Collar Band -->
+    <path
+        android:pathData="M80,128 L120,128 L120,148 L80,148 Z"
+        android:fillColor="#27272A"/>
+
+    <!-- Neck -->
+    <path
+        android:pathData="M86,108 L86,132 C90.5,134 95,135 100,135 C105,135 109.5,134 114,132 L114,108 Z"
+        android:fillColor="#FCD5B5"/>
+
+    <!-- Head / Face -->
+    <path
+        android:pathData="M68,82 C68,58 82,44 100,44 C118,44 132,58 132,82 C132,106 118,124 100,124 C82,124 68,106 68,82 Z"
+        android:fillColor="#FEE4CC"/>
+
+    <!-- Ears -->
+    <path
+        android:pathData="M64,78 C64,74 66.5,71 69,71 L69,89 C66.5,89 64,86 64,82 Z"
+        android:fillColor="#FCD5B5"/>
+    <path
+        android:pathData="M136,78 C136,74 133.5,71 131,71 L131,89 C133.5,89 136,86 136,82 Z"
+        android:fillColor="#FCD5B5"/>
+
+    <!-- Chic Angle Bob Cut (Sharp Asymmetrical) -->
+    <path
+        android:pathData="M56,76 C54,46 72,30 100,30 C128,30 146,46 144,76 C144,95 140,118 138,124 C132,106 130,90 130,78 C130,56 116,48 100,48 C84,48 70,56 70,78 C70,90 68,106 62,124 C60,118 56,95 56,76 Z"
+        android:fillColor="#18181B"/>
+
+    <!-- Sharp Front Fringe -->
+    <path
+        android:pathData="M64,66 C74,52 86,46 102,46 C118,46 130,52 136,66 C124,56 112,54 100,56 C88,58 76,68 64,66 Z"
+        android:fillColor="#27272A"/>
+
+    <!-- Modern Cat-Eye Glasses -->
+    <path
+        android:pathData="M70,72 L96,72 C96,80 92,86 83,86 C74,86 70,80 70,72 Z"
+        android:strokeColor="#C084FC"
+        android:strokeWidth="2.2"/>
+    <path
+        android:pathData="M104,72 L130,72 C130,80 126,86 117,86 C108,86 104,80 104,72 Z"
+        android:strokeColor="#C084FC"
+        android:strokeWidth="2.2"/>
+    <path
+        android:pathData="M96,74 L104,74"
+        android:strokeColor="#C084FC"
+        android:strokeWidth="2.2"/>
+
+    <!-- Eyes Behind Glasses -->
+    <path
+        android:pathData="M83,78m-2.5,0a2.5,2.5 0,1 1,5 0a2.5,2.5 0,1 1,-5 0"
+        android:fillColor="#1C2129"/>
+    <path
+        android:pathData="M117,78m-2.5,0a2.5,2.5 0,1 1,5 0a2.5,2.5 0,1 1,-5 0"
+        android:fillColor="#1C2129"/>
+
+    <!-- Crimson Matte Lipstick -->
+    <path
+        android:pathData="M92,98 C96,103 104,103 108,98"
+        android:strokeColor="#E11D48"
+        android:strokeWidth="2.6"
+        android:strokeLineCap="round"/>
+
+</vector>

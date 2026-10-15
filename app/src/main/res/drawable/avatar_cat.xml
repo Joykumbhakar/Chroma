@@ -1,0 +1,116 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportWidth="200"
+    android:viewportHeight="200">
+
+    <!-- Base Circle (Coral / Peach Glow) -->
+    
+
+    <!-- Subtle Glow Arc -->
+    
+
+    <!-- Background Accent -->
+    
+
+    <!-- Kitty Shoulders / Body -->
+    <path
+        android:pathData="M32,185 C40,154 68,142 100,142 C132,142 160,154 168,185 C148,195 125,200 100,200 C75,200 52,195 32,185 Z"
+        android:fillColor="#FFE4E6"/>
+
+    <!-- Bowtie / Bell Collar (Gold) -->
+    <path
+        android:pathData="M80,146 L120,146"
+        android:strokeColor="#F43F5E"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"/>
+    <path
+        android:pathData="M100,152m-4,0a4,4 0,1 1,8 0a4,4 0,1 1,-4 0"
+        android:fillColor="#FBBF24"/>
+
+    <!-- Left Cat Ear Outer -->
+    <path
+        android:pathData="M60,78 L52,40 L90,54 Z"
+        android:fillColor="#FFF1F2"/>
+
+    <!-- Left Cat Ear Inner -->
+    <path
+        android:pathData="M63,72 L58,48 L84,58 Z"
+        android:fillColor="#FDA4AF"/>
+
+    <!-- Right Cat Ear Outer -->
+    <path
+        android:pathData="M140,78 L148,40 L110,54 Z"
+        android:fillColor="#FFF1F2"/>
+
+    <!-- Right Cat Ear Inner -->
+    <path
+        android:pathData="M137,72 L142,48 L116,58 Z"
+        android:fillColor="#FDA4AF"/>
+
+    <!-- Cat Head Base (Chubby & Cute) -->
+    <path
+        android:pathData="M54,92 C54,64 74,48 100,48 C126,48 146,64 146,92 C146,120 126,134 100,134 C74,134 54,120 54,92 Z"
+        android:fillColor="#FFF1F2"/>
+
+    <!-- Left Eye (Big Cute Shiny Anime Eye) -->
+    <path
+        android:pathData="M80,86m-6,0a6,6 0,1 1,12 0a6,6 0,1 1,-12 0"
+        android:fillColor="#1E293B"/>
+    <path
+        android:pathData="M78,83m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0"
+        android:fillColor="#FFFFFF"/>
+
+    <!-- Right Eye (Big Cute Shiny Anime Eye) -->
+    <path
+        android:pathData="M120,86m-6,0a6,6 0,1 1,12 0a6,6 0,1 1,-12 0"
+        android:fillColor="#1E293B"/>
+    <path
+        android:pathData="M118,83m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0"
+        android:fillColor="#FFFFFF"/>
+
+    <!-- Little Pink Nose -->
+    <path
+        android:pathData="M96,96 L104,96 L100,101 Z"
+        android:fillColor="#F43F5E"/>
+
+    <!-- Cute Kitty Mouth (:3) -->
+    <path
+        android:pathData="M94,105 C96,108 99,108 100,105 C101,108 104,108 106,105"
+        android:strokeColor="#1E293B"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"/>
+
+    <!-- Left Whiskers -->
+    <path
+        android:pathData="M52,94 L68,96"
+        android:strokeColor="#94A3B8"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"/>
+    <path
+        android:pathData="M50,104 L68,102"
+        android:strokeColor="#94A3B8"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"/>
+
+    <!-- Right Whiskers -->
+    <path
+        android:pathData="M148,94 L132,96"
+        android:strokeColor="#94A3B8"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"/>
+    <path
+        android:pathData="M150,104 L132,102"
+        android:strokeColor="#94A3B8"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"/>
+
+    <!-- Soft Cheek Blush -->
+    <path
+        android:pathData="M66,98m-5,0a5,3.5 0,1 1,10 0a5,3.5 0,1 1,-10 0"
+        android:fillColor="#30F43F5E"/>
+    <path
+        android:pathData="M134,98m-5,0a5,3.5 0,1 1,10 0a5,3.5 0,1 1,-10 0"
+        android:fillColor="#30F43F5E"/>
+
+</vector>

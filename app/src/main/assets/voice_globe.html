@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en" class="light theme-original-blue">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Voice Recording Globe</title>
+    
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        :root {
+            --ios-blue: #0078FE;
+            --ios-blue-hover: #005ecb;
+            --ios-blue-subtle: rgba(0, 120, 254, 0.12);
+            --card-bg: rgba(255, 255, 255, 0.96);
+            --text-dark: #0f172a;
+            --text-muted: #64748b;
+            --border-subtle: rgba(15, 23, 42, 0.12);
+            
+            --orb-core: radial-gradient(circle at 30% 25%, #e0f2fe 0%, #60a5fa 38%, #0078FE 74%, #1e3a8a 100%);
+            --blob-c1: radial-gradient(50% 50% at center, #60a5fa, #0078FE);
+            --blob-c2: radial-gradient(50% 50% at center, #ffffff, #bae6fd);
+            --blob-c3: radial-gradient(50% 50% at center, #38bdf8, transparent);
+            --blob-c4: radial-gradient(50% 50% at center, #1d4ed8, #1e3a8a);
+            --wave-color: rgba(0, 120, 254, 0.38);
+        }
+
+        html.dark {
+            --card-bg: rgba(28, 28, 30, 0.96);
+            --text-dark: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-subtle: rgba(255, 255, 255, 0.12);
+            
+            --orb-core: radial-gradient(circle at 30% 25%, #38bdf8 0%, #0284c7 35%, #1d4ed8 72%, #091536 100%);
+            --blob-c1: radial-gradient(50% 50% at center, #38bdf8, #0284c7);
+            --blob-c2: radial-gradient(50% 50% at center, #ffffff, #7dd3fc);
+            --blob-c3: radial-gradient(50% 50% at center, #60a5fa, transparent);
+            --blob-c4: radial-gradient(50% 50% at center, #1e3a8a, #091536);
+            --wave-color: rgba(56, 189, 248, 0.45);
+        }
+
+        /* ── VARIATION 2: COSMIC AMETHYST ───────────────────────── */
+        html.theme-chromatic-3d {
+            --ios-blue: #8B5CF6;
+            --ios-blue-hover: #7c3aed;
+            --ios-blue-subtle: rgba(139, 92, 246, 0.14);
+            --orb-core: radial-gradient(circle at 30% 25%, #f3e8ff 0%, #c084fc 38%, #8b5cf6 74%, #3b0764 100%);
+            --blob-c1: radial-gradient(50% 50% at center, #c084fc, #8b5cf6);
+            --blob-c2: radial-gradient(50% 50% at center, #ffffff, #f3e8ff);
+            --blob-c3: radial-gradient(50% 50% at center, #e879f9, transparent);
+            --blob-c4: radial-gradient(50% 50% at center, #581c87, #3b0764);
+            --wave-color: rgba(139, 92, 246, 0.40);
+        }
+        html.dark.theme-chromatic-3d {
+            --orb-core: radial-gradient(circle at 30% 25%, #d8b4fe 0%, #9333ea 35%, #6b21a8 72%, #2e1065 100%);
+            --blob-c1: radial-gradient(50% 50% at center, #a855f7, #6b21a8);
+            --blob-c4: radial-gradient(50% 50% at center, #3b0764, #1e0538);
+        }
+
+        /* ── VARIATION 3: AURORA NEON PINK ─────────────────────── */
+        html.theme-aurora-pulse {
+            --ios-blue: #EC4899;
+            --ios-blue-hover: #db2777;
+            --ios-blue-subtle: rgba(236, 72, 153, 0.14);
+            --orb-core: radial-gradient(circle at 30% 25%, #fce7f3 0%, #f472b6 38%, #ec4899 74%, #831843 100%);
+            --blob-c1: radial-gradient(50% 50% at center, #f472b6, #ec4899);
+            --blob-c2: radial-gradient(50% 50% at center, #ffffff, #fce7f3);
+            --blob-c3: radial-gradient(50% 50% at center, #fb7185, transparent);
+            --blob-c4: radial-gradient(50% 50% at center, #9d174d, #700733);
+            --wave-color: rgba(236, 72, 153, 0.42);
+        }
+        html.dark.theme-aurora-pulse {
+            --orb-core: radial-gradient(circle at 30% 25%, #f472b6 0%, #db2777 35%, #9d174d 72%, #500724 100%);
+            --blob-c1: radial-gradient(50% 50% at center, #ec4899, #be185d);
+            --blob-c4: radial-gradient(50% 50% at center, #700733, #38031a);
+        }
+
+        /* ── VARIATION 4: CYBER EMERALD ────────────────────────── */
+        html.theme-cyber-grid {
+            --ios-blue: #10B981;
+            --ios-blue-hover: #059669;
+            --ios-blue-subtle: rgba(16, 185, 129, 0.14);
+            --orb-core: radial-gradient(circle at 30% 25%, #ccfbf1 0%, #34d399 38%, #10b981 74%, #064e3b 100%);
+            --blob-c1: radial-gradient(50% 50% at center, #34d399, #10b981);
+            --blob-c2: radial-gradient(50% 50% at center, #ffffff, #d1fae5);
+            --blob-c3: radial-gradient(50% 50% at center, #22d3ee, transparent);
+            --blob-c4: radial-gradient(50% 50% at center, #065f46, #064e3b);
+            --wave-color: rgba(16, 185, 129, 0.40);
+        }
+        html.dark.theme-cyber-grid {
+            --orb-core: radial-gradient(circle at 30% 25%, #2dd4bf 0%, #059669 35%, #047857 72%, #022c22 100%);
+            --blob-c1: radial-gradient(50% 50% at center, #10b981, #047857);
+            --blob-c4: radial-gradient(50% 50% at center, #064e3b, #011f18);
+        }
+
+        /* ── VARIATION 5: SOLAR FLAME ──────────────────────────── */
+        html.theme-solar-flare {
+            --ios-blue: #EA580C;
+            --ios-blue-hover: #c2410c;
+            --ios-blue-subtle: rgba(234, 88, 12, 0.14);
+            --orb-core: radial-gradient(circle at 30% 25%, #fef3c7 0%, #fbbf24 38%, #ea580c 74%, #7c2d12 100%);
+            --blob-c1: radial-gradient(50% 50% at center, #fbbf24, #ea580c);
+            --blob-c2: radial-gradient(50% 50% at center, #ffffff, #fef08a);
+            --blob-c3: radial-gradient(50% 50% at center, #f87171, transparent);
+            --blob-c4: radial-gradient(50% 50% at center, #9a3412, #7c2d12);
+            --wave-color: rgba(234, 88, 12, 0.42);
+        }
+        html.dark.theme-solar-flare {
+            --orb-core: radial-gradient(circle at 30% 25%, #fb923c 0%, #ea580c 35%, #9a3412 72%, #431407 100%);
+            --blob-c1: radial-gradient(50% 50% at center, #f97316, #c2410c);
+            --blob-c4: radial-gradient(50% 50% at center, #7c2d12, #290802);
+        }
+
+        /* ── VARIATION 6: OBSIDIAN QUANTUM ─────────────────────── */
+        html.theme-dark-matter {
+            --ios-blue: #6366F1;
+            --ios-blue-hover: #4f46e5;
+            --ios-blue-subtle: rgba(99, 102, 241, 0.14);
+            --orb-core: radial-gradient(circle at 30% 25%, #e0e7ff 0%, #818cf8 38%, #4f46e5 74%, #1e1b4b 100%);
+            --blob-c1: radial-gradient(50% 50% at center, #818cf8, #4f46e5);
+            --blob-c2: radial-gradient(50% 50% at center, #ffffff, #e0e7ff);
+            --blob-c3: radial-gradient(50% 50% at center, #a5b4fc, transparent);
+            --blob-c4: radial-gradient(50% 50% at center, #1e1b4b, #0f172a);
+            --wave-color: rgba(99, 102, 241, 0.40);
+        }
+        html.dark.theme-dark-matter {
+            --orb-core: radial-gradient(circle at 30% 25%, #818cf8 0%, #4338ca 35%, #1e1b4b 72%, #020617 100%);
+            --blob-c1: radial-gradient(50% 50% at center, #6366f1, #312e81);
+            --blob-c4: radial-gradient(50% 50% at center, #0f172a, #020617);
+        }
+
+        /* ── VARIATION 7: SAKURA BLOSSOM ───────────────────────── */
+        html.theme-rose-quartz {
+            --ios-blue: #F43F5E;
+            --ios-blue-hover: #e11d48;
+            --ios-blue-subtle: rgba(244, 63, 94, 0.14);
+            --orb-core: radial-gradient(circle at 30% 25%, #ffe4e6 0%, #fda4af 38%, #f43f5e 74%, #881337 100%);
+            --blob-c1: radial-gradient(50% 50% at center, #fda4af, #f43f5e);
+            --blob-c2: radial-gradient(50% 50% at center, #ffffff, #fff1f2);
+            --blob-c3: radial-gradient(50% 50% at center, #fbcfe8, transparent);
+            --blob-c4: radial-gradient(50% 50% at center, #9f1239, #881337);
+            --wave-color: rgba(244, 63, 94, 0.42);
+        }
+        html.dark.theme-rose-quartz {
+            --orb-core: radial-gradient(circle at 30% 25%, #fda4af 0%, #e11d48 35%, #9f1239 72%, #4c0519 100%);
+            --blob-c1: radial-gradient(50% 50% at center, #f43f5e, #be123c);
+            --blob-c4: radial-gradient(50% 50% at center, #881337, #3b0210);
+        }
+
+        /* ── VARIATION 8: AQUAMARINE PRISM ─────────────────────── */
+        html.theme-electric-cyan {
+            --ios-blue: #06B6D4;
+            --ios-blue-hover: #0891b2;
+            --ios-blue-subtle: rgba(6, 182, 212, 0.14);
+            --orb-core: radial-gradient(circle at 30% 25%, #cffafe 0%, #22d3ee 38%, #06b6d4 74%, #164e63 100%);
+            --blob-c1: radial-gradient(50% 50% at center, #22d3ee, #06b6d4);
+            --blob-c2: radial-gradient(50% 50% at center, #ffffff, #ecfeff);
+            --blob-c3: radial-gradient(50% 50% at center, #67e8f9, transparent);
+            --blob-c4: radial-gradient(50% 50% at center, #155e75, #164e63);
+            --wave-color: rgba(6, 182, 212, 0.42);
+        }
+        html.dark.theme-electric-cyan {
+            --orb-core: radial-gradient(circle at 30% 25%, #38bdf8 0%, #0891b2 35%, #0e7490 72%, #083344 100%);
+            --blob-c1: radial-gradient(50% 50% at center, #06b6d4, #0e7490);
+            --blob-c4: radial-gradient(50% 50% at center, #164e63, #041d27);
+        }
+
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: transparent;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* 3D Liquid Voice Recording Card */
+        .voice-card {
+            width: 304px;
+            height: 312px;
+            border-radius: 2.5rem;
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-subtle);
+            box-shadow: none !important;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1.25rem;
+            user-select: none;
+            transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        /* Top Header (No pill background) */
+        .voice-header-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: transparent;
+            padding: 4px 0;
+            border: none;
+            box-shadow: none !important;
+            z-index: 10;
+        }
+
+        .voice-rec-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background-color: var(--ios-blue);
+            box-shadow: none !important;
+            animation: recBlink 1.2s ease-in-out infinite;
+        }
+
+        @keyframes recBlink {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.35; transform: scale(0.82); }
+        }
+
+        .voice-status-title {
+            font-size: 15px;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            color: transparent;
+            background-image: linear-gradient(-40deg, var(--text-dark) 0% 35%, var(--ios-blue) 45%, #ffffff 50%, var(--ios-blue) 55%, var(--text-dark) 65% 100%);
+            background-clip: text;
+            -webkit-background-clip: text;
+            background-size: 800px;
+            animation: text-light 3.8s linear infinite;
+        }
+
+        @keyframes text-light {
+            0% { background-position: 0px; }
+            100% { background-position: 800px; }
+        }
+
+        .voice-timer-badge {
+            font-size: 13px;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+            color: var(--ios-blue);
+            background: transparent;
+            padding: 0 2px;
+            border-radius: 0;
+        }
+
+        /* 3D Liquid Globe AI Orb Container */
+        .ai {
+            --s: 240px;
+            --p: calc(var(--s) / 4);
+            width: var(--s);
+            aspect-ratio: 1;
+            padding: var(--p);
+            display: grid;
+            place-items: center;
+            position: absolute;
+            left: 50%;
+            top: 48%;
+            transform: translate(-50%, -50%);
+            animation: circle1 5s ease-in-out infinite;
+            pointer-events: none;
+        }
+
+        /* Outer Expanding Radar Waves */
+        .ai::before, .ai::after {
+            content: "";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 52%;
+            height: 52%;
+            border-radius: 50%;
+            border: 1.5px solid var(--wave-color);
+            box-shadow: none !important;
+            transform: translate(-50%, -50%);
+            animation: wave 2.1s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+        }
+        .ai::after {
+            animation-delay: 0.7s;
+        }
+
+        @keyframes wave {
+            0% { transform: translate(-50%, -50%) scale(0.98); opacity: 0.85; }
+            100% { transform: translate(-50%, -50%) scale(1.56); opacity: 0; }
+        }
+
+        @keyframes circle1 {
+            0%, 100% { transform: translate(-50%, -50%) scale(0.97); }
+            50% { transform: translate(-50%, -50%) scale(1.02); }
+        }
+
+        /* Orb Core Inner Container */
+        .ai .container {
+            overflow: hidden;
+            background: var(--orb-core);
+            width: 100%;
+            border-radius: 50%;
+            aspect-ratio: 1;
+            position: relative;
+            display: grid;
+            place-items: center;
+            box-shadow: none !important;
+        }
+
+        /* Liquid Plasma Blobs */
+        .ai .c {
+            position: absolute;
+            width: 220px;
+            aspect-ratio: 1;
+            border-radius: 50%;
+            filter: blur(7px);
+        }
+        .ai .c1 {
+            background: var(--blob-c1);
+            width: 170px;
+            animation: ai1 5.2s linear infinite;
+        }
+        .ai .c2 {
+            background: var(--blob-c2);
+            width: 95px;
+            animation: ai2 5.8s linear infinite;
+        }
+        .ai .c3 {
+            background: var(--blob-c3);
+            width: 140px;
+            animation: ai3 4.6s linear infinite;
+        }
+        .ai .c4 {
+            background: var(--blob-c4);
+            width: 160px;
+            animation: ai4 5.0s linear infinite;
+        }
+
+        @keyframes ai1 {
+            0% { transform: rotate(0deg) translate(45%) scale(0.95); opacity: 0.5; }
+            25% { transform: rotate(90deg) translate(45%) scale(1.65); opacity: 1; }
+            50% { transform: rotate(180deg) translate(45%) scale(0.8); opacity: 0.55; }
+            75% { transform: rotate(270deg) translate(45%) scale(1.3); opacity: 1; }
+            100% { transform: rotate(360deg) translate(45%) scale(0.95); opacity: 0.5; }
+        }
+
+        @keyframes ai2 {
+            0% { transform: rotate(90deg) translate(42%) scale(0.65); opacity: 0.9; }
+            25% { transform: rotate(180deg) translate(42%) scale(1.55); opacity: 0.35; }
+            50% { transform: rotate(270deg) translate(42%) scale(1.05); opacity: 0.8; }
+            75% { transform: rotate(360deg) translate(42%) scale(0.85); opacity: 0.4; }
+            100% { transform: rotate(450deg) translate(42%) scale(0.65); opacity: 0.9; }
+        }
+
+        @keyframes ai3 {
+            0% { transform: rotate(180deg) translate(44%) scale(0.85); opacity: 0.85; }
+            25% { transform: rotate(270deg) translate(44%) scale(1.45); opacity: 0.6; }
+            50% { transform: rotate(360deg) translate(44%) scale(0.7); opacity: 0.5; }
+            75% { transform: rotate(450deg) translate(44%) scale(1.3); opacity: 0.85; }
+            100% { transform: rotate(540deg) translate(44%) scale(0.85); opacity: 0.85; }
+        }
+
+        @keyframes ai4 {
+            0% { transform: rotate(270deg) translate(40%) scale(1); opacity: 0.95; }
+            25% { transform: rotate(360deg) translate(40%) scale(0.8); opacity: 0.65; }
+            50% { transform: rotate(450deg) translate(40%) scale(1.5); opacity: 0.6; }
+            75% { transform: rotate(540deg) translate(40%) scale(0.95); opacity: 0.9; }
+            100% { transform: rotate(630deg) translate(40%) scale(1); opacity: 0.95; }
+        }
+
+        /* Glass Lens Overlay */
+        .ai .glass {
+            overflow: hidden;
+            position: absolute;
+            inset: calc(var(--p) - 2px);
+            border-radius: 50%;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            box-shadow: none !important;
+            background: radial-gradient(62px at 32% 24%, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.12) 55%, transparent 75%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* 5-Bar Waveform Equalizer */
+        .orb-eq {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 3.5px;
+            height: 28px;
+            z-index: 4;
+        }
+
+        .orb-eq span {
+            width: 3px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.95);
+            box-shadow: none !important;
+            animation: eqPulse 0.85s ease-in-out infinite alternate;
+        }
+
+        .orb-eq span:nth-child(1) { height: 9px; animation-delay: 0.0s; }
+        .orb-eq span:nth-child(2) { height: 18px; animation-delay: 0.15s; }
+        .orb-eq span:nth-child(3) { height: 24px; animation-delay: 0.3s; }
+        .orb-eq span:nth-child(4) { height: 15px; animation-delay: 0.12s; }
+        .orb-eq span:nth-child(5) { height: 10px; animation-delay: 0.25s; }
+
+        @keyframes eqPulse {
+            0% { transform: scaleY(0.45); opacity: 0.7; }
+            100% { transform: scaleY(1.18); opacity: 1; }
+        }
+
+        /* Bottom Action Buttons */
+        .voice-actions-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            justify-content: center;
+            z-index: 10;
+        }
+
+        .voice-action-btn {
+            font-size: 12px;
+            font-weight: 600;
+            padding: 7px 14px;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            cursor: pointer;
+            transition: opacity 0.15s ease, transform 0.12s ease;
+            border: none;
+            outline: none;
+            box-shadow: none !important;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .voice-btn-cancel {
+            color: var(--text-muted);
+            background: rgba(148, 163, 184, 0.14);
+        }
+        .voice-btn-cancel:active {
+            opacity: 0.7;
+            transform: scale(0.96);
+        }
+
+        .voice-btn-text {
+            color: var(--ios-blue);
+            background: var(--ios-blue-subtle);
+        }
+        .voice-btn-text:active {
+            opacity: 0.7;
+            transform: scale(0.96);
+        }
+
+        .voice-btn-send {
+            color: #ffffff;
+            background: var(--ios-blue);
+            box-shadow: none !important;
+        }
+        .voice-btn-send:active {
+            opacity: 0.85;
+            transform: scale(0.96);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- The 3D Liquid Voice Recording Globe Card -->
+    <div class="voice-card">
+        
+        <!-- Top Status Header Pill -->
+        <div class="voice-header-row">
+            <span class="voice-rec-dot"></span>
+            <span id="voice-status-text" class="voice-status-title">Listening...</span>
+            <span id="voice-timer" class="voice-timer-badge">0:00</span>
+        </div>
+
+        <!-- 3D Liquid AI Globe Animation -->
+        <div class="ai">
+            <div class="container">
+                <div class="c c4"></div>
+                <div class="c c1"></div>
+                <div class="c c2"></div>
+                <div class="c c3"></div>
+            </div>
+            <div class="glass">
+                <div class="orb-eq">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Action Buttons -->
+        <div class="voice-actions-row">
+            <button type="button" id="voice-cancel-btn" class="voice-action-btn voice-btn-cancel" title="Cancel Recording">
+                <i class="ph-bold ph-x text-[14px]"></i> Cancel
+            </button>
+            <button type="button" id="voice-transcribe-btn" class="voice-action-btn voice-btn-text" title="Transcribe to Text">
+                <i class="ph-bold ph-text-aa text-[14px]"></i> Text
+            </button>
+            <button type="button" id="voice-send-btn" class="voice-action-btn voice-btn-send" title="Send Voice Note">
+                <i class="ph-bold ph-paper-plane-tilt text-[14px]"></i> Send
+            </button>
+        </div>
+
+    </div>
+
+    <script>
+        let seconds = 0;
+        let timerInterval = null;
+
+        function startTimer(initialSec = 0) {
+            seconds = initialSec;
+            updateTimerDisplay();
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                seconds++;
+                updateTimerDisplay();
+            }, 1000);
+        }
+
+        function updateTimerDisplay() {
+            const min = Math.floor(seconds / 60);
+            const sec = seconds % 60;
+            const timerEl = document.getElementById('voice-timer');
+            if (timerEl) {
+                timerEl.innerText = `${min}:${sec.toString().padStart(2, '0')}`;
+            }
+        }
+
+        function setStatus(text) {
+            const statusEl = document.getElementById('voice-status-text');
+            if (statusEl) statusEl.innerText = text;
+        }
+
+        function setTheme(isDark) {
+            if (isDark) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        }
+
+        const validThemes = [
+            'theme-original-blue',
+            'theme-chromatic-3d',
+            'theme-aurora-pulse',
+            'theme-cyber-grid',
+            'theme-solar-flare',
+            'theme-dark-matter',
+            'theme-rose-quartz',
+            'theme-electric-cyan'
+        ];
+
+        function setGlobeStyle(styleId) {
+            const formatted = 'theme-' + styleId.toLowerCase().replace(/_/g, '-');
+            validThemes.forEach(t => document.documentElement.classList.remove(t));
+            if (validThemes.includes(formatted)) {
+                document.documentElement.classList.add(formatted);
+            } else {
+                document.documentElement.classList.add('theme-original-blue');
+            }
+        }
+
+        // Bridge setup
+        document.getElementById('voice-cancel-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (window.AndroidBridge && window.AndroidBridge.onCancel) {
+                window.AndroidBridge.onCancel();
+            }
+        });
+
+        document.getElementById('voice-transcribe-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            setStatus("Transcribing...");
+            if (window.AndroidBridge && window.AndroidBridge.onTranscribe) {
+                window.AndroidBridge.onTranscribe();
+            }
+        });
+
+        document.getElementById('voice-send-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (window.AndroidBridge && window.AndroidBridge.onSend) {
+                window.AndroidBridge.onSend(seconds);
+            }
+        });
+
+        startTimer(0);
+    </script>
+</body>
+</html>

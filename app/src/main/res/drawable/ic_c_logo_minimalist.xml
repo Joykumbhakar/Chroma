@@ -1,0 +1,52 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+
+    <!-- Ambient Shadow / Soft Colored Glow -->
+    <path
+        android:pathData="M 72,28 A 33,33 0 1,0 72,72"
+        android:strokeWidth="15"
+        android:strokeLineCap="round"
+        android:strokeColor="#2E0A84FF" />
+
+    <!-- Main Apple Spectrum 'C' Vector Stroke -->
+    <path
+        android:pathData="M 72,28 A 33,33 0 1,0 72,72"
+        android:strokeWidth="13"
+        android:strokeLineCap="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:type="linear"
+                android:startX="15"
+                android:startY="15"
+                android:endX="85"
+                android:endY="85">
+                <item android:color="#00F0FF" android:offset="0.0" />
+                <item android:color="#007AFF" android:offset="0.45" />
+                <item android:color="#7857FF" android:offset="0.8" />
+                <item android:color="#FF2D55" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Top Specular Highlight Stroke -->
+    <path
+        android:pathData="M 45,17 C 55,17 65,21 72,28"
+        android:strokeWidth="3"
+        android:strokeLineCap="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:type="linear"
+                android:startX="45"
+                android:startY="17"
+                android:endX="72"
+                android:endY="28">
+                <item android:color="#99FFFFFF" android:offset="0.0" />
+                <item android:color="#00FFFFFF" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+</vector>

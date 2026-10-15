@@ -1,0 +1,1507 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Chat Interface — Bholanath Kumbhakar</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        :root {
+            --ios-blue: #0078FE;
+            --ios-blue-hover: #0062D1;
+            --chat-bg: #e5e5e5;
+            --app-bg: #ffffff;
+            --card-bg: rgba(255, 255, 255, 0.94);
+            --header-bg: rgba(255, 255, 255, 0.86);
+            --bubble-gray: #F2F4F7;
+            --text-dark: #0f172a;
+            --text-muted: #64748b;
+            --input-bg: #f4f6f8;
+            --pill-bg: rgba(15, 23, 42, 0.05);
+            --pill-hover: rgba(15, 23, 42, 0.09);
+            --border-subtle: rgba(15, 23, 42, 0.07);
+            --orb-core: #dbeafe;
+            --orb-ring: rgba(0, 120, 254, 0.32);
+            --orb-glow: rgba(0, 120, 254, 0.20);
+            --orb-shadow:
+                0 28px 64px -12px rgba(15, 23, 42, 0.16),
+                0 10px 28px -6px rgba(0, 120, 254, 0.12),
+                inset 0 1px 0 0 rgba(255, 255, 255, 0.9),
+                inset 0 0 0 1px rgba(15, 23, 42, 0.06);
+        }
+
+        html.dark {
+            --chat-bg: #030712;
+            --app-bg: #0f172a;
+            --card-bg: rgba(15, 23, 42, 0.94);
+            --header-bg: rgba(15, 23, 42, 0.86);
+            --bubble-gray: #1e293b;
+            --text-dark: #f8fafc;
+            --text-muted: #94a3b8;
+            --input-bg: #1e293b;
+            --pill-bg: rgba(255, 255, 255, 0.07);
+            --pill-hover: rgba(255, 255, 255, 0.13);
+            --border-subtle: rgba(255, 255, 255, 0.08);
+            --orb-core: #0b2247;
+            --orb-ring: rgba(56, 189, 248, 0.38);
+            --orb-glow: rgba(0, 120, 254, 0.32);
+            --orb-shadow:
+                0 32px 72px -12px rgba(0, 0, 0, 0.65),
+                0 12px 32px -6px rgba(0, 120, 254, 0.22),
+                inset 0 1px 0 0 rgba(255, 255, 255, 0.12),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+        }
+
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--chat-bg);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100dvh;
+            margin: 0;
+            -webkit-font-smoothing: antialiased;
+            transition: background-color 0.3s ease;
+        }
+
+        .app-container {
+            width: 100%;
+            height: 100dvh;
+            background-color: var(--app-bg);
+            color: var(--text-dark);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        .glass-header {
+            background-color: var(--header-bg);
+            backdrop-filter: blur(16px) saturate(180%);
+            -webkit-backdrop-filter: blur(16px) saturate(180%);
+            border-bottom: 1px solid var(--border-subtle);
+            transition: background-color 0.3s ease, border-color 0.3s ease;
+        }
+
+        .bubble-left {
+            background-color: var(--bubble-gray);
+            color: var(--text-dark);
+            border-radius: 20px 20px 20px 6px;
+            transition: background-color 0.3s ease, color 0.3s ease, transform 0.15s ease;
+        }
+
+        .bubble-right {
+            position: relative;
+            background-color: var(--ios-blue);
+            border-radius: 20px 20px 4px 20px; 
+            z-index: 1;
+            transition: transform 0.15s ease, background-color 0.3s ease;
+        }
+        
+        .bubble-right::before {
+            content: "";
+            position: absolute;
+            z-index: -1;
+            bottom: 0;
+            right: -8px;
+            height: 20px;
+            width: 20px;
+            background: var(--ios-blue);
+            border-bottom-left-radius: 15px;
+            transition: background-color 0.3s ease;
+        }
+        
+        .bubble-right::after {
+            content: "";
+            position: absolute;
+            z-index: -1;
+            bottom: 0;
+            right: -10px;
+            width: 10px;
+            height: 20px;
+            background: var(--app-bg); 
+            border-bottom-left-radius: 10px;
+            transition: background-color 0.3s ease;
+        }
+
+        .text-chat-blue { color: var(--ios-blue); }
+
+        .message-row .msg-actions {
+            opacity: 0;
+            transform: translateY(4px) scale(0.95);
+            pointer-events: none;
+            transition: all 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+
+        .message-row:hover .msg-actions,
+        .message-row:focus-within .msg-actions {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+            pointer-events: auto;
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(14px) scale(0.98); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        
+        .animate-msg {
+            opacity: 0;
+            animation: fadeInUp 0.38s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+            transform-origin: bottom center;
+        }
+
+        @keyframes popBadge {
+            0% { transform: scale(0.3); opacity: 0; }
+            70% { transform: scale(1.18); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .reaction-pill {
+            animation: popBadge 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+        }
+        
+        @keyframes pulse-soft {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
+            50% { transform: scale(1.05); box-shadow: 0 0 0 4px rgba(34, 197, 94, 0); }
+        }
+        
+        .online-pulse { animation: pulse-soft 2.5s infinite ease-in-out; }
+
+        .typing-dot {
+            width: 5px; height: 5px; background-color: #94a3b8; border-radius: 50%;
+            display: inline-block; animation: typingBounce 1.4s infinite ease-in-out both;
+        }
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes typingBounce {
+            0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+            40% { transform: scale(1); opacity: 1; }
+        }
+
+        .footer-wrapper {
+            background-color: var(--app-bg);
+            padding: 10px 16px max(14px, env(safe-area-inset-bottom));
+            position: relative;
+            z-index: 20;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            border-top: 1px solid var(--border-subtle);
+            transition: background-color 0.3s ease, border-color 0.3s ease;
+        }
+
+        .container-ia-chat {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            width: 100%;
+            max-width: 100%;
+            margin: 0 auto;
+        }
+
+        .container-upload-files {
+            position: absolute;
+            left: 0;
+            display: flex;
+            align-items: center;
+            color: #94a3b8;
+            transition: all 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+            gap: 2px;
+        }
+
+        .container-upload-files .upload-file {
+            width: 34px; height: 34px;
+            display: flex; align-items: center; justify-content: center;
+            padding: 5px; cursor: pointer; transition: all 0.25s ease; border-radius: 50%;
+        }
+
+        .container-upload-files .upload-file:hover {
+            color: var(--ios-blue);
+            background-color: rgba(0, 120, 254, 0.1);
+            transform: scale(1.08);
+        }
+
+        .input-text {
+            width: calc(100% - 114px);
+            margin-left: 114px;
+            padding: 0.72rem 1.1rem;
+            padding-right: 78px;
+            border-radius: 50px;
+            border: 1px solid var(--border-subtle);
+            outline: none;
+            background-color: var(--input-bg); 
+            color: var(--text-dark);
+            font-size: 15px;
+            line-height: 20px;
+            font-weight: 400;
+            transition: all 0.38s cubic-bezier(0.2, 0.8, 0.2, 1);
+            z-index: 10;
+        }
+
+        .input-text::placeholder { color: #94a3b8; }
+
+        .input-text:focus,
+        .input-text:not(:placeholder-shown) {
+            width: calc(100% - 44px);
+            margin-left: 44px;
+            background-color: var(--app-bg);
+            border-color: rgba(0, 120, 254, 0.35);
+            box-shadow: 0 4px 14px rgba(0, 120, 254, 0.07);
+        }
+
+        .input-text:focus ~ .container-upload-files,
+        .input-text:not(:placeholder-shown) ~ .container-upload-files {
+            opacity: 0; visibility: hidden; pointer-events: none; transform: translateX(-10px);
+        }
+
+        .input-text:focus ~ .label-files,
+        .input-text:not(:placeholder-shown) ~ .label-files {
+            transform: translateX(0) translateY(-50%) scale(1);
+            opacity: 1; visibility: visible; pointer-events: all;
+        }
+
+        .input-text:not(:placeholder-shown) ~ .btn-send {
+            transform: translateX(0) translateY(-50%) scale(1);
+            opacity: 1; visibility: visible; pointer-events: all;
+        }
+
+        .input-text:not(:placeholder-shown) ~ .label-voice {
+            transform: translateX(0) translateY(-50%) scale(0.25);
+            opacity: 0; visibility: hidden; pointer-events: none;
+        }
+
+        .input-voice { display: none; }
+
+        .input-voice:checked ~ .container-upload-files,
+        .input-voice:checked ~ .input-text,
+        .input-voice:checked ~ .label-files,
+        .input-voice:checked ~ .btn-emoji {
+            opacity: 0; visibility: hidden; pointer-events: none; transform: scale(0.95);
+        }
+
+        .label-files {
+            position: absolute; top: 50%; left: 0;
+            transform: translateX(-15px) translateY(-50%) scale(0.8);
+            display: flex; align-items: center; justify-content: center;
+            width: 36px; height: 36px; color: #fff; background-color: var(--ios-blue);
+            border-radius: 50px; cursor: pointer; opacity: 0; visibility: hidden;
+            pointer-events: none; transition: all 0.38s cubic-bezier(0.2, 0.8, 0.2, 1);
+            z-index: 11; box-shadow: 0 2px 8px rgba(0, 120, 254, 0.3);
+        }
+
+        .label-voice, .btn-send {
+            position: absolute; top: 50%; right: 0.25rem;
+            transform: translateX(0) translateY(-50%) scale(1);
+            width: 36px; height: 36px;
+            display: flex; align-items: center; justify-content: center;
+            padding: 6px; border: none; outline: none; cursor: pointer;
+            transition: all 0.48s cubic-bezier(0.19, 1, 0.22, 1); z-index: 20;
+        }
+
+        .btn-emoji {
+            position: absolute; top: 50%; right: 2.6rem; transform: translateY(-50%);
+            width: 32px; height: 32px;
+            display: flex; align-items: center; justify-content: center;
+            color: #94a3b8; border-radius: 50%; cursor: pointer; transition: all 0.2s ease; z-index: 15;
+        }
+        .btn-emoji:hover { color: var(--ios-blue); background-color: rgba(0, 120, 254, 0.08); }
+
+        .input-voice:checked ~ .label-voice {
+            background-color: var(--card-bg);
+            backdrop-filter: blur(24px) saturate(190%);
+            -webkit-backdrop-filter: blur(24px) saturate(190%);
+            right: calc(50% - 152px);
+            width: 304px;
+            height: 318px;
+            border-radius: 2.6rem;
+            box-shadow: var(--orb-shadow);
+            transform: translateX(0) translateY(-88%) scale(1);
+            cursor: default;
+        }
+
+        .input-voice:checked ~ .label-voice .icon-voice { opacity: 0; transform: scale(0.4); pointer-events: none; }
+        .input-voice:checked ~ .label-voice .text-voice > * { opacity: 1; transform: translateY(0); pointer-events: auto; }
+
+        .label-voice { color: #94a3b8; overflow: hidden; }
+        .label-voice:hover { color: var(--ios-blue); }
+        .label-voice .icon-voice { position: absolute; transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); }
+
+        .label-voice .text-voice {
+            position: absolute; inset: 1.2rem 1.25rem;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: space-between;
+            pointer-events: none; z-index: 10;
+        }
+
+        .label-voice .text-voice > * {
+            opacity: 0; transform: translateY(8px);
+            transition: all 0.38s cubic-bezier(0.2, 0.8, 0.2, 1) 0.08s;
+            margin: 0;
+        }
+
+        .voice-header-row {
+            display: flex; align-items: center; justify-content: space-between;
+            width: 100%; padding: 0 2px;
+        }
+
+        .voice-status-group { display: flex; align-items: center; gap: 7px; }
+
+        .rec-dot {
+            width: 7px; height: 7px; border-radius: 50%;
+            background-color: var(--ios-blue);
+            animation: recPulse 1.6s infinite cubic-bezier(0.4, 0, 0.6, 1);
+        }
+
+        @keyframes recPulse {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 120, 254, 0.55); }
+            50% { transform: scale(1.15); box-shadow: 0 0 0 5px rgba(0, 120, 254, 0); }
+        }
+
+        .voice-status-title {
+            font-size: 16px; font-weight: 600; letter-spacing: -0.015em;
+            color: transparent;
+            background-image: linear-gradient(
+                -40deg,
+                var(--text-dark) 0% 34%,
+                var(--ios-blue) 46%,
+                #38bdf8 50%,
+                var(--ios-blue) 54%,
+                var(--text-dark) 66% 100%
+            );
+            background-clip: text; -webkit-background-clip: text;
+            background-size: 700px;
+            animation: text-light 3.6s linear infinite;
+        }
+
+        .voice-timer-badge {
+            font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums;
+            color: var(--ios-blue); background: rgba(0, 120, 254, 0.11);
+            border: 1px solid rgba(0, 120, 254, 0.18);
+            padding: 2.5px 9px; border-radius: 999px;
+        }
+
+        .voice-eq-row {
+            display: flex; align-items: center; justify-content: center;
+            gap: 3px; height: 16px; margin-top: auto; margin-bottom: 10px;
+        }
+
+        .eq-bar {
+            width: 2.5px; height: 5px; border-radius: 999px;
+            background-color: var(--ios-blue); opacity: 0.65;
+            transition: height 0.09s ease, opacity 0.09s ease;
+        }
+
+        .voice-footer-controls {
+            display: flex; align-items: center; justify-content: space-between;
+            width: 100%; gap: 8px;
+        }
+
+        .voice-action-pill {
+            height: 34px; padding: 0 12px; border-radius: 999px;
+            font-size: 12px; font-weight: 600;
+            display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+            background: var(--pill-bg); color: var(--text-muted);
+            border: 1px solid var(--border-subtle);
+            cursor: pointer; transition: all 0.2s ease;
+        }
+        .voice-action-pill:hover { background: var(--pill-hover); color: var(--text-dark); transform: translateY(-1px); }
+        .voice-action-pill.cancel-btn:hover { color: #ef4444; background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.2); }
+
+        .voice-send-pill {
+            height: 34px; padding: 0 14px; border-radius: 999px;
+            font-size: 12px; font-weight: 600;
+            display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+            background: var(--ios-blue); color: #ffffff; border: none;
+            box-shadow: 0 4px 12px rgba(0, 120, 254, 0.32);
+            cursor: pointer; transition: all 0.2s ease;
+        }
+        .voice-send-pill:hover { background: var(--ios-blue-hover); transform: translateY(-1px) scale(1.02); }
+
+        @keyframes text-light {
+            0% { background-position: 0px; }
+            100% { background-position: 700px; }
+        }
+
+        .btn-send {
+            opacity: 0; visibility: hidden; pointer-events: none;
+            transform: translateY(-50%) scale(0.25); color: #ffffff;
+            background: var(--ios-blue); border-radius: 50%;
+            box-shadow: 0 4px 12px rgba(0, 120, 254, 0.3);
+        }
+
+        .ai {
+            --s: 248px; --p: calc(var(--s) / 4); --audio-scale: 1;
+            width: var(--s); aspect-ratio: 1; padding: var(--p);
+            display: grid; place-items: center; position: absolute;
+            left: 50%; top: 47%;
+            transform: translate(-50%, -50%) scale(var(--audio-scale));
+            animation: circle1 5s ease-in-out infinite;
+            opacity: 0; pointer-events: none; transition: opacity 0.4s ease, transform 0.08s ease-out;
+        }
+        
+        .input-voice:checked ~ .label-voice .ai { opacity: 1; transition-delay: 0.1s; }
+
+        .ai::before, .ai::after {
+            content: ""; position: absolute; top: 50%; left: 50%;
+            width: 50%; height: 50%; border-radius: 50%;
+            border: 1.5px solid var(--orb-ring);
+            box-shadow: 0 0 24px var(--orb-glow);
+            transform: translate(-50%, -50%);
+            animation: wave 2.1s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+        }
+        .ai::after { animation-delay: 0.7s; }
+
+        @keyframes wave {
+            0% { transform: translate(-50%, -50%) scale(0.98); opacity: 0.9; }
+            100% { transform: translate(-50%, -50%) scale(1.56); opacity: 0; }
+        }
+
+        @keyframes ai1 {
+            0% { transform: rotate(0deg) translate(50%) scale(0.9); opacity: 0; }
+            25% { transform: rotate(90deg) translate(50%) scale(1.75); opacity: 1; }
+            50% { transform: rotate(180deg) translate(50%) scale(0.75); opacity: 0.45; }
+            75% { transform: rotate(270deg) translate(50%) scale(1.25); opacity: 1; }
+            100% { transform: rotate(360deg) translate(50%) scale(0.9); opacity: 0; }
+        }
+        @keyframes ai2 {
+            0% { transform: rotate(90deg) translate(50%) scale(0.55); }
+            25% { transform: rotate(180deg) translate(50%) scale(1.65); opacity: 0; }
+            50% { transform: rotate(270deg) translate(50%) scale(1); opacity: 0; }
+            75% { transform: rotate(360deg) translate(50%) scale(0.85); opacity: 0; }
+            100% { transform: rotate(450deg) translate(50%) scale(0.55); opacity: 1; }
+        }
+        @keyframes ai3 {
+            0% { transform: rotate(180deg) translate(50%) scale(0.8); opacity: 0.85; }
+            25% { transform: rotate(270deg) translate(50%) scale(1.45); }
+            50% { transform: rotate(360deg) translate(50%) scale(0.65); opacity: 0.45; }
+            75% { transform: rotate(450deg) translate(50%) scale(1.3); opacity: 0.8; }
+            100% { transform: rotate(540deg) translate(50%) scale(0.8); opacity: 0.85; }
+        }
+        @keyframes ai4 {
+            0% { transform: rotate(270deg) translate(50%) scale(1); opacity: 1; }
+            25% { transform: rotate(360deg) translate(50%) scale(0.75); }
+            50% { transform: rotate(450deg) translate(50%) scale(1.55); opacity: 0.55; }
+            75% { transform: rotate(540deg) translate(50%) scale(0.9); opacity: 0.85; }
+            100% { transform: rotate(630deg) translate(50%) scale(1); opacity: 1; }
+        }
+
+        .ai .c { position: absolute; width: 260px; aspect-ratio: 1; border-radius: 50%; }
+        .ai .c1 { background: radial-gradient(50% 50% at center, #60a5fa, #0078FE); width: 185px; animation: ai1 5.2s linear infinite; }
+        .ai .c2 { background: radial-gradient(50% 50% at center, #bae6fd, #e0f2fe); width: 98px; animation: ai2 5.8s linear infinite; }
+        .ai .c3 { background: radial-gradient(50% 50% at center, #38bdf8, transparent); width: 142px; opacity: 0.75; animation: ai3 4.6s linear infinite; }
+        .ai .c4 { background: #1d4ed8; animation: ai4 5.0s linear infinite; }
+
+        .ai .container {
+            overflow: hidden; background: var(--orb-core); width: 100%; border-radius: 50%;
+            aspect-ratio: 1; position: relative; display: grid; place-items: center;
+            box-shadow:
+                0 14px 32px -6px rgba(0, 120, 254, 0.32),
+                inset 0 0 18px rgba(0, 120, 254, 0.25);
+        }
+
+        .ai .glass {
+            overflow: hidden; position: absolute; inset: calc(var(--p) - 3px);
+            border-radius: 50%; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+            box-shadow:
+                0 14px 30px rgba(0, 120, 254, 0.16),
+                inset 0 2px 12px rgba(255, 255, 255, 0.90),
+                inset 0 -6px 16px rgba(0, 120, 254, 0.24);
+            background:
+                radial-gradient(68px at 68% 26%, rgba(255, 255, 255, 0.88), transparent),
+                radial-gradient(55px at 28% 78%, rgba(56, 189, 248, 0.22), transparent);
+        }
+
+        @keyframes circle1 {
+            0%, 100% { transform: translate(-50%, -50%) scale(calc(0.97 * var(--audio-scale))); }
+            50% { transform: translate(-50%, -50%) scale(calc(1.01 * var(--audio-scale))); }
+        }
+    </style>
+</head>
+<body>
+
+    <input type="file" id="file-picker" class="hidden" accept="image/*,.pdf,.doc,.docx,.zip,.txt" />
+
+    <div class="app-container">
+        <div id="toast-notification" class="pointer-events-none fixed top-16 left-1/2 -translate-x-1/2 z-[120] opacity-0 -translate-y-2 transition-all duration-300">
+            <div class="bg-gray-900/90 dark:bg-slate-800/95 text-white text-xs font-medium px-4 py-2 rounded-full shadow-lg backdrop-blur-md flex items-center gap-2 border border-white/10">
+                <i class="ph-fill ph-check-circle text-[#22c55e] text-sm"></i>
+                <span id="toast-text">Action completed</span>
+            </div>
+        </div>
+
+        <header class="glass-header flex flex-col items-center z-50 sticky top-0 w-full shrink-0">
+            <div class="w-full max-w-4xl flex justify-between items-center px-3 py-2.5 md:px-6 md:py-3.5">
+                <div class="flex items-center gap-1 min-w-0">
+                    <button id="back-btn" title="Back" class="p-2 text-chat-blue hover:bg-blue-500/10 active:bg-blue-500/20 rounded-full transition-colors">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="15 18 9 12 15 6"></polyline>
+                        </svg>
+                    </button>
+                    
+                    <div id="profile-trigger" class="flex items-center gap-3 cursor-pointer group rounded-full py-1 pl-1 pr-3 hover:bg-slate-500/5 transition-colors min-w-0">
+                        <div class="relative w-10 h-10 md:w-11 md:h-11 shrink-0">
+                            <img src="https://i.pravatar.cc/150?img=11" alt="Bholanath" class="w-full h-full rounded-full object-cover shadow-sm ring-1 ring-black/5">
+                            <div id="online-dot" class="absolute bottom-0 right-0 w-[13px] h-[13px] bg-[#22c55e] border-2 border-white dark:border-slate-900 rounded-full z-10 online-pulse"></div>
+                        </div>
+                        <div class="flex flex-col justify-center min-w-0">
+                            <div class="flex items-center gap-1.5">
+                                <h1 class="text-[16px] md:text-[17px] font-semibold text-gray-900 dark:text-white leading-tight truncate">Bholanath Kumbhakar</h1>
+                                <i id="muted-header-icon" class="ph-fill ph-bell-slash text-xs text-gray-400 hidden"></i>
+                            </div>
+                            <span id="user-status" class="text-[12.5px] md:text-[13px] text-gray-500 dark:text-slate-400 font-medium transition-all duration-300">Online</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex items-center pr-1 gap-0.5 md:gap-1.5 shrink-0">
+                    <button id="search-btn" title="Search" class="p-2.5 text-chat-blue hover:bg-blue-500/10 rounded-full transition-colors">
+                        <i class="ph ph-magnifying-glass text-[22px]"></i>
+                    </button>
+                    <button id="audio-call-btn" title="Voice Call" class="p-2.5 text-chat-blue hover:bg-blue-500/10 rounded-full transition-colors">
+                        <i class="ph ph-phone text-[23px]"></i>
+                    </button>
+                    <button id="video-call-btn" title="Video Call" class="p-2.5 text-chat-blue hover:bg-blue-500/10 rounded-full transition-colors">
+                        <i class="ph ph-video-camera text-[24px]"></i>
+                    </button>
+                    
+                    <div class="relative">
+                        <button id="menu-btn" title="More Options" class="p-2.5 text-chat-blue hover:bg-blue-500/10 rounded-full transition-colors">
+                            <i class="ph ph-dots-three-vertical text-[24px]"></i>
+                        </button>
+                        <div id="dropdown-menu" class="hidden absolute right-0 top-full mt-2 w-52 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl rounded-2xl shadow-[0_10px_35px_rgb(0,0,0,0.14)] border border-gray-100 dark:border-slate-800 overflow-hidden z-[100] transform origin-top-right transition-all duration-200 opacity-0 scale-95">
+                            <div class="py-1.5 flex flex-col">
+                                <button id="info-menu-btn" class="flex items-center gap-3 px-4 py-2.5 text-[14px] font-medium text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800/80 transition-colors text-left w-full">
+                                    <i class="ph ph-info text-[18px] text-gray-500"></i> Contact Info
+                                </button>
+                                <button id="appearance-btn" class="flex items-center justify-between px-4 py-2.5 text-[14px] font-medium text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800/80 transition-colors text-left w-full">
+                                    <span class="flex items-center gap-3"><i class="ph ph-palette text-[18px] text-gray-500"></i> Appearance</span>
+                                    <span id="theme-pill" class="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 dark:bg-slate-800 text-gray-500">Light</span>
+                                </button>
+                                <button id="mute-notify-btn" class="flex items-center justify-between px-4 py-2.5 text-[14px] font-medium text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800/80 transition-colors text-left w-full">
+                                    <span class="flex items-center gap-3"><i class="ph ph-bell-slash text-[18px] text-gray-500"></i> Mute</span>
+                                    <span id="mute-pill" class="text-[11px] text-gray-400">Off</span>
+                                </button>
+                                <button id="clear-chat-btn" class="flex items-center gap-3 px-4 py-2.5 text-[14px] font-medium text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800/80 transition-colors text-left w-full">
+                                    <i class="ph ph-trash text-[18px] text-gray-500"></i> Clear Chat
+                                </button>
+                                <div class="h-px bg-gray-100 dark:bg-slate-800 my-1 mx-2"></div>
+                                <button id="block-user-btn" class="flex items-center gap-3 px-4 py-2.5 text-[14px] font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors text-left w-full">
+                                    <i class="ph ph-prohibit text-[18px] text-red-500"></i> <span id="block-label">Block</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="search-drawer" class="hidden w-full max-w-4xl px-4 pb-3">
+                <div class="relative flex items-center">
+                    <i class="ph ph-magnifying-glass absolute left-3.5 text-gray-400 text-base"></i>
+                    <input id="search-input" type="text" placeholder="Search in conversation..." class="w-full pl-9 pr-20 py-1.5 rounded-full bg-gray-100 dark:bg-slate-800 text-sm text-gray-800 dark:text-slate-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0078FE]/40" />
+                    <span id="search-count" class="absolute right-9 text-xs text-gray-400 font-medium"></span>
+                    <button id="close-search-btn" class="absolute right-2.5 p-1 text-gray-400 hover:text-gray-600">
+                        <i class="ph-bold ph-x text-xs"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div id="call-banner" class="hidden w-full bg-[#0078FE] text-white px-4 py-2 shadow-sm">
+                <div class="w-full max-w-4xl mx-auto flex items-center justify-between">
+                    <div class="flex items-center gap-2.5">
+                        <span class="w-2 h-2 rounded-full bg-white animate-ping"></span>
+                        <span id="call-title" class="text-xs sm:text-sm font-medium">Audio Call • Bholanath Kumbhakar</span>
+                        <span id="call-timer" class="text-xs font-mono bg-black/15 px-2 py-0.5 rounded-full">00:00</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button id="mute-mic-btn" class="p-1.5 rounded-full bg-white/15 hover:bg-white/25 transition-colors">
+                            <i class="ph-fill ph-microphone text-sm"></i>
+                        </button>
+                        <button id="end-call-btn" class="px-3 py-1 rounded-full bg-red-500 hover:bg-red-600 text-xs font-semibold flex items-center gap-1">
+                            <i class="ph-fill ph-phone-disconnect text-sm"></i> End
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main id="main-chat" class="flex-1 overflow-y-auto no-scrollbar flex flex-col items-center pt-2 pb-4 relative z-10 scroll-smooth w-full">
+            <div class="w-full max-w-4xl flex flex-col flex-1">
+                <div class="flex items-center justify-center my-4 md:my-5 relative">
+                    <span id="chat-date" class="bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm px-4 py-1 rounded-full text-[12px] font-medium text-gray-500 dark:text-slate-400 z-10 tracking-wide shadow-2xs border border-gray-100 dark:border-slate-700/70">Mon, 22 Sep</span>
+                </div>
+
+                <div id="empty-chat-state" class="hidden flex-1 flex-col items-center justify-center text-center py-16 px-4">
+                    <div class="w-14 h-14 rounded-full bg-blue-500/10 text-chat-blue flex items-center justify-center mb-3">
+                        <i class="ph-duotone ph-chat-circle-dots text-3xl"></i>
+                    </div>
+                    <p class="text-sm font-semibold text-gray-700 dark:text-slate-200">No messages yet</p>
+                    <p class="text-xs text-gray-400 dark:text-slate-500 mt-1">Send a message below to start chatting with Bholanath.</p>
+                </div>
+
+                <div id="chat-messages" class="flex flex-col px-4 md:px-6 gap-3.5 pb-4 w-full">
+                    <div class="message-row group flex gap-2 items-end w-full max-w-[85%] md:max-w-[75%] lg:max-w-[65%] animate-msg" style="animation-delay: 0.06s;">
+                        <img src="https://i.pravatar.cc/150?img=11" class="w-7 h-7 rounded-full object-cover shrink-0 mb-1 shadow-sm ring-1 ring-black/5" alt="Avatar">
+                        <div class="flex flex-col items-start">
+                            <div class="bubble-left px-3.5 py-2 flex flex-col min-w-[100px] shadow-2xs">
+                                <p class="msg-text text-[15px] leading-[1.38] tracking-tight">Hey! How are you doing?</p>
+                                <span class="text-[11px] text-gray-400 dark:text-slate-400 mt-0.5 font-medium">10:24 AM</span>
+                            </div>
+                            <div class="reactions-box flex flex-wrap gap-1 mt-1 empty:hidden"></div>
+                        </div>
+                        <div class="msg-actions flex items-center gap-0.5 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-full px-1.5 py-0.5 shadow-sm mb-1.5">
+                            <button class="react-btn hover:scale-125 transition-transform px-1 text-xs" data-emoji="❤️">❤️</button>
+                            <button class="react-btn hover:scale-125 transition-transform px-1 text-xs" data-emoji="👍">👍</button>
+                            <button class="reply-btn p-1 text-gray-400 hover:text-[#0078FE]"><i class="ph-bold ph-arrow-bend-up-left text-xs"></i></button>
+                            <button class="copy-btn p-1 text-gray-400 hover:text-[#0078FE]"><i class="ph-bold ph-copy text-xs"></i></button>
+                        </div>
+                    </div>
+
+                    <div class="message-row group flex justify-end items-end gap-2 w-full animate-msg" style="animation-delay: 0.14s;">
+                        <div class="msg-actions flex items-center gap-0.5 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-full px-1.5 py-0.5 shadow-sm mb-1.5">
+                            <button class="react-btn hover:scale-125 transition-transform px-1 text-xs" data-emoji="❤️">❤️</button>
+                            <button class="react-btn hover:scale-125 transition-transform px-1 text-xs" data-emoji="👍">👍</button>
+                            <button class="reply-btn p-1 text-gray-400 hover:text-[#0078FE]"><i class="ph-bold ph-arrow-bend-up-left text-xs"></i></button>
+                            <button class="copy-btn p-1 text-gray-400 hover:text-[#0078FE]"><i class="ph-bold ph-copy text-xs"></i></button>
+                            <button class="delete-btn p-1 text-gray-400 hover:text-red-500"><i class="ph-bold ph-trash text-xs"></i></button>
+                        </div>
+                        <div class="flex flex-col items-end max-w-[85%] md:max-w-[75%] lg:max-w-[65%]">
+                            <div class="bubble-right px-3.5 py-2 flex flex-col min-w-[120px] shadow-2xs">
+                                <p class="msg-text text-[15px] text-white leading-[1.38] tracking-tight">I'm good! Just working on some new ideas. How about you?</p>
+                                <div class="flex items-center justify-end gap-1 mt-0.5 text-blue-100">
+                                    <span class="text-[11px] font-medium">10:26 AM</span>
+                                    <i class="ph-bold ph-checks text-[14px] text-white"></i>
+                                </div>
+                            </div>
+                            <div class="reactions-box flex flex-wrap gap-1 mt-1 empty:hidden"></div>
+                        </div>
+                    </div>
+
+                    <div class="message-row group flex gap-2 items-end w-full max-w-[85%] md:max-w-[75%] lg:max-w-[65%] mt-0.5 animate-msg" style="animation-delay: 0.22s;">
+                        <img src="https://i.pravatar.cc/150?img=11" class="w-7 h-7 rounded-full object-cover shrink-0 mb-1 shadow-sm ring-1 ring-black/5" alt="Avatar">
+                        <div class="flex flex-col items-start">
+                            <div class="bubble-left px-3.5 py-2 flex flex-col min-w-[100px] shadow-2xs">
+                                <p class="msg-text text-[15px] leading-[1.38] tracking-tight">That's great! I'm also working on the home automation project with Jasica AI.</p>
+                                <span class="text-[11px] text-gray-400 dark:text-slate-400 mt-0.5 font-medium">10:28 AM</span>
+                            </div>
+                            <div class="reactions-box flex flex-wrap gap-1 mt-1 empty:hidden"></div>
+                        </div>
+                        <div class="msg-actions flex items-center gap-0.5 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-full px-1.5 py-0.5 shadow-sm mb-1.5">
+                            <button class="react-btn hover:scale-125 transition-transform px-1 text-xs" data-emoji="❤️">❤️</button>
+                            <button class="react-btn hover:scale-125 transition-transform px-1 text-xs" data-emoji="🔥">🔥</button>
+                            <button class="reply-btn p-1 text-gray-400 hover:text-[#0078FE]"><i class="ph-bold ph-arrow-bend-up-left text-xs"></i></button>
+                            <button class="copy-btn p-1 text-gray-400 hover:text-[#0078FE]"><i class="ph-bold ph-copy text-xs"></i></button>
+                        </div>
+                    </div>
+
+                    <div class="message-row group flex justify-end items-end gap-2 w-full mt-0.5 animate-msg" style="animation-delay: 0.30s;">
+                        <div class="msg-actions flex items-center gap-0.5 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-full px-1.5 py-0.5 shadow-sm mb-1.5">
+                            <button class="react-btn hover:scale-125 transition-transform px-1 text-xs" data-emoji="❤️">❤️</button>
+                            <button class="react-btn hover:scale-125 transition-transform px-1 text-xs" data-emoji="👍">👍</button>
+                            <button class="reply-btn p-1 text-gray-400 hover:text-[#0078FE]"><i class="ph-bold ph-arrow-bend-up-left text-xs"></i></button>
+                            <button class="copy-btn p-1 text-gray-400 hover:text-[#0078FE]"><i class="ph-bold ph-copy text-xs"></i></button>
+                            <button class="delete-btn p-1 text-gray-400 hover:text-red-500"><i class="ph-bold ph-trash text-xs"></i></button>
+                        </div>
+                        <div class="flex flex-col items-end max-w-[85%] md:max-w-[75%] lg:max-w-[65%]">
+                            <div class="bubble-right px-3.5 py-2 flex flex-col min-w-[120px] shadow-2xs">
+                                <p class="msg-text text-[15px] text-white leading-[1.38] tracking-tight">Nice! Can you share the latest update?</p>
+                                <div class="flex items-center justify-end gap-1 mt-0.5 text-blue-100">
+                                    <span class="text-[11px] font-medium">10:30 AM</span>
+                                    <i class="ph-bold ph-checks text-[14px] text-white"></i>
+                                </div>
+                            </div>
+                            <div class="reactions-box flex flex-wrap gap-1 mt-1 empty:hidden"></div>
+                        </div>
+                    </div>
+
+                    <div class="message-row group flex gap-2 items-end w-full max-w-[85%] md:max-w-[75%] lg:max-w-[65%] mt-0.5 animate-msg" style="animation-delay: 0.38s;">
+                        <img src="https://i.pravatar.cc/150?img=11" class="w-7 h-7 rounded-full object-cover shrink-0 mb-1 shadow-sm ring-1 ring-black/5" alt="Avatar">
+                        <div class="flex flex-col items-start">
+                            <div class="bubble-left px-3.5 py-2 flex flex-col min-w-[100px] shadow-2xs">
+                                <p class="msg-text text-[15px] leading-[1.38] tracking-tight">Sure! I'll send you the details in a moment.</p>
+                                <span class="text-[11px] text-gray-400 dark:text-slate-400 mt-0.5 font-medium">10:32 AM</span>
+                            </div>
+                            <div class="reactions-box flex flex-wrap gap-1 mt-1 empty:hidden"></div>
+                        </div>
+                        <div class="msg-actions flex items-center gap-0.5 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-full px-1.5 py-0.5 shadow-sm mb-1.5">
+                            <button class="react-btn hover:scale-125 transition-transform px-1 text-xs" data-emoji="❤️">❤️</button>
+                            <button class="react-btn hover:scale-125 transition-transform px-1 text-xs" data-emoji="👍">👍</button>
+                            <button class="reply-btn p-1 text-gray-400 hover:text-[#0078FE]"><i class="ph-bold ph-arrow-bend-up-left text-xs"></i></button>
+                            <button class="copy-btn p-1 text-gray-400 hover:text-[#0078FE]"><i class="ph-bold ph-copy text-xs"></i></button>
+                        </div>
+                    </div>
+
+                    <div class="message-row group flex justify-end items-end gap-2 w-full mt-0.5 mb-2 animate-msg" style="animation-delay: 0.46s;">
+                        <div class="msg-actions flex items-center gap-0.5 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-full px-1.5 py-0.5 shadow-sm mb-1.5">
+                            <button class="react-btn hover:scale-125 transition-transform px-1 text-xs" data-emoji="❤️">❤️</button>
+                            <button class="react-btn hover:scale-125 transition-transform px-1 text-xs" data-emoji="👍">👍</button>
+                            <button class="reply-btn p-1 text-gray-400 hover:text-[#0078FE]"><i class="ph-bold ph-arrow-bend-up-left text-xs"></i></button>
+                            <button class="copy-btn p-1 text-gray-400 hover:text-[#0078FE]"><i class="ph-bold ph-copy text-xs"></i></button>
+                            <button class="delete-btn p-1 text-gray-400 hover:text-red-500"><i class="ph-bold ph-trash text-xs"></i></button>
+                        </div>
+                        <div class="flex flex-col items-end max-w-[85%] md:max-w-[75%] lg:max-w-[65%]">
+                            <div class="bubble-right px-3.5 py-2 flex flex-col min-w-[120px] shadow-2xs">
+                                <p class="msg-text text-[15px] text-white leading-[1.38] tracking-tight">Perfect. Thanks!</p>
+                                <div class="flex items-center justify-end gap-1 mt-0.5 text-blue-100">
+                                    <span class="text-[11px] font-medium">10:33 AM</span>
+                                    <i class="ph-bold ph-checks text-[14px] text-white"></i>
+                                </div>
+                            </div>
+                            <div class="reactions-box flex flex-wrap gap-1 mt-1 empty:hidden"></div>
+                        </div>
+                    </div>
+
+                    <div id="typing-indicator" class="hidden flex gap-2 items-end w-full max-w-[85%] md:max-w-[75%] lg:max-w-[65%] mt-1 animate-msg" style="animation-delay: 0s;">
+                        <img src="https://i.pravatar.cc/150?img=11" class="w-7 h-7 rounded-full object-cover shrink-0 mb-1 shadow-sm ring-1 ring-black/5" alt="Avatar">
+                        <div class="bubble-left px-4 py-3.5 flex items-center gap-1 shadow-2xs">
+                            <span class="typing-dot"></span>
+                            <span class="typing-dot"></span>
+                            <span class="typing-dot"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <button id="scroll-bottom-btn" class="hidden fixed bottom-20 right-5 md:right-10 z-30 w-9 h-9 rounded-full bg-white/95 dark:bg-slate-800/95 text-chat-blue shadow-lg border border-gray-200 dark:border-slate-700 items-center justify-center hover:scale-105 active:scale-95 transition-all">
+                <i class="ph-bold ph-caret-down text-base"></i>
+            </button>
+        </main>
+
+        <footer class="footer-wrapper">
+            <div id="reply-bar" class="hidden w-full max-w-4xl mb-2 px-3.5 py-2 rounded-2xl bg-gray-100 dark:bg-slate-800 border-l-4 border-[#0078FE] items-center justify-between text-xs animate-msg">
+                <div class="flex flex-col min-w-0 pr-3">
+                    <span id="reply-sender" class="font-semibold text-[#0078FE]">Replying to message</span>
+                    <p id="reply-text" class="text-gray-600 dark:text-slate-300 truncate mt-0.5"></p>
+                </div>
+                <button id="close-reply-btn" class="p-1 text-gray-400 hover:text-gray-600 rounded-full">
+                    <i class="ph-bold ph-x text-sm"></i>
+                </button>
+            </div>
+
+            <div id="emoji-popover" class="hidden absolute bottom-16 right-4 md:right-auto md:left-1/2 md:translate-x-28 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border border-gray-100 dark:border-slate-800 rounded-2xl shadow-xl p-2 z-40 grid grid-cols-6 gap-1">
+                <button type="button" class="emoji-item p-1.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg text-lg">😀</button>
+                <button type="button" class="emoji-item p-1.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg text-lg">😂</button>
+                <button type="button" class="emoji-item p-1.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg text-lg">🙌</button>
+                <button type="button" class="emoji-item p-1.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg text-lg">🔥</button>
+                <button type="button" class="emoji-item p-1.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg text-lg">❤️</button>
+                <button type="button" class="emoji-item p-1.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg text-lg">👍</button>
+                <button type="button" class="emoji-item p-1.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg text-lg">🎉</button>
+                <button type="button" class="emoji-item p-1.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg text-lg">🚀</button>
+                <button type="button" class="emoji-item p-1.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg text-lg">✨</button>
+                <button type="button" class="emoji-item p-1.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg text-lg">🤔</button>
+                <button type="button" class="emoji-item p-1.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg text-lg">👏</button>
+                <button type="button" class="emoji-item p-1.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg text-lg">💯</button>
+            </div>
+
+            <div class="container-ia-chat w-full max-w-4xl">
+                <input type="checkbox" name="input-voice" id="input-voice" class="input-voice" />
+                <input type="text" name="input-text" id="input-text" placeholder="Type a message..." class="input-text" autocomplete="off" />
+                
+                <div class="container-upload-files">
+                    <button type="button" id="camera-btn" title="Send Photo" class="upload-file">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24">
+                            <g fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="13" r="3"></circle>
+                                <path d="M9.778 21h4.444c3.121 0 4.682 0 5.803-.735a4.4 4.4 0 0 0 1.226-1.204c.749-1.1.749-2.633.749-5.697s0-4.597-.749-5.697a4.4 4.4 0 0 0-1.226-1.204c-.72-.473-1.622-.642-3.003-.702c-.659 0-1.226-.49-1.355-1.125A2.064 2.064 0 0 0 13.634 3h-3.268c-.988 0-1.839.685-2.033 1.636c-.129.635-.696 1.125-1.355 1.125c-1.38.06-2.282.23-3.003.702A4.4 4.4 0 0 0 2.75 7.667C2 8.767 2 10.299 2 13.364s0 4.596.749 5.697c.324.476.74.885 1.226 1.204C5.096 21 6.657 21 9.778 21Z"></path>
+                            </g>
+                        </svg>
+                    </button>
+                    <button type="button" id="photo-btn" title="Choose Image" class="upload-file">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24">
+                            <g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2">
+                                <rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect>
+                                <circle cx="9" cy="9" r="2"></circle>
+                                <path d="m21 15l-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path>
+                            </g>
+                        </svg>
+                    </button>
+                    <button type="button" id="file-btn" title="Attach Document" class="upload-file">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24">
+                            <path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m6 14l1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"></path>
+                        </svg>
+                    </button>
+                </div>
+                
+                <button type="button" id="plus-attach-btn" class="label-files" title="Add Attachment">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24">
+                        <path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 12h14m-7-7v14"></path>
+                    </svg>
+                </button>
+
+                <button type="button" id="emoji-btn" class="btn-emoji" title="Insert Emoji">
+                    <i class="ph ph-smiley text-[21px]"></i>
+                </button>
+                
+                <!-- Cohesive iOS-Blue 3D Liquid Glass Voice Recorder -->
+                <label for="input-voice" class="label-voice" title="Record Voice Message">
+                    <svg class="icon-voice" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+                        <path fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2" d="M12 4v16m4-13v10M8 7v10m12-6v2M4 11v2"></path>
+                    </svg>
+                    
+                    <div id="ai-orb" class="ai">
+                        <div class="container">
+                            <div class="c c4"></div>
+                            <div class="c c1"></div>
+                            <div class="c c2"></div>
+                            <div class="c c3"></div>
+                        </div>
+                        <div class="glass"></div>
+                    </div>
+                    
+                    <div class="text-voice">
+                        <div class="voice-header-row">
+                            <div class="voice-status-group">
+                                <span class="rec-dot"></span>
+                                <span id="voice-status-text" class="voice-status-title">Listening...</span>
+                            </div>
+                            <span id="voice-timer" class="voice-timer-badge">0:00</span>
+                        </div>
+
+                        <div id="voice-eq" class="voice-eq-row">
+                            <span class="eq-bar"></span><span class="eq-bar"></span><span class="eq-bar"></span>
+                            <span class="eq-bar"></span><span class="eq-bar"></span><span class="eq-bar"></span>
+                            <span class="eq-bar"></span><span class="eq-bar"></span><span class="eq-bar"></span>
+                            <span class="eq-bar"></span><span class="eq-bar"></span><span class="eq-bar"></span>
+                        </div>
+
+                        <div class="voice-footer-controls">
+                            <button type="button" id="orb-cancel-btn" class="voice-action-pill cancel-btn" title="Cancel">
+                                <i class="ph-bold ph-x text-[11px]"></i> Cancel
+                            </button>
+                            <button type="button" id="orb-transcribe-btn" class="voice-action-pill" title="Transcribe to Text">
+                                <i class="ph-bold ph-text-aa text-[12px]"></i> Text
+                            </button>
+                            <button type="button" id="orb-send-btn" class="voice-send-pill" title="Send Voice Note">
+                                Send <i class="ph-bold ph-arrow-up text-[11px]"></i>
+                            </button>
+                        </div>
+                    </div>
+                </label>
+                
+                <button id="btn-send" class="btn-send" title="Send Message">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" style="transform: translateX(-1px); margin-top: 1px;">
+                        <path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="m5 12l7-7l7 7m-7 7V5"></path>
+                    </svg>
+                </button>
+            </div>
+        </footer>
+
+        <div id="contact-sheet-backdrop" class="hidden fixed inset-0 z-50 bg-black/25 backdrop-blur-xs transition-opacity">
+            <aside class="absolute right-0 top-0 bottom-0 w-full max-w-xs sm:max-w-sm bg-white dark:bg-slate-900 border-l border-gray-100 dark:border-slate-800 shadow-2xl flex flex-col justify-between p-6 overflow-y-auto">
+                <div>
+                    <div class="flex items-center justify-between pb-4 border-b border-gray-100 dark:border-slate-800">
+                        <h2 class="text-base font-semibold text-gray-900 dark:text-white">Contact Info</h2>
+                        <button id="close-contact-sheet" class="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-500">
+                            <i class="ph-bold ph-x text-base"></i>
+                        </button>
+                    </div>
+                    <div class="flex flex-col items-center text-center py-6">
+                        <div class="relative w-24 h-24 mb-3">
+                            <img src="https://i.pravatar.cc/150?img=11" class="lightbox-trigger w-full h-full rounded-full object-cover shadow-md ring-4 ring-blue-500/10 cursor-pointer" alt="Bholanath Kumbhakar">
+                            <span class="absolute bottom-1 right-1 w-4 h-4 rounded-full bg-[#22c55e] border-2 border-white dark:border-slate-900"></span>
+                        </div>
+                        <h3 class="text-lg font-bold text-gray-900 dark:text-white">Bholanath Kumbhakar</h3>
+                        <p class="text-xs text-gray-500 dark:text-slate-400 mt-0.5">+91 98765 43210</p>
+                        <p class="text-xs text-gray-500 dark:text-slate-400 mt-2 px-4 leading-relaxed">"Building hardware & home automation systems."</p>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2 pb-5 border-b border-gray-100 dark:border-slate-800">
+                        <button id="sheet-audio-btn" class="flex flex-col items-center gap-1 py-2.5 rounded-xl bg-gray-50 dark:bg-slate-800/70 hover:bg-blue-50 text-chat-blue">
+                            <i class="ph-fill ph-phone text-lg"></i><span class="text-[11px] font-medium">Audio</span>
+                        </button>
+                        <button id="sheet-video-btn" class="flex flex-col items-center gap-1 py-2.5 rounded-xl bg-gray-50 dark:bg-slate-800/70 hover:bg-blue-50 text-chat-blue">
+                            <i class="ph-fill ph-video-camera text-lg"></i><span class="text-[11px] font-medium">Video</span>
+                        </button>
+                        <button id="sheet-search-btn" class="flex flex-col items-center gap-1 py-2.5 rounded-xl bg-gray-50 dark:bg-slate-800/70 hover:bg-blue-50 text-chat-blue">
+                            <i class="ph-bold ph-magnifying-glass text-lg"></i><span class="text-[11px] font-medium">Search</span>
+                        </button>
+                    </div>
+                    <div class="mt-4">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-semibold uppercase tracking-wider text-gray-400">Shared Media</span>
+                            <span class="text-[11px] text-chat-blue font-medium">Tap to view</span>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2 mt-2.5">
+                            <img src="https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=600&q=80" class="lightbox-trigger w-full h-20 object-cover rounded-xl border border-gray-100 dark:border-slate-800 cursor-pointer" alt="Shared photo">
+                            <img src="https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=600&q=80" class="lightbox-trigger w-full h-20 object-cover rounded-xl border border-gray-100 dark:border-slate-800 cursor-pointer" alt="Shared photo">
+                            <img src="https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=600&q=80" class="lightbox-trigger w-full h-20 object-cover rounded-xl border border-gray-100 dark:border-slate-800 cursor-pointer" alt="Shared photo">
+                        </div>
+                    </div>
+                </div>
+                <div class="pt-4 border-t border-gray-100 dark:border-slate-800 text-center">
+                    <span class="text-[11px] text-gray-400">Direct Messages • End-to-End Encrypted</span>
+                </div>
+            </aside>
+        </div>
+
+        <div id="lightbox-modal" class="hidden fixed inset-0 z-[110] bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+            <button id="close-lightbox-btn" class="absolute top-5 right-5 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center">
+                <i class="ph-bold ph-x text-lg"></i>
+            </button>
+            <img id="lightbox-img" src="" alt="Preview" class="max-w-full max-h-[85dvh] rounded-2xl shadow-2xl object-contain" />
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const htmlEl = document.documentElement;
+            const mainChat = document.getElementById('main-chat');
+            const chatMessages = document.getElementById('chat-messages');
+            const emptyChatState = document.getElementById('empty-chat-state');
+            const scrollBottomBtn = document.getElementById('scroll-bottom-btn');
+            const inputText = document.getElementById('input-text');
+            const btnSend = document.getElementById('btn-send');
+            const typingIndicator = document.getElementById('typing-indicator');
+            const userStatus = document.getElementById('user-status');
+            const onlineDot = document.getElementById('online-dot');
+            const voiceInput = document.getElementById('input-voice');
+            const voiceStatusText = document.getElementById('voice-status-text');
+            const voiceTimer = document.getElementById('voice-timer');
+            const aiOrb = document.getElementById('ai-orb');
+            const eqBars = document.querySelectorAll('#voice-eq .eq-bar');
+            const orbCancelBtn = document.getElementById('orb-cancel-btn');
+            const orbTranscribeBtn = document.getElementById('orb-transcribe-btn');
+            const orbSendBtn = document.getElementById('orb-send-btn');
+            
+            const menuBtn = document.getElementById('menu-btn');
+            const dropdownMenu = document.getElementById('dropdown-menu');
+            const clearChatBtn = document.getElementById('clear-chat-btn');
+            const appearanceBtn = document.getElementById('appearance-btn');
+            const themePill = document.getElementById('theme-pill');
+            const muteNotifyBtn = document.getElementById('mute-notify-btn');
+            const mutePill = document.getElementById('mute-pill');
+            const mutedHeaderIcon = document.getElementById('muted-header-icon');
+            const blockUserBtn = document.getElementById('block-user-btn');
+            const blockLabel = document.getElementById('block-label');
+
+            let activeReplyQuote = null;
+            const replyBar = document.getElementById('reply-bar');
+            const replyText = document.getElementById('reply-text');
+            const closeReplyBtn = document.getElementById('close-reply-btn');
+
+            const emojiBtn = document.getElementById('emoji-btn');
+            const emojiPopover = document.getElementById('emoji-popover');
+
+            const searchBtn = document.getElementById('search-btn');
+            const searchDrawer = document.getElementById('search-drawer');
+            const searchInput = document.getElementById('search-input');
+            const searchCount = document.getElementById('search-count');
+            const closeSearchBtn = document.getElementById('close-search-btn');
+
+            const profileTrigger = document.getElementById('profile-trigger');
+            const infoMenuBtn = document.getElementById('info-menu-btn');
+            const contactSheetBackdrop = document.getElementById('contact-sheet-backdrop');
+            const closeContactSheet = document.getElementById('close-contact-sheet');
+            const lightboxModal = document.getElementById('lightbox-modal');
+            const lightboxImg = document.getElementById('lightbox-img');
+            const closeLightboxBtn = document.getElementById('close-lightbox-btn');
+
+            const audioCallBtn = document.getElementById('audio-call-btn');
+            const videoCallBtn = document.getElementById('video-call-btn');
+            const callBanner = document.getElementById('call-banner');
+            const callTitle = document.getElementById('call-title');
+            const callTimer = document.getElementById('call-timer');
+            const endCallBtn = document.getElementById('end-call-btn');
+            const muteMicBtn = document.getElementById('mute-mic-btn');
+            let callInterval = null;
+            let callSeconds = 0;
+
+            const toastNotification = document.getElementById('toast-notification');
+            const toastText = document.getElementById('toast-text');
+            let toastTimeout = null;
+
+            function showToast(message) {
+                toastText.textContent = message;
+                toastNotification.classList.remove('opacity-0', '-translate-y-2');
+                toastNotification.classList.add('opacity-100', 'translate-y-0');
+                clearTimeout(toastTimeout);
+                toastTimeout = setTimeout(() => {
+                    toastNotification.classList.remove('opacity-100', 'translate-y-0');
+                    toastNotification.classList.add('opacity-0', '-translate-y-2');
+                }, 2200);
+            }
+
+            function closeMenu() {
+                dropdownMenu.classList.remove('opacity-100', 'scale-100');
+                dropdownMenu.classList.add('opacity-0', 'scale-95');
+                setTimeout(() => dropdownMenu.classList.add('hidden'), 200);
+            }
+
+            menuBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (dropdownMenu.classList.contains('hidden')) {
+                    dropdownMenu.classList.remove('hidden');
+                    setTimeout(() => {
+                        dropdownMenu.classList.remove('opacity-0', 'scale-95');
+                        dropdownMenu.classList.add('opacity-100', 'scale-100');
+                    }, 10);
+                } else {
+                    closeMenu();
+                }
+            });
+
+            document.addEventListener('click', (e) => {
+                if (!dropdownMenu.contains(e.target) && e.target !== menuBtn && !dropdownMenu.classList.contains('hidden')) closeMenu();
+                if (!emojiPopover.contains(e.target) && !emojiBtn.contains(e.target) && !emojiPopover.classList.contains('hidden')) emojiPopover.classList.add('hidden');
+            });
+
+            appearanceBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isDark = htmlEl.classList.toggle('dark');
+                themePill.textContent = isDark ? 'Dark' : 'Light';
+                showToast(`${isDark ? 'Dark' : 'Light'} appearance enabled`);
+            });
+
+            let isMuted = false;
+            muteNotifyBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                isMuted = !isMuted;
+                mutePill.textContent = isMuted ? 'Muted' : 'Off';
+                mutedHeaderIcon.classList.toggle('hidden', !isMuted);
+                showToast(isMuted ? 'Notifications muted' : 'Notifications unmuted');
+            });
+
+            let isBlocked = false;
+            blockUserBtn.addEventListener('click', () => {
+                isBlocked = !isBlocked;
+                blockLabel.textContent = isBlocked ? 'Unblock' : 'Block';
+                userStatus.textContent = isBlocked ? 'Blocked' : 'Online';
+                onlineDot.classList.toggle('hidden', isBlocked);
+                inputText.disabled = isBlocked;
+                inputText.placeholder = isBlocked ? 'You blocked this contact' : 'Type a message...';
+                closeMenu();
+                showToast(isBlocked ? 'Contact blocked' : 'Contact unblocked');
+            });
+
+            clearChatBtn.addEventListener('click', () => {
+                document.querySelectorAll('.message-row').forEach(row => row.remove());
+                emptyChatState.classList.remove('hidden');
+                emptyChatState.classList.add('flex');
+                closeMenu();
+                showToast('Conversation cleared');
+            });
+
+            function toggleContactSheet(show) {
+                contactSheetBackdrop.classList.toggle('hidden', !show);
+                if (show) closeMenu();
+            }
+
+            profileTrigger.addEventListener('click', () => toggleContactSheet(true));
+            infoMenuBtn.addEventListener('click', () => toggleContactSheet(true));
+            closeContactSheet.addEventListener('click', () => toggleContactSheet(false));
+            contactSheetBackdrop.addEventListener('click', (e) => {
+                if (e.target === contactSheetBackdrop) toggleContactSheet(false);
+            });
+
+            document.addEventListener('click', (e) => {
+                const imgTrigger = e.target.closest('.lightbox-trigger');
+                if (imgTrigger && imgTrigger.src) {
+                    lightboxImg.src = imgTrigger.src;
+                    lightboxModal.classList.remove('hidden');
+                }
+            });
+
+            closeLightboxBtn.addEventListener('click', () => lightboxModal.classList.add('hidden'));
+            lightboxModal.addEventListener('click', (e) => {
+                if (e.target === lightboxModal) lightboxModal.classList.add('hidden');
+            });
+
+            function toggleSearchDrawer() {
+                const isHidden = searchDrawer.classList.toggle('hidden');
+                if (!isHidden) searchInput.focus();
+                else {
+                    searchInput.value = '';
+                    searchCount.textContent = '';
+                    document.querySelectorAll('.message-row').forEach(r => r.style.opacity = '1');
+                }
+            }
+
+            searchBtn.addEventListener('click', toggleSearchDrawer);
+            closeSearchBtn.addEventListener('click', toggleSearchDrawer);
+
+            searchInput.addEventListener('input', () => {
+                const q = searchInput.value.trim().toLowerCase();
+                const rows = document.querySelectorAll('.message-row');
+                if (!q) {
+                    rows.forEach(r => r.style.opacity = '1');
+                    searchCount.textContent = '';
+                    return;
+                }
+                let found = 0;
+                rows.forEach(r => {
+                    const txt = r.querySelector('.msg-text')?.textContent.toLowerCase() || '';
+                    if (txt.includes(q)) { r.style.opacity = '1'; found++; }
+                    else { r.style.opacity = '0.22'; }
+                });
+                searchCount.textContent = `${found} match${found === 1 ? '' : 'es'}`;
+            });
+
+            function startCall(type) {
+                if (isBlocked) { showToast('Unblock contact to start a call'); return; }
+                toggleContactSheet(false);
+                callBanner.classList.remove('hidden');
+                callTitle.textContent = `${type} • Bholanath Kumbhakar`;
+                userStatus.textContent = `In ${type.toLowerCase()}...`;
+                callSeconds = 0;
+                callTimer.textContent = '00:00';
+                clearInterval(callInterval);
+                callInterval = setInterval(() => {
+                    callSeconds++;
+                    const m = String(Math.floor(callSeconds / 60)).padStart(2, '0');
+                    const s = String(callSeconds % 60).padStart(2, '0');
+                    callTimer.textContent = `${m}:${s}`;
+                }, 1000);
+            }
+
+            audioCallBtn.addEventListener('click', () => startCall('Audio Call'));
+            videoCallBtn.addEventListener('click', () => startCall('Video Call'));
+            document.getElementById('sheet-audio-btn').addEventListener('click', () => startCall('Audio Call'));
+            document.getElementById('sheet-video-btn').addEventListener('click', () => startCall('Video Call'));
+            document.getElementById('sheet-search-btn').addEventListener('click', () => {
+                toggleContactSheet(false);
+                if (searchDrawer.classList.contains('hidden')) toggleSearchDrawer();
+            });
+
+            endCallBtn.addEventListener('click', () => {
+                clearInterval(callInterval);
+                callBanner.classList.add('hidden');
+                userStatus.textContent = 'Online';
+                showToast('Call ended');
+            });
+
+            muteMicBtn.addEventListener('click', () => {
+                const muted = muteMicBtn.classList.toggle('bg-red-500');
+                showToast(muted ? 'Microphone muted' : 'Microphone active');
+            });
+
+            const now = new Date();
+            document.getElementById('chat-date').textContent = now.toLocaleDateString('en-US', {
+                weekday: 'short', day: 'numeric', month: 'short'
+            });
+
+            function scrollToBottom() {
+                if (mainChat) mainChat.scrollTo({ top: mainChat.scrollHeight, behavior: 'smooth' });
+            }
+
+            mainChat.addEventListener('scroll', () => {
+                const dist = mainChat.scrollHeight - mainChat.scrollTop - mainChat.clientHeight;
+                scrollBottomBtn.classList.toggle('hidden', dist <= 140);
+                scrollBottomBtn.classList.toggle('flex', dist > 140);
+            });
+
+            scrollBottomBtn.addEventListener('click', scrollToBottom);
+            setTimeout(scrollToBottom, 150);
+
+            chatMessages.addEventListener('click', (e) => {
+                const reactBtn = e.target.closest('.react-btn');
+                const replyBtn = e.target.closest('.reply-btn');
+                const copyBtn = e.target.closest('.copy-btn');
+                const deleteBtn = e.target.closest('.delete-btn');
+                const voicePlayBtn = e.target.closest('.voice-play-btn');
+
+                if (reactBtn) toggleReaction(reactBtn.closest('.message-row'), reactBtn.getAttribute('data-emoji'));
+                if (replyBtn) {
+                    const row = replyBtn.closest('.message-row');
+                    const txt = row.querySelector('.msg-text')?.textContent || 'Voice / Media Attachment';
+                    activeReplyQuote = txt;
+                    replyText.textContent = txt;
+                    replyBar.classList.remove('hidden');
+                    replyBar.classList.add('flex');
+                    inputText.focus();
+                }
+                if (copyBtn) {
+                    const txt = copyBtn.closest('.message-row').querySelector('.msg-text')?.textContent || '';
+                    if (txt) {
+                        const temp = document.createElement('textarea');
+                        temp.value = txt;
+                        document.body.appendChild(temp);
+                        temp.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(temp);
+                        showToast('Message copied to clipboard');
+                    }
+                }
+                if (deleteBtn) {
+                    const row = deleteBtn.closest('.message-row');
+                    row.remove();
+                    showToast('Message deleted');
+                }
+                if (voicePlayBtn) {
+                    const icon = voicePlayBtn.querySelector('i');
+                    const isPlaying = icon.classList.contains('ph-pause');
+                    icon.className = isPlaying ? 'ph-fill ph-play text-xs' : 'ph-fill ph-pause text-xs';
+                    if (!isPlaying) {
+                        setTimeout(() => {
+                            icon.className = 'ph-fill ph-play text-xs';
+                        }, 2400);
+                    }
+                }
+            });
+
+            function toggleReaction(row, emoji) {
+                const box = row.querySelector('.reactions-box');
+                if (!box) return;
+                const existing = box.querySelector(`[data-emoji="${emoji}"]`);
+                if (existing) existing.remove();
+                else {
+                    const pill = document.createElement('span');
+                    pill.setAttribute('data-emoji', emoji);
+                    pill.className = 'reaction-pill inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 shadow-2xs cursor-pointer select-none';
+                    pill.textContent = emoji;
+                    pill.addEventListener('click', () => pill.remove());
+                    box.appendChild(pill);
+                }
+            }
+
+            closeReplyBtn.addEventListener('click', () => {
+                activeReplyQuote = null;
+                replyBar.classList.add('hidden');
+                replyBar.classList.remove('flex');
+            });
+
+            emojiBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                emojiPopover.classList.toggle('hidden');
+            });
+
+            document.querySelectorAll('.emoji-item').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    inputText.value += btn.textContent;
+                    emojiPopover.classList.add('hidden');
+                    inputText.focus();
+                });
+            });
+
+            const friendReplies = [
+                "That sounds amazing! Tell me more.",
+                "I completely agree.",
+                "Interesting perspective.",
+                "Let me look into that for a second...",
+                "Got it. I'll add that to the project notes."
+            ];
+
+            function getCurrentTime() {
+                return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            }
+
+            function escapeHTML(str) {
+                return str.replace(/[&<>'"]/g, tag => ({
+                    '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+                }[tag]));
+            }
+
+            function appendMessage(text, type, quoted = null, customMediaHTML = '') {
+                emptyChatState.classList.add('hidden');
+                emptyChatState.classList.remove('flex');
+                const time = getCurrentTime();
+                const div = document.createElement('div');
+                const safeText = escapeHTML(text);
+                const quoteHTML = quoted
+                    ? `<div class="mb-1.5 px-2.5 py-1 rounded-lg bg-black/15 border-l-2 border-white/80 text-[12px] text-white/90 truncate max-w-full">${escapeHTML(quoted)}</div>`
+                    : '';
+
+                if (type === 'outgoing') {
+                    div.className = 'message-row group flex justify-end items-end gap-2 w-full mt-0.5 mb-2 animate-msg';
+                    div.innerHTML = `
+                        <div class="msg-actions flex items-center gap-0.5 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-full px-1.5 py-0.5 shadow-sm mb-1.5">
+                            <button class="react-btn hover:scale-125 transition-transform px-1 text-xs" data-emoji="❤️">❤️</button>
+                            <button class="react-btn hover:scale-125 transition-transform px-1 text-xs" data-emoji="👍">👍</button>
+                            <button class="reply-btn p-1 text-gray-400 hover:text-[#0078FE]"><i class="ph-bold ph-arrow-bend-up-left text-xs"></i></button>
+                            <button class="copy-btn p-1 text-gray-400 hover:text-[#0078FE]"><i class="ph-bold ph-copy text-xs"></i></button>
+                            <button class="delete-btn p-1 text-gray-400 hover:text-red-500"><i class="ph-bold ph-trash text-xs"></i></button>
+                        </div>
+                        <div class="flex flex-col items-end max-w-[85%] md:max-w-[75%] lg:max-w-[65%]">
+                            <div class="bubble-right px-3.5 py-2 flex flex-col min-w-[120px] shadow-2xs">
+                                ${quoteHTML}
+                                ${customMediaHTML}
+                                ${safeText ? `<p class="msg-text text-[15px] text-white leading-[1.38] tracking-tight">${safeText}</p>` : ''}
+                                <div class="flex items-center justify-end gap-1 mt-0.5 text-blue-100">
+                                    <span class="text-[11px] font-medium">${time}</span>
+                                    <i class="ph-bold ph-checks text-[14px] text-white"></i>
+                                </div>
+                            </div>
+                            <div class="reactions-box flex flex-wrap gap-1 mt-1 empty:hidden"></div>
+                        </div>
+                    `;
+                } else {
+                    div.className = 'message-row group flex gap-2 items-end w-full max-w-[85%] md:max-w-[75%] lg:max-w-[65%] mt-0.5 animate-msg';
+                    div.innerHTML = `
+                        <img src="https://i.pravatar.cc/150?img=11" class="w-7 h-7 rounded-full object-cover shrink-0 mb-1 shadow-sm ring-1 ring-black/5" alt="Avatar">
+                        <div class="flex flex-col items-start">
+                            <div class="bubble-left px-3.5 py-2 flex flex-col min-w-[100px] shadow-2xs">
+                                <p class="msg-text text-[15px] leading-[1.38] tracking-tight">${safeText}</p>
+                                <span class="text-[11px] text-gray-400 dark:text-slate-400 mt-0.5 font-medium">${time}</span>
+                            </div>
+                            <div class="reactions-box flex flex-wrap gap-1 mt-1 empty:hidden"></div>
+                        </div>
+                    `;
+                }
+                chatMessages.insertBefore(div, typingIndicator);
+                scrollToBottom();
+            }
+
+            function simulateFriendReply() {
+                if (isBlocked) return;
+                typingIndicator.classList.remove('hidden');
+                userStatus.textContent = 'typing...';
+                scrollToBottom();
+                setTimeout(() => {
+                    typingIndicator.classList.add('hidden');
+                    userStatus.textContent = 'Online';
+                    appendMessage(friendReplies[Math.floor(Math.random() * friendReplies.length)], 'incoming');
+                }, 1600);
+            }
+
+            function handleSend() {
+                const text = inputText.value.trim();
+                if (text) {
+                    appendMessage(text, 'outgoing', activeReplyQuote);
+                    inputText.value = '';
+                    activeReplyQuote = null;
+                    replyBar.classList.add('hidden');
+                    replyBar.classList.remove('flex');
+                    setTimeout(simulateFriendReply, 500);
+                }
+            }
+
+            btnSend.addEventListener('click', handleSend);
+            inputText.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') { e.preventDefault(); handleSend(); }
+            });
+
+            // Voice Globe Recording Session & Interactive Controls
+            let voiceTimerInterval;
+            let eqInterval;
+            let recSecs = 0;
+
+            function startVoiceOrbSession() {
+                voiceStatusText.textContent = "Listening...";
+                recSecs = 0;
+                voiceTimer.textContent = "0:00";
+                clearInterval(voiceTimerInterval);
+                clearInterval(eqInterval);
+
+                voiceTimerInterval = setInterval(() => {
+                    recSecs++;
+                    const m = Math.floor(recSecs / 60);
+                    const s = String(recSecs % 60).padStart(2, '0');
+                    voiceTimer.textContent = `${m}:${s}`;
+                }, 1000);
+
+                eqInterval = setInterval(() => {
+                    let sum = 0;
+                    eqBars.forEach((bar, i) => {
+                        const weight = 1 - Math.abs(i - 5.5) / 7;
+                        const h = Math.round(4 + Math.random() * 12 * weight);
+                        sum += h;
+                        bar.style.height = `${h}px`;
+                    });
+                    const scale = 1 + ((sum / eqBars.length - 4) / 140);
+                    aiOrb.style.setProperty('--audio-scale', scale.toFixed(3));
+                }, 95);
+            }
+
+            function stopVoiceOrbSession() {
+                clearInterval(voiceTimerInterval);
+                clearInterval(eqInterval);
+                aiOrb.style.setProperty('--audio-scale', '1');
+            }
+
+            document.querySelector('.label-voice').addEventListener('click', (e) => {
+                if (voiceInput.checked) {
+                    e.preventDefault();
+                }
+            });
+
+            voiceInput.addEventListener('change', function() {
+                if (this.checked) startVoiceOrbSession();
+                else stopVoiceOrbSession();
+            });
+
+            orbCancelBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                voiceInput.checked = false;
+                stopVoiceOrbSession();
+                showToast('Voice recording canceled');
+            });
+
+            orbTranscribeBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                voiceStatusText.textContent = "Transcribing...";
+                setTimeout(() => {
+                    voiceInput.checked = false;
+                    stopVoiceOrbSession();
+                    inputText.value = "Here is the latest update on the project.";
+                    inputText.focus();
+                }, 600);
+            });
+
+            orbSendBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const duration = recSecs > 0 ? voiceTimer.textContent : "0:04";
+                voiceInput.checked = false;
+                stopVoiceOrbSession();
+
+                const voiceNoteHTML = `
+                    <div class="flex items-center gap-3 py-1 pr-1 min-w-[195px]">
+                        <button type="button" class="voice-play-btn w-8 h-8 rounded-full bg-white text-[#0078FE] flex items-center justify-center shrink-0 shadow-xs hover:scale-105 transition">
+                            <i class="ph-fill ph-play text-xs"></i>
+                        </button>
+                        <div class="flex flex-col flex-1 gap-1">
+                            <div class="flex items-center gap-0.5 h-4">
+                                <span class="w-1 h-2 bg-white/80 rounded-full"></span>
+                                <span class="w-1 h-3.5 bg-white rounded-full"></span>
+                                <span class="w-1 h-2.5 bg-white/90 rounded-full"></span>
+                                <span class="w-1 h-4 bg-white rounded-full"></span>
+                                <span class="w-1 h-3 bg-white/85 rounded-full"></span>
+                                <span class="w-1 h-2 bg-white/70 rounded-full"></span>
+                                <span class="w-1 h-3.5 bg-white/90 rounded-full"></span>
+                                <span class="w-1 h-4 bg-white rounded-full"></span>
+                                <span class="w-1 h-2.5 bg-white/75 rounded-full"></span>
+                                <span class="w-1 h-3 bg-white/85 rounded-full"></span>
+                                <span class="w-1 h-2 bg-white/65 rounded-full"></span>
+                                <span class="w-1 h-3 bg-white/80 rounded-full"></span>
+                            </div>
+                            <span class="msg-text text-[10.5px] text-blue-100 font-medium">Voice Note • ${duration}</span>
+                        </div>
+                    </div>
+                `;
+                appendMessage('', 'outgoing', activeReplyQuote, voiceNoteHTML);
+                activeReplyQuote = null;
+                replyBar.classList.add('hidden');
+                replyBar.classList.remove('flex');
+                setTimeout(simulateFriendReply, 600);
+            });
+        });
+    </script>
+</body>
+</html>

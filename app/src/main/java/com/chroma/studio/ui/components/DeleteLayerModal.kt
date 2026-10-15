@@ -33,7 +33,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import com.chroma.studio.ui.theme.LocalChromaColors
+import com.chroma.studio.ui.theme.LocalOscellionColors
 
 @Composable
 fun DeleteLayerModal(
@@ -42,7 +42,7 @@ fun DeleteLayerModal(
     onCancel: () -> Unit,
     onConfirm: () -> Unit
 ) {
-    val colors = LocalChromaColors.current
+    val colors = LocalOscellionColors.current
 
     Dialog(onDismissRequest = onCancel) {
         Column(

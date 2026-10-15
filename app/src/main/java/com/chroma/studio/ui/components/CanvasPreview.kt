@@ -75,22 +75,24 @@ fun CanvasPreview(
     textContent: String = "CHROMA",
     onTextContentChange: (String) -> Unit = {},
     isStatic: Boolean = false,
+    timeMillisOverride: Long? = null,
     modifier: Modifier = Modifier
 ) {
-    var timeMillis by remember { mutableStateOf(0L) }
+    var internalTimeMillis by remember { mutableStateOf(0L) }
+    val timeMillis = timeMillisOverride ?: internalTimeMillis
     
     if (animStatus == com.chroma.studio.model.AnimStatus.STOPPED) {
-        timeMillis = 0L
+        internalTimeMillis = 0L
     }
     
-    LaunchedEffect(animStatus, animSpeed, isStatic) {
-        if (animStatus == com.chroma.studio.model.AnimStatus.PLAYING && !isStatic) {
+    LaunchedEffect(animStatus, animSpeed, isStatic, timeMillisOverride) {
+        if (animStatus == com.chroma.studio.model.AnimStatus.PLAYING && !isStatic && timeMillisOverride == null) {
             var lastTime = androidx.compose.runtime.withFrameNanos { it }
             while(true) {
                 androidx.compose.runtime.withFrameNanos { frameTime ->
                     val deltaMs = (frameTime - lastTime) / 1_000_000f
                     lastTime = frameTime
-                    timeMillis += (deltaMs * (animSpeed / 50f)).toLong()
+                    internalTimeMillis += (deltaMs * (animSpeed / 50f)).toLong()
                 }
             }
         }
@@ -114,9 +116,6 @@ fun CanvasPreview(
         fraction * maxRot
     } else 0f
 
-    val meshShaders = remember { mutableMapOf<String, android.graphics.RuntimeShader>() }
-    val auroraShaders = remember { mutableMapOf<String, android.graphics.RuntimeShader>() }
-
     val outerShape: Shape = remember(shape) {
         when (shape) {
             "circle" -> CircleShape
@@ -130,7 +129,7 @@ fun CanvasPreview(
 
     val postFxModifier = remember(postFxMode) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && postFxMode != PostProcessingFx.NONE) {
-            val shader = android.graphics.RuntimeShader(ShaderEngines.POST_FX_SHADER)
+            val shader = ShaderEngines.postFxShaderInstance
             val modeInt = when (postFxMode) {
                 PostProcessingFx.GRAIN -> 1
                 PostProcessingFx.HALFTONE -> 2
@@ -237,10 +236,10 @@ fun CanvasPreview(
             var layerAuroraShader: android.graphics.RuntimeShader? = null
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 if (layer.type == LayerType.MESH) {
-                    layerMeshShader = meshShaders.getOrPut(layer.id) { android.graphics.RuntimeShader(ShaderEngines.MESH_SHADER) }
+                    layerMeshShader = ShaderEngines.meshShaderInstance
                 }
                 if (layer.type == LayerType.AURORA) {
-                    layerAuroraShader = auroraShaders.getOrPut(layer.id) { android.graphics.RuntimeShader(ShaderEngines.AURORA_SHADER) }
+                    layerAuroraShader = ShaderEngines.auroraShaderInstance
                 }
             }
 

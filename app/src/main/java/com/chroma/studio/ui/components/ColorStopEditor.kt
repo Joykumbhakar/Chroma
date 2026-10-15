@@ -57,7 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chroma.studio.model.ColorStop
 import com.chroma.studio.ui.components.glossyBorder
-import com.chroma.studio.ui.theme.LocalChromaColors
+import com.chroma.studio.ui.theme.LocalOscellionColors
 import kotlin.math.roundToInt
 
 @Composable
@@ -66,7 +66,7 @@ fun ColorStopEditor(
     onStopsChange: (List<ColorStop>) -> Unit,
     trailingContent: @Composable (() -> Unit)? = null
 ) {
-    val colors = LocalChromaColors.current
+    val colors = LocalOscellionColors.current
     val shape = RoundedCornerShape(8.dp)
 
     // derivedStateOf: only re-sorts when stops actually change identity
@@ -477,7 +477,7 @@ fun InlineColorPicker(
     initialColor: Color,
     onColorChange: (Color) -> Unit
 ) {
-    val colors = LocalChromaColors.current
+    val colors = LocalOscellionColors.current
     val hsv = remember { FloatArray(3) }
 
     // mutableFloatStateOf: specialized primitive state, avoids boxing overhead on every drag

@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="128dp"
+    android:height="128dp"
+    android:viewportWidth="1024"
+    android:viewportHeight="1024">
+
+    <!-- ── 1. Squircle Background (#2C2C2E to #121213) ────────────────── -->
+    <path
+        android:pathData="M 226,0 L 798,0 C 923,0 1024,101 1024,226 L 1024,798 C 1024,923 923,1024 798,1024 L 226,1024 C 101,1024 0,923 0,798 L 0,226 C 0,101 101,0 226,0 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="0"
+                android:startY="0"
+                android:endX="0"
+                android:endY="1024">
+                <item android:color="#FF2C2C2E" android:offset="0.0" />
+                <item android:color="#FF121213" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- ── 2. Subtle Bezel Stroke ──────────────────────────────────────── -->
+    <path
+        android:strokeWidth="4"
+        android:pathData="M 226,2 L 798,2 C 922,2 1022,102 1022,226 L 1022,798 C 1022,922 922,1022 798,1022 L 226,1022 C 102,1022 2,922 2,798 L 2,226 C 2,102 102,2 226,2 Z">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:type="linear"
+                android:startX="0"
+                android:startY="0"
+                android:endX="1024"
+                android:endY="1024">
+                <item android:color="#CC48484A" android:offset="0.0" />
+                <item android:color="#332C2C2E" android:offset="0.3" />
+                <item android:color="#E6000000" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- ── 3. 3D Milled Metallic Symbol ────────────────────────────────── -->
+    <path
+        android:fillType="evenOdd"
+        android:pathData="M 512 212 A 300 300 0 0 1 812 512 A 300 300 0 0 1 512 812 A 300 300 0 0 1 299.87 724.13 L 148.5 771 Q 120 780 136.5 755.1 L 230.24 615 A 300 300 0 0 1 512 212 Z M 512 342 A 170 170 0 0 0 512 682 A 170 170 0 0 0 512 342 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="0"
+                android:startY="0"
+                android:endX="1024"
+                android:endY="1024">
+                <item android:color="#FFFFFFFF" android:offset="0.0" />
+                <item android:color="#FFF5F5F7" android:offset="0.25" />
+                <item android:color="#FFD1D1D6" android:offset="0.50" />
+                <item android:color="#FF8E8E93" android:offset="0.85" />
+                <item android:color="#FF48484A" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- ── 4. Edge Highlight ───────────────────────────────────────────── -->
+    <path
+        android:fillType="evenOdd"
+        android:strokeWidth="6"
+        android:strokeColor="#80FFFFFF"
+        android:pathData="M 512 212 A 300 300 0 0 1 812 512 A 300 300 0 0 1 512 812 A 300 300 0 0 1 299.87 724.13 L 148.5 771 Q 120 780 136.5 755.1 L 230.24 615 A 300 300 0 0 1 512 212 Z M 512 342 A 170 170 0 0 0 512 682 A 170 170 0 0 0 512 342 Z" />
+</vector>

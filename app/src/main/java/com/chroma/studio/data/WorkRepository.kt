@@ -39,7 +39,7 @@ private object OffsetAdapter : JsonSerializer<Offset>, JsonDeserializer<Offset> 
     }
 }
 
-private val gson = GsonBuilder()
+val chromaGson = GsonBuilder()
     .registerTypeAdapter(Color::class.java, ColorAdapter)
     .registerTypeAdapter(Offset::class.java, OffsetAdapter)
     .create()
@@ -76,8 +76,8 @@ class WorkRepository(context: Context) {
         val ids = getIds().toMutableList()
         if (!ids.contains(work.id)) ids.add(work.id)
         prefs.edit()
+            .putString("work_${work.id}", chromaGson.toJson(work))
             .putString(KEY_IDS, ids.joinToString(","))
-            .putString("work_${work.id}", gson.toJson(work))
             .apply()
     }
 
@@ -102,16 +102,33 @@ class WorkRepository(context: Context) {
             .apply()
     }
 
-    /** Serialize layers to JSON string. */
-    fun serializeLayers(layers: List<GradientLayer>): String = gson.toJson(layers, layerListType)
+    /** Serialize layers to JSON string (compressed to save storage space). */
+    fun serializeLayers(layers: List<GradientLayer>): String {
+        val raw = chromaGson.toJson(layers, layerListType)
+        return com.chroma.studio.utils.DataCompressionUtils.compressText(raw)
+    }
 
-    /** Deserialize layers from JSON string. */
+    /** Deserialize layers from JSON string (supports both compressed and legacy raw JSON). */
     fun deserializeLayers(json: String): List<GradientLayer> {
         return try {
-            gson.fromJson(json, layerListType) ?: emptyList()
+            val decompressed = com.chroma.studio.utils.DataCompressionUtils.decompressText(json)
+            chromaGson.fromJson(decompressed, layerListType) ?: emptyList()
         } catch (e: Exception) {
             emptyList()
         }
+    }
+
+    fun setLiveWallpaperId(id: String) {
+        prefs.edit().putString("live_wallpaper_id", id).apply()
+    }
+
+    fun getLiveWallpaperWork(): ChromaWork? {
+        val id = prefs.getString("live_wallpaper_id", null)
+        if (id != null) {
+            val work = loadWork(id)
+            if (work != null && !work.isDeleted) return work
+        }
+        return loadActiveWorks().firstOrNull()
     }
 
     // ─── Private helpers ───
@@ -124,7 +141,7 @@ class WorkRepository(context: Context) {
     private fun loadWork(id: String): ChromaWork? {
         val json = prefs.getString("work_$id", null) ?: return null
         return try {
-            gson.fromJson(json, ChromaWork::class.java)
+            chromaGson.fromJson(json, ChromaWork::class.java)
         } catch (e: Exception) {
             null
         }

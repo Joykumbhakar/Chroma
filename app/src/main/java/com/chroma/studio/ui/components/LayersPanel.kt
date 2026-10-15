@@ -45,7 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.chroma.studio.model.GradientLayer
-import com.chroma.studio.ui.theme.LocalChromaColors
+import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.chroma.studio.viewmodel.ChromaViewModel
 
 /**
@@ -62,7 +62,7 @@ fun LayersPanel(
     vm: ChromaViewModel,
     modifier: Modifier = Modifier
 ) {
-    val colors = LocalChromaColors.current
+    val colors = LocalOscellionColors.current
 
     // Drag state
     var draggingIndex by remember { mutableIntStateOf(-1) }

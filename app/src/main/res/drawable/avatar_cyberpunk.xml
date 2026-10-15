@@ -1,0 +1,94 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportWidth="200"
+    android:viewportHeight="200">
+
+    <!-- Base Circle (Deep Space Black/Indigo) -->
+    
+
+    <!-- Neon Cyber Grid Glow -->
+    
+
+    <!-- Sci-fi Cyber Armor Body -->
+    <path
+        android:pathData="M24,185 C32,150 64,136 100,136 C136,136 168,150 176,185 C156,195 129,200 100,200 C71,200 44,195 24,185 Z"
+        android:fillColor="#18181B"/>
+
+    <!-- Glowing Armor Core / Lines -->
+    <path
+        android:pathData="M80,146 L100,178 L120,146"
+        android:strokeColor="#F43F5E"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"/>
+    <path
+        android:pathData="M100,178 L100,200"
+        android:strokeColor="#22D3EE"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"/>
+
+    <!-- Cyber Neck -->
+    <path
+        android:pathData="M86,108 L86,142 L114,142 L114,108 Z"
+        android:fillColor="#27272A"/>
+    <path
+        android:pathData="M94,115 L94,135"
+        android:strokeColor="#22D3EE"
+        android:strokeWidth="1.5"/>
+    <path
+        android:pathData="M106,115 L106,135"
+        android:strokeColor="#22D3EE"
+        android:strokeWidth="1.5"/>
+
+    <!-- Face Silhouette -->
+    <path
+        android:pathData="M68,80 C68,56 82,42 100,42 C118,42 132,56 132,80 C132,104 118,124 100,124 C82,124 68,104 68,80 Z"
+        android:fillColor="#F6C5A2"/>
+
+    <!-- Cyber Headphone Band -->
+    <path
+        android:pathData="M56,80 C56,44 74,28 100,28 C126,28 144,44 144,80"
+        android:strokeColor="#3F3F46"
+        android:strokeWidth="4.5"
+        android:strokeLineCap="round"/>
+
+    <!-- Left Ear Cup Glowing -->
+    <path
+        android:pathData="M54,72 L62,72 L62,94 L54,94 Z"
+        android:fillColor="#22D3EE"/>
+
+    <!-- Right Ear Cup Glowing -->
+    <path
+        android:pathData="M138,72 L146,72 L146,94 L138,94 Z"
+        android:fillColor="#F43F5E"/>
+
+    <!-- Spiky Cyber Hair -->
+    <path
+        android:pathData="M64,66 C64,46 76,32 100,32 C118,32 136,40 136,58 C130,52 120,44 108,44 C92,44 80,56 64,66 Z"
+        android:fillColor="#09090B"/>
+
+    <!-- Neon Cyber Visor (Full Wrap) -->
+    <path
+        android:pathData="M66,68 L134,68 C137,68 139,71 138,75 L135,84 C134,87 131,89 128,89 L72,89 C69,89 66,87 65,84 L62,75 C61,71 63,68 66,68 Z"
+        android:fillColor="#06B6D4"/>
+
+    <!-- Visor Neon Glow Streak -->
+    <path
+        android:pathData="M68,72 L132,72"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"/>
+    <path
+        android:pathData="M74,80 L126,80"
+        android:strokeColor="#F43F5E"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"/>
+
+    <!-- Confident Mouth Line -->
+    <path
+        android:pathData="M94,102 L106,102"
+        android:strokeColor="#C68962"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round"/>
+
+</vector>

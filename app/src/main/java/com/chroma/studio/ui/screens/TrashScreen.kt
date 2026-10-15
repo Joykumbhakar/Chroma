@@ -1,4 +1,5 @@
 package com.chroma.studio.ui.screens
+import com.chroma.studio.ui.components.GlassIconButton
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -16,8 +17,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -33,14 +32,9 @@ import androidx.compose.ui.unit.sp
 import com.chroma.studio.data.WorkRepository
 import com.chroma.studio.model.ChromaWork
 import com.chroma.studio.ui.components.CanvasPreview
-import com.chroma.studio.ui.theme.LocalChromaColors
+import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.chroma.studio.ui.components.glossyBorder
-import com.composables.icons.lucide.ChevronLeft
-import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.Trash2
-import com.composables.icons.lucide.RefreshCcw
-import com.composables.icons.lucide.X
-import com.composables.icons.lucide.Check
+import com.composables.icons.lucide.*
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.delay
@@ -61,7 +55,7 @@ fun TrashScreen(
     onPermanentDelete: (String) -> Unit,
     onBack: () -> Unit
 ) {
-    val colors = LocalChromaColors.current
+    val colors = LocalOscellionColors.current
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
     var singleDeleteId by remember { mutableStateOf<String?>(null) }
     var deletingWorkIds by remember { mutableStateOf(emptySet<String>()) }
@@ -80,7 +74,7 @@ fun TrashScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = onClearSelection) {
+                        GlassIconButton(onClick = onClearSelection) {
                             Icon(Lucide.X, "Cancel", tint = Color.White)
                         }
                         Spacer(Modifier.width(8.dp))
@@ -92,26 +86,20 @@ fun TrashScreen(
                         )
                     }
                     Row {
-                        IconButton(onClick = onRestoreSelected) {
+                        GlassIconButton(onClick = onRestoreSelected) {
                             Icon(Lucide.RefreshCcw, "Restore Selected", tint = Color.White)
                         }
-                        IconButton(onClick = { showDeleteConfirmDialog = true }) {
+                        GlassIconButton(onClick = { showDeleteConfirmDialog = true }) {
                             Icon(Lucide.Trash2, "Delete Selected", tint = Color.White)
                         }
                     }
                 }
             } else {
-                TopAppBar(
-                    title = { Text("Trash", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = colors.textMain) },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(Lucide.ChevronLeft, "Back", tint = colors.textMain)
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = colors.bg
-                    ),
-                    modifier = Modifier.statusBarsPadding()
+                com.chroma.studio.ui.components.ChromaScreenHeader(
+                    title = "Oscellion",
+                    badgeText = "Trash",
+                    showBackButton = true,
+                    onBack = onBack
                 )
             }
         },
@@ -206,7 +194,7 @@ fun TrashCard(
     onRestore: () -> Unit,
     onDelete: () -> Unit
 ) {
-    val colors = LocalChromaColors.current
+    val colors = LocalOscellionColors.current
     var showMenu by remember { mutableStateOf(false) }
     
     val deleteAlpha by animateFloatAsState(if (isDeleting) 0f else 1f, tween(300), label = "alpha")
@@ -283,7 +271,7 @@ fun TrashCard(
                 if (!selectionMode) {
                     Box {
                         Icon(
-                            Icons.Default.MoreVert,
+                            Lucide.EllipsisVertical,
                             contentDescription = "Options",
                             tint = colors.textMuted,
                             modifier = Modifier
@@ -321,102 +309,14 @@ fun DeleteConfirmationDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    val colors = LocalChromaColors.current
-    var dontAsk by remember { mutableStateOf(false) }
-
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(0.85f)
-                .clip(RoundedCornerShape(24.dp))
-                .background(Color(0xFFE6F0FA)) // A soft blue-white matching the screenshot
-                .border(1.dp, Color.White.copy(alpha = 0.5f), RoundedCornerShape(24.dp))
-        ) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Spacer(modifier = Modifier.height(24.dp))
-                
-                Text(
-                    text = "Delete Permanently",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 17.sp,
-                    color = Color.Black
-                )
-                
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                Text(
-                    text = "Are you sure you want to permanently delete ${if (count == 1) "this work" else "these $count works"}?\nThis action cannot be undone.",
-                    fontSize = 13.sp,
-                    color = Color(0xFF4B5563),
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 24.dp),
-                    lineHeight = 18.sp
-                )
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { dontAsk = !dontAsk }
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(16.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(if (dontAsk) Color(0xFFE5E7EB) else Color.Transparent)
-                            .border(1.dp, Color(0xFFA0AAB4), RoundedCornerShape(4.dp)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (dontAsk) {
-                            Icon(Lucide.Check, null, modifier = Modifier.size(10.dp), tint = Color(0xFF4B5563))
-                        }
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Don't ask me again", fontSize = 13.sp, color = Color(0xFF6B7280))
-                }
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                // Horizontal Divider
-                Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0xFFCBD5E1)))
-                
-                Row(
-                    modifier = Modifier.fillMaxWidth().height(50.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .clickable { onDismiss() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("Cancel", color = Color(0xFF2563EB), fontSize = 16.sp, fontWeight = FontWeight.Medium)
-                    }
-                    
-                    // Vertical Divider
-                    Box(modifier = Modifier.fillMaxHeight().width(1.dp).background(Color(0xFFCBD5E1)))
-                    
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .clickable { onConfirm() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("Delete", color = Color(0xFFEF4444), fontSize = 16.sp, fontWeight = FontWeight.Medium)
-                    }
-                }
-            }
-        }
-    }
+    com.chroma.studio.ui.components.IosAlertDialog(
+        title = "Delete Permanently",
+        message = "Are you sure you want to permanently delete ${if (count == 1) "this work" else "these $count works"}?\nThis action cannot be undone.",
+        confirmText = "Delete",
+        onConfirm = onConfirm,
+        dismissText = "Cancel",
+        onDismiss = onDismiss,
+        isDestructive = true
+    )
 }
 

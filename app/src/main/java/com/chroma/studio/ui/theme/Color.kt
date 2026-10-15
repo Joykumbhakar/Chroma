@@ -5,9 +5,9 @@ import androidx.compose.ui.graphics.Color
 /**
  * Direct port of the CSS custom properties from index.html (:root and body.dark).
  * Every hex value below matches the source file 1:1 so the app reads identically
- * to Chroma Studio in light and dark mode.
+ * to Oscellion in light and dark mode.
  */
-data class ChromaPalette(
+data class OscellionPalette(
     val bg: Color,
     val gridLine: Color,
 
@@ -31,14 +31,14 @@ data class ChromaPalette(
 )
 
 // ---- :root (light) ----
-val LightPalette = ChromaPalette(
+val LightPalette = OscellionPalette(
     bg = Color(0xFFF8FAFC),
     gridLine = Color(0x0F000000), // rgba(0,0,0,0.06) approx -> using 0x0F alpha (~6%)
-    glassBg = Color(0x8CFFFFFF),      // rgba(255,255,255,0.55)
-    glassBgHover = Color(0xCCFFFFFF), // rgba(255,255,255,0.8)
-    glassBorder = Color(0x99FFFFFF),  // rgba(255,255,255,0.6)
-    primary = Color(0xFF007AFF),
-    primaryHover = Color(0xFF0062CC),
+    glassBg = Color(0xFFFFFFFF),      // Solid white for light mode panel
+    glassBgHover = Color(0xFFF1F5F9), // slightly darker panel
+    glassBorder = Color(0xFFE5E7EB),  // gray-200 border
+    primary = Color(0xFF3B82F6),      // #3B82F6 (Brand blue)
+    primaryHover = Color(0xFF2563EB),
     onPrimary = Color(0xFFFFFFFF),
     textMain = Color(0xFF111827),
     textMuted = Color(0xFF4B5563),
@@ -49,14 +49,14 @@ val LightPalette = ChromaPalette(
 )
 
 // ---- body.dark ----
-val DarkPalette = ChromaPalette(
-    bg = Color(0xFF0D1117),
-    gridLine = Color(0x0DFFFFFF), // rgba(255,255,255,0.05)
-    glassBg = Color(0x8C191C29),      // rgba(25,28,41,0.55)
-    glassBgHover = Color(0xCC282C3E),  // rgba(40,44,62,0.8)
-    glassBorder = Color(0x14FFFFFF),  // rgba(255,255,255,0.08)
-    primary = Color(0xFF007AFF),
-    primaryHover = Color(0xFF0062CC),
+val DarkPalette = OscellionPalette(
+    bg = Color(0xFF030303),           // #030303
+    gridLine = Color(0x05FFFFFF),     // rgba(255,255,255,0.02)
+    glassBg = Color(0xFF0A0A0A),      // #0A0A0A (Panel background)
+    glassBgHover = Color(0xFF141414), // slightly lighter panel
+    glassBorder = Color(0x14FFFFFF),  // rgba(255, 255, 255, 0.08)
+    primary = Color(0xFF3B82F6),      // #3B82F6 (Brand blue)
+    primaryHover = Color(0xFF2563EB), // Tailwind blue-600
     onPrimary = Color(0xFFFFFFFF),
     textMain = Color(0xFFF9FAFB),
     textMuted = Color(0xFF9CA3AF),
@@ -67,7 +67,7 @@ val DarkPalette = ChromaPalette(
 )
 
 // Radii (--radius-sm/md/lg/pill) as dp values, used across components
-object ChromaRadius {
+object OscellionRadius {
     const val sm = 8
     const val md = 16
     const val lg = 24

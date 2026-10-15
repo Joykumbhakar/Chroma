@@ -75,7 +75,7 @@ import androidx.compose.ui.unit.sp
 import com.chroma.studio.model.ChromaBlendMode
 import com.chroma.studio.model.GradientLayer
 import com.chroma.studio.model.LayerType
-import com.chroma.studio.ui.theme.LocalChromaColors
+import com.chroma.studio.ui.theme.LocalOscellionColors
 
 /**
  * .layer-card { background: var(--glass-bg); animation: slideInLayer .4s; }
@@ -114,7 +114,7 @@ fun LayerCard(
     onSetActiveBlob: (Int) -> Unit = {},
     onUpdateBlobParam: (Int, String, Float) -> Unit = { _, _, _ -> }
 ) {
-    val colors = LocalChromaColors.current
+    val colors = LocalOscellionColors.current
     val shape = RoundedCornerShape(16.dp)
     val borderBrush = remember(isDragging, layer.expanded, colors.primary, colors.glassBorder) {
         if (isDragging) {
@@ -490,7 +490,7 @@ private fun ElementsAndColorsEditor(
     onRemoveBlob: (Int) -> Unit,
     onSetActiveBlob: (Int) -> Unit
 ) {
-    val colors = LocalChromaColors.current
+    val colors = LocalOscellionColors.current
     val activeIdx = layer.activeBlobIdx.coerceIn(0, layer.blobs.size - 1)
     val activeStop = layer.stops.getOrNull(activeIdx)
     Column(Modifier.fillMaxWidth()) {
@@ -658,7 +658,7 @@ private fun ElementsAndColorsEditor(
 
 @Composable
 private fun FieldLabel(text: String, value: String? = null) {
-    val colors = LocalChromaColors.current
+    val colors = LocalOscellionColors.current
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(text.uppercase(), color = colors.textMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
         if (value != null) Text(value, color = colors.textMain, fontSize = 10.sp, fontWeight = FontWeight.Medium)
@@ -667,7 +667,7 @@ private fun FieldLabel(text: String, value: String? = null) {
 
 @Composable
 private fun TypeButton(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, active: Boolean, onClick: () -> Unit) {
-    val colors = LocalChromaColors.current
+    val colors = LocalOscellionColors.current
     val shape = RoundedCornerShape(12.dp)
     
     val bgColor = colors.glassBg
@@ -714,7 +714,7 @@ private fun TypeButton(label: String, icon: androidx.compose.ui.graphics.vector.
 
 @Composable
 private fun BlendModeSelector(current: ChromaBlendMode, onChange: (ChromaBlendMode) -> Unit) {
-    val colors = LocalChromaColors.current
+    val colors = LocalOscellionColors.current
     var expanded by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
     androidx.compose.foundation.layout.Box {
@@ -759,70 +759,12 @@ fun ChromaSlider(
     valueRange: ClosedFloatingPointRange<Float>,
     modifier: Modifier = Modifier
 ) {
-    val colors = LocalChromaColors.current
-    val trackColor = if (colors.isDark) androidx.compose.ui.graphics.Color(0x33FFFFFF) else androidx.compose.ui.graphics.Color(0x26000000)
-
-    // mutableFloatStateOf: primitive-specialized state, avoids boxing on every drag frame
-    var dragValue by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<Float?>(null) }
-    val displayValue = dragValue ?: value
-    val currentOnValueChange by androidx.compose.runtime.rememberUpdatedState(onValueChange)
-
-    // Compute fraction once, only when displayValue changes
-    val pct by remember(displayValue, valueRange) {
-        derivedStateOf {
-            if (valueRange.endInclusive > valueRange.start)
-                ((displayValue - valueRange.start) / (valueRange.endInclusive - valueRange.start)).coerceIn(0f, 1f)
-            else 0f
-        }
-    }
-
-    var sliderWidthPx by androidx.compose.runtime.remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
-
-    Box(
+    AppleSlider(
+        value = value,
+        onValueChange = onValueChange,
+        valueRange = valueRange,
         modifier = modifier
-            .fillMaxWidth()
-            .height(24.dp)
-            .onSizeChanged { sliderWidthPx = it.width.toFloat() }
-            .pointerInput(Unit) {
-                detectTapGestures { tap ->
-                    val p = (tap.x / size.width).coerceIn(0f, 1f)
-                    currentOnValueChange(valueRange.start + p * (valueRange.endInclusive - valueRange.start))
-                }
-            }
-            .pointerInput(Unit) {
-                detectDragGestures(
-                    onDragStart = { dragValue = displayValue },
-                    onDragEnd = { dragValue = null },
-                    onDragCancel = { dragValue = null }
-                ) { change, _ ->
-                    change.consume()
-                    val p = (change.position.x / size.width).coerceIn(0f, 1f)
-                    val v = valueRange.start + p * (valueRange.endInclusive - valueRange.start)
-                    dragValue = v
-                    currentOnValueChange(v)
-                }
-            },
-        contentAlignment = Alignment.CenterStart
-    ) {
-        // Track
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(6.dp)
-                .clip(RoundedCornerShape(50))
-                .background(trackColor)
-        )
-
-        // Thumb — graphicsLayer only triggers transform (no layout/draw recomposition)
-        Box(
-            modifier = Modifier
-                .size(14.dp)
-                .graphicsLayer { translationX = (sliderWidthPx - 14.dp.toPx()) * pct }
-                .clip(CircleShape)
-                .background(colors.primary)
-                .border(2.dp, androidx.compose.ui.graphics.Color.White, CircleShape)
-        )
-    }
+    )
 }
 
 @Composable
@@ -831,7 +773,7 @@ fun CompactNumberField(
     onValueChange: (Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val colors = LocalChromaColors.current
+    val colors = LocalOscellionColors.current
     BasicTextField(
         value = value.toString(),
         onValueChange = { it.toFloatOrNull()?.let { v -> onValueChange(v) } },

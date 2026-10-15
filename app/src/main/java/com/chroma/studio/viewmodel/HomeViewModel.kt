@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.chroma.studio.data.WorkRepository
+import com.chroma.studio.data.DiscoverRepository
 import com.chroma.studio.model.ChromaWork
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -19,6 +20,7 @@ import androidx.compose.runtime.setValue
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     val repository = WorkRepository(application)
+    val discoverRepository = DiscoverRepository()
 
     val works = mutableStateListOf<ChromaWork>()
     val deletedWorks = mutableStateListOf<ChromaWork>()
@@ -46,8 +48,33 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     var customHomeBgShape by mutableStateOf("full")
         private set
 
+    var isCurrentUserVerified by mutableStateOf(false)
+        private set
+
     init {
         refresh()
+        initPresence()
+    }
+
+    private fun initPresence() {
+        val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+        val uid = auth.currentUser?.uid ?: return
+        val db = com.google.firebase.database.FirebaseDatabase.getInstance()
+        val myConnectionsRef = db.getReference("users/$uid/online")
+        val lastOnlineRef = db.getReference("users/$uid/lastOnline")
+        val connectedRef = db.getReference(".info/connected")
+        
+        connectedRef.addValueEventListener(object : com.google.firebase.database.ValueEventListener {
+            override fun onDataChange(snapshot: com.google.firebase.database.DataSnapshot) {
+                val connected = snapshot.getValue(Boolean::class.java) ?: false
+                if (connected) {
+                    myConnectionsRef.onDisconnect().setValue(false)
+                    lastOnlineRef.onDisconnect().setValue(com.google.firebase.database.ServerValue.TIMESTAMP)
+                    myConnectionsRef.setValue(true)
+                }
+            }
+            override fun onCancelled(error: com.google.firebase.database.DatabaseError) {}
+        })
     }
 
     fun refresh() {
@@ -59,8 +86,24 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             val customLayers = prefs.getString("custom_home_background_layers", null)
             val customShape = prefs.getString("custom_home_background_shape", "full") ?: "full"
             
+            val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+            var verified = false
+            auth.currentUser?.uid?.let { uid ->
+                val profile = discoverRepository.getUserProfile(uid)
+                verified = profile?.verified == true
+                
+                // E2EE: Generate and sync active public key to Firestore
+                val currentDeviceKey = com.chroma.studio.utils.CryptoHelper.getPublicKeyBase64()
+                if (currentDeviceKey.isNotEmpty() && (profile == null || profile.publicKey != currentDeviceKey)) {
+                    com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                        .collection("users").document(uid)
+                        .update("publicKey", currentDeviceKey)
+                }
+            }
+
             withContext(Dispatchers.Main) {
                 Snapshot.withMutableSnapshot {
+                    isCurrentUserVerified = verified
                     works.clear()
                     works.addAll(active)
                 }
@@ -189,5 +232,20 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         )
         repository.save(copy)
         refresh()
+    }
+    
+    fun shareToDiscover(work: ChromaWork, aspectRatio: String, onSuccess: () -> Unit, onError: (Exception) -> Unit) {
+        viewModelScope.launch {
+            try {
+                discoverRepository.publishWork(work, aspectRatio)
+                withContext(Dispatchers.Main) {
+                    onSuccess()
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    onError(e)
+                }
+            }
+        }
     }
 }

@@ -1,4 +1,5 @@
 package com.chroma.studio.ui.components
+import com.chroma.studio.ui.components.GlassButton
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
@@ -68,7 +69,7 @@ import com.chroma.studio.model.AnimStyle
 import com.chroma.studio.model.ApplePresets
 import com.chroma.studio.model.ColorBlindMode
 import com.chroma.studio.model.PostProcessingFx
-import com.chroma.studio.ui.theme.LocalChromaColors
+import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.chroma.studio.viewmodel.ChromaViewModel
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -82,7 +83,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 
 @Composable
 fun GlobalFxPanel(vm: ChromaViewModel, modifier: Modifier = Modifier) {
-    val colors = LocalChromaColors.current
+    val colors = LocalOscellionColors.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -168,16 +169,16 @@ fun GlobalFxPanel(vm: ChromaViewModel, modifier: Modifier = Modifier) {
                                 ),
                                 shape = RoundedCornerShape(8.dp)
                             )
-                            Button(
+                            GlassButton(
                                 onClick = {
                                     val usageManager = com.chroma.studio.data.UsageManager(context)
                                     if (!usageManager.canGenerate()) {
                                         android.widget.Toast.makeText(context, "Daily generation limit reached", android.widget.Toast.LENGTH_SHORT).show()
-                                        return@Button
+                                        return@GlassButton
                                     }
                                     if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser == null) {
                                         android.widget.Toast.makeText(context, "Please login to use AI", android.widget.Toast.LENGTH_SHORT).show()
-                                        return@Button
+                                        return@GlassButton
                                     }
                                     scope.launch(Dispatchers.IO) {
                                         try {
@@ -479,7 +480,7 @@ private fun FxSectionCard(
     backgroundColor: Color = Color.Unspecified,
     content: @Composable () -> Unit
 ) {
-    val colors = LocalChromaColors.current
+    val colors = LocalOscellionColors.current
     var expanded by remember { mutableStateOf(!collapsible || defaultExpanded) }
     val shape = RoundedCornerShape(16.dp)
 
@@ -565,7 +566,7 @@ private fun FxDropdown(
     onExpand: () -> Unit,
     menuContent: @Composable (dismiss: () -> Unit) -> Unit
 ) {
-    val colors = LocalChromaColors.current
+    val colors = LocalOscellionColors.current
     var expanded by remember { mutableStateOf(false) }
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
