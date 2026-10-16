@@ -3,8 +3,11 @@ package com.chroma.studio.ui.screens
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -14,9 +17,11 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -65,9 +70,10 @@ fun TrashScreen(
     var showEmptyTrashDialog by remember { mutableStateOf(false) }
     var singleDeleteId by remember { mutableStateOf<String?>(null) }
     var deletingWorkIds by remember { mutableStateOf(emptySet<String>()) }
+    var showBanner by rememberSaveable { mutableStateOf(true) }
     val coroutineScope = rememberCoroutineScope()
 
-    val buttonCorner = RoundedCornerShape(8.dp)
+    val buttonCorner = CircleShape
 
     val primaryGradient = Brush.linearGradient(
         listOf(Color(0xFF2563EB), Color(0xFF1D4ED8))
@@ -139,7 +145,7 @@ fun TrashScreen(
                                 .background(glassButtonGradient)
                                 .border(0.75.dp, colors.glassBorder, buttonCorner)
                                 .clickable { onRestoreSelected() }
-                                .padding(horizontal = 10.dp),
+                                .padding(horizontal = 12.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Row(
@@ -169,7 +175,7 @@ fun TrashScreen(
                                 .background(dangerGradient)
                                 .border(0.75.dp, Color.White.copy(alpha = 0.3f), buttonCorner)
                                 .clickable { showDeleteConfirmDialog = true }
-                                .padding(horizontal = 10.dp),
+                                .padding(horizontal = 12.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Row(
@@ -199,7 +205,7 @@ fun TrashScreen(
                                 .background(glassButtonGradient)
                                 .border(0.75.dp, colors.glassBorder, buttonCorner)
                                 .clickable { onSelectAll?.invoke() }
-                                .padding(horizontal = 12.dp),
+                                .padding(horizontal = 14.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
@@ -218,7 +224,7 @@ fun TrashScreen(
                                 .background(dangerGradient)
                                 .border(0.75.dp, Color.White.copy(alpha = 0.3f), buttonCorner)
                                 .clickable { showEmptyTrashDialog = true }
-                                .padding(horizontal = 11.dp),
+                                .padding(horizontal = 12.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Row(
@@ -313,31 +319,52 @@ fun TrashScreen(
                 }
             } else {
                 Column(modifier = Modifier.fillMaxSize()) {
-                    // Informative Clean Banner (Rectangular with thin glass border)
-                    val bannerCorner = RoundedCornerShape(8.dp)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 6.dp)
-                            .clip(bannerCorner)
-                            .background(glassButtonGradient)
-                            .border(0.75.dp, colors.glassBorder, bannerCorner)
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    // Informative Clean Banner with dismissible X button
+                    AnimatedVisibility(
+                        visible = showBanner,
+                        enter = fadeIn() + expandVertically(),
+                        exit = fadeOut() + shrinkVertically()
                     ) {
-                        Icon(
-                            imageVector = Lucide.Info,
-                            contentDescription = null,
-                            tint = colors.textMuted,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Text(
-                            text = "Items in Trash can be restored to your studio or permanently removed.",
-                            color = colors.textMuted,
-                            fontSize = 11.5.sp,
-                            lineHeight = 16.sp
-                        )
+                        val bannerCorner = RoundedCornerShape(8.dp)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 6.dp)
+                                .clip(bannerCorner)
+                                .background(glassButtonGradient)
+                                .border(0.75.dp, colors.glassBorder, bannerCorner)
+                                .padding(start = 12.dp, top = 8.dp, bottom = 8.dp, end = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Lucide.Info,
+                                contentDescription = null,
+                                tint = colors.textMuted,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                text = "Items in Trash can be restored to your studio or permanently removed.",
+                                color = colors.textMuted,
+                                fontSize = 11.5.sp,
+                                lineHeight = 16.sp,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clip(CircleShape)
+                                    .clickable { showBanner = false },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.X,
+                                    contentDescription = "Dismiss",
+                                    tint = colors.textMuted,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                            }
+                        }
                     }
 
                     LazyVerticalGrid(
@@ -449,7 +476,7 @@ fun TrashCard(
     
     val cardCorner = RoundedCornerShape(12.dp)
     val checkCorner = RoundedCornerShape(6.dp)
-    val actionCorner = RoundedCornerShape(8.dp)
+    val actionCorner = CircleShape
 
     val borderWidth = if (isSelected) 2.dp else 0.75.dp
     val borderColor = if (isSelected) colors.primary else colors.glassBorder
