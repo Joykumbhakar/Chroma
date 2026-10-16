@@ -3,11 +3,8 @@ package com.chroma.studio.ui.screens
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -21,7 +18,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -82,7 +78,6 @@ fun TrashScreen(
     var showEmptyTrashDialog by remember { mutableStateOf(false) }
     var singleDeleteId by remember { mutableStateOf<String?>(null) }
     var deletingWorkIds by remember { mutableStateOf(emptySet<String>()) }
-    var showBanner by rememberSaveable { mutableStateOf(true) }
     val coroutineScope = rememberCoroutineScope()
 
     val buttonCorner = CircleShape
@@ -92,13 +87,6 @@ fun TrashScreen(
     )
     val dangerGradient = Brush.linearGradient(
         listOf(Color(0xFFDC2626), Color(0xFFB91C1C))
-    )
-    val glassButtonGradient = Brush.verticalGradient(
-        if (colors.isDark) {
-            listOf(Color(0xFF202026), Color(0xFF141418))
-        } else {
-            listOf(Color(0xFFFFFFFF), Color(0xFFF1F5F9))
-        }
     )
 
     val selectIconGradient = Brush.linearGradient(
@@ -306,62 +294,13 @@ fun TrashScreen(
                     }
                 }
             } else {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    // Informative Clean Banner with dismissible X button
-                    AnimatedVisibility(
-                        visible = showBanner,
-                        enter = fadeIn() + expandVertically(),
-                        exit = fadeOut() + shrinkVertically()
-                    ) {
-                        val bannerCorner = RoundedCornerShape(8.dp)
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 6.dp)
-                                .clip(bannerCorner)
-                                .background(glassButtonGradient)
-                                .border(0.75.dp, colors.glassBorder, bannerCorner)
-                                .padding(start = 12.dp, top = 8.dp, bottom = 8.dp, end = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                imageVector = Lucide.Info,
-                                contentDescription = null,
-                                tint = colors.textMuted,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Text(
-                                text = "Items in Trash can be restored to your studio or permanently removed.",
-                                color = colors.textMuted,
-                                fontSize = 11.5.sp,
-                                lineHeight = 16.sp,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .size(24.dp)
-                                    .clip(CircleShape)
-                                    .clickable { showBanner = false },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Lucide.X,
-                                    contentDescription = "Dismiss",
-                                    tint = colors.textMuted,
-                                    modifier = Modifier.size(13.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
-                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 24.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxSize()
-                    ) {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 24.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxSize()
+                ) {
                         items(deletedWorks, key = { it.id }) { work ->
                             val isSelected = selectedWorkIds.contains(work.id)
                             AnimatedVisibility(visible = true, enter = fadeIn() + scaleIn(initialScale = 0.94f)) {
@@ -384,7 +323,6 @@ fun TrashScreen(
                 }
             }
         }
-    }
 
     if (showDeleteConfirmDialog) {
         val count = singleDeleteId?.let { 1 } ?: selectedWorkIds.size
