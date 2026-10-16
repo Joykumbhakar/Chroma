@@ -26,10 +26,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -46,6 +49,15 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Locale
+
+private fun Modifier.gradientTint(brush: Brush): Modifier = this
+    .graphicsLayer { alpha = 0.99f }
+    .drawWithCache {
+        onDrawWithContent {
+            drawContent()
+            drawRect(brush, blendMode = BlendMode.SrcIn)
+        }
+    }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -89,6 +101,19 @@ fun TrashScreen(
         }
     )
 
+    val selectIconGradient = Brush.linearGradient(
+        listOf(Color(0xFF38BDF8), Color(0xFF6366F1), Color(0xFFA855F7))
+    )
+    val restoreIconGradient = Brush.linearGradient(
+        listOf(Color(0xFF34D399), Color(0xFF06B6D4), Color(0xFF3B82F6))
+    )
+    val dangerIconGradient = Brush.linearGradient(
+        listOf(Color(0xFFFF6B6B), Color(0xFFEF4444), Color(0xFFDC2626))
+    )
+    val subtleIconGradient = Brush.linearGradient(
+        listOf(colors.textMuted, colors.textMuted.copy(alpha = 0.6f))
+    )
+
     LaunchedEffect(Unit) {
         onRefresh?.invoke()
     }
@@ -117,13 +142,11 @@ fun TrashScreen(
                 actions = {
                     if (selectionMode) {
                         val allSelected = deletedWorks.isNotEmpty() && selectedWorkIds.size >= deletedWorks.size
-                        // Deselect All / Select All
+                        // Deselect All / Select All Icon
                         Box(
                             modifier = Modifier
-                                .size(34.dp)
-                                .clip(buttonCorner)
-                                .background(if (allSelected) primaryGradient else glassButtonGradient)
-                                .border(0.75.dp, if (allSelected) Color.White.copy(alpha = 0.35f) else colors.glassBorder, buttonCorner)
+                                .size(36.dp)
+                                .clip(CircleShape)
                                 .clickable {
                                     if (allSelected) onClearSelection() else onSelectAll?.invoke()
                                 },
@@ -132,118 +155,83 @@ fun TrashScreen(
                             Icon(
                                 imageVector = Lucide.CheckCheck,
                                 contentDescription = if (allSelected) "Deselect All" else "Select All",
-                                tint = if (allSelected) Color.White else colors.textMain,
-                                modifier = Modifier.size(16.dp)
+                                tint = Color.White,
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .gradientTint(if (allSelected) selectIconGradient else subtleIconGradient)
                             )
                         }
-                        Spacer(Modifier.width(6.dp))
-                        // Restore Selected
+                        Spacer(Modifier.width(4.dp))
+                        // Restore Selected Icon
                         Box(
                             modifier = Modifier
-                                .height(34.dp)
-                                .clip(buttonCorner)
-                                .background(glassButtonGradient)
-                                .border(0.75.dp, colors.glassBorder, buttonCorner)
-                                .clickable { onRestoreSelected() }
-                                .padding(horizontal = 12.dp),
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .clickable { onRestoreSelected() },
                             contentAlignment = Alignment.Center
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(5.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Lucide.RefreshCcw,
-                                    contentDescription = "Restore",
-                                    tint = colors.textMain,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Text(
-                                    text = "Restore",
-                                    color = colors.textMain,
-                                    fontSize = 12.5.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
+                            Icon(
+                                imageVector = Lucide.RefreshCcw,
+                                contentDescription = "Restore",
+                                tint = Color.White,
+                                modifier = Modifier
+                                    .size(19.dp)
+                                    .gradientTint(restoreIconGradient)
+                            )
                         }
-                        Spacer(Modifier.width(6.dp))
-                        // Delete Selected
+                        Spacer(Modifier.width(4.dp))
+                        // Delete Selected Icon
                         Box(
                             modifier = Modifier
-                                .height(34.dp)
-                                .clip(buttonCorner)
-                                .background(dangerGradient)
-                                .border(0.75.dp, Color.White.copy(alpha = 0.3f), buttonCorner)
-                                .clickable { showDeleteConfirmDialog = true }
-                                .padding(horizontal = 12.dp),
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .clickable { showDeleteConfirmDialog = true },
                             contentAlignment = Alignment.Center
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(5.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Lucide.Trash2,
-                                    contentDescription = "Delete",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Text(
-                                    text = "Delete",
-                                    color = Color.White,
-                                    fontSize = 12.5.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
+                            Icon(
+                                imageVector = Lucide.Trash2,
+                                contentDescription = "Delete",
+                                tint = Color.White,
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .gradientTint(dangerIconGradient)
+                            )
                         }
                     } else if (deletedWorks.isNotEmpty()) {
-                        // Quick Select button
+                        // Quick Select Icon Button
                         Box(
                             modifier = Modifier
-                                .height(34.dp)
-                                .clip(buttonCorner)
-                                .background(glassButtonGradient)
-                                .border(0.75.dp, colors.glassBorder, buttonCorner)
-                                .clickable { onSelectAll?.invoke() }
-                                .padding(horizontal = 14.dp),
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .clickable { onSelectAll?.invoke() },
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                text = "Select",
-                                color = colors.primary,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold
+                            Icon(
+                                imageVector = Lucide.ListCheck,
+                                contentDescription = "Select",
+                                tint = Color.White,
+                                modifier = Modifier
+                                    .size(21.dp)
+                                    .gradientTint(selectIconGradient)
                             )
                         }
-                        Spacer(Modifier.width(6.dp))
-                        // Empty Trash button
+                        Spacer(Modifier.width(4.dp))
+                        // Empty Trash Icon Button
                         Box(
                             modifier = Modifier
-                                .height(34.dp)
-                                .clip(buttonCorner)
-                                .background(dangerGradient)
-                                .border(0.75.dp, Color.White.copy(alpha = 0.3f), buttonCorner)
-                                .clickable { showEmptyTrashDialog = true }
-                                .padding(horizontal = 12.dp),
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .clickable { showEmptyTrashDialog = true },
                             contentAlignment = Alignment.Center
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(5.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Lucide.Trash2,
-                                    contentDescription = "Empty",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(13.5.dp)
-                                )
-                                Text(
-                                    text = "Empty",
-                                    color = Color.White,
-                                    fontSize = 12.5.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
+                            Icon(
+                                imageVector = Lucide.Trash2,
+                                contentDescription = "Empty Trash",
+                                tint = Color.White,
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .gradientTint(dangerIconGradient)
+                            )
                         }
                     }
                 }
@@ -476,7 +464,6 @@ fun TrashCard(
     
     val cardCorner = RoundedCornerShape(12.dp)
     val checkCorner = RoundedCornerShape(6.dp)
-    val actionCorner = CircleShape
 
     val borderWidth = if (isSelected) 2.dp else 0.75.dp
     val borderColor = if (isSelected) colors.primary else colors.glassBorder
@@ -488,12 +475,11 @@ fun TrashCard(
     val primaryGradient = Brush.linearGradient(
         listOf(Color(0xFF2563EB), Color(0xFF1D4ED8))
     )
-    val glassButtonGradient = Brush.verticalGradient(
-        if (colors.isDark) {
-            listOf(Color(0xFF202026), Color(0xFF141418))
-        } else {
-            listOf(Color(0xFFFFFFFF), Color(0xFFF1F5F9))
-        }
+    val restoreIconGradient = Brush.linearGradient(
+        listOf(Color(0xFF34D399), Color(0xFF06B6D4), Color(0xFF3B82F6))
+    )
+    val dangerIconGradient = Brush.linearGradient(
+        listOf(Color(0xFFFF6B6B), Color(0xFFEF4444), Color(0xFFDC2626))
     )
 
     Box(
@@ -559,11 +545,12 @@ fun TrashCard(
                 Icon(
                     imageVector = Lucide.Trash2,
                     contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.75f),
+                    tint = Color.White,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(9.dp)
                         .size(15.dp)
+                        .gradientTint(dangerIconGradient)
                 )
 
                 // Selection check indicator (Clean square with 6.dp radius, thin glass border)
@@ -655,13 +642,11 @@ fun TrashCard(
                 
                 if (!selectionMode) {
                     Box {
-                        // Action menu button: Clean professional gradient with thin glass border (NO circle/capsule)
+                        // Action menu button: Clean floating icon button (no background)
                         Box(
                             modifier = Modifier
                                 .size(28.dp)
-                                .clip(actionCorner)
-                                .background(glassButtonGradient)
-                                .border(0.75.dp, colors.glassBorder, actionCorner)
+                                .clip(CircleShape)
                                 .clickable { showMenu = true },
                             contentAlignment = Alignment.Center
                         ) {
@@ -669,7 +654,7 @@ fun TrashCard(
                                 imageVector = Lucide.EllipsisVertical,
                                 contentDescription = "Options",
                                 tint = colors.textMuted,
-                                modifier = Modifier.size(15.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                         DropdownMenu(
@@ -685,8 +670,10 @@ fun TrashCard(
                                     Icon(
                                         imageVector = Lucide.RefreshCcw,
                                         contentDescription = null,
-                                        tint = colors.textMain,
-                                        modifier = Modifier.size(15.dp)
+                                        tint = Color.White,
+                                        modifier = Modifier
+                                            .size(15.dp)
+                                            .gradientTint(restoreIconGradient)
                                     )
                                 },
                                 onClick = { showMenu = false; onRestore() }
@@ -697,8 +684,10 @@ fun TrashCard(
                                     Icon(
                                         imageVector = Lucide.Trash2,
                                         contentDescription = null,
-                                        tint = Color(0xFFEF4444),
-                                        modifier = Modifier.size(15.dp)
+                                        tint = Color.White,
+                                        modifier = Modifier
+                                            .size(15.dp)
+                                            .gradientTint(dangerIconGradient)
                                     )
                                 },
                                 onClick = { showMenu = false; onDelete() }
