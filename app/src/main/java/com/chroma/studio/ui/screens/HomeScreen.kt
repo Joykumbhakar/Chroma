@@ -996,7 +996,7 @@ fun WorkCard(
     var showRenameDialog by remember { mutableStateOf(false) }
 
     val haptic = LocalHapticFeedback.current
-    val scale by animateFloatAsState(if (isSelected) 0.94f else 1f)
+    val scale by animateFloatAsState(if (isSelected) 0.94f else 1f, tween(200), label = "cardScale")
     val borderWidth = if (isSelected) 2.5.dp else 1.dp
     val borderColor = if (isSelected) colors.primary else Color.Transparent
 
@@ -1004,11 +1004,18 @@ fun WorkCard(
     val dateTimeFormat = remember { SimpleDateFormat("MMM dd, yyyy • hh:mm a", Locale.getDefault()) }
     val dateString = remember(work.lastModifiedAt) { dateFormat.format(java.util.Date(work.lastModifiedAt)) }
     val dateTimeString = remember(work.lastModifiedAt) { dateTimeFormat.format(java.util.Date(work.lastModifiedAt)) }
+    val layers = remember(work.layersJson) { repository.deserializeLayers(work.layersJson) }
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .scale(scale)
+            .shadow(
+                elevation = if (isSelected) 8.dp else 2.5.dp,
+                shape = RoundedCornerShape(18.dp),
+                ambientColor = Color(0x14000000),
+                spotColor = Color(0x1F000000)
+            )
             .clip(RoundedCornerShape(18.dp))
             .glossyBorder(RoundedCornerShape(18.dp), colors)
             .border(borderWidth, borderColor, RoundedCornerShape(18.dp))
@@ -1025,22 +1032,28 @@ fun WorkCard(
         fun ActionMenu() {
             if (!selectionMode) {
                 Box {
-                    Icon(
-                        imageVector = Lucide.EllipsisVertical,
-                        contentDescription = "Options",
-                        tint = colors.textMuted,
+                    Box(
                         modifier = Modifier
-                            .size(20.dp)
+                            .size(28.dp)
                             .clip(CircleShape)
-                            .clickable { showMenu = true }
-                            .padding(2.dp)
-                    )
+                            .background(colors.glassBgHover.copy(alpha = 0.65f))
+                            .border(0.5.dp, colors.glassBorder, CircleShape)
+                            .clickable { showMenu = true },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Lucide.EllipsisVertical,
+                            contentDescription = "Options",
+                            tint = colors.textMuted,
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
                     DropdownMenu(
                         expanded = showMenu,
                         onDismissRequest = { showMenu = false },
                         modifier = Modifier
-                            .glossyBorder(RoundedCornerShape(12.dp), colors)
-                            .background(colors.glassBg, RoundedCornerShape(12.dp))
+                            .glossyBorder(RoundedCornerShape(14.dp), colors)
+                            .background(colors.glassBg, RoundedCornerShape(14.dp))
                     ) {
                         DropdownMenuItem(
                             text = { Text("View as...", fontSize = 13.sp, color = colors.textMain) },
@@ -1092,10 +1105,13 @@ fun WorkCard(
         @Composable
         fun CanvasBox(modifier: Modifier = Modifier) {
             Box(
-                modifier = modifier.background(Color(0xFF1E1E24)),
+                modifier = modifier.background(
+                    Brush.verticalGradient(
+                        listOf(Color(0xFF1E1E26), Color(0xFF131317))
+                    )
+                ),
                 contentAlignment = Alignment.Center
             ) {
-                val layers = remember(work.layersJson) { repository.deserializeLayers(work.layersJson) }
                 if (layers.isEmpty()) {
                     Text(
                         work.name.take(1).uppercase(),
@@ -1113,20 +1129,90 @@ fun WorkCard(
                     )
                 }
 
-                if (isSelected) {
+                // Top-right Wallpaper badge
+                if (work.isHomeBackground) {
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color.Black.copy(alpha = 0.55f))
+                            .border(0.5.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 6.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Lucide.Sparkles,
+                            contentDescription = null,
+                            tint = Color(0xFFFFD60A),
+                            modifier = Modifier.size(10.dp)
+                        )
+                        Text(
+                            text = "Wallpaper",
+                            color = Color.White,
+                            fontSize = 9.5.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                // Bottom-right Layer count pill
+                if (layers.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(7.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color.Black.copy(alpha = 0.45f))
+                            .padding(horizontal = 5.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Icon(
+                            imageVector = Lucide.Layers,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.85f),
+                            modifier = Modifier.size(9.dp)
+                        )
+                        Text(
+                            text = "${layers.size}",
+                            color = Color.White,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+
+                // Selection check indicator
+                if (selectionMode) {
                     Box(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .background(colors.primary.copy(alpha = 0.35f)),
-                        contentAlignment = Alignment.Center
+                            .align(Alignment.TopStart)
+                            .padding(8.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(30.dp)
-                                .background(colors.primary, CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Lucide.Check, "Selected", tint = Color.White, modifier = Modifier.size(16.dp))
+                        if (isSelected) {
+                            Box(
+                                modifier = Modifier
+                                    .size(26.dp)
+                                    .background(colors.primary, CircleShape)
+                                    .border(1.5.dp, Color.White, CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.Check,
+                                    contentDescription = "Selected",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                            }
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .size(26.dp)
+                                    .background(Color.Black.copy(alpha = 0.35f), CircleShape)
+                                    .border(1.5.dp, Color.White.copy(alpha = 0.75f), CircleShape)
+                            )
                         }
                     }
                 }
@@ -1145,7 +1231,7 @@ fun WorkCard(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 11.dp, vertical = 9.dp)
+                            .padding(horizontal = 12.dp, vertical = 10.dp)
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -1155,23 +1241,35 @@ fun WorkCard(
                             Text(
                                 text = work.name,
                                 color = colors.textMain,
-                                fontSize = 14.sp,
+                                fontSize = 14.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = InterFontFamily,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f)
                             )
+                            Spacer(Modifier.width(4.dp))
                             ActionMenu()
                         }
                         Spacer(Modifier.height(3.dp))
-                        Text(
-                            text = dateString,
-                            color = colors.textMuted.copy(alpha = 0.75f),
-                            fontSize = 11.sp,
-                            fontFamily = InterFontFamily,
-                            maxLines = 1
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Lucide.Clock,
+                                contentDescription = null,
+                                tint = colors.textMuted.copy(alpha = 0.65f),
+                                modifier = Modifier.size(10.5.dp)
+                            )
+                            Text(
+                                text = dateString,
+                                color = colors.textMuted.copy(alpha = 0.75f),
+                                fontSize = 11.sp,
+                                fontFamily = InterFontFamily,
+                                maxLines = 1
+                            )
+                        }
                     }
                 }
             }
@@ -1187,7 +1285,7 @@ fun WorkCard(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 11.dp, vertical = 9.dp)
+                            .padding(horizontal = 12.dp, vertical = 10.dp)
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -1197,34 +1295,68 @@ fun WorkCard(
                             Text(
                                 text = work.name,
                                 color = colors.textMain,
-                                fontSize = 14.sp,
+                                fontSize = 14.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = InterFontFamily,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f)
                             )
+                            Spacer(Modifier.width(4.dp))
                             ActionMenu()
                         }
                         if (work.description.isNotBlank()) {
-                            Spacer(Modifier.height(3.dp))
+                            Spacer(Modifier.height(4.dp))
                             Text(
                                 text = work.description,
                                 color = colors.textMuted,
                                 fontSize = 11.5.sp,
                                 fontFamily = InterFontFamily,
                                 maxLines = 2,
+                                lineHeight = 15.sp,
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = dateString,
-                            color = colors.textMuted.copy(alpha = 0.70f),
-                            fontSize = 10.5.sp,
-                            fontFamily = InterFontFamily,
-                            maxLines = 1
-                        )
+                        Spacer(Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(colors.glassBgHover.copy(alpha = 0.7f))
+                                    .border(0.5.dp, colors.glassBorder, RoundedCornerShape(6.dp))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = work.canvasShape.replaceFirstChar { it.uppercase() },
+                                    color = colors.textMuted,
+                                    fontSize = 9.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    fontFamily = InterFontFamily
+                                )
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(3.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.Clock,
+                                    contentDescription = null,
+                                    tint = colors.textMuted.copy(alpha = 0.65f),
+                                    modifier = Modifier.size(10.dp)
+                                )
+                                Text(
+                                    text = dateString,
+                                    color = colors.textMuted.copy(alpha = 0.70f),
+                                    fontSize = 10.5.sp,
+                                    fontFamily = InterFontFamily,
+                                    maxLines = 1
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -1233,14 +1365,14 @@ fun WorkCard(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(72.dp)
-                        .padding(horizontal = 8.dp),
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     CanvasBox(
                         modifier = Modifier
                             .size(56.dp)
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(13.dp))
+                            .border(0.5.dp, colors.glassBorder, RoundedCornerShape(13.dp))
                     )
                     Spacer(Modifier.width(12.dp))
                     Column(
@@ -1257,13 +1389,33 @@ fun WorkCard(
                             overflow = TextOverflow.Ellipsis
                         )
                         Spacer(Modifier.height(3.dp))
-                        Text(
-                            text = dateString,
-                            color = colors.textMuted,
-                            fontSize = 12.sp,
-                            fontFamily = InterFontFamily,
-                            maxLines = 1
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = "${layers.size} ${if (layers.size == 1) "layer" else "layers"} • $dateString",
+                                color = colors.textMuted,
+                                fontSize = 11.5.sp,
+                                fontFamily = InterFontFamily,
+                                maxLines = 1
+                            )
+                            if (work.isHomeBackground) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(Color(0xFFFFD60A).copy(alpha = 0.15f))
+                                        .padding(horizontal = 4.dp, vertical = 1.dp)
+                                ) {
+                                    Text(
+                                        text = "Wallpaper",
+                                        color = Color(0xFFD97706),
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
                     }
                     ActionMenu()
                 }
@@ -1273,13 +1425,14 @@ fun WorkCard(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     CanvasBox(
                         modifier = Modifier
                             .size(76.dp)
-                            .clip(RoundedCornerShape(14.dp))
+                            .clip(RoundedCornerShape(15.dp))
+                            .border(0.5.dp, colors.glassBorder, RoundedCornerShape(15.dp))
                     )
                     Spacer(Modifier.width(12.dp))
                     Column(
@@ -1313,13 +1466,33 @@ fun WorkCard(
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
-                        Text(
-                            text = dateTimeString,
-                            color = colors.textMuted.copy(alpha = 0.75f),
-                            fontSize = 11.sp,
-                            fontFamily = InterFontFamily,
-                            maxLines = 1
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(5.dp))
+                                    .background(colors.glassBgHover.copy(alpha = 0.7f))
+                                    .border(0.5.dp, colors.glassBorder, RoundedCornerShape(5.dp))
+                                    .padding(horizontal = 5.dp, vertical = 1.5.dp)
+                            ) {
+                                Text(
+                                    text = work.canvasShape.replaceFirstChar { it.uppercase() },
+                                    color = colors.textMuted,
+                                    fontSize = 9.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    fontFamily = InterFontFamily
+                                )
+                            }
+                            Text(
+                                text = dateTimeString,
+                                color = colors.textMuted.copy(alpha = 0.75f),
+                                fontSize = 11.sp,
+                                fontFamily = InterFontFamily,
+                                maxLines = 1
+                            )
+                        }
                     }
                 }
             }

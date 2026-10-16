@@ -1581,13 +1581,16 @@ class HomeActivity : ComponentActivity() {
                             selectedWorkIds = vm.trashSelectedWorkIds,
                             selectionMode = vm.trashSelectionMode,
                             onToggleSelection = { id -> vm.toggleTrashSelection(id) },
+                            onSelectAll = { vm.selectAllTrash() },
                             onClearSelection = { vm.clearTrashSelection() },
                             onDeleteSelected = { vm.permanentDeleteTrashSelected() },
                             onRestoreSelected = { vm.restoreTrashSelected() },
+                            onEmptyTrash = { vm.emptyTrash() },
                             repository = vm.repository,
                             onRestore = { id -> vm.restore(id) },
                             onPermanentDelete = { id -> vm.permanentDelete(id) },
-                            onBack = { navController.popBackStack() }
+                            onBack = { navController.popBackStack() },
+                            onRefresh = { vm.refresh() }
                         )
                     }
                     composable(

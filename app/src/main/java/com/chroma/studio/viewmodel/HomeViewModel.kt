@@ -175,6 +175,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         trashSelectedWorkIds = newSet
     }
 
+    fun updateTrashSelection(newSelection: Set<String>) {
+        trashSelectedWorkIds = newSelection
+    }
+
+    fun selectAllTrash() {
+        trashSelectedWorkIds = deletedWorks.map { it.id }.toSet()
+    }
+
     fun clearTrashSelection() {
         trashSelectedWorkIds = emptySet()
     }
@@ -190,6 +198,22 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun restoreTrashSelected() {
         trashSelectedWorkIds.forEach { id ->
             repository.restore(id)
+        }
+        clearTrashSelection()
+        refresh()
+    }
+
+    fun emptyTrash() {
+        deletedWorks.forEach { work ->
+            repository.permanentDelete(work.id)
+        }
+        clearTrashSelection()
+        refresh()
+    }
+
+    fun restoreAllTrash() {
+        deletedWorks.forEach { work ->
+            repository.restore(work.id)
         }
         clearTrashSelection()
         refresh()
