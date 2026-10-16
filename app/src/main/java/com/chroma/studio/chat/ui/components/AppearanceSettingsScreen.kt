@@ -48,6 +48,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.TransformOrigin
 
 /**
  * Apple iOS 18 Design System — Inset Grouped Appearance Settings.
@@ -418,6 +420,7 @@ fun LiveBubblePreviewCard(
     customCorners: CustomCornerConfig,
     colors: ChatColors,
     modifier: Modifier = Modifier,
+    animationStyle: BubbleAnimationStyle = BubbleAnimationStyle.POP_ZOOM,
     animKey: Int = 0,
     testButtonText: String? = null,
     onTestClick: (() -> Unit)? = null
@@ -463,25 +466,113 @@ fun LiveBubblePreviewCard(
             }
         }
 
-        // Outgoing
-        key(animKey) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                Box(
-                    modifier = Modifier
-                        .widthIn(max = 240.dp)
-                        .shadow(outVisual.elevation, outVisual.shape)
-                        .clip(outVisual.shape)
-                        .background(brush = outVisual.background)
-                        .border(outVisual.borderWidth, outVisual.borderColor, outVisual.shape)
-                        .padding(horizontal = 14.dp, vertical = 9.dp)
-                ) {
-                    Column {
-                        Text("Clean, responsive & ultra fast! 🚀", fontSize = 14.5.sp, fontFamily = InterFontFamily, color = outVisual.textColor)
-                        Spacer(Modifier.height(3.dp))
-                        Row(modifier = Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                            Text("10:42 AM", fontSize = 10.5.sp, fontFamily = InterFontFamily, color = outVisual.timeColor)
-                            Icon(Lucide.ChevronsRight, contentDescription = null, tint = Color(0xFF34C759), modifier = Modifier.size(12.dp))
-                        }
+        // Outgoing with Interactive Live Animation Replay
+        val previewScaleX = remember { Animatable(1f) }
+        val previewScaleY = remember { Animatable(1f) }
+        val previewAlpha = remember { Animatable(1f) }
+        val previewOffsetY = remember { Animatable(0f) }
+        val previewOffsetX = remember { Animatable(0f) }
+        val previewRotationX = remember { Animatable(0f) }
+
+        LaunchedEffect(animKey, animationStyle) {
+            if (animKey == 0) return@LaunchedEffect
+            when (animationStyle) {
+                BubbleAnimationStyle.POP_ZOOM -> {
+                    previewScaleX.snapTo(0.42f)
+                    previewScaleY.snapTo(0.28f)
+                    previewOffsetY.snapTo(22f)
+                    previewAlpha.snapTo(0.35f)
+                    launch { previewScaleX.animateTo(1f, spring(dampingRatio = 0.52f, stiffness = Spring.StiffnessMediumLow)) }
+                    launch { previewScaleY.animateTo(1f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow)) }
+                    launch { previewOffsetY.animateTo(0f, spring(dampingRatio = 0.58f, stiffness = Spring.StiffnessMediumLow)) }
+                    previewAlpha.animateTo(1f, tween(140))
+                }
+                BubbleAnimationStyle.SLIDE_UP_FADE -> {
+                    previewScaleX.snapTo(1f)
+                    previewScaleY.snapTo(1f)
+                    previewOffsetY.snapTo(40f)
+                    previewAlpha.snapTo(0f)
+                    launch { previewOffsetY.animateTo(0f, spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow)) }
+                    previewAlpha.animateTo(1f, tween(200, easing = FastOutSlowInEasing))
+                }
+                BubbleAnimationStyle.ELASTIC_SPRING -> {
+                    previewScaleX.snapTo(0.25f)
+                    previewScaleY.snapTo(0.25f)
+                    previewOffsetY.snapTo(10f)
+                    previewAlpha.snapTo(0.1f)
+                    launch { previewScaleX.animateTo(1f, spring(dampingRatio = 0.40f, stiffness = Spring.StiffnessLow)) }
+                    launch { previewScaleY.animateTo(1f, spring(dampingRatio = 0.42f, stiffness = Spring.StiffnessLow)) }
+                    launch { previewOffsetY.animateTo(0f, spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessLow)) }
+                    previewAlpha.animateTo(1f, tween(120))
+                }
+                BubbleAnimationStyle.FLIP_IN_3D -> {
+                    previewScaleX.snapTo(0.85f)
+                    previewScaleY.snapTo(0.85f)
+                    previewRotationX.snapTo(45f)
+                    previewOffsetY.snapTo(20f)
+                    previewAlpha.snapTo(0f)
+                    launch { previewRotationX.animateTo(0f, spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessMediumLow)) }
+                    launch { previewScaleX.animateTo(1f, spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMedium)) }
+                    launch { previewScaleY.animateTo(1f, spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMedium)) }
+                    launch { previewOffsetY.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMedium)) }
+                    previewAlpha.animateTo(1f, tween(180))
+                }
+                BubbleAnimationStyle.SLIDE_IN_SIDE -> {
+                    previewScaleX.snapTo(0.92f)
+                    previewScaleY.snapTo(0.92f)
+                    previewOffsetX.snapTo(90f)
+                    previewAlpha.snapTo(0f)
+                    launch { previewOffsetX.animateTo(0f, spring(dampingRatio = 0.68f, stiffness = Spring.StiffnessMediumLow)) }
+                    launch { previewScaleX.animateTo(1f, spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMedium)) }
+                    launch { previewScaleY.animateTo(1f, spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMedium)) }
+                    previewAlpha.animateTo(1f, tween(160))
+                }
+                BubbleAnimationStyle.EXPAND_REVEAL -> {
+                    previewScaleX.snapTo(0.70f)
+                    previewScaleY.snapTo(0.38f)
+                    previewOffsetY.snapTo(16f)
+                    previewAlpha.snapTo(0.15f)
+                    launch { previewScaleX.animateTo(1f, spring(dampingRatio = 0.78f, stiffness = Spring.StiffnessMedium)) }
+                    launch { previewScaleY.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessMedium)) }
+                    launch { previewOffsetY.animateTo(0f, spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMedium)) }
+                    previewAlpha.animateTo(1f, tween(150))
+                }
+                BubbleAnimationStyle.GENTLE_FADE -> {
+                    previewScaleX.snapTo(0.96f)
+                    previewScaleY.snapTo(0.96f)
+                    previewAlpha.snapTo(0f)
+                    launch { previewScaleX.animateTo(1f, tween(260, easing = LinearOutSlowInEasing)) }
+                    launch { previewScaleY.animateTo(1f, tween(260, easing = LinearOutSlowInEasing)) }
+                    previewAlpha.animateTo(1f, tween(240, easing = LinearOutSlowInEasing))
+                }
+            }
+        }
+
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            Box(
+                modifier = Modifier
+                    .graphicsLayer {
+                        scaleX = previewScaleX.value
+                        scaleY = previewScaleY.value
+                        alpha = previewAlpha.value
+                        translationX = previewOffsetX.value
+                        translationY = previewOffsetY.value
+                        rotationX = previewRotationX.value
+                        transformOrigin = TransformOrigin(0.98f, 1.0f)
+                    }
+                    .widthIn(max = 240.dp)
+                    .shadow(outVisual.elevation, outVisual.shape)
+                    .clip(outVisual.shape)
+                    .background(brush = outVisual.background)
+                    .border(outVisual.borderWidth, outVisual.borderColor, outVisual.shape)
+                    .padding(horizontal = 14.dp, vertical = 9.dp)
+            ) {
+                Column {
+                    Text("Clean, responsive & ultra fast! 🚀", fontSize = 14.5.sp, fontFamily = InterFontFamily, color = outVisual.textColor)
+                    Spacer(Modifier.height(3.dp))
+                    Row(modifier = Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text("10:42 AM", fontSize = 10.5.sp, fontFamily = InterFontFamily, color = outVisual.timeColor)
+                        Icon(Lucide.ChevronsRight, contentDescription = null, tint = Color(0xFF34C759), modifier = Modifier.size(12.dp))
                     }
                 }
             }
@@ -911,6 +1002,7 @@ fun AnimationsSubScreen(
                 bubbleStyle = currentBubbleStyle,
                 customCorners = customCorners,
                 colors = colors,
+                animationStyle = currentAnimationStyle,
                 animKey = animTestKey,
                 testButtonText = "Tap to Replay Entrance Animation 🔄",
                 onTestClick = {

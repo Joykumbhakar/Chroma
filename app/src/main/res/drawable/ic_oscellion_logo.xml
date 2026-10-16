@@ -6,35 +6,85 @@
     android:viewportWidth="1024"
     android:viewportHeight="1024">
 
+    <!-- Ambient Studio Luminous Glow Layer behind the Emblem -->
+    <path
+        android:pathData="M 512 512 m -300, 0 a 300,300 0 1,0 600,0 a 300,300 0 1,0 -600,0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="512"
+                android:centerY="512"
+                android:gradientRadius="300">
+                <item android:color="#24FFFFFF" android:offset="0.0" />
+                <item android:color="#12CBD5E1" android:offset="0.4" />
+                <item android:color="#0594A3B8" android:offset="0.75" />
+                <item android:color="#00000000" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
     <group
         android:name="logo_group"
         android:pivotX="512"
         android:pivotY="512">
-        <!-- 3D Milled Metallic Symbol (Variation 2: Transparent Web / App Logo) -->
+
+        <!-- Deep Drop / Ambient Occlusion Shadow for 3D Elevation -->
         <path
             android:fillType="evenOdd"
-            android:pathData="M 512 212 A 300 300 0 0 1 812 512 A 300 300 0 0 1 512 812 A 300 300 0 0 1 299.87 724.13 L 148.5 771 Q 120 780 136.5 755.1 L 230.24 615 A 300 300 0 0 1 512 212 Z M 512 342 A 170 170 0 0 0 512 682 A 170 170 0 0 0 512 342 Z">
+            android:pathData="M 512 325 A 192 192 0 0 1 704 517 A 192 192 0 0 1 512 709 A 192 192 0 0 1 376.24 652.76 L 279.36 682.76 Q 261.12 688.52 271.68 672.58 L 331.67 582.92 A 192 192 0 0 1 512 325 Z M 512 408.2 A 108.8 108.8 0 0 0 512 625.8 A 108.8 108.8 0 0 0 512 408.2 Z">
             <aapt:attr name="android:fillColor">
                 <gradient
                     android:type="linear"
-                    android:startX="0"
-                    android:startY="0"
-                    android:endX="1024"
-                    android:endY="1024">
-                    <item android:color="#FFFFFFFF" android:offset="0.0" />
-                    <item android:color="#FFF5F5F7" android:offset="0.25" />
-                    <item android:color="#FFD1D1D6" android:offset="0.50" />
-                    <item android:color="#FF8E8E93" android:offset="0.85" />
-                    <item android:color="#FF48484A" android:offset="1.0" />
+                    android:startX="312"
+                    android:startY="312"
+                    android:endX="696"
+                    android:endY="760">
+                    <item android:color="#55000000" android:offset="0.0" />
+                    <item android:color="#AA000000" android:offset="1.0" />
                 </gradient>
             </aapt:attr>
         </path>
 
-        <!-- Subtle Specular Inner Rim Highlight -->
+        <!-- Primary 3D Milled Liquid Platinum / Chrome Emblem Body -->
         <path
             android:fillType="evenOdd"
-            android:strokeWidth="6"
-            android:strokeColor="#66FFFFFF"
-            android:pathData="M 512 212 A 300 300 0 0 1 812 512 A 300 300 0 0 1 512 812 A 300 300 0 0 1 299.87 724.13 L 148.5 771 Q 120 780 136.5 755.1 L 230.24 615 A 300 300 0 0 1 512 212 Z M 512 342 A 170 170 0 0 0 512 682 A 170 170 0 0 0 512 342 Z" />
+            android:pathData="M 512 320 A 192 192 0 0 1 704 512 A 192 192 0 0 1 512 704 A 192 192 0 0 1 376.24 647.76 L 279.36 677.76 Q 261.12 683.52 271.68 667.58 L 331.67 577.92 A 192 192 0 0 1 512 320 Z M 512 403.2 A 108.8 108.8 0 0 0 512 620.8 A 108.8 108.8 0 0 0 512 403.2 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:type="linear"
+                    android:startX="300"
+                    android:startY="287"
+                    android:endX="735"
+                    android:endY="748">
+                    <item android:color="#FFFFFFFF" android:offset="0.0" />
+                    <item android:color="#FFF8FAFC" android:offset="0.18" />
+                    <item android:color="#FFE2E8F0" android:offset="0.38" />
+                    <item android:color="#FF94A3B8" android:offset="0.62" />
+                    <item android:color="#FF475569" android:offset="0.84" />
+                    <item android:color="#FF1E293B" android:offset="1.0" />
+                </gradient>
+            </aapt:attr>
+        </path>
+
+        <!-- Specular Highlight Bevel Ridge (Upper Left Light Source) -->
+        <path
+            android:fillType="evenOdd"
+            android:strokeWidth="3.2"
+            android:pathData="M 512 320 A 192 192 0 0 1 704 512 A 192 192 0 0 1 512 704 A 192 192 0 0 1 376.24 647.76 L 279.36 677.76 Q 261.12 683.52 271.68 667.58 L 331.67 577.92 A 192 192 0 0 1 512 320 Z M 512 403.2 A 108.8 108.8 0 0 0 512 620.8 A 108.8 108.8 0 0 0 512 403.2 Z">
+            <aapt:attr name="android:strokeColor">
+                <gradient
+                    android:type="linear"
+                    android:startX="312"
+                    android:startY="300"
+                    android:endX="712"
+                    android:endY="712">
+                    <item android:color="#FFFFFFFF" android:offset="0.0" />
+                    <item android:color="#CCFFFFFF" android:offset="0.25" />
+                    <item android:color="#40CBD5E1" android:offset="0.6" />
+                    <item android:color="#20334155" android:offset="1.0" />
+                </gradient>
+            </aapt:attr>
+        </path>
+
     </group>
 </vector>

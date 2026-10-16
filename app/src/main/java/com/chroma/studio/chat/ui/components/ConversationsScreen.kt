@@ -467,8 +467,10 @@ fun ConversationsScreen(
                         // Contacts' Stories (One avatar tray circle per user with combined seen state)
                         items(distinctContactStories, key = { it.authorName }) { story ->
                             val userHasUnseen = stories.any { it.authorName == story.authorName && !it.seen }
+                            val contactAvatar = chats.find { it.name.equals(story.authorName, ignoreCase = true) }?.avatar
+                                ?.takeIf { it.isNotBlank() } ?: story.avatar
                             IosStoryAvatarItem(
-                                avatarUrl = story.avatar,
+                                avatarUrl = contactAvatar,
                                 name = story.authorName.split(" ").firstOrNull() ?: story.authorName,
                                 hasNewStory = true,
                                 isMyStory = false,
@@ -898,8 +900,9 @@ private fun IosStoryAvatarItem(
                 !seen -> Brush.sweepGradient(
                     listOf(
                         Color(0xFF007AFF),
-                        Color(0xFF38BDF8),
                         Color(0xFF5856D6),
+                        Color(0xFFFF2D55),
+                        Color(0xFFFF9500),
                         Color(0xFF007AFF)
                     )
                 )
@@ -920,16 +923,24 @@ private fun IosStoryAvatarItem(
                     modifier = Modifier
                         .fillMaxSize()
                         .clip(CircleShape)
-                        .background(colors.surfaceSecondary)
-                        .border(if (showRing) 2.dp else 1.dp, colors.appBg, CircleShape),
+                        .background(colors.appBg)
+                        .padding(if (showRing) 2.dp else 0.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    ChatAvatar(
-                        avatarUrl = avatarUrl,
-                        name = name,
-                        modifier = Modifier.fillMaxSize(),
-                        size = 56.dp
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape)
+                            .background(colors.surfaceSecondary),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        ChatAvatar(
+                            avatarUrl = avatarUrl,
+                            name = name,
+                            modifier = Modifier.fillMaxSize(),
+                            size = 56.dp
+                        )
+                    }
                 }
             }
 
@@ -956,8 +967,8 @@ private fun IosStoryAvatarItem(
         Text(
             text = name,
             fontSize = 11.5.sp,
-            fontWeight = FontWeight.Medium,
-            color = colors.textDark,
+            fontWeight = if (!seen && hasNewStory) FontWeight.SemiBold else FontWeight.Normal,
+            color = if (!seen && hasNewStory) colors.textDark else colors.textMuted,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )

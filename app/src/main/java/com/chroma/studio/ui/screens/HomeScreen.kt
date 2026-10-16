@@ -12,6 +12,9 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.shape.CircleShape
@@ -28,6 +31,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.zIndex
@@ -110,8 +114,12 @@ fun DrawerItem(
     }
 }
 
-enum class ViewMode {
-    GRID, LIST, GRID_DETAILS, LIST_DETAILS;
+enum class ViewMode(val title: String, val subtitle: String) {
+    GRID("Grid", "Two-column visual canvas cards"),
+    LIST("List", "Compact rows with quick actions"),
+    LIST_DETAILS("List with details", "Expanded rows with description & dates"),
+    GRID_DETAILS("Grid with details", "Cards with artwork, title, and metadata");
+
     fun next(): ViewMode {
         val values = entries.toTypedArray()
         return values[(ordinal + 1) % values.size]
@@ -219,6 +227,7 @@ fun HomeScreen(
     var searchActive by remember { mutableStateOf(false) }
     var showLoginScreen by remember { mutableStateOf(false) }
     var showCreatePostMenu by remember { mutableStateOf(false) }
+    var showViewModeSheet by remember { mutableStateOf(false) }
 
     if (showLoginScreen) {
         LoginScreen(
@@ -409,11 +418,18 @@ fun HomeScreen(
                             detectTapGestures(onLongPress = { onEditHomeBackground() })
                         }
                 )
+            } else {
+                ChromaAnimatedBackground()
             }
             Box(modifier = Modifier.fillMaxSize().then(if (showHeader) Modifier.statusBarsPadding() else Modifier)) {
-                // â”€â”€ Hero Section â”€â”€
+                // ── Hero Section ──
                 Column(modifier = Modifier.fillMaxWidth().height(if (showHeader) 420.dp else 340.dp).zIndex(1f).padding(horizontal = 20.dp, vertical = if (showHeader) 16.dp else 12.dp)) {
                     
+                    val heroTextColor = Color.White
+                    val heroMutedColor = Color.White.copy(alpha = 0.9f)
+                    val heroIconBg = Color.White.copy(alpha = 0.15f)
+                    val heroIconBorder = Color.White.copy(alpha = 0.4f)
+
                     // Top Bar with Animated Search
                     if (showHeader) {
                     Row(
@@ -430,7 +446,7 @@ fun HomeScreen(
                             Icon(
                                 Lucide.Menu,
                                 contentDescription = "Menu",
-                                tint = Color.White.copy(alpha = 0.9f),
+                                tint = heroTextColor.copy(alpha = 0.9f),
                                 modifier = Modifier
                                     .size(28.dp)
                                     .clickable { scope.launch { drawerState.open() } }
@@ -450,7 +466,7 @@ fun HomeScreen(
                                 Box(
                                     modifier = Modifier
                                         .size(36.dp)
-                                        .border(1.dp, Color.White.copy(alpha = 0.4f), CircleShape)
+                                        .border(1.dp, heroIconBorder, CircleShape)
                                         .clip(CircleShape)
                                         .background(Color.Transparent)
                                         .clickable { 
@@ -458,14 +474,14 @@ fun HomeScreen(
                                         },
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(Lucide.Upload, "Import JSON File", tint = Color.White, modifier = Modifier.size(16.dp))
+                                    Icon(Lucide.Upload, "Import JSON File", tint = heroTextColor, modifier = Modifier.size(16.dp))
                                 }
                                 
                                 val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
                                 Box(
                                     modifier = Modifier
                                         .size(36.dp)
-                                        .border(1.dp, Color.White.copy(alpha = 0.4f), CircleShape)
+                                        .border(1.dp, heroIconBorder, CircleShape)
                                         .clip(CircleShape)
                                         .background(Color.Transparent)
                                         .clickable { 
@@ -494,21 +510,28 @@ fun HomeScreen(
                                         },
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(Lucide.ClipboardPaste, "Paste JSON", tint = Color.White, modifier = Modifier.size(16.dp))
+                                    Icon(Lucide.ClipboardPaste, "Paste JSON", tint = heroTextColor, modifier = Modifier.size(16.dp))
                                 }
+                                val haptic = LocalHapticFeedback.current
                                 Box(
                                     modifier = Modifier
                                         .size(36.dp)
-                                        .border(1.dp, Color.White.copy(alpha = 0.4f), CircleShape)
+                                        .border(1.dp, heroIconBorder, CircleShape)
                                         .clip(CircleShape)
                                         .background(Color.Transparent)
-                                        .clickable { 
-                                            viewMode = viewMode.next()
-                                            onViewModeChanged(viewMode)
-                                        },
+                                        .combinedClickable(
+                                            onClick = { 
+                                                viewMode = viewMode.next()
+                                                onViewModeChanged(viewMode)
+                                            },
+                                            onLongClick = {
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                showViewModeSheet = true
+                                            }
+                                        ),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(viewMode.icon, "View Mode", tint = Color.White, modifier = Modifier.size(16.dp))
+                                    Icon(viewMode.icon, "View Mode: ${viewMode.title}", tint = heroTextColor, modifier = Modifier.size(16.dp))
                                 }
                             }
                             
@@ -516,24 +539,24 @@ fun HomeScreen(
                                 androidx.compose.foundation.text.BasicTextField(
                                     value = searchQuery,
                                     onValueChange = { searchQuery = it },
-                                    textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 16.sp),
-                                    cursorBrush = androidx.compose.ui.graphics.SolidColor(Color.White),
+                                    textStyle = androidx.compose.ui.text.TextStyle(color = heroTextColor, fontSize = 16.sp),
+                                    cursorBrush = androidx.compose.ui.graphics.SolidColor(heroTextColor),
                                     singleLine = true,
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clip(CircleShape)
-                                        .background(Color.White.copy(alpha = 0.2f))
+                                        .background(heroIconBg)
                                         .padding(horizontal = 16.dp, vertical = 8.dp),
                                     decorationBox = { innerTextField ->
                                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            Icon(Lucide.Search, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                                            Icon(Lucide.Search, null, tint = heroTextColor, modifier = Modifier.size(18.dp))
                                             Box(modifier = Modifier.weight(1f)) {
                                                 if (searchQuery.isEmpty()) {
-                                                    Text("Search works...", color = Color.White.copy(alpha = 0.7f), fontSize = 14.sp)
+                                                    Text("Search works...", color = heroMutedColor, fontSize = 14.sp)
                                                 }
                                                 innerTextField()
                                             }
-                                            Icon(Lucide.X, null, tint = Color.White, modifier = Modifier.size(18.dp).clickable { 
+                                            Icon(Lucide.X, null, tint = heroTextColor, modifier = Modifier.size(18.dp).clickable { 
                                                 if (searchQuery.isEmpty()) searchActive = false else searchQuery = "" 
                                             })
                                         }
@@ -544,11 +567,11 @@ fun HomeScreen(
                                     modifier = Modifier
                                         .size(36.dp)
                                         .clip(CircleShape)
-                                        .background(Color.White.copy(alpha = 0.15f))
+                                        .background(heroIconBg)
                                         .clickable { searchActive = true },
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(Lucide.Search, "Search", tint = Color.White, modifier = Modifier.size(18.dp))
+                                    Icon(Lucide.Search, "Search", tint = heroTextColor, modifier = Modifier.size(18.dp))
                                 }
                             }
                         }
@@ -558,18 +581,18 @@ fun HomeScreen(
                     Spacer(modifier = Modifier.weight(1f))
 
                     // Text section
-                    Text("Gradient create", color = Color.White.copy(alpha = 0.9f), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text("Gradient create", color = heroMutedColor, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Get started", color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold)
+                        Text("Get started", color = heroTextColor, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold)
                         Spacer(Modifier.width(8.dp))
                         Box(
                             modifier = Modifier
                                 .size(24.dp)
                                 .clip(RoundedCornerShape(6.dp))
-                                .background(Color.White.copy(alpha = 0.15f)),
+                                .background(heroIconBg),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Lucide.ChevronRight, null, tint = Color.White, modifier = Modifier.size(14.dp))
+                            Icon(Lucide.ChevronRight, null, tint = heroTextColor, modifier = Modifier.size(14.dp))
                         }
                     }
 
@@ -577,13 +600,14 @@ fun HomeScreen(
 
                     // Buttons
                     Row(modifier = Modifier.fillMaxWidth().height(110.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        // Button 1: New video
+                        // Button 1: New gradient
                         val cardBrush = Brush.linearGradient(
                             colors = listOf(Color.White.copy(alpha = 0.35f), Color.White.copy(alpha = 0.20f)),
                             start = androidx.compose.ui.geometry.Offset.Zero,
                             end = androidx.compose.ui.geometry.Offset(0f, Float.POSITIVE_INFINITY)
                         )
                         val cardTextColor = Color.White
+                        val cardBorderColor = Color.White.copy(alpha = 0.4f)
                         
                         Column(
                             modifier = Modifier
@@ -591,7 +615,7 @@ fun HomeScreen(
                                 .fillMaxHeight()
                                 .clip(RoundedCornerShape(24.dp))
                                 .background(cardBrush)
-                                .border(1.dp, Color.White.copy(alpha = 0.4f), RoundedCornerShape(24.dp))
+                                .border(1.dp, cardBorderColor, RoundedCornerShape(24.dp))
                                 .clickable { showCreatePostMenu = true },
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
@@ -708,21 +732,34 @@ fun HomeScreen(
                         }
                         // â”€â”€ Work grid â”€â”€
                 if (works.isEmpty()) {
-                    EmptyState(onNewWork = onNewWork)
+                    EmptyState(
+                        onNewWork = onNewWork,
+                        onCreateClick = { showCreatePostMenu = true }
+                    )
                 } else if (filteredWorks.isEmpty()) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text("No works found for \"$searchQuery\"", color = colors.textMuted, fontSize = 15.sp)
                     }
                 } else {
+                    val haptic = LocalHapticFeedback.current
+
+                    val gridColumns = when (viewMode) {
+                        ViewMode.LIST, ViewMode.LIST_DETAILS -> GridCells.Fixed(1)
+                        ViewMode.GRID, ViewMode.GRID_DETAILS -> GridCells.Fixed(2)
+                    }
+
+                    val currentSelectedIds by rememberUpdatedState(selectedWorkIds)
+                    val currentFilteredWorks by rememberUpdatedState(filteredWorks)
+
                     LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = if (viewMode == ViewMode.LIST || viewMode == ViewMode.LIST_DETAILS) 300.dp else 80.dp),
+                        columns = gridColumns,
                         state = gridState,
-                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 100.dp),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 100.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier
                             .fillMaxSize()
-                            .pointerInput(selectionMode) {
+                            .pointerInput(Unit) {
                                 detectDragGesturesAfterLongPress(
                                     onDragStart = { offset ->
                                         val item = gridState.layoutInfo.visibleItemsInfo.find {
@@ -730,16 +767,17 @@ fun HomeScreen(
                                             offset.y >= it.offset.y && offset.y <= it.offset.y + it.size.height
                                         }
                                         if (item != null) {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                             dragAnchorIndex = item.index
-                                            dragInitialSelectedIds = selectedWorkIds
-                                            val work = filteredWorks.getOrNull(item.index)
+                                            dragInitialSelectedIds = currentSelectedIds
+                                            val work = currentFilteredWorks.getOrNull(item.index)
                                             if (work != null) {
-                                                dragIsSelecting = !selectedWorkIds.contains(work.id)
+                                                dragIsSelecting = !currentSelectedIds.contains(work.id)
                                                 // Apply initial toggle
                                                 val newSelection = if (dragIsSelecting) {
-                                                    selectedWorkIds + work.id
+                                                    currentSelectedIds + work.id
                                                 } else {
-                                                    selectedWorkIds - work.id
+                                                    currentSelectedIds - work.id
                                                 }
                                                 onUpdateSelection(newSelection)
                                             }
@@ -764,7 +802,7 @@ fun HomeScreen(
                                             val maxIdx = maxOf(anchor, currentIndex)
                                             
                                             val currentDragSet = (minIdx..maxIdx)
-                                                .mapNotNull { filteredWorks.getOrNull(it)?.id }
+                                                .mapNotNull { currentFilteredWorks.getOrNull(it)?.id }
                                                 .toSet()
 
                                             val newSelection = if (dragIsSelecting) {
@@ -773,7 +811,7 @@ fun HomeScreen(
                                                 dragInitialSelectedIds - currentDragSet
                                             }
                                             
-                                            if (newSelection != selectedWorkIds) {
+                                            if (newSelection != currentSelectedIds) {
                                                 onUpdateSelection(newSelection)
                                             }
                                         }
@@ -802,7 +840,8 @@ fun HomeScreen(
                                 onExportWork = {
                                     workToExport = work
                                     exportWorkLauncher.launch("${work.name}.json")
-                                }
+                                },
+                                onOpenViewMode = { showViewModeSheet = true }
                             )
                         }
                     }
@@ -857,6 +896,17 @@ if (showCreatePostMenu) {
             }
         )
     }
+
+    if (showViewModeSheet) {
+        ViewModeBottomSheet(
+            currentMode = viewMode,
+            onSelectMode = { newMode ->
+                viewMode = newMode
+                onViewModeChanged(newMode)
+            },
+            onDismiss = { showViewModeSheet = false }
+        )
+    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -874,15 +924,22 @@ fun WorkCard(
     onSetAsBackground: () -> Unit,
     onSetAsLiveWallpaper: () -> Unit = {},
     onShareToDiscover: () -> Unit = {},
-    onExportWork: () -> Unit = {}
+    onExportWork: () -> Unit = {},
+    onOpenViewMode: () -> Unit = {}
 ) {
     val colors = LocalOscellionColors.current
     var showMenu by remember { mutableStateOf(false) }
     var showRenameDialog by remember { mutableStateOf(false) }
 
-    val scale by animateFloatAsState(if (isSelected) 0.92f else 1f)
-    val borderWidth = if (isSelected) 3.dp else 1.dp
+    val haptic = LocalHapticFeedback.current
+    val scale by animateFloatAsState(if (isSelected) 0.94f else 1f)
+    val borderWidth = if (isSelected) 2.5.dp else 1.dp
     val borderColor = if (isSelected) colors.primary else Color.Transparent
+
+    val dateFormat = remember { SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()) }
+    val dateTimeFormat = remember { SimpleDateFormat("MMM dd, yyyy • hh:mm a", Locale.getDefault()) }
+    val dateString = remember(work.lastModifiedAt) { dateFormat.format(java.util.Date(work.lastModifiedAt)) }
+    val dateTimeString = remember(work.lastModifiedAt) { dateTimeFormat.format(java.util.Date(work.lastModifiedAt)) }
 
     Box(
         modifier = Modifier
@@ -894,27 +951,86 @@ fun WorkCard(
             .background(colors.glassBg)
             .clickable(onClick = onClick)
     ) {
-        val isListMode = viewMode == ViewMode.LIST || viewMode == ViewMode.LIST_DETAILS
-        val showDetails = viewMode == ViewMode.GRID_DETAILS || viewMode == ViewMode.LIST_DETAILS
-        
         @Composable
-        fun Thumbnail() {
-            Box(
-                modifier = Modifier
-                    .run { if (isListMode) this.width(70.dp).fillMaxHeight() else this.fillMaxWidth().height(70.dp) }
-                    .clip(
-                        if (isListMode) RoundedCornerShape(topStart = 18.dp, bottomStart = 18.dp) 
-                        else RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp)
+        fun ActionMenu() {
+            if (!selectionMode) {
+                Box {
+                    Icon(
+                        imageVector = Lucide.EllipsisVertical,
+                        contentDescription = "Options",
+                        tint = colors.textMuted,
+                        modifier = Modifier
+                            .size(20.dp)
+                            .clip(CircleShape)
+                            .clickable { showMenu = true }
+                            .padding(2.dp)
                     )
-                    .background(Color(0xFFE5E7EB)),
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false },
+                        modifier = Modifier
+                            .glossyBorder(RoundedCornerShape(12.dp), colors)
+                            .background(colors.glassBg, RoundedCornerShape(12.dp))
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("View as...", fontSize = 13.sp, color = colors.textMain) },
+                            leadingIcon = { Icon(viewMode.icon, null, tint = colors.textMain, modifier = Modifier.size(15.dp)) },
+                            onClick = { showMenu = false; onOpenViewMode() }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Rename / Edit Info", fontSize = 13.sp, color = colors.textMain) },
+                            leadingIcon = { Icon(Lucide.Pencil, null, tint = colors.textMain, modifier = Modifier.size(15.dp)) },
+                            onClick = { showMenu = false; showRenameDialog = true }
+                        )
+                        if (work.isHomeBackground) {
+                            DropdownMenuItem(
+                                text = { Text("Set as Home Background", fontSize = 13.sp, color = colors.textMain) },
+                                leadingIcon = { Icon(Lucide.Image, null, tint = colors.textMain, modifier = Modifier.size(15.dp)) },
+                                onClick = { showMenu = false; onSetAsBackground() }
+                            )
+                        }
+                        DropdownMenuItem(
+                            text = { Text("Duplicate", fontSize = 13.sp, color = colors.textMain) },
+                            leadingIcon = { Icon(Lucide.Copy, null, tint = colors.textMain, modifier = Modifier.size(15.dp)) },
+                            onClick = { showMenu = false; onDuplicate() }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Export to JSON", fontSize = 13.sp, color = colors.textMain) },
+                            leadingIcon = { Icon(Lucide.Download, null, tint = colors.textMain, modifier = Modifier.size(15.dp)) },
+                            onClick = { showMenu = false; onExportWork() }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Set as Live Wallpaper", fontSize = 13.sp, color = colors.textMain) },
+                            leadingIcon = { Icon(Lucide.Smartphone, null, tint = colors.textMain, modifier = Modifier.size(15.dp)) },
+                            onClick = { showMenu = false; onSetAsLiveWallpaper() }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Share to Discover", fontSize = 13.sp, color = colors.textMain) },
+                            leadingIcon = { Icon(Lucide.Globe, null, tint = colors.textMain, modifier = Modifier.size(15.dp)) },
+                            onClick = { showMenu = false; onShareToDiscover() }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Move to Trash", fontSize = 13.sp, color = Color(0xFFEF4444)) },
+                            leadingIcon = { Icon(Lucide.Trash2, null, tint = Color(0xFFEF4444), modifier = Modifier.size(15.dp)) },
+                            onClick = { showMenu = false; onSoftDelete() }
+                        )
+                    }
+                }
+            }
+        }
+
+        @Composable
+        fun CanvasBox(modifier: Modifier = Modifier) {
+            Box(
+                modifier = modifier.background(Color(0xFF1E1E24)),
                 contentAlignment = Alignment.Center
             ) {
                 val layers = remember(work.layersJson) { repository.deserializeLayers(work.layersJson) }
                 if (layers.isEmpty()) {
                     Text(
                         work.name.take(1).uppercase(),
-                        color = Color.Black.copy(alpha = 0.2f),
-                        fontSize = 42.sp,
+                        color = Color.White.copy(alpha = 0.2f),
+                        fontSize = 32.sp,
                         fontWeight = FontWeight.Black
                     )
                 } else {
@@ -931,133 +1047,211 @@ fun WorkCard(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(colors.primary.copy(alpha = 0.3f)),
+                            .background(colors.primary.copy(alpha = 0.35f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(32.dp)
+                                .size(30.dp)
                                 .background(colors.primary, CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Lucide.Check, "Selected", tint = Color.White, modifier = Modifier.size(18.dp))
+                            Icon(Lucide.Check, "Selected", tint = Color.White, modifier = Modifier.size(16.dp))
                         }
                     }
                 }
             }
         }
-        
-        @Composable
-        fun Info() {
-            Column(modifier = Modifier.padding(8.dp).fillMaxWidth().run { if (isListMode) this.fillMaxHeight() else this }, verticalArrangement = Arrangement.Center) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top
-                ) {
-                    Text(
-                        work.name,
-                        color = colors.textMain,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
+
+        when (viewMode) {
+            ViewMode.GRID -> {
+                Column {
+                    CanvasBox(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(1.22f)
+                            .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp))
                     )
-                    if (!selectionMode) {
-                        Box {
-                            Icon(
-                                Lucide.EllipsisVertical,
-                                contentDescription = "Options",
-                                tint = colors.textMuted,
-                                modifier = Modifier
-                                    .size(18.dp)
-                                    .clickable { showMenu = true }
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 11.dp, vertical = 9.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = work.name,
+                                color = colors.textMain,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = InterFontFamily,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
                             )
-                            DropdownMenu(
-                                expanded = showMenu,
-                                onDismissRequest = { showMenu = false },
-                                modifier = Modifier
-                                    .glossyBorder(RoundedCornerShape(12.dp), colors)
-                                    .background(colors.glassBg, RoundedCornerShape(12.dp))
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text("Rename / Edit Info", fontSize = 13.sp, color = colors.textMain) },
-                                    leadingIcon = { Icon(Lucide.Pencil, null, tint = colors.textMain, modifier = Modifier.size(15.dp)) },
-                                    onClick = { showMenu = false; showRenameDialog = true }
-                                )
-                                if (work.isHomeBackground) {
-                                    DropdownMenuItem(
-                                        text = { Text("Set as Home Background", fontSize = 13.sp, color = colors.textMain) },
-                                        leadingIcon = { Icon(Lucide.Image, null, tint = colors.textMain, modifier = Modifier.size(15.dp)) },
-                                        onClick = { showMenu = false; onSetAsBackground() }
-                                    )
-                                }
-                                DropdownMenuItem(
-                                    text = { Text("Duplicate", fontSize = 13.sp, color = colors.textMain) },
-                                    leadingIcon = { Icon(Lucide.Copy, null, tint = colors.textMain, modifier = Modifier.size(15.dp)) },
-                                    onClick = { showMenu = false; onDuplicate() }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Export to JSON", fontSize = 13.sp, color = colors.textMain) },
-                                    leadingIcon = { Icon(Lucide.Download, null, tint = colors.textMain, modifier = Modifier.size(15.dp)) },
-                                    onClick = { showMenu = false; onExportWork() }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Set as Live Wallpaper", fontSize = 13.sp, color = colors.textMain) },
-                                    leadingIcon = { Icon(Lucide.Smartphone, null, tint = colors.textMain, modifier = Modifier.size(15.dp)) },
-                                    onClick = { showMenu = false; onSetAsLiveWallpaper() }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Share to Discover", fontSize = 13.sp, color = colors.textMain) },
-                                    leadingIcon = { Icon(Lucide.Globe, null, tint = colors.textMain, modifier = Modifier.size(15.dp)) },
-                                    onClick = { showMenu = false; onShareToDiscover() }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Move to Trash", fontSize = 13.sp, color = Color(0xFFEF4444)) },
-                                    leadingIcon = { Icon(Lucide.Trash2, null, tint = Color(0xFFEF4444), modifier = Modifier.size(15.dp)) },
-                                    onClick = { showMenu = false; onSoftDelete() }
-                                )
-                            }
+                            ActionMenu()
                         }
-                    }
-                }
-                
-                if (showDetails) {
-                    if (work.description.isNotBlank()) {
-                        Spacer(Modifier.height(4.dp))
+                        Spacer(Modifier.height(3.dp))
                         Text(
-                            work.description,
-                            color = colors.textMuted,
-                            fontSize = 12.sp,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
+                            text = dateString,
+                            color = colors.textMuted.copy(alpha = 0.75f),
+                            fontSize = 11.sp,
+                            fontFamily = InterFontFamily,
+                            maxLines = 1
                         )
                     }
-                    
-                    val dateFormat = remember { java.text.SimpleDateFormat("MMM dd, yyyy â€¢ hh:mm a", java.util.Locale.getDefault()) }
-                    val dateString = remember(work.lastModifiedAt) { dateFormat.format(java.util.Date(work.lastModifiedAt)) }
-                    
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        dateString,
-                        color = colors.textMuted.copy(alpha = 0.7f),
-                        fontSize = 11.sp,
-                        maxLines = 1
-                    )
                 }
             }
-        }
-        
-        if (isListMode) {
-            Row(modifier = Modifier.height(70.dp)) {
-                Thumbnail()
-                Info()
+
+            ViewMode.GRID_DETAILS -> {
+                Column {
+                    CanvasBox(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(1.22f)
+                            .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp))
+                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 11.dp, vertical = 9.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = work.name,
+                                color = colors.textMain,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = InterFontFamily,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                            ActionMenu()
+                        }
+                        if (work.description.isNotBlank()) {
+                            Spacer(Modifier.height(3.dp))
+                            Text(
+                                text = work.description,
+                                color = colors.textMuted,
+                                fontSize = 11.5.sp,
+                                fontFamily = InterFontFamily,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = dateString,
+                            color = colors.textMuted.copy(alpha = 0.70f),
+                            fontSize = 10.5.sp,
+                            fontFamily = InterFontFamily,
+                            maxLines = 1
+                        )
+                    }
+                }
             }
-        } else {
-            Column {
-                Thumbnail()
-                Info()
+
+            ViewMode.LIST -> {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(72.dp)
+                        .padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CanvasBox(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = work.name,
+                            color = colors.textMain,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            fontFamily = InterFontFamily,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(Modifier.height(3.dp))
+                        Text(
+                            text = dateString,
+                            color = colors.textMuted,
+                            fontSize = 12.sp,
+                            fontFamily = InterFontFamily,
+                            maxLines = 1
+                        )
+                    }
+                    ActionMenu()
+                }
+            }
+
+            ViewMode.LIST_DETAILS -> {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CanvasBox(
+                        modifier = Modifier
+                            .size(76.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = work.name,
+                                color = colors.textMain,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = InterFontFamily,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                            ActionMenu()
+                        }
+                        if (work.description.isNotBlank()) {
+                            Text(
+                                text = work.description,
+                                color = colors.textMuted,
+                                fontSize = 12.sp,
+                                fontFamily = InterFontFamily,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Text(
+                            text = dateTimeString,
+                            color = colors.textMuted.copy(alpha = 0.75f),
+                            fontSize = 11.sp,
+                            fontFamily = InterFontFamily,
+                            maxLines = 1
+                        )
+                    }
+                }
             }
         }
     }
@@ -1156,44 +1350,173 @@ fun RenameDialog(
     )
 }
 
+private const val EMPTY_STATE_PLUS_LAYER_JSON = """[{"activeBlobIdx":0,"angle":90.0,"animIntensity":50.0,"animSpeed":50.0,"animated":false,"blendMode":"NORMAL","blobBgColor":-72057594037927936,"blobs":[{"feather":100.0,"height":40.0,"opacity":1.0,"rotation":0.0,"width":40.0,"x":25.0,"y":40.0},{"feather":100.0,"height":40.0,"opacity":1.0,"rotation":0.0,"width":40.0,"x":75.0,"y":60.0}],"brightness":50.0,"centerX":50.0,"centerY":50.0,"columns":3,"complexity":50.609756,"expanded":true,"feather":100.0,"hasBaseBackground":false,"height":70.0,"id":"b770567f-6c0e-4184-b420-7e2bc05cda73","meshPoints":[{"packedValue":4744666964463242507},{"packedValue":4798022454124478464}],"name":"Layer 2","opacity":1.0,"repeatPattern":false,"rows":3,"stops":[{"color":-4445291151360,"id":"5b568c1e-1572-4937-bbec-d0e217918156","position":0.0},{"color":-53699048388952064,"id":"67b73e9b-ca3f-4ccf-b663-0329095d9f57","position":100.0},{"color":-15579774822907904,"id":"418f51d7-235d-4990-9dc6-c5ad11d80186","position":50.0},{"color":-5933282571059200,"id":"1ead79c1-5bb3-45d1-92cd-d0071488eaa3","position":70.84309},{"color":-42438949808898048,"id":"55066126-b643-4ae3-b00b-92130349607b","position":30.093676},{"color":-23568031741378560,"id":"4687e55a-c0d9-492c-ae01-1445945dd886","position":84.66042},{"color":-75466870358016,"id":"aba0afa5-0acd-4bf3-bb01-baf0c2703746","position":15.105386},{"color":-44412573180755968,"id":"92f555c9-d3de-4713-b76c-b4a62a6cac75","position":62.177986},{"color":-47518693529223168,"id":"f10f3e5d-034f-470c-a9e4-a98d155d18d3","position":39.34426},{"color":-106257490903040,"id":"4933870b-5fde-4934-a108-e07cc781df79","position":23.302109},{"color":-2301651499089920,"id":"40a29fd5-e96c-461d-9ce6-9b3a19eafd17","position":78.92272},{"color":-55370718380032,"id":"dd6210e3-344f-4b17-b880-284852a7ee9d","position":92.27166},{"color":-189115999977472,"id":"f2e66f12-96f5-4db7-9a70-104927900cb0","position":5.503513}],"type":"AURORA","visible":true,"waveSpeed":50.0,"width":70.0}]"""
+
 @Composable
-fun EmptyState(onNewWork: () -> Unit) {
+fun EmptyState(
+    onNewWork: () -> Unit,
+    onCreateClick: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
     val colors = LocalOscellionColors.current
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Box(
-            modifier = Modifier
-                .size(100.dp)
-                .background(colors.primary.copy(alpha = 0.1f), CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(Lucide.Paintbrush, "Empty", tint = colors.primary, modifier = Modifier.size(40.dp))
+    val haptic = LocalHapticFeedback.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.92f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "emptyStatePlusScale"
+    )
+
+    val auroraStops = remember {
+        arrayOf(
+            0.000000f to Color(0xFFFFFBF5),
+            0.055035f to Color(0xFFFF5400),
+            0.151054f to Color(0xFFFFBB5D),
+            0.233021f to Color(0xFFFF9F5C),
+            0.300937f to Color(0xFF693A00),
+            0.393443f to Color(0xFF572E00),
+            0.500000f to Color(0xFFC8A647),
+            0.621780f to Color(0xFF623700),
+            0.708431f to Color(0xFFEAEBB6),
+            0.789227f to Color(0xFFF7D2A9),
+            0.846604f to Color(0xFFAC4500),
+            0.922717f to Color(0xFFFFCDA4),
+            1.000000f to Color(0xFF413900)
+        )
+    }
+
+    val auroraBrush = remember(auroraStops) {
+        Brush.verticalGradient(colorStops = auroraStops)
+    }
+
+    val emptyStateLayers = remember {
+        try {
+            com.chroma.studio.data.chromaGson.fromJson<List<com.chroma.studio.model.GradientLayer>>(
+                EMPTY_STATE_PLUS_LAYER_JSON,
+                object : com.google.gson.reflect.TypeToken<List<com.chroma.studio.model.GradientLayer>>() {}.type
+            ) ?: emptyList()
+        } catch (_: Exception) {
+            emptyList()
         }
-        Spacer(Modifier.height(24.dp))
-        Text(
-            "No works yet",
-            color = colors.textMain,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            "Create a new canvas to start designing.",
-            color = colors.textMuted,
-            fontSize = 14.sp
-        )
-        Spacer(Modifier.height(32.dp))
-        GlassButton(
-            onClick = onNewWork,
-            colors = ButtonDefaults.buttonColors(containerColor = colors.primary.copy(alpha = 0.85f)),
-            shape = RoundedCornerShape(12.dp),
-            modifier = Modifier.glossyBorder(RoundedCornerShape(12.dp), colors),
-            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(horizontal = 24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            Text("Create New Work", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            // Plus Icon Button with Aurora Properties (70.dp Circle)
+            Box(
+                modifier = Modifier
+                    .size(70.dp)
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                    }
+                    .shadow(
+                        elevation = 16.dp,
+                        shape = CircleShape,
+                        ambientColor = Color(0xFFFF5400).copy(alpha = 0.45f),
+                        spotColor = Color(0xFFC8A647).copy(alpha = 0.50f)
+                    )
+                    .clip(CircleShape)
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = null
+                    ) {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onCreateClick?.invoke() ?: onNewWork()
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                if (emptyStateLayers.isNotEmpty()) {
+                    CanvasPreview(
+                        layers = emptyStateLayers,
+                        shape = "circle",
+                        borderColor = Color.Transparent,
+                        animStatus = com.chroma.studio.model.AnimStatus.PLAYING,
+                        animSpeed = 50f,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Box(modifier = Modifier.fillMaxSize().background(auroraBrush))
+                }
+
+                // Luxury specular glass overlay
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(CircleShape)
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(
+                                    Color.White.copy(alpha = 0.25f),
+                                    Color.White.copy(alpha = 0.04f),
+                                    Color.Transparent
+                                )
+                            )
+                        )
+                        .border(
+                            width = 1.dp,
+                            brush = Brush.verticalGradient(
+                                listOf(
+                                    Color.White.copy(alpha = 0.50f),
+                                    Color.White.copy(alpha = 0.12f)
+                                )
+                            ),
+                            shape = CircleShape
+                        )
+                )
+
+                // Crisp Plus Icon
+                Icon(
+                    imageVector = Lucide.Plus,
+                    contentDescription = "Create",
+                    tint = Color.White,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            // Heading: Create
+            Text(
+                text = "Create",
+                color = colors.textMain,
+                fontSize = 19.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = InterFontFamily,
+                letterSpacing = (-0.3).sp,
+                modifier = Modifier.clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onCreateClick?.invoke() ?: onNewWork()
+                }
+            )
+
+            Spacer(Modifier.height(3.dp))
+
+            // Paragraph: Create new Work/Post/Edit anything
+            Text(
+                text = "Create new Work/Post/Edit anything",
+                color = colors.textMuted,
+                fontSize = 13.5.sp,
+                fontWeight = FontWeight.Medium,
+                fontFamily = InterFontFamily,
+                letterSpacing = (-0.1).sp
+            )
         }
     }
 }
@@ -1238,99 +1561,11 @@ fun ChromaAnimatedBackground() {
     }
 }
 
-const val DEFAULT_HOME_BG_JSON = """[
-  {
-    "activeBlobIdx": 0,
-    "angle": 135.0,
-    "animIntensity": 50.0,
-    "animSpeed": 50.0,
-    "animated": false,
-    "blendMode": "NORMAL",
-    "blobBgColor": -72057594037927936,
-    "blobs": [
-      {
-        "feather": 100.0,
-        "height": 40.0,
-        "opacity": 1.0,
-        "rotation": 0.0,
-        "width": 40.0,
-        "x": 25.0,
-        "y": 40.0
-      },
-      {
-        "feather": 100.0,
-        "height": 40.0,
-        "opacity": 1.0,
-        "rotation": 0.0,
-        "width": 40.0,
-        "x": 75.0,
-        "y": 60.0
-      }
-    ],
-    "brightness": 50.0,
-    "centerX": 50.0,
-    "centerY": 50.0,
-    "columns": 3,
-    "complexity": 50.0,
-    "expanded": true,
-    "feather": 100.0,
-    "hasBaseBackground": false,
-    "height": 70.0,
-    "id": "6e0c3f5d-cb01-4aeb-8877-8415e7a0b27d",
-    "meshPoints": [
-      {
-        "x": 0.0,
-        "y": 0.0
-      },
-      {
-        "x": 100.0,
-        "y": 100.0
-      }
-    ],
-    "name": "Base",
-    "opacity": 1.0,
-    "repeatPattern": false,
-    "rows": 3,
-    "stops": [
-      {
-        "color": -70649712348233728,
-        "id": "090d95d1-c68c-476d-bb21-2d0b46da000e",
-        "position": 0.0
-      },
-      {
-        "color": -72046169424920576,
-        "id": "1bcbcd37-78a1-4c19-9aaa-ab465ca4bd95",
-        "position": 100.0
-      },
-      {
-        "color": -71866283309662208,
-        "id": "46c10578-1ef2-4f29-90f8-d266368cdf65",
-        "position": 50.81967
-      },
-      {
-        "color": -71717527117365248,
-        "id": "4df2c4b8-99ab-4058-8e1c-d9c304bac886",
-        "position": 70.023415
-      },
-      {
-        "color": -20847844269228032,
-        "id": "e8654a9a-a2c2-480b-acc9-ca75e0a2bf62",
-        "position": 25.526932
-      },
-      {
-        "color": -71972506440826880,
-        "id": "f5611c6c-d4d6-4d64-88f8-392f84ac08f0",
-        "position": 37.93911
-      }
-    ],
-    "type": "AURORA",
-    "visible": true,
-    "waveSpeed": 50.0,
-    "width": 70.0
-  }
-]"""
 
-const val GENERATE_BUTTON_BG_JSON = """[{"activeBlobIdx":0,"angle":90.0,"animIntensity":50.0,"animSpeed":50.0,"animated":false,"blendMode":"NORMAL","blobBgColor":-72057594037927936,"blobs":[{"feather":100.0,"height":40.0,"opacity":1.0,"rotation":0.0,"width":40.0,"x":25.0,"y":40.0},{"feather":100.0,"height":40.0,"opacity":1.0,"rotation":0.0,"width":40.0,"x":75.0,"y":60.0}],"brightness":50.0,"centerX":50.0,"centerY":50.0,"columns":3,"complexity":50.0,"expanded":false,"feather":100.0,"hasBaseBackground":false,"height":70.0,"id":"8d6b1d6b-0f10-418d-b692-a24b1cf4bd4c","meshPoints":[{"x":25.0,"y":40.0},{"x":75.0,"y":60.0}],"name":"Mix 1","opacity":1.0,"repeatPattern":false,"rows":3,"stops":[{"color":-30162120800731136,"id":"32dfc511-7164-47ee-b9ba-b6222e6e3d7c","position":0.0},{"color":-54873820728655872,"id":"e0d2d1bf-369e-4971-b6d1-aa64622043ba","position":50.0},{"color":-38489628595978240,"id":"6df8758d-6b95-4422-8695-d58b2a393f36","position":100.0}],"type":"AURORA","visible":true,"waveSpeed":50.0,"width":70.0},{"activeBlobIdx":0,"angle":90.0,"animIntensity":50.0,"animSpeed":50.0,"animated":false,"blendMode":"OVERLAY","blobBgColor":-72057594037927936,"blobs":[{"feather":100.0,"height":40.0,"opacity":1.0,"rotation":0.0,"width":40.0,"x":25.0,"y":40.0},{"feather":100.0,"height":40.0,"opacity":1.0,"rotation":0.0,"width":40.0,"x":75.0,"y":60.0}],"brightness":50.0,"centerX":50.0,"centerY":50.0,"columns":3,"complexity":50.0,"expanded":false,"feather":100.0,"hasBaseBackground":false,"height":70.0,"id":"3ebfc43c-55b6-4048-b9b1-523c9bfc9224","meshPoints":[{"x":25.0,"y":40.0},{"x":75.0,"y":60.0}],"name":"Mix 2","opacity":1.0,"repeatPattern":false,"rows":3,"stops":[{"color":-62539834840842240,"id":"c4af048b-7fb4-4077-85ea-f86b3ea51464","position":0.0},{"color":-47462137399869440,"id":"53c0a0c8-d5c3-4768-887d-c096f73cb321","position":50.0},{"color":-15062510436614144,"id":"f7686eb6-d4f6-44b9-9fa9-9dce22365bbc","position":100.0}],"type":"RADIAL","visible":true,"waveSpeed":50.0,"width":70.0}]"""
+
+const val DEFAULT_HOME_BG_JSON = """[{"activeBlobIdx":0,"angle":180.0,"animIntensity":50.0,"animSpeed":50.0,"animated":false,"blendMode":"NORMAL","blobBgColor":-72057594037927936,"blobs":[{"feather":100.0,"height":40.0,"opacity":1.0,"rotation":0.0,"width":40.0,"x":25.0,"y":40.0},{"feather":100.0,"height":40.0,"opacity":1.0,"rotation":0.0,"width":40.0,"x":75.0,"y":60.0}],"brightness":50.0,"centerX":50.0,"centerY":50.0,"columns":3,"complexity":50.0,"expanded":false,"feather":100.0,"hasBaseBackground":false,"height":70.0,"id":"fbc5d9bb-7c37-4972-b5ef-0a12dbd7cef3","meshPoints":[{"x":25.0,"y":40.0},{"x":75.0,"y":60.0}],"name":"Layer 2","opacity":1.0,"repeatPattern":false,"rows":3,"stops":[{"color":-71883875495706624,"id":"08c521a7-8c80-48fd-8aee-eedea5ba10ef","position":0.0},{"color":-71923565288488960,"id":"106a8c59-a666-4f87-a0a6-7fa5fb93deb3","position":100.0}],"type":"LINEAR","visible":false,"waveSpeed":50.0,"width":70.0},{"activeBlobIdx":0,"angle":90.0,"animIntensity":50.0,"animSpeed":50.0,"animated":false,"blendMode":"NORMAL","blobBgColor":-72057594037927936,"blobs":[{"feather":100.0,"height":40.0,"opacity":1.0,"rotation":0.0,"width":40.0,"x":25.0,"y":40.0},{"feather":100.0,"height":40.0,"opacity":1.0,"rotation":0.0,"width":40.0,"x":75.0,"y":60.0}],"brightness":50.0,"centerX":50.0,"centerY":50.0,"columns":3,"complexity":50.0,"expanded":false,"feather":100.0,"hasBaseBackground":false,"height":70.0,"id":"f76aa4c7-a600-48a3-b425-9e1fe8c9bbf6","meshPoints":[{"x":25.0,"y":40.0},{"x":86.56671,"y":19.477528}],"name":"Mix 1","opacity":1.0,"repeatPattern":false,"rows":3,"stops":[{"color":-71971290965082112,"id":"662cf022-18e4-4023-9c6b-044682b8d162","position":0.0},{"color":-49623223209295872,"id":"cc216b58-ba3b-4b40-8052-e99981670adb","position":50.0},{"color":-71972283102527488,"id":"b12b98fb-40bd-4b1e-a3f9-3fa4bc65e9fb","position":100.0}],"type":"AURORA","visible":true,"waveSpeed":50.0,"width":70.0}]"""
+
+const val GENERATE_BUTTON_BG_JSON = """[{"activeBlobIdx":0,"angle":90.0,"animIntensity":50.0,"animSpeed":50.0,"animated":false,"blendMode":"NORMAL","blobBgColor":-72057594037927936,"blobs":[{"feather":100.0,"height":40.0,"opacity":1.0,"rotation":0.0,"width":40.0,"x":25.0,"y":40.0},{"feather":100.0,"height":40.0,"opacity":1.0,"rotation":0.0,"width":40.0,"x":75.0,"y":60.0}],"brightness":50.0,"centerX":50.0,"centerY":50.0,"columns":3,"complexity":50.0,"expanded":false,"feather":100.0,"hasBaseBackground":false,"height":70.0,"id":"8d6b1d6b-0f10-418d-b692-a24b1cf4bd4c","meshPoints":[{"x":25.0,"y":40.0},{"x":75.0,"y":60.0}],"name":"Mix 1","opacity":1.0,"repeatPattern":false,"rows":3,"stops":[{"color":-32270670570192896,"id":"32dfc511-7164-47ee-b9ba-b6222e6e3d7c","position":0.0},{"color":-46085162294837248,"id":"e0d2d1bf-369e-4971-b6d1-aa64622043ba","position":50.0},{"color":-59921781690990592,"id":"6df8758d-6b95-4422-8695-d58b2a393f36","position":100.0}],"type":"AURORA","visible":true,"waveSpeed":50.0,"width":70.0},{"activeBlobIdx":0,"angle":90.0,"animIntensity":50.0,"animSpeed":50.0,"animated":false,"blendMode":"OVERLAY","blobBgColor":-72057594037927936,"blobs":[{"feather":100.0,"height":40.0,"opacity":1.0,"rotation":0.0,"width":40.0,"x":25.0,"y":40.0},{"feather":100.0,"height":40.0,"opacity":1.0,"rotation":0.0,"width":40.0,"x":75.0,"y":60.0}],"brightness":50.0,"centerX":50.0,"centerY":50.0,"columns":3,"complexity":50.0,"expanded":false,"feather":100.0,"hasBaseBackground":false,"height":70.0,"id":"3ebfc43c-55b6-4048-b9b1-523c9bfc9224","meshPoints":[{"x":25.0,"y":40.0},{"x":75.0,"y":60.0}],"name":"Mix 2","opacity":1.0,"repeatPattern":false,"rows":3,"stops":[{"color":-5427193689669632,"id":"c4af048b-7fb4-4077-85ea-f86b3ea51464","position":0.0},{"color":-53438807730552832,"id":"53c0a0c8-d5c3-4768-887d-c096f73cb321","position":50.0},{"color":-63596465515134976,"id":"f7686eb6-d4f6-44b9-9fa9-9dce22365bbc","position":100.0}],"type":"RADIAL","visible":true,"waveSpeed":50.0,"width":70.0}]"""
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1493,6 +1728,181 @@ fun CreatePostMenuSheet(
                 )
             }
             
+            Spacer(Modifier.height(12.dp))
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ViewModeBottomSheet(
+    currentMode: ViewMode,
+    onSelectMode: (ViewMode) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val colors = LocalOscellionColors.current
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val haptic = LocalHapticFeedback.current
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = if (isDark) Color(0xFF1C1C1E) else Color(0xFFF2F2F7),
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        dragHandle = {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp, bottom = 6.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(36.dp)
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(if (isDark) Color.White.copy(alpha = 0.25f) else Color.Black.copy(alpha = 0.2f))
+                )
+            }
+        }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "View as",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = InterFontFamily,
+                color = if (isDark) Color.White else Color.Black
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "Choose how your works and canvases are displayed",
+                fontSize = 13.sp,
+                color = Color(0xFF8E8E93),
+                fontWeight = FontWeight.Normal,
+                fontFamily = InterFontFamily
+            )
+
+            Spacer(Modifier.height(20.dp))
+
+            // Inset Grouped Container
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(if (isDark) Color(0xFF2C2C2E) else Color.White)
+                    .border(
+                        0.5.dp,
+                        if (isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.08f),
+                        RoundedCornerShape(18.dp)
+                    )
+            ) {
+                ViewMode.entries.forEachIndexed { index, mode ->
+                    val isSelected = mode == currentMode
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onSelectMode(mode)
+                                onDismiss()
+                            }
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(
+                                        if (isSelected) colors.primary.copy(alpha = 0.15f)
+                                        else if (isDark) Color.White.copy(alpha = 0.08f)
+                                        else Color.Black.copy(alpha = 0.05f)
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = mode.icon,
+                                    contentDescription = mode.title,
+                                    tint = if (isSelected) colors.primary else if (isDark) Color.White else Color.Black,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Column {
+                                Text(
+                                    text = mode.title,
+                                    fontSize = 15.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
+                                    fontFamily = InterFontFamily,
+                                    color = if (isSelected) colors.primary else if (isDark) Color.White else Color.Black
+                                )
+                                Text(
+                                    text = mode.subtitle,
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF8E8E93),
+                                    fontFamily = InterFontFamily
+                                )
+                            }
+                        }
+
+                        if (isSelected) {
+                            Icon(
+                                imageVector = Lucide.Check,
+                                contentDescription = "Selected",
+                                tint = colors.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+
+                    if (index < ViewMode.entries.size - 1) {
+                        HorizontalDivider(
+                            color = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f),
+                            thickness = 0.5.dp,
+                            modifier = Modifier.padding(start = 68.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(18.dp))
+
+            // Cancel Button
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(if (isDark) Color(0xFF2C2C2E) else Color.White)
+                    .border(
+                        0.5.dp,
+                        if (isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.08f),
+                        RoundedCornerShape(16.dp)
+                    )
+                    .clickable { onDismiss() },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Cancel",
+                    color = Color(0xFF007AFF),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    fontFamily = InterFontFamily
+                )
+            }
+
             Spacer(Modifier.height(12.dp))
         }
     }

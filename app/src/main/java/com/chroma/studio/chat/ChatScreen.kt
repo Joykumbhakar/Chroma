@@ -124,10 +124,17 @@ private fun ChatScreenContent(
     val coroutineScope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
     val settingsManager = remember { SettingsManager.getInstance(context) }
-    val clipboardManager = LocalClipboardManager.current
-    val listState = rememberLazyListState()
-
     val effectiveRoomId = initialRoomId ?: roomId
+    var activeChatId by remember { mutableStateOf(effectiveRoomId ?: "chat_1") }
+    var isInsideChat by remember { mutableStateOf(effectiveRoomId != null) }
+    var activeTab by remember { mutableStateOf("all") }
+    var sidebarSearchQuery by remember { mutableStateOf("") }
+
+    val listState = key(activeChatId, isInsideChat) {
+        rememberLazyListState(initialFirstVisibleItemIndex = 500)
+    }
+    val clipboardManager = LocalClipboardManager.current
+
     val currentFirebaseUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
     val currentUid = currentFirebaseUser?.uid ?: "user_1"
 
@@ -158,11 +165,6 @@ private fun ChatScreenContent(
     val onlineUsersPresence by (chatViewModel?.onlineUsersPresence?.collectAsState() ?: remember { mutableStateOf(emptyMap()) })
     val typingStatuses by (chatViewModel?.typingStatuses?.collectAsState() ?: remember { mutableStateOf(emptyMap()) })
     val mutedChatIds by (chatViewModel?.mutedChatIds?.collectAsState() ?: remember { mutableStateOf(emptySet()) })
-
-    var activeChatId by remember { mutableStateOf(effectiveRoomId ?: "chat_1") }
-    var activeTab by remember { mutableStateOf("all") }
-    var sidebarSearchQuery by remember { mutableStateOf("") }
-    var isInsideChat by remember { mutableStateOf(effectiveRoomId != null) }
 
     LaunchedEffect(effectiveRoomId) {
         if (!effectiveRoomId.isNullOrBlank()) {
@@ -234,11 +236,12 @@ private fun ChatScreenContent(
     var lastBottomMessageId by remember(activeChatId) { mutableStateOf<String?>(null) }
 
     val allMessages = remember(activeChatBase, liveMessages, isInsideChat) {
-        if (liveMessages != null && isInsideChat && chatViewModel != null) {
+        val rawList = if (liveMessages != null && isInsideChat && chatViewModel != null) {
             liveMessages
         } else {
             activeChatBase.messages
         }
+        groupContinuousMediaMessages(rawList)
     }
 
     // Only slice the latest `visibleMessageCount` messages for rendering
@@ -303,13 +306,17 @@ private fun ChatScreenContent(
         }
     }
 
-    LaunchedEffect(activeChat.messages, isInsideChat, isInitialScrollDone) {
+    LaunchedEffect(activeChat.messages, isInsideChat) {
         if (isInsideChat && activeChat.messages.isNotEmpty()) {
             val currentLatestId = activeChat.messages.lastOrNull()?.id
-            val bottomIndex = (activeChat.messages.size + 10).coerceAtLeast(0)
+            val targetIndex = (if (allMessages.size > visibleMessageCount) 1 else 0) + 1 + activeChat.messages.lastIndex
             if (!isInitialScrollDone) {
-                // Instantly snap to the bottom of the conversation (skip instantiating older messages)
-                listState.scrollToItem(bottomIndex)
+                // Instantly snap to the bottom of the conversation on open across layout passes
+                listState.scrollToItem(targetIndex.coerceAtLeast(0))
+                delay(30)
+                listState.scrollToItem(targetIndex.coerceAtLeast(0))
+                delay(70)
+                listState.scrollToItem(targetIndex.coerceAtLeast(0))
                 isInitialScrollDone = true
                 lastBottomMessageId = currentLatestId
             } else if (currentLatestId != null && currentLatestId != lastBottomMessageId) {
@@ -320,7 +327,7 @@ private fun ChatScreenContent(
                 val isOutgoing = lastMsg.senderId == currentUser.id
 
                 if (isOutgoing || isNearBottom) {
-                    listState.animateScrollToItem(bottomIndex)
+                    listState.animateScrollToItem(targetIndex.coerceAtLeast(0))
                 }
                 lastBottomMessageId = currentLatestId
             }
@@ -332,8 +339,8 @@ private fun ChatScreenContent(
     LaunchedEffect(imeVisible) {
         if (imeVisible && isInsideChat && activeChat.messages.isNotEmpty()) {
             delay(50)
-            val bottomIndex = (activeChat.messages.size + 10).coerceAtLeast(0)
-            listState.animateScrollToItem(bottomIndex)
+            val targetIndex = (if (allMessages.size > visibleMessageCount) 1 else 0) + 1 + activeChat.messages.lastIndex
+            listState.animateScrollToItem(targetIndex.coerceAtLeast(0))
         }
     }
 
@@ -364,15 +371,14 @@ private fun ChatScreenContent(
     var showBlockUserDialog by remember { mutableStateOf(false) }
     var showReportUserDialog by remember { mutableStateOf(false) }
 
-    // Island Notifications & Non-Intrusive In-App Toasts
+    // Island Notifications & Dynamic Island HUD System
     var islandNotification by remember { mutableStateOf<IslandNotification?>(null) }
-    var inAppToastMessage by remember { mutableStateOf<String?>(null) }
 
     fun showIsland(title: String, subtitle: String? = null, type: IslandType = IslandType.SUCCESS) {
         val notif = IslandNotification(title = title, subtitle = subtitle, type = type)
         islandNotification = notif
         coroutineScope.launch {
-            delay(2600)
+            delay(2800)
             if (islandNotification == notif) islandNotification = null
         }
     }
@@ -382,11 +388,13 @@ private fun ChatScreenContent(
         if (msg == "Message sent" || msg == "Liked" || msg.startsWith("Reacted") || msg == "Photo sent!") {
             return
         }
-        inAppToastMessage = msg
-        coroutineScope.launch {
-            delay(2000)
-            if (inAppToastMessage == msg) inAppToastMessage = null
+        val islandType = when {
+            msg.contains("fail", ignoreCase = true) || msg.contains("error", ignoreCase = true) || msg.contains("deleted", ignoreCase = true) -> IslandType.ERROR
+            msg.contains("block", ignoreCase = true) || msg.contains("warn", ignoreCase = true) || msg.contains("mute", ignoreCase = true) -> IslandType.WARNING
+            msg.contains("copied", ignoreCase = true) || msg.contains("pinned", ignoreCase = true) || msg.contains("saved", ignoreCase = true) -> IslandType.SUCCESS
+            else -> IslandType.INFO
         }
+        showIsland(title = msg, type = islandType)
     }
 
     fun getCurrentTimeFormatted(): String {
@@ -781,7 +789,8 @@ private fun ChatScreenContent(
         showToast("Message sent")
 
         coroutineScope.launch {
-            listState.animateScrollToItem(activeChat.messages.size)
+            val targetIndex = (if (allMessages.size > visibleMessageCount) 1 else 0) + 1 + activeChat.messages.size
+            listState.animateScrollToItem(targetIndex.coerceAtLeast(0))
         }
         if (chatViewModel == null || activeChatId.startsWith("mock_") || activeChatId.startsWith("chat_fallback")) {
             triggerSimulatedReply(activeChatId)
@@ -1147,6 +1156,9 @@ private fun ChatScreenContent(
                                         chatViewModel.setTypingStatus(false)
                                         chatViewModel.setRecordingStatus(false)
                                     }
+                                    if (effectiveRoomId != null) {
+                                        onNavigateBack?.invoke() ?: onBack?.invoke()
+                                    }
                                 },
                                 onProfileClick = { isContactDrawerOpen = true },
                                 onSearchToggle = {
@@ -1233,37 +1245,47 @@ private fun ChatScreenContent(
                                 }
                             }
 
-                            // Date Divider with hairline rules
+                            // Date Divider with hairline rules & frosted capsule
                             item(key = "date_divider_header") {
-                                Row(
+                                Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 20.dp, vertical = 14.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center
+                                        .padding(vertical = 12.dp),
+                                    contentAlignment = Alignment.Center
                                 ) {
+                                    // Full hairline rule across
                                     Box(
                                         modifier = Modifier
-                                            .weight(1f)
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp)
                                             .height(0.6.dp)
-                                            .background(colors.borderSubtle.copy(alpha = 0.5f))
+                                            .background(colors.borderSubtle.copy(alpha = 0.6f))
                                     )
+                                    // Floating pill badge
                                     val dateStr = remember {
                                         SimpleDateFormat("EEE, d MMM", Locale.getDefault()).format(Date())
                                     }
-                                    Text(
-                                        text = dateStr,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = colors.textMuted,
-                                        modifier = Modifier.padding(horizontal = 14.dp)
-                                    )
                                     Box(
                                         modifier = Modifier
-                                            .weight(1f)
-                                            .height(0.6.dp)
-                                            .background(colors.borderSubtle.copy(alpha = 0.5f))
-                                    )
+                                            .shadow(
+                                                elevation = 1.5.dp,
+                                                shape = RoundedCornerShape(16.dp),
+                                                ambientColor = Color.Black.copy(alpha = 0.08f),
+                                                spotColor = Color.Black.copy(alpha = 0.04f)
+                                            )
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(if (colors.isLight) Color.White else Color(0xFF151D2A))
+                                            .border(0.6.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
+                                            .padding(horizontal = 14.dp, vertical = 3.5.dp)
+                                    ) {
+                                        Text(
+                                            text = dateStr,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = colors.textMuted,
+                                            letterSpacing = 0.2.sp
+                                        )
+                                    }
                                 }
                             }
 
@@ -1316,147 +1338,155 @@ private fun ChatScreenContent(
                             ) { index, msg ->
                                 val isOutgoing = msg.senderId == currentUser.id
                                 val prevMsg = if (index > 0) activeChat.messages[index - 1] else null
-                                val isConsecutive = prevMsg != null && prevMsg.senderId == msg.senderId && prevMsg.mediaType != "call"
+                                val isConsecutive = prevMsg != null && prevMsg.senderId == msg.senderId && prevMsg.mediaType != "call" && (prevMsg.mediaType == msg.mediaType || (prevMsg.mediaType in listOf("text", null) && msg.mediaType in listOf("text", null)))
+                                val nextMsg = if (index < activeChat.messages.size - 1) activeChat.messages[index + 1] else null
+                                val isNextSame = nextMsg != null && nextMsg.senderId == msg.senderId && nextMsg.mediaType != "call" && (nextMsg.mediaType == msg.mediaType || (nextMsg.mediaType in listOf("text", null) && msg.mediaType in listOf("text", null)))
 
                                 MessageRow(
                                     message = msg,
                                     isOutgoing = isOutgoing,
                                     isConsecutive = isConsecutive,
+                                    isNextSame = isNextSame,
                                     searchQuery = searchInsideQuery,
                                     senderAvatar = activeChat.avatar,
                                     senderDisplayName = msg.senderName,
                                     showSenderName = activeChat.type == "group",
-                                    onReactionClick = { emoji ->
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        chats = chats.map { c ->
-                                            if (c.id == activeChatId) {
-                                                c.copy(
-                                                    messages = c.messages.map { m ->
-                                                        if (m.id == msg.id) toggleOrUpdateReaction(m, emoji) else m
-                                                    }
-                                                )
-                                            } else c
+                                    callbacks = MessageRowCallbacks(
+                                        onReactionClick = { emoji ->
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            chats = chats.map { c ->
+                                                if (c.id == activeChatId) {
+                                                    c.copy(
+                                                        messages = c.messages.map { m ->
+                                                            if (m.id == msg.id) toggleOrUpdateReaction(m, emoji) else m
+                                                        }
+                                                    )
+                                                } else c
+                                            }
+                                            if (chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
+                                                chatViewModel.toggleReaction(msg.id, emoji)
+                                            }
+                                            SoundManager.playReaction()
+                                        },
+                                        onDoubleTap = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            chats = chats.map { c ->
+                                                if (c.id == activeChatId) {
+                                                    c.copy(
+                                                        messages = c.messages.map { m ->
+                                                            if (m.id == msg.id) {
+                                                                val prevReaction = m.userReaction
+                                                                if (prevReaction == "❤️") {
+                                                                    m
+                                                                } else {
+                                                                    toggleOrUpdateReaction(m, "❤️")
+                                                                }
+                                                            } else m
+                                                        }
+                                                    )
+                                                } else c
+                                            }
+                                            if (chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
+                                                chatViewModel.toggleReaction(msg.id, "❤️")
+                                            }
+                                            SoundManager.playReaction()
+                                            showToast("Liked")
+                                        },
+                                        onLongPress = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            SoundManager.playReaction()
+                                            selectedMessageForContextMenu = msg
+                                        },
+                                        onReplyAction = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            val replySnippet = when {
+                                                msg.mediaType == "voice" -> "🎤 Voice message"
+                                                msg.mediaType == "image" || msg.mediaType == "image_stack" -> "📷 Photo"
+                                                msg.mediaType == "video" -> "🎥 Video"
+                                                msg.mediaType == "file" || msg.mediaType == "file_stack" -> "📄 ${msg.fileName ?: "Document"}"
+                                                msg.mediaType == "poll" -> "📊 ${msg.pollData?.question ?: "Poll"}"
+                                                !msg.text.isNullOrBlank() -> msg.text
+                                                else -> "Attachment"
+                                            }
+                                            activeReplyQuote = ReplyQuote(
+                                                author = msg.senderName,
+                                                text = replySnippet,
+                                                messageId = msg.id,
+                                                mediaType = msg.mediaType
+                                            )
+                                            showToast("Replying to ${msg.senderName}")
+                                        },
+                                        onEditAction = {
+                                            editingMessageId = msg.id
+                                            inputText = msg.text ?: ""
+                                            activeReplyQuote = null
+                                        },
+                                        onPinAction = {
+                                            chats = chats.map { if (it.id == activeChatId) it.copy(pinnedMessage = msg.text ?: "Attachment") else it }
+                                            showToast("Message pinned")
+                                        },
+                                        onCopyAction = {
+                                            if (msg.text != null) {
+                                                clipboardManager.setText(AnnotatedString(msg.text))
+                                                showToast("Copied to clipboard")
+                                            }
+                                        },
+                                        onDeleteAction = {
+                                            messagePendingDelete = msg
+                                        },
+                                        onImageClick = { imgUrl ->
+                                            previewLightboxImage = imgUrl
+                                            previewLightboxList = listOf(imgUrl)
+                                            previewLightboxIndex = 0
+                                        },
+                                        onImageStackClick = { urls, idx ->
+                                            previewLightboxList = urls
+                                            previewLightboxImage = urls.getOrElse(idx) { urls.firstOrNull() }
+                                            previewLightboxIndex = idx
+                                        },
+                                        onPollVote = { optIdx ->
+                                            chats = chats.map { c ->
+                                                if (c.id == activeChatId) {
+                                                    c.copy(
+                                                        messages = c.messages.map { m ->
+                                                            if (m.id == msg.id && m.pollData != null) {
+                                                                val allowMultiple = m.pollData.allowMultipleAnswers
+                                                                val updatedOpts = m.pollData.options.mapIndexed { idx, o ->
+                                                                    if (idx == optIdx) {
+                                                                        val newVoted = !o.isUserVoted
+                                                                        val newVotes = if (newVoted) o.votes + 1 else (o.votes - 1).coerceAtLeast(0)
+                                                                        o.copy(votes = newVotes, isUserVoted = newVoted)
+                                                                    } else if (!allowMultiple && o.isUserVoted) {
+                                                                        o.copy(votes = (o.votes - 1).coerceAtLeast(0), isUserVoted = false)
+                                                                    } else o
+                                                                }
+                                                                m.copy(pollData = m.pollData.copy(options = updatedOpts))
+                                                            } else m
+                                                        }
+                                                    )
+                                                } else c
+                                            }
+                                            SoundManager.playReaction()
+                                        },
+                                        onViewPollVotes = { poll ->
+                                            activePollForDetails = poll
+                                        },
+                                        onToggleSelect = {
+                                            if (selectedMessageIds.contains(msg.id)) {
+                                                selectedMessageIds.remove(msg.id)
+                                            } else {
+                                                selectedMessageIds.add(msg.id)
+                                            }
                                         }
-                                        if (chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
-                                            chatViewModel.toggleReaction(msg.id, emoji)
-                                        }
-                                        SoundManager.playReaction()
-                                    },
-                                    onDoubleTap = {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        chats = chats.map { c ->
-                                            if (c.id == activeChatId) {
-                                                c.copy(
-                                                    messages = c.messages.map { m ->
-                                                        if (m.id == msg.id) {
-                                                            val prevReaction = m.userReaction
-                                                            if (prevReaction == "❤️") {
-                                                                m
-                                                            } else {
-                                                                toggleOrUpdateReaction(m, "❤️")
-                                                            }
-                                                        } else m
-                                                    }
-                                                )
-                                            } else c
-                                        }
-                                        if (chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
-                                            chatViewModel.toggleReaction(msg.id, "❤️")
-                                        }
-                                        SoundManager.playReaction()
-                                        showToast("Liked")
-                                    },
-                                    onLongPress = {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        SoundManager.playReaction()
-                                        selectedMessageForContextMenu = msg
-                                    },
-                                    onReplyAction = {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        val replySnippet = when {
-                                            msg.mediaType == "voice" -> "🎤 Voice message"
-                                            msg.mediaType == "image" || msg.mediaType == "image_stack" -> "📷 Photo"
-                                            msg.mediaType == "video" -> "🎥 Video"
-                                            msg.mediaType == "file" || msg.mediaType == "file_stack" -> "📄 ${msg.fileName ?: "Document"}"
-                                            msg.mediaType == "poll" -> "📊 ${msg.pollData?.question ?: "Poll"}"
-                                            !msg.text.isNullOrBlank() -> msg.text
-                                            else -> "Attachment"
-                                        }
-                                        activeReplyQuote = ReplyQuote(
-                                            author = msg.senderName,
-                                            text = replySnippet,
-                                            messageId = msg.id,
-                                            mediaType = msg.mediaType
-                                        )
-                                        showToast("Replying to ${msg.senderName}")
-                                    },
-                                    onEditAction = {
-                                        editingMessageId = msg.id
-                                        inputText = msg.text ?: ""
-                                        activeReplyQuote = null
-                                    },
-                                    onPinAction = {
-                                        chats = chats.map { if (it.id == activeChatId) it.copy(pinnedMessage = msg.text ?: "Attachment") else it }
-                                        showToast("Message pinned")
-                                    },
-                                    onCopyAction = {
-                                        if (msg.text != null) {
-                                            clipboardManager.setText(AnnotatedString(msg.text))
-                                            showToast("Copied to clipboard")
-                                        }
-                                    },
-                                    onDeleteAction = {
-                                        messagePendingDelete = msg
-                                    },
-                                    onImageClick = { imgUrl ->
-                                        previewLightboxImage = imgUrl
-                                        previewLightboxList = listOf(imgUrl)
-                                        previewLightboxIndex = 0
-                                    },
-                                    onImageStackClick = { urls, idx ->
-                                        previewLightboxList = urls
-                                        previewLightboxImage = urls.getOrElse(idx) { urls.firstOrNull() }
-                                        previewLightboxIndex = idx
-                                    },
-                                    onPollVote = { optIdx ->
-                                        chats = chats.map { c ->
-                                            if (c.id == activeChatId) {
-                                                c.copy(
-                                                    messages = c.messages.map { m ->
-                                                        if (m.id == msg.id && m.pollData != null) {
-                                                            val allowMultiple = m.pollData.allowMultipleAnswers
-                                                            val updatedOpts = m.pollData.options.mapIndexed { idx, o ->
-                                                                if (idx == optIdx) {
-                                                                    val newVoted = !o.isUserVoted
-                                                                    val newVotes = if (newVoted) o.votes + 1 else (o.votes - 1).coerceAtLeast(0)
-                                                                    o.copy(votes = newVotes, isUserVoted = newVoted)
-                                                                } else if (!allowMultiple && o.isUserVoted) {
-                                                                    o.copy(votes = (o.votes - 1).coerceAtLeast(0), isUserVoted = false)
-                                                                } else o
-                                                            }
-                                                            m.copy(pollData = m.pollData.copy(options = updatedOpts))
-                                                        } else m
-                                                    }
-                                                )
-                                            } else c
-                                        }
-                                        SoundManager.playReaction()
-                                    },
-                                    onViewPollVotes = { poll ->
-                                        activePollForDetails = poll
-                                    },
+                                    ),
                                     isSelectionMode = isMessageSelectionMode,
                                     isSelected = selectedMessageIds.contains(msg.id),
-                                    onToggleSelect = {
-                                        if (selectedMessageIds.contains(msg.id)) {
-                                            selectedMessageIds.remove(msg.id)
-                                        } else {
-                                            selectedMessageIds.add(msg.id)
-                                        }
-                                    },
-                                    bubbleStyle = currentBubbleStyle,
-                                    customCornerConfig = currentCustomCorners,
-                                    animationStyle = currentAnimationStyle
+                                    config = MessageBubbleConfig(
+                                        bubbleStyle = currentBubbleStyle,
+                                        customCornerConfig = currentCustomCorners,
+                                        animationStyle = currentAnimationStyle
+                                    ),
+                                    modifier = Modifier.padding(bottom = if (isNextSame) 2.5.dp else 8.dp)
                                 )
                             }
 
@@ -2061,6 +2091,7 @@ private fun ChatScreenContent(
                     currentWallpaperDimming = dim
                     settingsManager.wallpaperType = wp
                     settingsManager.wallpaperDimming = dim
+                    isWallpaperPickerOpen = false
                     SoundManager.playSend()
                     showToast("Wallpaper set to ${wp.title}")
                 },
@@ -2546,45 +2577,7 @@ private fun ChatScreenContent(
             )
         }
 
-        // Apple iOS Transient In-App Action HUD Pill (Non-intrusive)
-        AnimatedVisibility(
-            visible = inAppToastMessage != null,
-            enter = fadeIn(animationSpec = tween(180)) + slideInVertically(
-                initialOffsetY = { -it },
-                animationSpec = spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow)
-            ),
-            exit = fadeOut(animationSpec = tween(150)) + slideOutVertically(
-                targetOffsetY = { -it },
-                animationSpec = spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMedium)
-            ),
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .windowInsetsPadding(WindowInsets.statusBars)
-                .padding(top = 10.dp)
-        ) {
-            inAppToastMessage?.let { toastText ->
-                Row(
-                    modifier = Modifier
-                        .shadow(12.dp, CircleShape, spotColor = Color.Black.copy(alpha = 0.25f))
-                        .clip(CircleShape)
-                        .background(Color(0xF01C1C1E))
-                        .border(0.5.dp, Color.White.copy(alpha = 0.2f), CircleShape)
-                        .padding(horizontal = 16.dp, vertical = 9.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    LucideCheck(tint = colors.iosBlue, size = 15.dp)
-                    Text(
-                        text = toastText,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.White
-                    )
-                }
-            }
-        }
-
-        // Dynamic Notch Island (Only for active Live Activities: Calls, Recording, Hardware Alerts)
+        // Dynamic Island HUD System (Routes Toasts, Notifications, Calls, Recording, Hardware Alerts)
         DynamicNotchIsland(
             notification = islandNotification,
             isCallActive = isCallBannerActive,
@@ -2617,6 +2610,76 @@ private fun ChatScreenContent(
             modifier = Modifier.align(Alignment.TopCenter)
         )
     }
+}
+
+internal fun groupContinuousMediaMessages(messages: List<ChatMessage>): List<ChatMessage> {
+    if (messages.size <= 1) return messages
+    val result = ArrayList<ChatMessage>(messages.size)
+    var i = 0
+    while (i < messages.size) {
+        val current = messages[i]
+        val isMedia = isStackableMedia(current)
+        if (isMedia) {
+            val group = mutableListOf(current)
+            var j = i + 1
+            while (j < messages.size) {
+                val next = messages[j]
+                val nextIsMedia = isStackableMedia(next)
+                if (nextIsMedia && next.senderId == current.senderId) {
+                    group.add(next)
+                    j++
+                } else {
+                    break
+                }
+            }
+            if (group.size > 1) {
+                val allUrls = mutableListOf<String>()
+                group.forEach { msg ->
+                    if (msg.mediaUrls.isNotEmpty()) {
+                        allUrls.addAll(msg.mediaUrls)
+                    } else if (!msg.mediaUrl.isNullOrBlank()) {
+                        allUrls.add(msg.mediaUrl)
+                    } else if (!msg.localUri.isNullOrBlank()) {
+                        allUrls.add(msg.localUri)
+                    }
+                }
+                val lastMsg = group.last()
+                val mergedText = group.mapNotNull { it.text?.takeIf { t -> t.isNotBlank() } }
+                    .distinct()
+                    .joinToString("\n")
+                    .takeIf { it.isNotBlank() }
+                val mergedReactions = mutableMapOf<String, Int>()
+                group.forEach { msg ->
+                    msg.reactions.forEach { (emoji, count) ->
+                        mergedReactions[emoji] = (mergedReactions[emoji] ?: 0) + count
+                    }
+                }
+                val mergedMsg = lastMsg.copy(
+                    id = lastMsg.id,
+                    mediaType = "image_stack",
+                    mediaUrls = allUrls.distinct(),
+                    mediaUrl = allUrls.firstOrNull(),
+                    text = mergedText,
+                    reactions = mergedReactions,
+                    userReaction = group.firstNotNullOfOrNull { it.userReaction }
+                )
+                result.add(mergedMsg)
+                i = j
+            } else {
+                result.add(current)
+                i++
+            }
+        } else {
+            result.add(current)
+            i++
+        }
+    }
+    return result
+}
+
+private fun isStackableMedia(msg: ChatMessage): Boolean {
+    return msg.mediaType in listOf("image", "image_stack") ||
+        (msg.mediaType == null && (!msg.mediaUrl.isNullOrBlank() || !msg.localUri.isNullOrBlank() || msg.mediaUrls.isNotEmpty()))
 }
 
 

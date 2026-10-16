@@ -162,6 +162,7 @@ class HomeActivity : ComponentActivity() {
         val splashScreen = installSplashScreen()
         splashScreen.setOnExitAnimationListener { splashScreenViewProvider ->
             val splashView = splashScreenViewProvider.view
+            splashView.setBackgroundResource(R.drawable.splash_bg_gradient)
             val alphaAnim = android.animation.ObjectAnimator.ofFloat(splashView, android.view.View.ALPHA, 1f, 0f)
             val scaleXAnim = android.animation.ObjectAnimator.ofFloat(splashView, android.view.View.SCALE_X, 1f, 1.04f)
             val scaleYAnim = android.animation.ObjectAnimator.ofFloat(splashView, android.view.View.SCALE_Y, 1f, 1.04f)

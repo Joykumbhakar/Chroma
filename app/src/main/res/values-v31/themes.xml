@@ -2,15 +2,16 @@
 <resources>
     <!-- Android 12 Splash Screen theme (used by HomeActivity) -->
     <style name="Theme.Oscellion.Splash" parent="Theme.SplashScreen">
-        <!-- Cold-boot dark background matching Variation 3: Android Splash Screen (#0a0a0b) -->
-        <item name="windowSplashScreenBackground">#0a0a0b</item>
+        <!-- Cold-boot luxury light-black to dark-black gradient background -->
+        <item name="android:windowBackground">@drawable/splash_bg_gradient</item>
+        <item name="windowSplashScreenBackground">@drawable/splash_bg_gradient</item>
         <!-- Animated icon — Oscellion logo -->
         <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_animated</item>
         <!-- Theme to apply once splash exits -->
         <item name="postSplashScreenTheme">@style/Theme.Oscellion</item>
 
         <!-- Android 12+ specific attributes -->
-        <item name="android:windowSplashScreenBackground">#0a0a0b</item>
+        <item name="android:windowSplashScreenBackground">@drawable/splash_bg_gradient</item>
         <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_splash_animated</item>
     </style>
 </resources>

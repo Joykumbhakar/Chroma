@@ -165,37 +165,33 @@ fun drawableUri(resId: Int): String = "android.resource://com.chroma.studio/$res
 
 enum class WallpaperType(
     val title: String,
-    val drawableRes: Int? = null,
-    val category: String = "Clean"
+    val drawableRes: Int,
+    val category: String = "Devices & OS"
 ) {
-    DEFAULT("Default Solid", null, "Clean"),
+    WALLPAPER_IPHONE("iPhone Studio", com.chroma.studio.R.drawable.wallpaper_iphone_small_screen, "Devices & OS"),
     WALLPAPER_HD_1("Neon Horizon", com.chroma.studio.R.drawable.wallpaper_hd_1, "HD Wallpapers"),
     WALLPAPER_HD_2("Aurora Spectrum", com.chroma.studio.R.drawable.wallpaper_hd_2, "HD Wallpapers"),
-    WALLPAPER_HD_3("Deep Indigo", com.chroma.studio.R.drawable.wallpaper_hd_3, "HD Wallpapers"),
+    WALLPAPER_HD_3("Golden Sunset", com.chroma.studio.R.drawable.wallpaper_hd_3, "HD Wallpapers"),
     WALLPAPER_HD_4("Cyber Matrix", com.chroma.studio.R.drawable.wallpaper_hd_4, "HD Wallpapers"),
-    BANNER_JOY("Joy Gradient", com.chroma.studio.R.drawable.profile_banner_joy, "Vibrant Waves"),
-    BANNER_AMETHYST("Amethyst Spark", com.chroma.studio.R.drawable.banner_wave_banner_amethyst_spark, "Vibrant Waves"),
-    BANNER_BERRY("Berry Purple", com.chroma.studio.R.drawable.banner_wave_banner_berry_purple, "Vibrant Waves"),
-    BANNER_CORAL("Coral Sunset", com.chroma.studio.R.drawable.banner_wave_banner_coral_sunset, "Vibrant Waves"),
-    BANNER_AZURE("Corporate Azure", com.chroma.studio.R.drawable.banner_wave_banner_corporate_azure, "Vibrant Waves"),
-    BANNER_ELECTRIC("Electric Blue", com.chroma.studio.R.drawable.banner_wave_banner_electric_blue, "Vibrant Waves"),
-    BANNER_EMERALD("Emerald Green", com.chroma.studio.R.drawable.banner_wave_banner_emerald_green, "Vibrant Waves"),
-    BANNER_GOLDEN("Golden Amber", com.chroma.studio.R.drawable.banner_wave_banner_golden_amber, "Vibrant Waves"),
-    BANNER_MIDNIGHT("Midnight Glow", com.chroma.studio.R.drawable.banner_wave_banner_midnight_glow, "Vibrant Waves"),
-    BANNER_OCEAN("Ocean Cyan", com.chroma.studio.R.drawable.banner_wave_banner_ocean_cyan, "Vibrant Waves"),
-    BANNER_INDIGO("Royal Indigo", com.chroma.studio.R.drawable.banner_wave_banner_royal_indigo, "Vibrant Waves"),
-    BANNER_RUBY("Ruby Red", com.chroma.studio.R.drawable.banner_wave_banner_ruby_red, "Vibrant Waves"),
-    BANNER_SUNSET("Sunset Orange", com.chroma.studio.R.drawable.banner_wave_banner_sunset_orange, "Vibrant Waves"),
-    BANNER_TEAL("Teal Aqua", com.chroma.studio.R.drawable.banner_wave_banner_teal_aqua, "Vibrant Waves"),
-    BANNER_VIOLET("Vibrant Violet", com.chroma.studio.R.drawable.banner_wave_banner_vibrant_violet, "Vibrant Waves"),
-    BANNER_CUPERTINO("Cupertino Mesh", com.chroma.studio.R.drawable.banner_cupertino_mesh, "Geometric & Mesh"),
-    BANNER_MINIMALIST("Minimalist Geometry", com.chroma.studio.R.drawable.banner_minimalist_geometry, "Geometric & Mesh"),
-    BANNER_DARK_TITANIUM("Dark Titanium", com.chroma.studio.R.drawable.banner_dark_titanium, "Geometric & Mesh"),
-    BANNER_CIRCUIT("Cyber Circuit", com.chroma.studio.R.drawable.banner_cyber_circuit, "Geometric & Mesh"),
-    DOODLE("Cyber Doodles", null, "Patterns"),
-    GRADIENT("Aurora Glow", null, "Gradients"),
-    DARK_NEBULA("Dark Nebula", null, "Gradients")
+    WALLPAPER_1("Flowing Silk", com.chroma.studio.R.drawable.wallpaper1, "HD Wallpapers"),
+    WALLPAPERS_ISLAND("Island Coast", com.chroma.studio.R.drawable.wallpapers, "Nature & Landscapes"),
+    WALLPAPER_STOCK("Ocean Waves", com.chroma.studio.R.drawable.wallpaper_stock, "Nature & Landscapes"),
+    WALLPAPER_ABSTRACT("Deep Horizon", com.chroma.studio.R.drawable.wallpaper, "Abstract"),
+    WALLPAPER_MACBOOK("MacBook Petals", com.chroma.studio.R.drawable.wallpaper_macbook, "Devices & OS"),
+    WALLPAPER_MACBOOK_ALT("MacBook Classic", com.chroma.studio.R.drawable.wallpaper_macbook_alt, "Devices & OS"),
+    WALLPAPER_WINDOWS("Windows Bloom", com.chroma.studio.R.drawable.wallpaper_windows, "Devices & OS"),
+    WALLPAPER_MAC("macOS Canvas", com.chroma.studio.R.drawable.wallpaper_mac_big_screen, "Devices & OS");
+
+    companion object {
+        val DEFAULT: WallpaperType get() = WALLPAPER_IPHONE
+    }
 }
+
+data class CoverBannerPreset(
+    val title: String,
+    val drawableRes: Int,
+    val category: String
+)
 
 enum class PointyCornerStyle(
     val id: String,
@@ -608,7 +604,34 @@ object MockData {
                 ChatMessage(id = "m2", senderId = "user_me", senderName = "Joy", text = "I'm good! Just working on some new ideas. How about you?", time = "10:26 AM", status = "read"),
                 ChatMessage(id = "m3", senderId = "user_bholanath", senderName = "Bholanath", text = "That's great! I'm also working on the home automation project with Jasica AI.", time = "10:28 AM", status = "read"),
                 ChatMessage(id = "m4", senderId = "user_me", senderName = "Joy", text = "Nice! Can you share the latest update?", time = "10:30 AM", status = "read"),
-                ChatMessage(id = "m5", senderId = "user_bholanath", senderName = "Bholanath", text = "Sure! I'll send you the details in a moment.", time = "10:32 AM", status = "read"),
+                ChatMessage(id = "m5", senderId = "user_bholanath", senderName = "Bholanath", text = "Sure! Here are the hardware schematics and smart module captures:", time = "10:32 AM", status = "read"),
+                ChatMessage(
+                    id = "m5_p1",
+                    senderId = "user_bholanath",
+                    senderName = "Bholanath",
+                    mediaType = "image",
+                    mediaUrl = "https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=800&q=80",
+                    time = "10:32 AM",
+                    status = "read"
+                ),
+                ChatMessage(
+                    id = "m5_p2",
+                    senderId = "user_bholanath",
+                    senderName = "Bholanath",
+                    mediaType = "image",
+                    mediaUrl = "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=800&q=80",
+                    time = "10:32 AM",
+                    status = "read"
+                ),
+                ChatMessage(
+                    id = "m5_p3",
+                    senderId = "user_bholanath",
+                    senderName = "Bholanath",
+                    mediaType = "image",
+                    mediaUrl = "https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=800&q=80",
+                    time = "10:32 AM",
+                    status = "read"
+                ),
                 ChatMessage(id = "m6", senderId = "user_me", senderName = "Joy", text = "Perfect. Thanks!", time = "10:33 AM", status = "read")
             )
         ),

@@ -1,25 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <set xmlns:android="http://schemas.android.com/apk/res/android"
     android:ordering="together">
-    <!-- Apple Entry Scale X -->
+    <!-- Premium Apple Entrance Scale X -->
     <objectAnimator
         android:propertyName="scaleX"
-        android:valueFrom="0.96"
+        android:valueFrom="0.86"
         android:valueTo="1.0"
-        android:duration="1200"
+        android:duration="950"
         android:interpolator="@android:anim/decelerate_interpolator" />
-    <!-- Apple Entry Scale Y -->
+    <!-- Premium Apple Entrance Scale Y -->
     <objectAnimator
         android:propertyName="scaleY"
-        android:valueFrom="0.96"
+        android:valueFrom="0.86"
         android:valueTo="1.0"
-        android:duration="1200"
+        android:duration="950"
         android:interpolator="@android:anim/decelerate_interpolator" />
-    <!-- Apple Entry Translate Y -->
+    <!-- Subtle Floating Translate Y Elevation -->
     <objectAnimator
         android:propertyName="translateY"
-        android:valueFrom="8"
+        android:valueFrom="14"
         android:valueTo="0"
-        android:duration="1200"
+        android:duration="950"
         android:interpolator="@android:anim/decelerate_interpolator" />
 </set>

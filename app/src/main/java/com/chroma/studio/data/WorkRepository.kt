@@ -35,7 +35,15 @@ private object OffsetAdapter : JsonSerializer<Offset>, JsonDeserializer<Offset> 
 
     override fun deserialize(json: JsonElement, typeOfT: Type, context: JsonDeserializationContext): Offset {
         val obj = json.asJsonObject
-        return Offset(obj["x"].asFloat, obj["y"].asFloat)
+        if (obj.has("packedValue")) {
+            val packed = obj["packedValue"].asLong
+            val xBits = (packed ushr 32).toInt()
+            val yBits = (packed and 0xFFFFFFFFL).toInt()
+            return Offset(java.lang.Float.intBitsToFloat(xBits), java.lang.Float.intBitsToFloat(yBits))
+        }
+        val x = if (obj.has("x")) obj["x"].asFloat else 0f
+        val y = if (obj.has("y")) obj["y"].asFloat else 0f
+        return Offset(x, y)
     }
 }
 

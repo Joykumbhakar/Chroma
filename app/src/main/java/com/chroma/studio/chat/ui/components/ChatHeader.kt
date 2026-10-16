@@ -14,6 +14,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import com.composables.icons.lucide.BadgeCheck
+import com.composables.icons.lucide.Lucide
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -117,25 +120,57 @@ fun ChatHeader(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        // Avatar with online indicator
-                        Box(modifier = Modifier.size(38.dp)) {
-                            AsyncImage(
-                                model = activeChat.avatar,
-                                contentDescription = activeChat.name,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .clip(CircleShape)
-                                    .border(1.dp, colors.borderSubtle, CircleShape),
-                                contentScale = ContentScale.Crop
+                        // Avatar with online pulsing indicator
+                        Box(
+                            modifier = Modifier.size(40.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            IosAvatarView(
+                                name = activeChat.name,
+                                avatarUrl = activeChat.avatar,
+                                size = 40.dp,
+                                isGroup = activeChat.type == "group",
+                                isOnline = false
                             )
                             if (activeChat.online) {
+                                val infiniteTransition = rememberInfiniteTransition(label = "headerPulse")
+                                val pulseScale by infiniteTransition.animateFloat(
+                                    initialValue = 1f,
+                                    targetValue = 1.45f,
+                                    animationSpec = infiniteRepeatable(
+                                        animation = tween(1500, easing = FastOutSlowInEasing),
+                                        repeatMode = RepeatMode.Restart
+                                    ),
+                                    label = "pulseScale"
+                                )
+                                val pulseAlpha by infiniteTransition.animateFloat(
+                                    initialValue = 0.55f,
+                                    targetValue = 0f,
+                                    animationSpec = infiniteRepeatable(
+                                        animation = tween(1500, easing = FastOutSlowInEasing),
+                                        repeatMode = RepeatMode.Restart
+                                    ),
+                                    label = "pulseAlpha"
+                                )
+
                                 Box(
                                     modifier = Modifier
-                                        .size(11.dp)
+                                        .size(12.dp)
                                         .align(Alignment.BottomEnd)
-                                        .background(colors.success, CircleShape)
-                                        .border(2.dp, colors.headerBg, CircleShape)
-                                )
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .scale(pulseScale)
+                                            .background(colors.success.copy(alpha = pulseAlpha), CircleShape)
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(colors.success, CircleShape)
+                                            .border(2.dp, colors.headerBg, CircleShape)
+                                    )
+                                }
                             }
                         }
 
@@ -157,10 +192,10 @@ fun ChatHeader(
                                 )
                                 if (activeChat.isVerified) {
                                     Icon(
-                                        painter = androidx.compose.ui.res.painterResource(id = com.chroma.studio.R.drawable.verification_badge),
+                                        imageVector = Lucide.BadgeCheck,
                                         contentDescription = "Verified",
-                                        tint = Color.Unspecified,
-                                        modifier = Modifier.size(15.dp)
+                                        tint = colors.iosBlue,
+                                        modifier = Modifier.size(16.dp)
                                     )
                                 }
                                 if (activeChat.isMuted) {

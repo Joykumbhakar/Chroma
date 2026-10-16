@@ -46,9 +46,8 @@ class SettingsManager(context: Context) {
 
     var wallpaperType: WallpaperType
         get() {
-            val name = prefs.getString(KEY_WALLPAPER_TYPE, WallpaperType.WALLPAPER_HD_1.name)
-            val parsed = runCatching { WallpaperType.valueOf(name ?: "") }.getOrDefault(WallpaperType.WALLPAPER_HD_1)
-            return if (parsed == WallpaperType.DEFAULT) WallpaperType.WALLPAPER_HD_1 else parsed
+            val name = prefs.getString(KEY_WALLPAPER_TYPE, WallpaperType.WALLPAPER_IPHONE.name)
+            return runCatching { WallpaperType.valueOf(name ?: "") }.getOrDefault(WallpaperType.WALLPAPER_IPHONE)
         }
         set(value) = prefs.edit().putString(KEY_WALLPAPER_TYPE, value.name).apply()
 

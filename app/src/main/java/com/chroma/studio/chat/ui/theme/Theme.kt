@@ -187,76 +187,21 @@ fun ChatWallpaperBackground(
     val colors = LocalChatColors.current
 
     Box(modifier = modifier.fillMaxSize().background(colors.appBg)) {
-        if (wallpaperType.drawableRes != null) {
-            Image(
-                painter = painterResource(id = wallpaperType.drawableRes),
-                contentDescription = wallpaperType.title,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-            // Ambient overlay for legibility over wallpapers
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        if (colors.isLight) Color.White.copy(alpha = dimmingAlpha)
-                        else Color.Black.copy(alpha = (dimmingAlpha + 0.2f).coerceAtMost(0.85f))
-                    )
-            )
-        } else {
-            when (wallpaperType) {
-                WallpaperType.DEFAULT -> {
-                    // Clean solid app background — no overlay needed
-                }
-                WallpaperType.DOODLE -> {
-                    val dotColor = colors.borderSubtle
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        val step = 20f * density
-                        val radius = 1.5f * density
-                        var x = 0f
-                        while (x < size.width) {
-                            var y = 0f
-                            while (y < size.height) {
-                                drawCircle(color = dotColor, radius = radius, center = Offset(x, y))
-                                y += step
-                            }
-                            x += step
-                        }
-                    }
-                }
-                WallpaperType.GRADIENT -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                Brush.linearGradient(
-                                    colors = listOf(
-                                        colors.iosBlue.copy(alpha = 0.06f),
-                                        Color(0xFF8B5CF6).copy(alpha = 0.06f)
-                                    )
-                                )
-                            )
-                    )
-                }
-                WallpaperType.DARK_NEBULA -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                Brush.radialGradient(
-                                    colors = listOf(
-                                        Color(0xFF38BDF8).copy(alpha = 0.10f),
-                                        Color.Transparent
-                                    ),
-                                    center = Offset(500f, 400f),
-                                    radius = 800f
-                                )
-                            )
-                    )
-                }
-                else -> {}
-            }
-        }
+        Image(
+            painter = painterResource(id = wallpaperType.drawableRes),
+            contentDescription = wallpaperType.title,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
+        // Ambient overlay for legibility over wallpapers
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    if (colors.isLight) Color.White.copy(alpha = dimmingAlpha)
+                    else Color.Black.copy(alpha = (dimmingAlpha + 0.2f).coerceAtMost(0.85f))
+                )
+        )
     }
 }
 

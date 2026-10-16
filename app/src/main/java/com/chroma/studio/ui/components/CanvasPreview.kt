@@ -174,7 +174,7 @@ fun CanvasPreview(
             .run {
                 if (shape == "full") this else border(1.dp, borderColor, outerShape)
             }
-            .background(Color.White)
+            .background(if (shape == "circle" && borderColor == Color.Transparent) Color.Black else Color.White)
             .then(resolvedPostFxModifier)
             .graphicsLayer {
                 alpha = globalOpacity
@@ -460,16 +460,17 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawChromaLayer(
         }
 
         LayerType.AURORA -> {
+            val sortedStops = if (layer.stops.isNotEmpty()) layer.stops.sortedBy { it.position } else emptyList()
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && auroraShader != null) {
                 auroraShader.setFloatUniform("resolution", w, h)
                 auroraShader.setFloatUniform("time", drift)
                 auroraShader.setFloatUniform("speed", layer.animSpeed / 50f)
                 auroraShader.setFloatUniform("complexity", (layer.complexity / 10f).coerceIn(1f, 5f))
                 
-                val c1 = layer.stops.getOrNull(0)?.color ?: Color.Transparent
-                val c2 = layer.stops.getOrNull(1)?.color ?: c1
-                val c3 = layer.stops.getOrNull(2)?.color ?: c2
-                val c4 = layer.stops.getOrNull(3)?.color ?: c3
+                val c1 = sortedStops.firstOrNull()?.color ?: Color.Transparent
+                val c2 = sortedStops.getOrNull((sortedStops.size * 0.25f).toInt())?.color ?: c1
+                val c3 = sortedStops.getOrNull((sortedStops.size * 0.60f).toInt())?.color ?: c2
+                val c4 = sortedStops.lastOrNull()?.color ?: c3
                 
                 auroraShader.setFloatUniform("color1", floatArrayOf(c1.red, c1.green, c1.blue, c1.alpha))
                 auroraShader.setFloatUniform("color2", floatArrayOf(c2.red, c2.green, c2.blue, c2.alpha))
@@ -477,14 +478,21 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawChromaLayer(
                 auroraShader.setFloatUniform("color4", floatArrayOf(c4.red, c4.green, c4.blue, c4.alpha))
                 
                 val brush = ShaderBrush(auroraShader)
-                drawRect(brush)
+                withTransform({
+                    if (layer.angle != 90f && layer.angle != 0f) {
+                        scale(1.6f, pivot = Offset(w / 2f, h / 2f))
+                        rotate(degrees = layer.angle - 90f, pivot = Offset(w / 2f, h / 2f))
+                    }
+                }) {
+                    drawRect(brush)
+                }
             } else {
-                val nW = minOf(4, layer.stops.size)
+                val nW = minOf(6, sortedStops.size)
                 val bri = layer.brightness / 100f
                 val cmpl = layer.complexity / 10f
                 val time = drift * layer.animSpeed / 100f
                 for (wi in 0 until nW) {
-                    val stop = layer.stops.getOrNull(wi % layer.stops.size) ?: continue
+                    val stop = sortedStops.getOrNull(wi % sortedStops.size) ?: continue
                     val phase = wi * (Math.PI * 2 / nW) + time * (0.5 + wi * 0.3)
                     val yBase = h * (0.15 + wi * 0.14)
                     val path = androidx.compose.ui.graphics.Path().apply {

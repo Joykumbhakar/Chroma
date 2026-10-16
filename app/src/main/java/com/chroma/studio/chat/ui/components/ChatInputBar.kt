@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chroma.studio.chat.data.ReplyQuote
 import com.chroma.studio.chat.ui.theme.LocalChatColors
+import kotlinx.coroutines.launch
 
 const val MAX_MESSAGE_CHARACTERS = 4096
 
@@ -368,8 +369,11 @@ fun ChatInputBar(
                         }
                     }
 
-                    // Voice / Send button (Blue tilted paper plane matching screenshot)
-                    val hasSendContent = inputText.isNotEmpty()
+                    // Voice / Send Action Button (Animated toggle between Voice Mic and Send Arrow)
+                    val hasSendContent = inputText.trim().isNotEmpty()
+                    val sendBtnScale = remember { Animatable(1f) }
+                    val sendBtnRotation = remember { Animatable(0f) }
+                    val sendBtnScope = rememberCoroutineScope()
 
                     Box(
                         modifier = Modifier
@@ -378,6 +382,28 @@ fun ChatInputBar(
                             .clickable {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 if (hasSendContent) {
+                                    sendBtnScope.launch {
+                                        sendBtnScale.snapTo(0.68f)
+                                        sendBtnRotation.snapTo(-22f)
+                                        launch {
+                                            sendBtnScale.animateTo(
+                                                1f,
+                                                animationSpec = spring(
+                                                    dampingRatio = 0.48f,
+                                                    stiffness = Spring.StiffnessMediumLow
+                                                )
+                                            )
+                                        }
+                                        launch {
+                                            sendBtnRotation.animateTo(
+                                                0f,
+                                                animationSpec = spring(
+                                                    dampingRatio = 0.52f,
+                                                    stiffness = Spring.StiffnessMediumLow
+                                                )
+                                            )
+                                        }
+                                    }
                                     onSendClick()
                                 } else {
                                     onVoiceClick()
@@ -385,7 +411,28 @@ fun ChatInputBar(
                             },
                         contentAlignment = Alignment.Center
                     ) {
-                        PhosphorPaperPlaneTilt(tint = colors.iosBlue, size = 24.dp)
+                        AnimatedContent(
+                            targetState = hasSendContent,
+                            transitionSpec = {
+                                (scaleIn(spring(dampingRatio = 0.65f, stiffness = Spring.StiffnessMediumLow)) + fadeIn(tween(140)))
+                                    .togetherWith(scaleOut(tween(100)) + fadeOut(tween(100)))
+                            },
+                            label = "sendVoiceToggle"
+                        ) { hasText ->
+                            Box(
+                                modifier = Modifier.graphicsLayer {
+                                    scaleX = sendBtnScale.value
+                                    scaleY = sendBtnScale.value
+                                    rotationZ = sendBtnRotation.value
+                                }
+                            ) {
+                                if (hasText) {
+                                    PhosphorPaperPlaneTilt(tint = colors.iosBlue, size = 24.dp)
+                                } else {
+                                    PhosphorVoiceMicIcon(tint = colors.iosBlue, size = 24.dp)
+                                }
+                            }
+                        }
                     }
                 }
             }

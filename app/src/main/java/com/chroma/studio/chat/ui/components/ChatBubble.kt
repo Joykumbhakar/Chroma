@@ -2,6 +2,7 @@ package com.chroma.studio.chat.ui.components
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -27,9 +28,21 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
+import kotlin.math.min
+import kotlin.math.sin
+import kotlin.math.PI
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
@@ -47,14 +60,21 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.chroma.studio.ui.components.IosAvatarView
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.font.FontStyle
+import java.util.regex.Pattern
 import com.chroma.studio.R
 import com.chroma.studio.chat.data.ChatFileItem
 import com.chroma.studio.chat.data.ChatMessage
 import com.chroma.studio.chat.data.PollData
 import com.chroma.studio.chat.media.AudioPlayerManager
 import com.chroma.studio.chat.ui.theme.LocalChatColors
+import com.chroma.studio.chat.ui.theme.ChatColors
 import androidx.compose.material3.HorizontalDivider
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
 import androidx.compose.foundation.shape.CutCornerShape
 import kotlin.math.roundToInt
 import androidx.compose.ui.graphics.TransformOrigin
@@ -65,43 +85,452 @@ import com.chroma.studio.chat.data.BubbleStyleType
 import com.chroma.studio.chat.data.CustomCornerConfig
 import com.chroma.studio.chat.data.PointyCornerStyle
 
+private val MARKDOWN_PATTERN: Pattern = Pattern.compile(
+    "\\[([^\\]]+)\\]\\(((?:https?://|www\\.)[^\\s)]+)\\)|" + // 1, 2: Markdown link
+    "((?:https?://|www\\.)[a-zA-Z0-9\\-\\._~:/?#\\[\\]@!\\$&'()*+,;=%]+)|" + // 3: Bare URL
+    "```(?:[a-zA-Z0-9_\\-]*\\r?\\n)?([\\s\\S]*?)```|" + // 4: Code block
+    "`([^`\\r\\n]+)`|" + // 5: Inline code
+    "\\*\\*([^\\*\\r\\n]+)\\*\\*|" + // 6: Bold
+    "(?:\\*([^\\*\\r\\n]+)\\*|_([^\\_\\r\\n]+)_)|" + // 7, 8: Italic
+    "(?:~~([^~\\r\\n]+)~~|~([^~\\r\\n]+)~)|" + // 9, 10: Strikethrough
+    "\\|\\|([\\s\\S]*?)\\|\\||" + // 11: Spoiler
+    "(?:(?<=^|[\\s(]))@([a-zA-Z0-9_]{2,30})\\b|" + // 12: Mention
+    "(?:(?<=^|[\\s(]))#([a-zA-Z0-9_]{2,30})\\b" // 13: Hashtag
+)
+
+fun parseMarkdownToAnnotatedString(
+    text: String,
+    visual: BubbleVisualConfig,
+    isOutgoing: Boolean = false,
+    searchQuery: String = "",
+    revealedSpoilers: Set<String> = emptySet()
+): androidx.compose.ui.text.AnnotatedString {
+    return buildAnnotatedString {
+        val matcher = MARKDOWN_PATTERN.matcher(text)
+        var lastEnd = 0
+        var spoilerIndex = 0
+
+        fun appendPlainWithSearch(plainText: String) {
+            if (plainText.isEmpty()) return
+            if (searchQuery.isNotBlank() && plainText.contains(searchQuery, ignoreCase = true)) {
+                var searchStart = 0
+                val lowerPlain = plainText.lowercase()
+                val lowerQuery = searchQuery.lowercase()
+                while (searchStart < plainText.length) {
+                    val foundIdx = lowerPlain.indexOf(lowerQuery, searchStart)
+                    if (foundIdx == -1) {
+                        withStyle(SpanStyle(color = visual.textColor, fontWeight = visual.fontWeight)) {
+                            append(plainText.substring(searchStart))
+                        }
+                        break
+                    }
+                    if (foundIdx > searchStart) {
+                        withStyle(SpanStyle(color = visual.textColor, fontWeight = visual.fontWeight)) {
+                            append(plainText.substring(searchStart, foundIdx))
+                        }
+                    }
+                    withStyle(
+                        SpanStyle(
+                            background = Color(0xFFFACC15),
+                            color = Color.Black,
+                            fontWeight = FontWeight.Bold
+                        )
+                    ) {
+                        append(plainText.substring(foundIdx, foundIdx + searchQuery.length))
+                    }
+                    searchStart = foundIdx + searchQuery.length
+                }
+            } else {
+                withStyle(SpanStyle(color = visual.textColor, fontWeight = visual.fontWeight)) {
+                    append(plainText)
+                }
+            }
+        }
+
+        while (matcher.find()) {
+            val start = matcher.start()
+            val end = matcher.end()
+
+            if (start > lastEnd) {
+                appendPlainWithSearch(text.substring(lastEnd, start))
+            }
+
+            when {
+                // 1 & 2: Markdown Link [text](url)
+                matcher.group(1) != null && matcher.group(2) != null -> {
+                    val linkText = matcher.group(1)!!
+                    val url = matcher.group(2)!!
+                    val tagStart = length
+                    withStyle(
+                        SpanStyle(
+                            color = visual.mentionColor,
+                            fontWeight = FontWeight.SemiBold,
+                            textDecoration = TextDecoration.Underline
+                        )
+                    ) {
+                        append(linkText)
+                    }
+                    addStringAnnotation(tag = "URL", annotation = url, start = tagStart, end = length)
+                }
+
+                // 3: Bare URL
+                matcher.group(3) != null -> {
+                    val url = matcher.group(3)!!
+                    val tagStart = length
+                    withStyle(
+                        SpanStyle(
+                            color = visual.mentionColor,
+                            fontWeight = FontWeight.Normal,
+                            textDecoration = TextDecoration.Underline
+                        )
+                    ) {
+                        append(url)
+                    }
+                    addStringAnnotation(tag = "URL", annotation = url, start = tagStart, end = length)
+                }
+
+                // 4: Code Block
+                matcher.group(4) != null -> {
+                    val codeContent = matcher.group(4)!!
+                    withStyle(
+                        SpanStyle(
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 12.5.sp,
+                            background = if (isOutgoing) Color(0x38000000) else Color(0x18000000),
+                            color = visual.textColor
+                        )
+                    ) {
+                        append("\n" + codeContent.trim() + "\n")
+                    }
+                }
+
+                // 5: Inline Code
+                matcher.group(5) != null -> {
+                    val codeText = matcher.group(5)!!
+                    withStyle(
+                        SpanStyle(
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 13.sp,
+                            background = if (isOutgoing) Color(0x38000000) else Color(0x18000000),
+                            color = visual.textColor,
+                            fontWeight = FontWeight.Medium
+                        )
+                    ) {
+                        append(" $codeText ")
+                    }
+                }
+
+                // 6: Bold **text**
+                matcher.group(6) != null -> {
+                    val boldText = matcher.group(6)!!
+                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = visual.textColor)) {
+                        append(boldText)
+                    }
+                }
+
+                // 7 or 8: Italic *text* or _text_
+                matcher.group(7) != null || matcher.group(8) != null -> {
+                    val italicText = matcher.group(7) ?: matcher.group(8)!!
+                    withStyle(SpanStyle(fontStyle = FontStyle.Italic, color = visual.textColor)) {
+                        append(italicText)
+                    }
+                }
+
+                // 9 or 10: Strikethrough ~~text~~ or ~text~
+                matcher.group(9) != null || matcher.group(10) != null -> {
+                    val strikeText = matcher.group(9) ?: matcher.group(10)!!
+                    withStyle(
+                        SpanStyle(
+                            textDecoration = TextDecoration.LineThrough,
+                            color = visual.textColor.copy(alpha = 0.85f)
+                        )
+                    ) {
+                        append(strikeText)
+                    }
+                }
+
+                // 11: Spoiler ||text||
+                matcher.group(11) != null -> {
+                    val spoilerText = matcher.group(11)!!
+                    val spoilerId = "spoiler_${spoilerIndex++}"
+                    val isRevealed = revealedSpoilers.contains(spoilerId)
+                    val tagStart = length
+                    if (isRevealed) {
+                        withStyle(
+                            SpanStyle(
+                                background = if (isOutgoing) Color(0x2EFFFFFF) else Color(0x22000000),
+                                color = visual.textColor
+                            )
+                        ) {
+                            append(spoilerText)
+                        }
+                    } else {
+                        withStyle(
+                            SpanStyle(
+                                background = if (isOutgoing) Color.White.copy(alpha = 0.5f) else Color.Gray.copy(alpha = 0.6f),
+                                color = Color.Transparent
+                            )
+                        ) {
+                            append(spoilerText)
+                        }
+                    }
+                    addStringAnnotation(tag = "SPOILER", annotation = spoilerId, start = tagStart, end = length)
+                }
+
+                // 12: Mention @user
+                matcher.group(12) != null -> {
+                    val username = matcher.group(12)!!
+                    withStyle(
+                        SpanStyle(
+                            color = visual.mentionColor,
+                            fontWeight = FontWeight.Bold,
+                            textDecoration = TextDecoration.Underline
+                        )
+                    ) {
+                        append("@$username")
+                    }
+                }
+
+                // 13: Hashtag #tag
+                matcher.group(13) != null -> {
+                    val tag = matcher.group(13)!!
+                    withStyle(
+                        SpanStyle(
+                            color = visual.mentionColor,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    ) {
+                        append("#$tag")
+                    }
+                }
+
+                else -> {
+                    appendPlainWithSearch(text.substring(start, end))
+                }
+            }
+            lastEnd = end
+        }
+
+        if (lastEnd < text.length) {
+            appendPlainWithSearch(text.substring(lastEnd))
+        }
+    }
+}
+
+@Composable
+private fun MessageReactionDock(
+    visible: Boolean,
+    isOutgoing: Boolean,
+    userReaction: String?,
+    colors: ChatColors,
+    onReactionClick: (String) -> Unit,
+    onLongPress: () -> Unit,
+    onReplyAction: () -> Unit,
+    onCloseDock: () -> Unit
+) {
+    val haptic = LocalHapticFeedback.current
+    val coroutineScope = rememberCoroutineScope()
+
+    AnimatedVisibility(
+        visible = visible,
+        enter = scaleIn(
+            initialScale = 0.35f,
+            transformOrigin = TransformOrigin(if (isOutgoing) 0.85f else 0.15f, 1f),
+            animationSpec = spring(dampingRatio = 0.65f, stiffness = 420f)
+        ) + slideInVertically(
+            initialOffsetY = { it / 2 },
+            animationSpec = spring(dampingRatio = 0.65f, stiffness = 420f)
+        ) + fadeIn(animationSpec = tween(130)),
+        exit = scaleOut(
+            targetScale = 0.35f,
+            transformOrigin = TransformOrigin(if (isOutgoing) 0.85f else 0.15f, 1f),
+            animationSpec = spring(dampingRatio = 0.72f, stiffness = 480f)
+        ) + slideOutVertically(
+            targetOffsetY = { it / 2 },
+            animationSpec = tween(110)
+        ) + fadeOut(animationSpec = tween(110))
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(bottom = 6.dp)
+                .shadow(
+                    elevation = 8.dp,
+                    shape = RoundedCornerShape(26.dp),
+                    ambientColor = Color.Black.copy(alpha = 0.25f),
+                    spotColor = Color.Black.copy(alpha = 0.2f)
+                )
+                .clip(RoundedCornerShape(26.dp))
+                .background(if (colors.isLight) Color(0xF8FFFFFF) else Color(0xF82C2C2E))
+                .border(
+                    0.5.dp,
+                    if (colors.isLight) Color(0x22000000) else Color(0x38FFFFFF),
+                    RoundedCornerShape(26.dp)
+                )
+                .padding(horizontal = 8.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            val quickEmojis = listOf("❤️", "👍", "👎", "😂", "‼️", "🔥")
+            quickEmojis.forEach { emoji ->
+                val isSelected = userReaction == emoji
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(if (isSelected) colors.iosBlueSubtle else Color.Transparent)
+                        .border(
+                            width = if (isSelected) 1.dp else 0.dp,
+                            color = if (isSelected) colors.iosBlue else Color.Transparent,
+                            shape = CircleShape
+                        )
+                        .clickable {
+                            coroutineScope.launch {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                SoundManager.playReaction()
+                                onCloseDock()
+                                kotlinx.coroutines.delay(120L)
+                                onReactionClick(emoji)
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (emoji == "❤️") {
+                        Image(
+                            painter = painterResource(id = R.drawable.heart_like),
+                            contentDescription = "Heart",
+                            modifier = Modifier.size(20.dp)
+                        )
+                    } else {
+                        Text(text = emoji, fontSize = 18.sp)
+                    }
+                }
+            }
+
+            // '+' Icon right next to reactions to open Message Info / Context Menu
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(if (colors.isLight) Color(0x14000000) else Color(0x28FFFFFF))
+                    .clickable {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        SoundManager.playReaction()
+                        onCloseDock()
+                        onLongPress()
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                PhosphorPlusIcon(tint = colors.textDark, size = 16.dp)
+            }
+
+            Box(
+                modifier = Modifier
+                    .width(0.5.dp)
+                    .height(18.dp)
+                    .background(colors.separator)
+            )
+
+            IconButton(
+                onClick = {
+                    onReplyAction()
+                    onCloseDock()
+                },
+                modifier = Modifier.size(30.dp)
+            ) {
+                LucideReply(tint = colors.iosBlue, size = 16.dp)
+            }
+        }
+    }
+}
+
+data class MessageRowCallbacks(
+    val onReactionClick: (String) -> Unit = {},
+    val onDoubleTap: () -> Unit = {},
+    val onLongPress: () -> Unit = {},
+    val onReplyAction: () -> Unit = {},
+    val onEditAction: () -> Unit = {},
+    val onPinAction: () -> Unit = {},
+    val onCopyAction: () -> Unit = {},
+    val onDeleteAction: () -> Unit = {},
+    val onImageClick: (String) -> Unit = {},
+    val onImageStackClick: ((List<String>, Int) -> Unit)? = null,
+    val onPollVote: (Int) -> Unit = {},
+    val onViewPollVotes: ((PollData) -> Unit)? = null,
+    val onToggleSelect: () -> Unit = {}
+)
+
+data class MessageBubbleConfig(
+    val bubbleStyle: BubbleStyleType = BubbleStyleType.CLASSIC_IOS,
+    val customCornerConfig: CustomCornerConfig = CustomCornerConfig(),
+    val animationStyle: BubbleAnimationStyle = BubbleAnimationStyle.POP_ZOOM
+)
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MessageRow(
     message: ChatMessage,
     isOutgoing: Boolean,
     isConsecutive: Boolean,
-    searchQuery: String,
-    senderAvatar: String,
-    senderDisplayName: String?,
-    showSenderName: Boolean,
-    onReactionClick: (String) -> Unit,
-    onDoubleTap: () -> Unit,
-    onLongPress: () -> Unit,
-    onReplyAction: () -> Unit,
-    onEditAction: () -> Unit,
-    onPinAction: () -> Unit,
-    onCopyAction: () -> Unit,
-    onDeleteAction: () -> Unit,
-    onImageClick: (String) -> Unit,
-    onImageStackClick: ((List<String>, Int) -> Unit)? = null,
-    onPollVote: (Int) -> Unit,
-    onViewPollVotes: ((PollData) -> Unit)? = null,
+    isNextSame: Boolean = false,
+    searchQuery: String = "",
+    senderAvatar: String = "",
+    senderDisplayName: String? = null,
+    showSenderName: Boolean = false,
+    callbacks: MessageRowCallbacks = MessageRowCallbacks(),
     isSelectionMode: Boolean = false,
     isSelected: Boolean = false,
-    onToggleSelect: () -> Unit = {},
-    bubbleStyle: BubbleStyleType = BubbleStyleType.CLASSIC_IOS,
-    customCornerConfig: CustomCornerConfig = CustomCornerConfig(),
-    animationStyle: BubbleAnimationStyle = BubbleAnimationStyle.POP_ZOOM,
+    config: MessageBubbleConfig = MessageBubbleConfig(),
     modifier: Modifier = Modifier
 ) {
+    val onReactionClick = callbacks.onReactionClick
+    val onDoubleTap = callbacks.onDoubleTap
+    val onLongPress = callbacks.onLongPress
+    val onReplyAction = callbacks.onReplyAction
+    val onEditAction = callbacks.onEditAction
+    val onPinAction = callbacks.onPinAction
+    val onCopyAction = callbacks.onCopyAction
+    val onDeleteAction = callbacks.onDeleteAction
+    val onImageClick = callbacks.onImageClick
+    val onImageStackClick = callbacks.onImageStackClick
+    val onPollVote = callbacks.onPollVote
+    val onViewPollVotes = callbacks.onViewPollVotes
+    val onToggleSelect = callbacks.onToggleSelect
+
+    val bubbleStyle = config.bubbleStyle
+    val customCornerConfig = config.customCornerConfig
+    val animationStyle = config.animationStyle
+
     val colors = LocalChatColors.current
     val haptic = LocalHapticFeedback.current
     var showReactionDock by remember { mutableStateOf(false) }
-    var showHeartBurst by remember { mutableStateOf(false) }
+    var isHeartBurstActive by remember { mutableStateOf(false) }
+    var heartJob by remember { mutableStateOf<Job?>(null) }
     var lastTapTimestamp by remember { mutableLongStateOf(0L) }
     val coroutineScope = rememberCoroutineScope()
     val dragOffset = remember { Animatable(0f) }
+
+    val heartPainter = painterResource(id = R.drawable.heart_like)
+    val heartScale = remember { Animatable(0.2f) }
+    val heartAlpha = remember { Animatable(1f) }
+
+    fun triggerHeartBurst() {
+        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        heartJob?.cancel()
+        heartJob = coroutineScope.launch {
+            try {
+                isHeartBurstActive = true
+                heartScale.snapTo(0.2f)
+                heartAlpha.snapTo(1f)
+                launch {
+                    heartScale.animateTo(1.35f, animationSpec = spring(dampingRatio = 0.5f, stiffness = Spring.StiffnessMediumLow))
+                }
+                heartAlpha.animateTo(0f, animationSpec = tween(300))
+            } finally {
+                isHeartBurstActive = false
+            }
+        }
+        onDoubleTap()
+    }
 
     // Only animate entrance for newly sent or received messages (< 4 sec)
     // Historical messages on open render instantly at scale=1, alpha=1 to eliminate lag and prevent OOM
@@ -110,93 +539,237 @@ fun MessageRow(
         message.timestamp > 0L && (now - message.timestamp) < 4000L
     }
 
-    // Message Bubble Entrance Animation Engine
-    val animScale = remember { Animatable(if (!isFreshMessage) 1f else if (animationStyle == BubbleAnimationStyle.POP_ZOOM) 0.45f else if (animationStyle == BubbleAnimationStyle.ELASTIC_SPRING) 0.2f else if (animationStyle == BubbleAnimationStyle.EXPAND_REVEAL) 0.7f else 1f) }
-    val animAlpha = remember { Animatable(if (!isFreshMessage) 1f else if (animationStyle == BubbleAnimationStyle.POP_ZOOM) 0.4f else 0f) }
-    val animOffsetY = remember { Animatable(if (!isFreshMessage) 0f else if (animationStyle == BubbleAnimationStyle.SLIDE_UP_FADE) 35f else if (animationStyle == BubbleAnimationStyle.EXPAND_REVEAL) 15f else 0f) }
-    val animOffsetX = remember { Animatable(if (!isFreshMessage) 0f else if (animationStyle == BubbleAnimationStyle.SLIDE_IN_SIDE) (if (isOutgoing) 70f else -70f) else 0f) }
-    val animRotationX = remember { Animatable(if (!isFreshMessage) 0f else if (animationStyle == BubbleAnimationStyle.FLIP_IN_3D) 35f else 0f) }
+    // Message Bubble Entrance Animation Engine (Rubber / Jumps squash & stretch)
+    val animScaleX = remember(message.id) {
+        Animatable(
+            if (!isFreshMessage) 1f else when (animationStyle) {
+                BubbleAnimationStyle.POP_ZOOM -> 0.42f
+                BubbleAnimationStyle.SLIDE_UP_FADE -> 1f
+                BubbleAnimationStyle.ELASTIC_SPRING -> 0.25f
+                BubbleAnimationStyle.FLIP_IN_3D -> 0.85f
+                BubbleAnimationStyle.SLIDE_IN_SIDE -> 0.92f
+                BubbleAnimationStyle.EXPAND_REVEAL -> 0.70f
+                BubbleAnimationStyle.GENTLE_FADE -> 0.96f
+            }
+        )
+    }
+    val animScaleY = remember(message.id) {
+        Animatable(
+            if (!isFreshMessage) 1f else when (animationStyle) {
+                BubbleAnimationStyle.POP_ZOOM -> 0.28f
+                BubbleAnimationStyle.SLIDE_UP_FADE -> 1f
+                BubbleAnimationStyle.ELASTIC_SPRING -> 0.25f
+                BubbleAnimationStyle.FLIP_IN_3D -> 0.85f
+                BubbleAnimationStyle.SLIDE_IN_SIDE -> 0.92f
+                BubbleAnimationStyle.EXPAND_REVEAL -> 0.38f
+                BubbleAnimationStyle.GENTLE_FADE -> 0.96f
+            }
+        )
+    }
+    val animAlpha = remember(message.id) {
+        Animatable(
+            if (!isFreshMessage) 1f else when (animationStyle) {
+                BubbleAnimationStyle.POP_ZOOM -> 0.35f
+                BubbleAnimationStyle.SLIDE_UP_FADE -> 0f
+                BubbleAnimationStyle.ELASTIC_SPRING -> 0.1f
+                BubbleAnimationStyle.FLIP_IN_3D -> 0f
+                BubbleAnimationStyle.SLIDE_IN_SIDE -> 0f
+                BubbleAnimationStyle.EXPAND_REVEAL -> 0.15f
+                BubbleAnimationStyle.GENTLE_FADE -> 0f
+            }
+        )
+    }
+    val animOffsetY = remember(message.id) {
+        Animatable(
+            if (!isFreshMessage) 0f else when (animationStyle) {
+                BubbleAnimationStyle.POP_ZOOM -> 22f
+                BubbleAnimationStyle.SLIDE_UP_FADE -> 40f
+                BubbleAnimationStyle.ELASTIC_SPRING -> 10f
+                BubbleAnimationStyle.FLIP_IN_3D -> 20f
+                BubbleAnimationStyle.EXPAND_REVEAL -> 16f
+                else -> 0f
+            }
+        )
+    }
+    val animOffsetX = remember(message.id) {
+        Animatable(
+            if (!isFreshMessage) 0f else when (animationStyle) {
+                BubbleAnimationStyle.SLIDE_IN_SIDE -> if (isOutgoing) 90f else -90f
+                else -> 0f
+            }
+        )
+    }
+    val animRotationX = remember(message.id) {
+        Animatable(
+            if (!isFreshMessage) 0f else when (animationStyle) {
+                BubbleAnimationStyle.FLIP_IN_3D -> 45f
+                else -> 0f
+            }
+        )
+    }
 
     LaunchedEffect(message.id, animationStyle) {
         if (!isFreshMessage) return@LaunchedEffect
         when (animationStyle) {
             BubbleAnimationStyle.POP_ZOOM -> {
-                animScale.snapTo(0.45f)
-                animAlpha.snapTo(0.4f)
-                animScale.animateTo(
-                    1f,
-                    animationSpec = spring(dampingRatio = 0.58f, stiffness = Spring.StiffnessMediumLow)
-                )
-                animAlpha.animateTo(1f, animationSpec = tween(150))
+                // Tactile rubber/jumps expand & squeeze spring physics
+                animScaleX.snapTo(0.42f)
+                animScaleY.snapTo(0.28f)
+                animOffsetY.snapTo(22f)
+                animAlpha.snapTo(0.35f)
+                launch {
+                    animScaleX.animateTo(
+                        1f,
+                        animationSpec = spring(dampingRatio = 0.52f, stiffness = Spring.StiffnessMediumLow)
+                    )
+                }
+                launch {
+                    animScaleY.animateTo(
+                        1f,
+                        animationSpec = spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow)
+                    )
+                }
+                launch {
+                    animOffsetY.animateTo(
+                        0f,
+                        animationSpec = spring(dampingRatio = 0.58f, stiffness = Spring.StiffnessMediumLow)
+                    )
+                }
+                animAlpha.animateTo(1f, animationSpec = tween(140))
             }
             BubbleAnimationStyle.SLIDE_UP_FADE -> {
-                animOffsetY.snapTo(35f)
+                animScaleX.snapTo(1f)
+                animScaleY.snapTo(1f)
+                animOffsetY.snapTo(40f)
                 animAlpha.snapTo(0f)
-                animOffsetY.animateTo(
-                    0f,
-                    animationSpec = spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMediumLow)
-                )
-                animAlpha.animateTo(1f, animationSpec = tween(200))
+                launch {
+                    animOffsetY.animateTo(
+                        0f,
+                        animationSpec = spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow)
+                    )
+                }
+                animAlpha.animateTo(1f, animationSpec = tween(200, easing = FastOutSlowInEasing))
             }
             BubbleAnimationStyle.ELASTIC_SPRING -> {
-                animScale.snapTo(0.2f)
-                animAlpha.snapTo(0f)
-                animScale.animateTo(
-                    1f,
-                    animationSpec = spring(dampingRatio = 0.38f, stiffness = Spring.StiffnessLow)
-                )
+                animScaleX.snapTo(0.25f)
+                animScaleY.snapTo(0.25f)
+                animOffsetY.snapTo(10f)
+                animAlpha.snapTo(0.1f)
+                launch {
+                    animScaleX.animateTo(
+                        1f,
+                        animationSpec = spring(dampingRatio = 0.40f, stiffness = Spring.StiffnessLow)
+                    )
+                }
+                launch {
+                    animScaleY.animateTo(
+                        1f,
+                        animationSpec = spring(dampingRatio = 0.42f, stiffness = Spring.StiffnessLow)
+                    )
+                }
+                launch {
+                    animOffsetY.animateTo(
+                        0f,
+                        animationSpec = spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessLow)
+                    )
+                }
                 animAlpha.animateTo(1f, animationSpec = tween(120))
             }
             BubbleAnimationStyle.FLIP_IN_3D -> {
-                animRotationX.snapTo(35f)
+                animScaleX.snapTo(0.85f)
+                animScaleY.snapTo(0.85f)
+                animRotationX.snapTo(45f)
+                animOffsetY.snapTo(20f)
                 animAlpha.snapTo(0f)
-                animRotationX.animateTo(
-                    0f,
-                    animationSpec = spring(dampingRatio = 0.65f, stiffness = Spring.StiffnessMediumLow)
-                )
-                animAlpha.animateTo(1f, animationSpec = tween(220))
-            }
-            BubbleAnimationStyle.SLIDE_IN_SIDE -> {
-                animOffsetX.snapTo(if (isOutgoing) 70f else -70f)
-                animAlpha.snapTo(0f)
-                animOffsetX.animateTo(
-                    0f,
-                    animationSpec = spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow)
-                )
+                launch {
+                    animRotationX.animateTo(
+                        0f,
+                        animationSpec = spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessMediumLow)
+                    )
+                }
+                launch {
+                    animScaleX.animateTo(
+                        1f,
+                        animationSpec = spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMedium)
+                    )
+                }
+                launch {
+                    animScaleY.animateTo(
+                        1f,
+                        animationSpec = spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMedium)
+                    )
+                }
+                launch {
+                    animOffsetY.animateTo(
+                        0f,
+                        animationSpec = spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMedium)
+                    )
+                }
                 animAlpha.animateTo(1f, animationSpec = tween(180))
             }
-            BubbleAnimationStyle.EXPAND_REVEAL -> {
-                animScale.snapTo(0.7f)
-                animOffsetY.snapTo(15f)
+            BubbleAnimationStyle.SLIDE_IN_SIDE -> {
+                val sideOffset = if (isOutgoing) 90f else -90f
+                animScaleX.snapTo(0.92f)
+                animScaleY.snapTo(0.92f)
+                animOffsetX.snapTo(sideOffset)
                 animAlpha.snapTo(0f)
-                animScale.animateTo(
-                    1f,
-                    animationSpec = spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMedium)
-                )
-                animOffsetY.animateTo(
-                    0f,
-                    animationSpec = spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMedium)
-                )
+                launch {
+                    animOffsetX.animateTo(
+                        0f,
+                        animationSpec = spring(dampingRatio = 0.68f, stiffness = Spring.StiffnessMediumLow)
+                    )
+                }
+                launch {
+                    animScaleX.animateTo(
+                        1f,
+                        animationSpec = spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMedium)
+                    )
+                }
+                launch {
+                    animScaleY.animateTo(
+                        1f,
+                        animationSpec = spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMedium)
+                    )
+                }
                 animAlpha.animateTo(1f, animationSpec = tween(160))
             }
-            BubbleAnimationStyle.GENTLE_FADE -> {
-                animAlpha.snapTo(0f)
-                animAlpha.animateTo(1f, animationSpec = tween(250, easing = LinearOutSlowInEasing))
+            BubbleAnimationStyle.EXPAND_REVEAL -> {
+                animScaleX.snapTo(0.70f)
+                animScaleY.snapTo(0.38f)
+                animOffsetY.snapTo(16f)
+                animAlpha.snapTo(0.15f)
+                launch {
+                    animScaleX.animateTo(
+                        1f,
+                        animationSpec = spring(dampingRatio = 0.78f, stiffness = Spring.StiffnessMedium)
+                    )
+                }
+                launch {
+                    animScaleY.animateTo(
+                        1f,
+                        animationSpec = spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessMedium)
+                    )
+                }
+                launch {
+                    animOffsetY.animateTo(
+                        0f,
+                        animationSpec = spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMedium)
+                    )
+                }
+                animAlpha.animateTo(1f, animationSpec = tween(150))
             }
-        }
-    }
-
-    // Floating heart scale animation for double tap
-    val heartScale = remember { Animatable(0f) }
-    val heartAlpha = remember { Animatable(1f) }
-
-    LaunchedEffect(showHeartBurst) {
-        if (showHeartBurst) {
-            heartScale.snapTo(0.2f)
-            heartAlpha.snapTo(1f)
-            heartScale.animateTo(1.35f, animationSpec = spring(dampingRatio = 0.5f, stiffness = Spring.StiffnessMediumLow))
-            heartAlpha.animateTo(0f, animationSpec = tween(300))
-            showHeartBurst = false
+            BubbleAnimationStyle.GENTLE_FADE -> {
+                animScaleX.snapTo(0.96f)
+                animScaleY.snapTo(0.96f)
+                animAlpha.snapTo(0f)
+                launch {
+                    animScaleX.animateTo(1f, animationSpec = tween(260, easing = LinearOutSlowInEasing))
+                }
+                launch {
+                    animScaleY.animateTo(1f, animationSpec = tween(260, easing = LinearOutSlowInEasing))
+                }
+                animAlpha.animateTo(1f, animationSpec = tween(240, easing = LinearOutSlowInEasing))
+            }
         }
     }
 
@@ -253,8 +826,8 @@ fun MessageRow(
             .padding(
                 start = animatedStartPadding,
                 end = animatedEndPadding,
-                top = if (isConsecutive) 2.dp else 6.dp,
-                bottom = if (message.reactions.isNotEmpty()) 4.dp else 2.dp
+                top = if (message.reactions.isNotEmpty()) 10.dp else (if (isConsecutive) 1.5.dp else 4.dp),
+                bottom = 0.dp
             ),
         verticalAlignment = if (isSelectionMode) Alignment.CenterVertically else Alignment.Bottom
     ) {
@@ -303,116 +876,16 @@ fun MessageRow(
             horizontalAlignment = if (isOutgoing) Alignment.End else Alignment.Start
         ) {
             // Apple iOS Reaction Dock (0.5s Hold Pop-up IN, Reacted Pop-up OUT)
-            AnimatedVisibility(
+            MessageReactionDock(
                 visible = showReactionDock,
-                enter = scaleIn(
-                    initialScale = 0.35f,
-                    transformOrigin = TransformOrigin(if (isOutgoing) 0.85f else 0.15f, 1f),
-                    animationSpec = spring(dampingRatio = 0.65f, stiffness = 420f)
-                ) + slideInVertically(
-                    initialOffsetY = { it / 2 },
-                    animationSpec = spring(dampingRatio = 0.65f, stiffness = 420f)
-                ) + fadeIn(animationSpec = tween(130)),
-                exit = scaleOut(
-                    targetScale = 0.35f,
-                    transformOrigin = TransformOrigin(if (isOutgoing) 0.85f else 0.15f, 1f),
-                    animationSpec = spring(dampingRatio = 0.72f, stiffness = 480f)
-                ) + slideOutVertically(
-                    targetOffsetY = { it / 2 },
-                    animationSpec = tween(110)
-                ) + fadeOut(animationSpec = tween(110))
-            ) {
-                Row(
-                    modifier = Modifier
-                        .padding(bottom = 6.dp)
-                        .shadow(
-                            elevation = 8.dp,
-                            shape = RoundedCornerShape(26.dp),
-                            ambientColor = Color.Black.copy(alpha = 0.25f),
-                            spotColor = Color.Black.copy(alpha = 0.2f)
-                        )
-                        .clip(RoundedCornerShape(26.dp))
-                        .background(if (colors.isLight) Color(0xF8FFFFFF) else Color(0xF82C2C2E))
-                        .border(
-                            0.5.dp,
-                            if (colors.isLight) Color(0x22000000) else Color(0x38FFFFFF),
-                            RoundedCornerShape(26.dp)
-                        )
-                        .padding(horizontal = 8.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    val quickEmojis = listOf("❤️", "👍", "👎", "😂", "‼️", "🔥")
-                    quickEmojis.forEach { emoji ->
-                        val isSelected = message.userReaction == emoji
-                        Box(
-                            modifier = Modifier
-                                .size(34.dp)
-                                .clip(CircleShape)
-                                .background(if (isSelected) colors.iosBlueSubtle else Color.Transparent)
-                                .border(
-                                    width = if (isSelected) 1.dp else 0.dp,
-                                    color = if (isSelected) colors.iosBlue else Color.Transparent,
-                                    shape = CircleShape
-                                )
-                                .clickable {
-                                    coroutineScope.launch {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        SoundManager.playReaction()
-                                        showReactionDock = false // Triggers animated scaleOut + fadeOut pop-up OUT
-                                        kotlinx.coroutines.delay(120L)
-                                        onReactionClick(emoji)
-                                    }
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (emoji == "❤️") {
-                                Image(
-                                    painter = painterResource(id = R.drawable.heart_like),
-                                    contentDescription = "Heart",
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            } else {
-                                Text(text = emoji, fontSize = 18.sp)
-                            }
-                        }
-                    }
-
-                    // '+' Icon right next to reactions to open Message Info / Context Menu
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .background(if (colors.isLight) Color(0x14000000) else Color(0x28FFFFFF))
-                            .clickable {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                SoundManager.playReaction()
-                                showReactionDock = false
-                                onLongPress()
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        PhosphorPlusIcon(tint = colors.textDark, size = 16.dp)
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .width(0.5.dp)
-                            .height(18.dp)
-                            .background(colors.separator)
-                    )
-
-                    IconButton(
-                        onClick = {
-                            onReplyAction()
-                            showReactionDock = false
-                        },
-                        modifier = Modifier.size(30.dp)
-                    ) {
-                        LucideReply(tint = colors.iosBlue, size = 16.dp)
-                    }
-                }
-            }
+                isOutgoing = isOutgoing,
+                userReaction = message.userReaction,
+                colors = colors,
+                onReactionClick = onReactionClick,
+                onLongPress = onLongPress,
+                onReplyAction = onReplyAction,
+                onCloseDock = { showReactionDock = false }
+            )
 
         // Swipe-to-reply Drag Row
         Box(
@@ -468,21 +941,20 @@ fun MessageRow(
                         )
                     },
                 horizontalArrangement = if (isOutgoing) Arrangement.End else Arrangement.Start,
-                verticalAlignment = Alignment.Top
+                verticalAlignment = Alignment.Bottom
             ) {
-                // Incoming Avatar (Full Circular Shape)
+                // Incoming Avatar (Full Circular Shape, aligned with bottom tail of the cluster)
                 if (!isOutgoing) {
-                    if (!isConsecutive) {
-                        AsyncImage(
-                            model = senderAvatar,
-                            contentDescription = "Sender",
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape),
-                            contentScale = ContentScale.Crop
+                    if (!isNextSame) {
+                        IosAvatarView(
+                            name = senderDisplayName ?: "",
+                            avatarUrl = senderAvatar,
+                            size = 32.dp,
+                            isOnline = false,
+                            modifier = Modifier.padding(bottom = 2.dp)
                         )
                     } else {
-                        Spacer(Modifier.width(36.dp))
+                        Spacer(Modifier.width(32.dp))
                     }
                     Spacer(Modifier.width(8.dp))
                 }
@@ -506,8 +978,8 @@ fun MessageRow(
                     }
 
                     // Resolve visual styling config for the selected BubbleStyleType & custom corners
-                    val visual = remember(bubbleStyle, customCornerConfig, isOutgoing, isConsecutive, colors.isLight, colors.iosBlue) {
-                        resolveBubbleVisual(bubbleStyle, isOutgoing, isConsecutive, colors, customCornerConfig)
+                    val visual = remember(bubbleStyle, customCornerConfig, isOutgoing, isConsecutive, isNextSame, colors.isLight, colors.iosBlue) {
+                        resolveBubbleVisual(bubbleStyle, isOutgoing, isConsecutive, isNextSame, colors, customCornerConfig)
                     }
 
                     Box(
@@ -516,36 +988,37 @@ fun MessageRow(
                         val bubbleBackground = if (isMediaOnly) SolidColor(Color.Transparent) else visual.background
                         val bubbleBorderWidth = if (isMediaOnly) 0.5.dp else visual.borderWidth
                         val bubbleBorderColor = if (isMediaOnly) (if (colors.isLight) Color(0x18000000) else Color(0x2EFFFFFF)) else visual.borderColor
+                        val effectiveShape = if (isMediaOnly) RoundedCornerShape(18.dp) else visual.shape
 
                         Box(
                             modifier = Modifier
                                 .graphicsLayer {
-                                    scaleX = animScale.value
-                                    scaleY = animScale.value
+                                    scaleX = animScaleX.value
+                                    scaleY = animScaleY.value
                                     alpha = animAlpha.value
                                     translationX = animOffsetX.value
                                     translationY = animOffsetY.value
                                     rotationX = animRotationX.value
-                                    transformOrigin = TransformOrigin(if (isOutgoing) 0.9f else 0.1f, 0.5f)
+                                    transformOrigin = TransformOrigin(if (isOutgoing) 0.98f else 0.02f, 1.0f)
                                 }
                                 .then(
                                     if (visual.elevation > 0.dp && !isMediaOnly) {
                                         Modifier.shadow(
                                             elevation = visual.elevation,
-                                            shape = visual.shape,
+                                            shape = effectiveShape,
                                             ambientColor = visual.ambientColor,
                                             spotColor = visual.spotColor,
                                             clip = false
                                         )
                                     } else Modifier
                                 )
-                                .clip(visual.shape)
-                                .background(brush = bubbleBackground)
+                                .clip(effectiveShape)
+                                .background(brush = bubbleBackground, shape = effectiveShape)
                                 .then(
                                     if (visual.borderBrush != null && !isMediaOnly) {
-                                        Modifier.border(bubbleBorderWidth, visual.borderBrush, visual.shape)
+                                        Modifier.border(bubbleBorderWidth, visual.borderBrush, effectiveShape)
                                     } else {
-                                        Modifier.border(bubbleBorderWidth, bubbleBorderColor, visual.shape)
+                                        Modifier.border(bubbleBorderWidth, bubbleBorderColor, effectiveShape)
                                     }
                                 )
                                 .pointerInput(message.id, isSelectionMode) {
@@ -556,9 +1029,7 @@ fun MessageRow(
                                     } else {
                                         detectTapGestures(
                                             onDoubleTap = {
-                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                showHeartBurst = true
-                                                onDoubleTap()
+                                                triggerHeartBurst()
                                             },
                                             onLongPress = {
                                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -579,7 +1050,7 @@ fun MessageRow(
                             Box(
                                 modifier = Modifier
                                     .matchParentSize()
-                                    .clip(visual.shape)
+                                    .clip(effectiveShape)
                                     .background(
                                         Brush.verticalGradient(
                                             colors = listOf(
@@ -593,395 +1064,31 @@ fun MessageRow(
                             )
                         }
 
-                        Column(
-                            modifier = Modifier.padding(
-                                horizontal = if (isMediaOnly) 0.dp else if (isVoiceOnly) 8.dp else 11.dp,
-                                vertical = if (isMediaOnly) 0.dp else if (isVoiceOnly) 5.dp else 7.dp
-                            )
-                        ) {
-                            // 1. Reply Quote Header
-                            if (message.replyTo != null) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(bottom = 6.dp)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(if (isOutgoing) Color.Black.copy(alpha = 0.18f) else Color(0x12000000))
-                                        .border(
-                                            width = 1.dp,
-                                            color = if (isOutgoing) Color.White.copy(alpha = 0.9f) else colors.iosBlue,
-                                            shape = RoundedCornerShape(12.dp)
-                                        )
-                                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                                ) {
-                                    Column {
-                                        Text(
-                                            text = message.replyTo.author,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = if (isOutgoing) Color.White else colors.iosBlue
-                                        )
-                                        Text(
-                                            text = message.replyTo.text,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            color = if (isOutgoing) Color.White.copy(alpha = 0.9f) else colors.textDark,
-                                            maxLines = 1
-                                        )
-                                    }
-                                }
-                            }
-
-                            // 2. Media Content
-                            when (message.mediaType) {
-                                "image", "image_stack" -> {
-                                    val urls = if (message.mediaUrls.isNotEmpty()) message.mediaUrls else listOfNotNull(message.mediaUrl)
-                                    if (urls.size > 1) {
-                                        MediaStackGrid(
-                                            mediaUrls = urls,
-                                            isOutgoing = isOutgoing,
-                                            isMediaOnly = isMediaOnly,
-                                            time = message.time,
-                                            status = message.status,
-                                            onImageClick = { idx ->
-                                                if (onImageStackClick != null) onImageStackClick(urls, idx)
-                                                else onImageClick(urls.getOrElse(idx) { urls.first() })
-                                            }
-                                        )
-                                        if (!isMediaOnly) Spacer(Modifier.height(4.dp))
-                                    } else if (urls.isNotEmpty()) {
-                                        val singleUrl = urls.first()
-                                        Box(modifier = Modifier.fillMaxWidth()) {
-                                            AsyncImage(
-                                                model = singleUrl,
-                                                contentDescription = "Media",
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .heightIn(max = 260.dp)
-                                                    .clip(RoundedCornerShape(14.dp))
-                                                    .border(0.5.dp, if (isOutgoing) Color.White.copy(alpha = 0.2f) else colors.borderSubtle, RoundedCornerShape(14.dp))
-                                                    .clickable {
-                                                        if (onImageStackClick != null) onImageStackClick(urls, 0)
-                                                        else onImageClick(singleUrl)
-                                                    },
-                                                contentScale = ContentScale.Crop
-                                            )
-                                            if (isMediaOnly) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .align(Alignment.BottomEnd)
-                                                        .padding(end = 6.dp, bottom = 6.dp)
-                                                        .clip(RoundedCornerShape(12.dp))
-                                                        .background(Color.Black.copy(alpha = 0.55f))
-                                                        .padding(horizontal = 7.dp, vertical = 2.5.dp)
-                                                ) {
-                                                    Row(
-                                                        verticalAlignment = Alignment.CenterVertically,
-                                                        horizontalArrangement = Arrangement.spacedBy(3.dp)
-                                                    ) {
-                                                        Text(
-                                                            text = message.time,
-                                                            fontSize = 10.5.sp,
-                                                            fontWeight = FontWeight.Medium,
-                                                            color = Color.White
-                                                        )
-                                                        if (isOutgoing) {
-                                                            MessageStatusTick(
-                                                                status = message.status,
-                                                                isOutgoing = true,
-                                                                normalTint = Color.White.copy(alpha = 0.9f),
-                                                                readTint = Color(0xFF38BDF8),
-                                                                pendingTint = Color.White.copy(alpha = 0.75f),
-                                                                size = 11.5.dp
-                                                            )
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        if (!isMediaOnly) Spacer(Modifier.height(4.dp))
-                                    }
-                                }
-                                "voice" -> {
-                                    VoiceNotePlayer(
-                                        messageId = message.id,
-                                        audioPath = message.localUri ?: message.mediaUrl ?: "",
-                                        waveformSamples = message.waveformSamples,
-                                        durationSec = message.voiceDuration,
-                                        isOutgoing = isOutgoing,
-                                        time = message.time,
-                                        status = message.status,
-                                        isEdited = message.isEdited,
-                                        timeColor = visual.timeColor,
-                                        fontFamily = visual.fontFamily,
-                                        showIntegratedMetadata = isVoiceOnly
-                                    )
-
-                                    if (message.transcription != null) {
-                                        Spacer(Modifier.height(6.dp))
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clip(RoundedCornerShape(10.dp))
-                                                .background(if (isOutgoing) Color.White.copy(alpha = 0.18f) else colors.surfaceSecondary)
-                                                .padding(horizontal = 8.dp, vertical = 6.dp)
-                                        ) {
-                                            Row(
-                                                verticalAlignment = Alignment.Top,
-                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                            ) {
-                                                PhosphorSparkleIcon(tint = if (isOutgoing) Color.White.copy(alpha = 0.9f) else colors.iosBlue, size = 13.dp)
-                                                Text(
-                                                    text = message.transcription,
-                                                    fontSize = 12.sp,
-                                                    fontWeight = FontWeight.Normal,
-                                                    color = if (isOutgoing) Color.White.copy(alpha = 0.95f) else colors.textDark,
-                                                    lineHeight = 16.sp
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                                "poll" -> {
-                                    if (message.pollData != null) {
-                                        PollCard(
-                                            poll = message.pollData,
-                                            isOutgoing = isOutgoing,
-                                            onVote = onPollVote,
-                                            onViewVotes = { onViewPollVotes?.invoke(message.pollData) }
-                                        )
-                                    }
-                                }
-                                "location" -> {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(14.dp))
-                                            .background(if (isOutgoing) Color.White.copy(alpha = 0.18f) else Color.Black.copy(alpha = 0.04f))
-                                            .border(0.5.dp, if (isOutgoing) Color.White.copy(alpha = 0.25f) else colors.borderSubtle, RoundedCornerShape(14.dp))
-                                            .padding(10.dp)
-                                        ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(38.dp)
-                                                .background(Color(0xFFF43F5E).copy(alpha = 0.18f), CircleShape)
-                                                .border(0.5.dp, Color(0xFFF43F5E).copy(alpha = 0.3f), CircleShape),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            LucideMapPin(tint = Color(0xFFF43F5E), size = 18.dp)
-                                        }
-                                        Column {
-                                            Text(
-                                                text = message.locationTitle ?: "Live Location",
-                                                fontSize = 13.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = if (isOutgoing) Color.White else colors.textDark
-                                            )
-                                            Text(
-                                                text = "Tap to open map",
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Medium,
-                                                color = if (isOutgoing) Color.White.copy(alpha = 0.8f) else colors.textMuted
-                                            )
-                                        }
-                                    }
-                                }
-                                "file", "file_stack" -> {
-                                    if (message.fileItems.isNotEmpty()) {
-                                        FileStackCluster(
-                                            fileItems = message.fileItems,
-                                            isOutgoing = isOutgoing
-                                        )
-                                        Spacer(Modifier.height(4.dp))
-                                    } else {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clip(RoundedCornerShape(14.dp))
-                                                .background(if (isOutgoing) Color.White.copy(alpha = 0.18f) else Color.Black.copy(alpha = 0.04f))
-                                                .border(0.5.dp, if (isOutgoing) Color.White.copy(alpha = 0.25f) else colors.borderSubtle, RoundedCornerShape(14.dp))
-                                                .padding(10.dp)
-                                        ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(38.dp)
-                                                    .background(colors.iosBlueSubtle, CircleShape)
-                                                    .border(0.5.dp, colors.iosBlue.copy(alpha = 0.25f), CircleShape),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                LucideFileText(tint = colors.iosBlue, size = 18.dp)
-                                            }
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Text(
-                                                    text = message.fileName ?: "Document.pdf",
-                                                    fontSize = 12.5.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = if (isOutgoing) Color.White else colors.textDark,
-                                                    maxLines = 1
-                                                )
-                                                Text(
-                                                    text = "${message.fileSize ?: "1.2 MB"} • Document",
-                                                    fontSize = 10.5.sp,
-                                                    fontWeight = FontWeight.SemiBold,
-                                                    color = if (isOutgoing) Color.White.copy(alpha = 0.8f) else colors.textMuted
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            // 3. Message Text with Mentions & Search Highlight
-                            if (!message.text.isNullOrEmpty()) {
-                                var isExpanded by remember(message.id) { mutableStateOf(false) }
-                                var isLongMessage by remember(message.id) { mutableStateOf(false) }
-
-                                val annotatedText = remember(message.text, searchQuery, visual) {
-                                    buildAnnotatedString {
-                                        val text = message.text
-                                        val words = text.split(" ")
-                                        words.forEachIndexed { index, word ->
-                                            if (word.startsWith("@")) {
-                                                withStyle(
-                                                    SpanStyle(
-                                                        color = visual.mentionColor,
-                                                        fontWeight = FontWeight.Bold,
-                                                        textDecoration = TextDecoration.Underline
-                                                    )
-                                                ) {
-                                                    append(word)
-                                                }
-                                            } else if (searchQuery.isNotEmpty() && word.contains(searchQuery, ignoreCase = true)) {
-                                                withStyle(
-                                                    SpanStyle(
-                                                        background = Color(0xFFFACC15),
-                                                        color = Color.Black,
-                                                        fontWeight = FontWeight.Bold
-                                                    )
-                                                ) {
-                                                    append(word)
-                                                }
-                                            } else {
-                                                withStyle(
-                                                    SpanStyle(
-                                                        color = visual.textColor,
-                                                        fontWeight = visual.fontWeight
-                                                    )
-                                                ) {
-                                                    append(word)
-                                                }
-                                            }
-                                            if (index < words.size - 1) append(" ")
-                                        }
-                                    }
-                                }
-
-                                Column(
-                                    modifier = Modifier.animateContentSize(
-                                        spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)
-                                    )
-                                ) {
-                                    Text(
-                                        text = annotatedText,
-                                        fontSize = 15.sp,
-                                        lineHeight = 20.sp,
-                                        letterSpacing = (-0.01).sp,
-                                        fontFamily = visual.fontFamily,
-                                        maxLines = if (isExpanded) Int.MAX_VALUE else 100,
-                                        overflow = TextOverflow.Ellipsis,
-                                        onTextLayout = { layoutResult ->
-                                            if (!isExpanded && (layoutResult.lineCount >= 100 || layoutResult.hasVisualOverflow)) {
-                                                isLongMessage = true
-                                            }
-                                        }
-                                    )
-
-                                    if (isLongMessage) {
-                                        Text(
-                                            text = if (isExpanded) "Show less" else "....read more",
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = if (isOutgoing) Color.White.copy(alpha = 0.95f) else colors.iosBlue,
-                                            modifier = Modifier
-                                                .clickable(
-                                                    interactionSource = remember { MutableInteractionSource() },
-                                                    indication = null
-                                                ) {
-                                                    isExpanded = !isExpanded
-                                                    SoundManager.playPop()
-                                                }
-                                                .padding(top = 4.dp, bottom = 2.dp)
-                                        )
-                                    }
-                                }
-
-                                // 4. Timestamp & Read Receipts (Crisp iOS status tick)
-                                if (!isVoiceOnly && !isMediaOnly) {
-                                    Row(
-                                        modifier = Modifier
-                                            .align(if (isOutgoing) Alignment.End else Alignment.Start)
-                                            .padding(top = 3.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(3.dp)
-                                    ) {
-                                        Text(
-                                            text = "${message.time}${if (message.isEdited) " • edited" else ""}",
-                                            fontSize = 10.5.sp,
-                                            fontWeight = FontWeight.Normal,
-                                            color = if (isOutgoing) Color.White.copy(alpha = 0.85f) else visual.timeColor,
-                                            fontFamily = visual.fontFamily
-                                        )
-                                        if (isOutgoing) {
-                                            MessageStatusTick(
-                                                status = message.status,
-                                                isOutgoing = true,
-                                                normalTint = Color.White.copy(alpha = 0.85f),
-                                                readTint = Color(0xFF60A5FA),
-                                                pendingTint = Color.White.copy(alpha = 0.75f),
-                                                size = 12.dp
-                                            )
-                                        }
-                                    }
-                                }
-                            } else {
-                                // 4. Timestamp for messages without text
-                                if (!isVoiceOnly && !isMediaOnly) {
-                                    Row(
-                                        modifier = Modifier
-                                            .align(if (isOutgoing) Alignment.End else Alignment.Start)
-                                            .padding(top = 2.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(3.dp)
-                                    ) {
-                                        Text(
-                                            text = "${message.time}${if (message.isEdited) " • edited" else ""}",
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            color = visual.timeColor,
-                                            fontFamily = visual.fontFamily
-                                        )
-                                        if (isOutgoing) {
-                                            MessageStatusTick(
-                                                status = message.status,
-                                                isOutgoing = true,
-                                                normalTint = visual.timeColor,
-                                                readTint = Color(0xFF38BDF8),
-                                                pendingTint = visual.timeColor.copy(alpha = 0.75f),
-                                                size = 12.dp
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        val hasTail = !isNextSame && !isMediaOnly && (bubbleStyle == BubbleStyleType.CLASSIC_IOS || bubbleStyle == BubbleStyleType.ROUNDED)
+                        MessageBubbleInnerContent(
+                            message = message,
+                            isOutgoing = isOutgoing,
+                            visual = visual,
+                            isVoiceOnly = isVoiceOnly,
+                            isMediaOnly = isMediaOnly,
+                            searchQuery = searchQuery,
+                            isSelectionMode = isSelectionMode,
+                            colors = colors,
+                            showReactionDock = showReactionDock,
+                            hasTail = hasTail,
+                            onToggleSelect = onToggleSelect,
+                            onCloseReactionDock = { showReactionDock = false },
+                            onOpenReactionDock = { showReactionDock = true },
+                            onTriggerHeartBurst = { triggerHeartBurst() },
+                            onImageClick = onImageClick,
+                            onImageStackClick = onImageStackClick,
+                            onPollVote = onPollVote,
+                            onViewPollVotes = onViewPollVotes
+                        )
                     }
 
                     // Floating heart pop effect on double-tap (UNCLIPPED, always in front & never cut off)
-                    if (heartScale.value > 0.05f) {
+                    if (isHeartBurstActive) {
                         Box(
                             modifier = Modifier
                                 .matchParentSize()
@@ -994,20 +1101,20 @@ fun MessageRow(
                             contentAlignment = Alignment.Center
                         ) {
                             Image(
-                                painter = painterResource(id = R.drawable.heart_like),
+                                painter = heartPainter,
                                 contentDescription = "Heart Like",
                                 modifier = Modifier.size(68.dp)
                             )
                         }
                     }
 
-                    // 5. Reaction Tags (Clean Apple frosted capsule pill, anchored snugly to bubble)
+                    // 5. Reaction Tags (Clean Apple frosted capsule pill, anchored to top outer edge)
                     if (message.reactions.isNotEmpty()) {
                         Row(
                             modifier = Modifier
-                                .align(if (isOutgoing) Alignment.BottomEnd else Alignment.BottomStart)
+                                .align(if (isOutgoing) Alignment.TopStart else Alignment.TopEnd)
                                 .offset(
-                                    y = 4.dp,
+                                    y = (-9).dp,
                                     x = if (isOutgoing) (-4).dp else 4.dp
                                 )
                                 .zIndex(60f)
@@ -1023,7 +1130,7 @@ fun MessageRow(
 
                                 Row(
                                     modifier = Modifier
-                                        .shadow(2.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.16f), spotColor = Color.Black.copy(alpha = 0.12f))
+                                        .shadow(3.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.18f), spotColor = Color.Black.copy(alpha = 0.14f))
                                         .clip(CircleShape)
                                         .background(badgeBg)
                                         .border(badgeBorderWidth, badgeBorderColor, CircleShape)
@@ -1066,6 +1173,504 @@ fun MessageRow(
 }
 
 @Composable
+private fun MessageBubbleInnerContent(
+    message: ChatMessage,
+    isOutgoing: Boolean,
+    visual: BubbleVisualConfig,
+    isVoiceOnly: Boolean,
+    isMediaOnly: Boolean,
+    searchQuery: String,
+    isSelectionMode: Boolean,
+    colors: ChatColors,
+    showReactionDock: Boolean,
+    hasTail: Boolean,
+    onToggleSelect: () -> Unit,
+    onCloseReactionDock: () -> Unit,
+    onOpenReactionDock: () -> Unit,
+    onTriggerHeartBurst: () -> Unit,
+    onImageClick: (String) -> Unit,
+    onImageStackClick: ((List<String>, Int) -> Unit)?,
+    onPollVote: (Int) -> Unit,
+    onViewPollVotes: ((PollData) -> Unit)?
+) {
+    val haptic = LocalHapticFeedback.current
+
+    Column(
+        modifier = Modifier.padding(
+            start = if (isMediaOnly) 0.dp else if (isVoiceOnly) 8.dp else (if (!isOutgoing && hasTail) 16.dp else 11.dp),
+            end = if (isMediaOnly) 0.dp else if (isVoiceOnly) 8.dp else (if (isOutgoing && hasTail) 16.dp else 11.dp),
+            top = if (isMediaOnly) 0.dp else if (isVoiceOnly) 5.dp else 7.dp,
+            bottom = if (isMediaOnly) 0.dp else if (isVoiceOnly) 5.dp else 7.dp
+        )
+    ) {
+        // 1. Reply Quote Header (Apple frosted card with vertical accent indicator)
+        if (message.replyTo != null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 6.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(
+                        if (isOutgoing) Color.White.copy(alpha = 0.18f)
+                        else if (colors.isLight) Color(0x0C000000)
+                        else Color(0x18FFFFFF)
+                    )
+                    .height(IntrinsicSize.Min)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(3.dp)
+                        .fillMaxHeight()
+                        .background(if (isOutgoing) Color.White else colors.iosBlue)
+                )
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 8.dp, vertical = 5.dp)
+                ) {
+                    Text(
+                        text = message.replyTo.author,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isOutgoing) Color.White else colors.iosBlue
+                    )
+                    Text(
+                        text = message.replyTo.text,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = if (isOutgoing) Color.White.copy(alpha = 0.9f) else colors.textDark,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+
+        // 2. Media Content
+        when (message.mediaType) {
+            "image", "image_stack" -> {
+                val urls = if (message.mediaUrls.isNotEmpty()) message.mediaUrls else listOfNotNull(message.mediaUrl)
+                if (urls.size > 1) {
+                    MediaStackGrid(
+                        mediaUrls = urls,
+                        isOutgoing = isOutgoing,
+                        isMediaOnly = isMediaOnly,
+                        time = message.time,
+                        status = message.status,
+                        onImageClick = { idx ->
+                            if (onImageStackClick != null) onImageStackClick(urls, idx)
+                            else onImageClick(urls.getOrElse(idx) { urls.first() })
+                        }
+                    )
+                    if (!isMediaOnly) Spacer(Modifier.height(4.dp))
+                } else if (urls.isNotEmpty()) {
+                    val singleUrl = urls.first()
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        AsyncImage(
+                            model = singleUrl,
+                            contentDescription = "Media",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 260.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .border(0.5.dp, if (isOutgoing) Color.White.copy(alpha = 0.2f) else colors.borderSubtle, RoundedCornerShape(14.dp))
+                                .clickable {
+                                    if (onImageStackClick != null) onImageStackClick(urls, 0)
+                                    else onImageClick(singleUrl)
+                                },
+                            contentScale = ContentScale.Crop
+                        )
+                        if (isMediaOnly) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(end = 6.dp, bottom = 6.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Color.Black.copy(alpha = 0.55f))
+                                    .padding(horizontal = 7.dp, vertical = 2.5.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                ) {
+                                    Text(
+                                        text = message.time,
+                                        fontSize = 10.5.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = Color.White
+                                    )
+                                    if (isOutgoing) {
+                                        MessageStatusTick(
+                                            status = message.status,
+                                            isOutgoing = true,
+                                            normalTint = Color.White.copy(alpha = 0.9f),
+                                            readTint = Color(0xFF38BDF8),
+                                            pendingTint = Color.White.copy(alpha = 0.75f),
+                                            size = 11.5.dp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (!isMediaOnly) Spacer(Modifier.height(4.dp))
+                }
+            }
+            "voice" -> {
+                VoiceNotePlayer(
+                    messageId = message.id,
+                    audioPath = message.localUri ?: message.mediaUrl ?: "",
+                    waveformSamples = message.waveformSamples,
+                    durationSec = message.voiceDuration,
+                    isOutgoing = isOutgoing,
+                    time = message.time,
+                    status = message.status,
+                    isEdited = message.isEdited,
+                    timeColor = visual.timeColor,
+                    fontFamily = visual.fontFamily,
+                    showIntegratedMetadata = isVoiceOnly,
+                    onDoubleTap = { onTriggerHeartBurst() }
+                )
+
+                if (message.transcription != null) {
+                    Spacer(Modifier.height(6.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (isOutgoing) Color.White.copy(alpha = 0.18f) else colors.surfaceSecondary)
+                            .padding(horizontal = 8.dp, vertical = 6.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.Top,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            PhosphorSparkleIcon(tint = if (isOutgoing) Color.White.copy(alpha = 0.9f) else colors.iosBlue, size = 13.dp)
+                            Text(
+                                text = message.transcription,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Normal,
+                                color = if (isOutgoing) Color.White.copy(alpha = 0.95f) else colors.textDark,
+                                lineHeight = 16.sp
+                            )
+                        }
+                    }
+                }
+            }
+            "poll" -> {
+                if (message.pollData != null) {
+                    PollCard(
+                        poll = message.pollData,
+                        isOutgoing = isOutgoing,
+                        onVote = onPollVote,
+                        onViewVotes = { onViewPollVotes?.invoke(message.pollData) }
+                    )
+                }
+            }
+            "location" -> {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(if (isOutgoing) Color.White.copy(alpha = 0.18f) else Color.Black.copy(alpha = 0.04f))
+                        .border(0.5.dp, if (isOutgoing) Color.White.copy(alpha = 0.25f) else colors.borderSubtle, RoundedCornerShape(14.dp))
+                        .padding(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .background(Color(0xFFF43F5E).copy(alpha = 0.18f), CircleShape)
+                            .border(0.5.dp, Color(0xFFF43F5E).copy(alpha = 0.3f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        LucideMapPin(tint = Color(0xFFF43F5E), size = 18.dp)
+                    }
+                    Column {
+                        Text(
+                            text = message.locationTitle ?: "Live Location",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isOutgoing) Color.White else colors.textDark
+                        )
+                        Text(
+                            text = "Tap to open map",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = if (isOutgoing) Color.White.copy(alpha = 0.8f) else colors.textMuted
+                        )
+                    }
+                }
+            }
+            "file", "file_stack" -> {
+                if (message.fileItems.isNotEmpty()) {
+                    FileStackCluster(
+                        fileItems = message.fileItems,
+                        isOutgoing = isOutgoing
+                    )
+                    Spacer(Modifier.height(4.dp))
+                } else {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(if (isOutgoing) Color.White.copy(alpha = 0.18f) else Color.Black.copy(alpha = 0.04f))
+                            .border(0.5.dp, if (isOutgoing) Color.White.copy(alpha = 0.25f) else colors.borderSubtle, RoundedCornerShape(14.dp))
+                            .padding(10.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .background(colors.iosBlueSubtle, CircleShape)
+                                .border(0.5.dp, colors.iosBlue.copy(alpha = 0.25f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            LucideFileText(tint = colors.iosBlue, size = 18.dp)
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = message.fileName ?: "Document.pdf",
+                                fontSize = 12.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isOutgoing) Color.White else colors.textDark,
+                                maxLines = 1
+                            )
+                            Text(
+                                text = "${message.fileSize ?: "1.2 MB"} • Document",
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (isOutgoing) Color.White.copy(alpha = 0.8f) else colors.textMuted
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Message Text with Markdown, Links, Formatted Text, Spoilers & Mentions
+        if (!message.text.isNullOrEmpty()) {
+            val uriHandler = LocalUriHandler.current
+            var isExpanded by remember(message.id) { mutableStateOf(false) }
+            var isLongMessage by remember(message.id) { mutableStateOf(false) }
+            var revealedSpoilers by remember(message.id) { mutableStateOf(setOf<String>()) }
+            var textLayoutResult by remember(message.id) { mutableStateOf<TextLayoutResult?>(null) }
+
+            val annotatedText = remember(message.text, searchQuery, visual, isOutgoing, revealedSpoilers) {
+                parseMarkdownToAnnotatedString(
+                    text = message.text,
+                    visual = visual,
+                    isOutgoing = isOutgoing,
+                    searchQuery = searchQuery,
+                    revealedSpoilers = revealedSpoilers
+                )
+            }
+
+            val textGestureModifier = Modifier.pointerInput(annotatedText, isSelectionMode) {
+                detectTapGestures(
+                    onTap = { pos ->
+                        val offset = textLayoutResult?.getOffsetForPosition(pos)
+                        if (offset != null) {
+                            val urlAnnotations = annotatedText.getStringAnnotations("URL", offset, offset)
+                            val url = urlAnnotations.firstOrNull()?.item
+                            if (url != null) {
+                                try {
+                                    val fullUrl = if (!url.startsWith("http://") && !url.startsWith("https://")) {
+                                        "https://$url"
+                                    } else {
+                                        url
+                                    }
+                                    uriHandler.openUri(fullUrl)
+                                    return@detectTapGestures
+                                } catch (e: Exception) {
+                                    // ignore malformed uri
+                                }
+                            }
+                            val spoilerAnnotations = annotatedText.getStringAnnotations("SPOILER", offset, offset)
+                            val spoilerId = spoilerAnnotations.firstOrNull()?.item
+                            if (spoilerId != null) {
+                                revealedSpoilers = revealedSpoilers + spoilerId
+                                SoundManager.playPop()
+                                return@detectTapGestures
+                            }
+                        }
+                        if (isSelectionMode) {
+                            onToggleSelect()
+                        } else if (showReactionDock) {
+                            onCloseReactionDock()
+                        }
+                    },
+                    onDoubleTap = {
+                        if (!isSelectionMode) {
+                            onTriggerHeartBurst()
+                        }
+                    },
+                    onLongPress = {
+                        if (!isSelectionMode) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            SoundManager.playReaction()
+                            onOpenReactionDock()
+                        }
+                    }
+                )
+            }
+
+            val isShortSingleLine = remember(message.text, message.replyTo, message.mediaType) {
+                message.replyTo == null &&
+                (message.mediaType.isNullOrEmpty() || message.mediaType == "text") &&
+                !message.text.contains('\n') &&
+                message.text.length <= 26 &&
+                !message.text.contains("```")
+            }
+
+            if (isShortSingleLine) {
+                // Compact Single-Line Capsule (Text & Timestamp inline, eliminating tombstone dome)
+                Row(
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(bottom = 1.dp)
+                ) {
+                    Text(
+                        text = annotatedText,
+                        fontSize = 15.sp,
+                        lineHeight = 20.sp,
+                        letterSpacing = (-0.01).sp,
+                        fontFamily = visual.fontFamily,
+                        modifier = textGestureModifier,
+                        onTextLayout = { textLayoutResult = it }
+                    )
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp),
+                        modifier = Modifier.padding(bottom = 1.5.dp)
+                    ) {
+                        Text(
+                            text = "${message.time}${if (message.isEdited) " • edited" else ""}",
+                            fontSize = 10.5.sp,
+                            fontWeight = FontWeight.Normal,
+                            color = if (isOutgoing) Color.White.copy(alpha = 0.85f) else visual.timeColor,
+                            fontFamily = visual.fontFamily
+                        )
+                        if (isOutgoing) {
+                            MessageStatusTick(
+                                status = message.status,
+                                isOutgoing = true,
+                                normalTint = Color.White.copy(alpha = 0.85f),
+                                readTint = Color(0xFF60A5FA),
+                                pendingTint = Color.White.copy(alpha = 0.75f),
+                                size = 11.5.dp
+                            )
+                        }
+                    }
+                }
+            } else {
+                Column(
+                    modifier = Modifier.animateContentSize(
+                        spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)
+                    )
+                ) {
+                    Text(
+                        text = annotatedText,
+                        fontSize = 15.sp,
+                        lineHeight = 20.sp,
+                        letterSpacing = (-0.01).sp,
+                        fontFamily = visual.fontFamily,
+                        maxLines = if (isExpanded) Int.MAX_VALUE else 100,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = textGestureModifier,
+                        onTextLayout = { layoutResult ->
+                            textLayoutResult = layoutResult
+                            if (!isExpanded && (layoutResult.lineCount >= 100 || layoutResult.hasVisualOverflow)) {
+                                isLongMessage = true
+                            }
+                        }
+                    )
+
+                    if (isLongMessage) {
+                        Text(
+                            text = if (isExpanded) "Show less" else "....read more",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isOutgoing) Color.White.copy(alpha = 0.95f) else colors.iosBlue,
+                            modifier = Modifier
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null
+                                ) {
+                                    isExpanded = !isExpanded
+                                    SoundManager.playPop()
+                                }
+                                .padding(top = 4.dp, bottom = 2.dp)
+                        )
+                    }
+                }
+            }
+
+            // 4. Timestamp & Read Receipts (Crisp iOS status tick)
+            if (!isVoiceOnly && !isMediaOnly) {
+                Row(
+                    modifier = Modifier
+                        .align(if (isOutgoing) Alignment.End else Alignment.Start)
+                        .padding(top = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    Text(
+                        text = "${message.time}${if (message.isEdited) " • edited" else ""}",
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = if (isOutgoing) Color.White.copy(alpha = 0.85f) else visual.timeColor,
+                        fontFamily = visual.fontFamily
+                    )
+                    if (isOutgoing) {
+                        MessageStatusTick(
+                            status = message.status,
+                            isOutgoing = true,
+                            normalTint = Color.White.copy(alpha = 0.85f),
+                            readTint = Color(0xFF60A5FA),
+                            pendingTint = Color.White.copy(alpha = 0.75f),
+                            size = 12.dp
+                        )
+                    }
+                }
+            }
+        } else {
+            // 4. Timestamp for messages without text
+            if (!isVoiceOnly && !isMediaOnly) {
+                Row(
+                    modifier = Modifier
+                        .align(if (isOutgoing) Alignment.End else Alignment.Start)
+                        .padding(top = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    Text(
+                        text = "${message.time}${if (message.isEdited) " • edited" else ""}",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = visual.timeColor,
+                        fontFamily = visual.fontFamily
+                    )
+                    if (isOutgoing) {
+                        MessageStatusTick(
+                            status = message.status,
+                            isOutgoing = true,
+                            normalTint = visual.timeColor,
+                            readTint = Color(0xFF38BDF8),
+                            pendingTint = visual.timeColor.copy(alpha = 0.75f),
+                            size = 12.dp
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun VoiceNotePlayer(
     messageId: String = "",
     audioPath: String = "",
@@ -1077,7 +1682,8 @@ fun VoiceNotePlayer(
     isEdited: Boolean = false,
     timeColor: Color = Color.White.copy(alpha = 0.85f),
     fontFamily: androidx.compose.ui.text.font.FontFamily? = null,
-    showIntegratedMetadata: Boolean = true
+    showIntegratedMetadata: Boolean = true,
+    onDoubleTap: (() -> Unit)? = null
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val colors = LocalChatColors.current
@@ -1164,32 +1770,60 @@ fun VoiceNotePlayer(
             }
             val activeProgress = if (isThisActive) playbackProgress else 0f
 
-            Row(
+            val pulseTransition = rememberInfiniteTransition(label = "voicePulse")
+            val pulseProgress by pulseTransition.animateFloat(
+                initialValue = 0f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(1200, easing = LinearEasing),
+                    repeatMode = RepeatMode.Restart
+                ),
+                label = "pulseProgress"
+            )
+
+            Canvas(
                 modifier = Modifier
                     .height(26.dp)
-                    .fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .fillMaxWidth()
+                    .pointerInput(messageId, isThisActive) {
+                        detectTapGestures(
+                            onTap = { offset ->
+                                val progress = (offset.x / size.width).coerceIn(0f, 1f)
+                                if (isThisActive) {
+                                    AudioPlayerManager.seekTo(progress)
+                                } else {
+                                    AudioPlayerManager.play(messageId, audioPath, context)
+                                    AudioPlayerManager.seekTo(progress)
+                                }
+                            },
+                            onDoubleTap = {
+                                onDoubleTap?.invoke()
+                            }
+                        )
+                    }
             ) {
-                barHeights.forEachIndexed { index, h ->
-                    val barProgress = index.toFloat() / barHeights.size.toFloat()
+                val totalBars = barHeights.size
+                val spacingPx = 2.dp.toPx()
+                val totalSpacing = spacingPx * (totalBars - 1)
+                val barWidth = (size.width - totalSpacing) / totalBars
+                val cornerRadius = androidx.compose.ui.geometry.CornerRadius(3.dp.toPx())
+
+                for (i in 0 until totalBars) {
+                    val h = barHeights[i]
+                    val barProgress = i.toFloat() / totalBars.toFloat()
                     val isPast = isThisActive && barProgress <= activeProgress
 
-                    val barScale = if (isThisPlaying) {
-                        val infinite = rememberInfiniteTransition(label = "vn$index")
-                        val livePulse by infinite.animateFloat(
-                            initialValue = 0.65f,
-                            targetValue = 1.25f,
-                            animationSpec = infiniteRepeatable(
-                                animation = tween(360, delayMillis = (index % 6) * 55, easing = FastOutSlowInEasing),
-                                repeatMode = RepeatMode.Reverse
-                            ),
-                            label = "barScale"
-                        )
-                        livePulse
+                    val pulseScale = if (isThisPlaying) {
+                        val phase = (pulseProgress + (i % 6) / 6f) % 1f
+                        0.75f + 0.35f * sin(phase * 2 * PI.toFloat())
                     } else 1f
 
-                    val barColor = when {
+                    val barHeightNorm = ((h / 100f) * pulseScale).coerceIn(0.18f, 1f)
+                    val barPxHeight = size.height * barHeightNorm
+                    val left = i * (barWidth + spacingPx)
+                    val top = (size.height - barPxHeight) / 2f
+
+                    val color = when {
                         isOutgoing -> {
                             if (isThisActive) {
                                 if (isPast) Color.White else Color.White.copy(alpha = 0.38f)
@@ -1206,20 +1840,11 @@ fun VoiceNotePlayer(
                         }
                     }
 
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight(((h / 100f) * barScale).coerceIn(0.18f, 1f))
-                            .clip(RoundedCornerShape(3.dp))
-                            .background(barColor)
-                            .clickable {
-                                if (isThisActive) {
-                                    AudioPlayerManager.seekTo(barProgress)
-                                } else {
-                                    AudioPlayerManager.play(messageId, audioPath, context)
-                                    AudioPlayerManager.seekTo(barProgress)
-                                }
-                            }
+                    drawRoundRect(
+                        color = color,
+                        topLeft = androidx.compose.ui.geometry.Offset(left, top),
+                        size = androidx.compose.ui.geometry.Size(barWidth, barPxHeight),
+                        cornerRadius = cornerRadius
                     )
                 }
             }
@@ -1550,15 +2175,169 @@ data class BubbleVisualConfig(
     val hasTopSpecular: Boolean
 )
 
+class AppleMessageBubbleShape(
+    val isOutgoing: Boolean,
+    val hasTail: Boolean = true,
+    val isConsecutive: Boolean = false,
+    val isNextSame: Boolean = false,
+    val cornerRadius: androidx.compose.ui.unit.Dp = 18.dp,
+    val groupedCornerRadius: androidx.compose.ui.unit.Dp = 7.dp
+) : Shape {
+    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
+        val w = size.width
+        val h = size.height
+        if (w <= 0f || h <= 0f) return Outline.Rectangle(Rect.Zero)
+
+        val maxR = with(density) { cornerRadius.toPx() }
+        val smallR = with(density) { groupedCornerRadius.toPx() }
+        val effectiveOutgoing = if (layoutDirection == LayoutDirection.Rtl) !isOutgoing else isOutgoing
+        val shouldDrawTail = hasTail && !isNextSame
+
+        val baseR = min(maxR, min(w / 2f, h / 2f))
+        val pinchedR = min(smallR, baseR)
+
+        // Determine individual corner radii based on burst grouping
+        val topLeftR = if (!effectiveOutgoing && isConsecutive) pinchedR else baseR
+        val bottomLeftR = if (!effectiveOutgoing && isNextSame) pinchedR else baseR
+        val topRightR = if (effectiveOutgoing && isConsecutive) pinchedR else baseR
+        val bottomRightR = if (effectiveOutgoing && isNextSame) pinchedR else baseR
+
+        val scale = baseR / 20f
+        val tailStart = maxOf(baseR, h - 18f * scale)
+
+        val path = Path().apply {
+            if (!shouldDrawTail) {
+                addRoundRect(
+                    RoundRect(
+                        rect = Rect(0f, 0f, w, h),
+                        topLeft = CornerRadius(topLeftR, topLeftR),
+                        topRight = CornerRadius(topRightR, topRightR),
+                        bottomRight = CornerRadius(bottomRightR, bottomRightR),
+                        bottomLeft = CornerRadius(bottomLeftR, bottomLeftR)
+                    )
+                )
+                return@apply
+            }
+
+            if (effectiveOutgoing) {
+                // Top-left to top-right
+                moveTo(topLeftR, 0f)
+                lineTo(w - topRightR, 0f)
+                arcTo(Rect(w - 2 * topRightR, 0f, w, 2 * topRightR), -90f, 90f, false)
+
+                // Right edge down to tail start
+                lineTo(w, tailStart)
+
+                // Sweeping iMessage bottom-right tail tip & inner notch
+                cubicTo(
+                    w, h - 7.5f * scale,
+                    w + 2.2f * scale, h - 2.0f * scale,
+                    w + 6.5f * scale, h - 0.3f * scale
+                )
+                cubicTo(
+                    w + 1.4f * scale, h + 0.6f * scale,
+                    w - 2.8f * scale, h - 0.8f * scale,
+                    w - 5.8f * scale, h - 4.0f * scale
+                )
+                cubicTo(
+                    w - 8.4f * scale, h - 1.2f * scale,
+                    w - 11.8f * scale, h,
+                    w - 16.0f * scale, h
+                )
+
+                // Bottom edge & left corners
+                lineTo(bottomLeftR, h)
+                arcTo(Rect(0f, h - 2 * bottomLeftR, 2 * bottomLeftR, h), 90f, 90f, false)
+                lineTo(0f, topLeftR)
+                arcTo(Rect(0f, 0f, 2 * topLeftR, 2 * topLeftR), 180f, 90f, false)
+                close()
+            } else {
+                // Top-left to bottom-right
+                moveTo(topLeftR, 0f)
+                lineTo(w - topRightR, 0f)
+                arcTo(Rect(w - 2 * topRightR, 0f, w, 2 * topRightR), -90f, 90f, false)
+                lineTo(w, h - bottomRightR)
+                arcTo(Rect(w - 2 * bottomRightR, h - 2 * bottomRightR, w, h), 0f, 90f, false)
+
+                // Bottom edge to left tail notch
+                lineTo(16.0f * scale, h)
+
+                // Sweeping iMessage bottom-left tail tip & outer curve
+                cubicTo(
+                    11.8f * scale, h,
+                    8.4f * scale, h - 1.2f * scale,
+                    5.8f * scale, h - 4.0f * scale
+                )
+                cubicTo(
+                    2.8f * scale, h - 0.8f * scale,
+                    -1.4f * scale, h + 0.6f * scale,
+                    -6.5f * scale, h - 0.3f * scale
+                )
+                cubicTo(
+                    -2.2f * scale, h - 2.0f * scale,
+                    0f, h - 7.5f * scale,
+                    0f, tailStart
+                )
+
+                // Left edge up to top-left corner
+                lineTo(0f, topLeftR)
+                arcTo(Rect(0f, 0f, 2 * topLeftR, 2 * topLeftR), 180f, 90f, false)
+                close()
+            }
+        }
+        return Outline.Generic(path)
+    }
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is AppleMessageBubbleShape) return false
+        return isOutgoing == other.isOutgoing &&
+                hasTail == other.hasTail &&
+                isConsecutive == other.isConsecutive &&
+                isNextSame == other.isNextSame &&
+                cornerRadius == other.cornerRadius &&
+                groupedCornerRadius == other.groupedCornerRadius
+    }
+
+    override fun hashCode(): Int {
+        var result = isOutgoing.hashCode()
+        result = 31 * result + hasTail.hashCode()
+        result = 31 * result + isConsecutive.hashCode()
+        result = 31 * result + isNextSame.hashCode()
+        result = 31 * result + cornerRadius.hashCode()
+        result = 31 * result + groupedCornerRadius.hashCode()
+        return result
+    }
+}
+
+fun getIosClusterShape(isOutgoing: Boolean, isConsecutive: Boolean, isNextSame: Boolean): RoundedCornerShape {
+    return if (isOutgoing) {
+        when {
+            !isConsecutive && !isNextSame -> RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 4.dp)
+            !isConsecutive && isNextSame -> RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 6.dp)
+            isConsecutive && isNextSame -> RoundedCornerShape(topStart = 18.dp, topEnd = 6.dp, bottomStart = 18.dp, bottomEnd = 6.dp)
+            else -> RoundedCornerShape(topStart = 18.dp, topEnd = 6.dp, bottomStart = 18.dp, bottomEnd = 4.dp)
+        }
+    } else {
+        when {
+            !isConsecutive && !isNextSame -> RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomEnd = 18.dp, bottomStart = 4.dp)
+            !isConsecutive && isNextSame -> RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomEnd = 18.dp, bottomStart = 6.dp)
+            isConsecutive && isNextSame -> RoundedCornerShape(topStart = 6.dp, topEnd = 18.dp, bottomEnd = 18.dp, bottomStart = 6.dp)
+            else -> RoundedCornerShape(topStart = 6.dp, topEnd = 18.dp, bottomEnd = 18.dp, bottomStart = 4.dp)
+        }
+    }
+}
+
 fun resolveBubbleVisual(
     style: BubbleStyleType,
     isOutgoing: Boolean,
     isConsecutive: Boolean,
+    isNextSame: Boolean = false,
     colors: com.chroma.studio.chat.ui.theme.ChatColors,
     customCorners: CustomCornerConfig = CustomCornerConfig()
 ): BubbleVisualConfig {
-    val base = resolveBaseBubbleVisual(style, isOutgoing, isConsecutive, colors)
-    if (!customCorners.customEnabled) {
+    val base = resolveBaseBubbleVisual(style, isOutgoing, isConsecutive, isNextSame, colors)
+    if (!customCorners.customEnabled || style == BubbleStyleType.CLASSIC_IOS || style == BubbleStyleType.ROUNDED) {
         return base
     }
 
@@ -1570,23 +2349,23 @@ fun resolveBubbleVisual(
     val customShape: androidx.compose.ui.graphics.Shape = when (customCorners.pointyCornerStyle) {
         PointyCornerStyle.CHAMFERED_CUT -> {
             if (isOutgoing) {
-                CutCornerShape(topStart = tStart, topEnd = tEnd, bottomStart = bStart, bottomEnd = 2.dp)
+                CutCornerShape(topStart = tStart, topEnd = tEnd, bottomStart = bStart, bottomEnd = if (isNextSame) 6.dp else 2.dp)
             } else {
-                CutCornerShape(topStart = tStart, topEnd = tEnd, bottomEnd = bEnd, bottomStart = 2.dp)
+                CutCornerShape(topStart = tStart, topEnd = tEnd, bottomEnd = bEnd, bottomStart = if (isNextSame) 6.dp else 2.dp)
             }
         }
         PointyCornerStyle.SHARP_ZERO -> {
             if (isOutgoing) {
-                RoundedCornerShape(topStart = tStart, topEnd = tEnd, bottomStart = bStart, bottomEnd = 0.dp)
+                RoundedCornerShape(topStart = tStart, topEnd = tEnd, bottomStart = bStart, bottomEnd = if (isNextSame) 6.dp else 0.dp)
             } else {
-                RoundedCornerShape(topStart = tStart, topEnd = tEnd, bottomEnd = bEnd, bottomStart = 0.dp)
+                RoundedCornerShape(topStart = tStart, topEnd = tEnd, bottomEnd = bEnd, bottomStart = if (isNextSame) 6.dp else 0.dp)
             }
         }
         PointyCornerStyle.SUBTLE_ROUNDED -> {
             if (isOutgoing) {
-                RoundedCornerShape(topStart = tStart, topEnd = tEnd, bottomStart = bStart, bottomEnd = 2.dp)
+                RoundedCornerShape(topStart = tStart, topEnd = tEnd, bottomStart = bStart, bottomEnd = if (isNextSame) 6.dp else 2.dp)
             } else {
-                RoundedCornerShape(topStart = tStart, topEnd = tEnd, bottomEnd = bEnd, bottomStart = 2.dp)
+                RoundedCornerShape(topStart = tStart, topEnd = tEnd, bottomEnd = bEnd, bottomStart = if (isNextSame) 6.dp else 2.dp)
             }
         }
         PointyCornerStyle.ROUNDED_MATCH, PointyCornerStyle.NONE -> {
@@ -1605,19 +2384,19 @@ private fun resolveBaseBubbleVisual(
     style: BubbleStyleType,
     isOutgoing: Boolean,
     isConsecutive: Boolean,
+    isNextSame: Boolean = false,
     colors: com.chroma.studio.chat.ui.theme.ChatColors
 ): BubbleVisualConfig {
     val isLight = colors.isLight
 
     return when (style) {
         BubbleStyleType.ROUNDED -> {
-            val shape = if (isOutgoing) {
-                if (isConsecutive) RoundedCornerShape(topStart = 18.dp, topEnd = 6.dp, bottomStart = 18.dp, bottomEnd = 6.dp)
-                else RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 4.dp)
-            } else {
-                if (isConsecutive) RoundedCornerShape(topStart = 6.dp, topEnd = 18.dp, bottomEnd = 18.dp, bottomStart = 6.dp)
-                else RoundedCornerShape(20.dp)
-            }
+            val shape = AppleMessageBubbleShape(
+                isOutgoing = isOutgoing,
+                hasTail = !isNextSame,
+                isConsecutive = isConsecutive,
+                isNextSame = isNextSame
+            )
             if (isOutgoing) {
                 BubbleVisualConfig(
                     shape = shape,
@@ -1667,13 +2446,12 @@ private fun resolveBaseBubbleVisual(
         }
 
         BubbleStyleType.CLASSIC_IOS -> {
-            val shape = if (isOutgoing) {
-                if (isConsecutive) RoundedCornerShape(topStart = 18.dp, topEnd = 6.dp, bottomStart = 18.dp, bottomEnd = 6.dp)
-                else RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 4.dp)
-            } else {
-                if (isConsecutive) RoundedCornerShape(topStart = 6.dp, topEnd = 18.dp, bottomEnd = 18.dp, bottomStart = 6.dp)
-                else RoundedCornerShape(20.dp)
-            }
+            val shape = AppleMessageBubbleShape(
+                isOutgoing = isOutgoing,
+                hasTail = !isNextSame,
+                isConsecutive = isConsecutive,
+                isNextSame = isNextSame
+            )
             if (isOutgoing) {
                 BubbleVisualConfig(
                     shape = shape,
@@ -1724,11 +2502,19 @@ private fun resolveBaseBubbleVisual(
 
         BubbleStyleType.WHATSAPP -> {
             val shape = if (isOutgoing) {
-                if (isConsecutive) RoundedCornerShape(topStart = 16.dp, topEnd = 5.dp, bottomStart = 16.dp, bottomEnd = 5.dp)
-                else RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp)
+                when {
+                    !isConsecutive && !isNextSame -> RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp)
+                    !isConsecutive && isNextSame -> RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 5.dp)
+                    isConsecutive && isNextSame -> RoundedCornerShape(topStart = 16.dp, topEnd = 5.dp, bottomStart = 16.dp, bottomEnd = 5.dp)
+                    else -> RoundedCornerShape(topStart = 16.dp, topEnd = 5.dp, bottomStart = 16.dp, bottomEnd = 4.dp)
+                }
             } else {
-                if (isConsecutive) RoundedCornerShape(topStart = 5.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 5.dp)
-                else RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 4.dp)
+                when {
+                    !isConsecutive && !isNextSame -> RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 4.dp)
+                    !isConsecutive && isNextSame -> RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 5.dp)
+                    isConsecutive && isNextSame -> RoundedCornerShape(topStart = 5.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 5.dp)
+                    else -> RoundedCornerShape(topStart = 5.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 4.dp)
+                }
             }
             if (isOutgoing) {
                 val bg = if (isLight) Color(0xFFD9FDD3) else Color(0xFF005C4B)
@@ -2471,9 +3257,10 @@ fun MediaStackGrid(
     val haptic = LocalHapticFeedback.current
     val coroutineScope = rememberCoroutineScope()
 
-    var viewMode by remember { mutableStateOf(if (count > 1) "grid" else "single") }
+    var viewMode by remember { mutableStateOf(if (count > 1) "stack" else "single") }
     var activeIndex by remember { mutableStateOf(0) }
     var showHeartPop by remember { mutableStateOf(false) }
+    val topCardDragX = remember { Animatable(0f) }
 
     // Double tap heart pop animation
     val heartScale by animateFloatAsState(
@@ -2591,7 +3378,7 @@ fun MediaStackGrid(
     ) {
         if (viewMode == "stack") {
             // ==========================================
-            // INSTAGRAM INTERACTIVE CARD STACK
+            // APPLE MESSAGES INTERACTIVE CARD STACK
             // ==========================================
             Box(
                 modifier = Modifier
@@ -2608,7 +3395,7 @@ fun MediaStackGrid(
 
                     val rotationTarget = when (depth) {
                         0 -> 0f
-                        1 -> if (cardIdx % 2 == 0) -3.2f else 3.2f
+                        1 -> if (cardIdx % 2 == 0) -3.8f else 3.8f
                         else -> if (cardIdx % 2 == 0) 4.5f else -4.5f
                     }
                     val scaleTarget = when (depth) {
@@ -2623,8 +3410,8 @@ fun MediaStackGrid(
                     }
                     val xOffsetTarget = when (depth) {
                         0 -> 0.dp
-                        1 -> if (cardIdx % 2 == 0) (-5).dp else 5.dp
-                        else -> if (cardIdx % 2 == 0) 6.dp else (-6).dp
+                        1 -> if (cardIdx % 2 == 0) (-6).dp else 6.dp
+                        else -> if (cardIdx % 2 == 0) 7.dp else (-7).dp
                     }
 
                     val animatedRotation by animateFloatAsState(
@@ -2648,14 +3435,15 @@ fun MediaStackGrid(
                         label = "cardX_$depth"
                     )
 
-                    val cardShape = RoundedCornerShape(16.dp)
+                    val cardShape = RoundedCornerShape(18.dp)
 
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .offset(x = animatedXOffset, y = animatedYOffset)
                             .graphicsLayer {
-                                rotationZ = animatedRotation
+                                translationX = if (depth == 0) topCardDragX.value else 0f
+                                rotationZ = animatedRotation + if (depth == 0) (topCardDragX.value * 0.045f) else 0f
                                 scaleX = animatedScale
                                 scaleY = animatedScale
                             }
@@ -2675,26 +3463,37 @@ fun MediaStackGrid(
                             .then(
                                 if (depth == 0) {
                                     Modifier
-                                        .pointerInput(activeIndex) {
-                                            var accumulatedDrag = 0f
+                                        .pointerInput(activeIndex, count) {
                                             detectHorizontalDragGestures(
-                                                onDragStart = { accumulatedDrag = 0f },
-                                                onDragEnd = { accumulatedDrag = 0f },
-                                                onDragCancel = { accumulatedDrag = 0f },
+                                                onDragStart = { },
+                                                onDragEnd = {
+                                                    coroutineScope.launch {
+                                                        if (topCardDragX.value < -70f) {
+                                                            topCardDragX.animateTo(-300f, tween(140))
+                                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                            SoundManager.playReaction()
+                                                            activeIndex = (activeIndex + 1) % count
+                                                            topCardDragX.snapTo(0f)
+                                                        } else if (topCardDragX.value > 70f) {
+                                                            topCardDragX.animateTo(300f, tween(140))
+                                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                            SoundManager.playReaction()
+                                                            activeIndex = (activeIndex - 1 + count) % count
+                                                            topCardDragX.snapTo(0f)
+                                                        } else {
+                                                            topCardDragX.animateTo(0f, spring(dampingRatio = 0.65f, stiffness = Spring.StiffnessMediumLow))
+                                                        }
+                                                    }
+                                                },
+                                                onDragCancel = {
+                                                    coroutineScope.launch {
+                                                        topCardDragX.animateTo(0f, spring(dampingRatio = 0.65f, stiffness = Spring.StiffnessMediumLow))
+                                                    }
+                                                },
                                                 onHorizontalDrag = { change, dragAmount ->
-                                                    accumulatedDrag += dragAmount
-                                                    if (accumulatedDrag < -40f) {
-                                                        change.consume()
-                                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                        SoundManager.playReaction()
-                                                        activeIndex = (activeIndex + 1) % count
-                                                        accumulatedDrag = 0f
-                                                    } else if (accumulatedDrag > 40f) {
-                                                        change.consume()
-                                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                        SoundManager.playReaction()
-                                                        activeIndex = (activeIndex - 1 + count) % count
-                                                        accumulatedDrag = 0f
+                                                    change.consume()
+                                                    coroutineScope.launch {
+                                                        topCardDragX.snapTo(topCardDragX.value + dragAmount)
                                                     }
                                                 }
                                             )
@@ -2732,7 +3531,7 @@ fun MediaStackGrid(
                     }
                 }
 
-                // Instagram Double-Tap Popping Heart Animation
+                // Double-Tap Popping Heart Animation
                 if (heartAlpha > 0f) {
                     Box(
                         modifier = Modifier
@@ -2751,46 +3550,46 @@ fun MediaStackGrid(
                     }
                 }
 
-                // Top-Right: Instagram Stack Badge (Icon + "1/N" counter)
+                // Top-Right: Apple Messages Stack Badge (Layered Photo Icon + "1 of N" counter)
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(top = 10.dp, end = 10.dp)
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(14.dp))
                         .background(Color.Black.copy(alpha = 0.65f))
-                        .border(0.5.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(12.dp))
+                        .border(0.5.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(14.dp))
                         .clickable {
                             // Tap stack counter to cycle to next photo
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             SoundManager.playReaction()
                             activeIndex = (activeIndex + 1) % count
                         }
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                        .padding(horizontal = 9.dp, vertical = 4.5.dp)
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
-                        // Stacked dual-rectangle icon (Instagram Photo Stack)
-                        Box(modifier = Modifier.size(11.dp)) {
+                        // Stacked dual-rectangle icon (Apple Messages Photo Stack)
+                        Box(modifier = Modifier.size(12.dp)) {
                             Box(
                                 modifier = Modifier
-                                    .size(8.dp)
-                                    .offset(x = 2.dp, y = (-1).dp)
-                                    .border(1.dp, Color.White.copy(alpha = 0.65f), RoundedCornerShape(2.dp))
+                                    .size(9.dp)
+                                    .offset(x = 2.5.dp, y = (-1.5).dp)
+                                    .border(1.dp, Color.White.copy(alpha = 0.65f), RoundedCornerShape(2.5.dp))
                             )
                             Box(
                                 modifier = Modifier
-                                    .size(8.dp)
+                                    .size(9.dp)
                                     .offset(x = 0.dp, y = 2.dp)
                                     .background(Color.Black)
-                                    .border(1.dp, Color.White, RoundedCornerShape(2.dp))
+                                    .border(1.dp, Color.White, RoundedCornerShape(2.5.dp))
                             )
                         }
                         Text(
-                            text = "${activeIndex + 1}/$count",
+                            text = "${activeIndex + 1} of $count",
                             fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.SemiBold,
                             color = Color.White
                         )
                     }
@@ -2801,14 +3600,14 @@ fun MediaStackGrid(
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .padding(top = 10.dp, start = 10.dp)
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(14.dp))
                         .background(Color.Black.copy(alpha = 0.65f))
-                        .border(0.5.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(12.dp))
+                        .border(0.5.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(14.dp))
                         .clickable {
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             viewMode = "grid"
                         }
-                        .padding(horizontal = 7.dp, vertical = 4.dp)
+                        .padding(horizontal = 8.dp, vertical = 4.5.dp)
                 ) {
                     Text(
                         text = "⊞ Grid",
@@ -2818,7 +3617,42 @@ fun MediaStackGrid(
                     )
                 }
 
-                // Bottom-Center: Instagram animated dot indicators (● ○ ○)
+                // Overlay Floating Timestamp Badge (Bottom End)
+                if (isMediaOnly && time.isNotEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(end = 10.dp, bottom = 10.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color.Black.copy(alpha = 0.65f))
+                            .border(0.5.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 7.dp, vertical = 3.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            Text(
+                                text = time,
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color.White
+                            )
+                            if (isOutgoing) {
+                                MessageStatusTick(
+                                    status = status,
+                                    isOutgoing = true,
+                                    normalTint = Color.White.copy(alpha = 0.9f),
+                                    readTint = Color(0xFF38BDF8),
+                                    pendingTint = Color.White.copy(alpha = 0.75f),
+                                    size = 11.dp
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Bottom-Center: Apple Messages dot indicators (● ○ ○)
                 if (count in 2..8) {
                     Row(
                         modifier = Modifier

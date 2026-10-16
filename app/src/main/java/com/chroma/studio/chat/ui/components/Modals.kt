@@ -62,6 +62,7 @@ import com.chroma.studio.chat.data.AccentColorType
 import com.chroma.studio.chat.data.BubbleAnimationStyle
 import com.chroma.studio.chat.data.BubbleStyleType
 import com.chroma.studio.chat.data.ChatConversation
+import com.chroma.studio.chat.data.CoverBannerPreset
 import com.chroma.studio.chat.data.CustomCornerConfig
 import com.chroma.studio.chat.data.GroupMember
 import com.chroma.studio.chat.data.PointyCornerStyle
@@ -86,9 +87,21 @@ fun IosCoverBannerPickerModal(
     val colors = LocalChatColors.current
     var selectedBanner by remember { mutableStateOf(currentBanner) }
     val bannerPresets = remember {
-        WallpaperType.values().filter {
-            it.drawableRes != null && (it.category == "Vibrant Waves" || it.category == "Geometric & Mesh")
-        }
+        listOf(
+            CoverBannerPreset("Midnight Glow", com.chroma.studio.R.drawable.banner_wave_banner_midnight_glow, "Vibrant Waves"),
+            CoverBannerPreset("Coral Sunset", com.chroma.studio.R.drawable.banner_wave_banner_coral_sunset, "Vibrant Waves"),
+            CoverBannerPreset("Electric Blue", com.chroma.studio.R.drawable.banner_wave_banner_electric_blue, "Vibrant Waves"),
+            CoverBannerPreset("Ocean Cyan", com.chroma.studio.R.drawable.banner_wave_banner_ocean_cyan, "Vibrant Waves"),
+            CoverBannerPreset("Emerald Green", com.chroma.studio.R.drawable.banner_wave_banner_emerald_green, "Vibrant Waves"),
+            CoverBannerPreset("Sunset Orange", com.chroma.studio.R.drawable.banner_wave_banner_sunset_orange, "Vibrant Waves"),
+            CoverBannerPreset("Ruby Red", com.chroma.studio.R.drawable.banner_wave_banner_ruby_red, "Vibrant Waves"),
+            CoverBannerPreset("Berry Purple", com.chroma.studio.R.drawable.banner_wave_banner_berry_purple, "Vibrant Waves"),
+            CoverBannerPreset("Cupertino Mesh", com.chroma.studio.R.drawable.banner_cupertino_mesh, "Geometric & Mesh"),
+            CoverBannerPreset("Dark Titanium", com.chroma.studio.R.drawable.banner_dark_titanium, "Geometric & Mesh"),
+            CoverBannerPreset("Cyber Circuit", com.chroma.studio.R.drawable.banner_cyber_circuit, "Geometric & Mesh"),
+            CoverBannerPreset("Minimalist Geometry", com.chroma.studio.R.drawable.banner_minimalist_geometry, "Geometric & Mesh"),
+            CoverBannerPreset("Abstract Waves", com.chroma.studio.R.drawable.banner_abstract_waves, "Geometric & Mesh")
+        )
     }
     var selectedCategory by remember { mutableStateOf("All") }
     val categories = listOf("All", "Vibrant Waves", "Geometric & Mesh")
@@ -204,7 +217,7 @@ fun IosCoverBannerPickerModal(
                             .heightIn(max = 280.dp)
                     ) {
                         items(displayedBanners) { banner ->
-                            val uri = drawableUri(banner.drawableRes!!)
+                            val uri = drawableUri(banner.drawableRes)
                             val isSelected = selectedBanner == uri
                             Box(
                                 modifier = Modifier
@@ -3159,7 +3172,7 @@ fun WallpaperPickerModal(
     var dimmingAlpha by remember { mutableFloatStateOf(currentDimmingAlpha) }
     var selectedCategory by remember { mutableStateOf("All") }
 
-    val categories = listOf("All", "HD Wallpapers", "Vibrant Waves", "Geometric & Mesh", "Patterns", "Gradients", "Clean")
+    val categories = listOf("All", "Devices & OS", "HD Wallpapers", "Nature & Landscapes", "Abstract")
     val allWallpapers = WallpaperType.values().toList()
     val filteredWallpapers = if (selectedCategory == "All") allWallpapers else allWallpapers.filter { it.category == selectedCategory }
 
@@ -3391,19 +3404,12 @@ fun WallpaperPickerModal(
                                 .clip(RoundedCornerShape(6.dp))
                                 .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(6.dp))
                         ) {
-                            if (wp.drawableRes != null) {
-                                Image(
-                                    painter = painterResource(id = wp.drawableRes),
-                                    contentDescription = wp.title,
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
-                            } else {
-                                ChatWallpaperBackground(
-                                    wallpaperType = wp,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            }
+                            Image(
+                                painter = painterResource(id = wp.drawableRes),
+                                contentDescription = wp.title,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
 
                             // Selected Green Check Badge
                             if (isSelected) {

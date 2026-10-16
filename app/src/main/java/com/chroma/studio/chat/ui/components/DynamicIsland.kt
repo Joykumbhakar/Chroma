@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.chroma.studio.chat.sound.SoundManager
 import com.chroma.studio.chat.ui.theme.LocalChatColors
+import kotlinx.coroutines.launch
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -107,11 +108,41 @@ fun DynamicNotchIsland(
 
     val isVisible = activeState != "IDLE"
 
+    // Rubber / Jumps dynamic squash-and-stretch physics
+    val rubberScaleX = remember { Animatable(1f) }
+    val rubberScaleY = remember { Animatable(1f) }
+
+    LaunchedEffect(notification, isExpanded, activeState) {
+        if (isVisible) {
+            // Tactile rubber impulse: starts slightly compressed horizontally, stretched vertically downwards
+            rubberScaleX.snapTo(0.78f)
+            rubberScaleY.snapTo(1.24f)
+            launch {
+                rubberScaleX.animateTo(
+                    targetValue = 1f,
+                    animationSpec = spring(
+                        dampingRatio = 0.52f, // Rubber bounce overshoot
+                        stiffness = Spring.StiffnessMediumLow
+                    )
+                )
+            }
+            launch {
+                rubberScaleY.animateTo(
+                    targetValue = 1f,
+                    animationSpec = spring(
+                        dampingRatio = 0.55f, // Rubber bounce settling
+                        stiffness = Spring.StiffnessMediumLow
+                    )
+                )
+            }
+        }
+    }
+
     // Dynamic Island Shape & Sizing fluid animations
     val cornerRadius by animateDpAsState(
         targetValue = if (isExpanded) 42.dp else 28.dp,
         animationSpec = spring(
-            dampingRatio = 0.68f,
+            dampingRatio = 0.56f,
             stiffness = Spring.StiffnessMediumLow
         ),
         label = "islandCornerRadius"
@@ -119,25 +150,25 @@ fun DynamicNotchIsland(
 
     AnimatedVisibility(
         visible = isVisible,
-        enter = fadeIn(animationSpec = tween(220)) +
+        enter = fadeIn(animationSpec = tween(150)) +
                 scaleIn(
-                    initialScale = 0.25f,
+                    initialScale = 0.30f,
                     transformOrigin = TransformOrigin(0.5f, 0f),
-                    animationSpec = spring(dampingRatio = 0.68f, stiffness = Spring.StiffnessMediumLow)
+                    animationSpec = spring(dampingRatio = 0.54f, stiffness = Spring.StiffnessMediumLow)
                 ) +
                 slideInVertically(
-                    initialOffsetY = { -it / 2 },
-                    animationSpec = spring(dampingRatio = 0.68f, stiffness = Spring.StiffnessMediumLow)
+                    initialOffsetY = { -it },
+                    animationSpec = spring(dampingRatio = 0.56f, stiffness = Spring.StiffnessMediumLow)
                 ),
-        exit = fadeOut(animationSpec = tween(180)) +
+        exit = fadeOut(animationSpec = tween(140)) +
                scaleOut(
-                   targetScale = 0.2f,
+                   targetScale = 0.25f,
                    transformOrigin = TransformOrigin(0.5f, 0f),
-                   animationSpec = tween(200, easing = FastOutSlowInEasing)
+                   animationSpec = tween(160, easing = FastOutSlowInEasing)
                ) +
                slideOutVertically(
-                   targetOffsetY = { -it / 2 },
-                   animationSpec = tween(200, easing = FastOutSlowInEasing)
+                   targetOffsetY = { -it },
+                   animationSpec = tween(160, easing = FastOutSlowInEasing)
                ),
         modifier = modifier
             .fillMaxWidth()
@@ -152,9 +183,14 @@ fun DynamicNotchIsland(
 
             Box(
                 modifier = Modifier
+                    .graphicsLayer {
+                        scaleX = rubberScaleX.value
+                        scaleY = rubberScaleY.value
+                        transformOrigin = TransformOrigin(0.5f, 0f)
+                    }
                     .animateContentSize(
                         animationSpec = spring(
-                            dampingRatio = 0.68f,
+                            dampingRatio = 0.54f,
                             stiffness = Spring.StiffnessMediumLow
                         )
                     )
