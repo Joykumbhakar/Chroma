@@ -39,6 +39,8 @@ import com.chroma.studio.model.ChromaWork
 import com.chroma.studio.ui.components.CanvasPreview
 import com.chroma.studio.ui.components.ChromaScreenHeader
 import com.chroma.studio.ui.components.glossyBorder
+import com.chroma.studio.ui.components.AppleTrashBinIcon
+import com.chroma.studio.ui.components.rememberAppleTrashState
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.composables.icons.lucide.*
 import kotlinx.coroutines.delay
@@ -124,6 +126,7 @@ fun TrashScreen(
                 },
                 badgeText = null, // No pill badge - clean text used in title
                 showBackButton = true,
+                circularBackButton = false,
                 onBack = {
                     if (selectionMode) onClearSelection() else onBack()
                 },
@@ -233,6 +236,7 @@ fun TrashScreen(
                 .padding(padding)
         ) {
             if (deletedWorks.isEmpty()) {
+                val emptyTrashState = rememberAppleTrashState()
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -240,17 +244,16 @@ fun TrashScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    Icon(
-                        imageVector = Lucide.Trash2,
-                        contentDescription = null,
-                        modifier = Modifier.size(46.dp),
-                        tint = colors.textMuted.copy(alpha = 0.55f)
+                    AppleTrashBinIcon(
+                        modifier = Modifier.size(175.dp),
+                        state = emptyTrashState,
+                        enableClickToAnimate = true
                     )
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(18.dp))
                     Text(
                         text = "Trash is Empty",
                         color = colors.textMain,
-                        fontSize = 18.sp,
+                        fontSize = 19.sp,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = (-0.3).sp
                     )
@@ -358,6 +361,10 @@ fun TrashScreen(
     }
 
     if (showEmptyTrashDialog) {
+        val emptyDialogTrashState = rememberAppleTrashState()
+        LaunchedEffect(Unit) {
+            emptyDialogTrashState.triggerEmptyShake()
+        }
         com.chroma.studio.ui.components.IosAlertDialog(
             title = "Empty Trash",
             message = "Are you sure you want to permanently delete all ${deletedWorks.size} items in Trash?\nThis action cannot be undone.",
@@ -374,7 +381,19 @@ fun TrashScreen(
             },
             dismissText = "Cancel",
             onDismiss = { showEmptyTrashDialog = false },
-            isDestructive = true
+            isDestructive = true,
+            customContent = {
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    AppleTrashBinIcon(
+                        modifier = Modifier.size(96.dp),
+                        state = emptyDialogTrashState,
+                        enableClickToAnimate = true
+                    )
+                }
+            }
         )
     }
 }
@@ -644,6 +663,10 @@ fun DeleteConfirmationDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val deleteDialogTrashState = rememberAppleTrashState()
+    LaunchedEffect(Unit) {
+        deleteDialogTrashState.triggerDeleteAnimation()
+    }
     com.chroma.studio.ui.components.IosAlertDialog(
         title = "Delete Permanently",
         message = "Are you sure you want to permanently delete ${if (count == 1) "this work" else "these $count works"}?\nThis action cannot be undone.",
@@ -651,6 +674,18 @@ fun DeleteConfirmationDialog(
         onConfirm = onConfirm,
         dismissText = "Cancel",
         onDismiss = onDismiss,
-        isDestructive = true
+        isDestructive = true,
+        customContent = {
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                AppleTrashBinIcon(
+                    modifier = Modifier.size(86.dp),
+                    state = deleteDialogTrashState,
+                    enableClickToAnimate = true
+                )
+            }
+        }
     )
 }

@@ -75,3 +75,8 @@ fun OscellionTheme(darkTheme: Boolean, content: @Composable () -> Unit) {
 // wire them up here to get pixel-identical typography. Falls back to system sans/mono.
 val InterFontFamily = FontFamily.SansSerif
 val MonoFontFamily = FontFamily.Monospace
+
+val TheSignatureFontFamily = FontFamily(
+    Font(com.chroma.studio.R.font.thesignature, FontWeight.Normal),
+    Font(com.chroma.studio.R.font.thesignature, FontWeight.Bold)
+)

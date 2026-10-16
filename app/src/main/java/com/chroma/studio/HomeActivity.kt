@@ -737,6 +737,7 @@ class HomeActivity : ComponentActivity() {
                                         works = vm.works,
                                         selectedWorkIds = vm.selectedWorkIds,
                                         selectionMode = vm.selectionMode,
+                                        isLoading = vm.isLoadingWorks,
                                         isDarkMode = vm.isDarkMode,
                                         isVerified = vm.isCurrentUserVerified,
                                         initialViewMode = initialViewMode,

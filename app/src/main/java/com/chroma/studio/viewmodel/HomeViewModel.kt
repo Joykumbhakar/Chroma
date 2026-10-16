@@ -28,6 +28,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     var selectedWorkIds by mutableStateOf<Set<String>>(emptySet())
         private set
 
+    var isLoadingWorks by mutableStateOf(true)
+        private set
+
     val selectionMode: Boolean
         get() = derivedStateOf { selectedWorkIds.isNotEmpty() }.value
 
@@ -78,9 +81,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun refresh() {
+        isLoadingWorks = true
         viewModelScope.launch(Dispatchers.IO) {
             val active = repository.loadActiveWorks()
             val deleted = repository.loadDeletedWorks()
+            kotlinx.coroutines.delay(200)
             
             val prefs = getApplication<Application>().getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
             val customLayers = prefs.getString("custom_home_background_layers", null)
@@ -113,6 +118,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 customHomeBgLayersJson = customLayers
                 customHomeBgShape = customShape
+                isLoadingWorks = false
             }
         }
     }

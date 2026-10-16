@@ -32,6 +32,7 @@ fun ChromaScreenHeader(
     badgeText: String? = null,
     badgeColor: Color = Color(0xFF007AFF),
     showBackButton: Boolean = false,
+    circularBackButton: Boolean = true,
     onBack: (() -> Unit)? = null,
     isSearchExpanded: Boolean = false,
     searchContent: (@Composable () -> Unit)? = null,
@@ -66,8 +67,15 @@ fun ChromaScreenHeader(
                             modifier = Modifier
                                 .size(36.dp)
                                 .clip(CircleShape)
-                                .background(colors.glassBgHover)
-                                .border(1.dp, colors.glassBorder, CircleShape)
+                                .then(
+                                    if (circularBackButton) {
+                                        Modifier
+                                            .background(colors.glassBgHover)
+                                            .border(1.dp, colors.glassBorder, CircleShape)
+                                    } else {
+                                        Modifier
+                                    }
+                                )
                                 .clickable { onBack() },
                             contentAlignment = Alignment.Center
                         ) {
@@ -75,7 +83,7 @@ fun ChromaScreenHeader(
                                 imageVector = Lucide.ChevronLeft,
                                 contentDescription = "Back",
                                 tint = colors.textMain,
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(if (circularBackButton) 20.dp else 22.dp)
                             )
                         }
                     }

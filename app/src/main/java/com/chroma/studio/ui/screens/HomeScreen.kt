@@ -2,9 +2,13 @@ package com.chroma.studio.ui.screens
 import com.chroma.studio.ui.components.GlassIconButton
 import com.chroma.studio.ui.components.GlassButton
 import com.chroma.studio.ui.components.IosAlertDialog
+import com.chroma.studio.ui.components.SynchronizedRotatingActionMenu
+import com.chroma.studio.ui.components.ActionMenuType
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.text.TextStyle
 import com.chroma.studio.ui.theme.InterFontFamily
+import com.chroma.studio.ui.theme.TheSignatureFontFamily
+import androidx.compose.ui.text.style.TextAlign
 
 import android.os.Build
 import androidx.annotation.RequiresApi
@@ -19,6 +23,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.platform.LocalDensity
+import kotlin.math.roundToInt
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.snapshots.Snapshot
@@ -139,6 +146,7 @@ fun HomeScreen(
     works: List<ChromaWork>,
     selectedWorkIds: Set<String>,
     selectionMode: Boolean,
+    isLoading: Boolean = false,
     isDarkMode: Boolean,
     initialViewMode: ViewMode,
     onToggleDarkMode: () -> Unit,
@@ -793,7 +801,9 @@ fun HomeScreen(
                             }
                         }
                         // â”€â”€ Work grid â”€â”€
-                if (works.isEmpty()) {
+                if (isLoading && works.isEmpty()) {
+                    HomeSkeletonGrid(viewMode = viewMode, isDarkMode = isDarkMode)
+                } else if (works.isEmpty()) {
                     EmptyState(
                         onNewWork = onNewWork,
                         onCreateClick = { showCreatePostMenu = true }
@@ -816,7 +826,7 @@ fun HomeScreen(
                     LazyVerticalGrid(
                         columns = gridColumns,
                         state = gridState,
-                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 100.dp),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 180.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier
@@ -912,52 +922,105 @@ fun HomeScreen(
             }
         }
     }
-}
-}
-    
-if (showCreatePostMenu) {
-        CreatePostMenuSheet(
-            onDismiss = { showCreatePostMenu = false },
-            onCreateGradient = {
-                showCreatePostMenu = false
-                onNewWork()
-            },
-            onCreatePost = {
-                showCreatePostMenu = false
-                if (FirebaseAuth.getInstance().currentUser != null) {
-                    onNavigateToCreatePost?.invoke()
-                } else {
-                    showLoginScreen = true
-                }
-            },
-            onCreateFlash = {
-                showCreatePostMenu = false
-                if (FirebaseAuth.getInstance().currentUser != null) {
-                    onNavigateToFlashPicker?.invoke()
-                } else {
-                    showLoginScreen = true
-                }
-            },
-            onCreateStory = {
-                showCreatePostMenu = false
-                if (FirebaseAuth.getInstance().currentUser != null) {
-                    onNavigateToCreateTextStatus?.invoke()
-                } else {
-                    showLoginScreen = true
-                }
-            },
-            onCreateAIGenerate = {
-                showCreatePostMenu = false
-                if (FirebaseAuth.getInstance().currentUser != null) {
-                    val intent = Intent(context, MainActivity::class.java).apply {
-                        putExtra("EXTRA_START_AI_GENERATOR", true)
-                    }
-                    context.startActivity(intent)
-                } else {
-                    showLoginScreen = true
+            
+            // ── Synchronized Rotating Action Menu ──
+            val shouldShowPlusButton = !selectionMode && !isLoading && works.isEmpty()
+
+            if (showCreatePostMenu) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(Unit) {
+                            detectTapGestures { showCreatePostMenu = false }
+                        }
+                )
+                androidx.activity.compose.BackHandler {
+                    showCreatePostMenu = false
                 }
             }
-        )
+
+            AnimatedVisibility(
+                visible = shouldShowPlusButton || showCreatePostMenu,
+                enter = scaleIn(spring(stiffness = Spring.StiffnessMediumLow)) + fadeIn(),
+                exit = scaleOut(spring(stiffness = Spring.StiffnessMediumLow)) + fadeOut(),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(bottom = 98.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    SynchronizedRotatingActionMenu(
+                        isOpen = showCreatePostMenu,
+                        onToggle = { showCreatePostMenu = !showCreatePostMenu },
+                        onClose = { showCreatePostMenu = false },
+                        onActionSelected = { actionType ->
+                            showCreatePostMenu = false
+                            when (actionType) {
+                                ActionMenuType.GRADIENTS -> {
+                                    onNewWork()
+                                }
+                                ActionMenuType.POST -> {
+                                    if (FirebaseAuth.getInstance().currentUser != null) {
+                                        onNavigateToCreatePost?.invoke()
+                                    } else {
+                                        showLoginScreen = true
+                                    }
+                                }
+                                ActionMenuType.VIDEO -> {
+                                    if (FirebaseAuth.getInstance().currentUser != null) {
+                                        onNavigateToFlashPicker?.invoke()
+                                    } else {
+                                        showLoginScreen = true
+                                    }
+                                }
+                                ActionMenuType.STORY -> {
+                                    if (FirebaseAuth.getInstance().currentUser != null) {
+                                        onNavigateToCreateTextStatus?.invoke()
+                                    } else {
+                                        showLoginScreen = true
+                                    }
+                                }
+                                ActionMenuType.AI_GENERATOR -> {
+                                    if (FirebaseAuth.getInstance().currentUser != null) {
+                                        val intent = Intent(context, MainActivity::class.java).apply {
+                                            putExtra("EXTRA_START_AI_GENERATOR", true)
+                                        }
+                                        context.startActivity(intent)
+                                    } else {
+                                        showLoginScreen = true
+                                    }
+                                }
+                            }
+                        }
+                    )
+
+                    // "Create" with Bold text using Thesignature.otf above the plus button (empty state only)
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = shouldShowPlusButton && !showCreatePostMenu,
+                        enter = fadeIn(tween(250)),
+                        exit = fadeOut(tween(180)),
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .offset(y = (-56).dp)
+                    ) {
+                        Text(
+                            text = "Create",
+                            color = colors.textMain,
+                            fontFamily = TheSignatureFontFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 38.sp,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) {
+                                showCreatePostMenu = true
+                            }
+                        )
+                    }
+                }
+            }
+        }
     }
 
     if (showViewModeSheet) {
@@ -969,6 +1032,334 @@ if (showCreatePostMenu) {
             },
             onDismiss = { showViewModeSheet = false }
         )
+    }
+}
+
+@Composable
+fun HomeSkeletonGrid(
+    viewMode: ViewMode,
+    isDarkMode: Boolean
+) {
+    val transition = rememberInfiniteTransition(label = "home_skeleton")
+    val translateAnim by transition.animateFloat(
+        initialValue = -400f,
+        targetValue = 1600f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1300, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "shimmer_offset"
+    )
+
+    val shimmerColors = if (isDarkMode) {
+        listOf(
+            Color(0xFF22232C).copy(alpha = 0.5f),
+            Color(0xFF383A49).copy(alpha = 0.9f),
+            Color(0xFF22232C).copy(alpha = 0.5f)
+        )
+    } else {
+        listOf(
+            Color(0xFFE2E8F0).copy(alpha = 0.6f),
+            Color(0xFFF8FAFC).copy(alpha = 0.95f),
+            Color(0xFFE2E8F0).copy(alpha = 0.6f)
+        )
+    }
+
+    val shimmerBrush = Brush.linearGradient(
+        colors = shimmerColors,
+        start = Offset(translateAnim - 400f, translateAnim - 400f),
+        end = Offset(translateAnim, translateAnim)
+    )
+
+    val gridColumns = when (viewMode) {
+        ViewMode.LIST, ViewMode.LIST_DETAILS -> GridCells.Fixed(1)
+        ViewMode.GRID, ViewMode.GRID_DETAILS -> GridCells.Fixed(2)
+    }
+
+    val itemCount = when (viewMode) {
+        ViewMode.LIST, ViewMode.LIST_DETAILS -> 7
+        ViewMode.GRID, ViewMode.GRID_DETAILS -> 6
+    }
+
+    LazyVerticalGrid(
+        columns = gridColumns,
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 180.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.fillMaxSize(),
+        userScrollEnabled = false
+    ) {
+        items(itemCount) {
+            SkeletonWorkCard(
+                viewMode = viewMode,
+                shimmerBrush = shimmerBrush
+            )
+        }
+    }
+}
+
+@Composable
+fun SkeletonWorkCard(
+    viewMode: ViewMode,
+    shimmerBrush: Brush
+) {
+    val colors = LocalOscellionColors.current
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(
+                elevation = 2.dp,
+                shape = RoundedCornerShape(18.dp),
+                ambientColor = Color(0x10000000),
+                spotColor = Color(0x18000000)
+            )
+            .clip(RoundedCornerShape(18.dp))
+            .glossyBorder(RoundedCornerShape(18.dp), colors)
+            .background(colors.glassBg)
+    ) {
+        when (viewMode) {
+            ViewMode.GRID -> {
+                Column {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(1.22f)
+                            .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp))
+                            .background(shimmerBrush)
+                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(0.68f)
+                                    .height(15.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(shimmerBrush)
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clip(CircleShape)
+                                    .background(shimmerBrush)
+                            )
+                        }
+                        Spacer(Modifier.height(7.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(11.dp)
+                                    .clip(CircleShape)
+                                    .background(shimmerBrush)
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .width(64.dp)
+                                    .height(10.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(shimmerBrush)
+                            )
+                        }
+                    }
+                }
+            }
+
+            ViewMode.GRID_DETAILS -> {
+                Column {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(1.22f)
+                            .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp))
+                            .background(shimmerBrush)
+                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(0.68f)
+                                    .height(15.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(shimmerBrush)
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clip(CircleShape)
+                                    .background(shimmerBrush)
+                            )
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(0.92f)
+                                .height(11.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(shimmerBrush)
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(0.55f)
+                                .height(11.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(shimmerBrush)
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .width(44.dp)
+                                    .height(16.dp)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(shimmerBrush)
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .width(55.dp)
+                                    .height(10.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(shimmerBrush)
+                            )
+                        }
+                    }
+                }
+            }
+
+            ViewMode.LIST -> {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .clip(RoundedCornerShape(13.dp))
+                            .background(shimmerBrush)
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(0.58f)
+                                .height(15.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(shimmerBrush)
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(0.38f)
+                                .height(11.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(shimmerBrush)
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .clip(CircleShape)
+                            .background(shimmerBrush)
+                    )
+                }
+            }
+
+            ViewMode.LIST_DETAILS -> {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(76.dp)
+                            .clip(RoundedCornerShape(15.dp))
+                            .background(shimmerBrush)
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(0.6f)
+                                    .height(15.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(shimmerBrush)
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clip(CircleShape)
+                                    .background(shimmerBrush)
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(0.85f)
+                                .height(11.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(shimmerBrush)
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .width(42.dp)
+                                    .height(15.dp)
+                                    .clip(RoundedCornerShape(5.dp))
+                                    .background(shimmerBrush)
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .width(60.dp)
+                                    .height(10.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(shimmerBrush)
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -1593,175 +1984,15 @@ fun RenameDialog(
     )
 }
 
-private const val EMPTY_STATE_PLUS_LAYER_JSON = """[{"activeBlobIdx":0,"angle":90.0,"animIntensity":50.0,"animSpeed":50.0,"animated":false,"blendMode":"NORMAL","blobBgColor":-72057594037927936,"blobs":[{"feather":100.0,"height":40.0,"opacity":1.0,"rotation":0.0,"width":40.0,"x":25.0,"y":40.0},{"feather":100.0,"height":40.0,"opacity":1.0,"rotation":0.0,"width":40.0,"x":75.0,"y":60.0}],"brightness":50.0,"centerX":50.0,"centerY":50.0,"columns":3,"complexity":50.609756,"expanded":true,"feather":100.0,"hasBaseBackground":false,"height":70.0,"id":"b770567f-6c0e-4184-b420-7e2bc05cda73","meshPoints":[{"packedValue":4744666964463242507},{"packedValue":4798022454124478464}],"name":"Layer 2","opacity":1.0,"repeatPattern":false,"rows":3,"stops":[{"color":-4445291151360,"id":"5b568c1e-1572-4937-bbec-d0e217918156","position":0.0},{"color":-53699048388952064,"id":"67b73e9b-ca3f-4ccf-b663-0329095d9f57","position":100.0},{"color":-15579774822907904,"id":"418f51d7-235d-4990-9dc6-c5ad11d80186","position":50.0},{"color":-5933282571059200,"id":"1ead79c1-5bb3-45d1-92cd-d0071488eaa3","position":70.84309},{"color":-42438949808898048,"id":"55066126-b643-4ae3-b00b-92130349607b","position":30.093676},{"color":-23568031741378560,"id":"4687e55a-c0d9-492c-ae01-1445945dd886","position":84.66042},{"color":-75466870358016,"id":"aba0afa5-0acd-4bf3-bb01-baf0c2703746","position":15.105386},{"color":-44412573180755968,"id":"92f555c9-d3de-4713-b76c-b4a62a6cac75","position":62.177986},{"color":-47518693529223168,"id":"f10f3e5d-034f-470c-a9e4-a98d155d18d3","position":39.34426},{"color":-106257490903040,"id":"4933870b-5fde-4934-a108-e07cc781df79","position":23.302109},{"color":-2301651499089920,"id":"40a29fd5-e96c-461d-9ce6-9b3a19eafd17","position":78.92272},{"color":-55370718380032,"id":"dd6210e3-344f-4b17-b880-284852a7ee9d","position":92.27166},{"color":-189115999977472,"id":"f2e66f12-96f5-4db7-9a70-104927900cb0","position":5.503513}],"type":"AURORA","visible":true,"waveSpeed":50.0,"width":70.0}]"""
-
 @Composable
 fun EmptyState(
     onNewWork: () -> Unit,
     onCreateClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val colors = LocalOscellionColors.current
-    val haptic = LocalHapticFeedback.current
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.92f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
-        ),
-        label = "emptyStatePlusScale"
-    )
-
-    val auroraStops = remember {
-        arrayOf(
-            0.000000f to Color(0xFFFFFBF5),
-            0.055035f to Color(0xFFFF5400),
-            0.151054f to Color(0xFFFFBB5D),
-            0.233021f to Color(0xFFFF9F5C),
-            0.300937f to Color(0xFF693A00),
-            0.393443f to Color(0xFF572E00),
-            0.500000f to Color(0xFFC8A647),
-            0.621780f to Color(0xFF623700),
-            0.708431f to Color(0xFFEAEBB6),
-            0.789227f to Color(0xFFF7D2A9),
-            0.846604f to Color(0xFFAC4500),
-            0.922717f to Color(0xFFFFCDA4),
-            1.000000f to Color(0xFF413900)
-        )
-    }
-
-    val auroraBrush = remember(auroraStops) {
-        Brush.verticalGradient(colorStops = auroraStops)
-    }
-
-    val emptyStateLayers = remember {
-        try {
-            com.chroma.studio.data.chromaGson.fromJson<List<com.chroma.studio.model.GradientLayer>>(
-                EMPTY_STATE_PLUS_LAYER_JSON,
-                object : com.google.gson.reflect.TypeToken<List<com.chroma.studio.model.GradientLayer>>() {}.type
-            ) ?: emptyList()
-        } catch (_: Exception) {
-            emptyList()
-        }
-    }
-
     Box(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = 24.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            // Plus Icon Button with Aurora Properties (70.dp Circle)
-            Box(
-                modifier = Modifier
-                    .size(70.dp)
-                    .graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-                    }
-                    .shadow(
-                        elevation = 16.dp,
-                        shape = CircleShape,
-                        ambientColor = Color(0xFFFF5400).copy(alpha = 0.45f),
-                        spotColor = Color(0xFFC8A647).copy(alpha = 0.50f)
-                    )
-                    .clip(CircleShape)
-                    .clickable(
-                        interactionSource = interactionSource,
-                        indication = null
-                    ) {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onCreateClick?.invoke() ?: onNewWork()
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                if (emptyStateLayers.isNotEmpty()) {
-                    CanvasPreview(
-                        layers = emptyStateLayers,
-                        shape = "circle",
-                        borderColor = Color.Transparent,
-                        animStatus = com.chroma.studio.model.AnimStatus.PLAYING,
-                        animSpeed = 50f,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    Box(modifier = Modifier.fillMaxSize().background(auroraBrush))
-                }
-
-                // Luxury specular glass overlay
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(CircleShape)
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(
-                                    Color.White.copy(alpha = 0.25f),
-                                    Color.White.copy(alpha = 0.04f),
-                                    Color.Transparent
-                                )
-                            )
-                        )
-                        .border(
-                            width = 1.dp,
-                            brush = Brush.verticalGradient(
-                                listOf(
-                                    Color.White.copy(alpha = 0.50f),
-                                    Color.White.copy(alpha = 0.12f)
-                                )
-                            ),
-                            shape = CircleShape
-                        )
-                )
-
-                // Crisp Plus Icon
-                Icon(
-                    imageVector = Lucide.Plus,
-                    contentDescription = "Create",
-                    tint = Color.White,
-                    modifier = Modifier.size(28.dp)
-                )
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            // Heading: Create
-            Text(
-                text = "Create",
-                color = colors.textMain,
-                fontSize = 19.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = InterFontFamily,
-                letterSpacing = (-0.3).sp,
-                modifier = Modifier.clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onCreateClick?.invoke() ?: onNewWork()
-                }
-            )
-
-            Spacer(Modifier.height(3.dp))
-
-            // Paragraph: Create new Work/Post/Edit anything
-            Text(
-                text = "Create new Work/Post/Edit anything",
-                color = colors.textMuted,
-                fontSize = 13.5.sp,
-                fontWeight = FontWeight.Medium,
-                fontFamily = InterFontFamily,
-                letterSpacing = (-0.1).sp
-            )
-        }
-    }
+        modifier = modifier.fillMaxSize()
+    )
 }
 
 @Composable
@@ -1810,171 +2041,6 @@ const val DEFAULT_HOME_BG_JSON = """[{"activeBlobIdx":0,"angle":180.0,"animInten
 
 const val GENERATE_BUTTON_BG_JSON = """[{"activeBlobIdx":0,"angle":90.0,"animIntensity":50.0,"animSpeed":50.0,"animated":false,"blendMode":"NORMAL","blobBgColor":-72057594037927936,"blobs":[{"feather":100.0,"height":40.0,"opacity":1.0,"rotation":0.0,"width":40.0,"x":25.0,"y":40.0},{"feather":100.0,"height":40.0,"opacity":1.0,"rotation":0.0,"width":40.0,"x":75.0,"y":60.0}],"brightness":50.0,"centerX":50.0,"centerY":50.0,"columns":3,"complexity":50.0,"expanded":false,"feather":100.0,"hasBaseBackground":false,"height":70.0,"id":"8d6b1d6b-0f10-418d-b692-a24b1cf4bd4c","meshPoints":[{"x":25.0,"y":40.0},{"x":75.0,"y":60.0}],"name":"Mix 1","opacity":1.0,"repeatPattern":false,"rows":3,"stops":[{"color":-32270670570192896,"id":"32dfc511-7164-47ee-b9ba-b6222e6e3d7c","position":0.0},{"color":-46085162294837248,"id":"e0d2d1bf-369e-4971-b6d1-aa64622043ba","position":50.0},{"color":-59921781690990592,"id":"6df8758d-6b95-4422-8695-d58b2a393f36","position":100.0}],"type":"AURORA","visible":true,"waveSpeed":50.0,"width":70.0},{"activeBlobIdx":0,"angle":90.0,"animIntensity":50.0,"animSpeed":50.0,"animated":false,"blendMode":"OVERLAY","blobBgColor":-72057594037927936,"blobs":[{"feather":100.0,"height":40.0,"opacity":1.0,"rotation":0.0,"width":40.0,"x":25.0,"y":40.0},{"feather":100.0,"height":40.0,"opacity":1.0,"rotation":0.0,"width":40.0,"x":75.0,"y":60.0}],"brightness":50.0,"centerX":50.0,"centerY":50.0,"columns":3,"complexity":50.0,"expanded":false,"feather":100.0,"hasBaseBackground":false,"height":70.0,"id":"3ebfc43c-55b6-4048-b9b1-523c9bfc9224","meshPoints":[{"x":25.0,"y":40.0},{"x":75.0,"y":60.0}],"name":"Mix 2","opacity":1.0,"repeatPattern":false,"rows":3,"stops":[{"color":-5427193689669632,"id":"c4af048b-7fb4-4077-85ea-f86b3ea51464","position":0.0},{"color":-53438807730552832,"id":"53c0a0c8-d5c3-4768-887d-c096f73cb321","position":50.0},{"color":-63596465515134976,"id":"f7686eb6-d4f6-44b9-9fa9-9dce22365bbc","position":100.0}],"type":"RADIAL","visible":true,"waveSpeed":50.0,"width":70.0}]"""
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun CreatePostMenuSheet(
-    onDismiss: () -> Unit,
-    onCreateGradient: () -> Unit,
-    onCreatePost: () -> Unit,
-    onCreateFlash: () -> Unit,
-    onCreateStory: () -> Unit,
-    onCreateAIGenerate: () -> Unit
-) {
-    val colors = LocalOscellionColors.current
-    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
-    
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = if (isDark) Color(0xFF1C1C1E) else Color(0xFFF2F2F7),
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        dragHandle = {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 10.dp, bottom = 6.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Box(
-                    modifier = Modifier
-                        .width(36.dp)
-                        .height(4.dp)
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(if (isDark) Color.White.copy(alpha = 0.25f) else Color.Black.copy(alpha = 0.2f))
-                )
-            }
-        }
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = "Create New",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (isDark) Color.White else Color.Black
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = "Choose what type of content to create or share",
-                fontSize = 13.sp,
-                color = Color(0xFF8E8E93),
-                fontWeight = FontWeight.Normal
-            )
-            
-            Spacer(Modifier.height(20.dp))
-            
-            // Cupertino Inset Grouped Container
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(if (isDark) Color(0xFF2C2C2E) else Color.White)
-                    .border(
-                        0.5.dp,
-                        if (isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.08f),
-                        RoundedCornerShape(18.dp)
-                    )
-            ) {
-                CreateOptionRow(
-                    icon = Lucide.Palette,
-                    iconGradient = listOf(Color(0xFF007AFF), Color(0xFF5AC8FA)),
-                    title = "New Gradient Canvas",
-                    subtitle = "Design procedural mesh gradient artwork",
-                    onClick = onCreateGradient
-                )
-                
-                HorizontalDivider(
-                    modifier = Modifier.padding(start = 64.dp),
-                    color = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f),
-                    thickness = 0.5.dp
-                )
-                
-                CreateOptionRow(
-                    icon = Lucide.Image,
-                    iconGradient = listOf(Color(0xFF5856D6), Color(0xFFAF52DE)),
-                    title = "Community Post",
-                    subtitle = "Share images or artwork with captions & tags",
-                    onClick = onCreatePost
-                )
-                
-                HorizontalDivider(
-                    modifier = Modifier.padding(start = 64.dp),
-                    color = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f),
-                    thickness = 0.5.dp
-                )
-                
-                CreateOptionRow(
-                    icon = Lucide.Film,
-                    iconGradient = listOf(Color(0xFFFF9500), Color(0xFFFF3B30)),
-                    title = "Flash / Reel Video",
-                    subtitle = "Record or upload short-form video reels",
-                    onClick = onCreateFlash
-                )
-                
-                HorizontalDivider(
-                    modifier = Modifier.padding(start = 64.dp),
-                    color = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f),
-                    thickness = 0.5.dp
-                )
-                
-                CreateOptionRow(
-                    icon = Lucide.Type,
-                    iconGradient = listOf(Color(0xFF34C759), Color(0xFF30B0C7)),
-                    title = "Story / Text Status",
-                    subtitle = "Publish formatted 24-hour typography status",
-                    onClick = onCreateStory
-                )
-                
-                HorizontalDivider(
-                    modifier = Modifier.padding(start = 64.dp),
-                    color = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f),
-                    thickness = 0.5.dp
-                )
-                
-                CreateOptionRow(
-                    icon = Lucide.Sparkles,
-                    iconGradient = listOf(Color(0xFF0A84FF), Color(0xFF64D2FF)),
-                    title = "AI Magic Generator",
-                    subtitle = "Synthesize unique gradients via prompt AI",
-                    badge = "AI",
-                    onClick = onCreateAIGenerate
-                )
-            }
-            
-            Spacer(Modifier.height(18.dp))
-            
-            // Apple Action Sheet Cancel Button
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(if (isDark) Color(0xFF2C2C2E) else Color.White)
-                    .border(
-                        0.5.dp,
-                        if (isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.08f),
-                        RoundedCornerShape(16.dp)
-                    )
-                    .clickable { onDismiss() },
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "Cancel",
-                    color = Color(0xFF007AFF),
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-            
-            Spacer(Modifier.height(12.dp))
-        }
-    }
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
