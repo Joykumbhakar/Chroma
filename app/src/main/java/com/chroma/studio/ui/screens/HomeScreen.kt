@@ -704,29 +704,91 @@ fun HomeScreen(
                 ) {
                     Column(modifier = Modifier.fillMaxSize().padding(top = 126.dp)) {
                         // â”€â”€ Contextual Action Bar for Selection Mode â”€â”€
-                        if (selectionMode) {
+                        AnimatedVisibility(
+                            visible = selectionMode,
+                            enter = fadeIn() + expandVertically(),
+                            exit = fadeOut() + shrinkVertically()
+                        ) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .background(colors.primary)
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                    .padding(horizontal = 16.dp, vertical = 6.dp)
+                                    .shadow(elevation = 8.dp, shape = RoundedCornerShape(18.dp), ambientColor = Color(0x33007AFF), spotColor = Color(0x4D007AFF))
+                                    .clip(RoundedCornerShape(18.dp))
+                                    .background(
+                                        Brush.horizontalGradient(
+                                            listOf(Color(0xFF007AFF), Color(0xFF0056D2))
+                                        )
+                                    )
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    GlassIconButton(onClick = onClearSelection) {
-                                        Icon(Lucide.X, "Cancel", tint = Color.White)
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(CircleShape)
+                                            .background(Color.White.copy(alpha = 0.22f))
+                                            .clickable { onClearSelection() },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Lucide.X,
+                                            contentDescription = "Cancel",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(18.dp)
+                                        )
                                     }
-                                    Spacer(Modifier.width(8.dp))
                                     Text(
-                                        "${selectedWorkIds.size} Selected",
+                                        text = "${selectedWorkIds.size} Selected",
                                         color = Color.White,
-                                        fontSize = 18.sp,
-                                        fontWeight = FontWeight.SemiBold
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = InterFontFamily
                                     )
                                 }
-                                GlassIconButton(onClick = onDeleteSelected) {
-                                    Icon(Lucide.Trash2, "Delete Selected", tint = Color.White)
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    val allSelected = filteredWorks.isNotEmpty() && selectedWorkIds.size >= filteredWorks.size
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(CircleShape)
+                                            .background(if (allSelected) Color.White.copy(alpha = 0.35f) else Color.White.copy(alpha = 0.20f))
+                                            .clickable {
+                                                if (allSelected) onClearSelection()
+                                                else onUpdateSelection(filteredWorks.map { it.id }.toSet())
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Lucide.CheckCheck,
+                                            contentDescription = if (allSelected) "Deselect All" else "Select All",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFFFF3B30))
+                                            .clickable { onDeleteSelected() },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Lucide.Trash2,
+                                            contentDescription = "Delete Selected",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -831,6 +893,7 @@ fun HomeScreen(
                                     if (selectionMode) onToggleSelection(work.id) 
                                     else onOpenWork(work) 
                                 },
+                                onLongClick = { onToggleSelection(work.id) },
                                 onRename = { name, desc -> onRenameWork(work.id, name, desc) },
                                 onDuplicate = { onDuplicateWork(work) },
                                 onSoftDelete = { onSoftDelete(work.id) },
@@ -918,6 +981,7 @@ fun WorkCard(
     viewMode: ViewMode,
     repository: WorkRepository,
     onClick: () -> Unit,
+    onLongClick: () -> Unit = {},
     onRename: (String, String) -> Unit,
     onDuplicate: () -> Unit,
     onSoftDelete: () -> Unit,
@@ -949,7 +1013,13 @@ fun WorkCard(
             .glossyBorder(RoundedCornerShape(18.dp), colors)
             .border(borderWidth, borderColor, RoundedCornerShape(18.dp))
             .background(colors.glassBg)
-            .clickable(onClick = onClick)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onLongClick()
+                }
+            )
     ) {
         @Composable
         fun ActionMenu() {
