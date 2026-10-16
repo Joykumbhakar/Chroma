@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -68,6 +67,22 @@ fun TrashScreen(
     var deletingWorkIds by remember { mutableStateOf(emptySet<String>()) }
     val coroutineScope = rememberCoroutineScope()
 
+    val buttonCorner = RoundedCornerShape(8.dp)
+
+    val primaryGradient = Brush.linearGradient(
+        listOf(Color(0xFF2563EB), Color(0xFF1D4ED8))
+    )
+    val dangerGradient = Brush.linearGradient(
+        listOf(Color(0xFFDC2626), Color(0xFFB91C1C))
+    )
+    val glassButtonGradient = Brush.verticalGradient(
+        if (colors.isDark) {
+            listOf(Color(0xFF202026), Color(0xFF141418))
+        } else {
+            listOf(Color(0xFFFFFFFF), Color(0xFFF1F5F9))
+        }
+    )
+
     LaunchedEffect(Unit) {
         onRefresh?.invoke()
     }
@@ -81,9 +96,14 @@ fun TrashScreen(
     Scaffold(
         topBar = {
             ChromaScreenHeader(
-                title = if (selectionMode) "${selectedWorkIds.size} Selected" else "Trash",
-                badgeText = if (selectionMode) null else if (deletedWorks.isNotEmpty()) "${deletedWorks.size}" else null,
-                badgeColor = Color(0xFFFF3B30),
+                title = if (selectionMode) {
+                    "${selectedWorkIds.size} Selected"
+                } else if (deletedWorks.isNotEmpty()) {
+                    "Trash (${deletedWorks.size})"
+                } else {
+                    "Trash"
+                },
+                badgeText = null, // No pill badge - clean text used in title
                 showBackButton = true,
                 onBack = {
                     if (selectionMode) onClearSelection() else onBack()
@@ -94,10 +114,10 @@ fun TrashScreen(
                         // Deselect All / Select All
                         Box(
                             modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(if (allSelected) colors.primary.copy(alpha = 0.22f) else colors.glassBgHover)
-                                .border(1.dp, if (allSelected) colors.primary else colors.glassBorder, CircleShape)
+                                .size(34.dp)
+                                .clip(buttonCorner)
+                                .background(if (allSelected) primaryGradient else glassButtonGradient)
+                                .border(0.75.dp, if (allSelected) Color.White.copy(alpha = 0.35f) else colors.glassBorder, buttonCorner)
                                 .clickable {
                                     if (allSelected) onClearSelection() else onSelectAll?.invoke()
                                 },
@@ -106,54 +126,78 @@ fun TrashScreen(
                             Icon(
                                 imageVector = Lucide.CheckCheck,
                                 contentDescription = if (allSelected) "Deselect All" else "Select All",
-                                tint = if (allSelected) colors.primary else colors.textMain,
-                                modifier = Modifier.size(17.dp)
+                                tint = if (allSelected) Color.White else colors.textMain,
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                         Spacer(Modifier.width(6.dp))
                         // Restore Selected
                         Box(
                             modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(colors.glassBgHover)
-                                .border(1.dp, colors.glassBorder, CircleShape)
-                                .clickable { onRestoreSelected() },
+                                .height(34.dp)
+                                .clip(buttonCorner)
+                                .background(glassButtonGradient)
+                                .border(0.75.dp, colors.glassBorder, buttonCorner)
+                                .clickable { onRestoreSelected() }
+                                .padding(horizontal = 10.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                imageVector = Lucide.RefreshCcw,
-                                contentDescription = "Restore Selected",
-                                tint = colors.textMain,
-                                modifier = Modifier.size(17.dp)
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.RefreshCcw,
+                                    contentDescription = "Restore",
+                                    tint = colors.textMain,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = "Restore",
+                                    color = colors.textMain,
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
                         }
                         Spacer(Modifier.width(6.dp))
                         // Delete Selected
                         Box(
                             modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFFFF3B30).copy(alpha = 0.15f))
-                                .border(1.dp, Color(0xFFFF3B30).copy(alpha = 0.4f), CircleShape)
-                                .clickable { showDeleteConfirmDialog = true },
+                                .height(34.dp)
+                                .clip(buttonCorner)
+                                .background(dangerGradient)
+                                .border(0.75.dp, Color.White.copy(alpha = 0.3f), buttonCorner)
+                                .clickable { showDeleteConfirmDialog = true }
+                                .padding(horizontal = 10.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                imageVector = Lucide.Trash2,
-                                contentDescription = "Delete Selected",
-                                tint = Color(0xFFFF3B30),
-                                modifier = Modifier.size(17.dp)
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.Trash2,
+                                    contentDescription = "Delete",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = "Delete",
+                                    color = Color.White,
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
                         }
                     } else if (deletedWorks.isNotEmpty()) {
                         // Quick Select button
                         Box(
                             modifier = Modifier
                                 .height(34.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(colors.glassBgHover)
-                                .border(1.dp, colors.glassBorder, RoundedCornerShape(10.dp))
+                                .clip(buttonCorner)
+                                .background(glassButtonGradient)
+                                .border(0.75.dp, colors.glassBorder, buttonCorner)
                                 .clickable { onSelectAll?.invoke() }
                                 .padding(horizontal = 12.dp),
                             contentAlignment = Alignment.Center
@@ -170,26 +214,26 @@ fun TrashScreen(
                         Box(
                             modifier = Modifier
                                 .height(34.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(Color(0xFFFF3B30).copy(alpha = 0.12f))
-                                .border(1.dp, Color(0xFFFF3B30).copy(alpha = 0.35f), RoundedCornerShape(10.dp))
+                                .clip(buttonCorner)
+                                .background(dangerGradient)
+                                .border(0.75.dp, Color.White.copy(alpha = 0.3f), buttonCorner)
                                 .clickable { showEmptyTrashDialog = true }
-                                .padding(horizontal = 10.dp),
+                                .padding(horizontal = 11.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
                             ) {
                                 Icon(
                                     imageVector = Lucide.Trash2,
                                     contentDescription = "Empty",
-                                    tint = Color(0xFFFF3B30),
-                                    modifier = Modifier.size(14.dp)
+                                    tint = Color.White,
+                                    modifier = Modifier.size(13.5.dp)
                                 )
                                 Text(
                                     text = "Empty",
-                                    color = Color(0xFFFF3B30),
+                                    color = Color.White,
                                     fontSize = 12.5.sp,
                                     fontWeight = FontWeight.SemiBold
                                 )
@@ -210,51 +254,42 @@ fun TrashScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(32.dp),
+                        .padding(horizontal = 32.dp, vertical = 24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(88.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFFFF3B30).copy(alpha = 0.08f))
-                            .border(1.dp, Color(0xFFFF3B30).copy(alpha = 0.2f), CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Lucide.Trash2,
-                            contentDescription = "Empty Trash",
-                            modifier = Modifier.size(42.dp),
-                            tint = Color(0xFFFF3B30).copy(alpha = 0.75f)
-                        )
-                    }
-                    Spacer(Modifier.height(18.dp))
+                    Icon(
+                        imageVector = Lucide.Trash2,
+                        contentDescription = null,
+                        modifier = Modifier.size(46.dp),
+                        tint = colors.textMuted.copy(alpha = 0.55f)
+                    )
+                    Spacer(Modifier.height(16.dp))
                     Text(
                         text = "Trash is Empty",
                         color = colors.textMain,
-                        fontSize = 19.sp,
+                        fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = (-0.3).sp
                     )
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(6.dp))
                     Text(
                         text = "Works you delete will be kept here safely before permanent removal.",
                         color = colors.textMuted,
-                        fontSize = 13.5.sp,
+                        fontSize = 13.sp,
                         textAlign = TextAlign.Center,
                         lineHeight = 18.sp,
-                        modifier = Modifier.padding(horizontal = 24.dp)
+                        modifier = Modifier.padding(horizontal = 20.dp)
                     )
-                    Spacer(Modifier.height(24.dp))
+                    Spacer(Modifier.height(22.dp))
                     Box(
                         modifier = Modifier
-                            .height(40.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(colors.glassBgHover)
-                            .border(1.dp, colors.glassBorder, RoundedCornerShape(12.dp))
+                            .height(38.dp)
+                            .clip(buttonCorner)
+                            .background(primaryGradient)
+                            .border(0.75.dp, Color.White.copy(alpha = 0.3f), buttonCorner)
                             .clickable { onBack() }
-                            .padding(horizontal = 20.dp),
+                            .padding(horizontal = 18.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Row(
@@ -264,13 +299,13 @@ fun TrashScreen(
                             Icon(
                                 imageVector = Lucide.ArrowLeft,
                                 contentDescription = null,
-                                tint = colors.textMain,
-                                modifier = Modifier.size(16.dp)
+                                tint = Color.White,
+                                modifier = Modifier.size(15.dp)
                             )
                             Text(
                                 text = "Back to Works",
-                                color = colors.textMain,
-                                fontSize = 13.5.sp,
+                                color = Color.White,
+                                fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
                         }
@@ -278,14 +313,15 @@ fun TrashScreen(
                 }
             } else {
                 Column(modifier = Modifier.fillMaxSize()) {
-                    // Informative Cupertino Banner
+                    // Informative Clean Banner (Rectangular with thin glass border)
+                    val bannerCorner = RoundedCornerShape(8.dp)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 6.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(colors.glassBg)
-                            .border(0.5.dp, colors.glassBorder, RoundedCornerShape(12.dp))
+                            .clip(bannerCorner)
+                            .background(glassButtonGradient)
+                            .border(0.75.dp, colors.glassBorder, bannerCorner)
                             .padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -294,12 +330,12 @@ fun TrashScreen(
                             imageVector = Lucide.Info,
                             contentDescription = null,
                             tint = colors.textMuted,
-                            modifier = Modifier.size(15.dp)
+                            modifier = Modifier.size(14.dp)
                         )
                         Text(
                             text = "Items in Trash can be restored to your studio or permanently removed.",
                             color = colors.textMuted,
-                            fontSize = 12.sp,
+                            fontSize = 11.5.sp,
                             lineHeight = 16.sp
                         )
                     }
@@ -313,7 +349,7 @@ fun TrashScreen(
                     ) {
                         items(deletedWorks, key = { it.id }) { work ->
                             val isSelected = selectedWorkIds.contains(work.id)
-                            AnimatedVisibility(visible = true, enter = fadeIn() + scaleIn(initialScale = 0.92f)) {
+                            AnimatedVisibility(visible = true, enter = fadeIn() + scaleIn(initialScale = 0.94f)) {
                                 TrashCard(
                                     work = work,
                                     isSelected = isSelected,
@@ -346,7 +382,7 @@ fun TrashScreen(
                     showDeleteConfirmDialog = false
                     singleDeleteId = null
                     coroutineScope.launch {
-                        delay(250)
+                        delay(200)
                         onPermanentDelete(id)
                         deletingWorkIds = deletingWorkIds - id
                     }
@@ -355,7 +391,7 @@ fun TrashScreen(
                     deletingWorkIds = deletingWorkIds + idsToDelete
                     showDeleteConfirmDialog = false
                     coroutineScope.launch {
-                        delay(250)
+                        delay(200)
                         onDeleteSelected()
                         deletingWorkIds = deletingWorkIds - idsToDelete
                     }
@@ -378,7 +414,7 @@ fun TrashScreen(
                 coroutineScope.launch {
                     val allIds = deletedWorks.map { it.id }.toSet()
                     deletingWorkIds = deletingWorkIds + allIds
-                    delay(250)
+                    delay(200)
                     onEmptyTrash?.invoke()
                     deletingWorkIds = emptySet()
                 }
@@ -406,17 +442,32 @@ fun TrashCard(
     val colors = LocalOscellionColors.current
     var showMenu by remember { mutableStateOf(false) }
     
-    val deleteAlpha by animateFloatAsState(if (isDeleting) 0f else 1f, tween(250), label = "alpha")
-    val deleteScale by animateFloatAsState(if (isDeleting) 0.6f else 1f, tween(250), label = "scale")
-    val baseScale by animateFloatAsState(if (isSelected) 0.94f else 1f, label = "baseScale")
+    val deleteAlpha by animateFloatAsState(if (isDeleting) 0f else 1f, tween(200), label = "alpha")
+    val deleteScale by animateFloatAsState(if (isDeleting) 0.6f else 1f, tween(200), label = "scale")
+    val baseScale by animateFloatAsState(if (isSelected) 0.95f else 1f, label = "baseScale")
     val scale = baseScale * deleteScale
     
-    val borderWidth = if (isSelected) 2.5.dp else 1.dp
-    val borderColor = if (isSelected) colors.primary else Color.Transparent
+    val cardCorner = RoundedCornerShape(12.dp)
+    val checkCorner = RoundedCornerShape(6.dp)
+    val actionCorner = RoundedCornerShape(8.dp)
+
+    val borderWidth = if (isSelected) 2.dp else 0.75.dp
+    val borderColor = if (isSelected) colors.primary else colors.glassBorder
 
     val dateFormat = remember { SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()) }
     val dateString = remember(work.lastModifiedAt) { dateFormat.format(java.util.Date(work.lastModifiedAt)) }
     val layers = remember(work.layersJson) { repository.deserializeLayers(work.layersJson) }
+
+    val primaryGradient = Brush.linearGradient(
+        listOf(Color(0xFF2563EB), Color(0xFF1D4ED8))
+    )
+    val glassButtonGradient = Brush.verticalGradient(
+        if (colors.isDark) {
+            listOf(Color(0xFF202026), Color(0xFF141418))
+        } else {
+            listOf(Color(0xFFFFFFFF), Color(0xFFF1F5F9))
+        }
+    )
 
     Box(
         modifier = Modifier
@@ -424,14 +475,14 @@ fun TrashCard(
             .scale(scale)
             .alpha(deleteAlpha)
             .shadow(
-                elevation = if (isSelected) 8.dp else 2.dp,
-                shape = RoundedCornerShape(18.dp),
+                elevation = if (isSelected) 6.dp else 1.5.dp,
+                shape = cardCorner,
                 ambientColor = Color(0x14000000),
                 spotColor = Color(0x1F000000)
             )
-            .clip(RoundedCornerShape(18.dp))
-            .glossyBorder(RoundedCornerShape(18.dp), colors)
-            .border(borderWidth, borderColor, RoundedCornerShape(18.dp))
+            .clip(cardCorner)
+            .glossyBorder(cardCorner, colors)
+            .border(borderWidth, borderColor, cardCorner)
             .background(colors.glassBg)
             .combinedClickable(
                 onClick = {
@@ -449,7 +500,7 @@ fun TrashCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(1.22f)
-                    .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp))
+                    .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
                     .background(
                         Brush.verticalGradient(
                             listOf(Color(0xFF1E1E26), Color(0xFF141418))
@@ -477,33 +528,18 @@ fun TrashCard(
                 // Dark scrim overlay for deleted item
                 Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)))
 
-                // Top-right Deleted Badge
-                Row(
+                // Clean thin outlined trash icon in top-right (NO pill/capsule badge)
+                Icon(
+                    imageVector = Lucide.Trash2,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.75f),
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(8.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color.Black.copy(alpha = 0.65f))
-                        .border(0.5.dp, Color(0x40FF3B30), RoundedCornerShape(8.dp))
-                        .padding(horizontal = 6.dp, vertical = 3.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Icon(
-                        imageVector = Lucide.Trash2,
-                        contentDescription = null,
-                        tint = Color(0xFFFF453A),
-                        modifier = Modifier.size(10.dp)
-                    )
-                    Text(
-                        text = "Deleted",
-                        color = Color(0xFFFF453A),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+                        .padding(9.dp)
+                        .size(15.dp)
+                )
 
-                // Selection check indicator
+                // Selection check indicator (Clean square with 6.dp radius, thin glass border)
                 if (selectionMode) {
                     Box(
                         modifier = Modifier
@@ -513,24 +549,24 @@ fun TrashCard(
                         if (isSelected) {
                             Box(
                                 modifier = Modifier
-                                    .size(26.dp)
-                                    .background(colors.primary, CircleShape)
-                                    .border(1.5.dp, Color.White, CircleShape),
+                                    .size(24.dp)
+                                    .background(primaryGradient, checkCorner)
+                                    .border(0.75.dp, Color.White, checkCorner),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Lucide.Check,
                                     contentDescription = "Selected",
                                     tint = Color.White,
-                                    modifier = Modifier.size(15.dp)
+                                    modifier = Modifier.size(14.dp)
                                 )
                             }
                         } else {
                             Box(
                                 modifier = Modifier
-                                    .size(26.dp)
-                                    .background(Color.Black.copy(alpha = 0.35f), CircleShape)
-                                    .border(1.5.dp, Color.White.copy(alpha = 0.75f), CircleShape)
+                                    .size(24.dp)
+                                    .background(Color.Black.copy(alpha = 0.4f), checkCorner)
+                                    .border(1.dp, Color.White.copy(alpha = 0.7f), checkCorner)
                             )
                         }
                     }
@@ -541,7 +577,7 @@ fun TrashCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                    .padding(horizontal = 11.dp, vertical = 9.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -555,18 +591,34 @@ fun TrashCard(
                         overflow = TextOverflow.Ellipsis
                     )
                     Spacer(Modifier.height(3.dp))
+                    // Clean Text line: "Deleted • X layers • Date" (NO pill badge)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Icon(
-                            imageVector = Lucide.Layers,
-                            contentDescription = null,
-                            tint = colors.textMuted.copy(alpha = 0.7f),
-                            modifier = Modifier.size(11.dp)
+                        Text(
+                            text = "Deleted",
+                            color = Color(0xFFEF4444),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold
                         )
                         Text(
-                            text = "${layers.size} ${if (layers.size == 1) "layer" else "layers"} • $dateString",
+                            text = "•",
+                            color = colors.textMuted.copy(alpha = 0.5f),
+                            fontSize = 10.sp
+                        )
+                        Text(
+                            text = "${layers.size} ${if (layers.size == 1) "layer" else "layers"}",
+                            color = colors.textMuted,
+                            fontSize = 11.sp
+                        )
+                        Text(
+                            text = "•",
+                            color = colors.textMuted.copy(alpha = 0.5f),
+                            fontSize = 10.sp
+                        )
+                        Text(
+                            text = dateString,
                             color = colors.textMuted,
                             fontSize = 11.sp,
                             maxLines = 1
@@ -576,12 +628,13 @@ fun TrashCard(
                 
                 if (!selectionMode) {
                     Box {
+                        // Action menu button: Clean professional gradient with thin glass border (NO circle/capsule)
                         Box(
                             modifier = Modifier
                                 .size(28.dp)
-                                .clip(CircleShape)
-                                .background(colors.glassBgHover.copy(alpha = 0.6f))
-                                .border(0.5.dp, colors.glassBorder, CircleShape)
+                                .clip(actionCorner)
+                                .background(glassButtonGradient)
+                                .border(0.75.dp, colors.glassBorder, actionCorner)
                                 .clickable { showMenu = true },
                             contentAlignment = Alignment.Center
                         ) {
@@ -596,8 +649,8 @@ fun TrashCard(
                             expanded = showMenu,
                             onDismissRequest = { showMenu = false },
                             modifier = Modifier
-                                .glossyBorder(RoundedCornerShape(14.dp), colors)
-                                .background(colors.glassBg, RoundedCornerShape(14.dp))
+                                .glossyBorder(RoundedCornerShape(10.dp), colors)
+                                .background(colors.glassBg, RoundedCornerShape(10.dp))
                         ) {
                             DropdownMenuItem(
                                 text = { Text("Restore", fontSize = 13.sp, color = colors.textMain) },
