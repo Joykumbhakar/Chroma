@@ -1669,27 +1669,17 @@ fun AppleHeartHandshakeGraphic(
     Canvas(modifier = modifier.then(clickModifier)) {
         val s = size.minDimension / 1000f
 
-        // 1. Ambient Floor Shadow (Dual-stage diffuse + contact bounce)
+        // Ambient Floor Shadow
         drawOval(
-            brush = AppleHigBluePalette.floorGlowBrush(500f, 868f, 240f, s),
-            topLeft = Offset(250f * s, 846f * s),
-            size = Size(500f * s, 44f * s)
-        )
-        drawOval(
-            brush = Brush.radialGradient(
-                colors = listOf(Color(0x77001438), Color(0x22001438), Color.Transparent),
-                center = Offset(500f * s, 862f * s),
-                radius = 120f * s
-            ),
-            topLeft = Offset(380f * s, 854f * s),
-            size = Size(240f * s, 18f * s)
+            brush = AppleHigBluePalette.floorGlowBrush(500f, 868f, 225f, s),
+            topLeft = Offset(275f * s, 848f * s),
+            size = Size(450f * s, 38f * s)
         )
 
         withTransform({
             translate(top = pumpTranslateY.value * s)
             scale(pumpScaleX.value, pumpScaleY.value, pivot = Offset(500f * s, 790f * s))
         }) {
-            // Master Apple HIG Heart Contour
             val heartPath = Path().apply {
                 moveTo(500f * s, 816f * s)
                 cubicTo(476f * s, 816f * s, 452f * s, 804f * s, 430f * s, 782f * s)
@@ -1706,18 +1696,9 @@ fun AppleHeartHandshakeGraphic(
             }
 
             clipPath(heartPath) {
-                // ── 2. HAND A (Left Hand / Forearm & Palm Base in Electric Sky Sapphire) ──
-                val handABrush = Brush.linearGradient(
-                    0.00f to Color(0xFF67E8F9), // Luminous Sky Cyan
-                    0.20f to Color(0xFF38BDF8), // Electric Azure
-                    0.52f to Color(0xFF0284C7), // Apple Sapphire Blue
-                    0.80f to Color(0xFF0051D5), // Deep Royal Core
-                    1.00f to Color(0xFF002B82), // Midnight Anchor
-                    start = Offset(140f * s, 80f * s),
-                    end = Offset(520f * s, 840f * s)
-                )
+                // 1. Main Cupertino Blue Heart Body + Cylindrical Sheen
                 drawRect(
-                    brush = handABrush,
+                    brush = AppleHigBluePalette.bodyBrush(s),
                     topLeft = Offset(120f * s, 135f * s),
                     size = Size(760f * s, 690f * s)
                 )
@@ -1727,294 +1708,126 @@ fun AppleHeartHandshakeGraphic(
                     size = Size(760f * s, 690f * s)
                 )
 
-                // Left Lobe Overhead Softbox Highlight
+                // Left Lobe Overhead Dome Highlight
                 drawOval(
-                    brush = Brush.radialGradient(
-                        colors = listOf(Color.White.copy(alpha = 0.44f), Color.White.copy(alpha = 0.12f), Color.Transparent),
-                        center = Offset(330f * s, 195f * s),
-                        radius = 140f * s
-                    ),
-                    topLeft = Offset(210f * s, 150f * s),
-                    size = Size(240f * s, 90f * s)
+                    color = Color.White.copy(alpha = 0.28f),
+                    topLeft = Offset(200f * s, 175f * s),
+                    size = Size(220f * s, 88f * s)
                 )
 
-                // ── 3. HAND B (Right Hand Forearm & Dorsal Body in Royal Cobalt) ─────
-                // Continuous anatomical mass extending from right lobe down to bottom tip
-                val rightArmPath = Path().apply {
-                    moveTo(500f * s, 218f * s)
-                    cubicTo(536f * s, 172f * s, 588f * s, 142f * s, 656f * s, 142f * s)
-                    cubicTo(776f * s, 142f * s, 872f * s, 232f * s, 872f * s, 354f * s)
-                    cubicTo(872f * s, 430f * s, 850f * s, 502f * s, 778f * s, 574f * s)
-                    lineTo(570f * s, 782f * s)
-                    lineTo(500f * s, 816f * s)
-                    // Inner clasp boundary meeting Hand A under the fingers:
-                    cubicTo(490f * s, 740f * s, 510f * s, 620f * s, 580f * s, 490f * s)
-                    cubicTo(620f * s, 420f * s, 550f * s, 305f * s, 500f * s, 218f * s)
-                    close()
-                }
-
-                val handBBrush = Brush.linearGradient(
-                    0.00f to Color(0xFF93C5FD), // Radiant Soft Ice
-                    0.25f to Color(0xFF3B82F6), // Vibrant Cobalt
-                    0.65f to Color(0xFF1D4ED8), // Deep Royal Sapphire
-                    1.00f to Color(0xFF0F172A), // Midnight Indigo
-                    start = Offset(740f * s, 140f * s),
-                    end = Offset(450f * s, 750f * s)
-                )
-
-                // Soft ambient occlusion behind Hand B meeting Hand A
-                drawPath(
-                    path = rightArmPath,
-                    color = Color.Black.copy(alpha = 0.28f),
-                    style = Stroke(width = 14f * s)
-                )
-                drawPath(path = rightArmPath, brush = handBBrush)
-
-                // Right Lobe Overhead Softbox Highlight
-                drawOval(
-                    brush = Brush.radialGradient(
-                        colors = listOf(Color.White.copy(alpha = 0.40f), Color.White.copy(alpha = 0.10f), Color.Transparent),
-                        center = Offset(670f * s, 195f * s),
-                        radius = 140f * s
-                    ),
-                    topLeft = Offset(550f * s, 150f * s),
-                    size = Size(240f * s, 90f * s)
-                )
-
-                // ── 4. CONTINUOUS SCULPTED CLASPING FINGERS OF HAND B ────────────────
-                // Organically wrapping around Hand A's palm with realistic finger curves & pads
-                withTransform({
-                    val flex = fingerShift.value * s
-                    translate(left = flex * 0.6f, top = flex * 0.4f)
-                }) {
-                    // 4 fingers: Index, Middle, Ring, Pinky
-                    data class ClaspFinger(
-                        val path: Path,
-                        val topRidge: Path,
-                        val padCenter: Offset,
-                        val padRadius: Float,
-                        val gradStart: Offset,
-                        val gradEnd: Offset
-                    )
-
-                    val finger1Path = Path().apply {
-                        moveTo(625f * s, 400f * s)
-                        cubicTo(550f * s, 418f * s, 485f * s, 436f * s, 435f * s, 458f * s)
-                        cubicTo(408f * s, 470f * s, 410f * s, 502f * s, 438f * s, 510f * s)
-                        cubicTo(490f * s, 492f * s, 555f * s, 474f * s, 608f * s, 458f * s)
-                        close()
-                    }
-                    val finger1Ridge = Path().apply {
-                        moveTo(625f * s, 403f * s)
-                        cubicTo(550f * s, 421f * s, 485f * s, 439f * s, 436f * s, 461f * s)
-                        cubicTo(414f * s, 471f * s, 414f * s, 488f * s, 424f * s, 496f * s)
-                    }
-
-                    val finger2Path = Path().apply {
-                        moveTo(608f * s, 458f * s)
-                        cubicTo(528f * s, 478f * s, 452f * s, 502f * s, 395f * s, 526f * s)
-                        cubicTo(365f * s, 539f * s, 368f * s, 574f * s, 398f * s, 582f * s)
-                        cubicTo(462f * s, 560f * s, 532f * s, 536f * s, 582f * s, 520f * s)
-                        close()
-                    }
-                    val finger2Ridge = Path().apply {
-                        moveTo(608f * s, 461f * s)
-                        cubicTo(528f * s, 481f * s, 452f * s, 505f * s, 396f * s, 529f * s)
-                        cubicTo(372f * s, 541f * s, 372f * s, 559f * s, 384f * s, 568f * s)
-                    }
-
-                    val finger3Path = Path().apply {
-                        moveTo(582f * s, 520f * s)
-                        cubicTo(508f * s, 542f * s, 438f * s, 568f * s, 385f * s, 595f * s)
-                        cubicTo(356f * s, 610f * s, 360f * s, 642f * s, 390f * s, 650f * s)
-                        cubicTo(450f * s, 628f * s, 515f * s, 604f * s, 555f * s, 585f * s)
-                        close()
-                    }
-                    val finger3Ridge = Path().apply {
-                        moveTo(582f * s, 523f * s)
-                        cubicTo(508f * s, 545f * s, 438f * s, 571f * s, 386f * s, 598f * s)
-                        cubicTo(364f * s, 612f * s, 366f * s, 629f * s, 376f * s, 638f * s)
-                    }
-
-                    val finger4Path = Path().apply {
-                        moveTo(555f * s, 585f * s)
-                        cubicTo(490f * s, 608f * s, 432f * s, 634f * s, 398f * s, 660f * s)
-                        cubicTo(372f * s, 674f * s, 376f * s, 705f * s, 406f * s, 712f * s)
-                        cubicTo(455f * s, 692f * s, 505f * s, 668f * s, 535f * s, 645f * s)
-                        close()
-                    }
-                    val finger4Ridge = Path().apply {
-                        moveTo(555f * s, 588f * s)
-                        cubicTo(490f * s, 611f * s, 432f * s, 637f * s, 399f * s, 663f * s)
-                        cubicTo(380f * s, 676f * s, 382f * s, 693f * s, 392f * s, 702f * s)
-                    }
-
-                    val fingerList = listOf(
-                        ClaspFinger(finger1Path, finger1Ridge, Offset(425f * s, 485f * s), 20f * s, Offset(520f * s, 400f * s), Offset(500f * s, 510f * s)),
-                        ClaspFinger(finger2Path, finger2Ridge, Offset(384f * s, 555f * s), 22f * s, Offset(490f * s, 458f * s), Offset(470f * s, 582f * s)),
-                        ClaspFinger(finger3Path, finger3Ridge, Offset(376f * s, 622f * s), 20f * s, Offset(470f * s, 520f * s), Offset(450f * s, 650f * s)),
-                        ClaspFinger(finger4Path, finger4Ridge, Offset(392f * s, 686f * s), 18f * s, Offset(450f * s, 585f * s), Offset(430f * s, 712f * s))
-                    )
-
-                    // Draw fingers with depth layers
-                    fingerList.forEach { f ->
-                        // 1. Ambient drop shadow cast onto Left Palm
-                        withTransform({
-                            translate(left = 4f * s, top = 8f * s)
-                        }) {
-                            drawPath(f.path, color = Color(0x4D001438))
-                        }
-
-                        // 2. Sculpted cylindrical finger body
-                        val fingerBrush = Brush.linearGradient(
-                            0.00f to Color(0xFFBAE6FD), // Sky Ice Specular Crest
-                            0.24f to Color(0xFF38BDF8), // Electric Azure
-                            0.60f to Color(0xFF0284C7), // Royal Cobalt
-                            0.88f to Color(0xFF0369A1), // Deep Cobalt
-                            1.00f to Color(0xFF0C4A6E), // Underside Crease Shadow
-                            start = f.gradStart,
-                            end = f.gradEnd
-                        )
-                        drawPath(f.path, brush = fingerBrush)
-
-                        // 3. Fingertip spherical pad catch-light
-                        drawCircle(
-                            brush = Brush.radialGradient(
-                                colors = listOf(Color.White.copy(alpha = 0.55f), Color.White.copy(alpha = 0.15f), Color.Transparent),
-                                center = f.padCenter,
-                                radius = f.padRadius
-                            ),
-                            radius = f.padRadius,
-                            center = f.padCenter
-                        )
-
-                        // 4. Upper specular edge ridge
-                        drawPath(
-                            path = f.topRidge,
-                            color = Color.White.copy(alpha = 0.70f),
-                            style = Stroke(width = 2.8f * s, cap = StrokeCap.Round)
-                        )
-                    }
-
-                    // Soft anatomical interdigital creases
-                    listOf(
-                        Path().apply {
-                            moveTo(608f * s, 458f * s)
-                            cubicTo(530f * s, 480f * s, 458f * s, 505f * s, 410f * s, 520f * s)
-                        },
-                        Path().apply {
-                            moveTo(582f * s, 520f * s)
-                            cubicTo(510f * s, 545f * s, 442f * s, 570f * s, 396f * s, 588f * s)
-                        },
-                        Path().apply {
-                            moveTo(555f * s, 585f * s)
-                            cubicTo(490f * s, 610f * s, 435f * s, 635f * s, 398f * s, 654f * s)
-                        }
-                    ).forEach { creasePath ->
-                        drawPath(
-                            path = creasePath,
-                            color = Color(0x35001438),
-                            style = Stroke(width = 2.0f * s, cap = StrokeCap.Round)
-                        )
-                    }
-                }
-
-                // ── 5. LEFT HAND THUMB (Cantilevered Clasp Over Hand B) ───────────────
-                withTransform({
-                    rotate(upperHandAngle.value, pivot = Offset(380f * s, 330f * s))
-                }) {
-                    val thumbPath = Path().apply {
-                        moveTo(365f * s, 290f * s)
-                        cubicTo(410f * s, 310f * s, 475f * s, 335f * s, 530f * s, 365f * s)
-                        cubicTo(560f * s, 380f * s, 560f * s, 415f * s, 532f * s, 432f * s)
-                        cubicTo(485f * s, 445f * s, 430f * s, 425f * s, 385f * s, 380f * s)
-                        cubicTo(360f * s, 350f * s, 350f * s, 315f * s, 365f * s, 290f * s)
-                        close()
-                    }
-
-                    // Smooth ambient shadow under thumb onto Hand B
-                    withTransform({
-                        translate(left = 4f * s, top = 8f * s)
-                    }) {
-                        drawPath(thumbPath, color = Color.Black.copy(alpha = 0.35f))
-                    }
-
-                    // Thumb Luminous 3D Body
-                    val thumbBrush = Brush.linearGradient(
-                        0.00f to Color(0xFFC7F0FF), // Ice Pearl
-                        0.25f to Color(0xFF38BDF8), // Electric Azure
-                        0.65f to Color(0xFF0284C7), // Royal Cobalt
-                        1.00f to Color(0xFF0038A0), // Deep Anchor Shadow
-                        start = Offset(365f * s, 290f * s),
-                        end = Offset(545f * s, 435f * s)
-                    )
-                    drawPath(thumbPath, brush = thumbBrush)
-
-                    // Thumb Knuckle Catch-Light
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(Color.White.copy(alpha = 0.48f), Color.Transparent),
-                            center = Offset(450f * s, 355f * s),
-                            radius = 32f * s
-                        ),
-                        radius = 32f * s,
-                        center = Offset(450f * s, 355f * s)
-                    )
-
-                    // Thumb Top Specular Edge
-                    val thumbEdge = Path().apply {
-                        moveTo(365f * s, 290f * s)
-                        cubicTo(410f * s, 310f * s, 475f * s, 335f * s, 530f * s, 365f * s)
-                        cubicTo(552f * s, 376f * s, 555f * s, 400f * s, 536f * s, 418f * s)
-                    }
-                    drawPath(
-                        path = thumbEdge,
-                        color = Color.White.copy(alpha = 0.85f),
-                        style = Stroke(width = 3.6f * s, cap = StrokeCap.Round)
-                    )
-                }
-
-                // ── 6. COLLABORATION REMIX CORE SPARKLE ──────────────────────────────
-                // Brilliant 4-pointed diamond starburst where the hands unite
-                val sparkCenter = Offset(480f * s, 420f * s)
-                val sparkRadius = 30f * s
-                val sparkPath = Path().apply {
-                    val cx = sparkCenter.x
-                    val cy = sparkCenter.y
-                    val rL = 26f * s
-                    val rS = 5.5f * s
-                    moveTo(cx, cy - rL)
-                    quadraticBezierTo(cx, cy, cx + rL, cy)
-                    quadraticBezierTo(cx, cy, cx, cy + rL)
-                    quadraticBezierTo(cx, cy, cx - rL, cy)
-                    quadraticBezierTo(cx, cy, cx, cy - rL)
-                    close()
-                }
-
-                // Ambient azure bloom
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(Color.White.copy(alpha = 0.85f), Color(0x6638BDF8), Color.Transparent),
-                        center = sparkCenter,
-                        radius = sparkRadius
-                    ),
-                    radius = sparkRadius,
-                    center = sparkCenter
-                )
-                // Pure white diamond core
-                drawPath(sparkPath, color = Color.White)
-
-                // Softbox gloss stripes along heart crest
                 with(AppleHigBluePalette) {
                     drawSoftboxGlossStripes(175f, 145f, 805f, 815f, s)
                 }
+
+                // 2. Sculpted Lower-Right Interlocking Finger Capsules
+                withTransform({
+                    translate(left = fingerShift.value * s, top = fingerShift.value * s)
+                }) {
+                    val fingerCapsules = listOf(
+                        Triple(672f, 562f, 162f),
+                        Triple(596f, 638f, 156f),
+                        Triple(520f, 712f, 138f)
+                    )
+                    fingerCapsules.forEach { (cx, cy, height) ->
+                        withTransform({
+                            rotate(-45f, pivot = Offset(cx * s, cy * s))
+                        }) {
+                            val topLeft = Offset((cx - 24f) * s, (cy - height / 2f) * s)
+                            val capSize = Size(48f * s, height * s)
+                            val rad = CornerRadius(24f * s, 24f * s)
+
+                            drawRoundRect(
+                                brush = AppleHigBluePalette.capsuleRecessBrush(cy - height / 2f, cy + height / 2f, s),
+                                topLeft = topLeft,
+                                size = capSize,
+                                cornerRadius = rad
+                            )
+                            drawRoundRect(
+                                brush = AppleHigBluePalette.capsuleBevelBrush(cy - height / 2f, cy + height / 2f, s),
+                                topLeft = topLeft,
+                                size = capSize,
+                                cornerRadius = rad,
+                                style = Stroke(width = 4.5f * s)
+                            )
+                        }
+                    }
+                }
+
+                // 3. Cantilevered 3D Upper-Right Hand & Thumb Layer
+                withTransform({
+                    rotate(upperHandAngle.value, pivot = Offset(650f * s, 340f * s))
+                }) {
+                    val upperHandPath = Path().apply {
+                        moveTo(500f * s, 218f * s)
+                        lineTo(378f * s, 340f * s)
+                        cubicTo(340f * s, 378f * s, 340f * s, 438f * s, 378f * s, 476f * s)
+                        cubicTo(416f * s, 514f * s, 478f * s, 514f * s, 518f * s, 476f * s)
+                        lineTo(584f * s, 412f * s)
+                        cubicTo(618f * s, 380f * s, 672f * s, 380f * s, 706f * s, 412f * s)
+                        lineTo(825f * s, 524f * s)
+                        lineTo(890f * s, 350f * s)
+                        lineTo(890f * s, 130f * s)
+                        lineTo(500f * s, 130f * s)
+                        close()
+                    }
+
+                    val seamCurvePath = Path().apply {
+                        moveTo(500f * s, 218f * s)
+                        lineTo(378f * s, 340f * s)
+                        cubicTo(340f * s, 378f * s, 340f * s, 438f * s, 378f * s, 476f * s)
+                        cubicTo(416f * s, 514f * s, 478f * s, 514f * s, 518f * s, 476f * s)
+                        lineTo(584f * s, 412f * s)
+                        cubicTo(618f * s, 380f * s, 672f * s, 380f * s, 706f * s, 412f * s)
+                        lineTo(825f * s, 524f * s)
+                    }
+
+                    // Recessed Deep Sapphire Clasp Shadow Groove Under the Thumb & Hand
+                    drawPath(
+                        path = seamCurvePath,
+                        brush = AppleHigBluePalette.capsuleBevelBrush(220f, 530f, s),
+                        style = Stroke(width = 44f * s, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                    )
+                    drawPath(
+                        path = seamCurvePath,
+                        brush = AppleHigBluePalette.capsuleRecessBrush(220f, 530f, s),
+                        style = Stroke(width = 34f * s, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                    )
+
+                    // Elevated Upper-Right Hand & Thumb Surface
+                    clipPath(upperHandPath) {
+                        drawRect(
+                            brush = AppleHigBluePalette.lidTopBrush(s),
+                            topLeft = Offset(330f * s, 130f * s),
+                            size = Size(560f * s, 410f * s)
+                        )
+                        // Soft Overhead Crown Highlight
+                        drawOval(
+                            color = Color.White.copy(alpha = 0.38f),
+                            topLeft = Offset(545f * s, 172f * s),
+                            size = Size(235f * s, 46f * s)
+                        )
+                        // Sculpted Thumb Pad Knuckle Catch-Light
+                        drawCircle(
+                            color = Color.White.copy(alpha = 0.28f),
+                            radius = 34f * s,
+                            center = Offset(445f * s, 412f * s)
+                        )
+                    }
+
+                    // Crisp White Specular Bevel Along the Sculpted Thumb Edge
+                    drawPath(
+                        path = seamCurvePath,
+                        color = Color.White.copy(alpha = 0.85f),
+                        style = Stroke(width = 5f * s, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                    )
+                }
             }
 
-            // ── 7. OUTER APPLE HIG SPECULAR BEVEL CONTOUR ────────────────────────────
+            // Outer Specular Bevel Contour
             drawPath(
                 path = heartPath,
                 brush = AppleHigBluePalette.specularStrokeBrush(s),
-                style = Stroke(width = 3.6f * s)
+                style = Stroke(width = 3.4f * s)
             )
         }
     }
