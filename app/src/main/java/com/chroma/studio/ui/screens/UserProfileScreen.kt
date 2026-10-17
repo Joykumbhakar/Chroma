@@ -21,6 +21,7 @@ import com.chroma.studio.ui.components.AppleWorksGraphic
 import com.chroma.studio.ui.components.ApplePhotosGraphic
 import com.chroma.studio.ui.components.AppleFlashGraphic
 import com.chroma.studio.ui.components.AppleRemixGraphic
+import com.chroma.studio.ui.components.AppleHeartHandshakeGraphic
 import com.chroma.studio.ui.components.rememberAppleGraphicAnimationState
 import com.chroma.studio.ui.components.AiWaveSphereVector
 // Apple HIG 3D Empty States
@@ -572,7 +573,7 @@ fun UserProfileScreen(
                             val remixGraphicState = rememberAppleGraphicAnimationState()
                             AppleEmptyTabState(
                                 graphic = {
-                                    AppleRemixGraphic(
+                                    AppleHeartHandshakeGraphic(
                                         modifier = Modifier.size(150.dp),
                                         state = remixGraphicState,
                                         enableClickToAnimate = true

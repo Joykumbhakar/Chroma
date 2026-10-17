@@ -1162,7 +1162,7 @@ fun AppleFlashGraphic(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 6. REMIX GRAPHICS ICON (Dual Orbital Co-Creation Nodes + Revolving Arcs)
+// 6. REMIX GRAPHICS ICON (Apple HIG 3D Heart-Handshake Co-Creation / Collaboration)
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
@@ -1172,101 +1172,14 @@ fun AppleRemixGraphic(
     enableClickToAnimate: Boolean = true,
     onClick: (() -> Unit)? = null
 ) {
-    val scope = rememberCoroutineScope()
-    val progress = state.articulationProgress.value
-
-    val clickModifier = if (enableClickToAnimate) {
-        Modifier.clickable(
-            interactionSource = remember { MutableInteractionSource() },
-            indication = null
-        ) {
-            scope.launch {
-                state.triggerArticulateAnimation()
-                onClick?.invoke()
-            }
-        }
-    } else Modifier
-
-    Canvas(modifier = modifier.then(clickModifier)) {
-        val s = 100f
-        val pearl = Apple3DShaderPalette.pearlBrush(s)
-        val sky = Apple3DShaderPalette.skyBrush(s)
-        val scaleFactor = size.minDimension / 100f
-
-        withTransform({
-            scale(scaleFactor, scaleFactor, pivot = Offset.Zero)
-            scale(state.squashX.value, state.squashY.value, pivot = Offset(50f, 85f))
-        }) {
-            drawFloorShadow(50f, 88f, 36f, 4.8f)
-
-            // Dual Orbital Nodes that smoothly rotate & expand outwards
-            withTransform({
-                rotate(degrees = -36f * progress, pivot = Offset(50f, 50f))
-                scale(1f + 0.08f * progress, 1f + 0.08f * progress, pivot = Offset(50f, 50f))
-            }) {
-                // Primary Node Squircle (Left)
-                drawSculptedSquircleBase(12f, 26f, 38f, 38f, 15f)
-                drawSapphireRecessRect(18f, 32f, 26f, 26f, 10f)
-
-                // Secondary Node Squircle (Right)
-                drawSculptedSquircleBase(50f, 36f, 38f, 38f, 15f)
-                drawSapphireRecessRect(56f, 42f, 26f, 26f, 10f)
-
-                // Upper Intertwining Orbital Arc (Left to Right)
-                drawArc(
-                    brush = pearl,
-                    startAngle = 200f,
-                    sweepAngle = 140f,
-                    useCenter = false,
-                    topLeft = Offset(22f, 16f),
-                    size = Size(56f, 48f),
-                    style = Stroke(width = 5.2f, cap = StrokeCap.Round)
-                )
-
-                // Lower Intertwining Orbital Arc (Right to Left)
-                drawArc(
-                    brush = sky,
-                    startAngle = 20f,
-                    sweepAngle = 140f,
-                    useCenter = false,
-                    topLeft = Offset(22f, 36f),
-                    size = Size(56f, 48f),
-                    style = Stroke(width = 5.2f, cap = StrokeCap.Round)
-                )
-
-                // Directional Arrow Heads on Arcs
-                val topArrow = Path().apply {
-                    moveTo(74f, 34f)
-                    lineTo(82f, 37f)
-                    lineTo(77f, 44f)
-                    close()
-                }
-                drawPath(topArrow, brush = pearl)
-
-                val bottomArrow = Path().apply {
-                    moveTo(26f, 66f)
-                    lineTo(18f, 63f)
-                    lineTo(23f, 56f)
-                    close()
-                }
-                drawPath(bottomArrow, brush = sky)
-
-                // Central Brilliant Sparkle Core (Intersection of Remix)
-                val sparkRadius = 6f + 2f * progress
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(Color.White, Color(0xFF80DCFF), Color.Transparent),
-                        center = Offset(50f, 50f),
-                        radius = sparkRadius * 2f
-                    ),
-                    radius = sparkRadius * 2f,
-                    center = Offset(50f, 50f)
-                )
-                drawCircle(color = Color.White, radius = sparkRadius, center = Offset(50f, 50f))
-            }
-        }
-    }
+    AppleHeartHandshakeGraphic(
+        modifier = modifier,
+        state = state,
+        enableClickToAnimate = enableClickToAnimate,
+        onClick = onClick
+    )
 }
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 7. MESSAGE / CHAT GRAPHICS ICON (Volumetric Chat Bubbles + Floating Speech Crest)

@@ -504,7 +504,7 @@ fun SearchScreen(
                                 val emptyState = rememberAppleGraphicAnimationState()
                                 AppleEmptyTabState(
                                     graphic = {
-                                        AppleHomeGraphic(
+                                        AppleTrendingFireGraphic(
                                             modifier = Modifier.size(140.dp),
                                             state = emptyState,
                                             enableClickToAnimate = true
@@ -519,7 +519,7 @@ fun SearchScreen(
                                 val emptyState = rememberAppleGraphicAnimationState()
                                 AppleEmptyTabState(
                                     graphic = {
-                                        AppleWorksGraphic(
+                                        AppleTrendingFireGraphic(
                                             modifier = Modifier.size(140.dp),
                                             state = emptyState,
                                             enableClickToAnimate = true
@@ -570,13 +570,23 @@ fun SearchScreen(
                                         .clickable { selectedCategory = filter }
                                         .padding(horizontal = 14.dp, vertical = 7.dp)
                                 ) {
-                                    Text(
-                                        text = filter,
-                                        color = if (isSelected) Color.White else colors.textMain,
-                                        fontSize = 13.5.sp,
-                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-                                        fontFamily = InterFontFamily
-                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                    ) {
+                                        if (filter == "Trending") {
+                                            AppleTrendingFireIcon(modifier = Modifier.size(15.dp))
+                                        } else if (filter == "Photos") {
+                                            ApplePhotosIcon(modifier = Modifier.size(15.dp))
+                                        }
+                                        Text(
+                                            text = filter,
+                                            color = if (isSelected) Color.White else colors.textMain,
+                                            fontSize = 13.5.sp,
+                                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                                            fontFamily = InterFontFamily
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -718,13 +728,21 @@ fun SearchScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = if (selectedCategory == "All") "Explore Creations" else "$selectedCategory Creations",
-                                fontSize = 17.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = colors.textMain,
-                                fontFamily = InterFontFamily
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                if (selectedCategory == "Trending") {
+                                    AppleTrendingFireIcon(modifier = Modifier.size(19.dp))
+                                }
+                                Text(
+                                    text = if (selectedCategory == "All") "Explore Creations" else "$selectedCategory Creations",
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colors.textMain,
+                                    fontFamily = InterFontFamily
+                                )
+                            }
                             Text(
                                 text = "${filteredArtworks.size} items",
                                 fontSize = 12.5.sp,
@@ -750,14 +768,8 @@ fun SearchScreen(
                                             state = emptyState,
                                             enableClickToAnimate = true
                                         )
-                                    } else if (selectedCategory.equals("Trending", ignoreCase = true)) {
-                                        AppleTrendingFireGraphic(
-                                            modifier = Modifier.size(150.dp),
-                                            state = emptyState,
-                                            enableClickToAnimate = true
-                                        )
                                     } else {
-                                        AppleWorksGraphic(
+                                        AppleTrendingFireGraphic(
                                             modifier = Modifier.size(150.dp),
                                             state = emptyState,
                                             enableClickToAnimate = true
