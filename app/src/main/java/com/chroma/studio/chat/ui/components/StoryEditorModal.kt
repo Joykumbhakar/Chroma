@@ -1,4 +1,4 @@
-﻿package com.chroma.studio.chat.ui.components
+package com.chroma.studio.chat.ui.components
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -33,11 +33,17 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
 import com.chroma.studio.chat.data.PollData
 import com.chroma.studio.chat.data.PollOption
 import com.chroma.studio.chat.data.Story
+import com.chroma.studio.chat.data.User
 import com.chroma.studio.chat.sound.SoundManager
 import com.chroma.studio.chat.ui.theme.LocalChatColors
+import com.chroma.studio.viewmodel.StoryViewModel
 
 data class StoryGradientPreset(
     val title: String,
@@ -58,10 +64,13 @@ enum class TextHighlightMode {
  */
 @Composable
 fun StoryEditorModal(
+    currentUser: User? = null,
+    storyViewModel: StoryViewModel? = null,
     onDismiss: () -> Unit,
     onPublishStory: (Story) -> Unit
 ) {
     val colors = LocalChatColors.current
+    val context = LocalContext.current
 
     // Gradient Background Presets
     val gradients = remember {
@@ -77,18 +86,19 @@ fun StoryEditorModal(
         )
     }
 
-    val sampleImages = remember {
-        listOf(
-            "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80",
-            "https://images.unsplash.com/photo-1518791841217-8f162f1e1131?auto=format&fit=crop&w=800&q=80",
-            "https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=800&q=80",
-            "https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=800&q=80",
-            "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=800&q=80"
-        )
-    }
-
     var selectedGradientIndex by remember { mutableIntStateOf(0) }
     var selectedPhotoUrl by remember { mutableStateOf<String?>(null) }
+    var selectedPhotoUri by remember { mutableStateOf<Uri?>(null) }
+
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            selectedPhotoUri = uri
+            selectedPhotoUrl = uri.toString()
+        }
+    }
+
     var storyCaption by remember { mutableStateOf("") }
     var selectedLocation by remember { mutableStateOf<String?>("San Francisco, CA") }
     var selectedMusic by remember { mutableStateOf<String?>("Odesza • A Moment Apart") }
@@ -555,7 +565,12 @@ fun StoryEditorModal(
                             indication = null
                         ) {
                             SoundManager.playReaction()
-                            selectedPhotoUrl = if (selectedPhotoUrl == null) sampleImages.firstOrNull() else null
+                            if (selectedPhotoUrl != null) {
+                                selectedPhotoUrl = null
+                                selectedPhotoUri = null
+                            } else {
+                                photoPickerLauncher.launch("image/*")
+                            }
                         },
                     contentAlignment = Alignment.Center
                 ) {
@@ -732,38 +747,34 @@ fun StoryEditorModal(
                         }
                     }
 
-                    // Photo Library Backdrop Thumbnails
+                    // Device Photo Library Action
                     Text(
-                        text = "Backdrop Photo Presets",
+                        text = "Device Photo Backdrop",
                         fontSize = 12.5.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color(0xFF8E8E93)
                     )
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(sampleImages) { url ->
-                            Box(
-                                modifier = Modifier
-                                    .size(56.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .border(
-                                        width = if (selectedPhotoUrl == url) 2.5.dp else 0.5.dp,
-                                        color = if (selectedPhotoUrl == url) colors.iosBlue else Color(0xFFE5E5EA),
-                                        shape = RoundedCornerShape(12.dp)
-                                    )
-                                    .clickable {
-                                        SoundManager.playReaction()
-                                        selectedPhotoUrl = url
-                                        isAddingSticker = false
-                                    }
-                            ) {
-                                AsyncImage(
-                                    model = url,
-                                    contentDescription = "Photo Preset",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(Color(0xFFF2F2F7))
+                            .clickable {
+                                SoundManager.playReaction()
+                                isAddingSticker = false
+                                photoPickerLauncher.launch("image/*")
                             }
-                        }
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        PhosphorPhotoIcon(tint = colors.iosBlue, size = 20.dp)
+                        Text(
+                            text = if (selectedPhotoUri != null) "Change Photo from Gallery" else "Choose Photo from Gallery",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF1C1C1E)
+                        )
                     }
                 }
             }
@@ -835,10 +846,31 @@ fun StoryEditorModal(
                     SoundManager.playSend()
                     val finalImage = selectedPhotoUrl
                     val finalCaption = if (storyCaption.isNotBlank()) storyCaption else ""
+                    val authorName = currentUser?.name?.takeIf { it.isNotBlank() } ?: "Your Story"
+                    val avatarUrl = currentUser?.avatar?.takeIf { it.isNotBlank() } ?: ""
+                    val authorId = currentUser?.id ?: ""
+
+                    // Real Upload/Publish to Firestore & Cloudinary
+                    if (selectedPhotoUri != null && storyViewModel != null) {
+                        storyViewModel.uploadStory(context, selectedPhotoUri!!)
+                    } else if (storyViewModel != null && (finalCaption.isNotBlank() || finalImage != null)) {
+                        val chosenGradient = gradients[selectedGradientIndex]
+                        val bgColorHex = String.format("#%08X", (0xFFFFFFFF and chosenGradient.colors.first().value.toLong()))
+                        val textFormatJson = "{\"fontIndex\":$fontIndex,\"textAlign\":\"${textAlign}\",\"highlightMode\":\"${highlightMode.name}\"}"
+                        storyViewModel.publishTextStory(
+                            textContent = finalCaption,
+                            textFormat = textFormatJson,
+                            backgroundColor = bgColorHex,
+                            audienceType = "public",
+                            customAudienceIds = emptyList()
+                        )
+                    }
+
                     val newStory = Story(
                         id = "s_my_${System.currentTimeMillis()}",
-                        authorName = "Your Story",
-                        avatar = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
+                        authorId = authorId,
+                        authorName = authorName,
+                        avatar = avatarUrl,
                         timeAgo = "Just now",
                         image = finalImage,
                         caption = finalCaption,

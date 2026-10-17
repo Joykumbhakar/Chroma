@@ -36,6 +36,7 @@ import com.chroma.studio.model.GradientLayer
 import com.chroma.studio.ui.components.CanvasPreview
 import com.chroma.studio.ui.components.ChromaScreenHeader
 import com.chroma.studio.ui.components.OscellionLoadingSpinner
+import com.chroma.studio.ui.components.AiWaveSphereIcon
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.chroma.studio.viewmodel.DiscoverViewModel
 import com.composables.icons.lucide.*
@@ -207,11 +208,10 @@ fun ActivityHistoryScreen(
                         OscellionLoadingSpinner(color = Color(0xFF007AFF))
                     }
                 } else if (currentList.isEmpty()) {
-                    // Empty State
-                    val emptyIcon = when (selectedTab) {
-                        ActivityTab.LIKED -> Lucide.Heart
-                        ActivityTab.SAVED -> Lucide.Bookmark
-                        ActivityTab.SHARED -> Lucide.Share2
+                    val emptyGraphicId = when (selectedTab) {
+                        ActivityTab.LIKED -> com.chroma.studio.ui.graphics3d.Apple3DGraphicId.PHOTO_GALLERY
+                        ActivityTab.SAVED -> com.chroma.studio.ui.graphics3d.Apple3DGraphicId.SMART_FOLDER
+                        ActivityTab.SHARED -> com.chroma.studio.ui.graphics3d.Apple3DGraphicId.TELEMETRY_CHART
                     }
                     val emptyTitle = when (selectedTab) {
                         ActivityTab.LIKED -> "No Liked Posts"
@@ -224,6 +224,8 @@ fun ActivityHistoryScreen(
                         ActivityTab.SHARED -> "Creations and posts you share will be listed here."
                     }
 
+                    var isIconOpen by remember { mutableStateOf(false) }
+
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
@@ -231,20 +233,12 @@ fun ActivityHistoryScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(72.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFF007AFF).copy(alpha = 0.1f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = emptyIcon,
-                                contentDescription = null,
-                                tint = Color(0xFF007AFF),
-                                modifier = Modifier.size(34.dp)
-                            )
-                        }
+                        com.chroma.studio.ui.graphics3d.Apple3DGraphicIcon(
+                            id = emptyGraphicId,
+                            isOpen = isIconOpen,
+                            onClick = { isIconOpen = !isIconOpen },
+                            modifier = Modifier.size(105.dp)
+                        )
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
                             text = emptyTitle,
@@ -384,11 +378,8 @@ fun ActivityGridItem(
                     .background(Brush.linearGradient(listOf(Color(0xFF2C2C2E), Color(0xFF1C1C1E)))),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Lucide.Sparkles,
-                    contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.4f),
-                    modifier = Modifier.size(24.dp)
+                AiWaveSphereIcon(
+                    modifier = Modifier.size(28.dp)
                 )
             }
         }

@@ -1,8 +1,13 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package com.chroma.studio.ui.screens
 import com.chroma.studio.ui.components.OscellionLoadingSpinner
 import com.chroma.studio.ui.components.GlassTextButton
 import com.chroma.studio.ui.components.GlassIconButton
 import com.chroma.studio.ui.components.GlassButton
+import com.chroma.studio.ui.components.LiquidGlassPrimaryButton
+import com.chroma.studio.ui.components.LiquidGlassSecondaryButton
+import com.chroma.studio.ui.components.LiquidGlassBottomSheet
+import com.chroma.studio.ui.components.AiWaveSphereIcon
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -28,9 +33,12 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.chroma.studio.ai.AIGenerator
 import com.chroma.studio.model.GradientLayer
+import com.chroma.studio.ui.graphics3d.Apple3DGraphicId
+import com.chroma.studio.ui.graphics3d.Apple3DGraphicIcon
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.google.firebase.auth.FirebaseAuth
 import com.composables.icons.lucide.Lucide
@@ -94,20 +102,24 @@ fun AIGenerateModal(
         }
     }
 
-    Dialog(onDismissRequest = { if (!isGenerating) onDismiss() }) {
-        Box(
+    LiquidGlassBottomSheet(onDismissRequest = { if (!isGenerating) onDismiss() }) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(colors.glassBg)
-                .border(1.dp, colors.glassBorder, RoundedCornerShape(16.dp))
-                .padding(24.dp)
+                .padding(horizontal = 24.dp, vertical = 12.dp)
         ) {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                Apple3DGraphicIcon(
+                    id = Apple3DGraphicId.NEURAL_CPU,
+                    modifier = Modifier.size(54.dp)
+                )
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Text(
                         "AI Gradient Generator",
                         style = MaterialTheme.typography.titleLarge,
@@ -116,13 +128,14 @@ fun AIGenerateModal(
                     )
                     Text(
                         "$generationsToday/$maxGenerations used",
-                        color = if (generationsToday >= maxGenerations) Color.Red else colors.textMuted,
-                        style = MaterialTheme.typography.bodySmall
+                        color = if (generationsToday >= maxGenerations) Color(0xFFFF3B30) else colors.textMuted,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
                 
                 if (errorMessage != null) {
-                    Text(errorMessage!!, color = Color.Red, style = MaterialTheme.typography.bodySmall)
+                    Text(errorMessage!!, color = Color(0xFFFF3B30), style = MaterialTheme.typography.bodySmall)
                 }
 
                 OutlinedTextField(
@@ -144,7 +157,7 @@ fun AIGenerateModal(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    GlassButton(
+                    LiquidGlassSecondaryButton(
                         onClick = {
                             photoPickerLauncher.launch(
                                 androidx.activity.result.PickVisualMediaRequest(
@@ -152,12 +165,12 @@ fun AIGenerateModal(
                                 )
                             )
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = colors.glassBgHover, contentColor = colors.textMain),
+                        isSmall = true,
                         enabled = !isGenerating
                     ) {
-                        Icon(Lucide.Image, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(if (selectedBitmap != null) "Change Image" else "Upload Image")
+                        Icon(Lucide.Image, contentDescription = null, tint = Color.Black, modifier = Modifier.size(15.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(if (selectedBitmap != null) "Change Image" else "Upload Image", color = Color.Black, fontSize = 12.5.sp, fontWeight = FontWeight.Medium)
                     }
 
                     if (selectedBitmap != null) {
@@ -178,11 +191,11 @@ fun AIGenerateModal(
                     }
                 }
 
-                GlassButton(
+                LiquidGlassPrimaryButton(
                     onClick = {
                         if (generationsToday >= maxGenerations) {
                             errorMessage = "You have reached your daily limit of $maxGenerations generations."
-                            return@GlassButton
+                            return@LiquidGlassPrimaryButton
                         }
                         
                         isGenerating = true
@@ -218,23 +231,25 @@ fun AIGenerateModal(
                             }
                         }
                     },
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = colors.primary, contentColor = colors.onPrimary),
+                    modifier = Modifier.fillMaxWidth().height(46.dp),
                     enabled = !isGenerating && prompt.isNotBlank() && generationsToday < maxGenerations
                 ) {
                     if (isGenerating) {
-                        OscellionLoadingSpinner(modifier = Modifier.size(24.dp), color = colors.onPrimary)
+                        OscellionLoadingSpinner(modifier = Modifier.size(22.dp), color = Color.White)
                     } else {
-                        Icon(Lucide.Sparkles, contentDescription = null, modifier = Modifier.size(20.dp))
+                        AiWaveSphereIcon(modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Generate AI Gradient", fontWeight = FontWeight.Bold)
+                        Text("Generate AI Gradient", color = Color.White, fontWeight = FontWeight.Bold)
                     }
                 }
                 
-                GlassTextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth(), enabled = !isGenerating) {
-                    Text("Cancel", color = colors.textMuted)
+                LiquidGlassSecondaryButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth().height(42.dp),
+                    enabled = !isGenerating
+                ) {
+                    Text("Cancel", color = Color.Black, fontWeight = FontWeight.Medium)
                 }
             }
         }
-    }
 }

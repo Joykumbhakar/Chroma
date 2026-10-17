@@ -107,25 +107,42 @@ class ChatViewModel : ViewModel() {
     private fun loadStories() {
         viewModelScope.launch {
             _recentChats.collect { chats ->
-                val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
-                val userIds = chats.mapNotNull { chat ->
-                    if (chat.isGroup) null
-                    else chat.participants.firstOrNull { it != currentUid }
-                }.distinct()
-
-                if (userIds.isNotEmpty()) {
-                    try {
-                        val storyRepo = com.chroma.studio.data.StoryRepository()
-                        val realStories = storyRepo.fetchStoriesForUsers(userIds)
-                        _stories.value = realStories
-                    } catch (e: Exception) {
-                        if (e is kotlinx.coroutines.CancellationException) throw e
-                        android.util.Log.e("ChatViewModel", "loadStories error", e)
-                    }
-                } else {
-                    _stories.value = emptyList()
-                }
+                refreshStoriesInternal(chats)
             }
+        }
+    }
+
+    fun refreshStories() {
+        viewModelScope.launch {
+            refreshStoriesInternal(_recentChats.value)
+        }
+    }
+
+    private suspend fun refreshStoriesInternal(chats: List<com.chroma.studio.model.ChatRoom>) {
+        val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+        val chatUserIds = chats.mapNotNull { chat ->
+            if (chat.isGroup) null
+            else chat.participants.firstOrNull { it != currentUid }
+        }.distinct()
+
+        try {
+            val storyRepo = com.chroma.studio.data.StoryRepository()
+            val followingIds = storyRepo.getFollowingIds()
+            val allUserIds = (chatUserIds + followingIds + listOfNotNull(currentUid)).distinct()
+
+            val realStories = if (allUserIds.isNotEmpty()) {
+                val targeted = storyRepo.fetchStoriesForUsers(allUserIds)
+                if (targeted.size < 5) {
+                    val publicStories = storyRepo.fetchRecentPublicStories()
+                    (targeted + publicStories).distinctBy { it.userId }
+                } else targeted
+            } else {
+                storyRepo.fetchRecentPublicStories()
+            }
+            _stories.value = realStories
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            android.util.Log.e("ChatViewModel", "loadStories error", e)
         }
     }
 
@@ -247,6 +264,17 @@ class ChatViewModel : ViewModel() {
     }
 
     fun openChat(roomId: String) {
+        val previousRoomId = _activeRoomId.value
+        val isAlreadyActiveForRoom = previousRoomId == roomId && messagesJob?.isActive == true
+        if (isAlreadyActiveForRoom) {
+            return
+        }
+
+        // Switching to a new/different room: reset previous messages so they don't flash or leak
+        if (previousRoomId != roomId) {
+            _serverMessages.value = emptyList()
+            _localMessages.value = emptyList()
+        }
         _activeRoomId.value = roomId
 
         // Observe participant presence in real-time
@@ -263,17 +291,25 @@ class ChatViewModel : ViewModel() {
         }
         
         // 1. INSTANT OFFLINE PRE-LOAD (Telegram / WhatsApp technique):
-        // Immediately load cached messages from local storage so the chat screen opens in <1ms even in Airplane mode
-        try {
-            val cached = com.chroma.studio.chat.data.ChatLocalCacheManager.getCachedMessages(
-                com.chroma.studio.ChromaApp.instance,
-                roomId
-            )
-            if (cached.isNotEmpty()) {
-                _serverMessages.value = cached
+        // First check in-memory L1 cache (0ms synchronous)
+        val inMemoryCached = com.chroma.studio.chat.data.ChatLocalCacheManager.getMemoryCachedMessages(roomId)
+        if (!inMemoryCached.isNullOrEmpty()) {
+            _serverMessages.value = inMemoryCached
+        } else {
+            // Asynchronously load disk L2 cache on Dispatchers.IO to never block the main thread
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    val diskCached = com.chroma.studio.chat.data.ChatLocalCacheManager.getCachedMessages(
+                        com.chroma.studio.ChromaApp.instance,
+                        roomId
+                    )
+                    if (diskCached.isNotEmpty() && _activeRoomId.value == roomId && _serverMessages.value.isEmpty()) {
+                        _serverMessages.value = diskCached
+                    }
+                } catch (e: Exception) {
+                    // ignore
+                }
             }
-        } catch (e: Exception) {
-            // ignore
         }
 
         // 2. Initial viewport limit: 30 messages (prevents overload crashes on open)

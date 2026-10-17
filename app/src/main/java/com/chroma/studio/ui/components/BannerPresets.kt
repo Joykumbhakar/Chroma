@@ -38,41 +38,11 @@ val AllBannerPresets: List<BannerPreset> = listOf(
     BannerPreset(id = "preset:wave_17", name = "Slate Blue", category = "Waves", drawableRes = R.drawable.banner_wave_banner_slate_blue),
     BannerPreset(id = "preset:wave_18", name = "Sunset Orange", category = "Waves", drawableRes = R.drawable.banner_wave_banner_sunset_orange),
     BannerPreset(id = "preset:wave_19", name = "Teal Aqua", category = "Waves", drawableRes = R.drawable.banner_wave_banner_teal_aqua),
-    BannerPreset(id = "preset:wave_20", name = "Vibrant Violet", category = "Waves", drawableRes = R.drawable.banner_wave_banner_vibrant_violet),
-    BannerPreset(
-        id = "preset:banner_cupertino_mesh",
-        name = "Cupertino Mesh",
-        category = "Apple",
-        drawableRes = R.drawable.banner_cupertino_mesh
-    ),
-    BannerPreset(
-        id = "preset:banner_dark_titanium",
-        name = "Dark Titanium",
-        category = "Dark Tech",
-        drawableRes = R.drawable.banner_dark_titanium
-    ),
-    BannerPreset(
-        id = "preset:banner_abstract_waves",
-        name = "Ocean Waves",
-        category = "Abstract",
-        drawableRes = R.drawable.banner_abstract_waves
-    ),
-    BannerPreset(
-        id = "preset:banner_cyber_circuit",
-        name = "Cyber Circuit",
-        category = "Dark Tech",
-        drawableRes = R.drawable.banner_cyber_circuit
-    ),
-    BannerPreset(
-        id = "preset:banner_minimalist_geometry",
-        name = "Minimal Slate",
-        category = "Minimal",
-        drawableRes = R.drawable.banner_minimalist_geometry
-    )
+    BannerPreset(id = "preset:wave_20", name = "Vibrant Violet", category = "Waves", drawableRes = R.drawable.banner_wave_banner_vibrant_violet)
 )
 
 /**
- * Resolves a banner preset string (e.g. "preset:banner_cupertino_mesh") to a drawable resource ID.
+ * Resolves a banner preset string (e.g. "preset:wave_1") to a drawable resource ID.
  */
 fun getBannerPresetDrawableRes(bannerUrl: String?): Int? {
     if (bannerUrl == null || !bannerUrl.startsWith("preset:")) return null

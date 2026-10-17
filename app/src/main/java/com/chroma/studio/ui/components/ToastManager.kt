@@ -26,7 +26,7 @@ object ToastManager {
             message.contains("follow", ignoreCase = true) -> Lucide.UserCheck
             message.contains("banner", ignoreCase = true) -> Lucide.Image
             message.contains("avatar", ignoreCase = true) -> Lucide.User
-            else -> Lucide.Sparkles
+            else -> AiWaveSphereVector
         }
 
         _toasts.tryEmit(ToastData(message, actionLabel, onAction, durationMs))

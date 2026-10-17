@@ -37,7 +37,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.Circle
-import com.composables.icons.lucide.Sparkles
 import com.composables.icons.lucide.Trash2
 import com.composables.icons.lucide.Copy
 import com.composables.icons.lucide.GripVertical
@@ -242,7 +241,7 @@ fun LayerCard(
                                 LayerType.CONIC -> Lucide.CircleDashed
                                 LayerType.MESH -> Lucide.Grid3x3
                                 LayerType.BLOB -> Lucide.Droplet
-                                LayerType.AURORA -> Lucide.Sparkles
+                                LayerType.AURORA -> AiWaveSphereVector
                                 LayerType.LIQUID -> Lucide.Droplet
                             },
                             active = layer.type == type
@@ -737,7 +736,11 @@ private fun BlendModeSelector(current: ChromaBlendMode, onChange: (ChromaBlendMo
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            modifier = Modifier.background(colors.glassBg)
+            modifier = Modifier
+                .shadow(16.dp, RoundedCornerShape(24.dp), ambientColor = Color.Black.copy(alpha = 0.2f), spotColor = Color.Black.copy(alpha = 0.15f))
+                .clip(RoundedCornerShape(24.dp))
+                .background(colors.glassBg)
+                .border(0.5.dp, colors.glassBorder, RoundedCornerShape(24.dp))
         ) {
             ChromaBlendMode.entries.forEach { mode ->
                 DropdownMenuItem(

@@ -20,7 +20,13 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.ChartColumn
+import com.chroma.studio.ui.components.LiquidGlassCheckbox
+import com.chroma.studio.ui.components.LiquidGlassRadio
+import com.chroma.studio.ui.components.LiquidGlassProgressBar
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,6 +41,7 @@ import androidx.compose.ui.geometry.Size
 import kotlin.math.min
 import kotlin.math.sin
 import kotlin.math.PI
+import kotlin.math.roundToInt
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
@@ -443,6 +450,7 @@ private fun MessageReactionDock(
     }
 }
 
+@Immutable
 data class MessageRowCallbacks(
     val onReactionClick: (String) -> Unit = {},
     val onDoubleTap: () -> Unit = {},
@@ -459,11 +467,173 @@ data class MessageRowCallbacks(
     val onToggleSelect: () -> Unit = {}
 )
 
+@Immutable
 data class MessageBubbleConfig(
     val bubbleStyle: BubbleStyleType = BubbleStyleType.CLASSIC_IOS,
     val customCornerConfig: CustomCornerConfig = CustomCornerConfig(),
     val animationStyle: BubbleAnimationStyle = BubbleAnimationStyle.POP_ZOOM
 )
+
+@Composable
+private fun Modifier.messageEntrance(
+    isFreshMessage: Boolean,
+    animationStyle: BubbleAnimationStyle,
+    isOutgoing: Boolean
+): Modifier {
+    if (!isFreshMessage) return this
+
+    val animScaleX = remember {
+        Animatable(
+            when (animationStyle) {
+                BubbleAnimationStyle.POP_ZOOM -> 0.42f
+                BubbleAnimationStyle.SLIDE_UP_FADE -> 1f
+                BubbleAnimationStyle.ELASTIC_SPRING -> 0.25f
+                BubbleAnimationStyle.FLIP_IN_3D -> 0.85f
+                BubbleAnimationStyle.SLIDE_IN_SIDE -> 0.92f
+                BubbleAnimationStyle.EXPAND_REVEAL -> 0.70f
+                BubbleAnimationStyle.GENTLE_FADE -> 0.96f
+            }
+        )
+    }
+    val animScaleY = remember {
+        Animatable(
+            when (animationStyle) {
+                BubbleAnimationStyle.POP_ZOOM -> 0.28f
+                BubbleAnimationStyle.SLIDE_UP_FADE -> 1f
+                BubbleAnimationStyle.ELASTIC_SPRING -> 0.25f
+                BubbleAnimationStyle.FLIP_IN_3D -> 0.85f
+                BubbleAnimationStyle.SLIDE_IN_SIDE -> 0.92f
+                BubbleAnimationStyle.EXPAND_REVEAL -> 0.38f
+                BubbleAnimationStyle.GENTLE_FADE -> 0.96f
+            }
+        )
+    }
+    val animAlpha = remember {
+        Animatable(
+            when (animationStyle) {
+                BubbleAnimationStyle.POP_ZOOM -> 0.35f
+                BubbleAnimationStyle.SLIDE_UP_FADE -> 0f
+                BubbleAnimationStyle.ELASTIC_SPRING -> 0.1f
+                BubbleAnimationStyle.FLIP_IN_3D -> 0f
+                BubbleAnimationStyle.SLIDE_IN_SIDE -> 0f
+                BubbleAnimationStyle.EXPAND_REVEAL -> 0.15f
+                BubbleAnimationStyle.GENTLE_FADE -> 0f
+            }
+        )
+    }
+    val animOffsetY = remember {
+        Animatable(
+            when (animationStyle) {
+                BubbleAnimationStyle.POP_ZOOM -> 22f
+                BubbleAnimationStyle.SLIDE_UP_FADE -> 40f
+                BubbleAnimationStyle.ELASTIC_SPRING -> 10f
+                BubbleAnimationStyle.FLIP_IN_3D -> 20f
+                BubbleAnimationStyle.EXPAND_REVEAL -> 16f
+                else -> 0f
+            }
+        )
+    }
+    val animOffsetX = remember {
+        Animatable(
+            when (animationStyle) {
+                BubbleAnimationStyle.SLIDE_IN_SIDE -> if (isOutgoing) 90f else -90f
+                else -> 0f
+            }
+        )
+    }
+    val animRotationX = remember {
+        Animatable(
+            when (animationStyle) {
+                BubbleAnimationStyle.FLIP_IN_3D -> 45f
+                else -> 0f
+            }
+        )
+    }
+
+    LaunchedEffect(animationStyle) {
+        when (animationStyle) {
+            BubbleAnimationStyle.POP_ZOOM -> {
+                animScaleX.snapTo(0.42f)
+                animScaleY.snapTo(0.28f)
+                animOffsetY.snapTo(22f)
+                animAlpha.snapTo(0.35f)
+                launch { animScaleX.animateTo(1f, animationSpec = spring(dampingRatio = 0.52f, stiffness = Spring.StiffnessMediumLow)) }
+                launch { animScaleY.animateTo(1f, animationSpec = spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow)) }
+                launch { animOffsetY.animateTo(0f, animationSpec = spring(dampingRatio = 0.58f, stiffness = Spring.StiffnessMediumLow)) }
+                animAlpha.animateTo(1f, animationSpec = tween(140))
+            }
+            BubbleAnimationStyle.SLIDE_UP_FADE -> {
+                animScaleX.snapTo(1f)
+                animScaleY.snapTo(1f)
+                animOffsetY.snapTo(40f)
+                animAlpha.snapTo(0f)
+                launch { animOffsetY.animateTo(0f, animationSpec = spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow)) }
+                animAlpha.animateTo(1f, animationSpec = tween(200, easing = FastOutSlowInEasing))
+            }
+            BubbleAnimationStyle.ELASTIC_SPRING -> {
+                animScaleX.snapTo(0.25f)
+                animScaleY.snapTo(0.25f)
+                animOffsetY.snapTo(10f)
+                animAlpha.snapTo(0.1f)
+                launch { animScaleX.animateTo(1f, animationSpec = spring(dampingRatio = 0.40f, stiffness = Spring.StiffnessLow)) }
+                launch { animScaleY.animateTo(1f, animationSpec = spring(dampingRatio = 0.42f, stiffness = Spring.StiffnessLow)) }
+                launch { animOffsetY.animateTo(0f, animationSpec = spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessLow)) }
+                animAlpha.animateTo(1f, animationSpec = tween(120))
+            }
+            BubbleAnimationStyle.FLIP_IN_3D -> {
+                animScaleX.snapTo(0.85f)
+                animScaleY.snapTo(0.85f)
+                animRotationX.snapTo(45f)
+                animOffsetY.snapTo(20f)
+                animAlpha.snapTo(0f)
+                launch { animRotationX.animateTo(0f, animationSpec = spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessMediumLow)) }
+                launch { animScaleX.animateTo(1f, animationSpec = spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMedium)) }
+                launch { animScaleY.animateTo(1f, animationSpec = spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMedium)) }
+                launch { animOffsetY.animateTo(0f, animationSpec = spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMedium)) }
+                animAlpha.animateTo(1f, animationSpec = tween(180))
+            }
+            BubbleAnimationStyle.SLIDE_IN_SIDE -> {
+                val sideOffset = if (isOutgoing) 90f else -90f
+                animScaleX.snapTo(0.92f)
+                animScaleY.snapTo(0.92f)
+                animOffsetX.snapTo(sideOffset)
+                animAlpha.snapTo(0f)
+                launch { animOffsetX.animateTo(0f, animationSpec = spring(dampingRatio = 0.68f, stiffness = Spring.StiffnessMediumLow)) }
+                launch { animScaleX.animateTo(1f, animationSpec = spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMedium)) }
+                launch { animScaleY.animateTo(1f, animationSpec = spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMedium)) }
+                animAlpha.animateTo(1f, animationSpec = tween(160))
+            }
+            BubbleAnimationStyle.EXPAND_REVEAL -> {
+                animScaleX.snapTo(0.70f)
+                animScaleY.snapTo(0.38f)
+                animOffsetY.snapTo(16f)
+                animAlpha.snapTo(0.15f)
+                launch { animScaleX.animateTo(1f, animationSpec = spring(dampingRatio = 0.78f, stiffness = Spring.StiffnessMedium)) }
+                launch { animScaleY.animateTo(1f, animationSpec = spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessMedium)) }
+                launch { animOffsetY.animateTo(0f, animationSpec = spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMedium)) }
+                animAlpha.animateTo(1f, animationSpec = tween(150))
+            }
+            BubbleAnimationStyle.GENTLE_FADE -> {
+                animScaleX.snapTo(0.96f)
+                animScaleY.snapTo(0.96f)
+                animAlpha.snapTo(0f)
+                launch { animScaleX.animateTo(1f, animationSpec = tween(260, easing = LinearOutSlowInEasing)) }
+                launch { animScaleY.animateTo(1f, animationSpec = tween(260, easing = LinearOutSlowInEasing)) }
+                animAlpha.animateTo(1f, animationSpec = tween(240, easing = LinearOutSlowInEasing))
+            }
+        }
+    }
+
+    return this.graphicsLayer {
+        scaleX = animScaleX.value
+        scaleY = animScaleY.value
+        alpha = animAlpha.value
+        translationX = animOffsetX.value
+        translationY = animOffsetY.value
+        rotationX = animRotationX.value
+        transformOrigin = TransformOrigin(if (isOutgoing) 0.98f else 0.02f, 1.0f)
+    }
+}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -509,7 +679,6 @@ fun MessageRow(
     val coroutineScope = rememberCoroutineScope()
     val dragOffset = remember { Animatable(0f) }
 
-    val heartPainter = painterResource(id = R.drawable.heart_like)
     val heartScale = remember { Animatable(0.2f) }
     val heartAlpha = remember { Animatable(1f) }
 
@@ -539,239 +708,8 @@ fun MessageRow(
         message.timestamp > 0L && (now - message.timestamp) < 4000L
     }
 
-    // Message Bubble Entrance Animation Engine (Rubber / Jumps squash & stretch)
-    val animScaleX = remember(message.id) {
-        Animatable(
-            if (!isFreshMessage) 1f else when (animationStyle) {
-                BubbleAnimationStyle.POP_ZOOM -> 0.42f
-                BubbleAnimationStyle.SLIDE_UP_FADE -> 1f
-                BubbleAnimationStyle.ELASTIC_SPRING -> 0.25f
-                BubbleAnimationStyle.FLIP_IN_3D -> 0.85f
-                BubbleAnimationStyle.SLIDE_IN_SIDE -> 0.92f
-                BubbleAnimationStyle.EXPAND_REVEAL -> 0.70f
-                BubbleAnimationStyle.GENTLE_FADE -> 0.96f
-            }
-        )
-    }
-    val animScaleY = remember(message.id) {
-        Animatable(
-            if (!isFreshMessage) 1f else when (animationStyle) {
-                BubbleAnimationStyle.POP_ZOOM -> 0.28f
-                BubbleAnimationStyle.SLIDE_UP_FADE -> 1f
-                BubbleAnimationStyle.ELASTIC_SPRING -> 0.25f
-                BubbleAnimationStyle.FLIP_IN_3D -> 0.85f
-                BubbleAnimationStyle.SLIDE_IN_SIDE -> 0.92f
-                BubbleAnimationStyle.EXPAND_REVEAL -> 0.38f
-                BubbleAnimationStyle.GENTLE_FADE -> 0.96f
-            }
-        )
-    }
-    val animAlpha = remember(message.id) {
-        Animatable(
-            if (!isFreshMessage) 1f else when (animationStyle) {
-                BubbleAnimationStyle.POP_ZOOM -> 0.35f
-                BubbleAnimationStyle.SLIDE_UP_FADE -> 0f
-                BubbleAnimationStyle.ELASTIC_SPRING -> 0.1f
-                BubbleAnimationStyle.FLIP_IN_3D -> 0f
-                BubbleAnimationStyle.SLIDE_IN_SIDE -> 0f
-                BubbleAnimationStyle.EXPAND_REVEAL -> 0.15f
-                BubbleAnimationStyle.GENTLE_FADE -> 0f
-            }
-        )
-    }
-    val animOffsetY = remember(message.id) {
-        Animatable(
-            if (!isFreshMessage) 0f else when (animationStyle) {
-                BubbleAnimationStyle.POP_ZOOM -> 22f
-                BubbleAnimationStyle.SLIDE_UP_FADE -> 40f
-                BubbleAnimationStyle.ELASTIC_SPRING -> 10f
-                BubbleAnimationStyle.FLIP_IN_3D -> 20f
-                BubbleAnimationStyle.EXPAND_REVEAL -> 16f
-                else -> 0f
-            }
-        )
-    }
-    val animOffsetX = remember(message.id) {
-        Animatable(
-            if (!isFreshMessage) 0f else when (animationStyle) {
-                BubbleAnimationStyle.SLIDE_IN_SIDE -> if (isOutgoing) 90f else -90f
-                else -> 0f
-            }
-        )
-    }
-    val animRotationX = remember(message.id) {
-        Animatable(
-            if (!isFreshMessage) 0f else when (animationStyle) {
-                BubbleAnimationStyle.FLIP_IN_3D -> 45f
-                else -> 0f
-            }
-        )
-    }
-
-    LaunchedEffect(message.id, animationStyle) {
-        if (!isFreshMessage) return@LaunchedEffect
-        when (animationStyle) {
-            BubbleAnimationStyle.POP_ZOOM -> {
-                // Tactile rubber/jumps expand & squeeze spring physics
-                animScaleX.snapTo(0.42f)
-                animScaleY.snapTo(0.28f)
-                animOffsetY.snapTo(22f)
-                animAlpha.snapTo(0.35f)
-                launch {
-                    animScaleX.animateTo(
-                        1f,
-                        animationSpec = spring(dampingRatio = 0.52f, stiffness = Spring.StiffnessMediumLow)
-                    )
-                }
-                launch {
-                    animScaleY.animateTo(
-                        1f,
-                        animationSpec = spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow)
-                    )
-                }
-                launch {
-                    animOffsetY.animateTo(
-                        0f,
-                        animationSpec = spring(dampingRatio = 0.58f, stiffness = Spring.StiffnessMediumLow)
-                    )
-                }
-                animAlpha.animateTo(1f, animationSpec = tween(140))
-            }
-            BubbleAnimationStyle.SLIDE_UP_FADE -> {
-                animScaleX.snapTo(1f)
-                animScaleY.snapTo(1f)
-                animOffsetY.snapTo(40f)
-                animAlpha.snapTo(0f)
-                launch {
-                    animOffsetY.animateTo(
-                        0f,
-                        animationSpec = spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow)
-                    )
-                }
-                animAlpha.animateTo(1f, animationSpec = tween(200, easing = FastOutSlowInEasing))
-            }
-            BubbleAnimationStyle.ELASTIC_SPRING -> {
-                animScaleX.snapTo(0.25f)
-                animScaleY.snapTo(0.25f)
-                animOffsetY.snapTo(10f)
-                animAlpha.snapTo(0.1f)
-                launch {
-                    animScaleX.animateTo(
-                        1f,
-                        animationSpec = spring(dampingRatio = 0.40f, stiffness = Spring.StiffnessLow)
-                    )
-                }
-                launch {
-                    animScaleY.animateTo(
-                        1f,
-                        animationSpec = spring(dampingRatio = 0.42f, stiffness = Spring.StiffnessLow)
-                    )
-                }
-                launch {
-                    animOffsetY.animateTo(
-                        0f,
-                        animationSpec = spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessLow)
-                    )
-                }
-                animAlpha.animateTo(1f, animationSpec = tween(120))
-            }
-            BubbleAnimationStyle.FLIP_IN_3D -> {
-                animScaleX.snapTo(0.85f)
-                animScaleY.snapTo(0.85f)
-                animRotationX.snapTo(45f)
-                animOffsetY.snapTo(20f)
-                animAlpha.snapTo(0f)
-                launch {
-                    animRotationX.animateTo(
-                        0f,
-                        animationSpec = spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessMediumLow)
-                    )
-                }
-                launch {
-                    animScaleX.animateTo(
-                        1f,
-                        animationSpec = spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMedium)
-                    )
-                }
-                launch {
-                    animScaleY.animateTo(
-                        1f,
-                        animationSpec = spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMedium)
-                    )
-                }
-                launch {
-                    animOffsetY.animateTo(
-                        0f,
-                        animationSpec = spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMedium)
-                    )
-                }
-                animAlpha.animateTo(1f, animationSpec = tween(180))
-            }
-            BubbleAnimationStyle.SLIDE_IN_SIDE -> {
-                val sideOffset = if (isOutgoing) 90f else -90f
-                animScaleX.snapTo(0.92f)
-                animScaleY.snapTo(0.92f)
-                animOffsetX.snapTo(sideOffset)
-                animAlpha.snapTo(0f)
-                launch {
-                    animOffsetX.animateTo(
-                        0f,
-                        animationSpec = spring(dampingRatio = 0.68f, stiffness = Spring.StiffnessMediumLow)
-                    )
-                }
-                launch {
-                    animScaleX.animateTo(
-                        1f,
-                        animationSpec = spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMedium)
-                    )
-                }
-                launch {
-                    animScaleY.animateTo(
-                        1f,
-                        animationSpec = spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMedium)
-                    )
-                }
-                animAlpha.animateTo(1f, animationSpec = tween(160))
-            }
-            BubbleAnimationStyle.EXPAND_REVEAL -> {
-                animScaleX.snapTo(0.70f)
-                animScaleY.snapTo(0.38f)
-                animOffsetY.snapTo(16f)
-                animAlpha.snapTo(0.15f)
-                launch {
-                    animScaleX.animateTo(
-                        1f,
-                        animationSpec = spring(dampingRatio = 0.78f, stiffness = Spring.StiffnessMedium)
-                    )
-                }
-                launch {
-                    animScaleY.animateTo(
-                        1f,
-                        animationSpec = spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessMedium)
-                    )
-                }
-                launch {
-                    animOffsetY.animateTo(
-                        0f,
-                        animationSpec = spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMedium)
-                    )
-                }
-                animAlpha.animateTo(1f, animationSpec = tween(150))
-            }
-            BubbleAnimationStyle.GENTLE_FADE -> {
-                animScaleX.snapTo(0.96f)
-                animScaleY.snapTo(0.96f)
-                animAlpha.snapTo(0f)
-                launch {
-                    animScaleX.animateTo(1f, animationSpec = tween(260, easing = LinearOutSlowInEasing))
-                }
-                launch {
-                    animScaleY.animateTo(1f, animationSpec = tween(260, easing = LinearOutSlowInEasing))
-                }
-                animAlpha.animateTo(1f, animationSpec = tween(240, easing = LinearOutSlowInEasing))
-            }
-        }
-    }
+    // Historical messages render instantly without creating heavyweight Animatable objects (prevents OOM & jank)
+    // Fresh messages delegate to Modifier.messageEntrance
 
     // System message (e.g. Call ended)
     if (message.mediaType == "call") {
@@ -800,21 +738,9 @@ fun MessageRow(
         return
     }
 
-    val rowBgColor by animateColorAsState(
-        targetValue = if (isSelected) colors.iosBlue.copy(alpha = 0.12f) else Color.Transparent,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-        label = "rowBg"
-    )
-    val animatedStartPadding by animateDpAsState(
-        targetValue = if (isSelectionMode) 12.dp else (if (isOutgoing) 44.dp else 8.dp),
-        animationSpec = spring(dampingRatio = 0.8f, stiffness = 400f),
-        label = "startPad"
-    )
-    val animatedEndPadding by animateDpAsState(
-        targetValue = if (isOutgoing) 8.dp else (if (isSelectionMode) 8.dp else 44.dp),
-        animationSpec = spring(dampingRatio = 0.8f, stiffness = 400f),
-        label = "endPad"
-    )
+    val rowBgColor = if (isSelectionMode && isSelected) colors.iosBlue.copy(alpha = 0.12f) else Color.Transparent
+    val animatedStartPadding = if (isSelectionMode) 12.dp else (if (isOutgoing) 44.dp else 8.dp)
+    val animatedEndPadding = if (isOutgoing) 8.dp else (if (isSelectionMode) 8.dp else 44.dp)
 
     Row(
         modifier = modifier
@@ -992,15 +918,11 @@ fun MessageRow(
 
                         Box(
                             modifier = Modifier
-                                .graphicsLayer {
-                                    scaleX = animScaleX.value
-                                    scaleY = animScaleY.value
-                                    alpha = animAlpha.value
-                                    translationX = animOffsetX.value
-                                    translationY = animOffsetY.value
-                                    rotationX = animRotationX.value
-                                    transformOrigin = TransformOrigin(if (isOutgoing) 0.98f else 0.02f, 1.0f)
-                                }
+                                .messageEntrance(
+                                    isFreshMessage = isFreshMessage,
+                                    animationStyle = animationStyle,
+                                    isOutgoing = isOutgoing
+                                )
                                 .then(
                                     if (visual.elevation > 0.dp && !isMediaOnly) {
                                         Modifier.shadow(
@@ -1101,7 +1023,7 @@ fun MessageRow(
                             contentAlignment = Alignment.Center
                         ) {
                             Image(
-                                painter = heartPainter,
+                                painter = painterResource(id = R.drawable.heart_like),
                                 contentDescription = "Heart Like",
                                 modifier = Modifier.size(68.dp)
                             )
@@ -1411,6 +1333,7 @@ private fun MessageBubbleInnerContent(
                     )
                     Spacer(Modifier.height(4.dp))
                 } else {
+                    val context = androidx.compose.ui.platform.LocalContext.current
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -1419,6 +1342,9 @@ private fun MessageBubbleInnerContent(
                             .clip(RoundedCornerShape(14.dp))
                             .background(if (isOutgoing) Color.White.copy(alpha = 0.18f) else Color.Black.copy(alpha = 0.04f))
                             .border(0.5.dp, if (isOutgoing) Color.White.copy(alpha = 0.25f) else colors.borderSubtle, RoundedCornerShape(14.dp))
+                            .clickable {
+                                openChatFileIntent(context, message.localUri ?: message.mediaUrl, message.fileName)
+                            }
                             .padding(10.dp)
                     ) {
                         Box(
@@ -1610,7 +1536,7 @@ private fun MessageBubbleInnerContent(
             }
 
             // 4. Timestamp & Read Receipts (Crisp iOS status tick)
-            if (!isVoiceOnly && !isMediaOnly) {
+            if (!isShortSingleLine && !isVoiceOnly && !isMediaOnly) {
                 Row(
                     modifier = Modifier
                         .align(if (isOutgoing) Alignment.End else Alignment.Start)
@@ -1690,13 +1616,13 @@ fun VoiceNotePlayer(
 
     val currentPlayingId by AudioPlayerManager.currentPlayingId.collectAsState()
     val isGlobalPlaying by AudioPlayerManager.isPlaying.collectAsState()
-    val playbackProgress by AudioPlayerManager.playbackProgress.collectAsState()
-    val playbackSpeed by AudioPlayerManager.playbackSpeed.collectAsState()
-    val currentPositionMs by AudioPlayerManager.currentPositionMs.collectAsState()
-    val totalDurationMs by AudioPlayerManager.totalDurationMs.collectAsState()
-
-    val isThisPlaying = isGlobalPlaying && currentPlayingId == messageId
     val isThisActive = currentPlayingId == messageId
+    val isThisPlaying = isGlobalPlaying && isThisActive
+
+    val playbackProgress by if (isThisActive) AudioPlayerManager.playbackProgress.collectAsState() else remember { mutableFloatStateOf(0f) }
+    val playbackSpeed by if (isThisActive) AudioPlayerManager.playbackSpeed.collectAsState() else remember { mutableFloatStateOf(1f) }
+    val currentPositionMs by if (isThisActive) AudioPlayerManager.currentPositionMs.collectAsState() else remember { mutableIntStateOf(0) }
+    val totalDurationMs by if (isThisActive) AudioPlayerManager.totalDurationMs.collectAsState() else remember { mutableIntStateOf(0) }
 
     val fallbackDuration = if (durationSec > 0) durationSec else 3
     val effectiveDuration = if (isThisActive && totalDurationMs > 0) (totalDurationMs / 1000).coerceAtLeast(1) else fallbackDuration
@@ -1770,16 +1696,20 @@ fun VoiceNotePlayer(
             }
             val activeProgress = if (isThisActive) playbackProgress else 0f
 
-            val pulseTransition = rememberInfiniteTransition(label = "voicePulse")
-            val pulseProgress by pulseTransition.animateFloat(
-                initialValue = 0f,
-                targetValue = 1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(1200, easing = LinearEasing),
-                    repeatMode = RepeatMode.Restart
-                ),
-                label = "pulseProgress"
-            )
+            val pulseProgress by if (isThisPlaying) {
+                val pulseTransition = rememberInfiniteTransition(label = "voicePulse")
+                pulseTransition.animateFloat(
+                    initialValue = 0f,
+                    targetValue = 1f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(1200, easing = LinearEasing),
+                        repeatMode = RepeatMode.Restart
+                    ),
+                    label = "pulseProgress"
+                )
+            } else {
+                remember { mutableFloatStateOf(0f) }
+            }
 
             Canvas(
                 modifier = Modifier
@@ -1929,166 +1859,198 @@ fun PollCard(
     val colors = LocalChatColors.current
     val totalVotes = poll.options.sumOf { it.votes }
     val maxVotes = poll.options.maxOfOrNull { it.votes } ?: 0
+    val hasVoted = poll.options.any { it.isUserVoted }
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 2.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+            .padding(vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // Poll Header Indicator (Icon + "Poll")
+        // Poll Header Indicator (Icon + Badges)
         Row(
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            LucideBarChart2(
-                tint = if (isOutgoing) Color.White.copy(alpha = 0.75f) else colors.textMuted,
-                size = 14.dp
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(22.dp)
+                        .clip(CircleShape)
+                        .background(if (isOutgoing) Color.White.copy(alpha = 0.2f) else colors.iosBlue.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Lucide.ChartColumn,
+                        contentDescription = null,
+                        tint = if (isOutgoing) Color.White else colors.iosBlue,
+                        modifier = Modifier.size(13.dp)
+                    )
+                }
+                Text(
+                    text = if (poll.isAnonymous) "Anonymous Poll" else "Public Poll",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (isOutgoing) Color.White.copy(alpha = 0.85f) else colors.iosBlue
+                )
+            }
+
             Text(
-                text = "Poll",
-                fontSize = 12.sp,
+                text = if (poll.allowMultipleAnswers) "Select one or more" else "Select one",
+                fontSize = 11.5.sp,
                 fontWeight = FontWeight.Medium,
-                color = if (isOutgoing) Color.White.copy(alpha = 0.75f) else colors.textMuted
+                color = if (isOutgoing) Color.White.copy(alpha = 0.65f) else colors.textMuted
             )
         }
 
         // Poll Question
         Text(
             text = poll.question,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.SemiBold,
-            lineHeight = 20.sp,
+            fontSize = 15.5.sp,
+            fontWeight = FontWeight.Bold,
+            lineHeight = 21.sp,
             color = if (isOutgoing) Color.White else colors.textDark
         )
 
-        // Subtitle
-        Text(
-            text = if (poll.allowMultipleAnswers) "Select one or more options" else "Select one option",
-            fontSize = 12.sp,
-            color = if (isOutgoing) Color.White.copy(alpha = 0.65f) else colors.textMuted
-        )
-
-        // Options List
+        // Options List with Liquid Glass Checkbox / Radio and Recessed Progress Bars
         Column(
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             poll.options.forEachIndexed { index, option ->
                 val percentage = if (totalVotes == 0) 0f else (option.votes.toFloat() / totalVotes)
-                val animatedProgress by animateFloatAsState(
-                    targetValue = percentage,
-                    animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f),
-                    label = "pollProgress_${index}"
-                )
                 val isSelected = option.isUserVoted
+                val isLeading = maxVotes > 0 && option.votes == maxVotes && totalVotes > 1
+
+                val containerBg = if (isOutgoing) {
+                    Color.White.copy(alpha = if (isSelected) 0.22f else 0.12f)
+                } else {
+                    if (colors.isLight) {
+                        if (isSelected) colors.iosBlue.copy(alpha = 0.08f) else Color(0xFFF2F2F7)
+                    } else {
+                        if (isSelected) colors.iosBlue.copy(alpha = 0.15f) else Color(0xFF2C2C2E)
+                    }
+                }
+
+                val borderColor = if (isSelected) {
+                    if (isOutgoing) Color.White else colors.iosBlue
+                } else {
+                    if (isOutgoing) Color.White.copy(alpha = 0.18f) else colors.borderSubtle
+                }
 
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(6.dp))
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(containerBg)
+                        .border(
+                            width = if (isSelected) 1.5.dp else 0.5.dp,
+                            color = borderColor,
+                            shape = RoundedCornerShape(12.dp)
+                        )
                         .clickable {
-                            com.chroma.studio.chat.sound.SoundManager.playReaction()
+                            SoundManager.playReaction()
                             onVote(index)
                         }
-                        .padding(vertical = 2.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    // Content row: Selection control + Option Text + Right side stats
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        // Left: Checkbox circle + Option Text
+                        // Left: Checkbox/Radio + Option Text
                         Row(
                             modifier = Modifier.weight(1f, fill = false),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            // Checkbox circle (20dp)
-                            Box(
-                                modifier = Modifier
-                                    .size(20.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        if (isSelected) {
-                                            if (isOutgoing) Color.White else Color(0xFF34C759)
-                                        } else {
-                                            Color.Transparent
-                                        }
-                                    )
-                                    .border(
-                                        width = if (isSelected) 0.dp else 1.5.dp,
-                                        color = if (isSelected) {
-                                            Color.Transparent
-                                        } else {
-                                            if (isOutgoing) Color.White.copy(alpha = 0.5f) else Color(0xFFC7C7CC)
-                                        },
-                                        shape = CircleShape
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (isSelected) {
-                                    LucideCheck(
-                                        tint = if (isOutgoing) colors.iosBlue else Color.White,
-                                        size = 12.dp
-                                    )
-                                }
+                            if (poll.allowMultipleAnswers) {
+                                LiquidGlassCheckbox(
+                                    checked = isSelected,
+                                    onCheckedChange = {
+                                        SoundManager.playReaction()
+                                        onVote(index)
+                                    },
+                                    size = 19.dp
+                                )
+                            } else {
+                                LiquidGlassRadio(
+                                    selected = isSelected,
+                                    onClick = {
+                                        SoundManager.playReaction()
+                                        onVote(index)
+                                    },
+                                    size = 19.dp
+                                )
                             }
 
                             Text(
                                 text = option.text,
                                 fontSize = 14.sp,
-                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                color = if (isOutgoing) Color.White else colors.textDark
+                                fontWeight = if (isSelected || isLeading) FontWeight.SemiBold else FontWeight.Normal,
+                                color = if (isOutgoing) Color.White else colors.textDark,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
 
-                        // Right: Voter Avatars + Vote Count
-                        if (option.votes > 0) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                // Overlapping mini avatars
-                                if (option.voters.isNotEmpty()) {
-                                    val visibleVoters = option.voters.take(3)
-                                    Row(
-                                        modifier = Modifier.padding(end = 2.dp)
-                                    ) {
-                                        visibleVoters.forEachIndexed { voterIdx, voter ->
-                                            Box(
-                                                modifier = Modifier
-                                                    .offset(x = (-6 * voterIdx).dp)
-                                                    .size(16.dp)
-                                                    .clip(CircleShape)
-                                                    .border(
-                                                        1.dp,
-                                                        if (isOutgoing) colors.iosBlue else colors.cardBg,
-                                                        CircleShape
-                                                    )
-                                                    .background(colors.surfaceSecondary),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                if (voter.avatar.isNotEmpty()) {
-                                                    AsyncImage(
-                                                        model = voter.avatar,
-                                                        contentDescription = voter.name,
-                                                        modifier = Modifier.fillMaxSize().clip(CircleShape),
-                                                        contentScale = ContentScale.Crop
-                                                    )
-                                                } else {
-                                                    Text(
-                                                        text = voter.name.take(1).uppercase(),
-                                                        fontSize = 7.sp,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = colors.iosBlue
-                                                    )
-                                                }
+                        // Right: Voter Avatars + Percentage / Vote count
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            if (!poll.isAnonymous && option.voters.isNotEmpty()) {
+                                val visibleVoters = option.voters.take(3)
+                                Row(modifier = Modifier.padding(end = 2.dp)) {
+                                    visibleVoters.forEachIndexed { voterIdx, voter ->
+                                        Box(
+                                            modifier = Modifier
+                                                .offset(x = (-6 * voterIdx).dp)
+                                                .size(18.dp)
+                                                .clip(CircleShape)
+                                                .border(
+                                                    1.dp,
+                                                    if (isOutgoing) colors.iosBlue else Color.White,
+                                                    CircleShape
+                                                )
+                                                .background(colors.surfaceSecondary),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            if (voter.avatar.isNotEmpty()) {
+                                                AsyncImage(
+                                                    model = voter.avatar,
+                                                    contentDescription = voter.name,
+                                                    modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                                    contentScale = ContentScale.Crop
+                                                )
+                                            } else {
+                                                Text(
+                                                    text = voter.name.take(1).uppercase(),
+                                                    fontSize = 8.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = colors.iosBlue
+                                                )
                                             }
                                         }
                                     }
                                 }
+                            }
 
+                            if (hasVoted) {
+                                val pct = (percentage * 100f).roundToInt()
+                                Text(
+                                    text = "$pct%",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isOutgoing) Color.White else (if (isSelected) colors.iosBlue else colors.textDark)
+                                )
+                            } else if (option.votes > 0) {
                                 Text(
                                     text = "${option.votes}",
                                     fontSize = 12.sp,
@@ -2099,65 +2061,62 @@ fun PollCard(
                         }
                     }
 
-                    // Progress bar (3dp height)
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(3.dp)
-                            .clip(RoundedCornerShape(1.5.dp))
-                            .background(
-                                if (isOutgoing) Color.White.copy(alpha = 0.2f) else colors.separator.copy(alpha = 0.15f)
-                            )
-                    ) {
-                        if (animatedProgress > 0f) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxHeight()
-                                    .fillMaxWidth(animatedProgress)
-                                    .clip(RoundedCornerShape(1.5.dp))
-                                    .background(
-                                        if (isOutgoing) {
-                                            Color.White.copy(alpha = 0.9f)
-                                        } else {
-                                            if (isSelected) Color(0xFF34C759) else colors.iosBlue
-                                        }
-                                    )
-                            )
-                        }
+                    // Liquid Glass Recessed Progress Bar
+                    if (hasVoted) {
+                        LiquidGlassProgressBar(
+                            progress = percentage,
+                            height = 6.dp,
+                            fillBrush = if (isOutgoing) Brush.horizontalGradient(listOf(Color.White.copy(alpha = 0.95f), Color.White.copy(alpha = 0.65f)))
+                                        else null
+                        )
                     }
                 }
             }
         }
 
-        // Divider & "View Votes" Footer
-        Box(
+        // Bottom Stats & Action Footer
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 2.dp)
-                .height(0.5.dp)
-                .background(if (isOutgoing) Color.White.copy(alpha = 0.25f) else colors.separator)
-        )
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(6.dp))
-                .clickable(enabled = onViewVotes != null) {
-                    onViewVotes?.invoke()
-                }
-                .padding(vertical = 4.dp),
-            contentAlignment = Alignment.Center
+                .padding(top = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                text = "View Votes",
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = if (isOutgoing) Color.White else colors.iosBlue
+                text = when {
+                    totalVotes == 0 -> "No votes yet"
+                    totalVotes == 1 -> "1 vote"
+                    else -> "$totalVotes votes"
+                },
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = if (isOutgoing) Color.White.copy(alpha = 0.75f) else colors.textMuted
             )
+
+            // "View Votes" Apple Pill Button
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (isOutgoing) Color.White.copy(alpha = 0.18f) else colors.iosBlue.copy(alpha = 0.1f))
+                    .clickable(enabled = onViewVotes != null) {
+                        SoundManager.playReaction()
+                        onViewVotes?.invoke()
+                    }
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "View Votes",
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (isOutgoing) Color.White else colors.iosBlue
+                )
+            }
         }
     }
 }
 
+@Immutable
 data class BubbleVisualConfig(
     val shape: androidx.compose.ui.graphics.Shape,
     val background: Brush,
@@ -3909,6 +3868,7 @@ fun FileStackCluster(
     isOutgoing: Boolean,
     modifier: Modifier = Modifier
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val colors = LocalChatColors.current
     Column(
         modifier = modifier
@@ -3969,7 +3929,9 @@ fun FileStackCluster(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(10.dp))
-                    .clickable { /* preview or open */ }
+                    .clickable {
+                        openChatFileIntent(context, file.uri, file.name)
+                    }
                     .padding(vertical = 4.dp, horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -4017,6 +3979,43 @@ fun FileStackCluster(
                 )
             }
         }
+    }
+}
+
+/**
+ * Helper to open an attached file or document using the system default viewer.
+ */
+fun openChatFileIntent(context: android.content.Context, uriString: String?, fileName: String?) {
+    try {
+        if (!uriString.isNullOrEmpty()) {
+            val uri = android.net.Uri.parse(uriString)
+            val extension = fileName?.substringAfterLast('.', "")?.lowercase() ?: ""
+            val mimeType = context.contentResolver.getType(uri) ?: when (extension) {
+                "pdf" -> "application/pdf"
+                "doc", "docx" -> "application/msword"
+                "xls", "xlsx" -> "application/vnd.ms-excel"
+                "ppt", "pptx" -> "application/vnd.ms-powerpoint"
+                "zip" -> "application/zip"
+                "rar" -> "application/x-rar-compressed"
+                "7z" -> "application/x-7z-compressed"
+                "txt" -> "text/plain"
+                "apk" -> "application/vnd.android.package-archive"
+                "mp3", "wav", "m4a", "aac", "ogg" -> "audio/*"
+                "mp4", "mkv", "mov" -> "video/*"
+                "jpg", "jpeg", "png", "webp", "gif" -> "image/*"
+                else -> "*/*"
+            }
+            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, mimeType)
+                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        } else {
+            android.widget.Toast.makeText(context, "Opening ${fileName ?: "file"}", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    } catch (e: Exception) {
+        android.widget.Toast.makeText(context, "No app available to open this file", android.widget.Toast.LENGTH_SHORT).show()
     }
 }
 

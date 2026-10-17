@@ -25,6 +25,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -35,6 +36,8 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
 import com.chroma.studio.model.FlashMediaType
+import com.chroma.studio.ui.components.ApplePhotosGraphic
+import com.chroma.studio.ui.components.rememberAppleGraphicAnimationState
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.composables.icons.lucide.*
 import kotlinx.coroutines.Dispatchers
@@ -166,7 +169,11 @@ fun FlashPickerScreen(
             DropdownMenu(
                 expanded = filterExpanded,
                 onDismissRequest = { filterExpanded = false },
-                modifier = Modifier.background(Color(0xFF1C1C1E))
+                modifier = Modifier
+                    .shadow(16.dp, RoundedCornerShape(24.dp), ambientColor = Color.Black.copy(alpha = 0.2f), spotColor = Color.Black.copy(alpha = 0.15f))
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(Color(0xFF1C1C1E))
+                    .border(0.5.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(24.dp))
             ) {
                 GalleryFilter.values().forEach { f ->
                     DropdownMenuItem(
@@ -191,11 +198,16 @@ fun FlashPickerScreen(
                 OscellionLoadingSpinner(color = Color(0xFF007AFF))
             }
         } else if (mediaItems.isEmpty()) {
+            val emptyState = rememberAppleGraphicAnimationState()
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Lucide.FolderOpen, null, tint = Color.White.copy(alpha = 0.3f), modifier = Modifier.size(64.dp))
+                    ApplePhotosGraphic(
+                        modifier = Modifier.size(130.dp),
+                        state = emptyState,
+                        enableClickToAnimate = true
+                    )
                     Spacer(Modifier.height(16.dp))
-                    Text("No media found", color = Color.White.copy(alpha = 0.6f), fontSize = 16.sp)
+                    Text("No media found", color = Color.White.copy(alpha = 0.8f), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         } else {

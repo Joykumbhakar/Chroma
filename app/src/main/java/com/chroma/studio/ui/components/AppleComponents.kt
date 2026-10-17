@@ -105,12 +105,14 @@ fun AppleSwitch(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    activeTrackColor: Color = Color(0xFF0A84FF),
+    inactiveTrackColor: Color = Color(0xFFE5E5EA),
     hazeState: dev.chrisbanes.haze.HazeState? = null
 ) {
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     var isPressed by remember { mutableStateOf(false) }
     val trackColor by animateColorAsState(
-        if (checked) Color(0xFF34C759) else Color(0xFFE5E5EA),
+        if (checked) activeTrackColor else inactiveTrackColor,
         animationSpec = androidx.compose.animation.core.tween(300),
         label = "trackColor"
     )
@@ -252,7 +254,7 @@ fun AppleSlider(
         thumb = {
             LiquidGlassKnob(
                 width = thumbWidth,
-                height = thumbWidth,
+                height = 18.dp,
                 scale = thumbScale,
                 baseAlpha = 1.0f,
                 hazeState = hazeState
@@ -830,8 +832,8 @@ fun IosActionSheet(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .shadow(16.dp, RoundedCornerShape(14.dp), spotColor = Color.Black.copy(alpha = 0.2f))
-                        .clip(RoundedCornerShape(14.dp))
+                        .shadow(16.dp, RoundedCornerShape(24.dp), spotColor = Color.Black.copy(alpha = 0.2f))
+                        .clip(RoundedCornerShape(24.dp))
                         .background(groupBg)
                 ) {
                     if (!title.isNullOrBlank()) {
@@ -885,8 +887,8 @@ fun IosActionSheet(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(58.dp)
-                        .shadow(16.dp, RoundedCornerShape(14.dp), spotColor = Color.Black.copy(alpha = 0.2f))
-                        .clip(RoundedCornerShape(14.dp))
+                        .shadow(16.dp, RoundedCornerShape(24.dp), spotColor = Color.Black.copy(alpha = 0.2f))
+                        .clip(RoundedCornerShape(24.dp))
                         .background(cancelBg)
                         .clickable(onClick = onDismiss),
                     contentAlignment = Alignment.Center
@@ -1443,7 +1445,11 @@ fun IosDynamicIslandHost(
                                         modifier = Modifier.size(24.dp).clip(CircleShape).background(Color(0xFFFF9500)),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Icon(if (event.isRemix) Lucide.Sparkles else Lucide.Download, null, tint = Color.White, modifier = Modifier.size(13.dp))
+                                        if (event.isRemix) {
+                                            AiWaveSphereIcon(modifier = Modifier.size(15.dp))
+                                        } else {
+                                            Icon(Lucide.Download, null, tint = Color.White, modifier = Modifier.size(13.dp))
+                                        }
                                     }
                                     Spacer(Modifier.width(8.dp))
                                     Text(
@@ -1808,7 +1814,11 @@ fun IosDynamicIslandHost(
                                         modifier = Modifier.size(34.dp).clip(CircleShape).background(Color(0xFFFF9500)),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Icon(if (event.isRemix) Lucide.Sparkles else Lucide.Download, null, tint = Color.White, modifier = Modifier.size(17.dp))
+                                        if (event.isRemix) {
+                                            AiWaveSphereIcon(modifier = Modifier.size(20.dp))
+                                        } else {
+                                            Icon(Lucide.Download, null, tint = Color.White, modifier = Modifier.size(17.dp))
+                                        }
                                     }
 
                                     Spacer(Modifier.width(10.dp))

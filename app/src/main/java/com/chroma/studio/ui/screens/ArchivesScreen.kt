@@ -10,6 +10,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chroma.studio.ui.theme.LocalOscellionColors
@@ -56,11 +57,35 @@ fun ArchivesScreen(
                     color = colors.primary
                 )
             } else if (archivedWorks.isEmpty()) {
-                Text(
-                    text = "No archived posts.",
-                    color = colors.textMuted,
-                    modifier = Modifier.align(Alignment.Center)
-                )
+                var isIconOpen by remember { mutableStateOf(false) }
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .padding(horizontal = 32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    com.chroma.studio.ui.graphics3d.Apple3DGraphicIcon(
+                        id = com.chroma.studio.ui.graphics3d.Apple3DGraphicId.ARCHIVE_BOX,
+                        isOpen = isIconOpen,
+                        onClick = { isIconOpen = !isIconOpen },
+                        modifier = Modifier.size(110.dp)
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    Text(
+                        text = "Archive Vault is Empty",
+                        color = colors.textMain,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = "Posts you archive will be encrypted and kept here privately.",
+                        color = colors.textMuted,
+                        fontSize = 13.sp,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                }
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),

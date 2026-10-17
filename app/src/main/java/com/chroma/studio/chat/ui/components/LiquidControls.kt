@@ -183,9 +183,14 @@ fun AppleSlider(
         }
     }
 
+    val thumbWidth by animateDpAsState(
+        targetValue = if (isInteracting) 28.dp else 24.dp,
+        animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.5f, stiffness = 600f),
+        label = "tw"
+    )
     val thumbScale by animateFloatAsState(
-        targetValue = if (isInteracting) 1.12f else 1.0f,
-        animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.45f, stiffness = 600f),
+        targetValue = if (isInteracting) 1.15f else 1.0f,
+        animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.5f, stiffness = 600f),
         label = "ts"
     )
 
@@ -229,8 +234,8 @@ fun AppleSlider(
         },
         thumb = {
             LiquidGlassKnob(
-                width = 26.dp,
-                height = 26.dp,
+                width = thumbWidth,
+                height = 18.dp,
                 scale = thumbScale,
                 baseAlpha = 1.0f,
                 hazeState = hazeState

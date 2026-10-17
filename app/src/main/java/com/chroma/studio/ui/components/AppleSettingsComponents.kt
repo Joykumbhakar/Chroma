@@ -40,6 +40,9 @@ import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Search
 import com.composables.icons.lucide.X
+import com.chroma.studio.ui.graphics3d.Apple3DGraphicId
+import com.chroma.studio.ui.graphics3d.Apple3DGraphicIcon
+import com.chroma.studio.ui.graphics3d.AppleSettingsSquircleIcon
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -546,58 +549,68 @@ fun AppleSettingsGroup(
 
 /**
  * Universal Signature Programmatic Gradient for Icon Badges:
- * Layer 1 (backgroundLayer): #f8fafc (Color(0xFFF8FAFC))
- * Layer 2 (layer0): TL_BR Linear Gradient (#FF006FFF to #FF111C42)
+ * Single Unified Apple Blue Gradient matching Liquid Glass spec.
  */
-val UniversalIconGradientColors = listOf(Color(0xFF006FFF), Color(0xFF111C42))
-val UniversalIconBrush = Brush.linearGradient(
-    colors = UniversalIconGradientColors,
-    start = Offset.Zero,
-    end = Offset.Infinite
+val UniversalIconGradientColors = listOf(Color(0xFF4DA6FF), Color(0xFF0A84FF), Color(0xFF0051D5))
+val UniversalIconBrush = Brush.verticalGradient(
+    colors = UniversalIconGradientColors
 )
 
 /**
- * Colorful Apple Setting Icon Badge
- * Defaults to the signature layered gradient background (#f8fafc base + #FF006FFF to #FF111C42 TL_BR).
+ * Settings List Graphic Icon Badge (65% Rounded Edge • Single Blue Gradient Background)
+ * Reference: e:\liquid_glass_design_system.html Section 4 & e:\apple_hig_3d_graphics_jetpack_compose_library.kt
  */
 @Composable
 fun AppleIconBadge(
-    icon: ImageVector,
-    iconColor: Color = Color(0xFF006FFF),
+    icon: ImageVector? = null,
+    graphic3dId: Apple3DGraphicId? = null,
+    iconColor: Color = Color(0xFF0A84FF),
     iconGradient: List<Color>? = null,
+    size: Dp = 30.dp,
     modifier: Modifier = Modifier
 ) {
-    val brush = if (iconGradient != null) {
-        Brush.linearGradient(
-            colors = iconGradient,
-            start = Offset.Zero,
-            end = Offset.Infinite
-        )
-    } else {
-        UniversalIconBrush
-    }
+    val squircleShape = RoundedCornerShape(8.dp)
 
-    Box(
-        modifier = modifier
-            .size(30.dp)
-            .shadow(
-                elevation = 1.dp,
-                shape = RoundedCornerShape(7.5.dp),
-                spotColor = Color.Black.copy(alpha = 0.15f),
-                ambientColor = Color.Black.copy(alpha = 0.08f)
+    if (icon != null) {
+        // Preferred Icon and Background design method: Soft translucent tinted squircle + vibrant matching Lucide icon
+        Box(
+            modifier = modifier
+                .size(size)
+                .clip(squircleShape)
+                .background(iconColor.copy(alpha = 0.14f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = iconColor,
+                modifier = Modifier.size(size * 0.58f)
             )
-            .clip(RoundedCornerShape(7.5.dp))
-            .background(Color(0xFFF8FAFC))
-            .background(brush)
-            .border(0.5.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(7.5.dp)),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = Color.White,
-            modifier = Modifier.size(17.dp)
-        )
+        }
+    } else if (graphic3dId != null) {
+        val brush = if (iconGradient != null) {
+            Brush.linearGradient(
+                colors = iconGradient,
+                start = Offset.Zero,
+                end = Offset.Infinite
+            )
+        } else {
+            UniversalIconBrush
+        }
+
+        Box(
+            modifier = modifier
+                .size(size)
+                .clip(squircleShape)
+                .background(brush)
+                .border(1.dp, Color.White.copy(alpha = 0.42f), squircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Apple3DGraphicIcon(
+                id = graphic3dId,
+                modifier = Modifier.size(size * 0.70f)
+            )
+        }
     }
 }
 
@@ -611,7 +624,8 @@ fun AppleSettingNavRow(
     valueText: String? = null,
     valueTextColor: Color = Color(0xFF8E8E93),
     icon: ImageVector? = null,
-    iconColor: Color = Color(0xFF006FFF),
+    graphic3dId: Apple3DGraphicId? = null,
+    iconColor: Color = Color(0xFF0A84FF),
     iconGradient: List<Color>? = null,
     isDestructive: Boolean = false,
     showChevron: Boolean = true,
@@ -634,9 +648,10 @@ fun AppleSettingNavRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(13.dp)
         ) {
-            if (icon != null) {
+            if (graphic3dId != null || icon != null) {
                 AppleIconBadge(
                     icon = icon,
+                    graphic3dId = graphic3dId,
                     iconColor = if (isDestructive) Color(0xFFFF3B30) else iconColor,
                     iconGradient = iconGradient
                 )
@@ -701,7 +716,8 @@ fun AppleSettingToggleRow(
     title: String,
     subtitle: String? = null,
     icon: ImageVector? = null,
-    iconColor: Color = Color(0xFF006FFF),
+    graphic3dId: Apple3DGraphicId? = null,
+    iconColor: Color = Color(0xFF0A84FF),
     iconGradient: List<Color>? = null,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
@@ -721,8 +737,13 @@ fun AppleSettingToggleRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(13.dp)
         ) {
-            if (icon != null) {
-                AppleIconBadge(icon = icon, iconColor = iconColor, iconGradient = iconGradient)
+            if (graphic3dId != null || icon != null) {
+                AppleIconBadge(
+                    icon = icon,
+                    graphic3dId = graphic3dId,
+                    iconColor = iconColor,
+                    iconGradient = iconGradient
+                )
             }
 
             Column(
@@ -762,9 +783,10 @@ fun AppleSettingToggleRow(
 fun AppleSettingSliderRow(
     title: String,
     valueText: String,
-    valueTextColor: Color = Color(0xFF007AFF),
+    valueTextColor: Color = Color(0xFF0A84FF),
     icon: ImageVector? = null,
-    iconColor: Color = Color(0xFF006FFF),
+    graphic3dId: Apple3DGraphicId? = null,
+    iconColor: Color = Color(0xFF0A84FF),
     iconGradient: List<Color>? = null,
     value: Float,
     onValueChange: (Float) -> Unit,
@@ -788,8 +810,13 @@ fun AppleSettingSliderRow(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                if (icon != null) {
-                    AppleIconBadge(icon = icon, iconColor = iconColor, iconGradient = iconGradient)
+                if (graphic3dId != null || icon != null) {
+                    AppleIconBadge(
+                        icon = icon,
+                        graphic3dId = graphic3dId,
+                        iconColor = iconColor,
+                        iconGradient = iconGradient
+                    )
                 }
                 Text(
                     text = title,

@@ -4,6 +4,8 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import com.chroma.studio.ui.components.FlatDoubleTapHeartOverlay
+import com.chroma.studio.ui.components.rememberDoubleTapLikeState
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -39,8 +41,11 @@ import com.chroma.studio.ui.components.GlassButton
 import com.chroma.studio.ui.components.GlassDialog
 import com.chroma.studio.ui.components.GlassIconButton
 import com.chroma.studio.ui.components.GlassTextButton
+import com.chroma.studio.ui.components.LiquidGlassSecondaryButton
 import com.chroma.studio.ui.components.OscellionLoadingSpinner
+import com.chroma.studio.ui.components.AppleFlashGraphic
 import com.chroma.studio.ui.components.ToastManager
+import com.chroma.studio.ui.components.rememberAppleGraphicAnimationState
 import com.chroma.studio.ui.theme.ChromaIcons
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.chroma.studio.viewmodel.FlashViewModel
@@ -372,7 +377,7 @@ private fun FlashVideoItem(
     }
 
     val colors = LocalOscellionColors.current
-    var doubleTapLike by remember { mutableStateOf(false) }
+    val doubleTapLikeState = rememberDoubleTapLikeState()
     var isPlaying by remember { mutableStateOf(player.isPlaying) }
     var showPlayPauseOverlay by remember { mutableStateOf(false) }
     var showMoreOptionsSheet by remember { mutableStateOf(false) }
@@ -436,17 +441,6 @@ private fun FlashVideoItem(
         }
     }
     
-    val heartScale by animateFloatAsState(
-        targetValue = if (doubleTapLike) 1.5f else 0f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-        finishedListener = { doubleTapLike = false },
-        label = "heartScale"
-    )
-    val heartAlpha by animateFloatAsState(
-        targetValue = if (doubleTapLike) 1f else 0f,
-        animationSpec = tween(400),
-        label = "heartAlpha"
-    )
     val likeScale by animateFloatAsState(
         targetValue = if (isLiked) 1.25f else 1f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy),
@@ -470,8 +464,8 @@ private fun FlashVideoItem(
             .fillMaxSize()
             .pointerInput(Unit) {
                 detectTapGestures(
-                    onDoubleTap = {
-                        doubleTapLike = true
+                    onDoubleTap = { offset ->
+                        doubleTapLikeState.trigger(offset)
                         if (!isLiked) {
                             onLike()
                         }
@@ -584,18 +578,12 @@ private fun FlashVideoItem(
             }
         }
 
-        // Double-tap heart animation (uses heart_like.png)
-        if (heartScale > 0f) {
-            Image(
-                painter = androidx.compose.ui.res.painterResource(id = com.chroma.studio.R.drawable.heart_like),
-                contentDescription = null,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .size(120.dp)
-                    .scale(heartScale)
-                    .graphicsLayer { alpha = heartAlpha }
-            )
-        }
+        // Double-tap heart animation (Simple, Flat, Smooth and Clean)
+        FlatDoubleTapHeartOverlay(
+            state = doubleTapLikeState,
+            modifier = Modifier.fillMaxSize(),
+            heartSize = 115.dp
+        )
 
         // ── Right-Side Vertical Action Column (Reels Style) ───────────────────
         Column(
@@ -977,9 +965,11 @@ private fun FlashVideoItem(
                         horizontalArrangement = Arrangement.End,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        GlassTextButton(onClick = { showDeleteConfirmDialog = false }) {
-                            Text("Cancel", color = colors.textMuted)
-                        }
+                        LiquidGlassSecondaryButton(
+                            text = "Cancel",
+                            onClick = { showDeleteConfirmDialog = false },
+                            isSmall = true
+                        )
                         Spacer(Modifier.width(8.dp))
                         GlassTextButton(
                             onClick = {
@@ -1250,6 +1240,7 @@ private fun ReelsActionButton(
 
 @Composable
 private fun FlashEmptyState(onUpload: () -> Unit) {
+    val emptyState = rememberAppleGraphicAnimationState()
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -1257,12 +1248,16 @@ private fun FlashEmptyState(onUpload: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Icon(Lucide.Film, null, tint = Color.White.copy(alpha = 0.4f), modifier = Modifier.size(80.dp))
-        Spacer(Modifier.height(24.dp))
+        AppleFlashGraphic(
+            modifier = Modifier.size(135.dp),
+            state = emptyState,
+            enableClickToAnimate = true
+        )
+        Spacer(Modifier.height(20.dp))
         Text("No Reels Yet", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
         Text("Be the first to share a video!", color = Color.White.copy(alpha = 0.6f), fontSize = 15.sp)
-        Spacer(Modifier.height(32.dp))
+        Spacer(Modifier.height(28.dp))
         GlassButton(
             onClick = onUpload,
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF)),

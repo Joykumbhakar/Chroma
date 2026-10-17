@@ -8,6 +8,7 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 
 val LocalOscellionColors = compositionLocalOf { LightPalette }
 
@@ -63,7 +64,10 @@ fun OscellionTheme(darkTheme: Boolean, content: @Composable () -> Unit) {
 
     CompositionLocalProvider(LocalOscellionColors provides animated) {
         androidx.compose.material3.MaterialTheme(
-            colorScheme = materialColorScheme
+            colorScheme = materialColorScheme,
+            shapes = androidx.compose.material3.MaterialTheme.shapes.copy(
+                extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(24.dp)
+            )
         ) {
             content()
         }

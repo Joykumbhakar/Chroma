@@ -319,10 +319,10 @@ class FlashRepository {
         return try {
             val snapshot = collection
                 .whereEqualTo("creatorId", userId)
-                .whereEqualTo("archived", false)
-                .orderBy("timestamp", Query.Direction.DESCENDING)
                 .get().await()
             snapshot.toObjects(FlashVideo::class.java)
+                .filter { !it.isArchived }
+                .sortedByDescending { it.timestamp }
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             emptyList()

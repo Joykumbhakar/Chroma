@@ -1,3 +1,4 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package com.chroma.studio.chat.ui.components
 
 import android.content.Context
@@ -38,6 +39,11 @@ import com.chroma.studio.R
 import com.chroma.studio.chat.data.*
 import com.chroma.studio.chat.sound.SoundManager
 import com.chroma.studio.chat.ui.theme.LocalChatColors
+import com.chroma.studio.ui.components.AppleSettingsGraphic
+import com.chroma.studio.ui.components.AppleSwitch
+import com.chroma.studio.ui.components.LiquidGlassPrimaryButton
+import com.chroma.studio.ui.components.LiquidGlassSecondaryButton
+import com.chroma.studio.ui.components.rememberAppleGraphicAnimationState
 
 /**
  * Flagship Apple iOS Settings & Profile Screen.
@@ -465,7 +471,7 @@ fun ProfileSettingsScreen(
                     SettingsActionRow(
                         icon = { LucideHeart(tint = Color(0xFFFF2D55), size = 18.dp) },
                         title = "Designed For",
-                        value = "Joy • Apple iOS HIG",
+                        value = "ChromaStudio • Apple iOS HIG",
                         onClick = { isAboutModalOpen = true }
                     )
                 }
@@ -651,18 +657,12 @@ fun SettingsToggleRow(
             }
         }
 
-        Switch(
+        AppleSwitch(
             checked = checked,
             onCheckedChange = {
                 SoundManager.playReaction()
                 onCheckedChange(it)
-            },
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.White,
-                checkedTrackColor = colors.iosBlue,
-                uncheckedThumbColor = Color.White,
-                uncheckedTrackColor = if (colors.isLight) Color(0xFFE5E5EA) else Color(0xFF39393D)
-            )
+            }
         )
     }
 }
@@ -686,7 +686,6 @@ fun EditProfileModal(
 
     val presetAvatars = remember {
         listOf(
-            drawableUri(R.drawable.profile_avatar_joy),
             drawableUri(R.drawable.ic_avatar_corporate_navy),
             drawableUri(R.drawable.ic_avatar_emerald_focus),
             drawableUri(R.drawable.ic_avatar_gold_standard),
@@ -723,47 +722,26 @@ fun EditProfileModal(
             drawableUri(R.drawable.banner_wave_banner_ruby_red),
             drawableUri(R.drawable.banner_wave_banner_berry_purple),
             drawableUri(R.drawable.banner_wave_banner_vibrant_violet),
-            drawableUri(R.drawable.banner_wave_banner_teal_aqua),
-            drawableUri(R.drawable.banner_abstract_waves),
-            drawableUri(R.drawable.banner_cupertino_mesh),
-            drawableUri(R.drawable.banner_dark_titanium),
-            drawableUri(R.drawable.profile_banner_joy)
+            drawableUri(R.drawable.banner_wave_banner_teal_aqua)
         )
     }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+    IosModalBottomSheet(
+        onDismissRequest = onDismiss
     ) {
-        Box(
+        Column(
             modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.5f))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) { onDismiss() },
-            contentAlignment = Alignment.Center
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth(0.92f)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(colors.cardBg)
-                    .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(20.dp))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) {}
-                    .padding(18.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "Edit Profile",
-                    fontSize = 19.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = colors.textDark
-                )
+            Text(
+                text = "Edit Profile",
+                fontSize = 19.sp,
+                fontWeight = FontWeight.Bold,
+                color = colors.textDark
+            )
 
                 Spacer(Modifier.height(12.dp))
 
@@ -947,44 +925,31 @@ fun EditProfileModal(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(if (colors.isLight) Color(0xFFE5E5EA) else Color(0xFF3A3A3C))
-                            .clickable { onDismiss() }
-                            .padding(vertical = 11.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("Cancel", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = colors.textDark)
-                    }
+                    LiquidGlassSecondaryButton(
+                        text = "Cancel",
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f)
+                    )
 
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(colors.iosBlue)
-                            .clickable {
-                                onSave(
-                                    currentUser.copy(
-                                        name = name.trim().ifEmpty { currentUser.name },
-                                        username = username.trim().ifEmpty { currentUser.username },
-                                        status = status.trim().ifEmpty { currentUser.status },
-                                        avatar = selectedAvatar,
-                                        banner = selectedBanner
-                                    )
+                    LiquidGlassPrimaryButton(
+                        text = "Save Changes",
+                        onClick = {
+                            onSave(
+                                currentUser.copy(
+                                    name = name.trim().ifEmpty { currentUser.name },
+                                    username = username.trim().ifEmpty { currentUser.username },
+                                    status = status.trim().ifEmpty { currentUser.status },
+                                    avatar = selectedAvatar,
+                                    banner = selectedBanner
                                 )
-                            }
-                            .padding(vertical = 11.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("Save Changes", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-                    }
+                            )
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
                 }
             }
         }
     }
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BLOCKED CONTACTS MODAL
@@ -998,147 +963,129 @@ fun BlockedContactsModal(
 ) {
     val colors = LocalChatColors.current
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+    IosModalBottomSheet(
+        onDismissRequest = onDismiss
     ) {
-        Box(
+        Column(
             modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.5f))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) { onDismiss() },
-            contentAlignment = Alignment.Center
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 32.dp)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth(0.92f)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(colors.cardBg)
-                    .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(20.dp))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) {}
-                    .padding(20.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                Text(
+                    text = "Blocked Contacts",
+                    fontSize = 19.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.textDark
+                )
+
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(colors.surfaceSecondary)
+                        .clickable { onDismiss() },
+                    contentAlignment = Alignment.Center
                 ) {
+                    PhosphorCloseX(tint = colors.textMuted, size = 12.dp)
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
+
+            if (blockedChats.isEmpty()) {
+                val emptyState = rememberAppleGraphicAnimationState()
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    AppleSettingsGraphic(
+                        modifier = Modifier.size(115.dp),
+                        state = emptyState,
+                        enableClickToAnimate = true
+                    )
+                    Spacer(Modifier.height(6.dp))
                     Text(
-                        text = "Blocked Contacts",
-                        fontSize = 19.sp,
-                        fontWeight = FontWeight.Bold,
+                        text = "No Blocked Contacts",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
                         color = colors.textDark
                     )
-
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(CircleShape)
-                            .background(colors.surfaceSecondary)
-                            .clickable { onDismiss() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        PhosphorCloseX(tint = colors.textMuted, size = 12.dp)
-                    }
+                    Text(
+                        text = "Contacts you block will appear here.",
+                        fontSize = 13.sp,
+                        color = colors.textMuted
+                    )
                 }
-
-                Spacer(Modifier.height(14.dp))
-
-                if (blockedChats.isEmpty()) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 28.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        LucideShieldCheck(tint = colors.success, size = 32.dp)
-                        Text(
-                            text = "No Blocked Contacts",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = colors.textDark
-                        )
-                        Text(
-                            text = "Contacts you block will appear here.",
-                            fontSize = 13.sp,
-                            color = colors.textMuted
-                        )
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 280.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(blockedChats) { chat ->
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 280.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(blockedChats) { chat ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(colors.surfaceSecondary)
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
                             Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(colors.surfaceSecondary)
-                                    .padding(horizontal = 12.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    AsyncImage(
-                                        model = chat.avatar,
-                                        contentDescription = chat.name,
-                                        modifier = Modifier.size(36.dp).clip(CircleShape),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                    Text(
-                                        text = chat.name,
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = colors.textDark
-                                    )
-                                }
+                                AsyncImage(
+                                    model = chat.avatar,
+                                    contentDescription = chat.name,
+                                    modifier = Modifier.size(36.dp).clip(CircleShape),
+                                    contentScale = ContentScale.Crop
+                                )
+                                Text(
+                                    text = chat.name,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = colors.textDark
+                                )
+                            }
 
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(colors.iosBlue.copy(alpha = 0.12f))
-                                        .clickable { onUnblock(chat.id) }
-                                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                                ) {
-                                    Text(
-                                        text = "Unblock",
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = colors.iosBlue
-                                    )
-                                }
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(colors.iosBlue.copy(alpha = 0.12f))
+                                    .clickable { onUnblock(chat.id) }
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    text = "Unblock",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = colors.iosBlue
+                                )
                             }
                         }
                     }
                 }
-
-                Spacer(Modifier.height(14.dp))
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(colors.iosBlue)
-                        .clickable { onDismiss() }
-                        .padding(vertical = 12.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("Close", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-                }
             }
+
+            Spacer(Modifier.height(14.dp))
+
+            LiquidGlassPrimaryButton(
+                text = "Close",
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }
@@ -1151,87 +1098,63 @@ fun BlockedContactsModal(
 fun AboutAppModal(onDismiss: () -> Unit) {
     val colors = LocalChatColors.current
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+    IosModalBottomSheet(
+        onDismissRequest = onDismiss
     ) {
-        Box(
+        Column(
             modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.5f))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) { onDismiss() },
-            contentAlignment = Alignment.Center
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Column(
+            // App Logo Icon
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth(0.88f)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(colors.cardBg)
-                    .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(20.dp))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) {}
-                    .padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .size(64.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(
+                        Brush.linearGradient(
+                            listOf(colors.iosBlue, Color(0xFF5856D6))
+                        )
+                    ),
+                contentAlignment = Alignment.Center
             ) {
-                // App Logo Icon
-                Box(
-                    modifier = Modifier
-                        .size(64.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(
-                            Brush.linearGradient(
-                                listOf(colors.iosBlue, Color(0xFF5856D6))
-                            )
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    PhosphorPaperPlaneTilt(tint = Color.White, size = 32.dp)
-                }
-
-                Spacer(Modifier.height(14.dp))
-
-                Text(
-                    text = "Oscellion Chat",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = colors.textDark
-                )
-
-                Text(
-                    text = "Version 3.4.0 • Build 2026.10",
-                    fontSize = 13.sp,
-                    color = colors.textMuted
-                )
-
-                Spacer(Modifier.height(14.dp))
-
-                Text(
-                    text = "Crafted with pure Apple iOS Design System principles, Signal Protocol End-to-End Encryption, and 20 bespoke chat bubble aesthetics.",
-                    fontSize = 13.5.sp,
-                    color = colors.textDark.copy(alpha = 0.8f),
-                    textAlign = TextAlign.Center,
-                    lineHeight = 18.sp
-                )
-
-                Spacer(Modifier.height(20.dp))
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(colors.iosBlue)
-                        .clickable { onDismiss() }
-                        .padding(vertical = 12.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("OK", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-                }
+                PhosphorPaperPlaneTilt(tint = Color.White, size = 32.dp)
             }
+
+            Spacer(Modifier.height(14.dp))
+
+            Text(
+                text = "Oscellion Chat",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = colors.textDark
+            )
+
+            Text(
+                text = "Version 3.4.0 • Build 2026.10",
+                fontSize = 13.sp,
+                color = colors.textMuted
+            )
+
+            Spacer(Modifier.height(14.dp))
+
+            Text(
+                text = "Crafted with pure Apple iOS Design System principles, Signal Protocol End-to-End Encryption, and 20 bespoke chat bubble aesthetics.",
+                fontSize = 13.5.sp,
+                color = colors.textDark.copy(alpha = 0.8f),
+                textAlign = TextAlign.Center,
+                lineHeight = 18.sp
+            )
+
+            Spacer(Modifier.height(20.dp))
+
+            LiquidGlassPrimaryButton(
+                text = "OK",
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }

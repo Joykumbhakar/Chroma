@@ -328,9 +328,7 @@ fun IosAvatarView(
  */
 val AppleStatusBlueGradient = listOf(
     Color(0xFF007AFF), // Apple System Blue
-    Color(0xFF38BDF8), // Vivid Sky
-    Color(0xFF5856D6), // Apple Indigo
-    Color(0xFF007AFF)  // Apple System Blue (seamless sweep)
+    Color(0xFF00C6FF)  // Simple Sky Blue
 )
 
 val AppleStatusSeenGrayDark = listOf(Color(0xFF3A3A3C), Color(0xFF2C2C2E))
@@ -346,7 +344,9 @@ fun getAppleStatusRingBrush(
             if (isDark) listOf(Color(0xFF2C2C2E), Color(0xFF1C1C1E))
             else listOf(Color(0xFFE5E5EA), Color(0xFFF2F2F7))
         )
-        !isSeen -> Brush.sweepGradient(AppleStatusBlueGradient)
+        !isSeen -> Brush.linearGradient(
+            listOf(Color(0xFF007AFF), Color(0xFF00C6FF))
+        )
         else -> Brush.linearGradient(
             if (isDark) AppleStatusSeenGrayDark
             else AppleStatusSeenGrayLight
@@ -437,11 +437,13 @@ fun AppleStatusAvatar(
             // Online green indicator dot
             Box(
                 modifier = Modifier
-                    .size(14.dp)
+                    .size(16.dp)
                     .align(Alignment.BottomEnd)
+                    .offset(x = (-1).dp, y = (-1).dp)
+                    .background(gapColor, CircleShape)
+                    .padding(2.5.dp)
                     .clip(CircleShape)
                     .background(Color(0xFF34C759))
-                    .border(2.dp, gapColor, CircleShape)
             )
         }
     }

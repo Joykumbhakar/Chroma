@@ -40,6 +40,10 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.chroma.studio.ui.components.IosAvatarView
 import com.chroma.studio.ui.components.ToastManager
+import com.chroma.studio.ui.components.LiquidGlassPrimaryButton
+import com.chroma.studio.ui.components.LiquidGlassSecondaryButton
+import com.chroma.studio.ui.components.AiWaveSphereIcon
+import com.chroma.studio.ui.components.AiWaveSphereVector
 import com.chroma.studio.ui.theme.InterFontFamily
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.chroma.studio.ui.theme.MonoFontFamily
@@ -144,7 +148,7 @@ val StoryCategories = listOf(
     StoryCategoryItem("hot_take", "Hot Take", Lucide.Flame),
     StoryCategoryItem("micro_blog", "Article", Lucide.BookOpen),
     StoryCategoryItem("spark", "Spark", Lucide.Zap),
-    StoryCategoryItem("reflection", "Reflection", Lucide.Sparkles)
+    StoryCategoryItem("reflection", "Reflection", Lucide.Compass)
 )
 
 data class StoryMoodItem(
@@ -154,7 +158,7 @@ data class StoryMoodItem(
 )
 
 val StoryMoods = listOf(
-    StoryMoodItem("inspired", "Inspired", Lucide.Sparkles),
+    StoryMoodItem("inspired", "Inspired", Lucide.Sun),
     StoryMoodItem("coffee", "Caffeinated", Lucide.Coffee),
     StoryMoodItem("night", "Night Owl", Lucide.Moon),
     StoryMoodItem("chill", "Chill Mode", Lucide.Smile),
@@ -171,7 +175,7 @@ data class StoryPromptItem(
 )
 
 val StoryPrompts = listOf(
-    StoryPromptItem("Daily Reflection", "One important lesson I learned today...", Lucide.Sparkles),
+    StoryPromptItem("Daily Reflection", "One important lesson I learned today...", Lucide.BookOpen),
     StoryPromptItem("Design Philosophy", "Good design is as little design as possible because...", Lucide.Palette),
     StoryPromptItem("Dev Log", "Currently building something exciting in Compose...", Lucide.Code),
     StoryPromptItem("Hot Take", "Unpopular opinion in tech and design...", Lucide.Flame),
@@ -422,11 +426,8 @@ fun StoryEditorScreen(
                         onClick = { showTemplatesSheet = true },
                         modifier = Modifier.size(36.dp)
                     ) {
-                        Icon(
-                            imageVector = Lucide.Sparkles,
-                            contentDescription = "Templates",
-                            tint = if (isDark) Color(0xFFFFD60A) else themeColors.primary,
-                            modifier = Modifier.size(19.dp)
+                        AiWaveSphereIcon(
+                            modifier = Modifier.size(20.dp)
                         )
                     }
 
@@ -445,20 +446,11 @@ fun StoryEditorScreen(
 
                     Spacer(Modifier.width(4.dp))
 
-                    // Primary Button from main app style
-                    Button(
+                    // Primary Liquid Glass Publish Button
+                    LiquidGlassPrimaryButton(
                         onClick = onPublishAction,
                         enabled = (bodyContent.isNotBlank() || headlineText.isNotBlank()) && !isPublishing,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = themeColors.primary,
-                            disabledContainerColor = themeColors.primary.copy(alpha = 0.35f),
-                            contentColor = Color.White,
-                            disabledContentColor = Color.White.copy(alpha = 0.6f)
-                        ),
-                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
-                        shape = RoundedCornerShape(10.dp),
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
-                        modifier = Modifier.height(34.dp)
+                        isSmall = true
                     ) {
                         if (isPublishing) {
                             CircularProgressIndicator(
@@ -467,13 +459,8 @@ fun StoryEditorScreen(
                                 strokeWidth = 2.dp
                             )
                         } else {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(5.dp)
-                            ) {
-                                Text("Publish", fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp)
-                                Icon(Lucide.Send, null, modifier = Modifier.size(12.dp))
-                            }
+                            Text("Publish", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp)
+                            Icon(Lucide.Send, null, tint = Color.White, modifier = Modifier.size(12.dp))
                         }
                     }
                 }
@@ -1275,7 +1262,7 @@ fun StoryEditorScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Icon(Lucide.Sparkles, null, tint = themeColors.primary, modifier = Modifier.size(16.dp))
+                        AiWaveSphereIcon(modifier = Modifier.size(18.dp))
                         Text(
                             text = "Prompts & Templates",
                             fontSize = 16.sp,
@@ -1345,9 +1332,11 @@ fun StoryEditorScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDiscardDialog = false }) {
-                    Text("Keep Editing", color = themeColors.textMain)
-                }
+                LiquidGlassSecondaryButton(
+                    text = "Keep Editing",
+                    onClick = { showDiscardDialog = false },
+                    isSmall = true
+                )
             }
         )
     }

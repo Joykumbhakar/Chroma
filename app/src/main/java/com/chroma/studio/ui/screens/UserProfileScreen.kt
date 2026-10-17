@@ -11,13 +11,19 @@ import com.canhub.cropper.CropImageOptions
 import com.canhub.cropper.CropImageContractOptions
 import com.canhub.cropper.CropImageContract
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.isSystemInDarkTheme
 import com.chroma.studio.ui.components.AppleStatusBlueGradient
 
 import com.chroma.studio.ui.components.ChromaPillButton
-import com.chroma.studio.ui.components.Html3DIcon
-import com.chroma.studio.ui.components.ThreeDIconHtml
+import com.chroma.studio.ui.components.AppleWorksGraphic
+import com.chroma.studio.ui.components.ApplePhotosGraphic
+import com.chroma.studio.ui.components.AppleFlashGraphic
+import com.chroma.studio.ui.components.AppleRemixGraphic
+import com.chroma.studio.ui.components.rememberAppleGraphicAnimationState
+import com.chroma.studio.ui.components.AiWaveSphereVector
+// Apple HIG 3D Empty States
 import com.chroma.studio.ui.components.ChromaPillVariant
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -98,7 +104,7 @@ import java.util.Date
 import java.util.Locale
 
 private fun getProfileRoleIcon(role: String?): ImageVector {
-    if (role.isNullOrBlank()) return Lucide.Sparkles
+    if (role.isNullOrBlank()) return AiWaveSphereVector
     return when (role.trim().lowercase()) {
         "developer" -> Lucide.Terminal
         "designer" -> Lucide.Palette
@@ -111,11 +117,12 @@ private fun getProfileRoleIcon(role: String?): ImageVector {
         "engineer" -> Lucide.Wrench
         "advocate" -> Lucide.BookOpen
         "ca" -> Lucide.Briefcase
-        else -> Lucide.Sparkles
+        else -> AiWaveSphereVector
     }
 }
 
-private fun isFieldVisible(key: String, visibility: Map<String, String>?, isCurrentUser: Boolean, isFollowing: Boolean): Boolean {
+internal fun isFieldVisible(key: String, visibility: Map<String, String>?, isCurrentUser: Boolean, isFollowing: Boolean): Boolean {
+    if (isCurrentUser) return true
     val defaultLevel = when (key) {
         "dob", "gender", "location" -> "private"
         else -> "public"
@@ -135,6 +142,7 @@ fun UserProfileScreen(
     initialPostId: String? = null,
     repository: WorkRepository,
     chatViewModel: com.chroma.studio.viewmodel.ChatViewModel,
+    storyViewModel: com.chroma.studio.viewmodel.StoryViewModel? = null,
     showBackButton: Boolean = true,
     onRequireLogin: () -> Unit,
     onDownloadWork: (DiscoverPost) -> Unit,
@@ -148,8 +156,13 @@ fun UserProfileScreen(
 ) {
     val colors = LocalOscellionColors.current
     val discoverVm = viewModel<DiscoverViewModel>()
-    val storyVm = viewModel<StoryViewModel>()
+    val storyVm = storyViewModel ?: viewModel<StoryViewModel>()
     val allStoryGroups by storyVm.storyGroups.collectAsState()
+    val myStories by storyVm.myStories.collectAsState()
+    val likedStoryIds by storyVm.likedStoryIds.collectAsState()
+    val isUploadingStory by storyVm.isUploading.collectAsState()
+    var showStoryViewer by remember { mutableStateOf(false) }
+    var storyViewerInitialIndex by remember { mutableIntStateOf(0) }
 
     var works by remember { mutableStateOf<List<DiscoverPost>>(emptyList()) }
     var profile by remember { mutableStateOf<UserProfile?>(null) }
@@ -162,6 +175,11 @@ fun UserProfileScreen(
     val isCurrentUser = currentUserId == userId
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val storyMediaPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        uri?.let { storyVm.uploadStory(context, it) }
+    }
 
     var isWorksLoading by remember { mutableStateOf(true) }
     var userFlashes by remember { mutableStateOf<List<FlashVideo>>(emptyList()) }
@@ -242,6 +260,10 @@ fun UserProfileScreen(
             isFlashesLoading = false
         }
 
+        launch {
+            storyVm.loadUserStories(userId)
+        }
+
         if (currentUserId != null && currentUserId != userId) {
             launch {
                 isFollowing = discoverVm.repository.checkIsFollowing(currentUserId, userId)
@@ -292,8 +314,11 @@ fun UserProfileScreen(
         }
     }
 
-    val filteredStories = allStoryGroups.filter { it.userId == userId }
-    val hasActiveStories = filteredStories.isNotEmpty()
+    val filteredStories = remember(allStoryGroups, userId) { allStoryGroups.filter { it.userId == userId } }
+    val hasActiveStories = remember(isCurrentUser, myStories, filteredStories) {
+        if (isCurrentUser) myStories.isNotEmpty() || filteredStories.isNotEmpty()
+        else filteredStories.isNotEmpty()
+    }
 
     Box(
         modifier = Modifier
@@ -311,729 +336,97 @@ fun UserProfileScreen(
         ) {
             // Header Content spans all 3 columns
             item(span = { GridItemSpan(maxLineSpan) }) {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    val presetBannerRes = remember(profile?.bannerUrl) { getBannerPresetDrawableRes(profile?.bannerUrl) }
-                    // Hero Banner Box with Avatar positioned cleanly over border
-                    Box(modifier = Modifier.fillMaxWidth()) {
-                        // 1. Cinematic Banner
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(125.dp)
-                                .clip(RoundedCornerShape(bottomStart = 20.dp, bottomEnd = 20.dp))
-                                .background(
-                                    Brush.linearGradient(
-                                        listOf(Color(0xFF007AFF), Color(0xFF0A84FF), Color(0xFF32ADE6))
-                                    )
-                                )
-                        ) {
-                            if (presetBannerRes != null) {
-                                Image(
-                                    painter = painterResource(id = presetBannerRes),
-                                    contentDescription = "Profile Banner",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
-                            } else if (!profile?.bannerUrl.isNullOrBlank()) {
-                                AsyncImage(
-                                    model = profile?.bannerUrl,
-                                    contentDescription = "Profile Banner",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
+                UserProfileHeroSection(
+                    profile = profile,
+                    hasActiveStories = hasActiveStories,
+                    worksCount = works.size + flashPosts.size,
+                    isRestricted = isRestricted,
+                    userId = userId,
+                    onAvatarClick = {
+                        if (hasActiveStories) {
+                            if (isCurrentUser) {
+                                storyViewerInitialIndex = -1
+                                showStoryViewer = true
                             } else {
-                                Image(
-                                    painter = painterResource(id = R.drawable.banner_cupertino_mesh),
-                                    contentDescription = "Default Profile Banner",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
-                            }
-
-                        }
-
-                        // 2. Avatar & Top Stats Row (Cleanly positioned with Avatar overlapping banner and Stats cleanly below banner edge)
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 80.dp, start = 16.dp, end = 16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.Bottom
-                        ) {
-                            // Elevated Apple Glass Avatar
-                            Box(contentAlignment = Alignment.Center) {
-                                // Ambient Halo
-                                Box(
-                                    modifier = Modifier
-                                        .size(82.dp)
-                                        .blur(14.dp)
-                                        .background(
-                                            Brush.radialGradient(
-                                                listOf(Color(0x55007AFF), Color(0x220A84FF), Color.Transparent)
-                                            ),
-                                            CircleShape
-                                        )
-                                )
-
-                                Box(
-                                    modifier = Modifier
-                                        .size(76.dp)
-                                        .shadow(10.dp, CircleShape, spotColor = Color.Black.copy(alpha = 0.20f))
-                                        .clip(CircleShape)
-                                        .background(Color.White)
-                                        .border(
-                                            width = 2.5.dp,
-                                            brush = if (hasActiveStories) {
-                                                Brush.sweepGradient(AppleStatusBlueGradient)
-                                            } else {
-                                                Brush.linearGradient(
-                                                    listOf(Color(0xFF32ADE6), Color(0xFF007AFF), Color(0xFF0051D5))
-                                                )
-                                            },
-                                            shape = CircleShape
-                                        )
-                                        .clickable { showAvatarOverlay = true },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    val presetRes = remember(profile?.avatarUrl) { getAvatarPresetDrawableRes(profile?.avatarUrl) }
-                                    val defaultAvatarRes = remember(profile?.gender) { getDefaultAvatarDrawableRes(profile?.gender) }
-                                    val resolvedDrawable = presetRes ?: if (profile?.avatarUrl.isNullOrBlank()) defaultAvatarRes else null
-
-                                    if (resolvedDrawable != null) {
-                                        Image(
-                                            painter = painterResource(id = resolvedDrawable),
-                                            contentDescription = "Avatar",
-                                            modifier = Modifier.fillMaxSize(),
-                                            contentScale = ContentScale.Crop
-                                        )
-                                    } else if (!profile?.avatarUrl.isNullOrBlank()) {
-                                        AsyncImage(
-                                            model = profile?.avatarUrl,
-                                            contentDescription = "Avatar",
-                                            modifier = Modifier.fillMaxSize(),
-                                            contentScale = ContentScale.Crop
-                                        )
-                                    } else {
-                                        Image(
-                                            painter = painterResource(id = R.drawable.default_avatar_apple),
-                                            contentDescription = "Avatar",
-                                            modifier = Modifier.fillMaxSize(),
-                                            contentScale = ContentScale.Crop
-                                        )
-                                    }
-
-                                    // Online Status Dot
-                                    if (profile?.online == true && profile?.showOnlineStatus == true) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(16.dp)
-                                                .align(Alignment.BottomEnd)
-                                                .offset(x = (-2).dp, y = (-2).dp)
-                                                .clip(CircleShape)
-                                                .background(Color(0xFF34C759))
-                                                .border(2.dp, Color.White, CircleShape)
-                                        )
-                                    }
-                                }
-                            }
-
-                            // Top Stats beside Avatar (Posts, Followers, Following)
-                            Row(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(top = 50.dp, start = 10.dp, bottom = 2.dp),
-                                horizontalArrangement = Arrangement.SpaceEvenly,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                // Posts Count
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(1.dp)
-                                ) {
-                                    Text(
-                                        text = formatCount(works.size + flashPosts.size),
-                                        color = colors.textMain,
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = "Posts",
-                                        color = Color(0xFF8E8E93),
-                                        fontSize = 11.5.sp,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }
-
-                                // Followers Count
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(1.dp),
-                                    modifier = Modifier.clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null
-                                    ) {
-                                        if (isRestricted) ToastManager.showToast("This account is private.")
-                                        else onNavigateToUserList?.invoke(userId, "followers")
-                                    }
-                                ) {
-                                    Text(
-                                        text = formatCount(profile?.followersCount ?: 0),
-                                        color = colors.textMain,
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = "Followers",
-                                        color = Color(0xFF8E8E93),
-                                        fontSize = 11.5.sp,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }
-
-                                // Following Count
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(1.dp),
-                                    modifier = Modifier.clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null
-                                    ) {
-                                        if (isRestricted) ToastManager.showToast("This account is private.")
-                                        else onNavigateToUserList?.invoke(userId, "following")
-                                    }
-                                ) {
-                                    Text(
-                                        text = formatCount(profile?.followingCount ?: 0),
-                                        color = colors.textMain,
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = "Following",
-                                        color = Color(0xFF8E8E93),
-                                        fontSize = 11.5.sp,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                // Profile Details (Name + Verified + Pass + Username + Role + Bio + Metadata + Actions)
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                ) {
-                    // Low-CPU animated gradient brush for Role text
-                    val roleTransition = rememberInfiniteTransition(label = "profile_role_gradient")
-                    val roleGradientShift by roleTransition.animateFloat(
-                        initialValue = 0f,
-                        targetValue = 600f,
-                        animationSpec = infiniteRepeatable(
-                            animation = tween(durationMillis = 4000, easing = LinearEasing),
-                            repeatMode = RepeatMode.Restart
-                        ),
-                        label = "role_gradient_shift"
-                    )
-
-                    val roleAnimatedBrush = remember(roleGradientShift) {
-                        Brush.linearGradient(
-                            colors = listOf(
-                                Color(0xFF007AFF), // Apple Blue
-                                Color(0xFF00C6FF), // Cyan
-                                Color(0xFF34C759), // Mint Green
-                                Color(0xFF007AFF)  // Loop back
-                            ),
-                            start = Offset(roleGradientShift, 0f),
-                            end = Offset(roleGradientShift + 250f, 0f)
-                        )
-                    }
-
-                    Spacer(Modifier.height(2.dp))
-
-                    // 1. Display Name + Verified Badge + Pass Button
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f, fill = false)
-                        ) {
-                            Text(
-                                text = profile?.displayName ?: "Unknown",
-                                color = colors.textMain,
-                                fontSize = 18.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            if (profile?.verified == true) {
-                                Spacer(Modifier.width(4.dp))
-                                IosVerificationBadge(
-                                    userId = profile?.uid,
-                                    modifier = Modifier.size(17.dp)
-                                )
-                            }
-                        }
-
-                        // Pass card trigger
-                        Box(
-                            modifier = Modifier
-                                .size(26.dp)
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(colors.glassBgHover.copy(alpha = 0.6f))
-                                .border(0.75.dp, colors.glassBorder, RoundedCornerShape(6.dp))
-                                .clickable { showShareCardModal = true },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Lucide.QrCode, contentDescription = "Show Pass", tint = Color(0xFF007AFF), modifier = Modifier.size(14.dp))
-                        }
-                    }
-
-                    // 2. Username (Shifted close directly below Name)
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(3.5.dp),
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .clickable {
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                val clip = ClipData.newPlainText("username", "@${profile?.username ?: ""}")
-                                clipboard.setPrimaryClip(clip)
-                                ToastManager.showToast("Username copied to clipboard")
-                            }
-                    ) {
-                        Text(
-                            text = "@${profile?.username ?: "unknown"}",
-                            color = Color(0xFF8E8E93),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Icon(
-                            imageVector = Lucide.Copy,
-                            contentDescription = "Copy username",
-                            tint = Color(0xFF8E8E93).copy(alpha = 0.5f),
-                            modifier = Modifier.size(10.5.dp)
-                        )
-                    }
-
-                    // 3. Role (In between @username and Bio with exact role icon, no background, no border, low CPU animated gradient)
-                    val roleText = profile?.role
-                    if (!roleText.isNullOrBlank()) {
-                        val roleIcon = getProfileRoleIcon(roleText)
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            modifier = Modifier.padding(top = 2.dp, bottom = 1.dp)
-                        ) {
-                            Icon(
-                                imageVector = roleIcon,
-                                contentDescription = null,
-                                tint = Color(0xFF007AFF),
-                                modifier = Modifier.size(12.5.dp)
-                            )
-                            Text(
-                                text = roleText,
-                                style = TextStyle(
-                                    brush = roleAnimatedBrush,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            )
-                        }
-                    }
-
-                    Spacer(Modifier.height(2.dp))
-
-                    // 4. Bio Text (Clean paragraph with inline "... more" just like Instagram/WhatsApp)
-                    val bioText = profile?.bio ?: ""
-                    if (bioText.isNotBlank()) {
-                        Spacer(Modifier.height(2.dp))
-
-                        var cutText by remember(bioText) { mutableStateOf<String?>(null) }
-
-                        val fullAnnotatedBio = remember(bioText) {
-                            buildAnnotatedString {
-                                val words = bioText.split(Regex("(?<=\\s)|(?=\\s)|\\n"))
-                                for (word in words) {
-                                    if (word.startsWith("@") || word.startsWith("#")) {
-                                        withStyle(style = SpanStyle(color = Color(0xFF007AFF), fontWeight = FontWeight.SemiBold)) {
-                                            append(word)
-                                        }
-                                    } else {
-                                        append(word)
-                                    }
-                                }
-                            }
-                        }
-
-                        val displayedBio = remember(isBioExpanded, cutText, fullAnnotatedBio) {
-                            if (isBioExpanded) {
-                                buildAnnotatedString {
-                                    append(fullAnnotatedBio)
-                                    if (cutText != null) {
-                                        withStyle(style = SpanStyle(color = Color(0xFF007AFF), fontWeight = FontWeight.Bold)) {
-                                            append(" less")
-                                        }
-                                    }
-                                }
-                            } else if (cutText != null) {
-                                buildAnnotatedString {
-                                    val words = cutText!!.split(Regex("(?<=\\s)|(?=\\s)|\\n"))
-                                    for (word in words) {
-                                        if (word.startsWith("@") || word.startsWith("#")) {
-                                            withStyle(style = SpanStyle(color = Color(0xFF007AFF), fontWeight = FontWeight.SemiBold)) {
-                                                append(word)
-                                            }
-                                        } else {
-                                            append(word)
-                                        }
-                                    }
-                                    withStyle(style = SpanStyle(color = Color(0xFF8E8E93))) {
-                                        append("... ")
-                                    }
-                                    withStyle(style = SpanStyle(color = Color(0xFF007AFF), fontWeight = FontWeight.Bold)) {
-                                        append("more")
-                                    }
-                                }
-                            } else {
-                                fullAnnotatedBio
-                            }
-                        }
-
-                        Text(
-                            text = displayedBio,
-                            color = colors.textMain,
-                            fontSize = 13.sp,
-                            lineHeight = 17.5.sp,
-                            maxLines = if (isBioExpanded) Int.MAX_VALUE else 3,
-                            overflow = TextOverflow.Clip,
-                            onTextLayout = { textLayoutResult ->
-                                if (!isBioExpanded && cutText == null && textLayoutResult.hasVisualOverflow) {
-                                    val lastLineIndex = 2.coerceAtMost(textLayoutResult.lineCount - 1)
-                                    val lastCharIndex = textLayoutResult.getLineEnd(lastLineIndex, visibleEnd = true)
-                                    val adjustedCut = (lastCharIndex - 9).coerceAtLeast(0)
-                                    if (adjustedCut < bioText.length) {
-                                        cutText = bioText.substring(0, adjustedCut).trimEnd()
-                                    }
-                                }
-                            },
-                            modifier = Modifier
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null
-                                ) {
-                                    if (cutText != null || isBioExpanded) {
-                                        isBioExpanded = !isBioExpanded
-                                    }
-                                }
-                                .animateContentSize()
-                        )
-                    }
-
-                    // 4. Metadata Info (Location, Birthday, Gender) - Clean inline items
-                    val office = profile?.officeLocation
-                    val home = profile?.homeLocation
-                    val country = profile?.countryLocation
-                    val locationVisible = isFieldVisible("location", profile?.dataVisibility, isCurrentUser, isFollowing)
-                    val dobVisible = isFieldVisible("dob", profile?.dataVisibility, isCurrentUser, isFollowing) && profile?.dateOfBirthAsLong != null
-                    val genderVisible = isFieldVisible("gender", profile?.dataVisibility, isCurrentUser, isFollowing) && !profile?.gender.isNullOrBlank()
-
-                    if ((locationVisible && (!office.isNullOrBlank() || !home.isNullOrBlank() || !country.isNullOrBlank())) || dobVisible || genderVisible) {
-                        Spacer(Modifier.height(5.dp))
-                        FlowRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(3.dp)
-                        ) {
-                            if (locationVisible && !office.isNullOrBlank()) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.5.dp)) {
-                                    Icon(Lucide.Briefcase, contentDescription = null, tint = Color(0xFF8E8E93), modifier = Modifier.size(12.5.dp))
-                                    Text(office, color = Color(0xFF8E8E93), fontSize = 12.sp)
-                                }
-                            }
-                            if (locationVisible && !home.isNullOrBlank()) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.5.dp)) {
-                                    Icon(Lucide.House, contentDescription = null, tint = Color(0xFF8E8E93), modifier = Modifier.size(12.5.dp))
-                                    Text(home, color = Color(0xFF8E8E93), fontSize = 12.sp)
-                                }
-                            }
-                            if (locationVisible && !country.isNullOrBlank()) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.5.dp)) {
-                                    Icon(Lucide.Globe, contentDescription = null, tint = Color(0xFF8E8E93), modifier = Modifier.size(12.5.dp))
-                                    Text(country, color = Color(0xFF8E8E93), fontSize = 12.sp)
-                                }
-                            }
-                            if (dobVisible) {
-                                val dobStr = profile?.dateOfBirthAsLong?.let {
-                                    SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(it))
-                                } ?: ""
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.5.dp)) {
-                                    Icon(Lucide.Calendar, contentDescription = null, tint = Color(0xFF8E8E93), modifier = Modifier.size(12.5.dp))
-                                    Text("Born $dobStr", color = Color(0xFF8E8E93), fontSize = 12.sp)
-                                }
-                            }
-                            if (genderVisible) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.5.dp)) {
-                                    Icon(Lucide.User, contentDescription = null, tint = Color(0xFF8E8E93), modifier = Modifier.size(12.5.dp))
-                                    Text(profile?.gender ?: "", color = Color(0xFF8E8E93), fontSize = 12.sp)
-                                }
-                            }
-                        }
-                    }
-
-                    // 5. Social Links & Content Tags - Clean inline links
-                    val profileLinks = profile?.socialLinks ?: emptyMap()
-                    val hasContentTags = profile?.contentTags?.isNotEmpty() == true
-
-                    if (profileLinks.isNotEmpty() || hasContentTags) {
-                        Spacer(Modifier.height(5.dp))
-                        FlowRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            verticalArrangement = Arrangement.spacedBy(3.dp)
-                        ) {
-                            profileLinks.forEach { (platform, url) ->
-                                val icon = when (platform.lowercase()) {
-                                    "github", "githubacname" -> Lucide.Github
-                                    "portfolio", "website" -> Lucide.Globe
-                                    "twitter", "x" -> Lucide.Twitter
-                                    "linkedin" -> Lucide.Linkedin
-                                    "instagram" -> Lucide.Instagram
-                                    else -> Lucide.Link
-                                }
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(3.5.dp),
-                                    modifier = Modifier.clickable {
-                                        try {
-                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                                        } catch (_: Exception) {}
-                                    }
-                                ) {
-                                    Icon(icon, contentDescription = platform, tint = Color(0xFF007AFF), modifier = Modifier.size(12.dp))
-                                    Text(
-                                        platform,
-                                        color = Color(0xFF007AFF),
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }
-                            }
-
-                            if (hasContentTags) {
-                                profile!!.contentTags.forEach { tag ->
-                                    Text(
-                                        text = if (tag.startsWith("#")) tag else "#$tag",
-                                        color = Color(0xFF8E8E93),
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-
-                    // 7. Mutual Connections
-                    if (mutualFollowers.isNotEmpty()) {
-                        Spacer(Modifier.height(5.dp))
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.clickable { onNavigateToUserList?.invoke(userId, "followers") }
-                        ) {
-                            Text("Followed by ", color = Color(0xFF8E8E93), fontSize = 11.5.sp)
-                            Row(horizontalArrangement = Arrangement.spacedBy((-5).dp)) {
-                                mutualFollowers.take(3).forEach { mutual ->
-                                    if (mutual.avatarUrl.isNotBlank()) {
-                                        AsyncImage(
-                                            model = ImageRequest.Builder(LocalContext.current)
-                                                .data(mutual.avatarUrl)
-                                                .crossfade(true)
-                                                .build(),
-                                            contentDescription = "Avatar",
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier
-                                                .size(17.dp)
-                                                .clip(CircleShape)
-                                                .border(1.dp, Color.White, CircleShape)
-                                        )
-                                    } else {
-                                        Image(
-                                            painter = painterResource(id = R.drawable.default_avatar_apple),
-                                            contentDescription = "Avatar",
-                                            modifier = Modifier
-                                                .size(17.dp)
-                                                .clip(CircleShape)
-                                                .border(1.dp, Color.White, CircleShape)
-                                        )
-                                    }
-                                }
-                            }
-                            Spacer(Modifier.width(5.dp))
-                            val names = mutualFollowers.take(2).joinToString(", ") { it.username } + if (mutualFollowers.size > 2) " and ${mutualFollowers.size - 2} others" else ""
-                            Text(
-                                names,
-                                color = colors.textMain,
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-
-                    Spacer(Modifier.height(6.dp))
-
-                    // Action Buttons Row (Gradient Pill Buttons)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        if (isCurrentUser) {
-                            ChromaPillButton(
-                                onClick = { onNavigateToEditProfile() },
-                                variant = ChromaPillVariant.Blue,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(38.dp)
-                            ) {
-                                Icon(Lucide.Pencil, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text("Edit Profile", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                            }
-
-                            ChromaPillButton(
-                                onClick = { showShareCardModal = true },
-                                variant = ChromaPillVariant.DarkGlass,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(38.dp)
-                            ) {
-                                Icon(Lucide.QrCode, contentDescription = null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(14.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text("Share Card", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                val groupIdx = allStoryGroups.indexOfFirst { it.userId == userId }
+                                storyViewerInitialIndex = if (groupIdx >= 0) groupIdx else 0
+                                showStoryViewer = true
                             }
                         } else {
-                            if (isFollowing) {
-                                ChromaPillButton(
-                                    onClick = {
-                                        if (currentUserId == null) onRequireLogin()
-                                        else {
-                                            val prevFollowing = isFollowing
-                                            val prevProfile = profile
-                                            isFollowing = !isFollowing
-                                            profile = profile?.copy(followersCount = (profile?.followersCount ?: 0) + if (isFollowing) 1 else -1)
-                                            scope.launch {
-                                                val success = discoverVm.repository.toggleFollow(currentUserId, userId)
-                                                if (!success) {
-                                                    isFollowing = prevFollowing
-                                                    profile = prevProfile
-                                                    ToastManager.showToast("Failed to update follow status")
-                                                }
-                                            }
-                                        }
-                                    },
-                                    variant = ChromaPillVariant.DarkGlass,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(38.dp)
-                                ) {
-                                    Icon(Lucide.Check, contentDescription = null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(14.dp))
-                                    Spacer(Modifier.width(5.dp))
-                                    Text("Following", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                }
-                            } else {
-                                ChromaPillButton(
-                                    onClick = {
-                                        if (currentUserId == null) onRequireLogin()
-                                        else {
-                                            val prevFollowing = isFollowing
-                                            val prevProfile = profile
-                                            isFollowing = !isFollowing
-                                            profile = profile?.copy(followersCount = (profile?.followersCount ?: 0) + if (isFollowing) 1 else -1)
-                                            scope.launch {
-                                                val success = discoverVm.repository.toggleFollow(currentUserId, userId)
-                                                if (!success) {
-                                                    isFollowing = prevFollowing
-                                                    profile = prevProfile
-                                                    ToastManager.showToast("Failed to update follow status")
-                                                }
-                                            }
-                                        }
-                                    },
-                                    variant = ChromaPillVariant.Blue,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(38.dp)
-                                ) {
-                                    Icon(Lucide.UserPlus, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
-                                    Spacer(Modifier.width(6.dp))
-                                    Text("Follow", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                }
-                            }
-
-                            ChromaPillButton(
-                                onClick = {
-                                    if (currentUserId == null) onRequireLogin()
-                                    else onNavigateToChat?.invoke(userId)
-                                },
-                                variant = ChromaPillVariant.Cyan,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(38.dp)
-                            ) {
-                                Icon(Lucide.MessageSquare, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text("Message", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                            }
-
-                            IconButton(
-                                onClick = { showShareCardModal = true },
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    
-                            ) {
-                                Icon(Lucide.Share2, contentDescription = "Share", tint = colors.textMain, modifier = Modifier.size(16.dp))
-                            }
+                            showAvatarOverlay = true
                         }
-                    }
-
-                    // Stories Section
-                    LaunchedEffect(userId, isCurrentUser) {
-                        if (!isCurrentUser) {
-                            storyVm.loadUserStories(userId)
-                        }
-                    }
-                    if (isCurrentUser || filteredStories.isNotEmpty()) {
-                        Spacer(Modifier.height(5.dp))
-                        StoriesSection(
-                            stories = filteredStories,
-                            isLoading = false,
-                            isCurrentUser = isCurrentUser,
-                            myStoryAvatarUrl = profile?.avatarUrl ?: "",
-                            myStoryGender = profile?.gender,
-                            contentPadding = PaddingValues(start = 0.dp, end = 0.dp, top = 2.dp, bottom = 4.dp)
-                        )
-                    }
-
-                    Spacer(Modifier.height(4.dp))
-
-                    // Modern Instagram-Style Seamless Flat Tab Switcher (Works, Photos, Flash Videos, Remixes)
-                    ProfileSeamlessTabBar(
-                        icons = profileTabIcons,
-                        selectedIndex = selectedTabIndex,
-                        onItemSelected = { selectedTabIndex = it },
-                        modifier = Modifier.padding(horizontal = 2.dp)
-                    )
-
-                    Spacer(Modifier.height(4.dp))
-                }
+                    },
+                    onNavigateToUserList = onNavigateToUserList
+                )
             }
-        }
+
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                UserProfileBioDetailsSection(
+                    profile = profile,
+                    isCurrentUser = isCurrentUser,
+                    isFollowing = isFollowing,
+                    mutualFollowers = mutualFollowers,
+                    userId = userId,
+                    onShowShareCard = { showShareCardModal = true },
+                    onNavigateToUserList = onNavigateToUserList
+                )
+            }
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                UserProfileActionsStoriesSection(
+                    isCurrentUser = isCurrentUser,
+                    isFollowing = isFollowing,
+                    userId = userId,
+                    currentUserId = currentUserId,
+                    profile = profile,
+                    filteredStories = filteredStories,
+                    hasMyStory = isCurrentUser && (myStories.isNotEmpty() || filteredStories.isNotEmpty()),
+                    profileTabIcons = profileTabIcons,
+                    selectedTabIndex = selectedTabIndex,
+                    onTabSelected = { selectedTabIndex = it },
+                    onToggleFollow = {
+                        if (currentUserId == null) onRequireLogin()
+                        else {
+                            val prevFollowing = isFollowing
+                            val prevProfile = profile
+                            isFollowing = !isFollowing
+                            profile = profile?.copy(followersCount = (profile?.followersCount ?: 0) + if (isFollowing) 1 else -1)
+                            scope.launch {
+                                val success = discoverVm.repository.toggleFollow(currentUserId, userId)
+                                if (!success) {
+                                    isFollowing = prevFollowing
+                                    profile = prevProfile
+                                    ToastManager.showToast("Failed to update follow status")
+                                }
+                            }
+                        }
+                    },
+                    onNavigateToEditProfile = onNavigateToEditProfile,
+                    onShowShareCard = { showShareCardModal = true },
+                    onNavigateToChat = onNavigateToChat,
+                    onMyStoryClick = {
+                        if (myStories.isNotEmpty() || filteredStories.isNotEmpty()) {
+                            storyViewerInitialIndex = if (isCurrentUser) -1 else 0
+                            showStoryViewer = true
+                        } else {
+                            storyMediaPicker.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        }
+                    },
+                    onAddStoryClick = {
+                        storyMediaPicker.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                        )
+                    },
+                    onStoryClick = { groupIdx ->
+                        val targetGroup = filteredStories.getOrNull(groupIdx)
+                        val fullIdx = if (targetGroup != null) allStoryGroups.indexOfFirst { it.userId == targetGroup.userId } else groupIdx
+                        storyViewerInitialIndex = if (fullIdx >= 0) fullIdx else 0
+                        showStoryViewer = true
+                    },
+                    storyVm = storyVm
+                )
+            }
 
         // Tab Content Items rendered directly into LazyVerticalGrid
         if (isRestricted) {
@@ -1078,8 +471,15 @@ fun UserProfileScreen(
                         }
                     } else if (normalWorks.isEmpty()) {
                         item(span = { GridItemSpan(maxLineSpan) }) {
+                            val worksGraphicState = rememberAppleGraphicAnimationState()
                             AppleEmptyTabState(
-                                icon = Lucide.Briefcase,
+                                graphic = {
+                                    AppleWorksGraphic(
+                                        modifier = Modifier.size(150.dp),
+                                        state = worksGraphicState,
+                                        enableClickToAnimate = true
+                                    )
+                                },
                                 title = "No Works Yet",
                                 subtitle = "Creations will appear here once published."
                             )
@@ -1104,8 +504,15 @@ fun UserProfileScreen(
                         }
                     } else if (imagePosts.isEmpty()) {
                         item(span = { GridItemSpan(maxLineSpan) }) {
+                            val photosGraphicState = rememberAppleGraphicAnimationState()
                             AppleEmptyTabState(
-                                htmlIcon = ThreeDIconHtml.PHOTOS_ICON_HTML,
+                                graphic = {
+                                    ApplePhotosGraphic(
+                                        modifier = Modifier.size(150.dp),
+                                        state = photosGraphicState,
+                                        enableClickToAnimate = true
+                                    )
+                                },
                                 title = "No Photos Yet",
                                 subtitle = "Photo posts will appear here once shared."
                             )
@@ -1130,8 +537,15 @@ fun UserProfileScreen(
                         }
                     } else if (flashPosts.isEmpty()) {
                         item(span = { GridItemSpan(maxLineSpan) }) {
+                            val flashGraphicState = rememberAppleGraphicAnimationState()
                             AppleEmptyTabState(
-                                htmlIcon = ThreeDIconHtml.ZAP_ICON_HTML,
+                                graphic = {
+                                    AppleFlashGraphic(
+                                        modifier = Modifier.size(150.dp),
+                                        state = flashGraphicState,
+                                        enableClickToAnimate = true
+                                    )
+                                },
                                 title = "No Flash Videos",
                                 subtitle = "Short video moments will appear here."
                             )
@@ -1155,8 +569,15 @@ fun UserProfileScreen(
                         }
                     } else if (remixWorks.isEmpty()) {
                         item(span = { GridItemSpan(maxLineSpan) }) {
+                            val remixGraphicState = rememberAppleGraphicAnimationState()
                             AppleEmptyTabState(
-                                htmlIcon = ThreeDIconHtml.HEART_HANDSHAKE_ICON_HTML,
+                                graphic = {
+                                    AppleRemixGraphic(
+                                        modifier = Modifier.size(150.dp),
+                                        state = remixGraphicState,
+                                        enableClickToAnimate = true
+                                    )
+                                },
                                 title = "No Remixes",
                                 subtitle = "Remixed co-creations will appear here."
                             )
@@ -1428,6 +849,35 @@ fun UserProfileScreen(
         }
     }
 
+    // Story Viewer Overlay
+    if (showStoryViewer && (allStoryGroups.isNotEmpty() || filteredStories.isNotEmpty() || myStories.isNotEmpty())) {
+        val viewerGroups = remember(allStoryGroups, filteredStories) {
+            if (filteredStories.isNotEmpty() && !allStoryGroups.any { it.userId == userId }) {
+                filteredStories + allStoryGroups
+            } else if (allStoryGroups.isNotEmpty()) {
+                allStoryGroups
+            } else {
+                filteredStories
+            }
+        }
+        StoryViewerScreen(
+            storyGroups = viewerGroups,
+            initialGroupIndex = storyViewerInitialIndex,
+            currentUserId = currentUserId ?: "",
+            storyViewModel = storyVm,
+            likedStoryIds = likedStoryIds,
+            myStories = myStories,
+            currentUserProfile = if (isCurrentUser) profile else null,
+            onClose = { showStoryViewer = false },
+            onAuthorClick = { clickedUid ->
+                showStoryViewer = false
+                if (clickedUid != userId) {
+                    onNavigateToUserList?.invoke(clickedUid, "followers")
+                }
+            }
+        )
+    }
+
     // Apple ID / NameDrop Share Card Bottom Sheet
     if (showShareCardModal && profile != null) {
         AppleProfileCardSheet(
@@ -1546,7 +996,6 @@ fun UserProfileScreen(
             var libraryTab by remember { mutableIntStateOf(0) }
             val myWorksWithImages = remember(works) { works.filter { !it.imageUrl.isNullOrBlank() } }
             val wavePresets = remember { AllBannerPresets.filter { it.id.startsWith("preset:wave_") } }
-            val otherPresets = remember { AllBannerPresets.filter { !it.id.startsWith("preset:wave_") } }
 
             Column(
                 modifier = Modifier
@@ -1641,7 +1090,7 @@ fun UserProfileScreen(
                         .background(if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFF1C1C1E) else Color(0xFFF2F2F7))
                         .padding(3.dp)
                 ) {
-                    listOf("Waves ()", "Classics ()", "My Works ()").forEachIndexed { index, title ->
+                    listOf("Waves (${wavePresets.size})", "Work (${myWorksWithImages.size})").forEachIndexed { index, title ->
                         val isSelected = libraryTab == index
                         Box(
                             modifier = Modifier
@@ -1730,70 +1179,6 @@ fun UserProfileScreen(
                         }
                     }
                     1 -> {
-                        LazyVerticalGrid(
-                            columns = GridCells.Fixed(2),
-                            modifier = Modifier.fillMaxWidth().heightIn(max = 380.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(otherPresets, key = { it.id }) { preset ->
-                                val isSelected = profile?.bannerUrl == preset.id
-                                Column(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .border(
-                                            width = if (isSelected) 2.dp else 0.75.dp,
-                                            color = if (isSelected) Color(0xFF007AFF) else colors.glassBorder,
-                                            shape = RoundedCornerShape(10.dp)
-                                        )
-                                        .clickable {
-                                            val uid = currentUserId ?: return@clickable
-                                            scope.launch {
-                                                try {
-                                                    com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users").document(uid).update("bannerUrl", preset.id).await()
-                                                    profile = profile?.copy(bannerUrl = preset.id)
-                                                    ToastManager.showToast("Banner set to ")
-                                                } catch (e: Exception) {
-                                                    ToastManager.showToast("Failed to update banner")
-                                                }
-                                                showBannerLibrarySheet = false
-                                            }
-                                        }
-                                ) {
-                                    Box(modifier = Modifier.fillMaxWidth().height(60.dp)) {
-                                        Image(
-                                            painter = painterResource(id = preset.drawableRes),
-                                            contentDescription = preset.name,
-                                            modifier = Modifier.fillMaxSize(),
-                                            contentScale = ContentScale.Crop
-                                        )
-                                        if (isSelected) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .padding(6.dp)
-                                                    .size(20.dp)
-                                                    .clip(CircleShape)
-                                                    .background(Color(0xFF007AFF))
-                                                    .align(Alignment.TopEnd),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Icon(Lucide.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
-                                            }
-                                        }
-                                    }
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .background(if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFF2C2C2E) else Color(0xFFF9F9F9))
-                                            .padding(horizontal = 8.dp, vertical = 5.dp)
-                                    ) {
-                                        Text(preset.name, color = colors.textMain, fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    2 -> {
                         if (myWorksWithImages.isEmpty()) {
                             Box(
                                 modifier = Modifier
@@ -2105,8 +1490,8 @@ fun AppleSettingSheetItem(
 
 @Composable
 fun AppleEmptyTabState(
+    graphic: (@Composable () -> Unit)? = null,
     icon: ImageVector? = null,
-    htmlIcon: String? = null,
     title: String,
     subtitle: String
 ) {
@@ -2114,14 +1499,11 @@ fun AppleEmptyTabState(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 16.dp, bottom = 48.dp, start = 24.dp, end = 24.dp),
+            .padding(top = 20.dp, bottom = 48.dp, start = 24.dp, end = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        if (!htmlIcon.isNullOrBlank()) {
-            Html3DIcon(
-                html = htmlIcon,
-                modifier = Modifier.size(130.dp)
-            )
+        if (graphic != null) {
+            graphic()
         } else if (icon != null) {
             Box(
                 modifier = Modifier.size(64.dp),
@@ -2130,10 +1512,10 @@ fun AppleEmptyTabState(
                 Icon(icon, contentDescription = null, tint = Color(0xFF8E8E93), modifier = Modifier.size(36.dp))
             }
         }
-        Spacer(Modifier.height(12.dp))
-        Text(title, color = colors.textMain, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(4.dp))
-        Text(subtitle, color = Color(0xFF8E8E93), fontSize = 13.sp, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(16.dp))
+        Text(title, color = colors.textMain, fontSize = 18.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(6.dp))
+        Text(subtitle, color = colors.textMuted, fontSize = 13.sp, textAlign = TextAlign.Center)
     }
 }
 
@@ -2217,7 +1599,12 @@ fun ProfileFlashCard(
 
                 DropdownMenu(
                     expanded = showMenu,
-                    onDismissRequest = { showMenu = false }
+                    onDismissRequest = { showMenu = false },
+                    modifier = Modifier
+                        .shadow(16.dp, RoundedCornerShape(24.dp), ambientColor = Color.Black.copy(alpha = 0.25f), spotColor = Color.Black.copy(alpha = 0.15f))
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(Color(0xF21C1C1E))
+                        .border(0.5.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(24.dp))
                 ) {
                     DropdownMenuItem(
                         text = { Text("Delete Flash", color = Color(0xFFFF3B30), fontWeight = FontWeight.SemiBold) },

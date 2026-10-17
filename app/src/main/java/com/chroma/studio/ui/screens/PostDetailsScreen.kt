@@ -4,6 +4,7 @@ import com.chroma.studio.ui.components.ChromaHeaderActionButton
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.chroma.studio.ui.components.OscellionLoadingSpinner
 import com.chroma.studio.ui.components.GlassIconButton
+import com.chroma.studio.ui.components.AiWaveSphereIcon
 
 import android.net.Uri
 import android.util.Log
@@ -221,7 +222,7 @@ fun PostDetailsScreen(
                                 .background(Color(0xFF007AFF).copy(alpha = 0.1f))
                                 .padding(horizontal = 12.dp, vertical = 4.dp)
                         ) {
-                            Icon(Lucide.Sparkles, null, tint = Color(0xFF007AFF), modifier = Modifier.size(12.dp))
+                            AiWaveSphereIcon(modifier = Modifier.size(13.dp))
                             Text(selectedTemplate, fontSize = 12.sp, color = Color(0xFF007AFF), fontWeight = FontWeight.Medium)
                         }
                         Spacer(Modifier.height(8.dp))

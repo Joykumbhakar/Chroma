@@ -40,6 +40,9 @@ import com.chroma.studio.chat.sound.SoundManager
 import com.chroma.studio.chat.ui.theme.ChatColors
 import com.chroma.studio.chat.ui.theme.LocalChatColors
 import com.chroma.studio.ui.theme.InterFontFamily
+import com.chroma.studio.ui.components.LiquidGlassPrimaryButton
+import com.chroma.studio.ui.components.LiquidGlassSecondaryButton
+import com.chroma.studio.ui.components.AiWaveSphereIcon
 import com.composables.icons.lucide.*
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -278,9 +281,14 @@ fun AppleSlider(
         }
     }
 
+    val thumbWidth by animateDpAsState(
+        targetValue = if (isInteracting) 28.dp else 24.dp,
+        animationSpec = spring(dampingRatio = 0.5f, stiffness = 600f),
+        label = "thumbWidth"
+    )
     val thumbScale by animateFloatAsState(
-        targetValue = if (isInteracting) 1.12f else 1.0f,
-        animationSpec = spring(dampingRatio = 0.45f, stiffness = 600f),
+        targetValue = if (isInteracting) 1.15f else 1.0f,
+        animationSpec = spring(dampingRatio = 0.5f, stiffness = 600f),
         label = "thumbScale"
     )
 
@@ -325,8 +333,8 @@ fun AppleSlider(
         },
         thumb = {
             LiquidGlassKnob(
-                width = 26.dp,
-                height = 26.dp,
+                width = thumbWidth,
+                height = 18.dp,
                 scale = thumbScale,
                 baseAlpha = 1.0f
             )
@@ -579,15 +587,12 @@ fun LiveBubblePreviewCard(
         }
 
         if (testButtonText != null && onTestClick != null) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF007AFF).copy(alpha = 0.12f))
-                    .clickable { onTestClick() }
-                    .padding(horizontal = 14.dp, vertical = 6.dp)
+            LiquidGlassSecondaryButton(
+                onClick = onTestClick,
+                isSmall = true,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
             ) {
-                Text(testButtonText, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, fontFamily = InterFontFamily, color = Color(0xFF007AFF))
+                Text(testButtonText, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, fontFamily = InterFontFamily, color = Color.Black)
             }
         }
     }
@@ -623,8 +628,8 @@ fun MainAppearanceSections(
 
                 IosSettingsRow(
                     isLight = colors.isLight,
-                    iconBg = AppleGradients.Universal,
-                    icon = { Icon(Lucide.MessageCircle, null, tint = Color.White, modifier = Modifier.size(16.dp)) },
+                    iconColor = Color(0xFF007AFF),
+                    icon = { Icon(Lucide.MessageCircle, null, tint = Color(0xFF007AFF), modifier = Modifier.size(17.dp)) },
                     title = "Bubble Styles",
                     subtitle = "${currentBubbleStyle.title} • ${currentBubbleStyle.category}",
                     onClick = { SoundManager.playReaction(); onNavigateToSubScreen(AppearanceSubScreen.BUBBLE_STYLES) },
@@ -634,8 +639,8 @@ fun MainAppearanceSections(
 
                 IosSettingsRow(
                     isLight = colors.isLight,
-                    iconBg = AppleGradients.Universal,
-                    icon = { Icon(Lucide.SlidersHorizontal, null, tint = Color.White, modifier = Modifier.size(16.dp)) },
+                    iconColor = Color(0xFFFF9500),
+                    icon = { Icon(Lucide.SlidersHorizontal, null, tint = Color(0xFFFF9500), modifier = Modifier.size(17.dp)) },
                     title = "Corners & Geometry",
                     subtitle = if (currentCustomCorners.customEnabled) "Custom (${currentCustomCorners.topStart.toInt()}dp)" else "Preset defaults",
                     onClick = { SoundManager.playReaction(); onNavigateToSubScreen(AppearanceSubScreen.CORNER_GEOMETRY) },
@@ -645,8 +650,8 @@ fun MainAppearanceSections(
 
                 IosSettingsRow(
                     isLight = colors.isLight,
-                    iconBg = AppleGradients.Universal,
-                    icon = { Icon(Lucide.Sparkles, null, tint = Color.White, modifier = Modifier.size(16.dp)) },
+                    iconColor = Color(0xFFAF52DE),
+                    icon = { AiWaveSphereIcon(modifier = Modifier.size(18.dp)) },
                     title = "Animations & Physics",
                     subtitle = currentAnimationStyle.title,
                     onClick = { SoundManager.playReaction(); onNavigateToSubScreen(AppearanceSubScreen.ANIMATIONS) },
@@ -656,8 +661,8 @@ fun MainAppearanceSections(
 
                 IosSettingsRow(
                     isLight = colors.isLight,
-                    iconBg = AppleGradients.Universal,
-                    icon = { Icon(Lucide.Mic, null, tint = Color.White, modifier = Modifier.size(16.dp)) },
+                    iconColor = Color(0xFF00C7BE),
+                    icon = { Icon(Lucide.Mic, null, tint = Color(0xFF00C7BE), modifier = Modifier.size(17.dp)) },
                     title = "Voice Globe Style",
                     subtitle = currentGlobeStyle.title,
                     onClick = { SoundManager.playReaction(); onNavigateToSubScreen(AppearanceSubScreen.VOICE_GLOBE) },
@@ -673,8 +678,8 @@ fun MainAppearanceSections(
 
                 IosSettingsRow(
                     isLight = colors.isLight,
-                    iconBg = AppleGradients.Universal,
-                    icon = { Icon(Lucide.Image, null, tint = Color.White, modifier = Modifier.size(16.dp)) },
+                    iconColor = Color(0xFF34C759),
+                    icon = { Icon(Lucide.Image, null, tint = Color(0xFF34C759), modifier = Modifier.size(17.dp)) },
                     title = "Wallpapers & Themes",
                     subtitle = "Backgrounds, accents & dark mode",
                     onClick = { SoundManager.playReaction(); onNavigateToSubScreen(AppearanceSubScreen.THEME_WALLPAPERS) },
@@ -684,8 +689,8 @@ fun MainAppearanceSections(
 
                 IosSettingsRow(
                     isLight = colors.isLight,
-                    iconBg = AppleGradients.Universal,
-                    icon = { Icon(Lucide.Moon, null, tint = Color.White, modifier = Modifier.size(16.dp)) },
+                    iconColor = Color(0xFF8E8E93),
+                    icon = { Icon(Lucide.Moon, null, tint = Color(0xFF8E8E93), modifier = Modifier.size(17.dp)) },
                     title = "Dark Appearance",
                     subtitle = if (colors.isLight) "Light Mode active" else "Dark Mode active",
                     trailing = { AppleSwitch(checked = !colors.isLight, onCheckedChange = { onToggleAppearance() }) }
@@ -694,8 +699,8 @@ fun MainAppearanceSections(
 
                 IosSettingsRow(
                     isLight = colors.isLight,
-                    iconBg = AppleGradients.Universal,
-                    icon = { Icon(Lucide.Palette, null, tint = Color.White, modifier = Modifier.size(16.dp)) },
+                    iconColor = Color(0xFFFF2D55),
+                    icon = { Icon(Lucide.Palette, null, tint = Color(0xFFFF2D55), modifier = Modifier.size(17.dp)) },
                     title = "Accent Color",
                     subtitle = accentColor.title,
                     onClick = { SoundManager.playReaction(); onAccentCycle() },
@@ -721,8 +726,8 @@ fun MainAppearanceSections(
             IosGroupedCard(isLight = colors.isLight) {
                 IosSettingsRow(
                     isLight = colors.isLight,
-                    iconBg = AppleGradients.Universal,
-                    icon = { Icon(Lucide.RotateCcw, null, tint = Color.White, modifier = Modifier.size(16.dp)) },
+                    iconColor = Color(0xFFFF3B30),
+                    icon = { Icon(Lucide.RotateCcw, null, tint = Color(0xFFFF3B30), modifier = Modifier.size(17.dp)) },
                     title = "Reset Appearance Defaults",
                     subtitle = "Restore system theme and classic bubbles",
                     onClick = onResetDefaults,
@@ -809,8 +814,8 @@ fun BubbleStylesSubScreen(
                             .padding(horizontal = 16.dp, vertical = 12.dp)
                     ) {
                         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            IosSquircleIcon(gradient = getBubbleStyleGradient(style)) {
-                                Icon(Lucide.MessageCircle, null, tint = Color.White, modifier = Modifier.size(17.dp))
+                            IosSquircleIcon(color = Color(0xFF007AFF)) {
+                                Icon(Lucide.MessageCircle, null, tint = Color(0xFF007AFF), modifier = Modifier.size(17.dp))
                             }
                             Spacer(Modifier.width(16.dp))
                             Column(modifier = Modifier.weight(1f)) {
@@ -874,8 +879,8 @@ fun CornerGeometrySubScreen(
             IosGroupedCard(isLight = colors.isLight) {
                 IosSettingsRow(
                     isLight = colors.isLight,
-                    iconBg = AppleGradients.Universal,
-                    icon = { Icon(Lucide.Square, null, tint = Color.White, modifier = Modifier.size(17.dp)) },
+                    iconColor = Color(0xFF007AFF),
+                    icon = { Icon(Lucide.Square, null, tint = Color(0xFF007AFF), modifier = Modifier.size(17.dp)) },
                     title = "Enable Custom Corners",
                     subtitle = if (currentCustomCorners.customEnabled) "Custom parameters active" else "Using preset style geometry",
                     trailing = {
@@ -895,9 +900,8 @@ fun CornerGeometrySubScreen(
 
                     IosSliderRow(
                         isLight = colors.isLight,
-                        iconBg = AppleGradients.Universal,
-                        activeBrush = AppleGradients.UniversalHorizontal,
-                        icon = { Icon(Lucide.CornerLeftUp, null, tint = Color.White, modifier = Modifier.size(16.dp)) },
+                        iconColor = Color(0xFF007AFF),
+                        icon = { Icon(Lucide.CornerLeftUp, null, tint = Color(0xFF007AFF), modifier = Modifier.size(17.dp)) },
                         title = "Top Radius",
                         valueDisplay = "${currentCustomCorners.topStart.toInt()} dp",
                         value = currentCustomCorners.topStart,
@@ -908,9 +912,8 @@ fun CornerGeometrySubScreen(
 
                     IosSliderRow(
                         isLight = colors.isLight,
-                        iconBg = AppleGradients.Universal,
-                        activeBrush = AppleGradients.UniversalHorizontal,
-                        icon = { Icon(Lucide.CornerLeftDown, null, tint = Color.White, modifier = Modifier.size(16.dp)) },
+                        iconColor = Color(0xFF007AFF),
+                        icon = { Icon(Lucide.CornerLeftDown, null, tint = Color(0xFF007AFF), modifier = Modifier.size(17.dp)) },
                         title = "Bottom Radius",
                         valueDisplay = "${currentCustomCorners.bottomStart.toInt()} dp",
                         value = currentCustomCorners.bottomStart,
@@ -921,9 +924,8 @@ fun CornerGeometrySubScreen(
 
                     IosSliderRow(
                         isLight = colors.isLight,
-                        iconBg = AppleGradients.Universal,
-                        activeBrush = AppleGradients.UniversalHorizontal,
-                        icon = { Icon(Lucide.Play, null, tint = Color.White, modifier = Modifier.size(16.dp)) },
+                        iconColor = Color(0xFFFF9500),
+                        icon = { Icon(Lucide.Play, null, tint = Color(0xFFFF9500), modifier = Modifier.size(17.dp)) },
                         title = "Pointy Corner Depth",
                         valueDisplay = "${currentCustomCorners.bottomEnd.toInt()} dp",
                         value = currentCustomCorners.bottomEnd,
@@ -934,8 +936,8 @@ fun CornerGeometrySubScreen(
 
                     IosSettingsRow(
                         isLight = colors.isLight,
-                        iconBg = AppleGradients.Universal,
-                        icon = { Icon(Lucide.ArrowLeftRight, null, tint = Color.White, modifier = Modifier.size(17.dp)) },
+                        iconColor = Color(0xFF34C759),
+                        icon = { Icon(Lucide.ArrowLeftRight, null, tint = Color(0xFF34C759), modifier = Modifier.size(17.dp)) },
                         title = "Apply To Both Sides",
                         subtitle = if (currentCustomCorners.applyToBoth) "Both incoming & outgoing" else "Outgoing only",
                         trailing = {
@@ -949,8 +951,8 @@ fun CornerGeometrySubScreen(
 
                     IosSettingsRow(
                         isLight = colors.isLight,
-                        iconBg = AppleGradients.Universal,
-                        icon = { Icon(Lucide.RotateCcw, null, tint = Color.White, modifier = Modifier.size(17.dp)) },
+                        iconColor = Color(0xFFFF3B30),
+                        icon = { Icon(Lucide.RotateCcw, null, tint = Color(0xFFFF3B30), modifier = Modifier.size(17.dp)) },
                         title = "Reset Corner Defaults",
                         subtitle = "Restore 10dp radius, 3dp pointy notch",
                         onClick = { SoundManager.playReaction(); onUpdateCustomCorners(CustomCornerConfig(customEnabled = true)) },
@@ -966,8 +968,8 @@ fun CornerGeometrySubScreen(
                         val isSelected = style == currentCustomCorners.pointyCornerStyle
                         IosSettingsRow(
                             isLight = colors.isLight,
-                            iconBg = AppleGradients.Universal,
-                            icon = { Icon(Lucide.Share2, null, tint = Color.White, modifier = Modifier.size(17.dp)) },
+                            iconColor = Color(0xFF007AFF),
+                            icon = { Icon(Lucide.Share2, null, tint = Color(0xFF007AFF), modifier = Modifier.size(17.dp)) },
                             title = style.title,
                             subtitle = style.description,
                             onClick = { SoundManager.playReaction(); onUpdateCustomCorners(currentCustomCorners.copy(pointyCornerStyle = style)) },
@@ -1020,8 +1022,8 @@ fun AnimationsSubScreen(
                     val isSelected = anim == currentAnimationStyle
                     IosSettingsRow(
                         isLight = colors.isLight,
-                        iconBg = AppleGradients.Universal,
-                        icon = { Icon(Lucide.Zap, null, tint = Color.White, modifier = Modifier.size(17.dp)) },
+                        iconColor = Color(0xFFAF52DE),
+                        icon = { Icon(Lucide.Zap, null, tint = Color(0xFFAF52DE), modifier = Modifier.size(17.dp)) },
                         title = anim.title,
                         subtitle = anim.description,
                         onClick = {
@@ -1080,8 +1082,8 @@ fun VoiceGlobeSubScreen(
                     val isSelected = globe == currentGlobeStyle
                     IosSettingsRow(
                         isLight = colors.isLight,
-                        iconBg = Brush.linearGradient(globe.previewGradient),
-                        icon = { Icon(Lucide.Activity, null, tint = Color.White, modifier = Modifier.size(17.dp)) },
+                        iconColor = Color(0xFF00C7BE),
+                        icon = { Icon(Lucide.Activity, null, tint = Color(0xFF00C7BE), modifier = Modifier.size(17.dp)) },
                         title = globe.title,
                         subtitle = globe.description,
                         onClick = {
@@ -1116,8 +1118,8 @@ fun ThemeWallpapersSubScreen(
             IosGroupedCard(isLight = colors.isLight) {
                 IosSettingsRow(
                     isLight = colors.isLight,
-                    iconBg = AppleGradients.Universal,
-                    icon = { Icon(Lucide.FolderPlus, null, tint = Color.White, modifier = Modifier.size(17.dp)) },
+                    iconColor = Color(0xFF34C759),
+                    icon = { Icon(Lucide.FolderPlus, null, tint = Color(0xFF34C759), modifier = Modifier.size(17.dp)) },
                     title = "Choose Chat Wallpaper",
                     subtitle = "Gallery images or gradient presets",
                     onClick = { SoundManager.playReaction(); onOpenWallpaperPicker() },
@@ -1131,8 +1133,8 @@ fun ThemeWallpapersSubScreen(
             IosGroupedCard(isLight = colors.isLight) {
                 IosSettingsRow(
                     isLight = colors.isLight,
-                    iconBg = AppleGradients.Universal,
-                    icon = { Icon(Lucide.Moon, null, tint = Color.White, modifier = Modifier.size(17.dp)) },
+                    iconColor = Color(0xFF8E8E93),
+                    icon = { Icon(Lucide.Moon, null, tint = Color(0xFF8E8E93), modifier = Modifier.size(17.dp)) },
                     title = "Dark Appearance",
                     subtitle = if (colors.isLight) "Light Mode active" else "Dark Mode active",
                     trailing = { AppleSwitch(checked = !colors.isLight, onCheckedChange = { onToggleAppearance() }) }
@@ -1145,8 +1147,8 @@ fun ThemeWallpapersSubScreen(
             IosGroupedCard(isLight = colors.isLight) {
                 IosSettingsRow(
                     isLight = colors.isLight,
-                    iconBg = AppleGradients.Universal,
-                    icon = { Icon(Lucide.Palette, null, tint = Color.White, modifier = Modifier.size(17.dp)) },
+                    iconColor = accentColor.color,
+                    icon = { Icon(Lucide.Palette, null, tint = accentColor.color, modifier = Modifier.size(17.dp)) },
                     title = "Current Accent",
                     subtitle = "${accentColor.title} — tap to cycle",
                     onClick = { SoundManager.playReaction(); onAccentCycle() },
@@ -1395,40 +1397,21 @@ fun IosRowDivider(isLight: Boolean, modifier: Modifier = Modifier) {
 
 /**
  * Apple-style 30dp squircle icon background with thin-outlined Lucide icon.
- * Layered with #f8fafc base + TL_BR linear gradient (#FF006FFF to #FF111C42).
+ * Uses soft translucent tinted squircle background (color.copy(alpha = 0.14f))
+ * paired with a vibrant vector Lucide icon in matching color.
  */
 @Composable
 fun IosSquircleIcon(
-    color: Color = Color(0xFF006FFF),
+    color: Color = Color(0xFF007AFF),
     gradient: Brush? = null,
     modifier: Modifier = Modifier,
     icon: @Composable () -> Unit
 ) {
-    val backgroundBrush = gradient ?: AppleGradients.Universal
-
     Box(
         modifier = modifier
             .size(30.dp)
-            .shadow(
-                elevation = 1.dp,
-                shape = RoundedCornerShape(7.5.dp),
-                spotColor = Color.Black.copy(alpha = 0.15f),
-                ambientColor = Color.Black.copy(alpha = 0.08f)
-            )
             .clip(RoundedCornerShape(7.5.dp))
-            .background(Color(0xFFF8FAFC))
-            .background(backgroundBrush)
-            .border(
-                0.5.dp,
-                Brush.verticalGradient(
-                    listOf(
-                        Color.White.copy(alpha = 0.35f),
-                        Color.White.copy(alpha = 0.05f),
-                        Color.Black.copy(alpha = 0.10f)
-                    )
-                ),
-                RoundedCornerShape(7.5.dp)
-            ),
+            .background(color.copy(alpha = 0.14f)),
         contentAlignment = Alignment.Center
     ) { icon() }
 }
@@ -1439,8 +1422,8 @@ fun IosSquircleIcon(
 @Composable
 fun IosSettingsRow(
     isLight: Boolean,
-    iconColor: Color = Color(0xFF006FFF),
-    iconBg: Brush? = AppleGradients.Universal,
+    iconColor: Color = Color(0xFF007AFF),
+    iconBg: Brush? = null,
     icon: @Composable () -> Unit,
     title: String,
     subtitle: String? = null,
@@ -1478,8 +1461,8 @@ fun IosSettingsRow(
 @Composable
 fun IosSliderRow(
     isLight: Boolean,
-    iconColor: Color = Color(0xFF006FFF),
-    iconBg: Brush? = AppleGradients.Universal,
+    iconColor: Color = Color(0xFF007AFF),
+    iconBg: Brush? = null,
     activeBrush: Brush? = null,
     icon: @Composable () -> Unit,
     title: String,

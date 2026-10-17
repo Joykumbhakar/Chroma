@@ -385,7 +385,11 @@ fun GroupInfoScreen(
                                         DropdownMenu(
                                             expanded = expanded,
                                             onDismissRequest = { expanded = false },
-                                            modifier = Modifier.background(Color.White)
+                                            modifier = Modifier
+                                                .shadow(16.dp, RoundedCornerShape(24.dp), ambientColor = Color.Black.copy(alpha = 0.2f), spotColor = Color.Black.copy(alpha = 0.15f))
+                                                .clip(RoundedCornerShape(24.dp))
+                                                .background(Color.White)
+                                                .border(0.5.dp, Color(0x18000000), RoundedCornerShape(24.dp))
                                         ) {
                                             if (!isMemberAdmin) {
                                                 DropdownMenuItem(

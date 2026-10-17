@@ -16,6 +16,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chroma.studio.ui.components.OscellionBackground
+import com.chroma.studio.ui.components.LiquidGlassPrimaryButton
+import com.chroma.studio.ui.components.LiquidGlassSecondaryButton
+import com.chroma.studio.ui.components.LiquidGlassCheckbox
 import com.chroma.studio.ui.theme.InterFontFamily
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.composables.icons.lucide.Lucide
@@ -91,13 +94,9 @@ fun PrivacyPolicyTermsScreen(
                                 .padding(vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Checkbox(
+                            LiquidGlassCheckbox(
                                 checked = hasAgreed,
-                                onCheckedChange = { hasAgreed = it },
-                                colors = CheckboxDefaults.colors(
-                                    checkedColor = colors.primary,
-                                    uncheckedColor = colors.textMuted
-                                )
+                                onCheckedChange = { hasAgreed = it }
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(
@@ -113,24 +112,17 @@ fun PrivacyPolicyTermsScreen(
                         Spacer(Modifier.height(14.dp))
 
                         // Accept Button
-                        Button(
+                        LiquidGlassPrimaryButton(
                             onClick = onAccept,
                             enabled = hasAgreed,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(50.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = colors.primary,
-                                disabledContainerColor = colors.primary.copy(alpha = 0.35f),
-                                contentColor = Color.White,
-                                disabledContentColor = Color.White.copy(alpha = 0.6f)
-                            ),
-                            elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp)
+                                .height(48.dp)
                         ) {
                             Text(
                                 text = "Agree & Continue",
-                                fontSize = 16.sp,
+                                fontSize = 15.sp,
+                                color = Color.White,
                                 fontWeight = FontWeight.SemiBold,
                                 fontFamily = InterFontFamily
                             )
@@ -152,25 +144,13 @@ fun PrivacyPolicyTermsScreen(
                             )
                         }
                     } else {
-                        Button(
+                        LiquidGlassSecondaryButton(
+                            text = "Close",
                             onClick = onBack,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(50.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = colors.primary,
-                                contentColor = Color.White
-                            ),
-                            elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp)
-                        ) {
-                            Text(
-                                text = "Close",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                fontFamily = InterFontFamily
-                            )
-                        }
+                                .height(48.dp)
+                        )
                     }
                 }
             }
@@ -324,7 +304,7 @@ fun PrivacyPolicyTermsScreen(
 
                     item {
                         AgreementSection(
-                            icon = Lucide.Sparkles,
+                            icon = Lucide.Palette,
                             iconColor = Color(0xFFFF9500),
                             title = "2. Creative Rights & Intellectual Property",
                             description = "You retain 100% intellectual property ownership of any gradient artworks, visual compositions, flashes, and designs you produce. By publishing your work publicly, you grant other users permission to view and interact according to your remix preferences."

@@ -1,3 +1,4 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package com.chroma.studio.chat.ui.components
 
 import android.content.Intent
@@ -43,6 +44,8 @@ import com.chroma.studio.chat.data.ChatConversation
 import com.chroma.studio.chat.data.GroupMember
 import com.chroma.studio.chat.sound.SoundManager
 import com.chroma.studio.chat.ui.theme.LocalChatColors
+import com.chroma.studio.ui.components.LiquidGlassPrimaryButton
+import com.chroma.studio.ui.components.LiquidGlassSecondaryButton
 import kotlinx.coroutines.launch
 
 enum class SharedMediaType {
@@ -105,194 +108,106 @@ fun CustomSharedGalleryModal(
     // Audio Playback Simulation State
     var activeAudioPlayingId by remember { mutableStateOf<String?>(null) }
 
-    // Default Seed Data for the Chat's Shared Content
-    var sharedItems by remember {
-        mutableStateOf(
-            listOf(
-                // Media
-                SharedMediaItem(
-                    id = "m_1",
-                    type = SharedMediaType.PHOTO,
-                    title = "Hardware Node Prototype",
-                    subtitle = "1920x1080 • 1.8 MB",
-                    url = "https://images.unsplash.com/photo-1558002038-1055907df827?q=80&w=1200&auto=format&fit=crop",
-                    senderName = "Bholanath Kumbhakar",
-                    senderAvatar = chat.avatar,
-                    senderId = "user_bholanath",
-                    timestamp = "Today, 10:24 AM"
-                ),
-                SharedMediaItem(
-                    id = "m_2",
-                    type = SharedMediaType.PHOTO,
-                    title = "Design Token System",
-                    subtitle = "2048x1536 • 2.4 MB",
-                    url = "https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=1200&auto=format&fit=crop",
-                    senderName = "Sarah Connor",
-                    senderAvatar = chat.avatar,
-                    senderId = "user_sarah",
-                    timestamp = "Yesterday, 3:45 PM"
-                ),
-                SharedMediaItem(
-                    id = "m_3",
-                    type = SharedMediaType.VIDEO,
-                    title = "Orb UI Animation Demo",
-                    subtitle = "4K • 18.2 MB",
-                    url = "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?q=80&w=1200&auto=format&fit=crop",
-                    senderName = "Joy",
-                    senderAvatar = chat.avatar,
-                    senderId = "user_me",
-                    timestamp = "Oct 1, 11:20 AM",
-                    duration = "0:42"
-                ),
-                SharedMediaItem(
-                    id = "m_4",
-                    type = SharedMediaType.PHOTO,
-                    title = "Server Cluster Rack",
-                    subtitle = "3840x2160 • 4.1 MB",
-                    url = "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?q=80&w=1200&auto=format&fit=crop",
-                    senderName = "Marcus Vance",
-                    senderAvatar = chat.avatar,
-                    senderId = "user_marcus",
-                    timestamp = "Sep 29, 6:15 PM"
-                ),
-                SharedMediaItem(
-                    id = "m_5",
-                    type = SharedMediaType.PHOTO,
-                    title = "Architecture Whiteboard",
-                    subtitle = "1600x1200 • 1.2 MB",
-                    url = "https://images.unsplash.com/photo-1531403009284-440f080d1e12?q=80&w=1200&auto=format&fit=crop",
-                    senderName = "Sarah Connor",
-                    senderAvatar = chat.avatar,
-                    senderId = "user_sarah",
-                    timestamp = "Sep 28, 2:10 PM"
-                ),
-                SharedMediaItem(
-                    id = "m_6",
-                    type = SharedMediaType.VIDEO,
-                    title = "Product Walkthrough Reel",
-                    subtitle = "1080p • 12.0 MB",
-                    url = "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?q=80&w=1200&auto=format&fit=crop",
-                    senderName = "Marcus Vance",
-                    senderAvatar = chat.avatar,
-                    senderId = "user_marcus",
-                    timestamp = "Sep 27, 4:50 PM",
-                    duration = "1:15"
-                ),
-
-                // Docs
-                SharedMediaItem(
-                    id = "d_1",
-                    type = SharedMediaType.DOCUMENT,
-                    title = "Product_Roadmap_Q4.pdf",
-                    subtitle = "2.4 MB • 14 pages",
-                    url = "https://oscellion.chat/docs/roadmap.pdf",
-                    senderName = "Bholanath Kumbhakar",
-                    senderAvatar = chat.avatar,
-                    senderId = "user_bholanath",
-                    timestamp = "Yesterday, 4:10 PM",
-                    fileExtension = "PDF"
-                ),
-                SharedMediaItem(
-                    id = "d_2",
-                    type = SharedMediaType.DOCUMENT,
-                    title = "API_Security_Audit_Report.docx",
-                    subtitle = "840 KB • Word Document",
-                    url = "https://oscellion.chat/docs/security.docx",
-                    senderName = "Marcus Vance",
-                    senderAvatar = chat.avatar,
-                    senderId = "user_marcus",
-                    timestamp = "Sep 30, 11:05 AM",
-                    fileExtension = "DOCX"
-                ),
-                SharedMediaItem(
-                    id = "d_3",
-                    type = SharedMediaType.DOCUMENT,
-                    title = "Design_System_Tokens_v3.zip",
-                    subtitle = "14.8 MB • Archive",
-                    url = "https://oscellion.chat/docs/tokens.zip",
-                    senderName = "Sarah Connor",
-                    senderAvatar = chat.avatar,
-                    senderId = "user_sarah",
-                    timestamp = "Sep 29, 5:30 PM",
-                    fileExtension = "ZIP"
-                ),
-                SharedMediaItem(
-                    id = "d_4",
-                    type = SharedMediaType.DOCUMENT,
-                    title = "Quarterly_Budget_Model.xlsx",
-                    subtitle = "1.1 MB • Spreadsheet",
-                    url = "https://oscellion.chat/docs/budget.xlsx",
-                    senderName = "Joy",
-                    senderAvatar = chat.avatar,
-                    senderId = "user_me",
-                    timestamp = "Sep 28, 9:15 AM",
-                    fileExtension = "XLSX"
-                ),
-
-                // Links
-                SharedMediaItem(
-                    id = "l_1",
-                    type = SharedMediaType.LINK,
-                    title = "Figma - Oscellion Design System & iOS UI Kit",
-                    subtitle = "figma.com/@oscellion • UI Screens & HIG Tokens",
-                    url = "https://figma.com/file/OscellionDesignSystem",
-                    senderName = "Sarah Connor",
-                    senderAvatar = chat.avatar,
-                    senderId = "user_sarah",
-                    timestamp = "Today, 9:30 AM"
-                ),
-                SharedMediaItem(
-                    id = "l_2",
-                    type = SharedMediaType.LINK,
-                    title = "GitHub - Oscellion Chat Core Engine v3.2",
-                    subtitle = "github.com/oscellion/chat-core • Production branch",
-                    url = "https://github.com/oscellion/chat-core",
-                    senderName = "Marcus Vance",
-                    senderAvatar = chat.avatar,
-                    senderId = "user_marcus",
-                    timestamp = "Yesterday, 2:15 PM"
-                ),
-                SharedMediaItem(
-                    id = "l_3",
-                    type = SharedMediaType.LINK,
-                    title = "Apple Human Interface Guidelines - Spatial & iOS UI",
-                    subtitle = "developer.apple.com/design/human-interface-guidelines",
-                    url = "https://developer.apple.com/design/human-interface-guidelines",
-                    senderName = "Bholanath Kumbhakar",
-                    senderAvatar = chat.avatar,
-                    senderId = "user_bholanath",
-                    timestamp = "Sep 29, 1:40 PM"
-                ),
-
-                // Audio
-                SharedMediaItem(
-                    id = "a_1",
-                    type = SharedMediaType.AUDIO,
-                    title = "Voice Memo - Hardware Sensor Calibration",
-                    subtitle = "0:38 • 320 kbps High Quality",
-                    url = "audio_calib.m4a",
-                    senderName = "Bholanath Kumbhakar",
-                    senderAvatar = chat.avatar,
-                    senderId = "user_bholanath",
-                    timestamp = "Today, 10:28 AM",
-                    duration = "0:38"
-                ),
-                SharedMediaItem(
-                    id = "a_2",
-                    type = SharedMediaType.AUDIO,
-                    title = "Voice Memo - UX Review & Sound Tuning",
-                    subtitle = "1:14 • 320 kbps High Quality",
-                    url = "audio_ux.m4a",
-                    senderName = "Sarah Connor",
-                    senderAvatar = chat.avatar,
-                    senderId = "user_sarah",
-                    timestamp = "Yesterday, 5:12 PM",
-                    duration = "1:14"
+    // Extract real shared content from chat messages
+    val initialSharedItems = remember(chat.messages) {
+        val list = mutableListOf<SharedMediaItem>()
+        chat.messages.forEach { msg ->
+            val sender = msg.senderName.ifBlank { "User" }
+            val time = msg.time.ifBlank { "Recent" }
+            if (msg.mediaType.equals("image", ignoreCase = true) || !msg.mediaUrl.isNullOrBlank() || !msg.localUri.isNullOrBlank()) {
+                val url = msg.mediaUrl ?: msg.localUri ?: ""
+                if (url.isNotBlank()) {
+                    list.add(
+                        SharedMediaItem(
+                            id = msg.id,
+                            type = SharedMediaType.PHOTO,
+                            title = msg.fileName ?: "Photo from $sender",
+                            subtitle = time,
+                            url = url,
+                            senderName = sender,
+                            senderAvatar = chat.avatar,
+                            senderId = msg.senderId,
+                            timestamp = time
+                        )
+                    )
+                }
+            } else if (msg.mediaType.equals("video", ignoreCase = true)) {
+                val url = msg.mediaUrl ?: msg.localUri ?: ""
+                if (url.isNotBlank()) {
+                    list.add(
+                        SharedMediaItem(
+                            id = msg.id,
+                            type = SharedMediaType.VIDEO,
+                            title = msg.fileName ?: "Video from $sender",
+                            subtitle = time,
+                            url = url,
+                            senderName = sender,
+                            senderAvatar = chat.avatar,
+                            senderId = msg.senderId,
+                            timestamp = time
+                        )
+                    )
+                }
+            } else if (msg.mediaType.equals("voice", ignoreCase = true) || msg.mediaType.equals("audio", ignoreCase = true)) {
+                val url = msg.mediaUrl ?: msg.localUri ?: ""
+                list.add(
+                    SharedMediaItem(
+                        id = msg.id,
+                        type = SharedMediaType.AUDIO,
+                        title = "Voice Memo from $sender",
+                        subtitle = "${msg.voiceDuration}s • $time",
+                        url = url,
+                        senderName = sender,
+                        senderAvatar = chat.avatar,
+                        senderId = msg.senderId,
+                        timestamp = time,
+                        duration = "${msg.voiceDuration / 60}:${(msg.voiceDuration % 60).toString().padStart(2, '0')}"
+                    )
                 )
-            )
-        )
+            } else if (msg.mediaType.equals("file", ignoreCase = true) || !msg.fileName.isNullOrBlank()) {
+                val name = msg.fileName ?: "Document"
+                val url = msg.mediaUrl ?: msg.localUri ?: ""
+                list.add(
+                    SharedMediaItem(
+                        id = msg.id,
+                        type = SharedMediaType.DOCUMENT,
+                        title = name,
+                        subtitle = "${msg.fileSize ?: "File"} • $time",
+                        url = url,
+                        senderName = sender,
+                        senderAvatar = chat.avatar,
+                        senderId = msg.senderId,
+                        timestamp = time
+                    )
+                )
+            }
+
+            msg.text?.let { text ->
+                val linkRegex = "(https?://[\\w\\d:#@%/;$()~_?\\+-=\\\\\\.&]+)".toRegex()
+                linkRegex.findAll(text).forEachIndexed { index, matchResult ->
+                    val linkUrl = matchResult.value
+                    list.add(
+                        SharedMediaItem(
+                            id = "${msg.id}_link_$index",
+                            type = SharedMediaType.LINK,
+                            title = linkUrl.substringAfter("://").take(35),
+                            subtitle = linkUrl,
+                            url = linkUrl,
+                            senderName = sender,
+                            senderAvatar = chat.avatar,
+                            senderId = msg.senderId,
+                            timestamp = time
+                        )
+                    )
+                }
+            }
+        }
+        list
     }
 
+    var sharedItems by remember(initialSharedItems) {
+        mutableStateOf<List<SharedMediaItem>>(initialSharedItems)
+    }
     // Filter Items by active Tab and Search Query
     val currentType = when (selectedTab) {
         0 -> SharedMediaType.PHOTO // Includes Video
@@ -1297,100 +1212,92 @@ fun CustomSharedGalleryModal(
 
         // ── 7. Forward Media Contact Selector Modal ─────────────────────────
         itemForForward?.let { forwardList ->
-            Dialog(
-                onDismissRequest = { itemForForward = null },
-                properties = DialogProperties(usePlatformDefaultWidth = false)
+            IosModalBottomSheet(
+                onDismissRequest = { itemForForward = null }
             ) {
-                Box(
+                Column(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.5f)),
-                    contentAlignment = Alignment.BottomCenter
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .padding(bottom = 32.dp)
                 ) {
-                    Column(
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Forward ${forwardList.size} item(s)",
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = colors.textDark
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(30.dp)
+                                .clip(CircleShape)
+                                .background(colors.surfaceSecondary)
+                                .clickable { itemForForward = null },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            LucideX(tint = colors.textDark, size = 15.dp)
+                        }
+                    }
+
+                    Spacer(Modifier.height(14.dp))
+                    Text(
+                        text = "SELECT RECIPIENT",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.textMuted
+                    )
+                    Spacer(Modifier.height(8.dp))
+
+                    LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .fillMaxHeight(0.75f)
-                            .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-                            .background(colors.cardBg)
-                            .padding(20.dp)
+                            .heightIn(max = 380.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Forward ${forwardList.size} item(s)",
-                                fontSize = 17.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = colors.textDark
-                            )
-                            Box(
+                        items(allChats) { targetChat ->
+                            Row(
                                 modifier = Modifier
-                                    .size(30.dp)
-                                    .clip(CircleShape)
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
                                     .background(colors.surfaceSecondary)
-                                    .clickable { itemForForward = null },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                LucideX(tint = colors.textDark, size = 15.dp)
-                            }
-                        }
-
-                        Spacer(Modifier.height(14.dp))
-                        Text(
-                            text = "SELECT RECIPIENT",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = colors.textMuted
-                        )
-                        Spacer(Modifier.height(8.dp))
-
-                        LazyColumn(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(allChats) { targetChat ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(colors.surfaceSecondary)
-                                        .clickable {
-                                            SoundManager.playSend()
-                                            onForwardItems(targetChat.id, forwardList)
-                                            onToast("Forwarded to ${targetChat.name}")
-                                            itemForForward = null
-                                            selectedItemIds.clear()
-                                        }
-                                        .padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    AsyncImage(
-                                        model = targetChat.avatar,
-                                        contentDescription = targetChat.name,
-                                        modifier = Modifier
-                                            .size(40.dp)
-                                            .clip(CircleShape),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = targetChat.name,
-                                            fontSize = 15.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = colors.textDark
-                                        )
-                                        Text(
-                                            text = targetChat.statusText,
-                                            fontSize = 12.sp,
-                                            color = colors.textMuted
-                                        )
+                                    .clickable {
+                                        SoundManager.playSend()
+                                        onForwardItems(targetChat.id, forwardList)
+                                        onToast("Forwarded to ${targetChat.name}")
+                                        itemForForward = null
+                                        selectedItemIds.clear()
                                     }
-                                    LucideForward(tint = colors.iosBlue, size = 18.dp)
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                AsyncImage(
+                                    model = targetChat.avatar,
+                                    contentDescription = targetChat.name,
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(CircleShape),
+                                    contentScale = ContentScale.Crop
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = targetChat.name,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = colors.textDark
+                                    )
+                                    Text(
+                                        text = targetChat.statusText,
+                                        fontSize = 12.sp,
+                                        color = colors.textMuted
+                                    )
                                 }
+                                LucideForward(tint = colors.iosBlue, size = 18.dp)
                             }
                         }
                     }
@@ -1400,16 +1307,14 @@ fun CustomSharedGalleryModal(
 
         // ── 8. Edit Item Title / Caption Dialog ──────────────────────────────
         itemForEdit?.let { item ->
-            Dialog(
+            IosModalBottomSheet(
                 onDismissRequest = { itemForEdit = null }
             ) {
                 Column(
                     modifier = Modifier
-                        .fillMaxWidth(0.9f)
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(colors.cardBg)
-                        .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(20.dp))
-                        .padding(20.dp),
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .padding(bottom = 32.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     Text(
@@ -1424,9 +1329,9 @@ fun CustomSharedGalleryModal(
                         onValueChange = { editingTitle = it },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(RoundedCornerShape(12.dp))
                             .background(colors.surfaceSecondary)
-                            .padding(12.dp),
+                            .padding(14.dp),
                         textStyle = TextStyle(fontSize = 15.sp, color = colors.textDark),
                         cursorBrush = SolidColor(colors.iosBlue)
                     )
@@ -1435,16 +1340,14 @@ fun CustomSharedGalleryModal(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Button(
+                        LiquidGlassSecondaryButton(
+                            text = "Cancel",
                             onClick = { itemForEdit = null },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = colors.surfaceSecondary)
-                        ) {
-                            Text("Cancel", color = colors.textDark)
-                        }
+                            modifier = Modifier.weight(1f)
+                        )
 
-                        Button(
+                        LiquidGlassPrimaryButton(
+                            text = "Save",
                             onClick = {
                                 if (editingTitle.isNotBlank()) {
                                     sharedItems = sharedItems.map { if (it.id == item.id) it.copy(title = editingTitle) else it }
@@ -1455,12 +1358,8 @@ fun CustomSharedGalleryModal(
                                 }
                                 itemForEdit = null
                             },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = colors.iosBlue)
-                        ) {
-                            Text("Save", color = Color.White, fontWeight = FontWeight.Bold)
-                        }
+                            modifier = Modifier.weight(1f)
+                        )
                     }
                 }
             }

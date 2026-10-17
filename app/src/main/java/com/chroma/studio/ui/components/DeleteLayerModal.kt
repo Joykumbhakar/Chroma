@@ -89,18 +89,11 @@ fun DeleteLayerModal(
                         interactionSource = remember { MutableInteractionSource() }
                     ) { onDontAskAgainChange(!dontAskAgain) }
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(14.dp)
-                            .clip(RoundedCornerShape(3.dp))
-                            .background(if (dontAskAgain) colors.primary else Color.Transparent)
-                            .border(1.dp, if (dontAskAgain) colors.primary else colors.textMuted.copy(alpha = 0.5f), RoundedCornerShape(3.dp)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (dontAskAgain) {
-                            Icon(Lucide.Check, null, tint = colors.onPrimary, modifier = Modifier.size(10.dp))
-                        }
-                    }
+                    LiquidGlassCheckbox(
+                        checked = dontAskAgain,
+                        onCheckedChange = onDontAskAgainChange,
+                        size = 18.dp
+                    )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text("Don't ask me again", color = colors.textMuted, fontSize = 11.sp)
                 }

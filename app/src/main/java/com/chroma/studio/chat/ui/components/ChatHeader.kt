@@ -15,11 +15,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import com.composables.icons.lucide.BadgeCheck
+import androidx.compose.ui.draw.shadow
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.*
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -30,8 +32,8 @@ import coil.compose.AsyncImage
 import com.chroma.studio.ui.components.IosAvatarView
 import com.chroma.studio.chat.data.AccentColorType
 import com.chroma.studio.chat.data.ChatConversation
-import com.chroma.studio.chat.data.WallpaperType
 import com.chroma.studio.chat.ui.theme.LocalChatColors
+import com.chroma.studio.ui.components.AiWaveSphereIcon
 
 @Composable
 fun ChatHeader(
@@ -98,7 +100,7 @@ fun ChatHeader(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(0.dp)
                         ) {
-                            LucideChevronLeft(tint = colors.iosBlue, size = 28.dp)
+                            Icon(Lucide.ChevronLeft, contentDescription = "Back", tint = colors.iosBlue, modifier = Modifier.size(28.dp))
                             if (unreadBadgeCount > 0) {
                                 Text(
                                     text = unreadBadgeCount.toString(),
@@ -161,8 +163,12 @@ fun ChatHeader(
                                     Box(
                                         modifier = Modifier
                                             .fillMaxSize()
-                                            .scale(pulseScale)
-                                            .background(colors.success.copy(alpha = pulseAlpha), CircleShape)
+                                            .graphicsLayer {
+                                                scaleX = pulseScale
+                                                scaleY = pulseScale
+                                                alpha = pulseAlpha
+                                            }
+                                            .background(colors.success, CircleShape)
                                     )
                                     Box(
                                         modifier = Modifier
@@ -246,18 +252,30 @@ fun ChatHeader(
                 ) {
                     // Search
                     IconButton(onClick = onSearchToggle, modifier = Modifier.size(34.dp)) {
-                        LucideSearch(
-                            tint = if (isSearchOpen) colors.iosBlue else colors.iosBlue,
-                            size = 18.dp
+                        Icon(
+                            imageVector = Lucide.Search,
+                            contentDescription = "Search",
+                            tint = colors.iosBlue,
+                            modifier = Modifier.size(19.dp)
                         )
                     }
                     // Audio call
                     IconButton(onClick = onAudioCallClick, modifier = Modifier.size(34.dp)) {
-                        LucidePhone(tint = colors.iosBlue, size = 18.dp)
+                        Icon(
+                            imageVector = Lucide.Phone,
+                            contentDescription = "Call",
+                            tint = colors.iosBlue,
+                            modifier = Modifier.size(19.dp)
+                        )
                     }
                     // Video call
                     IconButton(onClick = onVideoCallClick, modifier = Modifier.size(34.dp)) {
-                        LucideVideo(tint = colors.iosBlue, size = 19.dp)
+                        Icon(
+                            imageVector = Lucide.Video,
+                            contentDescription = "Video",
+                            tint = colors.iosBlue,
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
 
                     // Overflow menu
@@ -266,7 +284,12 @@ fun ChatHeader(
                             onClick = { showMenu = !showMenu },
                             modifier = Modifier.size(34.dp)
                         ) {
-                            PhosphorDotsThreeVertical(tint = colors.iosBlue, size = 19.dp)
+                            Icon(
+                                imageVector = Lucide.EllipsisVertical,
+                                contentDescription = "More Options",
+                                tint = colors.iosBlue,
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
 
                         DropdownMenu(
@@ -274,7 +297,8 @@ fun ChatHeader(
                             onDismissRequest = { showMenu = false },
                             modifier = Modifier
                                 .width(245.dp)
-                                .clip(RoundedCornerShape(18.dp))
+                                .shadow(16.dp, RoundedCornerShape(24.dp), ambientColor = Color.Black.copy(alpha = 0.2f), spotColor = Color.Black.copy(alpha = 0.15f))
+                                .clip(RoundedCornerShape(24.dp))
                                 .background(
                                     if (colors.isLight) Color(0xF8FFFFFF)
                                     else Color(0xF21C1C1E)
@@ -288,7 +312,7 @@ fun ChatHeader(
                                             Color.White.copy(alpha = if (colors.isLight) 0.25f else 0.18f)
                                         )
                                     ),
-                                    shape = RoundedCornerShape(18.dp)
+                                    shape = RoundedCornerShape(24.dp)
                                 )
                                 .padding(vertical = 4.dp)
                         ) {
@@ -297,15 +321,26 @@ fun ChatHeader(
                             MenuDivider(label = if (isGroup) "Group" else "Contact")
                             AppleMenuItem(
                                 title = if (isGroup) "Group Info" else "Contact Info",
-                                icon = { LucideInfo(tint = Color(0xFF007AFF), size = 16.dp) },
+                                icon = {
+                                    Icon(
+                                        imageVector = Lucide.Info,
+                                        contentDescription = null,
+                                        tint = Color(0xFF007AFF),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                },
                                 iconBgColor = Color(0xFF007AFF).copy(alpha = 0.14f),
                                 onClick = { showMenu = false; onProfileClick() }
                             )
                             AppleMenuItem(
                                 title = "Mute Notifications",
                                 icon = {
-                                    if (activeChat.isMuted) LucideBell(tint = Color(0xFFFF9500), size = 16.dp)
-                                    else LucideBellOff(tint = Color(0xFFFF9500), size = 16.dp)
+                                    Icon(
+                                        imageVector = if (activeChat.isMuted) Lucide.Bell else Lucide.BellOff,
+                                        contentDescription = null,
+                                        tint = Color(0xFFFF9500),
+                                        modifier = Modifier.size(16.dp)
+                                    )
                                 },
                                 iconBgColor = Color(0xFFFF9500).copy(alpha = 0.14f),
                                 trailingContent = {
@@ -326,16 +361,30 @@ fun ChatHeader(
                             MenuDivider(label = "Appearance")
                             AppleMenuItem(
                                 title = "Chat Themes",
-                                icon = { LucidePalette(tint = Color(0xFFAF52DE), size = 16.dp) },
+                                icon = {
+                                    Icon(
+                                        imageVector = Lucide.Palette,
+                                        contentDescription = null,
+                                        tint = Color(0xFFAF52DE),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                },
                                 iconBgColor = Color(0xFFAF52DE).copy(alpha = 0.14f),
                                 trailingContent = {
-                                    LucideSparkles(tint = Color(0xFFAF52DE), size = 13.dp)
+                                    AiWaveSphereIcon(modifier = Modifier.size(15.dp))
                                 },
                                 onClick = { showMenu = false; onOpenAppearanceSettings() }
                             )
                             AppleMenuItem(
                                 title = "Color Mode",
-                                icon = { LucideMoon(tint = Color(0xFF5856D6), size = 16.dp) },
+                                icon = {
+                                    Icon(
+                                        imageVector = Lucide.Moon,
+                                        contentDescription = null,
+                                        tint = Color(0xFF5856D6),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                },
                                 iconBgColor = Color(0xFF5856D6).copy(alpha = 0.14f),
                                 trailingContent = {
                                     Text(
@@ -355,25 +404,53 @@ fun ChatHeader(
                             MenuDivider(label = "Chat & Media")
                             AppleMenuItem(
                                 title = "Media, Links & Docs",
-                                icon = { LucideImage(tint = Color(0xFF34C759), size = 16.dp) },
+                                icon = {
+                                    Icon(
+                                        imageVector = Lucide.Image,
+                                        contentDescription = null,
+                                        tint = Color(0xFF34C759),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                },
                                 iconBgColor = Color(0xFF34C759).copy(alpha = 0.14f),
                                 onClick = { showMenu = false; onOpenSharedGallery() }
                             )
                             AppleMenuItem(
                                 title = "Create Poll",
-                                icon = { LucidePoll(tint = Color(0xFF32ADE6), size = 16.dp) },
+                                icon = {
+                                    Icon(
+                                        imageVector = Lucide.ChartColumn,
+                                        contentDescription = null,
+                                        tint = Color(0xFF32ADE6),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                },
                                 iconBgColor = Color(0xFF32ADE6).copy(alpha = 0.14f),
                                 onClick = { showMenu = false; onCreatePollClick() }
                             )
                             AppleMenuItem(
                                 title = "Export Transcript",
-                                icon = { LucideDownload(tint = Color(0xFF30B0C7), size = 16.dp) },
+                                icon = {
+                                    Icon(
+                                        imageVector = Lucide.Download,
+                                        contentDescription = null,
+                                        tint = Color(0xFF30B0C7),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                },
                                 iconBgColor = Color(0xFF30B0C7).copy(alpha = 0.14f),
                                 onClick = { showMenu = false; onExportTranscript() }
                             )
                             AppleMenuItem(
                                 title = "Clear Chat",
-                                icon = { LucideTrash(tint = Color(0xFF8E8E93), size = 16.dp) },
+                                icon = {
+                                    Icon(
+                                        imageVector = Lucide.Trash2,
+                                        contentDescription = null,
+                                        tint = Color(0xFF8E8E93),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                },
                                 iconBgColor = Color(0xFF8E8E93).copy(alpha = 0.14f),
                                 onClick = { showMenu = false; onClearChat() }
                             )
@@ -385,7 +462,14 @@ fun ChatHeader(
                             AppleMenuItem(
                                 title = if (isGroup) "Leave Group"
                                        else (if (activeChat.isBlocked) "Unblock Contact" else "Block Contact"),
-                                icon = { LucideBan(tint = Color(0xFFFF3B30), size = 16.dp) },
+                                icon = {
+                                    Icon(
+                                        imageVector = Lucide.Ban,
+                                        contentDescription = null,
+                                        tint = Color(0xFFFF3B30),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                },
                                 iconBgColor = Color(0xFFFF3B30).copy(alpha = 0.14f),
                                 isDestructive = true,
                                 onClick = { showMenu = false; onBlockUser() }

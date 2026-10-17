@@ -1,8 +1,13 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package com.chroma.studio.ui.screens
 import com.chroma.studio.ui.components.ChromaPillButton
 import com.chroma.studio.ui.components.ChromaPillVariant
 import com.chroma.studio.ui.components.GlassTextButton
 import com.chroma.studio.ui.components.GlassButton
+import com.chroma.studio.ui.components.LiquidGlassPrimaryButton
+import com.chroma.studio.ui.components.LiquidGlassSecondaryButton
+import com.chroma.studio.ui.components.LiquidGlassProgressBar
+import com.chroma.studio.ui.components.LiquidGlassBottomSheet
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -22,6 +27,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chroma.studio.ui.theme.LocalOscellionColors
+import com.chroma.studio.ui.graphics3d.Apple3DGraphicId
+import com.chroma.studio.ui.graphics3d.Apple3DGraphicIcon
 import com.composables.icons.lucide.*
 import dev.chrisbanes.haze.hazeChild
 
@@ -46,41 +53,20 @@ fun ShareToDiscoverDialog(
 
     androidx.activity.compose.BackHandler(onBack = onDismiss)
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.5f))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onDismiss
-            )
-            .imePadding(),
-        contentAlignment = Alignment.Center
+    LiquidGlassBottomSheet(
+        onDismissRequest = onDismiss
     ) {
-        Box(
+        Column(
             modifier = Modifier
-                .fillMaxWidth(0.9f)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = {}
-                )
-                .clip(RoundedCornerShape(24.dp))
-                .hazeChild(state = hazeState, shape = RoundedCornerShape(24.dp))
-                .background(colors.glassBg)
-                .border(1.dp, Color.White.copy(alpha = 0.4f), RoundedCornerShape(24.dp))
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 12.dp)
+                .imePadding(),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Column(
-                modifier = Modifier.padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Box(
-                    modifier = Modifier.size(48.dp).background(colors.primary.copy(alpha = 0.1f), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Lucide.Globe, null, tint = colors.primary, modifier = Modifier.size(24.dp))
-                }
+                Apple3DGraphicIcon(
+                    id = Apple3DGraphicId.NETWORK_GLOBE,
+                    modifier = Modifier.size(54.dp)
+                )
                 Spacer(Modifier.height(16.dp))
                 Text("Share to Discover", color = colors.textMain, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(8.dp))
@@ -155,9 +141,9 @@ fun ShareToDiscoverDialog(
                         }
                     }
                     ShareStatus.PUBLISHING -> {
-                        LinearProgressIndicator(
+                        LiquidGlassProgressBar(
                             modifier = Modifier.fillMaxWidth(),
-                            color = colors.primary
+                            height = 6.dp
                         )
                         Spacer(Modifier.height(16.dp))
                         Text("Publishing...", color = colors.textMain, fontSize = 14.sp)
@@ -183,30 +169,24 @@ fun ShareToDiscoverDialog(
                 ) {
                     if (status != ShareStatus.PUBLISHING) {
                         if (status == ShareStatus.SUCCESS) {
-                            ChromaPillButton(
+                            LiquidGlassPrimaryButton(
                                 onClick = onDismiss,
-                                variant = ChromaPillVariant.Emerald,
-                                height = 36.dp,
-                                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 6.dp)
+                                isSmall = true
                             ) {
                                 Text("Done", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                             }
                         } else {
-                            ChromaPillButton(
+                            LiquidGlassSecondaryButton(
                                 onClick = onDismiss,
-                                variant = ChromaPillVariant.DarkGlass,
-                                height = 36.dp,
-                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
+                                isSmall = true
                             ) {
-                                Text("Cancel", color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp)
+                                Text("Cancel", color = Color.Black, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                             }
                             Spacer(Modifier.width(10.dp))
-                            ChromaPillButton(
+                            LiquidGlassPrimaryButton(
                                 onClick = { onConfirm(name, desc, aspectRatio) },
                                 enabled = name.isNotBlank() && desc.isNotBlank(),
-                                variant = ChromaPillVariant.Cyan,
-                                height = 36.dp,
-                                contentPadding = PaddingValues(horizontal = 18.dp, vertical = 6.dp)
+                                isSmall = true
                             ) {
                                 Icon(Lucide.Send, contentDescription = null, tint = Color.White, modifier = Modifier.size(13.dp))
                                 Spacer(Modifier.width(6.dp))
@@ -217,5 +197,4 @@ fun ShareToDiscoverDialog(
                 }
             }
         }
-    }
 }

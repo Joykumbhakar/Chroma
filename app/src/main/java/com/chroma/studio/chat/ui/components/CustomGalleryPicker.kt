@@ -51,7 +51,9 @@ fun CustomGalleryPickerModal(
     var isLoading by remember { mutableStateOf(true) }
     val selectedUris = remember { mutableStateListOf<Uri>() }
     var selectedAlbum by remember { mutableStateOf("All") }
+    var mediaTypeFilter by remember { mutableStateOf("All") }
     var captionText by remember { mutableStateOf("") }
+    var previewItem by remember { mutableStateOf<GalleryMediaItem?>(null) }
 
     // Load media when permission is granted
     LaunchedEffect(hasPermission) {
@@ -70,9 +72,16 @@ fun CustomGalleryPickerModal(
         list
     }
 
-    val filteredItems = remember(mediaItems, selectedAlbum) {
-        if (selectedAlbum == "All") mediaItems
-        else mediaItems.filter { it.bucketName == selectedAlbum }
+    val filteredItems = remember(mediaItems, selectedAlbum, mediaTypeFilter) {
+        mediaItems.filter { item ->
+            val albumMatch = selectedAlbum == "All" || item.bucketName == selectedAlbum
+            val typeMatch = when (mediaTypeFilter) {
+                "Photos" -> !item.isVideo
+                "Videos" -> item.isVideo
+                else -> true
+            }
+            albumMatch && typeMatch
+        }
     }
 
     Box(
@@ -161,32 +170,65 @@ fun CustomGalleryPickerModal(
 
             Spacer(Modifier.height(10.dp))
 
-            // Album Filter Tabs
-            if (hasPermission && albums.size > 1) {
-                LazyRow(
+            // Media Type Segmented Filter (All, Photos, Videos)
+            if (hasPermission) {
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(albums) { album ->
-                        val isSelected = selectedAlbum == album
+                    listOf("All", "Photos", "Videos").forEach { type ->
+                        val isSelected = mediaTypeFilter == type
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(16.dp))
+                                .clip(RoundedCornerShape(14.dp))
                                 .background(if (isSelected) colors.iosBlue else colors.surfaceSecondary)
                                 .clickable {
                                     SoundManager.playReaction()
-                                    selectedAlbum = album
+                                    mediaTypeFilter = type
                                 }
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                                .padding(horizontal = 14.dp, vertical = 6.dp)
                         ) {
                             Text(
-                                text = album,
+                                text = type,
                                 fontSize = 12.5.sp,
-                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                 color = if (isSelected) Color.White else colors.textDark
                             )
+                        }
+                    }
+
+                    // Album filter chips
+                    if (albums.size > 1) {
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            items(albums.filter { it != "All" }) { album ->
+                                val isSelected = selectedAlbum == album
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(if (isSelected) colors.iosBlue.copy(alpha = 0.2f) else colors.surfaceSecondary.copy(alpha = 0.6f))
+                                        .border(
+                                            0.5.dp,
+                                            if (isSelected) colors.iosBlue else colors.borderSubtle,
+                                            RoundedCornerShape(14.dp)
+                                        )
+                                        .clickable {
+                                            SoundManager.playReaction()
+                                            selectedAlbum = if (selectedAlbum == album) "All" else album
+                                        }
+                                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                                ) {
+                                    Text(
+                                        text = album,
+                                        fontSize = 12.sp,
+                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                        color = if (isSelected) colors.iosBlue else colors.textMuted
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -334,6 +376,23 @@ fun CustomGalleryPickerModal(
                                 }
                             }
 
+                            // Quick Preview Button
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopStart)
+                                    .padding(6.dp)
+                                    .size(22.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.Black.copy(alpha = 0.45f))
+                                    .clickable {
+                                        SoundManager.playReaction()
+                                        previewItem = item
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                PhosphorPhotoIcon(tint = Color.White, size = 11.dp)
+                            }
+
                             // Selection Counter Badge
                             Box(
                                 modifier = Modifier
@@ -409,6 +468,43 @@ fun CustomGalleryPickerModal(
                         }
                     }
 
+                    // Caption Input Capsule
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(if (colors.isLight) Color(0xFFF2F2F7) else Color(0xFF2C2C2E))
+                            .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(20.dp))
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        androidx.compose.foundation.text.BasicTextField(
+                            value = captionText,
+                            onValueChange = { captionText = it },
+                            modifier = Modifier.weight(1f),
+                            cursorBrush = androidx.compose.ui.graphics.SolidColor(colors.iosBlue),
+                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp, color = colors.textDark),
+                            decorationBox = { inner ->
+                                if (captionText.isEmpty()) {
+                                    Text("Add a caption...", fontSize = 14.sp, color = colors.textMuted.copy(alpha = 0.65f))
+                                }
+                                inner()
+                            }
+                        )
+                        if (captionText.isNotEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .clip(CircleShape)
+                                    .background(colors.textMuted.copy(alpha = 0.2f))
+                                    .clickable { captionText = "" },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                PhosphorCloseX(tint = colors.textMuted, size = 10.dp)
+                            }
+                        }
+                    }
+
                     // Send Button Row
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -444,6 +540,106 @@ fun CustomGalleryPickerModal(
                                     color = Color.White
                                 )
                             }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Quick Preview Lightbox
+        previewItem?.let { item ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.94f))
+                    .clickable { previewItem = null },
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.SpaceBetween
+                ) {
+                    // Preview Top Bar
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .statusBarsPadding()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = item.name,
+                            color = Color.White,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f).padding(end = 12.dp)
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.2f))
+                                .clickable { previewItem = null },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            PhosphorCloseX(tint = Color.White, size = 14.dp)
+                        }
+                    }
+
+                    // Main Image Preview
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AsyncImage(
+                            model = item.uri,
+                            contentDescription = item.name,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Fit
+                        )
+                    }
+
+                    // Preview Bottom Action
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val isItemSel = selectedUris.contains(item.uri)
+                        Button(
+                            onClick = {
+                                SoundManager.playReaction()
+                                if (isItemSel) selectedUris.remove(item.uri) else selectedUris.add(item.uri)
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isItemSel) colors.iosBlue else Color.White.copy(alpha = 0.25f)
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(if (isItemSel) "Selected ✓" else "+ Select", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+
+                        Button(
+                            onClick = {
+                                SoundManager.playSend()
+                                if (!isItemSel) selectedUris.add(item.uri)
+                                onSendMedia(listOf(item.uri), captionText.ifBlank { null })
+                                previewItem = null
+                                onDismiss()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = colors.iosBlue),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Send This", color = Color.White, fontWeight = FontWeight.Bold)
                         }
                     }
                 }

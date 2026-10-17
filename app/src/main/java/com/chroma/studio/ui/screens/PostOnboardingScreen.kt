@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -30,6 +31,7 @@ import com.chroma.studio.chat.sound.SoundManager
 import com.chroma.studio.ui.components.AppleSettingsGroup
 import com.chroma.studio.ui.components.AppleSettingToggleRow
 import com.chroma.studio.ui.components.AppleSettingDivider
+import com.chroma.studio.ui.components.AiWaveSphereIcon
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.*
@@ -70,15 +72,26 @@ fun PostOnboardingScreen(
     var isDmPushEnabled by remember { mutableStateOf(prefs.getBoolean("push_notifications_dm", true)) }
     var isCreatorDropsEnabled by remember { mutableStateOf(prefs.getBoolean("push_notifications_drops", true)) }
 
-    // Followed Creators Selection
-    val featuredCreators = remember {
-        listOf(
-            FeaturedCreator("1", "Elena Rostova", "@elena_design", "Motion Graphics & 3D Vector", "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150"),
-            FeaturedCreator("2", "Kaelen Vance", "@kaelen.studio", "Generative AI & Sound Design", "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150"),
-            FeaturedCreator("3", "Aria Lin", "@aria.palette", "Design Systems & iOS Aesthetics", "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150")
-        )
+    // Followed Creators Selection from Real Users
+    val discoverRepo = remember { com.chroma.studio.data.DiscoverRepository() }
+    val scope = rememberCoroutineScope()
+    var featuredCreators by remember { mutableStateOf<List<FeaturedCreator>>(emptyList()) }
+    val followedCreatorIds = remember { mutableStateListOf<String>() }
+
+    LaunchedEffect(Unit) {
+        try {
+            val users = discoverRepo.getSuggestedCreators(6)
+            featuredCreators = users.map { u ->
+                FeaturedCreator(
+                    id = u.uid,
+                    name = u.displayName.ifBlank { u.username.ifBlank { "Creator" } },
+                    handle = if (u.username.isNotBlank()) "@${u.username}" else "@creator",
+                    tagline = if (u.bio.isNotBlank()) u.bio else "Visual Artist & Designer",
+                    avatarUrl = u.avatarUrl
+                )
+            }
+        } catch (_: Exception) {}
     }
-    val followedCreatorIds = remember { mutableStateListOf<String>("1", "2") }
 
     val scrollState = rememberScrollState()
 
@@ -118,11 +131,8 @@ fun PostOnboardingScreen(
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Lucide.Sparkles,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(34.dp)
+                AiWaveSphereIcon(
+                    modifier = Modifier.size(44.dp)
                 )
             }
 
@@ -327,73 +337,75 @@ fun PostOnboardingScreen(
             Spacer(Modifier.height(20.dp))
 
             // ── 6. Recommended Creators Section ──────────────────────────────
-            AppleSettingsGroup(
-                header = "RECOMMENDED CREATORS",
-                footer = "Curated creators to follow on Chroma Studio."
-            ) {
-                featuredCreators.forEachIndexed { index, creator ->
-                    val isFollowed = creator.id in followedCreatorIds
+            if (featuredCreators.isNotEmpty()) {
+                AppleSettingsGroup(
+                    header = "RECOMMENDED CREATORS",
+                    footer = "Curated creators to follow on Chroma Studio."
+                ) {
+                    featuredCreators.forEachIndexed { index, creator ->
+                        val isFollowed = creator.id in followedCreatorIds
 
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        AsyncImage(
-                            model = creator.avatarUrl,
-                            contentDescription = creator.name,
+                        Row(
                             modifier = Modifier
-                                .size(42.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)),
-                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                        )
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = creator.name,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (colors.isDark) Color.White else Color(0xFF1C1C1E)
-                            )
-                            Text(
-                                text = creator.handle + " • " + creator.tagline,
-                                fontSize = 12.5.sp,
-                                color = Color(0xFF8E8E93),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-
-                        // Follow Action (Clean Squircle, NO Pill)
-                        Surface(
-                            onClick = {
-                                SoundManager.playReaction()
-                                if (isFollowed) followedCreatorIds.remove(creator.id)
-                                else followedCreatorIds.add(creator.id)
-                            },
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (isFollowed) (if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)) else activeAccent,
-                            modifier = Modifier.height(32.dp)
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Box(
-                                modifier = Modifier.padding(horizontal = 12.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
+                            AsyncImage(
+                                model = creator.avatarUrl,
+                                contentDescription = creator.name,
+                                modifier = Modifier
+                                    .size(42.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                            )
+
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = if (isFollowed) "Following" else "Follow",
-                                    fontSize = 13.sp,
+                                    text = creator.name,
+                                    fontSize = 15.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = if (isFollowed) (if (colors.isDark) Color.White else Color(0xFF1C1C1E)) else Color.White
+                                    color = if (colors.isDark) Color.White else Color(0xFF1C1C1E)
+                                )
+                                Text(
+                                    text = creator.handle + " • " + creator.tagline,
+                                    fontSize = 12.5.sp,
+                                    color = Color(0xFF8E8E93),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
-                        }
-                    }
 
-                    if (index < featuredCreators.size - 1) {
-                        AppleSettingDivider(paddingStart = 70.dp)
+                            // Follow Action (Clean Squircle, NO Pill)
+                            Surface(
+                                onClick = {
+                                    SoundManager.playReaction()
+                                    if (isFollowed) followedCreatorIds.remove(creator.id)
+                                    else followedCreatorIds.add(creator.id)
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isFollowed) (if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)) else activeAccent,
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier.padding(horizontal = 12.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = if (isFollowed) "Following" else "Follow",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (isFollowed) (if (colors.isDark) Color.White else Color(0xFF1C1C1E)) else Color.White
+                                    )
+                                }
+                            }
+                        }
+
+                        if (index < featuredCreators.size - 1) {
+                            AppleSettingDivider(paddingStart = 70.dp)
+                        }
                     }
                 }
             }
@@ -404,6 +416,16 @@ fun PostOnboardingScreen(
             CupertinoPrimaryButton(
                 onClick = {
                     SoundManager.playReaction()
+                    val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                    if (currentUid != null && followedCreatorIds.isNotEmpty()) {
+                        scope.launch {
+                            for (cId in followedCreatorIds) {
+                                try {
+                                    discoverRepo.toggleFollow(currentUid, cId)
+                                } catch (_: Exception) {}
+                            }
+                        }
+                    }
                     prefs.edit().apply {
                         putBoolean("show_online_status", isPresenceEnabled)
                         putBoolean("read_receipts_enabled", isReadReceiptsEnabled)

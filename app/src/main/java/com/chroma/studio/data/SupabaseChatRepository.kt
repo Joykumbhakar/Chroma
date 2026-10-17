@@ -43,6 +43,8 @@ class SupabaseChatRepository {
     // High-performance in-memory cache to eliminate repeated Firestore round-trips when sending messages
     private val roomParticipantsCache = java.util.concurrent.ConcurrentHashMap<String, List<String>>()
     private val userPublicKeyCache = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val decryptedMessageCache = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val roomDeletedAtCache = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
     private fun getChatRoomId(uid1: String, uid2: String): String {
         return if (uid1 < uid2) "${uid1}_$uid2" else "${uid2}_$uid1"
@@ -154,7 +156,7 @@ class SupabaseChatRepository {
             var finalIv = ""
             var finalEncryptedKeys = emptyMap<String, String>()
 
-            if (messageType != "system") {
+            if (messageType != "system" && text.isNotBlank()) {
                 try {
                     val aesKey = com.chroma.studio.utils.CryptoHelper.generateAESKey()
                     val aesBytes = aesKey.encoded
@@ -338,6 +340,8 @@ class SupabaseChatRepository {
                 val rawChats = snapshot?.documents?.mapNotNull { it.toObject(ChatRoom::class.java) } ?: emptyList()
                 for (chat in rawChats) {
                     roomParticipantsCache[chat.id] = chat.participants
+                    val dAt = chat.deletedAt[currentUser.uid] ?: 0L
+                    roomDeletedAtCache[chat.id] = dAt
                 }
                 val activeChats = rawChats.filter { !it.deletedBy.contains(currentUser.uid) }
                 trySend(activeChats.sortedByDescending { it.lastMessageTime })
@@ -354,16 +358,8 @@ class SupabaseChatRepository {
             return@callbackFlow
         }
 
-        var deletedAt = 0L
-        try {
-            val roomDoc = chatsCollection.document(roomId).get().await()
-            val room = roomDoc.toObject(ChatRoom::class.java)
-            if (room != null) {
-                deletedAt = room.deletedAt[currentUserUid] ?: 0L
-            }
-        } catch (e: Exception) {
-            Log.e("SupabaseChatRepository", "Error fetching room for deletedAt", e)
-        }
+        // Instant synchronous retrieval from memory cache (0ms delay) to immediately attach snapshot listener
+        val deletedAt = roomDeletedAtCache[roomId] ?: 0L
 
         var query = chatsCollection.document(roomId).collection("messages")
             .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
@@ -375,23 +371,36 @@ class SupabaseChatRepository {
         val firestoreListener = query.limit(limit)
             .addSnapshotListener { snapshot, e ->
                 if (e == null && snapshot != null) {
-                    val currentUserUid = auth.currentUser?.uid
-                    val messages = snapshot.documents.mapNotNull { doc ->
-                        val msg = doc.toObject(ChatMessage::class.java) ?: return@mapNotNull null
-                        
-                        var decryptedText = msg.text
-                        if (msg.messageType != "system" && msg.iv.isNotEmpty()) {
+                    launch(Dispatchers.Default) {
+                        val currentUid = auth.currentUser?.uid
+                        val messages = snapshot.documents.mapNotNull { doc ->
+                            val msg = doc.toObject(ChatMessage::class.java) ?: return@mapNotNull null
+                            
+                            if (msg.messageType == "system" || msg.iv.isEmpty() || msg.text.isEmpty()) {
+                                return@mapNotNull msg
+                            }
+
+                            val cacheKey = "${msg.id}_${msg.text.hashCode()}_${msg.iv}"
+                            val cached = decryptedMessageCache[cacheKey]
+                            if (cached != null) {
+                                return@mapNotNull msg.copy(text = cached)
+                            }
+
+                            var decryptedText = msg.text
                             var isDecrypted = false
 
                             // 1. Try user-specific RSA decryption
-                            if (currentUserUid != null && msg.encryptedAesKeys.containsKey(currentUserUid)) {
+                            if (currentUid != null && msg.encryptedAesKeys.containsKey(currentUid)) {
                                 try {
-                                    val myEncryptedAes = msg.encryptedAesKeys[currentUserUid]
+                                    val myEncryptedAes = msg.encryptedAesKeys[currentUid]
                                     if (!myEncryptedAes.isNullOrEmpty()) {
                                         val aesBytes = com.chroma.studio.utils.CryptoHelper.decryptAESKeyWithRSA(myEncryptedAes)
                                         if (aesBytes != null) {
-                                            decryptedText = com.chroma.studio.utils.CryptoHelper.decryptMessageWithAES(msg.text, msg.iv, aesBytes)
-                                            isDecrypted = true
+                                            val res = com.chroma.studio.utils.CryptoHelper.decryptMessageWithAES(msg.text, msg.iv, aesBytes)
+                                            if (res.isNotEmpty() || msg.text.isEmpty()) {
+                                                decryptedText = res
+                                                isDecrypted = true
+                                            }
                                         }
                                     }
                                 } catch (ex: Exception) {
@@ -407,9 +416,14 @@ class SupabaseChatRepository {
                                     if (!fallbackEntry.isNullOrEmpty() && fallbackEntry.contains(":")) {
                                         val parts = fallbackEntry.split(":", limit = 2)
                                         val aesBase64 = com.chroma.studio.utils.CryptoHelper.decryptMessageWithAES(parts[0], parts[1], roomKey)
-                                        val aesBytes = android.util.Base64.decode(aesBase64, android.util.Base64.NO_WRAP)
-                                        decryptedText = com.chroma.studio.utils.CryptoHelper.decryptMessageWithAES(msg.text, msg.iv, aesBytes)
-                                        isDecrypted = true
+                                        if (aesBase64.isNotEmpty()) {
+                                            val aesBytes = android.util.Base64.decode(aesBase64, android.util.Base64.NO_WRAP)
+                                            val res = com.chroma.studio.utils.CryptoHelper.decryptMessageWithAES(msg.text, msg.iv, aesBytes)
+                                            if (res.isNotEmpty() || msg.text.isEmpty()) {
+                                                decryptedText = res
+                                                isDecrypted = true
+                                            }
+                                        }
                                     } else {
                                         val direct = com.chroma.studio.utils.CryptoHelper.decryptMessageWithAES(msg.text, msg.iv, roomKey)
                                         if (direct.isNotEmpty()) {
@@ -422,19 +436,23 @@ class SupabaseChatRepository {
                                 }
                             }
 
-                            // 3. If still not decrypted, check if msg.text was already plaintext
+                            // 3. If still not decrypted, check if msg.text was already plaintext or a media message without caption
                             if (!isDecrypted) {
-                                decryptedText = if (msg.text.isNotEmpty() && !msg.text.contains(" ") && msg.text.length > 20) {
+                                val isMedia = msg.imageUrl != null || msg.mediaUrl != null || msg.messageType in listOf("image", "video", "voice", "audio", "file")
+                                decryptedText = if (isMedia) {
+                                    ""
+                                } else if (msg.text.isNotEmpty() && !msg.text.contains(" ") && msg.text.length > 20) {
                                     "🔒 Message encrypted"
                                 } else {
                                     msg.text
                                 }
                             }
+                            
+                            decryptedMessageCache[cacheKey] = decryptedText
+                            msg.copy(text = decryptedText)
                         }
-                        
-                        msg.copy(text = decryptedText)
+                        trySend(messages)
                     }
-                    trySend(messages)
                 }
             }
         awaitClose { firestoreListener.remove() }

@@ -446,11 +446,8 @@ fun ProfilePassCardView(
                                     )
                                     .padding(horizontal = 6.dp, vertical = 2.dp)
                             ) {
-                                Icon(
-                                    imageVector = Lucide.Sparkles,
-                                    contentDescription = null,
-                                    tint = customization.accentColor,
-                                    modifier = Modifier.size(11.dp)
+                                AiWaveSphereIcon(
+                                    modifier = Modifier.size(13.dp)
                                 )
                                 Text(
                                     text = roleText,
@@ -1109,11 +1106,8 @@ fun AppleProfileCardSheet(
                                         .background(Brush.linearGradient(listOf(Color(0xFF007AFF), Color(0xFF00C6FF)))),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(
-                                        imageVector = Lucide.Sparkles,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(19.dp)
+                                    AiWaveSphereIcon(
+                                        modifier = Modifier.size(24.dp)
                                     )
                                 }
                                 Column(modifier = Modifier.weight(1f)) {
@@ -1182,7 +1176,7 @@ fun AppleProfileCardSheet(
                                 Text("Dark Scrim Overlay", color = colors.textMain, fontSize = 12.sp)
                                 Text("${(customization.imageScrimAlpha * 100).toInt()}%", color = Color(0xFF8E8E93), fontSize = 12.sp)
                             }
-                            Slider(
+                            AppleSlider(
                                 value = customization.imageScrimAlpha,
                                 onValueChange = { customization = customization.copy(imageScrimAlpha = it) },
                                 valueRange = 0f..0.8f
@@ -1195,7 +1189,7 @@ fun AppleProfileCardSheet(
                                 Text("Blur Effect", color = colors.textMain, fontSize = 12.sp)
                                 Text("${customization.imageBlur.toInt()} dp", color = Color(0xFF8E8E93), fontSize = 12.sp)
                             }
-                            Slider(
+                            AppleSlider(
                                 value = customization.imageBlur,
                                 onValueChange = { customization = customization.copy(imageBlur = it) },
                                 valueRange = 0f..20f

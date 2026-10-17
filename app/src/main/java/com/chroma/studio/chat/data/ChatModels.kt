@@ -10,7 +10,7 @@ data class User(
     val name: String,
     val username: String,
     val avatar: String,
-    val banner: String = drawableUri(com.chroma.studio.R.drawable.profile_banner_joy),
+    val banner: String = drawableUri(com.chroma.studio.R.drawable.banner_wave_banner_midnight_glow),
     val status: String,
     val isVerified: Boolean = false
 )
@@ -28,6 +28,7 @@ data class StoryViewerInfo(
 @Immutable
 data class Story(
     val id: String,
+    val authorId: String? = null,
     val authorName: String,
     val avatar: String,
     val timeAgo: String,
@@ -91,7 +92,8 @@ data class ReplyQuote(
 data class GroupMember(
     val name: String,
     val role: String,
-    val avatar: String
+    val avatar: String,
+    val id: String = ""
 )
 
 @Immutable
@@ -139,7 +141,7 @@ data class ChatConversation(
     val name: String,
     val type: String, // "direct", "group"
     val avatar: String,
-    val banner: String = drawableUri(com.chroma.studio.R.drawable.profile_banner_joy),
+    val banner: String = drawableUri(com.chroma.studio.R.drawable.banner_wave_banner_midnight_glow),
     val online: Boolean,
     val statusText: String,
     val phone: String,
@@ -494,226 +496,18 @@ enum class VoiceGlobeStyleType(
 
 object MockData {
     val currentUser = User(
-        id = "user_me",
-        name = "Joy (You)",
-        username = "@joy_oscellion",
-        avatar = drawableUri(com.chroma.studio.R.drawable.profile_avatar_joy),
-        status = "Available",
-        isVerified = true
+        id = "",
+        name = "User",
+        username = "@user",
+        avatar = "",
+        status = "Active"
     )
 
-    fun initialStories(): List<Story> = listOf(
-        Story(
-            id = "s_my_1",
-            authorName = "Your Story",
-            avatar = drawableUri(com.chroma.studio.R.drawable.profile_avatar_joy),
-            timeAgo = "25m ago",
-            image = "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80",
-            caption = "Sunset vibes from the studio terrace 🌇",
-            seen = false,
-            isMyStory = true,
-            viewCount = 148,
-            likesCount = 42,
-            musicTrack = "Odesza • A Moment Apart",
-            locationTag = "San Francisco, CA",
-            viewers = listOf(
-                StoryViewerInfo(id = "v1", name = "Bholanath Kumbhakar", username = "@bholanath", avatar = drawableUri(com.chroma.studio.R.drawable.ic_avatar_corporate_navy), timeAgo = "4m ago", reactedEmoji = "🔥"),
-                StoryViewerInfo(id = "v2", name = "Sarah Connor", username = "@sarah_c", avatar = drawableUri(com.chroma.studio.R.drawable.ic_avatar_deep_purple), timeAgo = "12m ago", reactedEmoji = "❤️"),
-                StoryViewerInfo(id = "v3", name = "Marcus Vance", username = "@marcus_v", avatar = drawableUri(com.chroma.studio.R.drawable.ic_avatar_royal_blue), timeAgo = "18m ago", reactedEmoji = "👏"),
-                StoryViewerInfo(id = "v4", name = "Elena Rostova", username = "@elena_ux", avatar = drawableUri(com.chroma.studio.R.drawable.ic_avatar_emerald_focus), timeAgo = "22m ago", reactedEmoji = "❤️")
-            )
-        ),
-        Story(
-            id = "s_my_2",
-            authorName = "Your Story",
-            avatar = drawableUri(com.chroma.studio.R.drawable.profile_avatar_joy),
-            timeAgo = "10m ago",
-            image = "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=800&q=80",
-            caption = "Espresso fuel for the weekend release! ☕💻",
-            seen = false,
-            isMyStory = true,
-            viewCount = 86,
-            likesCount = 29,
-            musicTrack = "Chillhop • Morning Coffee"
-        ),
-        Story(
-            id = "s1",
-            authorName = "Bholanath Kumbhakar",
-            avatar = drawableUri(com.chroma.studio.R.drawable.ic_avatar_corporate_navy),
-            timeAgo = "15m ago",
-            image = "https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=800&q=80",
-            caption = "Bench testing the new smart home circuit nodes! ⚡",
-            seen = false,
-            viewCount = 92,
-            likesCount = 28,
-            musicTrack = "Synthwave • Neon Nights"
-        ),
-        Story(
-            id = "s2_1",
-            authorName = "Sarah Connor",
-            avatar = drawableUri(com.chroma.studio.R.drawable.ic_avatar_deep_purple),
-            timeAgo = "1h ago",
-            image = "https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=800&q=80",
-            caption = "Design system components ready for sprint review 🎨",
-            seen = false,
-            viewCount = 210,
-            likesCount = 64
-        ),
-        Story(
-            id = "s2_2",
-            authorName = "Sarah Connor",
-            avatar = drawableUri(com.chroma.studio.R.drawable.ic_avatar_deep_purple),
-            timeAgo = "40m ago",
-            image = "https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=800&q=80",
-            caption = "Dark mode color tokens exported for iOS 18 🌙",
-            seen = false,
-            viewCount = 175,
-            likesCount = 52
-        ),
-        Story(
-            id = "s3",
-            authorName = "Dev Team Alpha",
-            avatar = drawableUri(com.chroma.studio.R.drawable.ic_avatar_sapphire_night),
-            timeAgo = "3h ago",
-            image = "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=800&q=80",
-            caption = "Release v3.2 deployment celebration! 🚀",
-            seen = true,
-            viewCount = 345,
-            likesCount = 112
-        )
-    )
+    fun initialStories(): List<Story> = emptyList()
 
-    fun initialChats(): List<ChatConversation> = listOf(
-        ChatConversation(
-            id = "chat_1",
-            name = "Bholanath Kumbhakar",
-            type = "direct",
-            avatar = drawableUri(com.chroma.studio.R.drawable.ic_avatar_corporate_navy),
-            banner = drawableUri(com.chroma.studio.R.drawable.banner_wave_banner_midnight_glow),
-            online = true,
-            statusText = "Online",
-            phone = "+91 98765 43210",
-            bio = "Building hardware & home automation systems.",
-            unreadCount = 0,
-            pinnedMessage = "Perfect. Thanks!",
-            isMuted = false,
-            isBlocked = false,
-            isVerified = true,
-            messages = listOf(
-                ChatMessage(id = "m1", senderId = "user_bholanath", senderName = "Bholanath", text = "Hey! How are you doing?", time = "10:24 AM", status = "read"),
-                ChatMessage(id = "m2", senderId = "user_me", senderName = "Joy", text = "I'm good! Just working on some new ideas. How about you?", time = "10:26 AM", status = "read"),
-                ChatMessage(id = "m3", senderId = "user_bholanath", senderName = "Bholanath", text = "That's great! I'm also working on the home automation project with Jasica AI.", time = "10:28 AM", status = "read"),
-                ChatMessage(id = "m4", senderId = "user_me", senderName = "Joy", text = "Nice! Can you share the latest update?", time = "10:30 AM", status = "read"),
-                ChatMessage(id = "m5", senderId = "user_bholanath", senderName = "Bholanath", text = "Sure! Here are the hardware schematics and smart module captures:", time = "10:32 AM", status = "read"),
-                ChatMessage(
-                    id = "m5_p1",
-                    senderId = "user_bholanath",
-                    senderName = "Bholanath",
-                    mediaType = "image",
-                    mediaUrl = "https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=800&q=80",
-                    time = "10:32 AM",
-                    status = "read"
-                ),
-                ChatMessage(
-                    id = "m5_p2",
-                    senderId = "user_bholanath",
-                    senderName = "Bholanath",
-                    mediaType = "image",
-                    mediaUrl = "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=800&q=80",
-                    time = "10:32 AM",
-                    status = "read"
-                ),
-                ChatMessage(
-                    id = "m5_p3",
-                    senderId = "user_bholanath",
-                    senderName = "Bholanath",
-                    mediaType = "image",
-                    mediaUrl = "https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=800&q=80",
-                    time = "10:32 AM",
-                    status = "read"
-                ),
-                ChatMessage(id = "m6", senderId = "user_me", senderName = "Joy", text = "Perfect. Thanks!", time = "10:33 AM", status = "read")
-            )
-        ),
-        ChatConversation(
-            id = "chat_2",
-            name = "Sarah Connor",
-            type = "direct",
-            avatar = drawableUri(com.chroma.studio.R.drawable.ic_avatar_deep_purple),
-            banner = drawableUri(com.chroma.studio.R.drawable.banner_wave_banner_coral_sunset),
-            online = true,
-            statusText = "Online",
-            phone = "+1 (555) 234-5678",
-            bio = "Lead UX Designer. Passionate about micro-interactions and accessibility.",
-            unreadCount = 2,
-            pinnedMessage = null,
-            isMuted = false,
-            isBlocked = false,
-            isVerified = true,
-            messages = listOf(
-                ChatMessage(id = "m201", senderId = "user_sarah", senderName = "Sarah", text = "Hey Joy, did you review the updated design prototypes?", time = "09:15 AM", status = "read"),
-                ChatMessage(id = "m202", senderId = "user_sarah", senderName = "Sarah", text = "The new optical orb voice recorder flow feels amazing!", time = "09:18 AM", status = "delivered", reactions = mapOf("❤️" to 1), userReaction = "❤️")
-            )
-        ),
-        ChatConversation(
-            id = "chat_3",
-            name = "Dev Team Alpha",
-            type = "group",
-            avatar = drawableUri(com.chroma.studio.R.drawable.ic_avatar_sapphire_night),
-            banner = drawableUri(com.chroma.studio.R.drawable.banner_wave_banner_electric_blue),
-            online = true,
-            statusText = "4 members online",
-            phone = "Group Chat",
-            bio = "Engineering core, sprint deployments, CI/CD pipelines and code reviews.",
-            unreadCount = 0,
-            pinnedMessage = "Release v3.2 code freeze at 5:00 PM EST.",
-            isMuted = false,
-            isBlocked = false,
-            isVerified = true,
-            members = listOf(
-                GroupMember(name = "Joy (You)", role = "Lead Architect", avatar = drawableUri(com.chroma.studio.R.drawable.profile_avatar_joy)),
-                GroupMember(name = "Bholanath Kumbhakar", role = "Hardware Specialist", avatar = drawableUri(com.chroma.studio.R.drawable.ic_avatar_corporate_navy)),
-                GroupMember(name = "Sarah Connor", role = "UI/UX Designer", avatar = drawableUri(com.chroma.studio.R.drawable.ic_avatar_deep_purple)),
-                GroupMember(name = "Marcus Vance", role = "Backend Lead", avatar = drawableUri(com.chroma.studio.R.drawable.ic_avatar_royal_blue))
-            ),
-            messages = listOf(
-                ChatMessage(id = "m301", senderId = "user_marcus", senderName = "Marcus Vance", text = "All regression pipelines are green on production! 🚀", time = "08:40 AM", status = "read", reactions = mapOf("🚀" to 3)),
-                ChatMessage(id = "m302", senderId = "user_bholanath", senderName = "Bholanath", text = "Firmware endpoints are synced with websocket clusters.", time = "08:45 AM", status = "read", reactions = mapOf("👍" to 2)),
-                ChatMessage(
-                    id = "m303",
-                    senderId = "user_sarah",
-                    senderName = "Sarah Connor",
-                    mediaType = "image_stack",
-                    mediaUrls = listOf(
-                        "https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=800&q=80",
-                        "https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=800&q=80",
-                        "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=800&q=80",
-                        "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=800&q=80",
-                        "https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=800&q=80"
-                    ),
-                    text = "Here are the initial hardware test captures and board layout schematics 📸",
-                    time = "08:50 AM",
-                    status = "read",
-                    reactions = mapOf("❤️" to 4)
-                ),
-                ChatMessage(
-                    id = "m304",
-                    senderId = "user_me",
-                    senderName = "Joy (You)",
-                    mediaType = "file_stack",
-                    fileItems = listOf(
-                        ChatFileItem(name = "Firmware_Release_v3.2.0.pdf", size = "2.4 MB", extension = "PDF"),
-                        ChatFileItem(name = "Production_Gerber_Files.zip", size = "18.6 MB", extension = "ZIP"),
-                        ChatFileItem(name = "Architecture_Specs.docx", size = "780 KB", extension = "DOCX")
-                    ),
-                    text = "Attached all release artifacts and KiCad deliverables for deployment.",
-                    time = "08:52 AM",
-                    status = "read"
-                )
-            )
-        )
-    )
+    fun initialChats(): List<ChatConversation> = emptyList()
 }
+
 
 
 

@@ -69,11 +69,9 @@ class StoryRepository {
             for (batch in batches) {
                 val snap = storiesCol
                     .whereIn("userId", batch)
-                    .whereGreaterThan("expiresAt", now)
-                    .orderBy("expiresAt", Query.Direction.DESCENDING)
-                    .orderBy("timestamp", Query.Direction.DESCENDING)
                     .get().await()
                 snap.documents.mapNotNull { it.toObject(Story::class.java) }
+                    .filter { it.expiresAt > now }
                     .let { allStories.addAll(it) }
             }
             val userIdsWithStories = allStories.map { it.userId }.distinct()
@@ -95,6 +93,35 @@ class StoryRepository {
         }
     }
 
+    /** Fetch active public stories from the community. */
+    suspend fun fetchRecentPublicStories(limit: Long = 20): List<UserStoryGroup> {
+        val currentUid = auth.currentUser?.uid ?: return emptyList()
+        val now = System.currentTimeMillis()
+        return try {
+            val snap = storiesCol
+                .limit(limit)
+                .get().await()
+            val allStories = snap.documents.mapNotNull { it.toObject(Story::class.java) }
+                .filter { it.expiresAt > now }
+            val userIdsWithStories = allStories.map { it.userId }.distinct()
+            val profiles = mutableMapOf<String, UserProfile>()
+            for (uid in userIdsWithStories) {
+                usersCol.document(uid).get().await()
+                    .toObject(UserProfile::class.java)?.let { profiles[uid] = it }
+            }
+            userIdsWithStories.mapNotNull { uid ->
+                val profile = profiles[uid] ?: return@mapNotNull null
+                val userStories = allStories.filter { it.userId == uid }.sortedBy { it.timestamp }
+                val allSeen = userStories.all { it.viewedBy.contains(currentUid) }
+                UserStoryGroup(userId = uid, userProfile = profile, stories = userStories, allSeen = allSeen)
+            }.sortedBy { it.allSeen }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("StoryRepository", "fetchRecentPublicStories error", e)
+            emptyList()
+        }
+    }
+
     /** Fetch only the current user's own active stories. */
     suspend fun fetchMyStories(): List<Story> {
         val uid = auth.currentUser?.uid ?: return emptyList()
@@ -102,11 +129,8 @@ class StoryRepository {
         return try {
             val snap = storiesCol
                 .whereEqualTo("userId", uid)
-                .whereGreaterThan("expiresAt", now)
-                .orderBy("expiresAt", Query.Direction.DESCENDING)
-                .orderBy("timestamp", Query.Direction.ASCENDING)
                 .get().await()
-            snap.toObjects(Story::class.java)
+            snap.toObjects(Story::class.java).filter { it.expiresAt > now }.sortedBy { it.timestamp }
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             emptyList()

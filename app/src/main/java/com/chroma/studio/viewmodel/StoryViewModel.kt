@@ -53,18 +53,24 @@ class StoryViewModel : ViewModel() {
             try {
                 val followingIds = repository.getFollowingIds()
                 val currentUid = auth.currentUser?.uid
-                val allIds = if (currentUid != null) followingIds + currentUid else followingIds
-                if (allIds.isNotEmpty()) {
-                    val groups = repository.fetchStoriesForUsers(allIds)
-                    _storyGroups.value = groups
-                    // Pre-populate liked story IDs
-                    val myUid = currentUid ?: return@launch
-                    val liked = mutableSetOf<String>()
-                    groups.forEach { g ->
-                        g.stories.forEach { s -> if (s.likedBy.contains(myUid)) liked.add(s.id) }
-                    }
-                    _likedStoryIds.value = liked
+                val allIds = if (currentUid != null) (followingIds + currentUid).distinct() else followingIds
+                val groups = if (allIds.isNotEmpty()) {
+                    val targeted = repository.fetchStoriesForUsers(allIds)
+                    if (targeted.size < 5) {
+                        val publicStories = repository.fetchRecentPublicStories()
+                        (targeted + publicStories).distinctBy { it.userId }
+                    } else targeted
+                } else {
+                    repository.fetchRecentPublicStories()
                 }
+                _storyGroups.value = if (currentUid != null) groups.filter { it.userId != currentUid } else groups
+                // Pre-populate liked story IDs
+                val myUid = currentUid ?: return@launch
+                val liked = mutableSetOf<String>()
+                groups.forEach { g ->
+                    g.stories.forEach { s -> if (s.likedBy.contains(myUid)) liked.add(s.id) }
+                }
+                _likedStoryIds.value = liked
                 loadMyStories()
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
@@ -74,6 +80,11 @@ class StoryViewModel : ViewModel() {
     }
 
     fun loadUserStories(userId: String) {
+        val currentUid = auth.currentUser?.uid
+        if (currentUid != null && userId == currentUid) {
+            loadMyStories()
+            return
+        }
         viewModelScope.launch {
             try {
                 // Check if we already have this user's stories
@@ -184,6 +195,10 @@ class StoryViewModel : ViewModel() {
 
     fun deleteStory(storyId: String) {
         _myStories.value = _myStories.value.filter { it.id != storyId }
+        _storyGroups.value = _storyGroups.value.mapNotNull { group ->
+            val updated = group.stories.filter { it.id != storyId }
+            if (updated.isEmpty()) null else group.copy(stories = updated)
+        }
         viewModelScope.launch { repository.deleteStory(storyId) }
     }
 }

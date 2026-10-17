@@ -3,11 +3,12 @@ package com.chroma.studio.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.WandSparkles
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -82,12 +83,10 @@ fun ContrastCheckerBadge(
                 .padding(horizontal = 6.dp, vertical = 2.dp)
         )
         if (!passesAA) {
-            Icon(
-                imageVector = Lucide.WandSparkles,
-                contentDescription = "Auto-fix contrast",
-                tint = colors.primary,
+            AiWaveSphereIcon(
                 modifier = Modifier
                     .padding(start = 6.dp)
+                    .size(16.dp)
                     .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { onAutoFix() }
             )
         }

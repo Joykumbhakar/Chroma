@@ -1,3 +1,4 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package com.chroma.studio.chat.ui.components
 
 import androidx.compose.animation.*
@@ -75,6 +76,15 @@ import com.chroma.studio.chat.data.*
 import com.chroma.studio.chat.sound.SoundManager
 
 import com.chroma.studio.chat.ui.theme.LocalChatColors
+
+import com.chroma.studio.ui.components.AppleSwitch
+import com.chroma.studio.ui.components.LiquidGlassProgressBar
+import com.chroma.studio.ui.components.LiquidGlassPrimaryButton
+import com.chroma.studio.ui.components.LiquidGlassSecondaryButton
+
+import com.composables.icons.lucide.Lucide
+
+import com.composables.icons.lucide.ChartColumn
 
 /**
 
@@ -581,31 +591,18 @@ fun IosActionSheet(
         ) {
 
             // Main Actions Group Card
-
             Box(
-
                 modifier = Modifier
-
                     .fillMaxWidth()
-
-                    .clip(RoundedCornerShape(14.dp))
-
+                    .clip(RoundedCornerShape(24.dp))
                     .background(
-
                         if (colors.isLight) Color(0xF6FFFFFF) else Color(0xF21C1C1E)
-
                     )
-
                     .border(
-
                         0.5.dp,
-
                         if (colors.isLight) Color(0x1F000000) else Color(0x2EFFFFFF),
-
-                        RoundedCornerShape(14.dp)
-
+                        RoundedCornerShape(24.dp)
                     )
-
             ) {
 
                 Column(
@@ -771,35 +768,20 @@ fun IosActionSheet(
             Box(
 
                 modifier = Modifier
-
                     .fillMaxWidth()
-
                     .height(56.dp)
-
-                    .clip(RoundedCornerShape(14.dp))
-
+                    .clip(RoundedCornerShape(24.dp))
                     .background(
-
                         if (isCancelPressed) {
-
                             if (colors.isLight) Color(0xDEFFFFFF) else Color(0xDE2C2C2E)
-
                         } else {
-
                             if (colors.isLight) Color(0xFFFFFFFF) else Color(0xFF1C1C1E)
-
                         }
-
                     )
-
                     .border(
-
                         0.5.dp,
-
                         if (colors.isLight) Color(0x1F000000) else Color(0x2EFFFFFF),
-
-                        RoundedCornerShape(14.dp)
-
+                        RoundedCornerShape(24.dp)
                     )
 
                     .clickable(
@@ -1429,11 +1411,9 @@ fun IosMessageContextMenuModal(
 
                         .fillMaxWidth()
 
-                        .clip(RoundedCornerShape(16.dp))
-
+                        .clip(RoundedCornerShape(24.dp))
                         .background(if (colors.isLight) Color(0xF8FFFFFF) else Color(0xF01C1C1E))
-
-                        .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
+                        .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(24.dp))
 
                         .padding(horizontal = 14.dp, vertical = 10.dp)
 
@@ -1521,11 +1501,9 @@ fun IosMessageContextMenuModal(
 
                         .fillMaxWidth()
 
-                        .clip(RoundedCornerShape(16.dp))
-
+                        .clip(RoundedCornerShape(24.dp))
                         .background(if (colors.isLight) Color(0xF8FFFFFF) else Color(0xF4252528))
-
-                        .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
+                        .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(24.dp))
 
                 ) {
 
@@ -2315,164 +2293,52 @@ fun IosMessageInfoModal(
 
     val colors = LocalChatColors.current
 
-    Dialog(
-
-        onDismissRequest = onDismiss,
-
-        properties = DialogProperties(
-
-            dismissOnBackPress = true,
-
-            dismissOnClickOutside = true,
-
-            usePlatformDefaultWidth = false
-
-        )
-
+    IosModalBottomSheet(
+        onDismissRequest = onDismiss
     ) {
-
-        Box(
-
+        Column(
             modifier = Modifier
-
-                .fillMaxSize()
-
-                .background(Color.Black.copy(alpha = 0.45f))
-
-                .clickable(
-
-                    interactionSource = remember { MutableInteractionSource() },
-
-                    indication = null
-
-                ) { onDismiss() }
-
-                .padding(horizontal = 24.dp),
-
-            contentAlignment = Alignment.Center
-
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-
-            Box(
-
-                modifier = Modifier
-
-                    .widthIn(max = 320.dp)
-
-                    .fillMaxWidth()
-
-                    .clip(RoundedCornerShape(18.dp))
-
-                    .background(if (colors.isLight) Color(0xF8FFFFFF) else Color(0xF2252528))
-
-                    .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(18.dp))
-
-                    .clickable(
-
-                        interactionSource = remember { MutableInteractionSource() },
-
-                        indication = null
-
-                    ) {}
-
-                    .padding(20.dp)
-
-            ) {
-
-                Column(
-
-                    modifier = Modifier.fillMaxWidth(),
-
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-
-                ) {
-
-                    Text(
-
-                        text = "Message Info",
-
-                        fontSize = 18.sp,
-
-                        fontWeight = FontWeight.Bold,
-
-                        color = colors.textDark,
-
-                        modifier = Modifier.align(Alignment.CenterHorizontally)
-
-                    )
-
-                    HorizontalDivider(color = colors.separator, thickness = 0.5.dp)
-
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-
-                        InfoRow(label = "Sender", value = if (isOutgoing) "You" else message.senderName)
-
-                        InfoRow(label = "Sent Time", value = message.time)
-
-                        InfoRow(label = "Delivery Status", value = message.status.replaceFirstChar { it.uppercase() })
-
-                        if (message.mediaType != null) {
-
-                            InfoRow(label = "Type", value = message.mediaType.uppercase())
-
-                        }
-
-                        if (message.text != null) {
-
-                            InfoRow(label = "Length", value = "${message.text.length} characters � ${message.text.split(" ").size} words")
-
-                        }
-
-                        if (message.isEdited) {
-
-                            InfoRow(label = "Status", value = "Edited message")
-
-                        }
-
-                    }
-
-                    Spacer(Modifier.height(4.dp))
-
-                    Box(
-
-                        modifier = Modifier
-
-                            .fillMaxWidth()
-
-                            .height(44.dp)
-
-                            .clip(RoundedCornerShape(12.dp))
-
-                            .background(colors.iosBlue)
-
-                            .clickable { onDismiss() },
-
-                        contentAlignment = Alignment.Center
-
-                    ) {
-
-                        Text(
-
-                            text = "Done",
-
-                            fontSize = 16.sp,
-
-                            fontWeight = FontWeight.SemiBold,
-
-                            color = Color.White
-
-                        )
-
-                    }
-
+            Text(
+                text = "Message Info",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = colors.textDark,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            )
+            HorizontalDivider(color = colors.separator, thickness = 0.5.dp)
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                InfoRow(label = "Sender", value = if (isOutgoing) "You" else message.senderName)
+                InfoRow(label = "Sent Time", value = message.time)
+                InfoRow(label = "Delivery Status", value = message.status.replaceFirstChar { it.uppercase() })
+                if (message.mediaType != null) {
+                    InfoRow(label = "Type", value = message.mediaType.uppercase())
                 }
-
+                if (message.text != null) {
+                    InfoRow(label = "Length", value = "${message.text.length} characters • ${message.text.split(" ").size} words")
+                }
+                if (message.isEdited) {
+                    InfoRow(label = "Status", value = "Edited message")
+                }
             }
-
+            Spacer(Modifier.height(8.dp))
+            LiquidGlassPrimaryButton(
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "Done",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White
+                )
+            }
         }
-
     }
-
 }
 
 /**
@@ -2514,233 +2380,94 @@ private fun InfoRow(label: String, value: String) {
 @Composable
 
 fun IosForwardMessageModal(
-
     chats: List<ChatConversation>,
-
     onDismiss: () -> Unit,
-
     onSelectChat: (ChatConversation) -> Unit
-
 ) {
-
     val colors = LocalChatColors.current
 
-    Dialog(
-
-        onDismissRequest = onDismiss,
-
-        properties = DialogProperties(
-
-            dismissOnBackPress = true,
-
-            dismissOnClickOutside = true,
-
-            usePlatformDefaultWidth = false
-
-        )
-
+    IosModalBottomSheet(
+        onDismissRequest = onDismiss
     ) {
-
-        Box(
-
+        Column(
             modifier = Modifier
-
-                .fillMaxSize()
-
-                .background(Color.Black.copy(alpha = 0.50f))
-
-                .clickable(
-
-                    interactionSource = remember { MutableInteractionSource() },
-
-                    indication = null
-
-                ) { onDismiss() }
-
-                .padding(horizontal = 20.dp, vertical = 32.dp),
-
-            contentAlignment = Alignment.Center
-
+                .fillMaxWidth()
+                .padding(horizontal = 18.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-
-            Box(
-
-                modifier = Modifier
-
-                    .widthIn(max = 340.dp)
-
-                    .fillMaxWidth()
-
-                    .heightIn(max = 480.dp)
-
-                    .clip(RoundedCornerShape(20.dp))
-
-                    .background(if (colors.isLight) Color(0xF8FFFFFF) else Color(0xF2222224))
-
-                    .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(20.dp))
-
-                    .clickable(
-
-                        interactionSource = remember { MutableInteractionSource() },
-
-                        indication = null
-
-                    ) {}
-
-                    .padding(18.dp)
-
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-
-                Column(
-
-                    modifier = Modifier.fillMaxSize(),
-
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-
+                Text(
+                    text = "Forward To...",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.textDark
+                )
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(colors.surfaceSecondary)
+                        .clickable { onDismiss() },
+                    contentAlignment = Alignment.Center
                 ) {
-
-                    Row(
-
-                        modifier = Modifier.fillMaxWidth(),
-
-                        horizontalArrangement = Arrangement.SpaceBetween,
-
-                        verticalAlignment = Alignment.CenterVertically
-
-                    ) {
-
-                        Text(
-
-                            text = "Forward To...",
-
-                            fontSize = 18.sp,
-
-                            fontWeight = FontWeight.Bold,
-
-                            color = colors.textDark
-
-                        )
-
-                        Box(
-
-                            modifier = Modifier
-
-                                .size(28.dp)
-
-                                .clip(CircleShape)
-
-                                .background(colors.surfaceSecondary)
-
-                                .clickable { onDismiss() },
-
-                            contentAlignment = Alignment.Center
-
-                        ) {
-
-                            PhosphorCloseX(tint = colors.textMuted, size = 12.dp)
-
-                        }
-
-                    }
-
-                    HorizontalDivider(color = colors.separator, thickness = 0.5.dp)
-
-                    LazyColumn(
-
-                        modifier = Modifier.weight(1f),
-
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-
-                    ) {
-
-                        items(chats) { chat ->
-
-                            Row(
-
-                                modifier = Modifier
-
-                                    .fillMaxWidth()
-
-                                    .clip(RoundedCornerShape(12.dp))
-
-                                    .clickable {
-
-                                        SoundManager.playSend()
-
-                                        onSelectChat(chat)
-
-                                        onDismiss()
-
-                                    }
-
-                                    .padding(horizontal = 10.dp, vertical = 8.dp),
-
-                                verticalAlignment = Alignment.CenterVertically,
-
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-
-                            ) {
-
-                                AsyncImage(
-
-                                    model = chat.avatar,
-
-                                    contentDescription = chat.name,
-
-                                    modifier = Modifier
-
-                                        .size(40.dp)
-
-                                        .clip(CircleShape)
-
-                                        .border(0.5.dp, colors.borderSubtle, CircleShape),
-
-                                    contentScale = ContentScale.Crop
-
-                                )
-
-                                Column(modifier = Modifier.weight(1f)) {
-
-                                    Text(
-
-                                        text = chat.name,
-
-                                        fontSize = 15.sp,
-
-                                        fontWeight = FontWeight.SemiBold,
-
-                                        color = colors.textDark
-
-                                    )
-
-                                    Text(
-
-                                        text = if (chat.type == "group") "Group Chat" else "Direct Message",
-
-                                        fontSize = 12.sp,
-
-                                        color = colors.textMuted
-
-                                    )
-
-                                }
-
-                                LucideForward(tint = colors.iosBlue, size = 18.dp)
-
-                            }
-
-                        }
-
-                    }
-
+                    PhosphorCloseX(tint = colors.textMuted, size = 12.dp)
                 }
-
             }
 
+            HorizontalDivider(color = colors.separator, thickness = 0.5.dp)
+
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 380.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                items(chats) { chat ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable {
+                                SoundManager.playSend()
+                                onSelectChat(chat)
+                                onDismiss()
+                            }
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        AsyncImage(
+                            model = chat.avatar,
+                            contentDescription = chat.name,
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .border(0.5.dp, colors.borderSubtle, CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = chat.name,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = colors.textDark
+                            )
+                            Text(
+                                text = if (chat.type == "group") "Group Chat" else "Direct Message",
+                                fontSize = 12.sp,
+                                color = colors.textMuted
+                            )
+                        }
+                        LucideForward(tint = colors.iosBlue, size = 18.dp)
+                    }
+                }
+            }
         }
-
     }
-
 }
 
 /**
@@ -2767,83 +2494,55 @@ fun IosAddGroupMemberModal(
 
     val selectedContacts = remember { mutableStateListOf<GroupContact>() }
 
-    val candidates = remember(searchQuery, existingMemberNames) {
+    val discoverRepo = remember { com.chroma.studio.data.DiscoverRepository() }
+    var candidates by remember { mutableStateOf<List<GroupContact>>(emptyList()) }
+    var isSearching by remember { mutableStateOf(false) }
 
-        defaultAvailableContacts.filter { contact ->
-
-            !existingMemberNames.contains(contact.name) &&
-
-            (searchQuery.isEmpty() || contact.name.contains(searchQuery, ignoreCase = true) || contact.role.contains(searchQuery, ignoreCase = true))
-
+    LaunchedEffect(searchQuery, existingMemberNames) {
+        val q = searchQuery.trim()
+        if (q.length >= 2) {
+            isSearching = true
+            try {
+                val found = discoverRepo.searchUsers(q)
+                candidates = found.filter { !existingMemberNames.contains(it.displayName.ifBlank { it.username }) }.map { prof ->
+                    GroupContact(
+                        id = prof.uid,
+                        name = prof.displayName.ifBlank { prof.username.ifBlank { "User" } },
+                        role = if (prof.bio.isNotBlank()) prof.bio else "@${prof.username}",
+                        avatar = prof.avatarUrl,
+                        status = if (prof.online) "Online" else "Active on Oscellion"
+                    )
+                }
+            } catch (_: Exception) {}
+            isSearching = false
+        } else {
+            try {
+                val suggested = discoverRepo.getSuggestedCreators(8)
+                candidates = suggested.filter { !existingMemberNames.contains(it.displayName.ifBlank { it.username }) }.map { prof ->
+                    GroupContact(
+                        id = prof.uid,
+                        name = prof.displayName.ifBlank { prof.username.ifBlank { "User" } },
+                        role = if (prof.bio.isNotBlank()) prof.bio else "@${prof.username}",
+                        avatar = prof.avatarUrl,
+                        status = if (prof.online) "Online" else "Active on Oscellion"
+                    )
+                }
+            } catch (_: Exception) {
+                candidates = emptyList()
+            }
         }
-
     }
 
-    Dialog(
-
-        onDismissRequest = onDismiss,
-
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-
+    IosModalBottomSheet(
+        onDismissRequest = onDismiss
     ) {
-
-        Box(
-
+        Column(
             modifier = Modifier
-
-                .fillMaxSize()
-
-                .background(Color.Black.copy(alpha = 0.50f))
-
-                .clickable(
-
-                    interactionSource = remember { MutableInteractionSource() },
-
-                    indication = null
-
-                ) { onDismiss() }
-
-                .padding(horizontal = 20.dp, vertical = 28.dp),
-
-            contentAlignment = Alignment.Center
-
+                .fillMaxWidth()
+                .padding(horizontal = 18.dp, vertical = 10.dp)
+                .imePadding(),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-
-            Box(
-
-                modifier = Modifier
-
-                    .widthIn(max = 350.dp)
-
-                    .fillMaxWidth()
-
-                    .heightIn(max = 520.dp)
-
-                    .clip(RoundedCornerShape(20.dp))
-
-                    .background(if (colors.isLight) Color(0xF8FFFFFF) else Color(0xF2222224))
-
-                    .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(20.dp))
-
-                    .clickable(
-
-                        interactionSource = remember { MutableInteractionSource() },
-
-                        indication = null
-
-                    ) {}
-
-                    .padding(18.dp)
-
-            ) {
-
-                Column(
-
-                    modifier = Modifier.fillMaxSize(),
-
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-
-                ) {
 
                     // Header Row
 
@@ -3079,61 +2778,28 @@ fun IosAddGroupMemberModal(
 
                     // Add Button
 
-                    Button(
-
+                    LiquidGlassPrimaryButton(
                         onClick = {
-
                             if (selectedContacts.isNotEmpty()) {
-
                                 SoundManager.playSend()
-
                                 onAddMembers(selectedContacts.toList())
-
                                 onDismiss()
-
                             }
-
                         },
-
                         enabled = selectedContacts.isNotEmpty(),
-
                         modifier = Modifier
-
                             .fillMaxWidth()
-
-                            .height(46.dp),
-
-                        shape = RoundedCornerShape(12.dp),
-
-                        colors = ButtonDefaults.buttonColors(
-
-                            containerColor = colors.iosBlue,
-
-                            disabledContainerColor = colors.iosBlue.copy(alpha = 0.4f)
-
-                        )
-
+                            .height(44.dp)
                     ) {
-
                         Text(
-
                             text = if (selectedContacts.isEmpty()) "Select Contacts" else "Add (${selectedContacts.size}) Participants",
-
                             fontSize = 15.sp,
-
                             fontWeight = FontWeight.SemiBold,
-
                             color = Color.White
-
                         )
-
                     }
 
                 }
-
-            }
-
-        }
 
     }
 
@@ -3167,69 +2833,16 @@ fun IosGroupPermissionsModal(
 
     var disappearingTimer by remember { mutableStateOf("Off") }
 
-    Dialog(
-
-        onDismissRequest = onDismiss,
-
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-
+    IosModalBottomSheet(
+        onDismissRequest = onDismiss
     ) {
-
-        Box(
-
+        Column(
             modifier = Modifier
-
-                .fillMaxSize()
-
-                .background(Color.Black.copy(alpha = 0.50f))
-
-                .clickable(
-
-                    interactionSource = remember { MutableInteractionSource() },
-
-                    indication = null
-
-                ) { onDismiss() }
-
-                .padding(horizontal = 20.dp, vertical = 28.dp),
-
-            contentAlignment = Alignment.Center
-
+                .fillMaxWidth()
+                .padding(horizontal = 18.dp, vertical = 10.dp)
+                .imePadding(),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-
-            Box(
-
-                modifier = Modifier
-
-                    .widthIn(max = 350.dp)
-
-                    .fillMaxWidth()
-
-                    .clip(RoundedCornerShape(20.dp))
-
-                    .background(if (colors.isLight) Color(0xF8FFFFFF) else Color(0xF2222224))
-
-                    .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(20.dp))
-
-                    .clickable(
-
-                        interactionSource = remember { MutableInteractionSource() },
-
-                        indication = null
-
-                    ) {}
-
-                    .padding(18.dp)
-
-            ) {
-
-                Column(
-
-                    modifier = Modifier.fillMaxWidth(),
-
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-
-                ) {
 
                     // Header
 
@@ -3435,39 +3048,20 @@ fun IosGroupPermissionsModal(
 
                     // Save Button
 
-                    Button(
-
+                    LiquidGlassPrimaryButton(
                         onClick = {
-
                             SoundManager.playReaction()
-
                             onSave()
-
                             onDismiss()
-
                         },
-
                         modifier = Modifier
-
                             .fillMaxWidth()
-
-                            .height(44.dp),
-
-                        shape = RoundedCornerShape(12.dp),
-
-                        colors = ButtonDefaults.buttonColors(containerColor = colors.iosBlue)
-
+                            .height(44.dp)
                     ) {
-
                         Text("Apply Settings", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-
                     }
 
                 }
-
-            }
-
-        }
 
     }
 
@@ -3513,26 +3107,9 @@ private fun PermissionToggleRow(
 
         }
 
-        Switch(
-
+        AppleSwitch(
             checked = isChecked,
-
-            onCheckedChange = onToggle,
-
-            colors = SwitchDefaults.colors(
-
-                checkedThumbColor = Color.White,
-
-                checkedTrackColor = colors.iosBlue,
-
-                uncheckedThumbColor = Color.White,
-
-                uncheckedTrackColor = colors.surfaceTertiary
-
-            ),
-
-            modifier = Modifier.scale(0.85f)
-
+            onCheckedChange = onToggle
         )
 
     }
@@ -3565,186 +3142,81 @@ fun IosMemberActionSheetModal(
 
     val isAdmin = member.role.contains("Admin", ignoreCase = true) || member.role.contains("Owner", ignoreCase = true)
 
-    Dialog(
-
-        onDismissRequest = onDismiss,
-
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-
+    IosModalBottomSheet(
+        onDismissRequest = onDismiss
     ) {
-
-        Box(
-
+        Column(
             modifier = Modifier
-
-                .fillMaxSize()
-
-                .background(Color.Black.copy(alpha = 0.50f))
-
-                .clickable(
-
-                    interactionSource = remember { MutableInteractionSource() },
-
-                    indication = null
-
-                ) { onDismiss() }
-
-                .padding(horizontal = 20.dp, vertical = 28.dp),
-
-            contentAlignment = Alignment.Center
-
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-
-            Column(
-
+            // Member Header Card
+            Row(
                 modifier = Modifier
-
-                    .widthIn(max = 330.dp)
-
                     .fillMaxWidth()
-
-                    .clickable(
-
-                        interactionSource = remember { MutableInteractionSource() },
-
-                        indication = null
-
-                    ) {},
-
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(colors.surfaceSecondary)
+                    .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-
-                // Member Header Card
-
-                Row(
-
+                AsyncImage(
+                    model = member.avatar,
+                    contentDescription = member.name,
                     modifier = Modifier
-
-                        .fillMaxWidth()
-
-                        .clip(RoundedCornerShape(16.dp))
-
-                        .background(if (colors.isLight) Color(0xF8FFFFFF) else Color(0xF01C1C1E))
-
-                        .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
-
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
-
-                    verticalAlignment = Alignment.CenterVertically,
-
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-
-                ) {
-
-                    AsyncImage(
-
-                        model = member.avatar,
-
-                        contentDescription = member.name,
-
-                        modifier = Modifier
-
-                            .size(44.dp)
-
-                            .clip(CircleShape)
-
-                            .border(0.5.dp, colors.borderSubtle, CircleShape),
-
-                        contentScale = ContentScale.Crop
-
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .border(0.5.dp, colors.borderSubtle, CircleShape),
+                    contentScale = ContentScale.Crop
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = member.name,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.textDark
                     )
-
-                    Column(modifier = Modifier.weight(1f)) {
-
-                        Text(
-
-                            text = member.name,
-
-                            fontSize = 16.sp,
-
-                            fontWeight = FontWeight.SemiBold,
-
-                            color = colors.textDark
-
-                        )
-
-                        Text(
-
-                            text = member.role,
-
-                            fontSize = 12.5.sp,
-
-                            color = colors.textMuted
-
-                        )
-
-                    }
-
+                    Text(
+                        text = member.role,
+                        fontSize = 12.5.sp,
+                        color = colors.textMuted
+                    )
                 }
-
-                // Actions Card
-
-                Box(
-
-                    modifier = Modifier
-
-                        .fillMaxWidth()
-
-                        .clip(RoundedCornerShape(16.dp))
-
-                        .background(if (colors.isLight) Color(0xF8FFFFFF) else Color(0xF4252528))
-
-                        .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
-
-                ) {
-
-                    Column(modifier = Modifier.fillMaxWidth()) {
-
-                        ContextMenuItemRow(
-
-                            title = "Message ${member.name.split(" ").firstOrNull() ?: member.name}",
-
-                            icon = { LucideMail(tint = colors.iosBlue, size = 18.dp) },
-
-                            onClick = { onDirectMessage(); onDismiss() }
-
-                        )
-
-                        ContextMenuItemRow(
-
-                            title = if (isAdmin) "Dismiss as Admin" else "Make Group Admin",
-
-                            icon = { LucideLock(tint = colors.iosBlue, size = 18.dp) },
-
-                            onClick = { onToggleAdmin(); onDismiss() }
-
-                        )
-
-                        ContextMenuItemRow(
-
-                            title = "Remove from Group",
-
-                            icon = { LucideTrash(tint = Color(0xFFFF3B30), size = 18.dp) },
-
-                            isDestructive = true,
-
-                            isLast = true,
-
-                            onClick = { onRemoveMember(); onDismiss() }
-
-                        )
-
-                    }
-
-                }
-
             }
 
+            // Actions Card
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(if (colors.isLight) Color(0xF8FFFFFF) else Color(0xF4252528))
+                    .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    ContextMenuItemRow(
+                        title = "Message ${member.name.split(" ").firstOrNull() ?: member.name}",
+                        icon = { LucideMail(tint = colors.iosBlue, size = 18.dp) },
+                        onClick = { onDirectMessage(); onDismiss() }
+                    )
+                    ContextMenuItemRow(
+                        title = if (isAdmin) "Dismiss as Admin" else "Make Group Admin",
+                        icon = { LucideLock(tint = colors.iosBlue, size = 18.dp) },
+                        onClick = { onToggleAdmin(); onDismiss() }
+                    )
+                    ContextMenuItemRow(
+                        title = "Remove from Group",
+                        icon = { LucideTrash(tint = Color(0xFFFF3B30), size = 18.dp) },
+                        isDestructive = true,
+                        isLast = true,
+                        onClick = { onRemoveMember(); onDismiss() }
+                    )
+                }
+            }
         }
-
     }
-
 }
 
 /**
@@ -3756,6 +3228,44 @@ fun IosMemberActionSheetModal(
  * and percentage metrics.
 
  */
+
+/**
+ * iOS Liquid Glass Bottom Sheet Drawer
+ * Uses Google Material 3 ModalBottomSheet with native sheet dragging and velocity gestures.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun IosModalBottomSheet(
+    onDismissRequest: () -> Unit,
+    modifier: Modifier = Modifier,
+    sheetState: SheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+    containerColor: Color = LocalChatColors.current.cardBg,
+    contentColor: Color = LocalChatColors.current.textDark,
+    dragHandle: @Composable (() -> Unit)? = {
+        Box(
+            modifier = Modifier
+                .padding(top = 10.dp, bottom = 8.dp)
+                .width(36.dp)
+                .height(5.dp)
+                .clip(RoundedCornerShape(9999.dp))
+                .background(LocalChatColors.current.textMuted.copy(alpha = 0.35f))
+        )
+    },
+    content: @Composable ColumnScope.() -> Unit
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        modifier = modifier,
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        containerColor = containerColor,
+        contentColor = contentColor,
+        scrimColor = Color.Black.copy(alpha = 0.45f),
+        tonalElevation = 0.dp,
+        dragHandle = dragHandle,
+        content = content
+    )
+}
 
 @Composable
 
@@ -3779,67 +3289,10 @@ fun IosPollDetailsModal(
 
     }
 
-    Dialog(
-
-        onDismissRequest = onDismiss,
-
-        properties = DialogProperties(
-
-            dismissOnBackPress = true,
-
-            dismissOnClickOutside = true,
-
-            usePlatformDefaultWidth = false
-
-        )
-
+    IosModalBottomSheet(
+        onDismissRequest = onDismiss
     ) {
-
-        Box(
-
-            modifier = Modifier
-
-                .fillMaxSize()
-
-                .background(Color.Black.copy(alpha = 0.45f))
-
-                .clickable(
-
-                    interactionSource = remember { MutableInteractionSource() },
-
-                    indication = null
-
-                ) { onDismiss() },
-
-            contentAlignment = Alignment.BottomCenter
-
-        ) {
-
-            Box(
-
-                modifier = Modifier
-
-                    .fillMaxWidth()
-
-                    .widthIn(max = 480.dp)
-
-                    .heightIn(max = 600.dp)
-
-                    .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
-
-                    .background(if (colors.isLight) Color(0xFFF2F2F7) else Color(0xFF1C1C1E))
-
-                    .clickable(
-
-                        interactionSource = remember { MutableInteractionSource() },
-
-                        indication = null
-
-                    ) {}
-
-            ) {
-
-                Column(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxWidth().heightIn(max = 600.dp)) {
 
                     // Sheet Header
 
@@ -3931,7 +3384,7 @@ fun IosPollDetailsModal(
 
                         ) {
 
-                            LucidePoll(tint = colors.textMuted, size = 15.dp)
+                            Icon(Lucide.ChartColumn, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(15.dp))
 
                             Text(
 
@@ -4001,7 +3454,7 @@ fun IosPollDetailsModal(
 
                             ) {
 
-                                LucidePoll(tint = colors.textMuted.copy(alpha = 0.4f), size = 48.dp)
+                                Icon(Lucide.ChartColumn, contentDescription = null, tint = colors.textMuted.copy(alpha = 0.4f), modifier = Modifier.size(48.dp))
 
                                 Text(
 
@@ -4099,45 +3552,49 @@ fun IosPollDetailsModal(
 
                                     }
 
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 14.dp, vertical = 6.dp)
+                                    ) {
+                                        LiquidGlassProgressBar(
+                                            progress = if (totalVotes > 0) (option.votes.toFloat() / totalVotes) else 0f,
+                                            height = 6.dp
+                                        )
+                                    }
+
                                     HorizontalDivider(color = colors.separator, thickness = 0.5.dp)
 
-                                    // Voters List
-
-                                    val voters = if (option.voters.isNotEmpty()) {
-
-                                        option.voters
-
-                                    } else {
-
-                                        // Generate representative voters matching the count
-
-                                        buildList {
-
-                                            if (option.isUserVoted) {
-
-                                                add(PollVoter(name = "${currentUser.name} (You)", avatar = currentUser.avatar, isCurrentUser = true, time = "Just now"))
-
-                                            }
-
-                                            val dummyNames = listOf("Sarah Connor", "Bholanath Kumbhakar", "Elena Rostova", "Marcus Vance", "Liam Chen", "Jessica Taylor", "David Miller")
-
-                                            val dummyAvatars = defaultGroupAvatarPresets
-
-                                            val remaining = option.votes - (if (option.isUserVoted) 1 else 0)
-
-                                            for (i in 0 until remaining) {
-
-                                                val name = dummyNames.getOrElse(i % dummyNames.size) { "Voter ${i + 1}" }
-
-                                                val avatar = dummyAvatars.getOrElse((i + option.votes) % dummyAvatars.size) { currentUser.avatar }
-
-                                                add(PollVoter(name = name, avatar = avatar, isCurrentUser = false, time = "${(i + 1) * 3}m ago"))
-
-                                            }
-
+                                    if (poll.isAnonymous) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            LucideLock(tint = colors.textMuted, size = 15.dp)
+                                            Text(
+                                                text = "Anonymous voting — voter identities are hidden",
+                                                fontSize = 13.sp,
+                                                color = colors.textMuted
+                                            )
                                         }
-
-                                    }
+                                    } else {
+                                        // Voters List
+                                        val voters = if (option.voters.isNotEmpty()) {
+                                            option.voters
+                                        } else {
+                                            buildList {
+                                                if (option.isUserVoted) {
+                                                    add(PollVoter(name = "${currentUser.name} (You)", avatar = currentUser.avatar, isCurrentUser = true, time = "Just now"))
+                                                }
+                                                val remaining = option.votes - (if (option.isUserVoted) 1 else 0)
+                                                for (i in 0 until remaining) {
+                                                    add(PollVoter(name = "Participant ${i + 1}", avatar = "", isCurrentUser = false, time = ""))
+                                                }
+                                            }
+                                        }
 
                                     voters.forEachIndexed { voterIdx, voter ->
 
@@ -4220,7 +3677,7 @@ fun IosPollDetailsModal(
                                         }
 
                                     }
-
+                                }
                                 }
 
                             }
@@ -4230,10 +3687,6 @@ fun IosPollDetailsModal(
                     }
 
                 }
-
-            }
-
-        }
 
     }
 

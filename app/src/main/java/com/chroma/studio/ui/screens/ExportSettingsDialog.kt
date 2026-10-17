@@ -1,3 +1,4 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package com.chroma.studio.ui.screens
 
 import androidx.compose.foundation.background
@@ -31,11 +32,11 @@ fun ExportSettingsDialog(
     val fpsList = listOf(24, 30, 60)
     val codecs = listOf("libx264", "libx265")
 
-    com.chroma.studio.ui.components.GlassDialog(
+    com.chroma.studio.ui.components.LiquidGlassBottomSheet(
         onDismissRequest = onDismiss
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(24.dp)
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)
         ) {
             Text("Export Settings", color = colors.textMain, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(16.dp))
@@ -78,20 +79,16 @@ fun ExportSettingsDialog(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                com.chroma.studio.ui.components.ChromaPillButton(
+                com.chroma.studio.ui.components.LiquidGlassSecondaryButton(
                     onClick = onDismiss,
-                    variant = com.chroma.studio.ui.components.ChromaPillVariant.DarkGlass,
-                    height = 36.dp,
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
+                    isSmall = true
                 ) {
-                    Text("Cancel", color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp)
+                    Text("Cancel", color = Color.Black, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 }
                 Spacer(Modifier.width(10.dp))
-                com.chroma.studio.ui.components.ChromaPillButton(
+                com.chroma.studio.ui.components.LiquidGlassPrimaryButton(
                     onClick = { onExport(ExportSettings(resolution, fps, codec)) },
-                    variant = com.chroma.studio.ui.components.ChromaPillVariant.Emerald,
-                    height = 36.dp,
-                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 6.dp)
+                    isSmall = true
                 ) {
                     Text("Export", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 }

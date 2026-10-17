@@ -1,0 +1,102 @@
+<?xml version="1.0" standalone="no"?>
+
+                <svg id="wave-svg-10" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" class="banner-preview">
+                    <defs>
+                        <!-- Dynamic gradients for 3D layered look -->
+                        <linearGradient id="wave-grad-1-10" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#00B4DB" />
+                            <stop offset="100%" stop-color="#0083B0" />
+                        </linearGradient>
+                        <linearGradient id="wave-grad-2-10" x1="100%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stop-color="#0083B0" />
+                            <stop offset="100%" stop-color="#005573" />
+                        </linearGradient>
+                        <linearGradient id="wave-grad-3-10" x1="0%" y1="100%" x2="100%" y2="0%">
+                            <stop offset="0%" stop-color="#005573" />
+                            <stop offset="100%" stop-color="#00B4DB" />
+                        </linearGradient>
+                        
+                        <!-- Smooth glowing ambient light -->
+                        <radialGradient id="wave-glow-10" cx="80%" cy="50%" r="50%">
+                            <stop offset="0%" stop-color="#0083B0" stop-opacity="0.15" />
+                            <stop offset="100%" stop-color="#00B4DB" stop-opacity="0" />
+                        </radialGradient>
+
+                        <!-- Subtle background texture (Dot Matrix) -->
+                        <pattern id="dot-matrix-10" width="24" height="24" patternUnits="userSpaceOnUse">
+                            <circle cx="2" cy="2" r="1.5" fill="#E2E8F0" opacity="0.6" />
+                        </pattern>
+                        
+                        <!-- Deep drop shadow to create high-end separation -->
+                        <filter id="wave-shadow-10" x="-10%" y="-10%" width="120%" height="120%">
+                            <feDropShadow dx="-8" dy="-4" stdDeviation="16" flood-opacity="0.25" flood-color="#005573" />
+                        </filter>
+                        <!-- Secondary lighter shadow -->
+                        <filter id="wave-shadow-light-10" x="-5%" y="-5%" width="110%" height="110%">
+                            <feDropShadow dx="-4" dy="-2" stdDeviation="8" flood-opacity="0.15" flood-color="#00B4DB" />
+                        </filter>
+                        
+                        <clipPath id="wave-clip-10">
+                            <rect width="1200" height="400" rx="0" />
+                        </clipPath>
+                    </defs>
+                    
+                    <g clip-path="url(#wave-clip-10)">
+                        <!-- Premium Studio Background (Slight Radial Gradient for depth) -->
+                        <rect width="1200" height="400" fill="#F8FAFC" />
+                        <rect width="1200" height="400" fill="url(#dot-matrix-10)" />
+                        
+                        <!-- Ambient background glow -->
+                        <circle cx="950" cy="200" r="400" fill="url(#wave-glow-10)" />
+                        <circle cx="250" cy="300" r="300" fill="url(#wave-glow-10)" />
+                        
+                        <!-- Floating Geometric Accents (Corporate Graphic Design Elements) -->
+                        <g stroke="#00B4DB" stroke-width="2" opacity="0.4" fill="none">
+                            <!-- Plus signs -->
+                            <path d="M 100,80 L 110,80 M 105,75 L 105,85" />
+                            <path d="M 400,120 L 410,120 M 405,115 L 405,125" />
+                            <path d="M 850,50 L 860,50 M 855,45 L 855,55" opacity="0.2" />
+                            
+                            <!-- Hollow Rings -->
+                            <circle cx="150" cy="180" r="12" />
+                            <circle cx="150" cy="180" r="4" opacity="0.5" />
+                            <circle cx="650" cy="80" r="8" />
+                            <circle cx="950" cy="320" r="24" stroke-dasharray="4 4" />
+                        </g>
+
+                        <!-- RIGHT SIDE SWEEPING WAVES (Ultra-smooth Bezier Curves) -->
+                        <!-- Layer 1: Deepest right background wave -->
+                        <path d="M 1200,0 L 700,0 C 650,80 580,180 350,280 C 200,345 50,380 -50,450 L 1200,450 Z" 
+                              fill="url(#wave-grad-2-10)" opacity="0.8" />
+                        
+                        <!-- Layer 2: Middle right wave -->
+                        <path d="M 1200,0 L 850,0 C 750,150 550,280 200,380 C 100,410 0,420 -50,450 L 1200,450 Z" 
+                              fill="url(#wave-grad-1-10)" filter="url(#wave-shadow-light-10)" />
+                        
+                        <!-- Layer 3: Front right prominent wave -->
+                        <path d="M 1200,80 C 950,180 750,300 350,450 L 1200,450 Z" 
+                              fill="url(#wave-grad-3-10)" filter="url(#wave-shadow-10)" />
+                              
+                        <!-- The Distinctive Thick White Cutout/Swoosh -->
+                        <path d="M 1200,60 C 950,160 750,280 340,430" 
+                              stroke="#FFFFFF" stroke-width="24" fill="none" stroke-linecap="round" filter="url(#wave-shadow-light-10)" />
+                              
+                        <!-- Thin secondary accent swoosh -->
+                        <path d="M 1200,105 C 1000,195 800,290 440,450" 
+                              stroke="#0083B0" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.6" />
+                        
+                        <!-- LEFT SIDE CORNER WAVES -->
+                        <!-- Layer 1: Back left corner wave -->
+                        <path d="M -50,180 C 180,180 350,300 650,450 L -50,450 Z" 
+                              fill="url(#wave-grad-2-10)" opacity="0.9" />
+                              
+                        <!-- Layer 2: Front left corner wave -->
+                        <path d="M -50,250 C 120,250 280,330 500,450 L -50,450 Z" 
+                              fill="url(#wave-grad-1-10)" filter="url(#wave-shadow-10)" />
+                              
+                        <!-- Left Accent Swoosh -->
+                        <path d="M -50,230 C 140,230 300,310 520,440" 
+                              stroke="#FFFFFF" stroke-width="12" fill="none" stroke-linecap="round" />
+                    </g>
+                </svg>
+            

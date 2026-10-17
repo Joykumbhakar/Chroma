@@ -155,5 +155,12 @@ dependencies {
     // FFmpeg for Pro Video Editor Rendering
     implementation("com.github.microshow:RxFFmpeg:4.9.0")
 
+    // CameraX for Apple iOS Style In-App Camera
+    val cameraxVersion = "1.3.4"
+    implementation("androidx.camera:camera-core:$cameraxVersion")
+    implementation("androidx.camera:camera-camera2:$cameraxVersion")
+    implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
+    implementation("androidx.camera:camera-view:$cameraxVersion")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

@@ -24,10 +24,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -41,6 +37,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import com.chroma.studio.ui.components.AiWaveSphereIcon
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -414,7 +411,7 @@ fun ProfileIdentityScreen(
                     modifier = Modifier.weight(1f)
                 ) {
                     Text(
-                        displayName.trim().ifEmpty { "Mr. Joy" },
+                        displayName.trim().ifEmpty { profile.displayName.takeIf { it.isNotBlank() } ?: profile.username.takeIf { it.isNotBlank() } ?: "User" },
                         fontWeight = FontWeight.Bold,
                         fontSize = 20.sp,
                         color = colors.textMain,
@@ -586,7 +583,7 @@ fun ProfileIdentityScreen(
                             }
                         ) {
                             DesignCardRow(Lucide.Building, "Office Location", officeLocation.ifBlank { "Remotely" }, { editSheetState = EditSheetData("Office Location", officeLocation, listOf("Remotely", "On-site", "Hybrid")) { officeLocation = it } })
-                            DesignCardRow(Icons.Default.Home, "City / Region", homeLocation.ifBlank { "Set City" }, { editSheetState = EditSheetData("Home Location", homeLocation) { homeLocation = it } })
+                            DesignCardRow(Lucide.House, "City / Region", homeLocation.ifBlank { "Set City" }, { editSheetState = EditSheetData("Home Location", homeLocation) { homeLocation = it } })
                             DesignCardRow(Lucide.Globe, "Country", countryLocation.ifBlank { "India" }, { editSheetState = EditSheetData("Country", countryLocation, listOf("India", "United States", "United Kingdom", "Canada", "Australia", "Germany", "Other")) { countryLocation = it } }, showDivider = false)
                         }
 
@@ -649,34 +646,6 @@ fun ProfileIdentityScreen(
                             }
 
                             Spacer(Modifier.height(14.dp))
-                            val applePresets = AllBannerPresets.filter { !it.id.startsWith("preset:wave_") }
-                            if (applePresets.isNotEmpty()) {
-                                Text("Apple & Modern Presets", color = colors.textMain, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                                Spacer(Modifier.height(8.dp))
-                                LazyRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    items(applePresets) { preset ->
-                                        val isSelected = bannerUrl == preset.id
-                                        Image(
-                                            painter = painterResource(id = preset.drawableRes),
-                                            contentDescription = preset.name,
-                                            modifier = Modifier
-                                                .width(120.dp).height(44.dp)
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .border(
-                                                    width = if (isSelected) 2.dp else 0.5.dp,
-                                                    color = if (isSelected) Color(0xFF007AFF) else Color.Transparent,
-                                                    shape = RoundedCornerShape(8.dp)
-                                                )
-                                                .clickable { 
-                                                    bannerUrl = preset.id
-                                                    selectedBannerUri = null 
-                                                },
-                                            contentScale = ContentScale.Crop
-                                        )
-                                    }
-                                }
-                                Spacer(Modifier.height(14.dp))
-                            }
 
                             Text("Vector Wave Presets", color = colors.textMain, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                             Spacer(Modifier.height(8.dp))
@@ -771,7 +740,7 @@ fun ProfileIdentityScreen(
                                                 AsyncImage(model = work.imageUrl, contentDescription = work.title, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                                             } else {
                                                 Box(modifier = Modifier.fillMaxSize().background(Color(0xFF007AFF).copy(alpha = 0.2f)), contentAlignment = Alignment.Center) {
-                                                    Icon(Lucide.Sparkles, null, tint = Color(0xFF007AFF), modifier = Modifier.size(20.dp))
+                                                    AiWaveSphereIcon(modifier = Modifier.size(24.dp))
                                                 }
                                             }
                                         }
@@ -910,13 +879,13 @@ fun ProfileIdentityScreen(
                             }
                             showAvatarDialog = false 
                         },
-                        variant = ChromaPillVariant.DarkGlass,
+                        variant = ChromaPillVariant.Secondary,
                         height = 40.dp,
                         modifier = Modifier.weight(1f)
                     ) {
-                        Icon(Lucide.Camera, null, tint = Color.White, modifier = Modifier.size(15.dp))
+                        Icon(Lucide.Camera, null, tint = Color.Black, modifier = Modifier.size(15.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("Camera", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Camera", color = Color.Black, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
                 Spacer(Modifier.height(18.dp))
@@ -976,7 +945,8 @@ fun ChipItem(icon: ImageVector?, text: String, onClick: () -> Unit = {}) {
 
 @Composable
 fun DesignCard(
-    icon: ImageVector,
+    icon: ImageVector? = null,
+    graphic3dId: com.chroma.studio.ui.graphics3d.Apple3DGraphicId? = null,
     title: String,
     subtitle: String,
     action: @Composable (() -> Unit)? = null,
@@ -989,16 +959,18 @@ fun DesignCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = cardBg),
-        shape = RoundedCornerShape(14.dp),
-        border = BorderStroke(0.75.dp, colors.glassBorder)
+        shape = RoundedCornerShape(22.dp),
+        border = BorderStroke(1.dp, if (isDark) colors.glassBorder else Color(0xFFDFE8F3))
     ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+        Column(modifier = Modifier.fillMaxWidth().padding(18.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(icon, null, tint = Color(0xFF007AFF), modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(10.dp))
+                if (graphic3dId != null || icon != null) {
+                    AppleIconBadge(icon = icon, graphic3dId = graphic3dId, size = 34.dp)
+                    Spacer(Modifier.width(12.dp))
+                }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(title, color = colors.textMain, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     Text(subtitle, color = Color(0xFF8E8E93), fontSize = 11.5.sp)

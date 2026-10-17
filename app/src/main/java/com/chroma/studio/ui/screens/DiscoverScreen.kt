@@ -8,6 +8,12 @@ package com.chroma.studio.ui.screens
 
 import com.chroma.studio.ui.components.ChromaPillButton
 import com.chroma.studio.ui.components.ChromaPillVariant
+import com.chroma.studio.ui.components.LiquidGlassProgressBar
+import com.chroma.studio.ui.components.AiWaveSphereIcon
+import com.chroma.studio.ui.components.ApplePhotosGraphic
+import com.chroma.studio.ui.components.rememberAppleGraphicAnimationState
+import com.chroma.studio.ui.components.FlatDoubleTapHeartOverlay
+import com.chroma.studio.ui.components.rememberDoubleTapLikeState
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -284,7 +290,11 @@ fun DiscoverScreen(
                                 DropdownMenu(
                                     expanded = showCreateMenu,
                                     onDismissRequest = { showCreateMenu = false },
-                                    modifier = Modifier.background(colors.bg)
+                                    modifier = Modifier
+                                        .shadow(16.dp, RoundedCornerShape(24.dp), ambientColor = Color.Black.copy(alpha = 0.25f), spotColor = Color.Black.copy(alpha = 0.15f))
+                                        .clip(RoundedCornerShape(24.dp))
+                                        .background(colors.bg)
+                                        .border(0.5.dp, colors.glassBorder, RoundedCornerShape(24.dp))
                                 ) {
                                     DropdownMenuItem(
                                         text = { Text("New Image Post", color = colors.textMain, fontWeight = FontWeight.Medium) },
@@ -370,6 +380,16 @@ fun DiscoverScreen(
                             myStoryAvatarUrl = myProfile?.avatarUrl ?: "",
                             myStoryGender = myProfile?.gender,
                             onMyStoryClick = {
+                                if (myStories.isNotEmpty()) {
+                                    storyViewerInitialIndex = -1
+                                    showStoryViewer = true
+                                } else {
+                                    mediaPicker.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                    )
+                                }
+                            },
+                            onAddStoryClick = {
                                 mediaPicker.launch(
                                     PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                                 )
@@ -380,9 +400,8 @@ fun DiscoverScreen(
                             }
                         )
                         if (isUploadingStory) {
-                            LinearProgressIndicator(
-                                modifier = Modifier.fillMaxWidth().height(2.dp),
-                                color = Color(0xFF007AFF)
+                            LiquidGlassProgressBar(
+                                modifier = Modifier.fillMaxWidth().height(4.dp).padding(horizontal = 16.dp, vertical = 2.dp)
                             )
                         }
                     }
@@ -439,8 +458,15 @@ fun DiscoverScreen(
                     // Feed Posts List
                     if (filteredWorks.isEmpty()) {
                         item(key = "empty_state") {
+                            val photoState = rememberAppleGraphicAnimationState()
                             AppleEmptyTabState(
-                                icon = Lucide.Sparkles,
+                                graphic = {
+                                    ApplePhotosGraphic(
+                                        modifier = Modifier.size(140.dp),
+                                        state = photoState,
+                                        enableClickToAnimate = true
+                                    )
+                                },
                                 title = "No Posts Found",
                                 subtitle = if (searchQuery.isNotBlank()) "Try searching for a different creator or keyword."
                                 else "Be the first to share an inspiring creation!"
@@ -533,7 +559,7 @@ fun DiscoverScreen(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
-                                        Icon(Lucide.Sparkles, contentDescription = null, tint = Color(0xFF007AFF), modifier = Modifier.size(16.dp))
+                                        AiWaveSphereIcon(modifier = Modifier.size(16.dp))
                                         Text(
                                             "You're all caught up",
                                             color = Color(0xFF8E8E93),
@@ -550,7 +576,7 @@ fun DiscoverScreen(
         }
 
         // Story Viewer Overlay
-        if (showStoryViewer && stories.isNotEmpty() && storyViewModel != null) {
+        if (showStoryViewer && (stories.isNotEmpty() || myStories.isNotEmpty()) && storyViewModel != null) {
             StoryViewerScreen(
                 storyGroups = stories,
                 initialGroupIndex = storyViewerInitialIndex,
@@ -558,6 +584,7 @@ fun DiscoverScreen(
                 storyViewModel = storyViewModel,
                 likedStoryIds = likedStoryIds,
                 myStories = myStories,
+                currentUserProfile = myProfile,
                 onClose = { showStoryViewer = false },
                 onAuthorClick = { userId ->
                     onAuthorClick(userId, null)
@@ -683,17 +710,7 @@ fun FeedPostCard(
     var editTitle by remember(work.id) { mutableStateOf(work.title) }
     var editDescription by remember(work.id) { mutableStateOf(work.description) }
 
-    var showBigHeart by remember { mutableStateOf(false) }
-    val bigHeartScale by animateFloatAsState(
-        targetValue = if (showBigHeart) 1.25f else 0f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
-        label = "big_heart_scale"
-    )
-    val bigHeartAlpha by animateFloatAsState(
-        targetValue = if (showBigHeart) 0.85f else 0f,
-        animationSpec = tween(220),
-        label = "big_heart_alpha"
-    )
+    val doubleTapLikeState = rememberDoubleTapLikeState()
 
     var layers by remember(work.jsonUrl) { mutableStateOf<List<GradientLayer>?>(LayerCache.get(work.jsonUrl)) }
 
@@ -859,14 +876,14 @@ fun FeedPostCard(
                 .background(Color.Black.copy(alpha = 0.05f))
                 .pointerInput(Unit) {
                     detectTapGestures(
-                        onDoubleTap = {
+                        onDoubleTap = { offset ->
                             val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
                             if (!uid.isNullOrBlank()) {
                                 if (!isLiked) onLikeClick()
                             } else {
                                 onRequireLogin()
                             }
-                            showBigHeart = true
+                            doubleTapLikeState.trigger(offset)
                         }
                     )
                 },
@@ -890,23 +907,11 @@ fun FeedPostCard(
                 )
             }
 
-            // Instagram-style double tap reaction
-            if (bigHeartScale > 0f) {
-                Image(
-                    painter = painterResource(id = R.drawable.heart_like),
-                    contentDescription = null,
-                    modifier = Modifier
-                        .size(110.dp)
-                        .scale(bigHeartScale)
-                        .graphicsLayer { alpha = bigHeartAlpha }
-                )
-                LaunchedEffect(showBigHeart) {
-                    if (showBigHeart) {
-                        kotlinx.coroutines.delay(650)
-                        showBigHeart = false
-                    }
-                }
-            }
+            // Flat, smooth, clean double tap heart reaction
+            FlatDoubleTapHeartOverlay(
+                state = doubleTapLikeState,
+                modifier = Modifier.fillMaxSize()
+            )
         }
 
         // Interactive Action Bar (Like | Remix | Download | Bookmark | Share) with full counter privacy controls
@@ -1134,11 +1139,11 @@ fun FeedPostCard(
                 ) {
                     ChromaPillButton(
                         onClick = { showEditDialog = false },
-                        variant = ChromaPillVariant.DarkGlass,
+                        variant = ChromaPillVariant.Secondary,
                         height = 36.dp,
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
                     ) {
-                        Text("Cancel", color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp)
+                        Text("Cancel", color = Color.Black, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                     }
                     Spacer(Modifier.width(10.dp))
                     ChromaPillButton(

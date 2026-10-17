@@ -122,8 +122,10 @@ fun CreateTextStatusScreen(
                             expanded = showPrivacyMenu,
                             onDismissRequest = { showPrivacyMenu = false },
                             modifier = Modifier
+                                .shadow(16.dp, RoundedCornerShape(24.dp), ambientColor = Color.Black.copy(alpha = 0.2f), spotColor = Color.Black.copy(alpha = 0.15f))
+                                .clip(RoundedCornerShape(24.dp))
                                 .background(colors.glassBg)
-                                .border(0.5.dp, colors.glassBorder, RoundedCornerShape(12.dp))
+                                .border(0.5.dp, colors.glassBorder, RoundedCornerShape(24.dp))
                         ) {
                             DropdownMenuItem(
                                 leadingIcon = {

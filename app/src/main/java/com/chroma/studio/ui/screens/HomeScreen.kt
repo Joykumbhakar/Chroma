@@ -2,8 +2,10 @@ package com.chroma.studio.ui.screens
 import com.chroma.studio.ui.components.GlassIconButton
 import com.chroma.studio.ui.components.GlassButton
 import com.chroma.studio.ui.components.IosAlertDialog
+import com.chroma.studio.ui.components.LiquidGlassSecondaryButton
 import com.chroma.studio.ui.components.SynchronizedRotatingActionMenu
 import com.chroma.studio.ui.components.ActionMenuType
+import com.chroma.studio.ui.components.AiWaveSphereIcon
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.text.TextStyle
 import com.chroma.studio.ui.theme.InterFontFamily
@@ -56,6 +58,14 @@ import androidx.compose.ui.platform.LocalContext
 import com.chroma.studio.MainActivity
 import com.chroma.studio.ui.components.glossyBorder
 import com.chroma.studio.ui.components.SmallSwitch
+import com.chroma.studio.ui.components.AppleSwitch
+import com.chroma.studio.ui.graphics3d.Apple3DGraphicId
+import com.chroma.studio.ui.graphics3d.AppleSettingsSquircleIcon
+import com.chroma.studio.ui.graphics3d.AppleSettingsSquircleVectorIcon
+import com.chroma.studio.ui.components.AppleHomeGraphic
+import com.chroma.studio.ui.components.AppleWorksGraphic
+import com.chroma.studio.ui.components.AppleEmptyStateView
+import com.chroma.studio.ui.components.rememberAppleGraphicAnimationState
 import com.composables.icons.lucide.*
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -75,7 +85,6 @@ val DrawerIconGradient = Brush.linearGradient(
 @Composable
 fun DrawerItem(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
-    iconGradient: List<Color>? = null,
     label: String,
     selected: Boolean,
     onClick: () -> Unit
@@ -86,35 +95,19 @@ fun DrawerItem(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(Color.Transparent)
+            .background(if (selected) Color(0xFF0A84FF).copy(alpha = 0.08f) else Color.Transparent)
             .clickable { onClick() }
-            .padding(horizontal = 10.dp, vertical = 10.dp),
+            .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .size(38.dp)
-                .shadow(
-                    elevation = 1.dp,
-                    shape = RoundedCornerShape(10.dp),
-                    spotColor = Color.Black.copy(alpha = 0.15f),
-                    ambientColor = Color.Black.copy(alpha = 0.08f)
-                )
-                .clip(RoundedCornerShape(10.dp))
-                .background(Color(0xFFF8FAFC))
-                .background(
-                    if (iconGradient != null) Brush.linearGradient(iconGradient, start = Offset.Zero, end = Offset.Infinite)
-                    else DrawerIconGradient
-                )
-                .border(0.5.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(10.dp)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(19.dp))
-        }
+        AppleSettingsSquircleVectorIcon(
+            icon = icon,
+            size = 36.dp
+        )
         Text(
             text = label,
-            color = if (selected) Color(0xFF006FFF) else colors.textMain,
+            color = if (selected) Color(0xFF0A84FF) else colors.textMain,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
             fontSize = 15.sp
         )
@@ -338,7 +331,7 @@ fun HomeScreen(
 
                     Spacer(Modifier.height(6.dp))
                     
-                    // Dark mode toggle (Clean transparent row with gradient icon & thin glass border)
+                    // Dark mode toggle (Clean transparent row with Apple squircle vector icon & Apple HIG switch)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -353,28 +346,10 @@ fun HomeScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    .shadow(
-                                        elevation = 1.dp,
-                                        shape = RoundedCornerShape(10.dp),
-                                        spotColor = Color.Black.copy(alpha = 0.15f),
-                                        ambientColor = Color.Black.copy(alpha = 0.08f)
-                                    )
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(Color(0xFFF8FAFC))
-                                    .background(DrawerIconGradient)
-                                    .border(0.5.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(10.dp)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = if (isDarkMode) Lucide.Moon else Lucide.Sun,
-                                    contentDescription = "Theme",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(19.dp)
-                                )
-                            }
+                            AppleSettingsSquircleVectorIcon(
+                                icon = if (isDarkMode) Lucide.Moon else Lucide.Sun,
+                                size = 36.dp
+                            )
                             Column {
                                 Text(
                                     text = if (isDarkMode) "Dark Mode" else "Light Mode",
@@ -389,7 +364,7 @@ fun HomeScreen(
                                 )
                             }
                         }
-                        SmallSwitch(
+                        AppleSwitch(
                             checked = isDarkMode,
                             onCheckedChange = { onToggleDarkMode() }
                         )
@@ -670,7 +645,7 @@ fun HomeScreen(
                                     verticalArrangement = Arrangement.Center
                                 ) {
                                     Box(modifier = Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(Color.Black), contentAlignment = Alignment.Center) {
-                                        Icon(Lucide.Sparkles, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                                        AiWaveSphereIcon(modifier = Modifier.size(26.dp))
                                     }
                                     Spacer(Modifier.height(12.dp))
                                     Text("Generate", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
@@ -809,9 +784,21 @@ fun HomeScreen(
                         onCreateClick = { showCreatePostMenu = true }
                     )
                 } else if (filteredWorks.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("No works found for \"$searchQuery\"", color = colors.textMuted, fontSize = 15.sp)
-                    }
+                    val searchGraphicState = rememberAppleGraphicAnimationState()
+                    AppleEmptyStateView(
+                        graphic = {
+                            AppleWorksGraphic(
+                                modifier = Modifier.size(130.dp),
+                                state = searchGraphicState,
+                                enableClickToAnimate = true
+                            )
+                        },
+                        title = "No Works Found",
+                        subtitle = "No creations matched \"$searchQuery\". Try searching for another name or tag.",
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(bottom = 135.dp)
+                    )
                 } else {
                     val haptic = LocalHapticFeedback.current
 
@@ -946,7 +933,7 @@ fun HomeScreen(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
-                    .padding(bottom = 98.dp)
+                    .padding(bottom = 106.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     SynchronizedRotatingActionMenu(
@@ -1001,14 +988,14 @@ fun HomeScreen(
                         exit = fadeOut(tween(180)),
                         modifier = Modifier
                             .align(Alignment.Center)
-                            .offset(y = (-56).dp)
+                            .offset(y = (-46).dp)
                     ) {
                         Text(
                             text = "Create",
                             color = colors.textMain,
                             fontFamily = TheSignatureFontFamily,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 38.sp,
+                            fontSize = 32.sp,
                             textAlign = TextAlign.Center,
                             modifier = Modifier.clickable(
                                 interactionSource = remember { MutableInteractionSource() },
@@ -1443,8 +1430,10 @@ fun WorkCard(
                         expanded = showMenu,
                         onDismissRequest = { showMenu = false },
                         modifier = Modifier
-                            .glossyBorder(RoundedCornerShape(14.dp), colors)
-                            .background(colors.glassBg, RoundedCornerShape(14.dp))
+                            .shadow(16.dp, RoundedCornerShape(24.dp), ambientColor = Color.Black.copy(alpha = 0.25f), spotColor = Color.Black.copy(alpha = 0.15f))
+                            .clip(RoundedCornerShape(24.dp))
+                            .glossyBorder(RoundedCornerShape(24.dp), colors)
+                            .background(colors.glassBg, RoundedCornerShape(24.dp))
                     ) {
                         DropdownMenuItem(
                             text = { Text("View as...", fontSize = 13.sp, color = colors.textMain) },
@@ -1533,11 +1522,8 @@ fun WorkCard(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Icon(
-                            imageVector = Lucide.Sparkles,
-                            contentDescription = null,
-                            tint = Color(0xFFFFD60A),
-                            modifier = Modifier.size(10.dp)
+                        AiWaveSphereIcon(
+                            modifier = Modifier.size(12.dp)
                         )
                         Text(
                             text = "Wallpaper",
@@ -1990,8 +1976,23 @@ fun EmptyState(
     onCreateClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    Box(
-        modifier = modifier.fillMaxSize()
+    val homeGraphicState = rememberAppleGraphicAnimationState()
+    AppleEmptyStateView(
+        graphic = {
+            AppleHomeGraphic(
+                modifier = Modifier.size(130.dp),
+                state = homeGraphicState,
+                enableClickToAnimate = true
+            )
+        },
+        title = "No Works Yet",
+        subtitle = "Create your first canvas or generative wallpaper to get started in your studio.",
+        actionButtonText = "Create Work",
+        actionButtonIcon = Lucide.Plus,
+        onActionClick = onCreateClick ?: onNewWork,
+        modifier = modifier
+            .fillMaxSize()
+            .padding(bottom = 135.dp)
     )
 }
 
@@ -2189,28 +2190,13 @@ fun ViewModeBottomSheet(
             Spacer(Modifier.height(18.dp))
 
             // Cancel Button
-            Box(
+            LiquidGlassSecondaryButton(
+                text = "Cancel",
+                onClick = onDismiss,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(if (isDark) Color(0xFF2C2C2E) else Color.White)
-                    .border(
-                        0.5.dp,
-                        if (isDark) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.08f),
-                        RoundedCornerShape(16.dp)
-                    )
-                    .clickable { onDismiss() },
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "Cancel",
-                    color = Color(0xFF007AFF),
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    fontFamily = InterFontFamily
-                )
-            }
+            )
 
             Spacer(Modifier.height(12.dp))
         }

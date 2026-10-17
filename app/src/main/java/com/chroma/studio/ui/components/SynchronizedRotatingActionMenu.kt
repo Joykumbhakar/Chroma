@@ -37,6 +37,8 @@ import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
@@ -799,25 +801,66 @@ private fun ActionNodeIcon(
                 }
             }
 
-            // 5. AI Generator (Customized Lucide Sparkles Icon)
+            // 5. AI Generator (Purple Gradient Wave Sphere Graphic)
             ActionMenuType.AI_GENERATOR -> {
-                val mainStarPath = parseScaledSvgPath(
-                    pathData = "M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z",
-                    sx = sx,
-                    sy = sy
-                )
-                drawPath(path = mainStarPath, brush = fillBrushWithAlpha(0.16f), style = Fill)
-                drawPath(path = mainStarPath, brush = strokeBrush, style = strokeStyle)
+                val scale = size.minDimension / 48f
+                val cx = size.width / 2f
+                val cy = size.height / 2f
 
-                val sparkleLines = listOf(
-                    "M20 3v4",
-                    "M22 5h-4",
-                    "M4 17v2",
-                    "M5 18H3"
+                // 1. Purple Gradient Circular Background Badge
+                val grad = Brush.linearGradient(
+                    colors = listOf(Color(0xFF8A2BE2), Color(0xFF6E11E9), Color(0xFF4A00E0)),
+                    start = Offset(cx - 16f * scale, cy - 18f * scale),
+                    end = Offset(cx + 16f * scale, cy + 18f * scale)
                 )
-                sparkleLines.forEach { d ->
-                    val path = parseScaledSvgPath(d, sx, sy)
-                    drawPath(path = path, brush = strokeBrush, style = strokeStyle)
+                drawCircle(
+                    brush = grad,
+                    radius = 22f * scale,
+                    center = Offset(cx, cy)
+                )
+
+                // 2. Outer White Ring
+                drawCircle(
+                    color = Color.White,
+                    radius = 14f * scale,
+                    center = Offset(cx, cy),
+                    style = Stroke(width = 2.2f * scale)
+                )
+
+                // 3. Three Flowing Wave Strokes (Clipped inside sphere)
+                clipPath(
+                    Path().apply {
+                        addOval(Rect(center = Offset(cx, cy), radius = 13f * scale))
+                    }
+                ) {
+                    val waveStroke = Stroke(width = 2.2f * scale, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                    // Wave 1 (Upper Hemisphere)
+                    drawPath(
+                        Path().apply {
+                            moveTo(cx - 16f * scale, cy - 8f * scale)
+                            cubicTo(cx - 8f * scale, cy, cx, cy - 16f * scale, cx + 16f * scale, cy - 8f * scale)
+                        },
+                        color = Color.White,
+                        style = waveStroke
+                    )
+                    // Wave 2 (Center Equator Wave)
+                    drawPath(
+                        Path().apply {
+                            moveTo(cx - 16f * scale, cy)
+                            cubicTo(cx - 8f * scale, cy + 8f * scale, cx, cy - 8f * scale, cx + 16f * scale, cy)
+                        },
+                        color = Color.White,
+                        style = waveStroke
+                    )
+                    // Wave 3 (Lower Hemisphere)
+                    drawPath(
+                        Path().apply {
+                            moveTo(cx - 16f * scale, cy + 8f * scale)
+                            cubicTo(cx - 8f * scale, cy + 16f * scale, cx, cy, cx + 16f * scale, cy + 8f * scale)
+                        },
+                        color = Color.White,
+                        style = waveStroke
+                    )
                 }
             }
         }

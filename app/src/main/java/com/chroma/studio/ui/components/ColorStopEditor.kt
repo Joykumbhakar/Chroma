@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.WandSparkles
 import com.composables.icons.lucide.GripVertical
 import com.composables.icons.lucide.Trash2
 import com.composables.icons.lucide.Copy
@@ -742,7 +741,7 @@ fun InlineColorPicker(
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Lucide.WandSparkles, contentDescription = null, tint = colors.textMain, modifier = Modifier.size(14.dp))
+                AiWaveSphereIcon(modifier = Modifier.size(15.dp))
                 Spacer(Modifier.padding(start = 6.dp))
                 Text("Auto-Harmony", color = colors.textMain, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
             }

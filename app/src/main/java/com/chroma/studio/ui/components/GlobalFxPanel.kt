@@ -28,7 +28,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.Sparkles
 import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.Image
 import com.composables.icons.lucide.Pause
@@ -150,7 +149,7 @@ fun GlobalFxPanel(vm: ChromaViewModel, modifier: Modifier = Modifier) {
                     
                     FxSectionCard(
                         title = "AI PROMPT-TO-PALETTE",
-                        icon = Lucide.Sparkles,
+                        icon = AiWaveSphereVector,
                         defaultExpanded = true,
                         backgroundColor = Color.Transparent
                     ) {
@@ -199,7 +198,7 @@ fun GlobalFxPanel(vm: ChromaViewModel, modifier: Modifier = Modifier) {
                                 contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = colors.primary, contentColor = colors.onPrimary)
                             ) {
-                                Icon(Lucide.Sparkles, contentDescription = "Generate", modifier = Modifier.size(20.dp))
+                                AiWaveSphereIcon(modifier = Modifier.size(24.dp))
                             }
                         }
                     }
@@ -590,7 +589,11 @@ private fun FxDropdown(
             DropdownMenu(
                 expanded = expanded,
                 onDismissRequest = { expanded = false },
-                modifier = Modifier.background(colors.glassBg)
+                modifier = Modifier
+                    .shadow(16.dp, RoundedCornerShape(24.dp), ambientColor = Color.Black.copy(alpha = 0.2f), spotColor = Color.Black.copy(alpha = 0.15f))
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(colors.glassBg)
+                    .border(0.5.dp, colors.glassBorder, RoundedCornerShape(24.dp))
             ) {
                 menuContent { expanded = false }
             }

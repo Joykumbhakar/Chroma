@@ -6,6 +6,9 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import com.chroma.studio.ui.components.AppleChatGraphic
+import com.chroma.studio.ui.components.AppleEmptyStateView
+import com.chroma.studio.ui.components.rememberAppleGraphicAnimationState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -37,11 +40,14 @@ import com.chroma.studio.chat.data.*
 import com.chroma.studio.chat.media.*
 import com.chroma.studio.chat.sound.SoundManager
 import com.chroma.studio.chat.ui.components.*
+import com.chroma.studio.ui.screens.StoryViewerScreen
+import com.chroma.studio.viewmodel.StoryViewModel
 import com.chroma.studio.chat.ui.theme.ChatWallpaperBackground
 import com.chroma.studio.chat.ui.theme.LocalChatColors
 import com.chroma.studio.chat.util.PermissionHelper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -125,18 +131,16 @@ private fun ChatScreenContent(
     val context = androidx.compose.ui.platform.LocalContext.current
     val settingsManager = remember { SettingsManager.getInstance(context) }
     val effectiveRoomId = initialRoomId ?: roomId
-    var activeChatId by remember { mutableStateOf(effectiveRoomId ?: "chat_1") }
+    var activeChatId by remember { mutableStateOf(effectiveRoomId ?: "") }
     var isInsideChat by remember { mutableStateOf(effectiveRoomId != null) }
     var activeTab by remember { mutableStateOf("all") }
     var sidebarSearchQuery by remember { mutableStateOf("") }
 
-    val listState = key(activeChatId, isInsideChat) {
-        rememberLazyListState(initialFirstVisibleItemIndex = 500)
-    }
+    val listState = rememberLazyListState()
     val clipboardManager = LocalClipboardManager.current
 
     val currentFirebaseUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-    val currentUid = currentFirebaseUser?.uid ?: "user_1"
+    val currentUid = currentFirebaseUser?.uid ?: ""
 
     val userProfiles by (chatViewModel?.userProfiles?.collectAsState() ?: remember { mutableStateOf(emptyMap()) })
     val currentProfile = if (currentFirebaseUser != null) userProfiles[currentFirebaseUser.uid] else null
@@ -146,17 +150,31 @@ private fun ChatScreenContent(
             if (currentFirebaseUser != null) {
                 ChatAdapters.toUser(currentProfile, currentUid)
             } else {
-                MockData.currentUser
+                User(
+                    id = currentUid,
+                    name = "User",
+                    username = "@user",
+                    avatar = "",
+                    status = "Online"
+                )
             }
         )
     }
 
-    val realStoryGroups by (chatViewModel?.stories?.collectAsState() ?: remember { mutableStateOf(emptyList()) })
-    var stories by remember { mutableStateOf(MockData.initialStories()) }
-    LaunchedEffect(realStoryGroups) {
-        if (realStoryGroups.isNotEmpty()) {
-            stories = ChatAdapters.toStoriesList(realStoryGroups, currentUid)
-        }
+    val effectiveStoryVm = storyViewModel ?: androidx.lifecycle.viewmodel.compose.viewModel<StoryViewModel>()
+    val storyGroups by effectiveStoryVm.storyGroups.collectAsState()
+    val myStories by effectiveStoryVm.myStories.collectAsState()
+    val likedStoryIds by effectiveStoryVm.likedStoryIds.collectAsState()
+    val isUploadingStory by effectiveStoryVm.isUploading.collectAsState()
+    var showStoryViewer by remember { mutableStateOf(false) }
+    var storyViewerInitialIndex by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        effectiveStoryVm.loadStories()
+    }
+
+    var stories by remember { mutableStateOf<List<Story>>(emptyList()) }
+    LaunchedEffect(storyGroups) {
+        stories = ChatAdapters.toStoriesList(storyGroups, currentUid)
     }
 
     val recentRooms by (chatViewModel?.recentChats?.collectAsState() ?: remember { mutableStateOf(emptyList()) })
@@ -174,14 +192,67 @@ private fun ChatScreenContent(
         }
     }
 
-    var chats by remember(recentRooms, userProfiles, isOtherOnline, otherLastSeen, onlineUsersPresence, typingStatuses, mutedChatIds) {
+    val activeRoom = remember(recentRooms, activeChatId) {
+        recentRooms.find { it.id == activeChatId }
+    }
+    val otherUid = remember(activeRoom, currentUid, activeChatId) {
+        if (activeRoom != null && !activeRoom.isGroup) {
+            activeRoom.participants.firstOrNull { it != currentUid }
+        } else if (!activeChatId.startsWith("group_") && activeChatId.contains("_")) {
+            activeChatId.split("_").firstOrNull { it != currentUid }
+        } else null
+    }
+    val activeRoomPresence = remember(onlineUsersPresence, otherUid) {
+        if (otherUid != null) onlineUsersPresence[otherUid] else null
+    }
+    val isActiveOnline = isOtherOnline || (activeRoomPresence?.online == true)
+    val activeLastSeen = otherLastSeen ?: activeRoomPresence?.lastOnline
+    val activeRoomTyping = remember(typingStatuses, activeChatId) {
+        typingStatuses[activeChatId] ?: emptyMap()
+    }
+
+    // Active Chat with Safe Guaranteed Fallback (Zero crash possibility)
+    val fallbackChat = remember {
+        ChatConversation(
+            id = "chat_fallback",
+            name = "Chroma Support",
+            type = "direct",
+            avatar = "",
+            online = true,
+            statusText = "Online",
+            phone = "",
+            bio = "Official Chroma Studio Support",
+            unreadCount = 0,
+            pinnedMessage = null,
+            isMuted = false,
+            isBlocked = false,
+            messages = emptyList()
+        )
+    }
+
+    val activeChatBase = remember(activeRoom, activeChatId, currentUid, userProfiles, isActiveOnline, activeLastSeen, activeRoomTyping, mutedChatIds) {
+        if (activeRoom != null) {
+            ChatAdapters.toChatConversation(
+                room = activeRoom,
+                currentUid = currentUid,
+                userProfiles = userProfiles,
+                isOnline = isActiveOnline,
+                lastSeenTime = activeLastSeen,
+                typingMap = activeRoomTyping
+            ).copy(isMuted = mutedChatIds.contains(activeRoom.id))
+        } else {
+            fallbackChat.copy(id = activeChatId)
+        }
+    }
+
+    var chats by remember(recentRooms, userProfiles, isOtherOnline, otherLastSeen, onlineUsersPresence, typingStatuses, mutedChatIds, isInsideChat) {
         mutableStateOf(
-            if (recentRooms.isEmpty()) {
-                MockData.initialChats()
+            if (isInsideChat && effectiveRoomId != null) {
+                listOf(activeChatBase)
             } else {
                 recentRooms.map { room ->
-                    val otherUid = if (!room.isGroup) room.participants.firstOrNull { it != currentUid } else null
-                    val presence = if (otherUid != null) onlineUsersPresence[otherUid] else null
+                    val oUid = if (!room.isGroup) room.participants.firstOrNull { it != currentUid } else null
+                    val presence = if (oUid != null) onlineUsersPresence[oUid] else null
                     val isOnline = presence?.online == true || (!room.isGroup && room.id == activeChatId && isOtherOnline)
                     val lastSeenTime = presence?.lastOnline ?: if (room.id == activeChatId) otherLastSeen else null
                     val roomTyping = typingStatuses[room.id] ?: emptyMap()
@@ -209,35 +280,23 @@ private fun ChatScreenContent(
         } else null
     }
 
-    // Active Chat with Safe Guaranteed Fallback (Zero crash possibility)
-    val fallbackChat = remember {
-        ChatConversation(
-            id = "chat_fallback",
-            name = "Oscellion Support",
-            type = "direct",
-            avatar = drawableUri(com.chroma.studio.R.drawable.profile_avatar_joy),
-            online = true,
-            statusText = "Online",
-            phone = "+1 (800) 555-0199",
-            bio = "Official Oscellion System Assistant",
-            unreadCount = 0,
-            pinnedMessage = null,
-            isMuted = false,
-            isBlocked = false,
-            messages = emptyList()
-        )
-    }
-    val activeChatBase = chats.find { it.id == activeChatId } ?: chats.firstOrNull() ?: fallbackChat
-    
     // Windowed Viewport Pagination (Only load showing parts messages & files to avoid overload crashing)
     var visibleMessageCount by remember(activeChatId) { mutableIntStateOf(25) }
     var previousMessageCount by remember(activeChatId) { mutableIntStateOf(0) }
     var isInitialScrollDone by remember(activeChatId) { mutableStateOf(false) }
     var lastBottomMessageId by remember(activeChatId) { mutableStateOf<String?>(null) }
 
-    val allMessages = remember(activeChatBase, liveMessages, isInsideChat) {
+    val localChatMessages = remember(chats, activeChatId) {
+        chats.find { it.id == activeChatId }?.messages ?: emptyList()
+    }
+
+    val allMessages = remember(liveMessages, isInsideChat, localChatMessages, activeChatBase.messages) {
         val rawList = if (liveMessages != null && isInsideChat && chatViewModel != null) {
-            liveMessages
+            val serverIds = liveMessages.map { it.id }.toSet()
+            val pendingLocal = localChatMessages.filter { it.id !in serverIds }
+            (liveMessages + pendingLocal).distinctBy { it.id }
+        } else if (localChatMessages.isNotEmpty()) {
+            localChatMessages
         } else {
             activeChatBase.messages
         }
@@ -309,27 +368,30 @@ private fun ChatScreenContent(
     LaunchedEffect(activeChat.messages, isInsideChat) {
         if (isInsideChat && activeChat.messages.isNotEmpty()) {
             val currentLatestId = activeChat.messages.lastOrNull()?.id
-            val targetIndex = (if (allMessages.size > visibleMessageCount) 1 else 0) + 1 + activeChat.messages.lastIndex
-            if (!isInitialScrollDone) {
-                // Instantly snap to the bottom of the conversation on open across layout passes
-                listState.scrollToItem(targetIndex.coerceAtLeast(0))
-                delay(30)
-                listState.scrollToItem(targetIndex.coerceAtLeast(0))
-                delay(70)
-                listState.scrollToItem(targetIndex.coerceAtLeast(0))
-                isInitialScrollDone = true
-                lastBottomMessageId = currentLatestId
-            } else if (currentLatestId != null && currentLatestId != lastBottomMessageId) {
-                // Auto-scroll ONLY when a genuinely new message arrives at the bottom (never when prepending older history)
-                val isNearBottom = (listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) >=
-                    (listState.layoutInfo.totalItemsCount - 4).coerceAtLeast(0)
-                val lastMsg = activeChat.messages.last()
-                val isOutgoing = lastMsg.senderId == currentUser.id
+            val totalItemCount = (if (allMessages.size > visibleMessageCount) 1 else 0) + 1 + activeChat.messages.size
+            val targetIndex = (totalItemCount - 1).coerceAtLeast(0)
+            val sizeDiff = activeChat.messages.size - previousMessageCount
 
-                if (isOutgoing || isNearBottom) {
-                    listState.animateScrollToItem(targetIndex.coerceAtLeast(0))
+            try {
+                if (!isInitialScrollDone || sizeDiff > 1) {
+                    // Instantly snap to the bottom on initial open or when a message batch arrives (no lag, no stutter)
+                    listState.scrollToItem(targetIndex)
+                    isInitialScrollDone = true
+                    lastBottomMessageId = currentLatestId
+                } else if (currentLatestId != null && currentLatestId != lastBottomMessageId) {
+                    // Auto-scroll ONLY when a single genuinely new message arrives at the bottom
+                    val isNearBottom = (listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) >=
+                        (listState.layoutInfo.totalItemsCount - 4).coerceAtLeast(0)
+                    val lastMsg = activeChat.messages.last()
+                    val isOutgoing = lastMsg.senderId == currentUser.id
+
+                    if (isOutgoing || isNearBottom) {
+                        listState.animateScrollToItem(targetIndex)
+                    }
+                    lastBottomMessageId = currentLatestId
                 }
-                lastBottomMessageId = currentLatestId
+            } catch (e: Exception) {
+                // Safeguard against any layout race condition during rapid compose measurement
             }
             previousMessageCount = activeChat.messages.size
         }
@@ -339,8 +401,9 @@ private fun ChatScreenContent(
     LaunchedEffect(imeVisible) {
         if (imeVisible && isInsideChat && activeChat.messages.isNotEmpty()) {
             delay(50)
-            val targetIndex = (if (allMessages.size > visibleMessageCount) 1 else 0) + 1 + activeChat.messages.lastIndex
-            listState.animateScrollToItem(targetIndex.coerceAtLeast(0))
+            val totalItemCount = (if (allMessages.size > visibleMessageCount) 1 else 0) + 1 + activeChat.messages.size
+            val targetIndex = (totalItemCount - 1).coerceAtLeast(0)
+            listState.animateScrollToItem(targetIndex)
         }
     }
 
@@ -450,39 +513,39 @@ private fun ChatScreenContent(
     // Permission & Media State
     var permissionToExplain by remember { mutableStateOf<PermissionRequestType?>(null) }
     var isGalleryPickerOpen by remember { mutableStateOf(false) }
+    var isFileManagerOpen by remember { mutableStateOf(false) }
+    var isIosCameraOpen by remember { mutableStateOf(false) }
     var pendingCameraPhotoUri by remember { mutableStateOf<Uri?>(null) }
 
-    // Activity Result Launchers
-    val takePictureLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.TakePicture()
-    ) { success ->
-        if (success && pendingCameraPhotoUri != null) {
-            val replyQuoteSnapshot = activeReplyQuote
-            val photoMsg = ChatMessage(
-                id = "m_${System.currentTimeMillis()}",
-                senderId = currentUser.id,
-                senderName = currentUser.name,
-                mediaType = "image",
-                localUri = pendingCameraPhotoUri.toString(),
-                mediaUrl = pendingCameraPhotoUri.toString(),
-                text = "Photo captured with Camera",
-                time = getCurrentTimeFormatted(),
-                status = "sent",
-                replyTo = replyQuoteSnapshot
-            )
-            chats = chats.map { if (it.id == activeChatId) it.copy(messages = it.messages + photoMsg) else it }
-            activeReplyQuote = null
-            coroutineScope.launch {
-                try {
-                    val bytes = com.chroma.studio.utils.ImageUtils.compressChatImage(context, pendingCameraPhotoUri!!) ?: context.contentResolver.openInputStream(pendingCameraPhotoUri!!)?.readBytes()
-                    if (bytes != null && chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
-                        chatViewModel.sendMediaMessage(bytes, "jpg", "Photo captured with Camera", replyToMessageId = replyQuoteSnapshot?.messageId)
-                    }
-                } catch (e: Exception) {}
+    fun sendCapturedPhoto(uri: Uri, caption: String?) {
+        val replyQuoteSnapshot = activeReplyQuote
+        val photoMsg = ChatMessage(
+            id = "m_${System.currentTimeMillis()}",
+            senderId = currentUser.id,
+            senderName = currentUser.name,
+            mediaType = "image",
+            localUri = uri.toString(),
+            mediaUrl = uri.toString(),
+            text = caption?.takeIf { it.isNotBlank() },
+            time = getCurrentTimeFormatted(),
+            status = "sent",
+            replyTo = replyQuoteSnapshot
+        )
+        chats = chats.map { if (it.id == activeChatId) it.copy(messages = it.messages + photoMsg) else it }
+        activeReplyQuote = null
+        coroutineScope.launch {
+            try {
+                val bytes = com.chroma.studio.utils.ImageUtils.compressChatImage(context, uri)
+                    ?: context.contentResolver.openInputStream(uri)?.readBytes()
+                if (bytes != null && chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
+                    chatViewModel.sendMediaMessage(bytes, "jpg", caption ?: "", replyToMessageId = replyQuoteSnapshot?.messageId)
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("ChatScreen", "Failed to upload camera photo", e)
             }
-            SoundManager.playSend()
-            showToast("Photo sent!")
         }
+        SoundManager.playSend()
+        showToast("Photo sent ✨")
     }
 
     val audioPermissionLauncher = rememberLauncherForActivityResult(
@@ -506,9 +569,7 @@ private fun ChatScreenContent(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            val (_, uri) = MediaStoreHelper.createTempImageUri(context)
-            pendingCameraPhotoUri = uri
-            takePictureLauncher.launch(uri)
+            isIosCameraOpen = true
         } else {
             showIsland("Camera access needed", null, IslandType.WARNING)
         }
@@ -554,7 +615,7 @@ private fun ChatScreenContent(
                 SoundManager.playReaction()
             }
         } else {
-            permissionToExplain = PermissionRequestType.MICROPHONE
+            audioPermissionLauncher.launch(PermissionHelper.RECORD_AUDIO_PERMISSION)
         }
     }
 
@@ -603,11 +664,9 @@ private fun ChatScreenContent(
 
     fun launchCamera() {
         if (PermissionHelper.hasCameraPermission(context)) {
-            val (_, uri) = MediaStoreHelper.createTempImageUri(context)
-            pendingCameraPhotoUri = uri
-            takePictureLauncher.launch(uri)
+            isIosCameraOpen = true
         } else {
-            permissionToExplain = PermissionRequestType.CAMERA
+            cameraPermissionLauncher.launch(PermissionHelper.CAMERA_PERMISSION)
         }
     }
 
@@ -615,7 +674,7 @@ private fun ChatScreenContent(
         if (PermissionHelper.hasMediaPermission(context)) {
             isGalleryPickerOpen = true
         } else {
-            permissionToExplain = PermissionRequestType.GALLERY
+            mediaPermissionLauncher.launch(PermissionHelper.getMediaPermissions())
         }
     }
 
@@ -690,43 +749,7 @@ private fun ChatScreenContent(
         }
     }
 
-    // Friend Auto-Reply Simulation
-    fun triggerSimulatedReply(chatId: String) {
-        coroutineScope.launch {
-            delay(800)
-            isTyping = true
-            listState.animateScrollToItem((chats.find { it.id == chatId }?.messages?.size ?: 1))
-            delay(1600)
-            isTyping = false
 
-            val replies = listOf(
-                "That sounds awesome! Let's get that integrated.",
-                "I just checked the documentation on that, totally agree.",
-                "Awesome! I'll ping you once the firmware test finishes.",
-                "Got it. Can you share the latest schematic link?",
-                "Let's jump on a quick audio call to finalize.",
-                "Have you asked @Sarah regarding the new mockups?",
-                "Sending over the location now."
-            )
-            val randomReply = replies.random()
-            val chat = chats.find { it.id == chatId } ?: return@launch
-
-            val newMsg = ChatMessage(
-                id = "m_${System.currentTimeMillis()}",
-                senderId = "partner_${chat.id}",
-                senderName = chat.name,
-                text = randomReply,
-                time = getCurrentTimeFormatted(),
-                status = "read"
-            )
-
-            chats = chats.map { c ->
-                if (c.id == chatId) c.copy(messages = c.messages + newMsg) else c
-            }
-            SoundManager.playReceive()
-            listState.animateScrollToItem(activeChat.messages.size)
-        }
-    }
 
     // Send Message Handler
     fun handleSendMessage() {
@@ -792,9 +815,6 @@ private fun ChatScreenContent(
             val targetIndex = (if (allMessages.size > visibleMessageCount) 1 else 0) + 1 + activeChat.messages.size
             listState.animateScrollToItem(targetIndex.coerceAtLeast(0))
         }
-        if (chatViewModel == null || activeChatId.startsWith("mock_") || activeChatId.startsWith("chat_fallback")) {
-            triggerSimulatedReply(activeChatId)
-        }
     }
 
     val isAnyModalOrSubscreenOpen = isMessageSelectionMode ||
@@ -842,37 +862,51 @@ private fun ChatScreenContent(
 
     Box(modifier = Modifier.fillMaxSize()) {
         // 1. Root Screen: Standalone Apple iOS Conversations & Stories Screen
-        ConversationsScreen(
-            currentUser = currentUser,
-            stories = stories,
-            chats = chats,
-            activeTab = activeTab,
-            onTabSelected = { activeTab = it },
-            searchQuery = sidebarSearchQuery,
-            onSearchQueryChanged = { sidebarSearchQuery = it },
-            onChatSelected = { chatId ->
-                activeChatId = chatId
-                chats = chats.map { if (it.id == chatId) it.copy(unreadCount = 0) else it }
-                isInitialScrollDone = false
-                isInsideChat = true
-                chatViewModel?.openChat(chatId)
-                coroutineScope.launch {
-                    val msgs = chats.find { it.id == chatId }?.messages ?: emptyList()
-                    if (msgs.isNotEmpty()) {
-                        listState.scrollToItem((msgs.size + 10).coerceAtLeast(0))
+        if (effectiveRoomId == null) {
+            ConversationsScreen(
+                currentUser = currentUser,
+                stories = stories,
+                storyGroups = storyGroups,
+                hasMyStory = myStories.isNotEmpty(),
+                onMyStoryClick = {
+                    if (myStories.isNotEmpty()) {
+                        storyViewerInitialIndex = -1
+                        showStoryViewer = true
+                    } else {
+                        if (onNavigateToCreateStory != null) {
+                            onNavigateToCreateStory.invoke()
+                        } else {
+                            isStoryEditorOpen = true
+                        }
                     }
-                }
-                val targetRoom = recentRooms.find { it.id == chatId }
-                if (targetRoom != null && !targetRoom.isGroup) {
-                    val otherUid = targetRoom.participants.firstOrNull { it != currentUid }
-                    if (otherUid != null) {
-                        chatViewModel?.observeUserOnlineStatus(otherUid)
+                },
+                onStoryGroupClick = { groupIdx ->
+                    storyViewerInitialIndex = groupIdx
+                    showStoryViewer = true
+                },
+                chats = chats,
+                activeTab = activeTab,
+                onTabSelected = { activeTab = it },
+                searchQuery = sidebarSearchQuery,
+                onSearchQueryChanged = { sidebarSearchQuery = it },
+                onChatSelected = { chatId ->
+                    activeChatId = chatId
+                    chats = chats.map { if (it.id == chatId) it.copy(unreadCount = 0) else it }
+                    isInitialScrollDone = false
+                    isInsideChat = true
+                    chatViewModel?.openChat(chatId)
+                    val targetRoom = recentRooms.find { it.id == chatId }
+                    if (targetRoom != null && !targetRoom.isGroup) {
+                        val otherUid = targetRoom.participants.firstOrNull { it != currentUid }
+                        if (otherUid != null) {
+                            chatViewModel?.observeUserOnlineStatus(otherUid)
+                        }
                     }
-                }
-            },
+                },
             onStoryClick = { story ->
-                activeStoryViewer = story
-                stories = stories.map { if (it.id == story.id) it.copy(seen = true) else it }
+                val idx = storyGroups.indexOfFirst { it.userId == story.authorId }
+                storyViewerInitialIndex = if (idx >= 0) idx else 0
+                showStoryViewer = true
             },
             onAddStoryClick = {
                 if (onNavigateToCreateStory != null) {
@@ -947,6 +981,7 @@ private fun ChatScreenContent(
                 showToast("Story link copied")
             }
         )
+        }
 
         // 1.5 Fullscreen Apple iOS Profile & Settings Screen (Native iOS Slide Transition)
         AnimatedVisibility(
@@ -1051,10 +1086,10 @@ private fun ChatScreenContent(
         // 2. Active Chat Conversation Screen (Native iOS Slide Transition)
         AnimatedVisibility(
             visible = isInsideChat,
-            enter = slideInHorizontally(
+            enter = if (effectiveRoomId != null) fadeIn(animationSpec = tween(150)) else (slideInHorizontally(
                 initialOffsetX = { it },
                 animationSpec = spring(dampingRatio = 0.86f, stiffness = Spring.StiffnessMediumLow)
-            ) + fadeIn(animationSpec = tween(180)),
+            ) + fadeIn(animationSpec = tween(180))),
             exit = slideOutHorizontally(
                 targetOffsetX = { it },
                 animationSpec = spring(dampingRatio = 0.88f, stiffness = Spring.StiffnessMedium)
@@ -1214,6 +1249,14 @@ private fun ChatScreenContent(
                         }
                     }
 
+                    val rememberedBubbleConfig = remember(currentBubbleStyle, currentCustomCorners, currentAnimationStyle) {
+                        MessageBubbleConfig(
+                            bubbleStyle = currentBubbleStyle,
+                            customCornerConfig = currentCustomCorners,
+                            animationStyle = currentAnimationStyle
+                        )
+                    }
+
                     // 2. Chat Messages Stream
                     Box(
                         modifier = Modifier
@@ -1292,41 +1335,19 @@ private fun ChatScreenContent(
                             // Empty State
                             if (activeChat.messages.isEmpty()) {
                                 item {
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(vertical = 48.dp),
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(68.dp)
-                                                .background(
-                                                    colors.iosBlueSubtle,
-                                                    androidx.compose.foundation.shape.CircleShape
-                                                )
-                                                .border(
-                                                    1.dp,
-                                                    colors.iosBlue.copy(alpha = 0.15f),
-                                                    androidx.compose.foundation.shape.CircleShape
-                                                ),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            PhosphorPaperPlaneTilt(tint = colors.iosBlue, size = 30.dp)
-                                        }
-                                        Text(
-                                            "Say Hello!",
-                                            fontSize = 17.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = colors.textDark
-                                        )
-                                        Text(
-                                            "Send a message, photo, or voice note.",
-                                            fontSize = 14.sp,
-                                            color = colors.textMuted
-                                        )
-                                    }
+                                    val chatGraphicState = rememberAppleGraphicAnimationState()
+                                    AppleEmptyStateView(
+                                        graphic = {
+                                            AppleChatGraphic(
+                                                modifier = Modifier.size(150.dp),
+                                                state = chatGraphicState,
+                                                enableClickToAnimate = true
+                                            )
+                                        },
+                                        title = "Say Hello!",
+                                        subtitle = "Send a message, photo, or voice note to begin chatting.",
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp)
+                                    )
                                 }
                             }
 
@@ -1342,16 +1363,8 @@ private fun ChatScreenContent(
                                 val nextMsg = if (index < activeChat.messages.size - 1) activeChat.messages[index + 1] else null
                                 val isNextSame = nextMsg != null && nextMsg.senderId == msg.senderId && nextMsg.mediaType != "call" && (nextMsg.mediaType == msg.mediaType || (nextMsg.mediaType in listOf("text", null) && msg.mediaType in listOf("text", null)))
 
-                                MessageRow(
-                                    message = msg,
-                                    isOutgoing = isOutgoing,
-                                    isConsecutive = isConsecutive,
-                                    isNextSame = isNextSame,
-                                    searchQuery = searchInsideQuery,
-                                    senderAvatar = activeChat.avatar,
-                                    senderDisplayName = msg.senderName,
-                                    showSenderName = activeChat.type == "group",
-                                    callbacks = MessageRowCallbacks(
+                                val rowCallbacks = remember(msg.id, msg.userReaction, msg.pollData, msg.text, msg.mediaType, msg.senderName) {
+                                    MessageRowCallbacks(
                                         onReactionClick = { emoji ->
                                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                             chats = chats.map { c ->
@@ -1445,6 +1458,13 @@ private fun ChatScreenContent(
                                             previewLightboxIndex = idx
                                         },
                                         onPollVote = { optIdx ->
+                                            val currentVoter = PollVoter(
+                                                id = currentUser.id,
+                                                name = currentUser.name,
+                                                avatar = currentUser.avatar,
+                                                isCurrentUser = true,
+                                                time = "Just now"
+                                            )
                                             chats = chats.map { c ->
                                                 if (c.id == activeChatId) {
                                                     c.copy(
@@ -1455,9 +1475,18 @@ private fun ChatScreenContent(
                                                                     if (idx == optIdx) {
                                                                         val newVoted = !o.isUserVoted
                                                                         val newVotes = if (newVoted) o.votes + 1 else (o.votes - 1).coerceAtLeast(0)
-                                                                        o.copy(votes = newVotes, isUserVoted = newVoted)
+                                                                        val newVoters = if (newVoted) {
+                                                                            o.voters.filterNot { it.id == currentUser.id } + currentVoter
+                                                                        } else {
+                                                                            o.voters.filterNot { it.id == currentUser.id }
+                                                                        }
+                                                                        o.copy(votes = newVotes, isUserVoted = newVoted, voters = newVoters)
                                                                     } else if (!allowMultiple && o.isUserVoted) {
-                                                                        o.copy(votes = (o.votes - 1).coerceAtLeast(0), isUserVoted = false)
+                                                                        o.copy(
+                                                                            votes = (o.votes - 1).coerceAtLeast(0),
+                                                                            isUserVoted = false,
+                                                                            voters = o.voters.filterNot { it.id == currentUser.id }
+                                                                        )
                                                                     } else o
                                                                 }
                                                                 m.copy(pollData = m.pollData.copy(options = updatedOpts))
@@ -1478,14 +1507,22 @@ private fun ChatScreenContent(
                                                 selectedMessageIds.add(msg.id)
                                             }
                                         }
-                                    ),
+                                    )
+                                }
+
+                                MessageRow(
+                                    message = msg,
+                                    isOutgoing = isOutgoing,
+                                    isConsecutive = isConsecutive,
+                                    isNextSame = isNextSame,
+                                    searchQuery = searchInsideQuery,
+                                    senderAvatar = activeChat.avatar,
+                                    senderDisplayName = msg.senderName,
+                                    showSenderName = activeChat.type == "group",
+                                    callbacks = rowCallbacks,
                                     isSelectionMode = isMessageSelectionMode,
                                     isSelected = selectedMessageIds.contains(msg.id),
-                                    config = MessageBubbleConfig(
-                                        bubbleStyle = currentBubbleStyle,
-                                        customCornerConfig = currentCustomCorners,
-                                        animationStyle = currentAnimationStyle
-                                    ),
+                                    config = rememberedBubbleConfig,
                                     modifier = Modifier.padding(bottom = if (isNextSame) 2.5.dp else 8.dp)
                                 )
                             }
@@ -1700,28 +1737,8 @@ private fun ChatScreenContent(
                                 onCancelReply = { activeReplyQuote = null },
                                 isBlocked = activeChat.isBlocked,
                                 onCameraClick = { launchCamera() },
-                                onPhotoClick = { launchGallery() },
-                                onFileClick = {
-                                    val newFileMsg = ChatMessage(
-                                        id = "m_${System.currentTimeMillis()}",
-                                        senderId = currentUser.id,
-                                        senderName = currentUser.name,
-                                        mediaType = "file_stack",
-                                        fileItems = listOf(
-                                            ChatFileItem(name = "Automation_Firmware_v4.2.pdf", size = "2.4 MB", extension = "PDF"),
-                                            ChatFileItem(name = "Schematic_Diagrams_2026.zip", size = "14.8 MB", extension = "ZIP"),
-                                            ChatFileItem(name = "Integration_Specs_v2.docx", size = "680 KB", extension = "DOCX")
-                                        ),
-                                        text = "Compiled technical documentation and assets attached.",
-                                        time = getCurrentTimeFormatted(),
-                                        status = "sent",
-                                        replyTo = activeReplyQuote
-                                    )
-                                    chats = chats.map { if (it.id == activeChatId) it.copy(messages = it.messages + newFileMsg) else it }
-                                    activeReplyQuote = null
-                                    SoundManager.playSend()
-                                    showToast("3 files stacked & sent ✨")
-                                    triggerSimulatedReply(activeChatId)
+                                onPhotoClick = { launchGallery() },                                onFileClick = {
+                                    isFileManagerOpen = true
                                 },
                                 onPollClick = { isPollCreatorOpen = true },
                                 onVoiceClick = { startVoiceRecording() },
@@ -1907,37 +1924,40 @@ private fun ChatScreenContent(
             )
         }
 
-        // Fullscreen Story Viewer (Dual Mode: Creator & Viewer)
-        AnimatedVisibility(
-            visible = activeStoryViewer != null,
-            enter = scaleIn(initialScale = 0.9f, animationSpec = spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow)) + fadeIn(animationSpec = tween(220)),
-            exit = scaleOut(targetScale = 0.9f, animationSpec = tween(160)) + fadeOut(animationSpec = tween(160))
-        ) {
-            activeStoryViewer?.let { activeStory ->
-                val initialIdx = stories.indexOfFirst { it.id == activeStory.id }.coerceAtLeast(0)
-                StoryViewerModal(
-                    stories = stories,
-                    initialStoryIndex = initialIdx,
-                    onClose = { activeStoryViewer = null },
-                    onReaction = { emoji ->
-                        SoundManager.playReaction()
-                        showToast("Reacted with $emoji to story")
-                    },
-                    onReplySend = { replyMsg ->
-                        showToast("Reply sent to ${activeStory.authorName}!")
-                        activeStoryViewer = null
-                    },
-                    onOpenAnalytics = { st ->
-                        storyForAnalytics = st
-                        isStoryAnalyticsOpen = true
-                    },
-                    onDeleteStory = { storyId ->
-                        stories = stories.filter { it.id != storyId }
-                        activeStoryViewer = null
-                        showToast("Story deleted")
-                    }
+        // Fullscreen Story Viewer (Unified StoryViewerScreen)
+        if (showStoryViewer && (storyGroups.isNotEmpty() || myStories.isNotEmpty())) {
+            val myProfile = remember(currentUser) {
+                com.chroma.studio.model.UserProfile(
+                    uid = currentUser.id,
+                    displayName = currentUser.name,
+                    avatarUrl = currentUser.avatar
                 )
             }
+            StoryViewerScreen(
+                storyGroups = storyGroups,
+                initialGroupIndex = storyViewerInitialIndex,
+                currentUserId = currentUid,
+                storyViewModel = effectiveStoryVm,
+                likedStoryIds = likedStoryIds,
+                myStories = myStories,
+                currentUserProfile = myProfile,
+                onClose = { showStoryViewer = false },
+                onAuthorClick = { authorId ->
+                    showStoryViewer = false
+                    if (onNavigateToUserProfile != null) {
+                        onNavigateToUserProfile.invoke(authorId)
+                    } else if (onNavigateToProfile != null) {
+                        onNavigateToProfile.invoke(authorId)
+                    }
+                },
+                onReplySend = { authorId, replyMsg ->
+                    if (chatViewModel != null && authorId.isNotBlank() && authorId != currentUid) {
+                        val roomId = if (currentUid < authorId) "${currentUid}_${authorId}" else "${authorId}_${currentUid}"
+                        chatViewModel.openChat(roomId)
+                        chatViewModel.sendMessage("Replying to story: \"$replyMsg\"")
+                    }
+                }
+            )
         }
 
         // Fullscreen Story Editor Modal
@@ -1947,12 +1967,16 @@ private fun ChatScreenContent(
             exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(180)) + fadeOut()
         ) {
             StoryEditorModal(
+                currentUser = currentUser,
+                storyViewModel = effectiveStoryVm,
                 onDismiss = { isStoryEditorOpen = false },
                 onPublishStory = { newStory ->
                     stories = listOf(newStory) + stories.filter { !it.isMyStory }
                     isStoryEditorOpen = false
                     SoundManager.playSend()
                     showToast("Your Story published! ✨")
+                    chatViewModel?.refreshStories()
+                    effectiveStoryVm.loadStories()
                 }
             )
         }
@@ -2005,24 +2029,33 @@ private fun ChatScreenContent(
         ) {
             PollCreatorModal(
                 onDismiss = { isPollCreatorOpen = false },
-                onPostPoll = { question, options ->
+                onPostPoll = { question, options, isAnon, allowMult ->
                     val replyQuoteSnapshot = activeReplyQuote
                     val pollMsg = ChatMessage(
                         id = "m_${System.currentTimeMillis()}",
                         senderId = currentUser.id,
                         senderName = currentUser.name,
                         mediaType = "poll",
-                        pollData = PollData(question = question, options = options.map { PollOption(text = it, votes = 0) }),
+                        pollData = PollData(
+                            question = question,
+                            options = options.map { PollOption(text = it, votes = 0) },
+                            isAnonymous = isAnon,
+                            allowMultipleAnswers = allowMult,
+                            creatorName = currentUser.name
+                        ),
                         text = "",
                         time = getCurrentTimeFormatted(),
                         status = "sent",
                         replyTo = replyQuoteSnapshot
                     )
                     chats = chats.map { if (it.id == activeChatId) it.copy(messages = it.messages + pollMsg) else it }
+                    if (chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
+                        val pollPayload = "[POLL]:$question|||${options.joinToString(";;;")}"
+                        chatViewModel.sendMessage(pollPayload, replyToMessageId = replyQuoteSnapshot?.messageId)
+                    }
                     activeReplyQuote = null
                     SoundManager.playSend()
-                    showToast("Interactive poll posted")
-                    triggerSimulatedReply(activeChatId)
+                    showToast("Interactive poll posted ✨")
                 }
             )
         }
@@ -2169,18 +2202,125 @@ private fun ChatScreenContent(
                     }
                     activeReplyQuote = null
                     isGalleryPickerOpen = false
-                    if (chatViewModel == null || activeChatId.startsWith("mock_") || activeChatId.startsWith("chat_fallback")) {
-                        triggerSimulatedReply(activeChatId)
+                }
+            )
+        }
+
+        // Authentic Apple iOS In-App Camera Screen (CameraX viewfinder, concentric shutter, zoom capsule, mode strip, photo review)
+        if (isIosCameraOpen) {
+            IosCameraScreen(
+                onDismiss = { isIosCameraOpen = false },
+                onPhotoCaptured = { uri, caption ->
+                    isIosCameraOpen = false
+                    sendCapturedPhoto(uri, caption)
+                }
+            )
+        }
+
+        // Custom Inbuilt File Manager Modal
+        if (isFileManagerOpen) {
+            CustomFileManagerModal(
+                onDismiss = { isFileManagerOpen = false },
+                onSendFiles = { files ->
+                    val replyQuoteSnapshot = activeReplyQuote
+                    if (files.size > 1) {
+                        val newFileMsg = ChatMessage(
+                            id = "m_${System.currentTimeMillis()}",
+                            senderId = currentUser.id,
+                            senderName = currentUser.name,
+                            mediaType = "file_stack",
+                            fileItems = files,
+                            text = "${files.size} documents attached",
+                            time = getCurrentTimeFormatted(),
+                            status = "sent",
+                            replyTo = replyQuoteSnapshot
+                        )
+                        chats = chats.map { if (it.id == activeChatId) it.copy(messages = it.messages + newFileMsg) else it }
+                        if (chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
+                            files.forEach { f ->
+                                coroutineScope.launch(Dispatchers.IO) {
+                                    try {
+                                        val u = f.uri?.let { Uri.parse(it) }
+                                        if (u != null) {
+                                            val bytes = context.contentResolver.openInputStream(u)?.use { it.readBytes() }
+                                            if (bytes != null) {
+                                                chatViewModel.sendMediaMessage(bytes, f.extension.lowercase().ifBlank { "bin" }, text = f.name, replyToMessageId = replyQuoteSnapshot?.messageId)
+                                            }
+                                        }
+                                    } catch (_: Exception) {}
+                                }
+                            }
+                        }
+                        SoundManager.playSend()
+                        showToast("${files.size} files sent ✨")
+                    } else if (files.isNotEmpty()) {
+                        val file = files.first()
+                        val newFileMsg = ChatMessage(
+                            id = "m_${System.currentTimeMillis()}",
+                            senderId = currentUser.id,
+                            senderName = currentUser.name,
+                            mediaType = "file",
+                            fileName = file.name,
+                            fileSize = file.size,
+                            localUri = file.uri,
+                            fileItems = listOf(file),
+                            text = null,
+                            time = getCurrentTimeFormatted(),
+                            status = "sent",
+                            replyTo = replyQuoteSnapshot
+                        )
+                        chats = chats.map { if (it.id == activeChatId) it.copy(messages = it.messages + newFileMsg) else it }
+                        if (chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
+                            coroutineScope.launch(Dispatchers.IO) {
+                                try {
+                                    val u = file.uri?.let { Uri.parse(it) }
+                                    if (u != null) {
+                                        val bytes = context.contentResolver.openInputStream(u)?.use { it.readBytes() }
+                                        if (bytes != null) {
+                                            chatViewModel.sendMediaMessage(bytes, file.extension.lowercase().ifBlank { "bin" }, text = file.name, replyToMessageId = replyQuoteSnapshot?.messageId)
+                                        }
+                                    }
+                                } catch (_: Exception) {}
+                            }
+                        }
+                        SoundManager.playSend()
+                        showToast("File sent ✨")
                     }
+                    activeReplyQuote = null
+                    isFileManagerOpen = false
                 }
             )
         }
 
         // Apple iOS Multi-Step Group Creation Modal
         if (isCreateGroupModalOpen) {
+            val contactCandidates = remember(userProfiles, currentUid) {
+                userProfiles.values
+                    .filter { it.uid.isNotBlank() && it.uid != currentUid }
+                    .map { prof ->
+                        com.chroma.studio.chat.ui.components.GroupContact(
+                            id = prof.uid,
+                            name = prof.displayName.ifBlank { prof.username.ifBlank { "User" } },
+                            role = if (prof.bio.isNotBlank()) prof.bio else "@${prof.username}",
+                            avatar = prof.avatarUrl,
+                            status = if (prof.online) "Online" else "Active on Oscellion"
+                        )
+                    }
+            }
             CreateGroupModal(
                 currentUser = currentUser,
+                availableContacts = contactCandidates,
                 onDismiss = { isCreateGroupModalOpen = false },
+                onDirectMessage = { contact ->
+                    isCreateGroupModalOpen = false
+                    if (chatViewModel != null) {
+                        chatViewModel.startChat(contact.id) { roomId ->
+                            activeChatId = roomId
+                            chatViewModel.openChat(roomId)
+                            isInsideChat = true
+                        }
+                    }
+                },
                 onCreateGroup = { groupName, groupAvatar, members ->
                     val newGroupId = "group_${System.currentTimeMillis()}"
                     val currentTime = getCurrentTimeFormatted()
@@ -2217,8 +2357,8 @@ private fun ChatScreenContent(
                     showToast("Group \"$groupName\" created")
 
                     if (chatViewModel != null) {
-                        val memberNames = members.map { it.name }
-                        chatViewModel.createGroup(groupName, "Group created", memberNames, groupAvatar) { generatedRoomId ->
+                        val realParticipantIds = members.mapNotNull { it.id.takeIf { id -> id.isNotBlank() && id != currentUser.id } }
+                        chatViewModel.createGroup(groupName, "Group created", realParticipantIds, groupAvatar) { generatedRoomId ->
                             activeChatId = generatedRoomId
                             isInsideChat = true
                         }

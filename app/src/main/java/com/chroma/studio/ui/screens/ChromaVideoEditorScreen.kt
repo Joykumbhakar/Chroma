@@ -2874,7 +2874,7 @@ private fun HorizontalToolbar(
     val tools = listOf(
         ToolItem(Lucide.Scissors,  "Trim",      Color(0xFF007AFF), { onOpenTool(EditorTool.TRIM) }),
         ToolItem(Lucide.Clock,     "Speed",     Color(0xFF5856D6), { onOpenTool(EditorTool.SPEED) }),
-        ToolItem(Lucide.Wand,      "Filter",    Color(0xFFFF9500), { onOpenTool(EditorTool.FILTER) }),
+        ToolItem(Lucide.SlidersHorizontal, "Filter", Color(0xFFFF9500), { onOpenTool(EditorTool.FILTER) }),
         ToolItem(Lucide.Settings2, "Adjust",    Color(0xFF34C759), { onOpenTool(EditorTool.ADJUST) }),
         ToolItem(Lucide.Move,      "Transform", Color(0xFF8E8E93), { onOpenTool(EditorTool.TRANSFORM) }),
         ToolItem(Lucide.Volume2,   "Audio",     Color(0xFF007AFF), { onOpenTool(EditorTool.AUDIO) }),
@@ -3088,7 +3088,7 @@ private fun EditorBottomPanelGridUI(
             }
             "Visuals" -> {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                    ToolGridItem(Modifier.weight(1f), Lucide.Wand, "Filters", "Color presets", { onOpenTool(EditorTool.FILTER) })
+                    ToolGridItem(Modifier.weight(1f), Lucide.SlidersHorizontal, "Filters", "Color presets", { onOpenTool(EditorTool.FILTER) })
                     ToolGridItem(Modifier.weight(1f), Lucide.Settings2, "Adjust", "Brightness & contrast", { onOpenTool(EditorTool.ADJUST) })
                 }
                 Spacer(modifier = Modifier.height(12.dp))

@@ -30,14 +30,14 @@ fun PrivacyScreen(
                      (showOnline != profile.showOnlineStatus)
     }
 
-    val screenBg = if (isDark) Color(0xFF000000) else Color(0xFFF2F2F7)
+    val screenBg = if (isDark) Color(0xFF000000) else Color(0xFFF4F7FB)
 
     Scaffold(
         topBar = {
             AppleSettingsHeader(
                 title = "Privacy",
                 icon = Lucide.Lock,
-                iconGradient = listOf(Color(0xFFFF9500), Color(0xFFFF5E00)),
+                iconGradient = listOf(Color(0xFF4DA6FF), Color(0xFF0A84FF), Color(0xFF0051D5)),
                 doneText = if (hasChanges) "Save" else "Done",
                 onDoneClick = {
                     if (hasChanges) {
@@ -69,6 +69,7 @@ fun PrivacyScreen(
                         title = "Private Account",
                         subtitle = "Only approved followers can view your portfolio",
                         icon = Lucide.Lock,
+                        iconGradient = listOf(Color(0xFF5856D6), Color(0xFF3634A3)),
                         checked = isPrivate,
                         onCheckedChange = { isPrivate = it }
                     )
@@ -84,6 +85,7 @@ fun PrivacyScreen(
                         title = "Allow Mentions & Tags",
                         subtitle = "Let other creators mention @${profile.username}",
                         icon = Lucide.AtSign,
+                        iconGradient = listOf(Color(0xFF007AFF), Color(0xFF0051D5)),
                         checked = allowTagging,
                         onCheckedChange = { allowTagging = it }
                     )
@@ -92,8 +94,9 @@ fun PrivacyScreen(
 
                     AppleSettingToggleRow(
                         title = "Show Online Activity",
-                        subtitle = "Show green presence indicator when active",
+                        subtitle = "Show presence beacon when active on mesh",
                         icon = Lucide.Activity,
+                        iconGradient = listOf(Color(0xFF34C759), Color(0xFF248A3D)),
                         checked = showOnline,
                         onCheckedChange = { showOnline = it }
                     )

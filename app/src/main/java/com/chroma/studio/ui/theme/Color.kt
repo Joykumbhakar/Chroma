@@ -32,16 +32,16 @@ data class OscellionPalette(
 
 // ---- :root (light) ----
 val LightPalette = OscellionPalette(
-    bg = Color(0xFFF8FAFC),
-    gridLine = Color(0x0F000000), // rgba(0,0,0,0.06) approx -> using 0x0F alpha (~6%)
-    glassBg = Color(0xFFFFFFFF),      // Solid white for light mode panel
-    glassBgHover = Color(0xFFF1F5F9), // slightly darker panel
-    glassBorder = Color(0xFFE5E7EB),  // gray-200 border
-    primary = Color(0xFF3B82F6),      // #3B82F6 (Brand blue)
-    primaryHover = Color(0xFF2563EB),
+    bg = Color(0xFFF4F7FB),           // --ds-bg-canvas
+    gridLine = Color(0x0F000000),     // subtle grid line
+    glassBg = Color(0xFFFFFFFF),      // --ds-surface-card (Solid white pristine panel)
+    glassBgHover = Color(0xFFF4F7FB), // hover panel
+    glassBorder = Color(0xFFDFE8F3),  // --ds-border-flat
+    primary = Color(0xFF0A84FF),      // --ds-accent-blue (Cupertino System Blue)
+    primaryHover = Color(0xFF0051D5), // deep blue
     onPrimary = Color(0xFFFFFFFF),
-    textMain = Color(0xFF111827),
-    textMuted = Color(0xFF4B5563),
+    textMain = Color(0xFF0F172A),     // --ds-text-primary (Slate 900)
+    textMuted = Color(0xFF64748B),    // --ds-text-secondary (Slate 500)
     success = Color(0xFF10B981),
     error = Color(0xFFEF4444),
     warning = Color(0xFFF59E0B),

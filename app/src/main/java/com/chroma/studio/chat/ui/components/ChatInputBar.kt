@@ -59,17 +59,63 @@ fun ChatInputBar(
     var showEmojiPicker by remember { mutableStateOf(false) }
     var showAttachmentMenu by remember { mutableStateOf(false) }
 
-    val plusRotate by animateFloatAsState(
-        targetValue = if (showAttachmentMenu) 45f else 0f,
-        animationSpec = spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMediumLow),
-        label = "plusRotate"
-    )
+    androidx.activity.compose.BackHandler(enabled = showAttachmentMenu) {
+        showAttachmentMenu = false
+    }
 
-    Surface(
-        color = colors.headerBg,
-        modifier = modifier.fillMaxWidth()
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .wrapContentHeight()
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
+        // ── Synchronized Rotating Action Menu (Floating 3D Action Nodes over wallpaper) ──
+        AnimatedVisibility(
+            visible = showAttachmentMenu,
+            enter = expandVertically(
+                animationSpec = tween(
+                    durationMillis = ACTION_MENU_ANIM_DURATION_MS,
+                    easing = ActionMenuPopEasing
+                )
+            ) + fadeIn(animationSpec = tween(260)),
+            exit = shrinkVertically(
+                animationSpec = tween(
+                    durationMillis = ACTION_MENU_CLOSE_DURATION_MS,
+                    easing = ActionMenuSmoothOutEasing
+                )
+            ) + fadeOut(animationSpec = tween(220))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                SynchronizedRotatingActionNodes(
+                    isOpen = showAttachmentMenu,
+                    onOptionSelected = { option ->
+                        showAttachmentMenu = false
+                        when (option) {
+                            ActionMenuOption.CAMERA -> onCameraClick()
+                            ActionMenuOption.PHOTOS -> onPhotoClick()
+                            ActionMenuOption.FILES -> onFileClick()
+                            ActionMenuOption.POLL -> onPollClick()
+                        }
+                    }
+                )
+            }
+        }
+
+        Surface(
+            color = colors.headerBg,
+            modifier = Modifier
+                .fillMaxWidth()
+                .wrapContentHeight()
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .wrapContentHeight()
+            ) {
 
             // ── Top hairline separator ─────────────────────────────
             Box(
@@ -152,52 +198,6 @@ fun ChatInputBar(
                     }
                 }
 
-                // ── Attachment Quick Menu ─────────────────────────
-                AnimatedVisibility(
-                    visible = showAttachmentMenu,
-                    enter = expandVertically(
-                        animationSpec = spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)
-                    ) + fadeIn(),
-                    exit = shrinkVertically(animationSpec = tween(150)) + fadeOut()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 10.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(colors.cardBg)
-                            .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
-                        horizontalArrangement = Arrangement.SpaceAround,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        AttachmentItem(
-                            icon = { PhosphorCameraIcon(tint = Color.White, size = 20.dp) },
-                            title = "Camera",
-                            bgColor = Color(0xFF007AFF),
-                            onClick = { showAttachmentMenu = false; onCameraClick() }
-                        )
-                        AttachmentItem(
-                            icon = { PhosphorPhotoIcon(tint = Color.White, size = 20.dp) },
-                            title = "Photos",
-                            bgColor = Color(0xFF34C759),
-                            onClick = { showAttachmentMenu = false; onPhotoClick() }
-                        )
-                        AttachmentItem(
-                            icon = { UiverseFolderUploadIcon(tint = Color.White, size = 20.dp) },
-                            title = "Files",
-                            bgColor = Color(0xFFFF9500),
-                            onClick = { showAttachmentMenu = false; onFileClick() }
-                        )
-                        AttachmentItem(
-                            icon = { PhosphorPollIcon(tint = Color.White, size = 20.dp) },
-                            title = "Poll",
-                            bgColor = Color(0xFFAF52DE),
-                            onClick = { showAttachmentMenu = false; onPollClick() }
-                        )
-                    }
-                }
-
                 // ── Emoji Picker ──────────────────────────────────
                 AnimatedVisibility(
                     visible = showEmojiPicker,
@@ -251,31 +251,21 @@ fun ChatInputBar(
                     verticalAlignment = Alignment.Bottom,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Attachment toggle button (Blue circular button with white plus icon)
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .shadow(2.dp, CircleShape)
-                            .clip(CircleShape)
-                            .background(colors.iosBlue)
-                            .clickable {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                showAttachmentMenu = !showAttachmentMenu
-                                if (showAttachmentMenu) showEmojiPicker = false
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        PhosphorPlusIcon(
-                            tint = Color.White,
-                            size = 20.dp,
-                            modifier = Modifier.graphicsLayer { rotationZ = plusRotate }
-                        )
-                    }
+                    // ── Synchronized Rotating Action Menu Trigger Button (Blue '+' that spins to 'x') ──
+                    SynchronizedActionMenuTriggerButton(
+                        isOpen = showAttachmentMenu,
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            showAttachmentMenu = !showAttachmentMenu
+                            if (showAttachmentMenu) showEmojiPicker = false
+                        }
+                    )
 
                     // Text input capsule
                     Row(
                         modifier = Modifier
                             .weight(1f)
+                            .heightIn(min = 40.dp, max = 120.dp)
                             .clip(RoundedCornerShape(22.dp))
                             .background(
                                 if (isDictating) colors.iosBlueSubtle
@@ -294,6 +284,7 @@ fun ChatInputBar(
                         BasicTextField(
                             value = inputText,
                             onValueChange = { newText ->
+                                if (showAttachmentMenu) showAttachmentMenu = false
                                 if (newText.length <= MAX_MESSAGE_CHARACTERS) {
                                     onInputTextChange(newText)
                                 } else {
@@ -311,17 +302,24 @@ fun ChatInputBar(
                                 lineHeight = 20.sp
                             ),
                             decorationBox = { innerTextField ->
-                                if (inputText.isEmpty()) {
-                                    Text(
-                                        text = if (isBlocked) "You can't message this contact"
-                                               else if (isDictating) "Listening... Speak now"
-                                               else "Type a message...",
-                                        fontSize = 16.sp,
-                                        fontWeight = if (isDictating) FontWeight.SemiBold else FontWeight.Normal,
-                                        color = if (isDictating) colors.iosBlue else colors.textMuted
-                                    )
+                                Box(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    contentAlignment = Alignment.CenterStart
+                                ) {
+                                    if (inputText.isEmpty()) {
+                                        Text(
+                                            text = if (isBlocked) "You can't message this contact"
+                                                   else if (isDictating) "Listening... Speak now"
+                                                   else "Type a message...",
+                                            fontSize = 16.sp,
+                                            fontWeight = if (isDictating) FontWeight.SemiBold else FontWeight.Normal,
+                                            color = if (isDictating) colors.iosBlue else colors.textMuted,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    innerTextField()
                                 }
-                                innerTextField()
                             }
                         )
 
@@ -438,6 +436,7 @@ fun ChatInputBar(
             }
         }
     }
+}
 }
 
 // ── Attachment Grid Item ──────────────────────────────────

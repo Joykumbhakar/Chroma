@@ -1,125 +1,331 @@
 rules_version = '2';
+
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// 1. Collection: users
+//    Document ID: {userId} (matches request.auth.uid)
+//    Fields:
+//      - uid: string (required, immutable) - Auth UID
+//      - username: string (required) - Unique handle
+//      - displayName: string (optional) - User profile name
+//      - bio: string (optional) - User biography
+//      - avatarUrl: string (optional) - Profile image URL
+//      - publicKey: string (optional) - Public encryption key for E2EE chats
+//      - followersCount: int (counter, updateable on follow)
+//      - followingCount: int (counter, updateable on follow)
+//      - isPrivateAccount: bool (privacy setting)
+//      - ... other profile & preference fields
+//    Subcollections:
+//      - /users/{userId}/followers/{followerId} (followerId is the follower's UID)
+//      - /users/{userId}/following/{followingId} (followingId is the followed user's UID)
+//      - /users/{userId}/liked_posts/{workId} (bookmarked/liked post record)
+//      - /users/{userId}/saved_posts/{workId} (saved post record)
+//      - /users/{userId}/shared_posts/{workId} (shared post record)
+//
+// 2. Collection: community_works
+//    Document ID: {workId}
+//    Fields:
+//      - id: string (work ID)
+//      - creatorId: string (immutable, creator's UID)
+//      - authorUsername: string
+//      - authorDisplayName: string
+//      - authorAvatarUrl: string
+//      - title: string
+//      - description: string
+//      - postType: string ("work" | "image")
+//      - jsonUrl: string (compressed vector layers)
+//      - imageUrl: string (Cloudinary CDN URL)
+//      - likesCount: int (interaction counter)
+//      - remixCount: int (interaction counter)
+//      - downloadCount: int (interaction counter)
+//      - downloadedBy: list of string
+//      - saveCount: int (interaction counter)
+//      - savedBy: list of string
+//      - shareCount: int (interaction counter)
+//      - sharedBy: list of string
+//      - isArchived: bool
+//    Subcollections:
+//      - /community_works/{workId}/likes/{userId} (userId is the liker's UID)
+//
+// 3. Collection: usernames
+//    Document ID: {username} (lowercase username string)
+//    Fields:
+//      - uid: string (owner UID)
+//      - createdAt: number/timestamp
+//
+// 4. Collection: chats
+//    Document ID: {chatId}
+//    Fields:
+//      - id: string
+//      - name: string (optional group name)
+//      - isGroup: bool
+//      - avatarUrl: string (optional)
+//      - participants: list of string (UIDs of participants)
+//      - admins: list of string (UIDs of admins)
+//      - createdBy: string (creator UID)
+//      - groupDescription: string (optional)
+//      - lastMessage: string
+//      - lastSender: string
+//      - lastMessageTime: number
+//      - unreadCount: map of string -> int
+//      - favoritedBy: list of string
+//      - deletedBy: list of string
+//      - deletedAt: map of string -> number
+//    Subcollections:
+//      - /chats/{chatId}/messages/{messageId}
+//        Fields:
+//          - id: string
+//          - senderId: string (must match request.auth.uid)
+//          - text: string
+//          - timestamp: number
+//          - isRead: bool
+//          - messageType: string
+//
+// 5. Collection: flash_videos
+//    Document ID: {flashId}
+//    Fields:
+//      - id: string
+//      - creatorId: string (creator UID)
+//      - videoUrl: string
+//      - thumbnailUrl: string
+//      - caption: string
+//      - likesCount, viewsCount, commentCount, remixCount, shareCount, saveCount: int
+//      - likedBy, viewedBy, remixedBy, sharedBy, savedBy: list of string
+//      - isArchived: bool
+//
+// 6. Collection: flash_comments
+//    Document ID: {commentId}
+//    Fields:
+//      - id: string
+//      - videoId: string
+//      - userId: string (commenter UID)
+//      - text: string
+//      - timestamp: number
+//      - likesCount: int
+//      - likedBy: list of string
+//
+// 7. Collection: stories
+//    Document ID: {storyId}
+//    Fields:
+//      - id: string
+//      - userId: string (creator UID)
+//      - mediaUrl: string
+//      - textContent: string
+//      - expiresAt: number
+//      - views, likes, shares, viewsCount, likesCount: int
+//      - viewedBy, likedBy: list of string
+//
+// 8. Collection: user_chat_prefs
+//    Document ID: {prefId} (e.g. {userId}_{roomId})
+//    Fields:
+//      - userId: string
+//      - roomId: string
+//      - muted: bool
+//
+// 9. Collection: reports
+//    Document ID: {reportId}
+//    Fields:
+//      - workId: string
+//      - reporterId: string
+//      - reason: string
+//      - timestamp: number
+// ===============================================================
+
 service cloud.firestore {
   match /databases/{database}/documents {
-  
-    // 1. App-specific Users Collection
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // ===============================================================
+    // 1. Users Collection
+    // ===============================================================
     match /users/{userId} {
-      // Users can read any profile (so they can see other creators)
-      allow read: if request.auth != null;
-      
-      // Allow users to update their own profile OR allow anyone to increment follower/following counts
-      allow update: if request.auth != null && (
-        request.auth.uid == userId ||
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followersCount'])) ||
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followingCount']))
+      // Authenticated users can view public creator profiles
+      allow read: if isAuthenticated();
+
+      // Users can create and delete only their own profile
+      allow create: if isOwner(userId);
+      allow delete: if isOwner(userId);
+
+      // Owner can update their profile, OR any user can safely increment/decrement follower/following counts
+      allow update: if isAuthenticated() && (
+        isOwner(userId) ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followersCount', 'followingCount'])
       );
-      
-      allow create: if request.auth != null && request.auth.uid == userId;
-      allow delete: if request.auth != null && request.auth.uid == userId;
-      
-      // Subcollections for following and followers
+
+      // Subcollections
       match /followers/{followerId} {
-        allow read: if request.auth != null;
-        allow write: if request.auth != null && request.auth.uid == followerId;
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated() && request.auth.uid == followerId;
       }
-      
+
       match /following/{followingId} {
-        allow read: if request.auth != null;
-        allow write: if request.auth != null && request.auth.uid == userId;
+        allow read: if isAuthenticated();
+        allow write: if isOwner(userId);
+      }
+
+      match /liked_posts/{workId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /saved_posts/{workId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /shared_posts/{workId} {
+        allow read, write: if isOwner(userId);
       }
     }
-    
-    // 2. App-specific Community Works Collection
+
+    // ===============================================================
+    // 2. Community Works Collection
+    // ===============================================================
     match /community_works/{workId} {
-      // Anyone logged in can read the works
-      allow read: if request.auth != null;
-      
-      // Only the creator can upload their works
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.creatorId;
-      
-      // Only the creator can edit their works, OR anyone can safely update the interaction counts
-      allow update: if request.auth != null && (
+      // Logged in users can view community works
+      allow read: if isAuthenticated();
+
+      // Only the author can create their work
+      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.creatorId;
+
+      // Creator can edit their work, OR users can safely update interaction counters/tracking arrays
+      allow update: if isAuthenticated() && (
         request.auth.uid == resource.data.creatorId ||
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likesCount', 'downloadsCount', 'remixCount'])
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['likesCount', 'remixCount', 'downloadCount', 'downloadedBy', 'downloadsCount', 'saveCount', 'savedBy', 'shareCount', 'sharedBy'])
       );
-      
-      // Only the creator can delete their works
-      allow delete: if request.auth != null && request.auth.uid == resource.data.creatorId;
-      
-      // Subcollection for likes (Users can only add/remove their own like)
+
+      // Only creator can delete their work
+      allow delete: if isAuthenticated() && request.auth.uid == resource.data.creatorId;
+
+      // Subcollection for likes tracking
       match /likes/{userId} {
-        allow read: if request.auth != null;
-        allow write: if request.auth != null && request.auth.uid == userId;
+        allow read: if isAuthenticated();
+        allow write: if isOwner(userId);
       }
     }
-    
-    // 3. Usernames uniqueness collection
+
+    // ===============================================================
+    // 3. Usernames Uniqueness Collection
+    // ===============================================================
     match /usernames/{username} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow read: if isAuthenticated();
+      // Only the user owning this UID can claim or update their username mapping
+      allow create: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
+      allow update: if isAuthenticated() && resource.data.uid == request.auth.uid && request.resource.data.uid == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.uid == request.auth.uid;
     }
-    
-    // 4. Chat Rooms Collection (Firebase metadata)
+
+    // ===============================================================
+    // 4. Chat Rooms Collection
+    // ===============================================================
     match /chats/{chatId} {
-      // Only participants can read the room (or allow read if the room doesn't exist yet so we can check it)
-      allow read: if request.auth != null && (resource == null || request.auth.uid in resource.data.participants);
-      
+      // Split read into get and list so that collection queries (whereArrayContains) succeed.
+      // - get: Allows single document read if the room doesn't exist yet (for client existence checks) OR if participant
+      allow get: if isAuthenticated() && (resource == null || request.auth.uid in resource.data.participants);
+
+      // - list: Allows collection queries where participants array contains the authenticated user UID
+      allow list: if isAuthenticated() && request.auth.uid in resource.data.participants;
+
       // Creating a room: user must be in the participants array
-      allow create: if request.auth != null && request.auth.uid in request.resource.data.participants;
-      
-      // Updating a room: user must be in the participants array (e.g. updating last message)
-      allow update: if request.auth != null && request.auth.uid in resource.data.participants;
-      
-      allow delete: if false; // Users shouldn't delete rooms completely, they just leave
+      allow create: if isAuthenticated() && request.auth.uid in request.resource.data.participants;
+
+      // Updating a room: user must be in the participants array (e.g. updating last message, unread counts)
+      allow update: if isAuthenticated() && request.auth.uid in resource.data.participants;
+
+      // Disallow complete room deletion from client
+      allow delete: if false;
 
       // Subcollection: Messages
       match /messages/{messageId} {
-        // Can only read messages if user is a participant of the parent room
-        allow read: if request.auth != null && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
-        
+        // Can only read messages if user is a participant of the parent chat room
+        allow read: if isAuthenticated() &&
+          request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+
         // Can create message if participant AND senderId matches their actual UID
-        allow create: if request.auth != null 
-                      && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants 
-                      && request.resource.data.senderId == request.auth.uid;
-        
-        // Can update (e.g., mark as read) if participant
-        allow update: if request.auth != null && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
-        
+        allow create: if isAuthenticated()
+          && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants
+          && request.resource.data.senderId == request.auth.uid;
+
+        // Can update (e.g., mark as read, reactions) if participant
+        allow update: if isAuthenticated() &&
+          request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+
         // Users can only delete their own messages
-        allow delete: if request.auth != null 
-                      && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants 
-                      && resource.data.senderId == request.auth.uid;
+        allow delete: if isAuthenticated()
+          && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants
+          && resource.data.senderId == request.auth.uid;
       }
     }
 
+    // ===============================================================
     // 5. Flash Videos Collection
+    // ===============================================================
     match /flash_videos/{flashId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.creatorId;
-      allow update: if request.auth != null && (
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.creatorId;
+      allow update: if isAuthenticated() && (
         request.auth.uid == resource.data.creatorId ||
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likesCount', 'viewsCount', 'likedBy', 'viewedBy'])
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['likesCount', 'viewsCount', 'likedBy', 'viewedBy', 'commentCount', 'remixCount', 'remixedBy', 'shareCount', 'sharedBy', 'saveCount', 'savedBy'])
       );
-      allow delete: if request.auth != null && request.auth.uid == resource.data.creatorId;
+      allow delete: if isAuthenticated() && request.auth.uid == resource.data.creatorId;
     }
 
-    // 6. Stories Collection (24-hour disappearing stories)
+    // ===============================================================
+    // 6. Flash Comments Collection
+    // ===============================================================
+    match /flash_comments/{commentId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.userId;
+      allow update: if isAuthenticated() && (
+        request.auth.uid == resource.data.userId ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likedBy', 'likesCount'])
+      );
+      allow delete: if isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    // ===============================================================
+    // 7. Stories Collection (24-hour disappearing stories)
+    // ===============================================================
     match /stories/{storyId} {
-      // Any logged-in user can read stories (to see others' stories)
-      allow read: if request.auth != null;
-
-      // Only the story owner can create their own story
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
-
-      // Owner can fully update; anyone can update only viewedBy, likedBy, views, and likes
-      allow update: if request.auth != null && (
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.userId;
+      allow update: if isAuthenticated() && (
         request.auth.uid == resource.data.userId ||
         request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['viewedBy', 'likedBy', 'viewsCount', 'likesCount'])
+          .hasOnly(['viewedBy', 'likedBy', 'views', 'likes', 'shares', 'viewsCount', 'likesCount'])
       );
+      allow delete: if isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
 
-      // Only the story owner can delete
-      allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    // ===============================================================
+    // 8. User Chat Preferences Collection
+    // ===============================================================
+    match /user_chat_prefs/{prefId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // ===============================================================
+    // 9. Reports Collection
+    // ===============================================================
+    match /reports/{reportId} {
+      allow read: if false;
+      allow create: if isAuthenticated() && request.resource.data.reporterId == request.auth.uid;
+      allow update, delete: if false;
     }
   }
 }

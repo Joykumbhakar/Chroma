@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.chroma.studio.ui.components.LiquidGlassSecondaryButton
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.chroma.studio.R
@@ -66,19 +67,23 @@ fun StoryViewerScreen(
     storyViewModel: StoryViewModel,
     likedStoryIds: Set<String>,
     myStories: List<Story>,
+    currentUserProfile: UserProfile? = null,
     onClose: () -> Unit,
-    onAuthorClick: (String) -> Unit
+    onAuthorClick: (String) -> Unit,
+    onReplySend: ((authorId: String, text: String) -> Unit)? = null
 ) {
-    val allGroups = remember(storyGroups, myStories, currentUserId) {
+    val allGroups = remember(storyGroups, myStories, currentUserId, currentUserProfile, initialGroupIndex) {
         if (initialGroupIndex < 0 && myStories.isNotEmpty()) {
             listOf(
                 UserStoryGroup(
                     userId = currentUserId,
-                    userProfile = UserProfile(uid = currentUserId, displayName = "Your Story"),
+                    userProfile = currentUserProfile?.copy(
+                        displayName = currentUserProfile.displayName.ifBlank { "Your Story" }
+                    ) ?: UserProfile(uid = currentUserId, displayName = "Your Story"),
                     stories = myStories,
                     allSeen = true
                 )
-            ) + storyGroups
+            ) + storyGroups.filter { it.userId != currentUserId }
         } else {
             storyGroups
         }
@@ -665,6 +670,11 @@ fun StoryViewerScreen(
                                         if (quickReplyText.isNotBlank()) {
                                             IconButton(
                                                 onClick = {
+                                                    val reply = quickReplyText.trim()
+                                                    val authorId = currentStory?.userId ?: currentGroup?.userId ?: ""
+                                                    if (authorId.isNotBlank() && reply.isNotBlank()) {
+                                                        onReplySend?.invoke(authorId, reply)
+                                                    }
                                                     ToastManager.showToast("Reply sent!")
                                                     quickReplyText = ""
                                                 },
@@ -746,9 +756,11 @@ fun StoryViewerScreen(
                         }
                     },
                     dismissButton = {
-                        TextButton(onClick = { showDeleteConfirm = false }) {
-                            Text("Cancel")
-                        }
+                        LiquidGlassSecondaryButton(
+                            text = "Cancel",
+                            onClick = { showDeleteConfirm = false },
+                            isSmall = true
+                        )
                     },
                     shape = RoundedCornerShape(18.dp)
                 )

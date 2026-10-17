@@ -45,6 +45,14 @@ object ChatLocalCacheManager {
     }
 
     /**
+     * Instantly retrieves in-memory L1 cached messages for [roomId] (0ms synchronous).
+     * Returns null if not present in memory.
+     */
+    fun getMemoryCachedMessages(roomId: String): List<ChatMessage>? {
+        return memoryCache[roomId]
+    }
+
+    /**
      * Instantly retrieves pre-loaded messages for [roomId] from memory or local disk.
      * Guaranteed to never block the UI thread and returns within 1-2 milliseconds.
      */

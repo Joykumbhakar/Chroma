@@ -1,0 +1,60 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+
+    <!-- 1. Purple Gradient Circular Background Badge -->
+    <path
+        android:pathData="M 24,24 m -22,0 a 22,22 0 1,0 44,0 a 22,22 0 1,0 -44,0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="8"
+                android:startY="6"
+                android:endX="40"
+                android:endY="42">
+                <item android:offset="0.0" android:color="#8A2BE2" />
+                <item android:offset="0.5" android:color="#6E11E9" />
+                <item android:offset="1.0" android:color="#4A00E0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 2. Outer White Ring -->
+    <path
+        android:pathData="M 24,24 m -14,0 a 14,14 0 1,0 28,0 a 14,14 0 1,0 -28,0"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.2"
+        android:fillColor="#00000000" />
+
+    <!-- 3. Three Flowing Wave Strokes (Clipped inside sphere) -->
+    <group>
+        <clip-path android:pathData="M 24,24 m -13,0 a 13,13 0 1,0 26,0 a 13,13 0 1,0 -26,0" />
+        
+        <!-- Wave 1 (Upper Hemisphere) -->
+        <path
+            android:pathData="M 8,16 C 16,24 24,8 40,16"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="2.2"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+
+        <!-- Wave 2 (Center Equator Wave) -->
+        <path
+            android:pathData="M 8,24 C 16,32 24,16 40,24"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="2.2"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+
+        <!-- Wave 3 (Lower Hemisphere) -->
+        <path
+            android:pathData="M 8,32 C 16,40 24,24 40,32"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="2.2"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+    </group>
+</vector>

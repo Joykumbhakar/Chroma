@@ -1,3 +1,4 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package com.chroma.studio.chat.ui.components
 
 import androidx.compose.animation.*
@@ -38,6 +39,8 @@ import com.chroma.studio.R
 import com.chroma.studio.chat.data.drawableUri
 import com.chroma.studio.chat.sound.SoundManager
 import com.chroma.studio.chat.ui.theme.LocalChatColors
+import com.chroma.studio.ui.components.LiquidGlassPrimaryButton
+import com.chroma.studio.ui.components.LiquidGlassSecondaryButton
 
 /**
  * Data representation for custom styled Group Logos
@@ -88,8 +91,7 @@ val defaultGroupAvatarDrawables = listOf(
     drawableUri(R.drawable.ic_avatar_charcoal),
     drawableUri(R.drawable.ic_avatar_classic_mac),
     drawableUri(R.drawable.ic_avatar_space_gray),
-    drawableUri(R.drawable.ic_avatar_steel_grey),
-    drawableUri(R.drawable.profile_avatar_joy)
+    drawableUri(R.drawable.ic_avatar_steel_grey)
 )
 
 /**
@@ -124,33 +126,16 @@ fun GroupIconCreatorModal(
         )
     }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+    IosModalBottomSheet(
+        onDismissRequest = onDismiss
     ) {
-        Box(
+        Column(
             modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.55f))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) { onDismiss() },
-            contentAlignment = Alignment.Center
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth(0.92f)
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(colors.cardBg)
-                    .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(24.dp))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) {}
-                    .padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
                 // Header Row
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -520,41 +505,28 @@ fun GroupIconCreatorModal(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(if (colors.isLight) Color(0xFFE5E5EA) else Color(0xFF3A3A3C))
-                            .clickable { onDismiss() }
-                            .padding(vertical = 12.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("Cancel", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = colors.textDark)
-                    }
+                    LiquidGlassSecondaryButton(
+                        text = "Cancel",
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f)
+                    )
 
-                    Box(
-                        modifier = Modifier
-                            .weight(1.3f)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(colors.iosBlue)
-                            .clickable {
-                                val resultAvatar = when (selectedTab) {
-                                    "presets" -> selectedPresetAvatar
-                                    else -> selectedPresetAvatar // In addition to vector presets, maps smoothly
-                                }
-                                SoundManager.playSend()
-                                onApplyIcon(resultAvatar)
+                    LiquidGlassPrimaryButton(
+                        text = "Set Group Icon",
+                        onClick = {
+                            val resultAvatar = when (selectedTab) {
+                                "presets" -> selectedPresetAvatar
+                                else -> selectedPresetAvatar
                             }
-                            .padding(vertical = 12.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("Set Group Icon", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-                    }
+                            SoundManager.playSend()
+                            onApplyIcon(resultAvatar)
+                        },
+                        modifier = Modifier.weight(1.3f)
+                    )
                 }
             }
         }
     }
-}
 
 @Composable
 fun GroupVectorIconRenderer(

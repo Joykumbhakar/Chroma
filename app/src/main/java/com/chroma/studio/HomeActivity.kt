@@ -1038,11 +1038,14 @@ class HomeActivity : ComponentActivity() {
                                 userId = currentUser.uid,
                                 repository = vm.repository,
                                 chatViewModel = chatVm,
+                                storyViewModel = storyVm,
                                 showBackButton = false,
                                 onRequireLogin = { navController.navigate("login") },
                                 onNavigateToChat = { otherUserId -> 
                                     chatVm.startChat(otherUserId) { roomId -> 
-                                        navController.navigate("chat/$roomId") 
+                                        navController.navigate("chat/$roomId") {
+                                            launchSingleTop = true
+                                        } 
                                     } 
                                 },
                                 onNavigateToEditProfile = { navController.navigate("profile_identity") },
@@ -1603,16 +1606,20 @@ class HomeActivity : ComponentActivity() {
                     ) { backStackEntry ->
                         val userId = backStackEntry.arguments?.getString("userId") ?: return@composable
                         val postId = backStackEntry.arguments?.getString("postId")
+                        val storyVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.StoryViewModel>()
                         
                         com.chroma.studio.ui.screens.UserProfileScreen(
                             userId = userId,
                             initialPostId = postId,
                             repository = vm.repository,
                             chatViewModel = chatVm,
+                            storyViewModel = storyVm,
                             onRequireLogin = { navController.navigate("login") },
                             onNavigateToChat = { otherUserId -> 
                                 chatVm.startChat(otherUserId) { roomId -> 
-                                    navController.navigate("chat/$roomId") 
+                                    navController.navigate("chat/$roomId") {
+                                        launchSingleTop = true
+                                    } 
                                 } 
                             },
                             onNavigateToEditProfile = { navController.navigate("profile_identity") },

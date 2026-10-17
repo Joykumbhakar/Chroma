@@ -62,6 +62,7 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 import com.composables.icons.lucide.*
+import com.chroma.studio.chat.ui.components.VoiceRecorderCard
 
 /**
  * ============================================================================
@@ -821,7 +822,10 @@ private fun GlassHeader(
                         onDismissRequest = onDismissDropdown,
                         modifier = Modifier
                             .width(210.dp)
+                            .shadow(16.dp, RoundedCornerShape(24.dp), ambientColor = Color.Black.copy(alpha = 0.2f), spotColor = Color.Black.copy(alpha = 0.15f))
+                            .clip(RoundedCornerShape(24.dp))
                             .background(colors.appBg)
+                            .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(24.dp))
                     ) {
                         DropdownMenuItem(
                             text = { Text("Contact Info", color = colors.textDark, fontSize = 14.sp) },
@@ -1711,31 +1715,20 @@ private fun FooterComposer(
                 ),
                 exit = fadeOut(tween(220)) + scaleOut(targetScale = 0.25f)
             ) {
-                Box(
-                    modifier = Modifier
-                        .padding(vertical = 8.dp)
-                        .size(300.dp)
-                        .shadow(24.dp, RoundedCornerShape(48.dp))
-                        .clip(RoundedCornerShape(48.dp))
-                        .background(colors.appBg)
-                        .border(1.dp, colors.borderSubtle, RoundedCornerShape(48.dp))
-                        .clickable { onToggleVoiceRecording() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (useWebViewForVoiceOrb) {
-                        // Option B: Renders the standalone VoiceOrbComponent.html inside an Android WebView
-                        WebViewVoiceOrbComponent(
-                            isDark = colors.isDark,
-                            statusText = voiceStatusText,
-                            onCancelClick = onToggleVoiceRecording
-                        )
-                    } else {
-                        // Option A (Default): 100% Native Jetpack Compose Canvas Liquid Orb
-                        NativeLiquidVoiceOrb(
-                            statusText = voiceStatusText
-                        )
-                    }
-                }
+                VoiceRecorderCard(
+                    recordingDurationSec = 1,
+                    statusText = voiceStatusText,
+                    onCancel = onToggleVoiceRecording,
+                    onTranscribe = {
+                        onInputTextChange("Here is the latest update on the project.")
+                        onToggleVoiceRecording()
+                    },
+                    onSend = {
+                        onToggleVoiceRecording()
+                        onSendClick()
+                    },
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
             }
         }
     }

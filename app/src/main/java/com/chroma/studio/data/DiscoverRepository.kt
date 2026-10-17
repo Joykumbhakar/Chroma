@@ -466,6 +466,17 @@ class DiscoverRepository {
         awaitClose { listener.remove() }
     }
 
+    suspend fun getSuggestedCreators(limit: Long = 10): List<UserProfile> {
+        return try {
+            val currentUid = auth.currentUser?.uid
+            val snap = usersCollection.limit(limit).get().await()
+            snap.toObjects(UserProfile::class.java).filter { it.uid != currentUid && it.uid.isNotBlank() }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            emptyList()
+        }
+    }
+
     suspend fun searchUsers(query: String): List<UserProfile> {
         if (query.isBlank()) return emptyList()
         return try {

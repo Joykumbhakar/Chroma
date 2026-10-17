@@ -4,6 +4,7 @@ import com.chroma.studio.ui.components.ChromaHeaderActionButton
 import com.chroma.studio.ui.components.OscellionLoadingSpinner
 import com.chroma.studio.ui.components.GlassIconButton
 import com.chroma.studio.ui.components.GlassButton
+import com.chroma.studio.ui.components.LiquidGlassProgressBar
 
 import android.graphics.Bitmap
 import android.net.Uri
@@ -179,11 +180,10 @@ fun FlashPostScreen(
 
         // Upload progress bar
         if (isUploading) {
-            LinearProgressIndicator(
+            LiquidGlassProgressBar(
                 progress = uploadProgress,
-                modifier = Modifier.fillMaxWidth(),
-                color = Color(0xFF007AFF),
-                trackColor = Color.White.copy(alpha = 0.1f)
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                height = 6.dp
             )
             Text(
                 "Uploading… ${(uploadProgress * 100).toInt()}%",

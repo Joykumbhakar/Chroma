@@ -21,6 +21,7 @@ import dev.chrisbanes.haze.haze
 import dev.chrisbanes.haze.hazeChild
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.SolidColor
 import com.chroma.studio.ui.theme.OscellionPalette
 
 fun Modifier.glossyBorder(
@@ -338,14 +339,14 @@ fun GlassFloatingActionButton(
 
 val PrimaryButtonGradient = Brush.verticalGradient(
     listOf(
-        Color(0xFF4480FF), // 0%
-        Color(0xFF115DFC), // 50%
-        Color(0xFF0550ED)  // 100%
+        Color(0xFF4DA6FF), // 0%
+        Color(0xFF0A84FF), // 52%
+        Color(0xFF0051D5)  // 100%
     )
 )
 
 /**
- * Primary action button with vertical electric blue gradient (#4480FF -> #115DFC -> #0550ED)
+ * Primary action button with vertical electric blue gradient (#4DA6FF -> #0A84FF -> #0051D5)
  * and subtle upper ambient highlight shadow.
  */
 @Composable
@@ -391,18 +392,40 @@ fun PrimaryGradientButton(
 }
 
 enum class ChromaPillVariant {
-    Blue,      // Electric Blue (#4480FF -> #115DFC -> #0550ED)
+    Blue,      // Liquid Glass Primary Blue (#4DA6FF -> #0A84FF -> #0051D5)
+    Secondary, // Liquid Glass Secondary White / Specular (#FFFFFF -> #F4F7FB -> #DFE8F3)
     Purple,    // Creative Neon Violet (#A855F7 -> #7C3AED -> #581C87)
     Emerald,   // Success Mint Green (#34D399 -> #059669 -> #065F46)
     Amber,     // Radiant Orange/Gold (#FB923C -> #EA580C -> #9A3412)
     Rose,      // Vivid Crimson/Red (#FB7185 -> #E11D48 -> #881337)
     Cyan,      // Arctic Teal/Cyan (#38BDF8 -> #0284C7 -> #0C4A6E)
-    DarkGlass  // Frosted Dark Titanium (#374151 -> #1F2937 -> #111827)
+    DarkGlass  // Frosted Glass
 }
 
 object ChromaPillColors {
-    val BlueBorder = Brush.verticalGradient(listOf(Color(0xFF7CA4FF), Color(0xFF043CC7)))
-    val BlueBody = Brush.verticalGradient(listOf(Color(0xFF4480FF), Color(0xFF115DFC), Color(0xFF0550ED)))
+    val BlueBorder = Brush.verticalGradient(
+        listOf(
+            Color(0xFFFFFFFF).copy(alpha = 0.95f),
+            Color(0xFFBAE6FD).copy(alpha = 0.65f),
+            Color(0xFF0051D5).copy(alpha = 0.5f)
+        )
+    )
+    val BlueBody = Brush.verticalGradient(
+        listOf(
+            Color(0xFF4DA6FF),
+            Color(0xFF0A84FF),
+            Color(0xFF0051D5)
+        )
+    )
+
+    val SecondaryBorder = SolidColor(Color.Black)
+    val SecondaryBody = Brush.verticalGradient(
+        listOf(
+            Color(0xFFFFFFFF),
+            Color(0xFFF8F9FA),
+            Color(0xFFF1F3F5)
+        )
+    )
 
     val PurpleBorder = Brush.verticalGradient(listOf(Color(0xFFD8B4FE), Color(0xFF6B21A8)))
     val PurpleBody = Brush.verticalGradient(listOf(Color(0xFFA855F7), Color(0xFF7C3AED), Color(0xFF581C87)))
@@ -419,11 +442,23 @@ object ChromaPillColors {
     val CyanBorder = Brush.verticalGradient(listOf(Color(0xFF7DD3FC), Color(0xFF0369A1)))
     val CyanBody = Brush.verticalGradient(listOf(Color(0xFF38BDF8), Color(0xFF0284C7), Color(0xFF0C4A6E)))
 
-    val DarkGlassBorder = Brush.verticalGradient(listOf(Color(0xFF6B7280), Color(0xFF1F2937)))
-    val DarkGlassBody = Brush.verticalGradient(listOf(Color(0xFF374151), Color(0xFF1F2937), Color(0xFF111827)))
+    val DarkGlassBorder = Brush.verticalGradient(
+        listOf(
+            Color(0xFFFFFFFF).copy(alpha = 0.5f),
+            Color(0xFFDFE8F3).copy(alpha = 0.3f),
+            Color(0xFF64748B).copy(alpha = 0.2f)
+        )
+    )
+    val DarkGlassBody = Brush.verticalGradient(
+        listOf(
+            Color(0xFFFFFFFF).copy(alpha = 0.12f),
+            Color(0xFFFFFFFF).copy(alpha = 0.05f)
+        )
+    )
 
     fun getBorder(variant: ChromaPillVariant): Brush = when (variant) {
         ChromaPillVariant.Blue -> BlueBorder
+        ChromaPillVariant.Secondary -> SecondaryBorder
         ChromaPillVariant.Purple -> PurpleBorder
         ChromaPillVariant.Emerald -> EmeraldBorder
         ChromaPillVariant.Amber -> AmberBorder
@@ -434,6 +469,7 @@ object ChromaPillColors {
 
     fun getBody(variant: ChromaPillVariant): Brush = when (variant) {
         ChromaPillVariant.Blue -> BlueBody
+        ChromaPillVariant.Secondary -> SecondaryBody
         ChromaPillVariant.Purple -> PurpleBody
         ChromaPillVariant.Emerald -> EmeraldBody
         ChromaPillVariant.Amber -> AmberBody
@@ -469,12 +505,14 @@ fun ChromaPillButton(
     val activeBody = bodyBrush ?: ChromaPillColors.getBody(variant)
     val disabledBorder = Brush.verticalGradient(listOf(Color(0xFF8E8E93), Color(0xFF636366)))
     val disabledBody = Brush.verticalGradient(listOf(Color(0xFF636366), Color(0xFF48484A)))
+    val strokeWidth = if (variant == ChromaPillVariant.Secondary) 1.dp else 1.5.dp
+    val defaultContentColor = if (variant == ChromaPillVariant.Secondary) Color.Black else Color.White
 
     Box(
         modifier = modifier
             .clip(androidx.compose.foundation.shape.CircleShape)
             .background(if (enabled) activeBorder else disabledBorder)
-            .padding(1.5.dp)
+            .padding(strokeWidth)
             .clip(androidx.compose.foundation.shape.CircleShape)
             .background(if (enabled) activeBody else disabledBody)
             .clickable(enabled = enabled, onClick = onClick)
@@ -482,11 +520,15 @@ fun ChromaPillButton(
             .padding(contentPadding),
         contentAlignment = androidx.compose.ui.Alignment.Center
     ) {
-        androidx.compose.foundation.layout.Row(
-            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
-            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+        androidx.compose.runtime.CompositionLocalProvider(
+            androidx.compose.material3.LocalContentColor provides defaultContentColor
         ) {
-            content()
+            androidx.compose.foundation.layout.Row(
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+            ) {
+                content()
+            }
         }
     }
 }

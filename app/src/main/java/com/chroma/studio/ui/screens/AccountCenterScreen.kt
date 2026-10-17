@@ -58,7 +58,7 @@ fun AccountCenterScreen(
         isLoading = false
     }
 
-    val screenBg = if (isDark) Color(0xFF000000) else Color(0xFFF2F2F7)
+    val screenBg = if (isDark) Color(0xFF000000) else Color(0xFFF4F7FB)
 
     Scaffold(
         topBar = {
@@ -78,7 +78,7 @@ fun AccountCenterScreen(
                     .padding(padding),
                 contentAlignment = Alignment.Center
             ) {
-                OscellionLoadingSpinner(color = Color(0xFF007AFF))
+                OscellionLoadingSpinner(color = Color(0xFF0A84FF))
             }
         } else {
             LazyColumn(
@@ -125,7 +125,7 @@ fun AccountCenterScreen(
                         AppleSettingNavRow(
                             title = "Security & Access",
                             subtitle = "Password, logins, and recovery alerts",
-                            icon = Lucide.Shield,
+                            icon = Lucide.ShieldCheck,
                             onClick = { profile?.let { onNavigateToSecurity(it) } }
                         )
 

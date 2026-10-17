@@ -2,6 +2,7 @@ package com.chroma.studio.ui.screens
 import com.chroma.studio.ui.components.GlassIconButton
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -24,6 +25,12 @@ import com.composables.icons.lucide.Lucide
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.chroma.studio.ui.components.glossyBorder
+
+import com.chroma.studio.ui.components.ApplePhotosGraphic
+import com.chroma.studio.ui.components.AppleEmptyStateView
+import com.chroma.studio.ui.components.rememberAppleGraphicAnimationState
+import com.chroma.studio.ui.graphics3d.Apple3DGraphicId
+import com.chroma.studio.ui.graphics3d.Apple3DGraphicIcon
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,13 +55,21 @@ fun BackgroundsScreen(
         containerColor = colors.bg
     ) { padding ->
         if (backgroundWorks.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                Text(
-                    "No custom backgrounds found.\n\nCreate a new 'Full' shape work to set it as your home background.",
-                    color = colors.textMuted,
-                    textAlign = TextAlign.Center,
-                    fontSize = 15.sp,
-                    modifier = Modifier.padding(32.dp)
+            Box(
+                modifier = Modifier.fillMaxSize().padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
+                val photosState = rememberAppleGraphicAnimationState()
+                AppleEmptyStateView(
+                    graphic = {
+                        ApplePhotosGraphic(
+                            modifier = Modifier.size(160.dp),
+                            state = photosState,
+                            enableClickToAnimate = true
+                        )
+                    },
+                    title = "No Custom Backgrounds",
+                    subtitle = "Create a new 'Full' shape work in the studio to set it as your dynamic home background."
                 )
             }
         } else {
@@ -88,8 +103,8 @@ private fun BackgroundCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .glossyBorder(RoundedCornerShape(18.dp), colors)
+            .clip(RoundedCornerShape(22.dp))
+            .border(1.dp, colors.glassBorder, RoundedCornerShape(22.dp))
             .background(colors.glassBg)
             .clickable(onClick = onClick)
     ) {
@@ -97,7 +112,7 @@ private fun BackgroundCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(180.dp)
-                .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp))
+                .clip(RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp))
         ) {
             CanvasPreview(
                 layers = remember(work.layersJson) { repository.deserializeLayers(work.layersJson) },

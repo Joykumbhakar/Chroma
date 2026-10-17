@@ -35,6 +35,7 @@ import com.chroma.studio.chat.data.User
 import com.chroma.studio.chat.data.drawableUri
 import com.chroma.studio.chat.sound.SoundManager
 import com.chroma.studio.chat.ui.theme.LocalChatColors
+import com.chroma.studio.ui.components.AppleSwitch
 
 /**
  * Available Contact item for Group Creation selection.
@@ -65,67 +66,7 @@ val defaultGroupAvatarPresets = listOf(
     drawableUri(R.drawable.ic_avatar_burgundy_board),
     drawableUri(R.drawable.ic_avatar_midnight),
     drawableUri(R.drawable.ic_avatar_charcoal),
-    drawableUri(R.drawable.ic_avatar_classic_mac),
-    drawableUri(R.drawable.profile_avatar_joy)
-)
-
-val defaultAvailableContacts = listOf(
-    GroupContact(
-        id = "user_bholanath",
-        name = "Bholanath Kumbhakar",
-        role = "Hardware Specialist",
-        avatar = drawableUri(R.drawable.ic_avatar_corporate_navy),
-        status = "Online"
-    ),
-    GroupContact(
-        id = "user_sarah",
-        name = "Sarah Connor",
-        role = "Lead UX Designer",
-        avatar = drawableUri(R.drawable.ic_avatar_emerald_focus),
-        status = "Online"
-    ),
-    GroupContact(
-        id = "user_marcus",
-        name = "Marcus Vance",
-        role = "Backend Lead",
-        avatar = drawableUri(R.drawable.ic_avatar_gold_standard),
-        status = "Active 10m ago"
-    ),
-    GroupContact(
-        id = "user_elena",
-        name = "Elena Rostova",
-        role = "Product Manager",
-        avatar = drawableUri(R.drawable.ic_avatar_sapphire_night),
-        status = "Online"
-    ),
-    GroupContact(
-        id = "user_liam",
-        name = "Liam Chen",
-        role = "Security Engineer",
-        avatar = drawableUri(R.drawable.ic_avatar_royal_blue),
-        status = "Active 1h ago"
-    ),
-    GroupContact(
-        id = "user_jessica",
-        name = "Jessica Taylor",
-        role = "AI Architect",
-        avatar = drawableUri(R.drawable.ic_avatar_deep_purple),
-        status = "Online"
-    ),
-    GroupContact(
-        id = "user_david",
-        name = "David Miller",
-        role = "Mobile Engineer",
-        avatar = drawableUri(R.drawable.ic_avatar_ocean_depth),
-        status = "Active today"
-    ),
-    GroupContact(
-        id = "user_sophia",
-        name = "Sophia Martinez",
-        role = "QA Specialist",
-        avatar = drawableUri(R.drawable.ic_avatar_teal_pro),
-        status = "Online"
-    )
+    drawableUri(R.drawable.ic_avatar_classic_mac)
 )
 
 /**
@@ -136,8 +77,9 @@ val defaultAvailableContacts = listOf(
 @Composable
 fun CreateGroupModal(
     currentUser: User,
-    availableContacts: List<GroupContact> = defaultAvailableContacts,
+    availableContacts: List<GroupContact> = emptyList(),
     onDismiss: () -> Unit,
+    onDirectMessage: ((GroupContact) -> Unit)? = null,
     onCreateGroup: (groupName: String, groupAvatar: String, members: List<GroupMember>) -> Unit
 ) {
     val colors = LocalChatColors.current
@@ -151,11 +93,62 @@ fun CreateGroupModal(
     var disappearingMessagesEnabled by remember { mutableStateOf(false) }
     var onlyAdminsCanPost by remember { mutableStateOf(false) }
 
-    val filteredContacts = remember(searchQuery, availableContacts) {
-        if (searchQuery.isBlank()) availableContacts
-        else {
+    val discoverRepo = remember { com.chroma.studio.data.DiscoverRepository() }
+    var defaultSuggestedContacts by remember { mutableStateOf<List<GroupContact>>(emptyList()) }
+    var searchResults by remember { mutableStateOf<List<GroupContact>>(emptyList()) }
+    var isSearching by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        try {
+            val suggested = discoverRepo.getSuggestedCreators(limit = 40)
+            defaultSuggestedContacts = suggested.filter { it.uid != currentUser.id }.map { prof ->
+                GroupContact(
+                    id = prof.uid,
+                    name = prof.displayName.ifBlank { prof.username.ifBlank { "User" } },
+                    role = if (prof.bio.isNotBlank()) prof.bio else "@${prof.username}",
+                    avatar = prof.avatarUrl,
+                    status = if (prof.online) "Online" else "Active on Oscellion"
+                )
+            }
+        } catch (_: Exception) {}
+    }
+
+    LaunchedEffect(searchQuery) {
+        val q = searchQuery.trim()
+        if (q.isNotEmpty()) {
+            isSearching = true
+            try {
+                val found = discoverRepo.searchUsers(q)
+                searchResults = found.filter { it.uid != currentUser.id }.map { prof ->
+                    GroupContact(
+                        id = prof.uid,
+                        name = prof.displayName.ifBlank { prof.username.ifBlank { "User" } },
+                        role = if (prof.bio.isNotBlank()) prof.bio else "@${prof.username}",
+                        avatar = prof.avatarUrl,
+                        status = if (prof.online) "Online" else "Active on Oscellion"
+                    )
+                }
+            } catch (_: Exception) {}
+            isSearching = false
+        } else {
+            searchResults = emptyList()
+        }
+    }
+
+    val allBaseContacts = remember(availableContacts, defaultSuggestedContacts) {
+        (availableContacts + defaultSuggestedContacts).distinctBy { it.id }
+    }
+
+    val filteredContacts = remember(searchQuery, allBaseContacts, searchResults) {
+        if (searchQuery.isBlank()) allBaseContacts
+        else if (searchResults.isNotEmpty()) {
+            (searchResults + allBaseContacts.filter {
+                val q = searchQuery.trim().lowercase()
+                it.name.lowercase().contains(q) || it.role.lowercase().contains(q)
+            }).distinctBy { it.id }
+        } else {
             val q = searchQuery.trim().lowercase()
-            availableContacts.filter {
+            allBaseContacts.filter {
                 it.name.lowercase().contains(q) || it.role.lowercase().contains(q)
             }
         }
@@ -232,39 +225,62 @@ fun CreateGroupModal(
                         groupName.isNotBlank()
                     }
 
-                    Text(
-                        text = if (currentStep == GroupCreationStep.SELECT_PARTICIPANTS) "Next" else "Create",
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (isActionEnabled) colors.iosBlue else colors.textMuted.copy(alpha = 0.4f),
-                        modifier = Modifier
-                            .clickable(
-                                enabled = isActionEnabled,
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null
-                            ) {
-                                SoundManager.playReaction()
-                                if (currentStep == GroupCreationStep.SELECT_PARTICIPANTS) {
-                                    currentStep = GroupCreationStep.GROUP_DETAILS
-                                } else {
-                                    val groupMembers = listOf(
-                                        GroupMember(
-                                            name = "${currentUser.name} (You)",
-                                            role = "Group Admin",
-                                            avatar = currentUser.avatar
-                                        )
-                                    ) + selectedContacts.map {
-                                        GroupMember(
-                                            name = it.name,
-                                            role = it.role,
-                                            avatar = it.avatar
-                                        )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (currentStep == GroupCreationStep.SELECT_PARTICIPANTS && selectedContacts.size == 1 && onDirectMessage != null) {
+                            Text(
+                                text = "Direct Chat",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = colors.iosBlue,
+                                modifier = Modifier
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null
+                                    ) {
+                                        SoundManager.playReaction()
+                                        onDirectMessage.invoke(selectedContacts.first())
                                     }
-                                    onCreateGroup(groupName.trim(), selectedAvatar, groupMembers)
+                                    .padding(vertical = 4.dp, horizontal = 6.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                        }
+
+                        Text(
+                            text = if (currentStep == GroupCreationStep.SELECT_PARTICIPANTS) "Next" else "Create",
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (isActionEnabled) colors.iosBlue else colors.textMuted.copy(alpha = 0.4f),
+                            modifier = Modifier
+                                .clickable(
+                                    enabled = isActionEnabled,
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null
+                                ) {
+                                    SoundManager.playReaction()
+                                    if (currentStep == GroupCreationStep.SELECT_PARTICIPANTS) {
+                                        currentStep = GroupCreationStep.GROUP_DETAILS
+                                    } else {
+                                        val groupMembers = listOf(
+                                            GroupMember(
+                                                id = currentUser.id,
+                                                name = "${currentUser.name} (You)",
+                                                role = "Group Admin",
+                                                avatar = currentUser.avatar
+                                            )
+                                        ) + selectedContacts.map {
+                                            GroupMember(
+                                                id = it.id,
+                                                name = it.name,
+                                                role = it.role,
+                                                avatar = it.avatar
+                                            )
+                                        }
+                                        onCreateGroup(groupName.trim(), selectedAvatar, groupMembers)
+                                    }
                                 }
-                            }
-                            .padding(vertical = 4.dp)
-                    )
+                                .padding(vertical = 4.dp)
+                        )
+                    }
                 }
 
                 HorizontalDivider(color = colors.separator, thickness = 0.5.dp)
@@ -296,7 +312,8 @@ fun CreateGroupModal(
                                     } else {
                                         selectedContacts.add(contact)
                                     }
-                                }
+                                },
+                                onDirectMessage = onDirectMessage
                             )
                         }
 
@@ -333,7 +350,8 @@ private fun StepSelectParticipants(
     onSearchQueryChanged: (String) -> Unit,
     selectedContacts: List<GroupContact>,
     filteredContacts: List<GroupContact>,
-    onToggleContact: (GroupContact) -> Unit
+    onToggleContact: (GroupContact) -> Unit,
+    onDirectMessage: ((GroupContact) -> Unit)? = null
 ) {
     val colors = LocalChatColors.current
 
@@ -507,11 +525,32 @@ private fun StepSelectParticipants(
                     )
                 }
 
-                Text(
-                    text = contact.status,
-                    fontSize = 12.5.sp,
-                    color = if (contact.status == "Online") colors.success else colors.textMuted
-                )
+                if (onDirectMessage != null) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(colors.iosBlue.copy(alpha = 0.12f))
+                            .clickable {
+                                SoundManager.playReaction()
+                                onDirectMessage(contact)
+                            }
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Chat",
+                            color = colors.iosBlue,
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                } else {
+                    Text(
+                        text = contact.status,
+                        fontSize = 12.5.sp,
+                        color = if (contact.status == "Online") colors.success else colors.textMuted
+                    )
+                }
             }
 
             HorizontalDivider(
@@ -736,15 +775,9 @@ private fun StepGroupDetails(
                             color = colors.textMuted
                         )
                     }
-                    Switch(
+                    AppleSwitch(
                         checked = disappearingMessagesEnabled,
-                        onCheckedChange = { onToggleDisappearingMessages() },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = colors.iosBlue,
-                            uncheckedThumbColor = Color.White,
-                            uncheckedTrackColor = colors.surfaceTertiary
-                        )
+                        onCheckedChange = { onToggleDisappearingMessages() }
                     )
                 }
 
@@ -772,15 +805,9 @@ private fun StepGroupDetails(
                             color = colors.textMuted
                         )
                     }
-                    Switch(
+                    AppleSwitch(
                         checked = onlyAdminsCanPost,
-                        onCheckedChange = { onToggleOnlyAdminsCanPost() },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = colors.iosBlue,
-                            uncheckedThumbColor = Color.White,
-                            uncheckedTrackColor = colors.surfaceTertiary
-                        )
+                        onCheckedChange = { onToggleOnlyAdminsCanPost() }
                     )
                 }
             }

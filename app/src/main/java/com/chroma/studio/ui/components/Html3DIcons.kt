@@ -416,8 +416,7 @@ object ThreeDIconHtml {
                         <circle cx="19" cy="15" r="0.8" fill="#FDE047" class="sparkle-blink" style="animation-delay: 1.2s;" />
                         <circle cx="17" cy="5" r="0.4" fill="#38BDF8" class="sparkle-blink" style="animation-delay: 0.7s;" />
                         <circle cx="8" cy="19" r="0.7" fill="#38BDF8" class="sparkle-blink" style="animation-delay: 2.1s;" />
-                        <!-- Tiny starburst lines -->
-                        <path d="M 4.5 7 L 5.5 9 M 4.5 9 L 5.5 7" stroke="#FDE047" stroke-width="0.2" class="sparkle-blink" style="animation-delay: 0.1s;" opacity="0.6" />
+                        <circle cx="5" cy="8" r="0.4" fill="#FDE047" class="sparkle-blink" style="animation-delay: 0.1s;" opacity="0.6" />
                     </g>
                 </g>
             </svg>

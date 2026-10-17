@@ -1,3 +1,4 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package com.chroma.studio.chat.ui.components
 import com.chroma.studio.R
 
@@ -8,6 +9,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.*
+import com.chroma.studio.ui.components.AppleSwitch
 import kotlinx.coroutines.launch
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -32,8 +34,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.Icons
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -87,29 +87,11 @@ fun IosCoverBannerPickerModal(
     val colors = LocalChatColors.current
     var selectedBanner by remember { mutableStateOf(currentBanner) }
     val bannerPresets = remember {
-        listOf(
-            CoverBannerPreset("Midnight Glow", com.chroma.studio.R.drawable.banner_wave_banner_midnight_glow, "Vibrant Waves"),
-            CoverBannerPreset("Coral Sunset", com.chroma.studio.R.drawable.banner_wave_banner_coral_sunset, "Vibrant Waves"),
-            CoverBannerPreset("Electric Blue", com.chroma.studio.R.drawable.banner_wave_banner_electric_blue, "Vibrant Waves"),
-            CoverBannerPreset("Ocean Cyan", com.chroma.studio.R.drawable.banner_wave_banner_ocean_cyan, "Vibrant Waves"),
-            CoverBannerPreset("Emerald Green", com.chroma.studio.R.drawable.banner_wave_banner_emerald_green, "Vibrant Waves"),
-            CoverBannerPreset("Sunset Orange", com.chroma.studio.R.drawable.banner_wave_banner_sunset_orange, "Vibrant Waves"),
-            CoverBannerPreset("Ruby Red", com.chroma.studio.R.drawable.banner_wave_banner_ruby_red, "Vibrant Waves"),
-            CoverBannerPreset("Berry Purple", com.chroma.studio.R.drawable.banner_wave_banner_berry_purple, "Vibrant Waves"),
-            CoverBannerPreset("Cupertino Mesh", com.chroma.studio.R.drawable.banner_cupertino_mesh, "Geometric & Mesh"),
-            CoverBannerPreset("Dark Titanium", com.chroma.studio.R.drawable.banner_dark_titanium, "Geometric & Mesh"),
-            CoverBannerPreset("Cyber Circuit", com.chroma.studio.R.drawable.banner_cyber_circuit, "Geometric & Mesh"),
-            CoverBannerPreset("Minimalist Geometry", com.chroma.studio.R.drawable.banner_minimalist_geometry, "Geometric & Mesh"),
-            CoverBannerPreset("Abstract Waves", com.chroma.studio.R.drawable.banner_abstract_waves, "Geometric & Mesh")
-        )
+        com.chroma.studio.ui.components.AllBannerPresets.map {
+            CoverBannerPreset(it.name, it.drawableRes, "Waves")
+        }
     }
-    var selectedCategory by remember { mutableStateOf("All") }
-    val categories = listOf("All", "Vibrant Waves", "Geometric & Mesh")
-
-    val displayedBanners = remember(selectedCategory) {
-        if (selectedCategory == "All") bannerPresets
-        else bannerPresets.filter { it.category == selectedCategory }
-    }
+    val displayedBanners = bannerPresets
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -157,7 +139,7 @@ fun IosCoverBannerPickerModal(
                                 color = colors.textDark
                             )
                             Text(
-                                text = "Choose a cover style for your group",
+                                text = "Choose a wave style for your group",
                                 fontSize = 12.5.sp,
                                 color = colors.textMuted
                             )
@@ -171,39 +153,6 @@ fun IosCoverBannerPickerModal(
                             contentAlignment = Alignment.Center
                         ) {
                             PhosphorCloseX(tint = colors.textMuted, size = 12.dp)
-                        }
-                    }
-
-                    // Category Pill Tabs
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(colors.surfaceSecondary)
-                            .padding(3.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        categories.forEach { cat ->
-                            val isSel = selectedCategory == cat
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(if (isSel) colors.cardBg else Color.Transparent)
-                                    .clickable {
-                                        SoundManager.playReaction()
-                                        selectedCategory = cat
-                                    }
-                                    .padding(vertical = 6.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = cat,
-                                    fontSize = 12.sp,
-                                    fontWeight = if (isSel) FontWeight.SemiBold else FontWeight.Normal,
-                                    color = if (isSel) colors.textDark else colors.textMuted
-                                )
-                            }
                         }
                     }
 
@@ -602,811 +551,67 @@ fun ContactInfoDrawer(
                     Spacer(Modifier.height(18.dp))
 
                     // Action Buttons Row (audio, video, search, mute/mail)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        // Audio Call Action
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(colors.cardBg)
-                                .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(14.dp))
-                                .clickable { onAudioCall() }
-                                .padding(vertical = 10.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            LucidePhone(tint = colors.iosBlue, size = 20.dp)
-                            Text("audio", fontSize = 11.5.sp, fontWeight = FontWeight.Medium, color = colors.iosBlue)
-                        }
-
-                        // Video Call Action
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(colors.cardBg)
-                                .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(14.dp))
-                                .clickable { onVideoCall() }
-                                .padding(vertical = 10.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            LucideVideo(tint = colors.iosBlue, size = 20.dp)
-                            Text("video", fontSize = 11.5.sp, fontWeight = FontWeight.Medium, color = colors.iosBlue)
-                        }
-
-                        // Search Messages Action
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(colors.cardBg)
-                                .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(14.dp))
-                                .clickable { onSearchMessages() }
-                                .padding(vertical = 10.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            LucideSearch(tint = colors.iosBlue, size = 20.dp)
-                            Text("search", fontSize = 11.5.sp, fontWeight = FontWeight.Medium, color = colors.iosBlue)
-                        }
-
-                        // 4th Action: Mute for Group, Mail for direct contact
-                        if (isGroup) {
-                            Column(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(colors.cardBg)
-                                    .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(14.dp))
-                                    .clickable { onMuteNotifications() }
-                                    .padding(vertical = 10.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                if (chat.isMuted) {
-                                    LucideBellOff(tint = colors.iosBlue, size = 20.dp)
-                                    Text("unmute", fontSize = 11.5.sp, fontWeight = FontWeight.Medium, color = colors.iosBlue)
-                                } else {
-                                    LucideBell(tint = colors.iosBlue, size = 20.dp)
-                                    Text("mute", fontSize = 11.5.sp, fontWeight = FontWeight.Medium, color = colors.iosBlue)
-                                }
-                            }
-                        } else {
-                            Column(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(colors.cardBg)
-                                    .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(14.dp))
-                                    .clickable { onMailClick() }
-                                    .padding(vertical = 10.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                LucideMail(tint = colors.iosBlue, size = 20.dp)
-                                Text("mail", fontSize = 11.5.sp, fontWeight = FontWeight.Medium, color = colors.iosBlue)
-                            }
-                        }
-                    }
+                    ContactInfoActionsRow(
+                        chat = chat,
+                        isGroup = isGroup,
+                        onAudioCall = onAudioCall,
+                        onVideoCall = onVideoCall,
+                        onSearchMessages = onSearchMessages,
+                        onMuteNotifications = onMuteNotifications,
+                        onMailClick = onMailClick
+                    )
 
                     Spacer(Modifier.height(16.dp))
 
                     // ── Details Card: Group Info vs User Contact Info ────────
                     if (isGroup) {
-                        // Group Details Card
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(colors.cardBg)
-                                .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
-                        ) {
-                            // Description Row (Clickable to Edit)
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        SoundManager.playReaction()
-                                        isEditingBio = true
-                                    }
-                                    .padding(horizontal = 16.dp, vertical = 11.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.Top
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text("description", fontSize = 12.5.sp, color = colors.textDark, fontWeight = FontWeight.Medium)
-                                    Spacer(Modifier.height(3.dp))
-                                    Text(
-                                        text = if (chat.bio.isNotBlank()) chat.bio else "Team chat for project planning, design feedback, and team sync.",
-                                        fontSize = 15.sp,
-                                        color = colors.textDark,
-                                        lineHeight = 20.sp,
-                                        fontWeight = FontWeight.Normal
-                                    )
-                                }
-                                LucideEdit(tint = colors.iosBlue, size = 15.dp, modifier = Modifier.padding(top = 4.dp, start = 8.dp))
-                            }
-
-                            HorizontalDivider(color = colors.borderSubtle, thickness = 0.5.dp)
-
-                            // Group Permissions & Settings Row
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        SoundManager.playReaction()
-                                        isPermissionsModalOpen = true
-                                    }
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(28.dp)
-                                            .clip(CircleShape)
-                                            .background(colors.iosBlueSubtle),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        LucideLock(tint = colors.iosBlue, size = 15.dp)
-                                    }
-                                    Column {
-                                        Text("Group Permissions", fontSize = 15.sp, color = colors.textDark, fontWeight = FontWeight.Medium)
-                                        Text("Send messages, edit info, add members", fontSize = 12.sp, color = colors.textMuted)
-                                    }
-                                }
-                                LucideChevronRight(tint = colors.textMuted, size = 18.dp)
-                            }
-
-                            HorizontalDivider(color = colors.borderSubtle, thickness = 0.5.dp)
-
-                            // Group Invite Link Row
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { onShareProfile() }
-                                    .padding(horizontal = 16.dp, vertical = 11.dp)
-                            ) {
-                                Text("invite link", fontSize = 12.5.sp, color = colors.textDark, fontWeight = FontWeight.Medium)
-                                Spacer(Modifier.height(3.dp))
-                                Text(
-                                    text = "https://oscellion.chat/join/${chat.id}",
-                                    fontSize = 15.sp,
-                                    color = colors.iosBlue,
-                                    fontWeight = FontWeight.Normal
-                                )
-                            }
-
-                            HorizontalDivider(color = colors.borderSubtle, thickness = 0.5.dp)
-
-                            // Created Info Row
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 11.dp)
-                            ) {
-                                Text("created", fontSize = 12.5.sp, color = colors.textDark, fontWeight = FontWeight.Medium)
-                                Spacer(Modifier.height(3.dp))
-                                Text(
-                                    text = "Created by Alex Rivera • ${chat.members?.size ?: 0} members",
-                                    fontSize = 14.sp,
-                                    color = colors.textMuted,
-                                    fontWeight = FontWeight.Normal
-                                )
-                            }
-                        }
+                        ContactInfoGroupDetailsCard(
+                            chat = chat,
+                            onEditBio = { isEditingBio = true },
+                            onOpenPermissions = { isPermissionsModalOpen = true },
+                            onShareProfile = onShareProfile
+                        )
 
                         Spacer(Modifier.height(16.dp))
 
                         // ── Group Members Section ───────────────────────────
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp)
-                        ) {
-                            Text(
-                                text = "MEMBERS (${chat.members?.size ?: 0})",
-                                fontSize = 12.5.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = colors.textMuted,
-                                letterSpacing = 0.5.sp,
-                                modifier = Modifier.padding(start = 4.dp, bottom = 6.dp)
-                            )
-
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(colors.cardBg)
-                                    .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
-                            ) {
-                                // Add Participants Action Row
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            SoundManager.playReaction()
-                                            if (onAddParticipants != null) {
-                                                onAddParticipants()
-                                            } else {
-                                                isAddMemberModalOpen = true
-                                            }
-                                        }
-                                        .padding(horizontal = 14.dp, vertical = 11.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(36.dp)
-                                            .background(colors.iosBlueSubtle, CircleShape),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text("+", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = colors.iosBlue)
-                                    }
-                                    Text(
-                                        text = "Add Participants...",
-                                        fontSize = 15.5.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = colors.iosBlue
-                                    )
-                                }
-
-                                if (chat.members != null && chat.members.isNotEmpty()) {
-                                    HorizontalDivider(
-                                        color = colors.separator,
-                                        thickness = 0.5.dp,
-                                        modifier = Modifier.padding(start = 62.dp)
-                                    )
-
-                                    chat.members.forEachIndexed { index, member ->
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clickable {
-                                                    SoundManager.playReaction()
-                                                    selectedMemberForAction = member
-                                                }
-                                                .padding(horizontal = 14.dp, vertical = 10.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                        ) {
-                                            AsyncImage(
-                                                model = member.avatar,
-                                                contentDescription = member.name,
-                                                modifier = Modifier
-                                                    .size(38.dp)
-                                                    .clip(CircleShape)
-                                                    .border(0.5.dp, colors.borderSubtle, CircleShape),
-                                                contentScale = ContentScale.Crop
-                                            )
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Text(
-                                                    text = member.name,
-                                                    fontSize = 15.sp,
-                                                    fontWeight = FontWeight.SemiBold,
-                                                    color = colors.textDark
-                                                )
-                                                Text(
-                                                    text = member.role,
-                                                    fontSize = 12.5.sp,
-                                                    color = colors.textMuted
-                                                )
-                                            }
-
-                                            if (member.role.contains("Admin", ignoreCase = true) || member.role.contains("Owner", ignoreCase = true)) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .clip(RoundedCornerShape(6.dp))
-                                                        .background(colors.iosBlueSubtle)
-                                                        .padding(horizontal = 7.dp, vertical = 2.5.dp)
-                                                ) {
-                                                    Text(
-                                                        text = if (member.role.contains("Owner", ignoreCase = true)) "Owner" else "Admin",
-                                                        fontSize = 11.sp,
-                                                        fontWeight = FontWeight.SemiBold,
-                                                        color = colors.iosBlue
-                                                    )
-                                                }
-                                            }
-
-                                            LucideChevronRight(tint = colors.textMuted.copy(alpha = 0.6f), size = 16.dp)
-                                        }
-
-                                        if (index < chat.members.size - 1) {
-                                            HorizontalDivider(
-                                                color = colors.separator,
-                                                thickness = 0.5.dp,
-                                                modifier = Modifier.padding(start = 64.dp)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        ContactInfoMembersSection(
+                            chat = chat,
+                            onAddParticipants = onAddParticipants,
+                            onOpenAddMemberModal = { isAddMemberModalOpen = true },
+                            onSelectMember = { selectedMemberForAction = it }
+                        )
 
                         Spacer(Modifier.height(16.dp))
                     } else {
-                        val context = LocalContext.current
-                        val clipboardManager = LocalClipboardManager.current
-                        val usernameText = "@${chat.name.lowercase().replace(Regex("[^a-zA-Z0-9]"), ".")}"
-
-                        // User Profile Details Card (Username & Phone)
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(colors.cardBg)
-                                .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
-                        ) {
-                            // Username Row (Tap to copy)
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        clipboardManager.setText(AnnotatedString(usernameText))
-                                        Toast.makeText(context, "Username copied", Toast.LENGTH_SHORT).show()
-                                        SoundManager.playReaction()
-                                    }
-                                    .padding(horizontal = 16.dp, vertical = 11.dp)
-                            ) {
-                                Text("username", fontSize = 12.5.sp, color = colors.textMuted, fontWeight = FontWeight.Normal)
-                                Spacer(Modifier.height(3.dp))
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(
-                                        text = usernameText,
-                                        fontSize = 16.sp,
-                                        color = colors.iosBlue,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                    Icon(
-                                        imageVector = Lucide.Copy,
-                                        contentDescription = "Copy Username",
-                                        tint = colors.textMuted.copy(alpha = 0.6f),
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                }
-                            }
-
-                            HorizontalDivider(color = colors.borderSubtle, thickness = 0.5.dp)
-
-                            // Phone Row (Tap to copy)
-                            val displayPhone = if (chat.phone.isNotBlank()) chat.phone else "Not provided"
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable(enabled = chat.phone.isNotBlank()) {
-                                        clipboardManager.setText(AnnotatedString(chat.phone))
-                                        Toast.makeText(context, "Phone number copied", Toast.LENGTH_SHORT).show()
-                                        SoundManager.playReaction()
-                                    }
-                                    .padding(horizontal = 16.dp, vertical = 11.dp)
-                            ) {
-                                Text("phone", fontSize = 12.5.sp, color = colors.textMuted, fontWeight = FontWeight.Normal)
-                                Spacer(Modifier.height(3.dp))
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(
-                                        text = displayPhone,
-                                        fontSize = 16.sp,
-                                        color = if (chat.phone.isNotBlank()) colors.textDark else colors.textMuted,
-                                        fontWeight = FontWeight.Normal
-                                    )
-                                    if (chat.phone.isNotBlank()) {
-                                        Icon(
-                                            imageVector = Lucide.Copy,
-                                            contentDescription = "Copy Phone",
-                                            tint = colors.textMuted.copy(alpha = 0.6f),
-                                            modifier = Modifier.size(15.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(Modifier.height(16.dp))
-
-                        // Bio Card for User (Tap to copy)
-                        val displayBio = if (chat.bio.isNotBlank()) chat.bio else "No bio provided"
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(colors.cardBg)
-                                .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
-                                .clickable(enabled = chat.bio.isNotBlank()) {
-                                    clipboardManager.setText(AnnotatedString(chat.bio))
-                                    Toast.makeText(context, "Bio copied", Toast.LENGTH_SHORT).show()
-                                    SoundManager.playReaction()
-                                }
-                                .padding(16.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text("bio", fontSize = 12.5.sp, color = colors.textMuted, fontWeight = FontWeight.Normal)
-                                if (chat.bio.isNotBlank()) {
-                                    Icon(
-                                        imageVector = Lucide.Copy,
-                                        contentDescription = "Copy Bio",
-                                        tint = colors.textMuted.copy(alpha = 0.6f),
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                }
-                            }
-                            Spacer(Modifier.height(5.dp))
-                            Text(
-                                text = displayBio,
-                                fontSize = 15.5.sp,
-                                color = if (chat.bio.isNotBlank()) colors.textDark else colors.textMuted,
-                                lineHeight = 21.sp,
-                                fontWeight = FontWeight.Normal
-                            )
-                        }
+                        ContactInfoUserBioCard(chat = chat)
 
                         Spacer(Modifier.height(16.dp))
                     }
 
                     // ── Shared Content Section (Media, Links, Docs) ─────────
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp)
-                    ) {
-                        // Section Header with See All
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 8.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "MEDIA, LINKS & DOCS",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = colors.textMuted
-                            )
-                            Row(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .clickable {
-                                        SoundManager.playReaction()
-                                        fullGalleryInitialTab = mediaTab
-                                        isFullGalleryOpen = true
-                                    }
-                                    .padding(horizontal = 4.dp, vertical = 2.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(2.dp)
-                            ) {
-                                Text(
-                                    text = "See All",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = colors.iosBlue
-                                )
-                                LucideChevronRight(tint = colors.iosBlue, size = 14.dp)
-                            }
+                    ContactInfoSharedContentSection(
+                        chat = chat,
+                        onSeeAll = { tabIdx ->
+                            fullGalleryInitialTab = tabIdx
+                            isFullGalleryOpen = true
                         }
-
-                        // Section Segmented Selector
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(colors.surfaceSecondary)
-                                .padding(3.dp),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            listOf("Media", "Links", "Docs").forEachIndexed { tabIdx, tabTitle ->
-                                val isSelected = mediaTab == tabIdx
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(if (isSelected) colors.cardBg else Color.Transparent)
-                                        .clickable {
-                                            SoundManager.playReaction()
-                                            mediaTab = tabIdx
-                                        }
-                                        .padding(vertical = 6.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = tabTitle,
-                                        fontSize = 13.sp,
-                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                        color = if (isSelected) colors.textDark else colors.textMuted
-                                    )
-                                }
-                            }
-                        }
-
-                        Spacer(Modifier.height(8.dp))
-
-                        when (mediaTab) {
-                            0 -> {
-                                // Media Images Grid
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(16.dp))
-                                        .background(colors.cardBg)
-                                        .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
-                                        .padding(12.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    val mediaList = listOf(
-                                        "https://images.unsplash.com/photo-1558002038-1055907df827?q=80&w=300&auto=format&fit=crop",
-                                        "https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=300&auto=format&fit=crop",
-                                        "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?q=80&w=300&auto=format&fit=crop"
-                                    )
-                                    mediaList.forEach { url ->
-                                        AsyncImage(
-                                            model = url,
-                                            contentDescription = "Shared Media",
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .aspectRatio(1f)
-                                                .clip(RoundedCornerShape(10.dp))
-                                                .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(10.dp))
-                                                .clickable {
-                                                    SoundManager.playReaction()
-                                                    fullGalleryInitialTab = 0
-                                                    isFullGalleryOpen = true
-                                                },
-                                            contentScale = ContentScale.Crop
-                                        )
-                                    }
-                                }
-                            }
-                            1 -> {
-                                // Shared Links
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(16.dp))
-                                        .background(colors.cardBg)
-                                        .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable {
-                                                SoundManager.playReaction()
-                                                fullGalleryInitialTab = 2
-                                                isFullGalleryOpen = true
-                                            }
-                                            .padding(horizontal = 14.dp, vertical = 11.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(34.dp)
-                                                .background(colors.iosBlueSubtle, RoundedCornerShape(8.dp)),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            LucideSearch(tint = colors.iosBlue, size = 16.dp)
-                                        }
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = "https://figma.com/file/OscellionDesignSystem",
-                                                fontSize = 14.sp,
-                                                fontWeight = FontWeight.Medium,
-                                                color = colors.iosBlue,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                            Text("Figma design tokens & screen specifications", fontSize = 12.sp, color = colors.textMuted)
-                                        }
-                                    }
-                                }
-                            }
-                            2 -> {
-                                // Shared Documents
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(16.dp))
-                                        .background(colors.cardBg)
-                                        .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable {
-                                                SoundManager.playReaction()
-                                                fullGalleryInitialTab = 1
-                                                isFullGalleryOpen = true
-                                            }
-                                            .padding(horizontal = 14.dp, vertical = 11.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(34.dp)
-                                                .background(Color(0xFFFF3B30).copy(alpha = 0.12f), RoundedCornerShape(8.dp)),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text("PDF", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFF3B30))
-                                        }
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = "Product_Roadmap_Q4.pdf",
-                                                fontSize = 14.sp,
-                                                fontWeight = FontWeight.Medium,
-                                                color = colors.textDark
-                                            )
-                                            Text("2.4 MB • Shared yesterday", fontSize = 12.sp, color = colors.textMuted)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    )
 
                     Spacer(Modifier.height(16.dp))
 
                     // ── Action Groups & Danger Options ──────────────────────
-                    if (isGroup) {
-                        // Group Action Group
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(colors.cardBg)
-                                .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { onShareProfile() }
-                                    .padding(horizontal = 16.dp, vertical = 13.dp)
-                            ) {
-                                Text("Share Group Link", fontSize = 16.5.sp, color = colors.iosBlue, fontWeight = FontWeight.Normal)
-                            }
-                            HorizontalDivider(color = colors.borderSubtle, thickness = 0.5.dp)
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { onMuteNotifications() }
-                                    .padding(horizontal = 16.dp, vertical = 13.dp)
-                            ) {
-                                Text(
-                                    text = if (chat.isMuted) "Unmute Group" else "Mute Group Notifications",
-                                    fontSize = 16.5.sp,
-                                    color = colors.iosBlue,
-                                    fontWeight = FontWeight.Normal
-                                )
-                            }
-                        }
-
-                        Spacer(Modifier.height(14.dp))
-
-                        // Group Danger Zone: Leave Group
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(colors.cardBg)
-                                .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        SoundManager.playReaction()
-                                        isLeaveGroupSheetOpen = true
-                                    }
-                                    .padding(horizontal = 16.dp, vertical = 13.dp)
-                            ) {
-                                Text(
-                                    text = "Leave Group",
-                                    fontSize = 16.5.sp,
-                                    color = Color(0xFFFF3B30),
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                        }
-                    } else {
-                        // User Profile Actions
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(colors.cardBg)
-                                .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { onSendMessage() }
-                                    .padding(horizontal = 16.dp, vertical = 13.dp)
-                            ) {
-                                Text("Send Message", fontSize = 16.5.sp, color = colors.iosBlue, fontWeight = FontWeight.Normal)
-                            }
-                            HorizontalDivider(color = colors.borderSubtle, thickness = 0.5.dp)
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { onShareProfile() }
-                                    .padding(horizontal = 16.dp, vertical = 13.dp)
-                            ) {
-                                Text("Share Contact", fontSize = 16.5.sp, color = colors.iosBlue, fontWeight = FontWeight.Normal)
-                            }
-                            HorizontalDivider(color = colors.borderSubtle, thickness = 0.5.dp)
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { onAddToFavorites() }
-                                    .padding(horizontal = 16.dp, vertical = 13.dp)
-                            ) {
-                                Text("Add to Favorites", fontSize = 16.5.sp, color = colors.iosBlue, fontWeight = FontWeight.Normal)
-                            }
-                        }
-
-                        Spacer(Modifier.height(14.dp))
-
-                        // User Danger Options
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(colors.cardBg)
-                                .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { onReportUser() }
-                                    .padding(horizontal = 16.dp, vertical = 13.dp)
-                            ) {
-                                Text("Report Contact", fontSize = 16.5.sp, color = Color(0xFFFF3B30), fontWeight = FontWeight.Normal)
-                            }
-                            HorizontalDivider(color = colors.borderSubtle, thickness = 0.5.dp)
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { onBlockUser() }
-                                    .padding(horizontal = 16.dp, vertical = 13.dp)
-                            ) {
-                                Text(
-                                    text = if (chat.isBlocked) "Unblock this Contact" else "Block this Contact",
-                                    fontSize = 16.5.sp,
-                                    color = Color(0xFFFF3B30),
-                                    fontWeight = FontWeight.Normal
-                                )
-                            }
-                        }
-                    }
+                    ContactInfoActionsAndDangerGroup(
+                        chat = chat,
+                        isGroup = isGroup,
+                        onShareProfile = onShareProfile,
+                        onMuteNotifications = onMuteNotifications,
+                        onSendMessage = onSendMessage,
+                        onAddToFavorites = onAddToFavorites,
+                        onReportUser = onReportUser,
+                        onBlockUser = onBlockUser,
+                        onOpenLeaveGroup = { isLeaveGroupSheetOpen = true }
+                    )
 
                     Spacer(Modifier.height(32.dp))
                 }
@@ -1607,6 +812,893 @@ fun ContactInfoDrawer(
         }
     }
 }
+
+// ── Contact Info Child Components (Method-Size Partitioning) ──────────────────
+
+@Composable
+private fun ContactInfoActionsRow(
+    chat: ChatConversation,
+    isGroup: Boolean,
+    onAudioCall: () -> Unit,
+    onVideoCall: () -> Unit,
+    onSearchMessages: () -> Unit,
+    onMuteNotifications: () -> Unit,
+    onMailClick: () -> Unit
+) {
+    val colors = LocalChatColors.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .clip(RoundedCornerShape(14.dp))
+                .background(colors.cardBg)
+                .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(14.dp))
+                .clickable { onAudioCall() }
+                .padding(vertical = 10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            LucidePhone(tint = colors.iosBlue, size = 20.dp)
+            Text("audio", fontSize = 11.5.sp, fontWeight = FontWeight.Medium, color = colors.iosBlue)
+        }
+
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .clip(RoundedCornerShape(14.dp))
+                .background(colors.cardBg)
+                .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(14.dp))
+                .clickable { onVideoCall() }
+                .padding(vertical = 10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            LucideVideo(tint = colors.iosBlue, size = 20.dp)
+            Text("video", fontSize = 11.5.sp, fontWeight = FontWeight.Medium, color = colors.iosBlue)
+        }
+
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .clip(RoundedCornerShape(14.dp))
+                .background(colors.cardBg)
+                .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(14.dp))
+                .clickable { onSearchMessages() }
+                .padding(vertical = 10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            LucideSearch(tint = colors.iosBlue, size = 20.dp)
+            Text("search", fontSize = 11.5.sp, fontWeight = FontWeight.Medium, color = colors.iosBlue)
+        }
+
+        if (isGroup) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(colors.cardBg)
+                    .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(14.dp))
+                    .clickable { onMuteNotifications() }
+                    .padding(vertical = 10.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                if (chat.isMuted) {
+                    LucideBellOff(tint = colors.iosBlue, size = 20.dp)
+                    Text("unmute", fontSize = 11.5.sp, fontWeight = FontWeight.Medium, color = colors.iosBlue)
+                } else {
+                    LucideBell(tint = colors.iosBlue, size = 20.dp)
+                    Text("mute", fontSize = 11.5.sp, fontWeight = FontWeight.Medium, color = colors.iosBlue)
+                }
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(colors.cardBg)
+                    .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(14.dp))
+                    .clickable { onMailClick() }
+                    .padding(vertical = 10.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                LucideMail(tint = colors.iosBlue, size = 20.dp)
+                Text("mail", fontSize = 11.5.sp, fontWeight = FontWeight.Medium, color = colors.iosBlue)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ContactInfoGroupDetailsCard(
+    chat: ChatConversation,
+    onEditBio: () -> Unit,
+    onOpenPermissions: () -> Unit,
+    onShareProfile: () -> Unit
+) {
+    val colors = LocalChatColors.current
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(colors.cardBg)
+            .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable {
+                    SoundManager.playReaction()
+                    onEditBio()
+                }
+                .padding(horizontal = 16.dp, vertical = 11.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("description", fontSize = 12.5.sp, color = colors.textDark, fontWeight = FontWeight.Medium)
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    text = if (chat.bio.isNotBlank()) chat.bio else "Team chat for project planning, design feedback, and team sync.",
+                    fontSize = 15.sp,
+                    color = colors.textDark,
+                    lineHeight = 20.sp,
+                    fontWeight = FontWeight.Normal
+                )
+            }
+            LucideEdit(tint = colors.iosBlue, size = 15.dp, modifier = Modifier.padding(top = 4.dp, start = 8.dp))
+        }
+
+        HorizontalDivider(color = colors.borderSubtle, thickness = 0.5.dp)
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable {
+                    SoundManager.playReaction()
+                    onOpenPermissions()
+                }
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(colors.iosBlueSubtle),
+                    contentAlignment = Alignment.Center
+                ) {
+                    LucideLock(tint = colors.iosBlue, size = 15.dp)
+                }
+                Column {
+                    Text("Group Permissions", fontSize = 15.sp, color = colors.textDark, fontWeight = FontWeight.Medium)
+                    Text("Send messages, edit info, add members", fontSize = 12.sp, color = colors.textMuted)
+                }
+            }
+            LucideChevronRight(tint = colors.textMuted, size = 18.dp)
+        }
+
+        HorizontalDivider(color = colors.borderSubtle, thickness = 0.5.dp)
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onShareProfile() }
+                .padding(horizontal = 16.dp, vertical = 11.dp)
+        ) {
+            Text("invite link", fontSize = 12.5.sp, color = colors.textDark, fontWeight = FontWeight.Medium)
+            Spacer(Modifier.height(3.dp))
+            Text(
+                text = "https://oscellion.chat/join/${chat.id}",
+                fontSize = 15.sp,
+                color = colors.iosBlue,
+                fontWeight = FontWeight.Normal
+            )
+        }
+
+        HorizontalDivider(color = colors.borderSubtle, thickness = 0.5.dp)
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 11.dp)
+        ) {
+            Text("created", fontSize = 12.5.sp, color = colors.textDark, fontWeight = FontWeight.Medium)
+            Spacer(Modifier.height(3.dp))
+            val creatorName = chat.members?.firstOrNull { it.role.contains("admin", ignoreCase = true) || it.role.contains("owner", ignoreCase = true) }?.name ?: chat.members?.firstOrNull()?.name ?: "Group Admin"
+            Text(
+                text = "Created by $creatorName • ${chat.members?.size ?: 0} members",
+                fontSize = 14.sp,
+                color = colors.textMuted,
+                fontWeight = FontWeight.Normal
+            )
+        }
+    }
+}
+
+@Composable
+private fun ContactInfoMembersSection(
+    chat: ChatConversation,
+    onAddParticipants: (() -> Unit)?,
+    onOpenAddMemberModal: () -> Unit,
+    onSelectMember: (GroupMember) -> Unit
+) {
+    val colors = LocalChatColors.current
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+    ) {
+        Text(
+            text = "MEMBERS (${chat.members?.size ?: 0})",
+            fontSize = 12.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = colors.textMuted,
+            letterSpacing = 0.5.sp,
+            modifier = Modifier.padding(start = 4.dp, bottom = 6.dp)
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(colors.cardBg)
+                .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        SoundManager.playReaction()
+                        if (onAddParticipants != null) {
+                            onAddParticipants()
+                        } else {
+                            onOpenAddMemberModal()
+                        }
+                    }
+                    .padding(horizontal = 14.dp, vertical = 11.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .background(colors.iosBlueSubtle, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("+", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = colors.iosBlue)
+                }
+                Text(
+                    text = "Add Participants...",
+                    fontSize = 15.5.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = colors.iosBlue
+                )
+            }
+
+            if (chat.members != null && chat.members.isNotEmpty()) {
+                HorizontalDivider(
+                    color = colors.separator,
+                    thickness = 0.5.dp,
+                    modifier = Modifier.padding(start = 62.dp)
+                )
+
+                chat.members.forEachIndexed { index, member ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                SoundManager.playReaction()
+                                onSelectMember(member)
+                            }
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        AsyncImage(
+                            model = member.avatar,
+                            contentDescription = member.name,
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .border(0.5.dp, colors.borderSubtle, CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = member.name,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = colors.textDark
+                            )
+                            Text(
+                                text = member.role,
+                                fontSize = 12.5.sp,
+                                color = colors.textMuted
+                            )
+                        }
+
+                        if (member.role.contains("Admin", ignoreCase = true) || member.role.contains("Owner", ignoreCase = true)) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(colors.iosBlueSubtle)
+                                    .padding(horizontal = 7.dp, vertical = 2.5.dp)
+                            ) {
+                                Text(
+                                    text = if (member.role.contains("Owner", ignoreCase = true)) "Owner" else "Admin",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = colors.iosBlue
+                                )
+                            }
+                        }
+
+                        LucideChevronRight(tint = colors.textMuted.copy(alpha = 0.6f), size = 16.dp)
+                    }
+
+                    if (index < chat.members.size - 1) {
+                        HorizontalDivider(
+                            color = colors.separator,
+                            thickness = 0.5.dp,
+                            modifier = Modifier.padding(start = 64.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ContactInfoUserBioCard(
+    chat: ChatConversation
+) {
+    val colors = LocalChatColors.current
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+    val usernameText = "@${chat.name.lowercase().replace(Regex("[^a-zA-Z0-9]"), ".")}"
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(colors.cardBg)
+            .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable {
+                    clipboardManager.setText(AnnotatedString(usernameText))
+                    Toast.makeText(context, "Username copied", Toast.LENGTH_SHORT).show()
+                    SoundManager.playReaction()
+                }
+                .padding(horizontal = 16.dp, vertical = 11.dp)
+        ) {
+            Text("username", fontSize = 12.5.sp, color = colors.textMuted, fontWeight = FontWeight.Normal)
+            Spacer(Modifier.height(3.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = usernameText,
+                    fontSize = 16.sp,
+                    color = colors.iosBlue,
+                    fontWeight = FontWeight.Medium
+                )
+                Icon(
+                    imageVector = Lucide.Copy,
+                    contentDescription = "Copy Username",
+                    tint = colors.textMuted.copy(alpha = 0.6f),
+                    modifier = Modifier.size(15.dp)
+                )
+            }
+        }
+
+        HorizontalDivider(color = colors.borderSubtle, thickness = 0.5.dp)
+
+        val displayPhone = if (chat.phone.isNotBlank()) chat.phone else "Not provided"
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(enabled = chat.phone.isNotBlank()) {
+                    clipboardManager.setText(AnnotatedString(chat.phone))
+                    Toast.makeText(context, "Phone number copied", Toast.LENGTH_SHORT).show()
+                    SoundManager.playReaction()
+                }
+                .padding(horizontal = 16.dp, vertical = 11.dp)
+        ) {
+            Text("phone", fontSize = 12.5.sp, color = colors.textMuted, fontWeight = FontWeight.Normal)
+            Spacer(Modifier.height(3.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = displayPhone,
+                    fontSize = 16.sp,
+                    color = if (chat.phone.isNotBlank()) colors.textDark else colors.textMuted,
+                    fontWeight = FontWeight.Normal
+                )
+                if (chat.phone.isNotBlank()) {
+                    Icon(
+                        imageVector = Lucide.Copy,
+                        contentDescription = "Copy Phone",
+                        tint = colors.textMuted.copy(alpha = 0.6f),
+                        modifier = Modifier.size(15.dp)
+                    )
+                }
+            }
+        }
+
+        HorizontalDivider(color = colors.borderSubtle, thickness = 0.5.dp)
+
+        val displayBio = if (chat.bio.isNotBlank()) chat.bio else "No bio provided"
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(colors.cardBg)
+                .clickable(enabled = chat.bio.isNotBlank()) {
+                    clipboardManager.setText(AnnotatedString(chat.bio))
+                    Toast.makeText(context, "Bio copied", Toast.LENGTH_SHORT).show()
+                    SoundManager.playReaction()
+                }
+                .padding(vertical = 12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("bio", fontSize = 12.5.sp, color = colors.textMuted, fontWeight = FontWeight.Normal)
+                if (chat.bio.isNotBlank()) {
+                    Icon(
+                        imageVector = Lucide.Copy,
+                        contentDescription = "Copy Bio",
+                        tint = colors.textMuted.copy(alpha = 0.6f),
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+            }
+            Spacer(Modifier.height(5.dp))
+            Text(
+                text = displayBio,
+                fontSize = 15.5.sp,
+                color = if (chat.bio.isNotBlank()) colors.textDark else colors.textMuted,
+                lineHeight = 21.sp,
+                fontWeight = FontWeight.Normal
+            )
+        }
+    }
+}
+
+@Composable
+private fun ContactInfoSharedContentSection(
+    chat: ChatConversation,
+    onSeeAll: (Int) -> Unit
+) {
+    val colors = LocalChatColors.current
+    var mediaTab by remember { mutableIntStateOf(0) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "MEDIA, LINKS & DOCS",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = colors.textMuted
+            )
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable {
+                        SoundManager.playReaction()
+                        onSeeAll(mediaTab)
+                    }
+                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = "See All",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = colors.iosBlue
+                )
+                LucideChevronRight(tint = colors.iosBlue, size = 14.dp)
+            }
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .background(colors.surfaceSecondary)
+                .padding(3.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            listOf("Media", "Links", "Docs").forEachIndexed { tabIdx, tabTitle ->
+                val isSelected = mediaTab == tabIdx
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (isSelected) colors.cardBg else Color.Transparent)
+                        .clickable {
+                            SoundManager.playReaction()
+                            mediaTab = tabIdx
+                        }
+                        .padding(vertical = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = tabTitle,
+                        fontSize = 13.sp,
+                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                        color = if (isSelected) colors.textDark else colors.textMuted
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        when (mediaTab) {
+            0 -> {
+                val sharedMedia = remember(chat.messages) {
+                    chat.messages.flatMap { msg ->
+                        if (msg.mediaUrls.isNotEmpty()) msg.mediaUrls
+                        else listOfNotNull(msg.mediaUrl.takeIf { !it.isNullOrBlank() } ?: msg.localUri.takeIf { !it.isNullOrBlank() })
+                    }.filter { it.isNotBlank() }.take(3)
+                }
+                if (sharedMedia.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(colors.cardBg)
+                            .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        sharedMedia.forEach { url ->
+                            AsyncImage(
+                                model = url,
+                                contentDescription = "Shared Media",
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .aspectRatio(1f)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(10.dp))
+                                    .clickable {
+                                        SoundManager.playReaction()
+                                        onSeeAll(0)
+                                    },
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                        for (i in sharedMedia.size until 3) {
+                            Spacer(Modifier.weight(1f))
+                        }
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(colors.cardBg)
+                            .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
+                            .padding(vertical = 20.dp, horizontal = 16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("No media shared yet", fontSize = 13.5.sp, color = colors.textMuted)
+                    }
+                }
+            }
+            1 -> {
+                val sharedLinks = remember(chat.messages) {
+                    val regex = Regex("""https?://[^\s]+""")
+                    chat.messages.mapNotNull { it.text }
+                        .flatMap { text -> regex.findAll(text).map { it.value } }
+                        .distinct()
+                        .take(1)
+                }
+                if (sharedLinks.isNotEmpty()) {
+                    val link = sharedLinks.first()
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(colors.cardBg)
+                            .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    SoundManager.playReaction()
+                                    onSeeAll(2)
+                                }
+                                .padding(horizontal = 14.dp, vertical = 11.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .background(colors.iosBlueSubtle, RoundedCornerShape(8.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                LucideSearch(tint = colors.iosBlue, size = 16.dp)
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = link,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = colors.iosBlue,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text("Shared Link", fontSize = 12.sp, color = colors.textMuted)
+                            }
+                        }
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(colors.cardBg)
+                            .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
+                            .padding(vertical = 20.dp, horizontal = 16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("No links shared yet", fontSize = 13.5.sp, color = colors.textMuted)
+                    }
+                }
+            }
+            2 -> {
+                val sharedDocs = remember(chat.messages) {
+                    chat.messages.filter { it.mediaType in listOf("file", "file_stack") || !it.fileName.isNullOrBlank() }.take(1)
+                }
+                if (sharedDocs.isNotEmpty()) {
+                    val doc = sharedDocs.first()
+                    val docName = doc.fileName ?: doc.fileItems.firstOrNull()?.name ?: "Document.pdf"
+                    val docSize = doc.fileSize ?: doc.fileItems.firstOrNull()?.size ?: "File"
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(colors.cardBg)
+                            .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    SoundManager.playReaction()
+                                    onSeeAll(1)
+                                }
+                                .padding(horizontal = 14.dp, vertical = 11.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .background(Color(0xFFFF3B30).copy(alpha = 0.12f), RoundedCornerShape(8.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(docName.substringAfterLast(".", "DOC").uppercase().take(3), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFF3B30))
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = docName,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = colors.textDark,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text("$docSize • ${doc.time}", fontSize = 12.sp, color = colors.textMuted)
+                            }
+                        }
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(colors.cardBg)
+                            .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
+                            .padding(vertical = 20.dp, horizontal = 16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("No documents shared yet", fontSize = 13.5.sp, color = colors.textMuted)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ContactInfoActionsAndDangerGroup(
+    chat: ChatConversation,
+    isGroup: Boolean,
+    onShareProfile: () -> Unit,
+    onMuteNotifications: () -> Unit,
+    onSendMessage: () -> Unit,
+    onAddToFavorites: () -> Unit,
+    onReportUser: () -> Unit,
+    onBlockUser: () -> Unit,
+    onOpenLeaveGroup: () -> Unit
+) {
+    val colors = LocalChatColors.current
+    if (isGroup) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(colors.cardBg)
+                .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onShareProfile() }
+                    .padding(horizontal = 16.dp, vertical = 13.dp)
+            ) {
+                Text("Share Group Link", fontSize = 16.5.sp, color = colors.iosBlue, fontWeight = FontWeight.Normal)
+            }
+            HorizontalDivider(color = colors.borderSubtle, thickness = 0.5.dp)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onMuteNotifications() }
+                    .padding(horizontal = 16.dp, vertical = 13.dp)
+            ) {
+                Text(
+                    text = if (chat.isMuted) "Unmute Group" else "Mute Group Notifications",
+                    fontSize = 16.5.sp,
+                    color = colors.iosBlue,
+                    fontWeight = FontWeight.Normal
+                )
+            }
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(colors.cardBg)
+                .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        SoundManager.playReaction()
+                        onOpenLeaveGroup()
+                    }
+                    .padding(horizontal = 16.dp, vertical = 13.dp)
+            ) {
+                Text(
+                    text = "Leave Group",
+                    fontSize = 16.5.sp,
+                    color = Color(0xFFFF3B30),
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+    } else {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(colors.cardBg)
+                .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onSendMessage() }
+                    .padding(horizontal = 16.dp, vertical = 13.dp)
+            ) {
+                Text("Send Message", fontSize = 16.5.sp, color = colors.iosBlue, fontWeight = FontWeight.Normal)
+            }
+            HorizontalDivider(color = colors.borderSubtle, thickness = 0.5.dp)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onShareProfile() }
+                    .padding(horizontal = 16.dp, vertical = 13.dp)
+            ) {
+                Text("Share Contact", fontSize = 16.5.sp, color = colors.iosBlue, fontWeight = FontWeight.Normal)
+            }
+            HorizontalDivider(color = colors.borderSubtle, thickness = 0.5.dp)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onAddToFavorites() }
+                    .padding(horizontal = 16.dp, vertical = 13.dp)
+            ) {
+                Text("Add to Favorites", fontSize = 16.5.sp, color = colors.iosBlue, fontWeight = FontWeight.Normal)
+            }
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(colors.cardBg)
+                .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onReportUser() }
+                    .padding(horizontal = 16.dp, vertical = 13.dp)
+            ) {
+                Text("Report Contact", fontSize = 16.5.sp, color = Color(0xFFFF3B30), fontWeight = FontWeight.Normal)
+            }
+            HorizontalDivider(color = colors.borderSubtle, thickness = 0.5.dp)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onBlockUser() }
+                    .padding(horizontal = 16.dp, vertical = 13.dp)
+            ) {
+                Text(
+                    text = if (chat.isBlocked) "Unblock this Contact" else "Block this Contact",
+                    fontSize = 16.5.sp,
+                    color = Color(0xFFFF3B30),
+                    fontWeight = FontWeight.Normal
+                )
+            }
+        }
+    }
+}
+
 
 // 2. Complete Story Viewer Modal (Apple iOS Frosted Glass & Dual Mode)
 data class UserStoryGroup(
@@ -2409,7 +2501,7 @@ fun FullCallModal(
                         .border(0.5.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(24.dp))
                 ) {
                     AsyncImage(
-                        model = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80",
+                        model = chat.avatar.ifBlank { chat.banner },
                         contentDescription = "Video feed",
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
@@ -2558,47 +2650,27 @@ private fun AppleCallIconButton(
 @Composable
 fun PollCreatorModal(
     onDismiss: () -> Unit,
-    onPostPoll: (String, List<String>) -> Unit
+    onPostPoll: (question: String, options: List<String>, isAnonymous: Boolean, allowMultiple: Boolean) -> Unit
 ) {
     val colors = LocalChatColors.current
     var question by remember { mutableStateOf("") }
-    val options = remember { mutableStateListOf("Option 1", "Option 2") }
-    var isAnonymous by remember { mutableStateOf(true) }
+    val options = remember { mutableStateListOf("", "") }
+    var isAnonymous by remember { mutableStateOf(false) }
     var allowMultiple by remember { mutableStateOf(false) }
 
-    val isValid = question.isNotBlank() && options.filter { it.isNotBlank() }.size >= 2
+    val validOptions = options.map { it.trim() }.filter { it.isNotBlank() }
+    val isValid = question.trim().isNotBlank() && validOptions.size >= 2
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.5f))
-            .clickable(
-                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                indication = null
-            ) { onDismiss() }
-            .padding(horizontal = 16.dp, vertical = 24.dp)
-            .windowInsetsPadding(WindowInsets.systemBars),
-        contentAlignment = Alignment.Center
+    IosModalBottomSheet(
+        onDismissRequest = onDismiss
     ) {
-        Box(
-            modifier = Modifier
-                .widthIn(max = 400.dp)
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(if (colors.isLight) Color(0xFFF2F2F7) else Color(0xFF1C1C1E))
-                .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
-                .clickable(
-                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                    indication = null
-                ) {}
-        ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.fillMaxWidth().imePadding()) {
                 // iOS Top Navigation Bar
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(if (colors.isLight) Color(0xFFFFFFFF) else Color(0xFF2C2C2E))
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                        .padding(horizontal = 18.dp, vertical = 14.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -2620,7 +2692,7 @@ fun PollCreatorModal(
                     Text(
                         text = "New Poll",
                         fontSize = 17.sp,
-                        fontWeight = FontWeight.SemiBold,
+                        fontWeight = FontWeight.Bold,
                         color = colors.textDark
                     )
 
@@ -2628,17 +2700,16 @@ fun PollCreatorModal(
                         text = "Create",
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (isValid) colors.iosBlue else colors.textMuted.copy(alpha = 0.4f),
+                        color = if (isValid) colors.iosBlue else colors.textMuted.copy(alpha = 0.35f),
                         modifier = Modifier
                             .clickable(
                                 enabled = isValid,
                                 interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                                 indication = null
                             ) {
-                                val validOptions = options.filter { it.isNotBlank() }
                                 if (isValid) {
-                                    SoundManager.playReaction()
-                                    onPostPoll(question, validOptions)
+                                    SoundManager.playSend()
+                                    onPostPoll(question.trim(), validOptions, isAnonymous, allowMultiple)
                                     onDismiss()
                                 }
                             }
@@ -2651,36 +2722,49 @@ fun PollCreatorModal(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .heightIn(max = 520.dp)
                         .verticalScroll(rememberScrollState())
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     // Section 1: Question Inset Group
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(
-                            text = "QUESTION",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = colors.textMuted,
-                            modifier = Modifier.padding(start = 12.dp)
-                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "QUESTION",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = colors.textMuted
+                            )
+                            Text(
+                                text = "${question.length}/255",
+                                fontSize = 11.sp,
+                                color = if (question.length > 240) Color(0xFFFF3B30) else colors.textMuted.copy(alpha = 0.7f)
+                            )
+                        }
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
+                                .clip(RoundedCornerShape(16.dp))
                                 .background(if (colors.isLight) Color.White else Color(0xFF2C2C2E))
-                                .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(12.dp))
+                                .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
                                 .padding(horizontal = 14.dp, vertical = 12.dp)
                         ) {
                             BasicTextField(
                                 value = question,
-                                onValueChange = { question = it },
+                                onValueChange = { if (it.length <= 255) question = it },
                                 modifier = Modifier.fillMaxWidth(),
-                                textStyle = TextStyle(fontSize = 16.sp, color = colors.textDark),
+                                textStyle = TextStyle(fontSize = 16.sp, color = colors.textDark, fontWeight = FontWeight.Normal),
                                 cursorBrush = SolidColor(colors.iosBlue),
                                 decorationBox = { inner ->
                                     if (question.isEmpty()) {
-                                        Text("Ask a question...", fontSize = 16.sp, color = colors.textMuted.copy(alpha = 0.7f))
+                                        Text("Ask a question...", fontSize = 16.sp, color = colors.textMuted.copy(alpha = 0.6f))
                                     }
                                     inner()
                                 }
@@ -2698,12 +2782,12 @@ fun PollCreatorModal(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "OPTIONS (${options.size})",
+                                text = "OPTIONS (${options.size}/10)",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = colors.textMuted
                             )
-                            if (options.size < 8) {
+                            if (options.size < 10) {
                                 Text(
                                     text = "+ Add Option",
                                     fontSize = 13.sp,
@@ -2724,9 +2808,9 @@ fun PollCreatorModal(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
+                                .clip(RoundedCornerShape(16.dp))
                                 .background(if (colors.isLight) Color.White else Color(0xFF2C2C2E))
-                                .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(12.dp))
+                                .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
                         ) {
                             options.forEachIndexed { idx, opt ->
                                 Row(
@@ -2740,7 +2824,7 @@ fun PollCreatorModal(
                                         modifier = Modifier
                                             .size(8.dp)
                                             .clip(CircleShape)
-                                            .background(colors.iosBlue)
+                                            .background(if (opt.isNotBlank()) colors.iosBlue else colors.textMuted.copy(alpha = 0.3f))
                                     )
                                     BasicTextField(
                                         value = opt,
@@ -2750,7 +2834,7 @@ fun PollCreatorModal(
                                         textStyle = TextStyle(fontSize = 15.sp, color = colors.textDark),
                                         decorationBox = { inner ->
                                             if (opt.isEmpty()) {
-                                                Text("Option ${idx + 1}", fontSize = 15.sp, color = colors.textMuted.copy(alpha = 0.7f))
+                                                Text("Option ${idx + 1}", fontSize = 15.sp, color = colors.textMuted.copy(alpha = 0.55f))
                                             }
                                             inner()
                                         }
@@ -2759,7 +2843,7 @@ fun PollCreatorModal(
                                     if (options.size > 2) {
                                         Box(
                                             modifier = Modifier
-                                                .size(22.dp)
+                                                .size(24.dp)
                                                 .clip(CircleShape)
                                                 .background(if (colors.isLight) Color(0xFFF2F2F7) else Color(0xFF3A3A3C))
                                                 .clickable {
@@ -2797,9 +2881,9 @@ fun PollCreatorModal(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
+                                .clip(RoundedCornerShape(16.dp))
                                 .background(if (colors.isLight) Color.White else Color(0xFF2C2C2E))
-                                .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(12.dp))
+                                .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
                         ) {
                             // Anonymous Voting Row
                             Row(
@@ -2812,17 +2896,11 @@ fun PollCreatorModal(
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text("Anonymous Voting", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = colors.textDark)
-                                    Text("Voters are kept private", fontSize = 12.sp, color = colors.textMuted)
+                                    Text("Voters are kept private and hidden", fontSize = 12.sp, color = colors.textMuted)
                                 }
-                                Switch(
+                                AppleSwitch(
                                     checked = isAnonymous,
-                                    onCheckedChange = { isAnonymous = it },
-                                    colors = SwitchDefaults.colors(
-                                        checkedThumbColor = Color.White,
-                                        checkedTrackColor = colors.iosBlue,
-                                        uncheckedThumbColor = Color.White,
-                                        uncheckedTrackColor = if (colors.isLight) Color(0xFFE5E5EA) else Color(0xFF39393D)
-                                    )
+                                    onCheckedChange = { isAnonymous = it }
                                 )
                             }
 
@@ -2843,17 +2921,11 @@ fun PollCreatorModal(
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text("Multiple Answers", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = colors.textDark)
-                                    Text("Allow selecting multiple choices", fontSize = 12.sp, color = colors.textMuted)
+                                    Text("Allow voters to pick more than one choice", fontSize = 12.sp, color = colors.textMuted)
                                 }
-                                Switch(
+                                AppleSwitch(
                                     checked = allowMultiple,
-                                    onCheckedChange = { allowMultiple = it },
-                                    colors = SwitchDefaults.colors(
-                                        checkedThumbColor = Color.White,
-                                        checkedTrackColor = colors.iosBlue,
-                                        uncheckedThumbColor = Color.White,
-                                        uncheckedTrackColor = if (colors.isLight) Color(0xFFE5E5EA) else Color(0xFF39393D)
-                                    )
+                                    onCheckedChange = { allowMultiple = it }
                                 )
                             }
                         }
@@ -2862,7 +2934,6 @@ fun PollCreatorModal(
             }
         }
     }
-}
 
 // 5. Apple Photos Grade Lightbox Modal (Gesture Zoom & Actions)
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
@@ -3404,8 +3475,8 @@ fun WallpaperPickerModal(
                                 .clip(RoundedCornerShape(6.dp))
                                 .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(6.dp))
                         ) {
-                            Image(
-                                painter = painterResource(id = wp.drawableRes),
+                            AsyncImage(
+                                model = wp.drawableRes,
                                 contentDescription = wp.title,
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Crop

@@ -1316,22 +1316,10 @@ fun UiverseFolderUploadIcon(tint: Color = Color(0xFFAAAAAA), size: Dp = 20.dp, m
     }
 }
 
-// Lucide Sparkles
+// Lucide Sparkles -> Replaced with new Purple Wave Sphere AI Icon
 @Composable
 fun LucideSparkles(tint: Color = Color(0xFF007AFF), size: Dp = 18.dp, modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier.size(size)) {
-        val scale = size.toPx() / 24f
-        val stroke = Stroke(width = 1.25f * density, cap = StrokeCap.Round, join = StrokeJoin.Round)
-        val path = Path().apply {
-            moveTo(12f * scale, 3f * scale)
-            cubicTo(12f * scale, 7.5f * scale, 15.5f * scale, 11f * scale, 20f * scale, 11f * scale)
-            cubicTo(15.5f * scale, 11f * scale, 12f * scale, 14.5f * scale, 12f * scale, 19f * scale)
-            cubicTo(12f * scale, 14.5f * scale, 8.5f * scale, 11f * scale, 4f * scale, 11f * scale)
-            cubicTo(8.5f * scale, 11f * scale, 12f * scale, 7.5f * scale, 12f * scale, 3f * scale)
-            close()
-        }
-        drawPath(path, color = tint, style = stroke)
-    }
+    com.chroma.studio.ui.components.AiWaveSphereIcon(modifier = modifier.size(size))
 }
 
 // Lucide Sliders
@@ -1491,22 +1479,10 @@ fun PhosphorPollIcon(tint: Color = Color.White, size: Dp = 20.dp, modifier: Modi
     LucidePoll(tint = tint, size = size, modifier = modifier)
 }
 
-// Phosphor Sparkle / AI Icon
+// Phosphor Sparkle / AI Icon -> Replaced with new Purple Wave Sphere AI Icon
 @Composable
 fun PhosphorSparkleIcon(tint: Color = Color.White, size: Dp = 16.dp, modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier.size(size)) {
-        val scale = size.toPx() / 24f
-        val stroke = Stroke(width = 1.25f * density, cap = StrokeCap.Round, join = StrokeJoin.Round)
-        val path = Path().apply {
-            moveTo(12f * scale, 3f * scale)
-            cubicTo(12f * scale, 8f * scale, 16f * scale, 12f * scale, 21f * scale, 12f * scale)
-            cubicTo(16f * scale, 12f * scale, 12f * scale, 16f * scale, 12f * scale, 21f * scale)
-            cubicTo(12f * scale, 16f * scale, 8f * scale, 12f * scale, 3f * scale, 12f * scale)
-            cubicTo(8f * scale, 12f * scale, 12f * scale, 8f * scale, 12f * scale, 3f * scale)
-            close()
-        }
-        drawPath(path, color = tint, style = stroke)
-    }
+    com.chroma.studio.ui.components.AiWaveSphereIcon(modifier = modifier.size(size))
 }
 
 @Composable

@@ -1,6 +1,8 @@
 package com.chroma.studio.ui.screens
 import com.chroma.studio.ui.components.GlassIconButton
 import com.chroma.studio.ui.components.GlassButton
+import com.chroma.studio.ui.components.LiquidGlassPrimaryButton
+import com.chroma.studio.ui.components.LiquidGlassSecondaryButton
 import androidx.compose.ui.composed
 import com.airbnb.lottie.compose.animateLottieCompositionAsState
 
@@ -45,6 +47,8 @@ import com.airbnb.lottie.compose.LottieCompositionSpec
 import com.airbnb.lottie.compose.LottieConstants
 import com.airbnb.lottie.compose.rememberLottieComposition
 import com.chroma.studio.R
+import com.chroma.studio.ui.components.AppleHeartHandshakeGraphic
+import com.chroma.studio.ui.components.rememberAppleGraphicAnimationState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -103,8 +107,19 @@ fun UserListScreen(
             }
         } else {
             if (users.isEmpty()) {
+                val emptyState = rememberAppleGraphicAnimationState()
                 Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                    Text("No users found.", color = colors.textMuted)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        AppleHeartHandshakeGraphic(
+                            modifier = Modifier.size(130.dp),
+                            state = emptyState,
+                            enableClickToAnimate = true
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        Text("No Users Found", color = colors.textMain, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.height(4.dp))
+                        Text("Try searching for another creator or username.", color = colors.textMuted, fontSize = 13.sp)
+                    }
                 }
             } else {
                 LazyColumn(
@@ -174,30 +189,31 @@ fun UserListScreen(
 
                             // Action Button
                             if (currentUserId != null && currentUserId != user.uid) {
-                                GlassButton(
-                                    onClick = {
-                                        scope.launch {
-                                            val success = discoverVm.repository.toggleFollow(currentUserId, user.uid)
-                                            if (success) {
-                                                if (isFollowingUser) {
+                                if (isFollowingUser) {
+                                    LiquidGlassSecondaryButton(
+                                        text = "Following",
+                                        onClick = {
+                                            scope.launch {
+                                                val success = discoverVm.repository.toggleFollow(currentUserId, user.uid)
+                                                if (success) {
                                                     currentUserFollowingIds = currentUserFollowingIds - user.uid
-                                                } else {
+                                                }
+                                            }
+                                        },
+                                        isSmall = true
+                                    )
+                                } else {
+                                    LiquidGlassPrimaryButton(
+                                        text = "Follow",
+                                        onClick = {
+                                            scope.launch {
+                                                val success = discoverVm.repository.toggleFollow(currentUserId, user.uid)
+                                                if (success) {
                                                     currentUserFollowingIds = currentUserFollowingIds + user.uid
                                                 }
                                             }
-                                        }
-                                    },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (isFollowingUser) colors.glassBgHover.copy(alpha=0.5f) else Color(0xFF3B82F6),
-                                        contentColor = if (isFollowingUser) Color(0xFF3B82F6) else colors.bg
-                                    ),
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.height(36.dp)
-                                ) {
-                                    Text(
-                                        text = if (isFollowingUser) "Following" else "Follow",
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 13.sp
+                                        },
+                                        isSmall = true
                                     )
                                 }
                             }

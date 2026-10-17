@@ -23,6 +23,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 
 
 
@@ -169,6 +170,9 @@ fun ChatAppTheme(
     CompositionLocalProvider(LocalChatColors provides colors) {
         MaterialTheme(
             typography = Typography,
+            shapes = MaterialTheme.shapes.copy(
+                extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(24.dp)
+            ),
             content = content
         )
     }
@@ -187,8 +191,8 @@ fun ChatWallpaperBackground(
     val colors = LocalChatColors.current
 
     Box(modifier = modifier.fillMaxSize().background(colors.appBg)) {
-        Image(
-            painter = painterResource(id = wallpaperType.drawableRes),
+        AsyncImage(
+            model = wallpaperType.drawableRes,
             contentDescription = wallpaperType.title,
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop

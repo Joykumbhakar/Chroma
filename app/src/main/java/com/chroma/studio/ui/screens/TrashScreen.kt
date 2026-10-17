@@ -10,6 +10,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -361,40 +362,39 @@ fun TrashScreen(
     }
 
     if (showEmptyTrashDialog) {
-        val emptyDialogTrashState = rememberAppleTrashState()
-        LaunchedEffect(Unit) {
-            emptyDialogTrashState.triggerEmptyShake()
-        }
-        com.chroma.studio.ui.components.IosAlertDialog(
-            title = "Empty Trash",
-            message = "Are you sure you want to permanently delete all ${deletedWorks.size} items in Trash?\nThis action cannot be undone.",
-            confirmText = "Empty Trash",
-            onConfirm = {
-                showEmptyTrashDialog = false
-                coroutineScope.launch {
-                    val allIds = deletedWorks.map { it.id }.toSet()
-                    deletingWorkIds = deletingWorkIds + allIds
-                    delay(200)
-                    onEmptyTrash?.invoke()
-                    deletingWorkIds = emptySet()
-                }
-            },
-            dismissText = "Cancel",
-            onDismiss = { showEmptyTrashDialog = false },
-            isDestructive = true,
-            customContent = {
-                Box(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    AppleTrashBinIcon(
-                        modifier = Modifier.size(96.dp),
-                        state = emptyDialogTrashState,
-                        enableClickToAnimate = true
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showEmptyTrashDialog = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.45f))
+                    .clickable { showEmptyTrashDialog = false },
+                contentAlignment = Alignment.Center
+            ) {
+                Box(modifier = Modifier.clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {}) {
+                    com.chroma.studio.ui.graphics3d.AppleHigDialogCard(
+                        graphicId = com.chroma.studio.ui.graphics3d.Apple3DGraphicId.TRASH_BIN,
+                        title = "Empty System Trash?",
+                        description = "${deletedWorks.size} cached items will be permanently removed. This action cannot be undone.",
+                        cancelText = "Cancel",
+                        confirmText = "Empty Trash",
+                        onCancel = { showEmptyTrashDialog = false },
+                        onConfirm = {
+                            showEmptyTrashDialog = false
+                            coroutineScope.launch {
+                                val allIds = deletedWorks.map { it.id }.toSet()
+                                deletingWorkIds = deletingWorkIds + allIds
+                                delay(200)
+                                onEmptyTrash?.invoke()
+                                deletingWorkIds = emptySet()
+                            }
+                        }
                     )
                 }
             }
-        )
+        }
     }
 }
 
@@ -618,8 +618,10 @@ fun TrashCard(
                             expanded = showMenu,
                             onDismissRequest = { showMenu = false },
                             modifier = Modifier
-                                .glossyBorder(RoundedCornerShape(10.dp), colors)
-                                .background(colors.glassBg, RoundedCornerShape(10.dp))
+                                .shadow(16.dp, RoundedCornerShape(24.dp), ambientColor = Color.Black.copy(alpha = 0.25f), spotColor = Color.Black.copy(alpha = 0.15f))
+                                .clip(RoundedCornerShape(24.dp))
+                                .glossyBorder(RoundedCornerShape(24.dp), colors)
+                                .background(colors.glassBg, RoundedCornerShape(24.dp))
                         ) {
                             DropdownMenuItem(
                                 text = { Text("Restore", fontSize = 13.sp, color = colors.textMain) },

@@ -111,7 +111,7 @@ fun StoriesSection(
                             avatarSize = 54.dp,
                             hasStatus = hasMyStory,
                             isSeen = false,
-                            showAddBadge = !hasMyStory,
+                            showAddBadge = true,
                             gender = myStoryGender,
                             isDark = isDark,
                             gapColor = if (isDark) Color(0xFF121212) else Color.White,
@@ -154,7 +154,7 @@ fun StoriesSection(
                 }
             }
         } else {
-            items(stories.size, key = { stories[it].userProfile.uid }) { index ->
+            items(stories.size, key = { stories[it].userProfile.uid.ifBlank { "story_group_$it" } }) { index ->
                 val storyGroup = stories[index]
                 val profile = storyGroup.userProfile
                 val displayName = profile.displayName.ifBlank { "User" }

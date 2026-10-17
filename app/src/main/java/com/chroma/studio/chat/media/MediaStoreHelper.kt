@@ -33,7 +33,7 @@ object MediaStoreHelper {
         val file = File(picturesDir, "photo_${System.currentTimeMillis()}.jpg")
         val uri = FileProvider.getUriForFile(
             context,
-            "${context.packageName}.fileprovider",
+            "${context.packageName}.provider",
             file
         )
         return Pair(file, uri)

@@ -170,10 +170,13 @@ private fun DrawScope.drawDoodleSymbol(index: Int, center: Offset, color: Color)
                 style = androidx.compose.ui.graphics.drawscope.Stroke(1.5.dp.toPx())
             )
         }
-        1 -> { // Star / Sparkle
+        1 -> { // Flowing Wave
             val r = 7.dp.toPx()
-            drawLine(color, Offset(center.x - r, center.y), Offset(center.x + r, center.y), 1.5.dp.toPx())
-            drawLine(color, Offset(center.x, center.y - r), Offset(center.x, center.y + r), 1.5.dp.toPx())
+            val path = Path().apply {
+                moveTo(center.x - r, center.y)
+                cubicTo(center.x - r / 2, center.y - r / 2, center.x, center.y + r / 2, center.x + r, center.y)
+            }
+            drawPath(path, color, style = androidx.compose.ui.graphics.drawscope.Stroke(1.5.dp.toPx(), cap = StrokeCap.Round))
         }
         2 -> { // Heart
             val path = Path().apply {

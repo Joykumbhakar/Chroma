@@ -25,7 +25,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.Sparkles
 
 @Composable
 fun WelcomeBanner(onDismiss: () -> Unit) {

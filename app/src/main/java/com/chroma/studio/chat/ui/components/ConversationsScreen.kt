@@ -6,6 +6,9 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import com.chroma.studio.ui.components.AppleChatGraphic
+import com.chroma.studio.ui.components.AppleEmptyStateView
+import com.chroma.studio.ui.components.rememberAppleGraphicAnimationState
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -48,6 +51,8 @@ import com.chroma.studio.ui.components.getAvatarPresetDrawableRes
 import com.composables.icons.lucide.BadgeCheck
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Plus
+import com.chroma.studio.ui.components.StoriesSection
+import com.chroma.studio.model.UserStoryGroup
 
 /**
  * Flagship Apple iOS 18 Conversations & Stories Screen.
@@ -59,7 +64,11 @@ import com.composables.icons.lucide.Plus
 @Composable
 fun ConversationsScreen(
     currentUser: User,
-    stories: List<Story>,
+    stories: List<Story> = emptyList(),
+    storyGroups: List<UserStoryGroup> = emptyList(),
+    hasMyStory: Boolean = false,
+    onMyStoryClick: (() -> Unit)? = null,
+    onStoryGroupClick: ((Int) -> Unit)? = null,
     chats: List<ChatConversation>,
     activeTab: String,
     onTabSelected: (String) -> Unit,
@@ -422,70 +431,31 @@ fun ConversationsScreen(
                 .padding(innerPadding),
             contentPadding = PaddingValues(bottom = 16.dp)
         ) {
-            // ── 1. Stories Carousel ─────────────────────────────────────
-            item {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp, bottom = 8.dp)
-                ) {
-                    val myStory = stories.find { it.isMyStory }
-                    val distinctContactStories = remember(stories) {
-                        stories.filter { !it.isMyStory }
-                            .groupBy { it.authorName }
-                            .values
-                            .map { it.first() }
-                    }
-
-                    LazyRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        // Current User Story
-                        item {
-                            IosStoryAvatarItem(
-                                avatarUrl = currentUser.avatar,
-                                name = "Your Story",
-                                hasNewStory = myStory != null,
-                                isMyStory = true,
-                                seen = myStory?.seen ?: false,
-                                onClick = {
-                                    SoundManager.playReaction()
-                                    if (myStory != null) onStoryClick(myStory) else onAddStoryClick()
-                                },
-                                onLongClick = {
-                                    if (myStory != null) {
-                                        selectedStoryForContextMenu = myStory
-                                    } else {
-                                        onAddStoryClick()
-                                    }
-                                }
-                            )
+            // ── 1. Stories Carousel (Unified Across All Tabs) ───────────
+            item(key = "conversations_stories_carousel") {
+                StoriesSection(
+                    stories = storyGroups,
+                    isLoading = false,
+                    hasMyStory = hasMyStory,
+                    myStoryAvatarUrl = currentUser.avatar,
+                    onMyStoryClick = {
+                        SoundManager.playReaction()
+                        if (hasMyStory && onMyStoryClick != null) {
+                            onMyStoryClick()
+                        } else {
+                            onAddStoryClick()
                         }
-
-                        // Contacts' Stories (One avatar tray circle per user with combined seen state)
-                        items(distinctContactStories, key = { it.authorName }) { story ->
-                            val userHasUnseen = stories.any { it.authorName == story.authorName && !it.seen }
-                            val contactAvatar = chats.find { it.name.equals(story.authorName, ignoreCase = true) }?.avatar
-                                ?.takeIf { it.isNotBlank() } ?: story.avatar
-                            IosStoryAvatarItem(
-                                avatarUrl = contactAvatar,
-                                name = story.authorName.split(" ").firstOrNull() ?: story.authorName,
-                                hasNewStory = true,
-                                isMyStory = false,
-                                seen = !userHasUnseen,
-                                onClick = {
-                                    SoundManager.playReaction()
-                                    onStoryClick(story)
-                                },
-                                onLongClick = {
-                                    selectedStoryForContextMenu = story
-                                }
-                            )
-                        }
-                    }
-                }
+                    },
+                    onAddStoryClick = {
+                        SoundManager.playReaction()
+                        onAddStoryClick()
+                    },
+                    onStoryClick = { groupIdx ->
+                        SoundManager.playReaction()
+                        onStoryGroupClick?.invoke(groupIdx)
+                    },
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
+                )
             }
 
             // ── 3. Clean Underline Tab Navigation ──────────────────────
@@ -669,35 +639,19 @@ fun ConversationsScreen(
             if (activeTab != "calls") {
                 if (filteredChats.isEmpty()) {
                     item {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 48.dp, horizontal = 24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(56.dp)
-                                    .clip(CircleShape)
-                                    .background(colors.surfaceSecondary),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                LucideSearch(tint = colors.textMuted, size = 24.dp)
-                            }
-                            Text(
-                                text = "No Conversations Found",
-                                fontSize = 17.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = colors.textDark
-                            )
-                            Text(
-                                text = if (searchQuery.isNotEmpty()) "No results matching “$searchQuery”" else "Start a new conversation to get connected",
-                                fontSize = 14.sp,
-                                color = colors.textMuted,
-                                textAlign = TextAlign.Center
-                            )
-                        }
+                        val chatState = rememberAppleGraphicAnimationState()
+                        AppleEmptyStateView(
+                            graphic = {
+                                AppleChatGraphic(
+                                    modifier = Modifier.size(150.dp),
+                                    state = chatState,
+                                    enableClickToAnimate = true
+                                )
+                            },
+                            title = "No Conversations Found",
+                            subtitle = if (searchQuery.isNotEmpty()) "No results matching “$searchQuery”." else "Start a new conversation to get connected with artists.",
+                            modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 24.dp)
+                        )
                     }
                 } else {
                     items(filteredChats, key = { it.id }) { chat ->

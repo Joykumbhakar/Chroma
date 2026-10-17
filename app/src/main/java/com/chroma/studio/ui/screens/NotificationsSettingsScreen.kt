@@ -30,14 +30,14 @@ fun NotificationsSettingsScreen(
                      (quietMode != profile.quietModeEnabled)
     }
 
-    val screenBg = if (isDark) Color(0xFF000000) else Color(0xFFF2F2F7)
+    val screenBg = if (isDark) Color(0xFF000000) else Color(0xFFF4F7FB)
 
     Scaffold(
         topBar = {
             AppleSettingsHeader(
                 title = "Notifications",
                 icon = Lucide.Bell,
-                iconGradient = listOf(Color(0xFFFF2D55), Color(0xFFFF375F)),
+                iconGradient = listOf(Color(0xFF4DA6FF), Color(0xFF0A84FF), Color(0xFF0051D5)),
                 doneText = if (hasChanges) "Save" else "Done",
                 onDoneClick = {
                     if (hasChanges) {
@@ -68,7 +68,8 @@ fun NotificationsSettingsScreen(
                     AppleSettingToggleRow(
                         title = "Allow Push Notifications",
                         subtitle = "Banners, sounds, and badges",
-                        icon = Lucide.BellRing,
+                        icon = Lucide.Bell,
+                        iconGradient = listOf(Color(0xFFFF3B30), Color(0xFFD70015)),
                         checked = pushEnabled,
                         onCheckedChange = { pushEnabled = it }
                     )
@@ -79,6 +80,7 @@ fun NotificationsSettingsScreen(
                         title = "Quiet Hours Mode",
                         subtitle = "Silence all alerts and vibrations during night hours",
                         icon = Lucide.Moon,
+                        iconGradient = listOf(Color(0xFF5856D6), Color(0xFF3634A3)),
                         checked = quietMode,
                         onCheckedChange = { quietMode = it }
                     )
@@ -94,6 +96,7 @@ fun NotificationsSettingsScreen(
                         title = "Email Notifications",
                         subtitle = "Product updates and weekly highlights",
                         icon = Lucide.Mail,
+                        iconGradient = listOf(Color(0xFF007AFF), Color(0xFF0051D5)),
                         checked = emailEnabled,
                         onCheckedChange = { emailEnabled = it }
                     )

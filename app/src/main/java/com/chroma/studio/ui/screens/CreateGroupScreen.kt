@@ -36,6 +36,8 @@ import com.chroma.studio.model.UserProfile
 import com.chroma.studio.ui.components.AuroraBackground
 import com.chroma.studio.ui.components.GlassIconButton
 import com.chroma.studio.ui.components.OscellionLoadingSpinner
+import com.chroma.studio.ui.components.LiquidGlassProgressBar
+import com.chroma.studio.ui.components.LiquidGlassCheckbox
 import com.chroma.studio.ui.components.spatialCard
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.chroma.studio.viewmodel.ChatViewModel
@@ -223,7 +225,7 @@ fun CreateGroupScreen(
                                 ) {
                                     if (isSearching) {
                                         item {
-                                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), color = Color(0xFF0A84FF))
+                                            LiquidGlassProgressBar(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp))
                                         }
                                     } else if (searchQuery.length >= 2 && searchResults.isEmpty()) {
                                         item {
@@ -455,22 +457,12 @@ private fun UserSelectRow(user: UserProfile, isSelected: Boolean, onClick: () ->
             Text(user.displayName, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text("@${user.username}", color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp, maxLines = 1)
         }
-        // Checkmark
-        AnimatedContent(targetState = isSelected, label = "check") { selected ->
-            if (selected) {
-                Box(
-                    modifier = Modifier.size(26.dp).clip(CircleShape).background(Color(0xFF0A84FF)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Lucide.Check, null, tint = Color.White, modifier = Modifier.size(15.dp))
-                }
-            } else {
-                Box(
-                    modifier = Modifier.size(26.dp).clip(CircleShape)
-                        .border(1.5.dp, Color.White.copy(alpha = 0.3f), CircleShape)
-                )
-            }
-        }
+        // Selection Checkbox
+        LiquidGlassCheckbox(
+            checked = isSelected,
+            onCheckedChange = { onClick() },
+            size = 22.dp
+        )
     }
 }
 

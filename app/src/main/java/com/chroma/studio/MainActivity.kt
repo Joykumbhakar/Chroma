@@ -70,7 +70,7 @@ import com.chroma.studio.ui.components.getDefaultAvatarDrawableRes
 import com.chroma.studio.ui.components.generateQrBitmap
 import com.composables.icons.lucide.*
 import com.composables.icons.lucide.BadgeCheck
-import com.composables.icons.lucide.Sparkles
+import com.chroma.studio.ui.components.AiWaveSphereIcon
 import com.composables.icons.lucide.QrCode
 import androidx.compose.material3.ExperimentalMaterial3Api
 
@@ -690,11 +690,8 @@ private fun PassCardLiveOverlay(
                             .background(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.25f))
                             .padding(horizontal = 5.dp, vertical = 1.5.dp)
                     ) {
-                        androidx.compose.material3.Icon(
-                            com.composables.icons.lucide.Lucide.Sparkles,
-                            contentDescription = null,
-                            tint = androidx.compose.ui.graphics.Color.White,
-                            modifier = Modifier.size(9.5.dp)
+                        AiWaveSphereIcon(
+                            modifier = Modifier.size(11.dp)
                         )
                         Text(
                             text = roleText,

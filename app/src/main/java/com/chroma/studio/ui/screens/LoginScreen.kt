@@ -46,6 +46,8 @@ import com.chroma.studio.ui.components.GlassTextButton
 import com.chroma.studio.ui.components.OscellionBackground
 import com.chroma.studio.ui.components.OscellionLoadingSpinner
 import com.chroma.studio.ui.components.OscellionLogo
+import com.chroma.studio.ui.components.LiquidGlassTokens
+import com.chroma.studio.ui.components.LiquidGlassSecondaryButton
 import com.chroma.studio.ui.components.getDefaultAvatarDrawableRes
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.chroma.studio.data.SavedAccount
@@ -171,25 +173,35 @@ fun CupertinoPrimaryButton(
     containerColor: Color = LocalOscellionColors.current.primary,
     content: @Composable RowScope.() -> Unit
 ) {
-    Button(
-        onClick = onClick,
+    val shape = RoundedCornerShape(9999.dp)
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(50.dp),
-        shape = RoundedCornerShape(12.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = containerColor,
-            disabledContainerColor = containerColor.copy(alpha = 0.35f),
-            contentColor = Color.White,
-            disabledContentColor = Color.White.copy(alpha = 0.6f)
-        ),
-        elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
-        enabled = enabled && !isLoading
+            .height(50.dp)
+            .clip(shape)
+            .background(
+                if (enabled && !isLoading) LiquidGlassTokens.PrimaryBlueGradient
+                else Brush.verticalGradient(listOf(Color(0xFF94A3B8), Color(0xFF64748B)))
+            )
+            .border(
+                1.5.dp,
+                if (enabled && !isLoading) LiquidGlassTokens.PrimarySpecularBorder
+                else Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.2f), Color.Transparent)),
+                shape
+            )
+            .clickable(enabled = enabled && !isLoading, onClick = onClick)
+            .padding(horizontal = 22.dp),
+        contentAlignment = Alignment.Center
     ) {
-        if (isLoading) {
-            OscellionLoadingSpinner(Modifier.size(20.dp), color = Color.White)
-        } else {
-            content()
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            if (isLoading) {
+                OscellionLoadingSpinner(Modifier.size(20.dp), color = Color.White)
+            } else {
+                content()
+            }
         }
     }
 }
@@ -212,6 +224,7 @@ fun CupertinoPrimaryButton(
     ) {
         Text(
             text = text,
+            color = Color.White,
             fontSize = 16.sp,
             fontWeight = FontWeight.SemiBold,
             letterSpacing = (-0.2).sp
@@ -227,25 +240,34 @@ fun CupertinoSecondaryButton(
     isLoading: Boolean = false,
     content: @Composable RowScope.() -> Unit
 ) {
-    val colors = LocalOscellionColors.current
-    Surface(
-        onClick = onClick,
-        enabled = enabled && !isLoading,
+    val shape = RoundedCornerShape(9999.dp)
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(50.dp),
-        shape = RoundedCornerShape(12.dp),
-        color = Color.Transparent,
-        border = BorderStroke(1.dp, colors.glassBorder.copy(alpha = 0.75f))
+            .height(50.dp)
+            .clip(shape)
+            .background(
+                if (enabled && !isLoading) LiquidGlassTokens.SecondaryWhiteGradient
+                else Brush.verticalGradient(listOf(Color(0xFFF1F5F9), Color(0xFFE2E8F0)))
+            )
+            .border(
+                1.dp,
+                if (enabled && !isLoading) LiquidGlassTokens.SecondarySpecularBorder
+                else Brush.verticalGradient(listOf(Color(0xFFCBD5E1), Color(0xFF94A3B8))),
+                shape
+            )
+            .clickable(enabled = enabled && !isLoading, onClick = onClick)
+            .padding(horizontal = 22.dp),
+        contentAlignment = Alignment.Center
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
-            content = content
-        )
+        CompositionLocalProvider(LocalContentColor provides Color.Black) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                content = content
+            )
+        }
     }
 }
 
@@ -1155,7 +1177,7 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onCancel: () -> Unit) {
                                         val (iconRes, iconVector) = when (gender) {
                                             "Male" -> Pair(R.drawable.ic_gender_male, null)
                                             "Female" -> Pair(R.drawable.ic_gender_female, null)
-                                            "Non-binary" -> Pair(null, Lucide.Sparkles)
+                                            "Non-binary" -> Pair(null, Lucide.Heart)
                                             else -> Pair(null, Lucide.EyeOff)
                                         }
 
@@ -1460,9 +1482,11 @@ fun CupertinoAvatarPickerStep(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    TextButton(onClick = { showSheet = false }) {
-                        Text("Cancel", color = colors.primary, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-                    }
+                    LiquidGlassSecondaryButton(
+                        text = "Cancel",
+                        onClick = { showSheet = false },
+                        isSmall = true
+                    )
                 }
             }
         }

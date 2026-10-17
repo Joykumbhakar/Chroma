@@ -13,6 +13,13 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import com.chroma.studio.ui.components.AppleWorksGraphic
+import com.chroma.studio.ui.components.AppleHomeGraphic
+import com.chroma.studio.ui.components.ApplePhotosGraphic
+import com.chroma.studio.ui.components.AppleHeartHandshakeGraphic
+import com.chroma.studio.ui.components.AppleTrendingFireGraphic
+import com.chroma.studio.ui.components.rememberAppleGraphicAnimationState
+import com.chroma.studio.ui.components.AiWaveSphereIcon
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -419,8 +426,15 @@ fun SearchScreen(
                             }
                         } else if (selectedScope == SearchScope.CREATORS && !isSearchingUsers) {
                             item(span = StaggeredGridItemSpan.FullLine) {
+                                val emptyState = rememberAppleGraphicAnimationState()
                                 AppleEmptyTabState(
-                                    icon = Lucide.Users,
+                                    graphic = {
+                                        AppleHeartHandshakeGraphic(
+                                            modifier = Modifier.size(140.dp),
+                                            state = emptyState,
+                                            enableClickToAnimate = true
+                                        )
+                                    },
                                     title = "No Creators Found",
                                     subtitle = "No creator matched \"$searchQuery\""
                                 )
@@ -487,16 +501,30 @@ fun SearchScreen(
 
                         if (filteredArtworks.isEmpty() && !isSearchingUsers && userResults.isEmpty() && selectedScope == SearchScope.ALL) {
                             item(span = StaggeredGridItemSpan.FullLine) {
+                                val emptyState = rememberAppleGraphicAnimationState()
                                 AppleEmptyTabState(
-                                    icon = Lucide.SearchX,
+                                    graphic = {
+                                        AppleHomeGraphic(
+                                            modifier = Modifier.size(140.dp),
+                                            state = emptyState,
+                                            enableClickToAnimate = true
+                                        )
+                                    },
                                     title = "No Results Found",
                                     subtitle = "We couldn't find anything matching \"$searchQuery\""
                                 )
                             }
                         } else if (filteredArtworks.isEmpty() && selectedScope == SearchScope.ARTWORKS) {
                             item(span = StaggeredGridItemSpan.FullLine) {
+                                val emptyState = rememberAppleGraphicAnimationState()
                                 AppleEmptyTabState(
-                                    icon = Lucide.Palette,
+                                    graphic = {
+                                        AppleWorksGraphic(
+                                            modifier = Modifier.size(140.dp),
+                                            state = emptyState,
+                                            enableClickToAnimate = true
+                                        )
+                                    },
                                     title = "No Artworks Found",
                                     subtitle = "Try searching for different keywords or styles."
                                 )
@@ -713,8 +741,29 @@ fun SearchScreen(
                         }
                     } else if (filteredArtworks.isEmpty()) {
                         item(span = StaggeredGridItemSpan.FullLine) {
+                            val emptyState = rememberAppleGraphicAnimationState()
                             AppleEmptyTabState(
-                                icon = Lucide.Palette,
+                                graphic = {
+                                    if (selectedCategory.equals("Photos", ignoreCase = true)) {
+                                        ApplePhotosGraphic(
+                                            modifier = Modifier.size(150.dp),
+                                            state = emptyState,
+                                            enableClickToAnimate = true
+                                        )
+                                    } else if (selectedCategory.equals("Trending", ignoreCase = true)) {
+                                        AppleTrendingFireGraphic(
+                                            modifier = Modifier.size(150.dp),
+                                            state = emptyState,
+                                            enableClickToAnimate = true
+                                        )
+                                    } else {
+                                        AppleWorksGraphic(
+                                            modifier = Modifier.size(150.dp),
+                                            state = emptyState,
+                                            enableClickToAnimate = true
+                                        )
+                                    }
+                                },
                                 title = "No Creations Here",
                                 subtitle = "No creations found in category \"$selectedCategory\"."
                             )
@@ -1189,64 +1238,38 @@ private fun ExploreQuickLookSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Remix in Studio Button
-                Button(
+                LiquidGlassPrimaryButton(
                     onClick = onRemix,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF)),
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier
-                        .weight(1.15f)
-                        .height(46.dp),
-                    contentPadding = PaddingValues(horizontal = 8.dp)
+                    modifier = Modifier.weight(1.15f)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(Lucide.Sparkles, contentDescription = null, tint = Color.White, modifier = Modifier.size(15.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            "Remix in Studio",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp,
-                            fontFamily = InterFontFamily,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+                    AiWaveSphereIcon(modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "Remix in Studio",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        fontFamily = InterFontFamily,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
 
                 // View Post Button
-                OutlinedButton(
+                LiquidGlassSecondaryButton(
                     onClick = onNavigateToPost,
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFF2F2F7)
-                    ),
-                    border = androidx.compose.foundation.BorderStroke(
-                        0.5.dp,
-                        if (colors.isDark) Color(0xFF3A3A3C) else Color(0xFFD1D1D6)
-                    ),
-                    modifier = Modifier
-                        .weight(0.95f)
-                        .height(46.dp),
-                    contentPadding = PaddingValues(horizontal = 8.dp)
+                    modifier = Modifier.weight(0.95f)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(Lucide.Globe, contentDescription = null, tint = colors.textMain, modifier = Modifier.size(15.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            "View Post",
-                            color = colors.textMain,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp,
-                            fontFamily = InterFontFamily,
-                            maxLines = 1
-                        )
-                    }
+                    Icon(Lucide.Globe, contentDescription = null, tint = Color.Black, modifier = Modifier.size(15.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "View Post",
+                        color = Color.Black,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        fontFamily = InterFontFamily,
+                        maxLines = 1
+                    )
                 }
             }
         }
@@ -1356,7 +1379,7 @@ fun ExploreWorkGridCard(
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Lucide.Sparkles, null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(24.dp))
+                    AiWaveSphereIcon(modifier = Modifier.size(28.dp))
                 }
             }
         }

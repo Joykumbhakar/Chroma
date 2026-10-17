@@ -7,10 +7,14 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import com.chroma.studio.ui.components.AppleChatGraphic
+import com.chroma.studio.ui.components.AppleEmptyStateView
+import com.chroma.studio.ui.components.rememberAppleGraphicAnimationState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -69,6 +73,7 @@ fun ChatListScreen(
     // 0: All, 1: Unread, 2: Direct, 3: Groups
     var selectedTab by remember { mutableIntStateOf(0) }
     var searchQuery by remember { mutableStateOf("") }
+    var viewingStoryGroupIndex by remember { mutableStateOf<Int?>(null) }
 
     // Colors matching the HTML theme
     val iosBlue = Color(0xFF0078FE)
@@ -135,7 +140,7 @@ fun ChatListScreen(
                 Spacer(modifier = Modifier.width(10.dp))
                 Column {
                     Text(
-                        text = currentUser?.displayName ?: "Alex Rivera",
+                        text = currentUser?.displayName ?: "User",
                         color = textDark,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
@@ -199,16 +204,27 @@ fun ChatListScreen(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 contentPadding = PaddingValues(vertical = 4.dp)
             ) {
+                val myStory = myStories.firstOrNull()
                 // My Story Item
                 item {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.clickable { onNavigateToCreateStory?.invoke() }
+                        modifier = Modifier.clickable {
+                            if (myStory != null) {
+                                viewingStoryGroupIndex = -1
+                            } else {
+                                onNavigateToCreateStory?.invoke()
+                            }
+                        }
                     ) {
                         Box(
                             modifier = Modifier
                                 .size(48.dp)
-                                .border(1.5.dp, if (isDark) Color(0xFF3A3A3C) else Color(0xFFD1D1D6), CircleShape)
+                                .border(
+                                    width = 1.5.dp,
+                                    brush = if (myStory != null) Brush.linearGradient(listOf(Color(0xFF007AFF), Color(0xFF00C6FF))) else androidx.compose.ui.graphics.SolidColor(if (isDark) Color(0xFF3A3A3C) else Color(0xFFD1D1D6)),
+                                    shape = CircleShape
+                                )
                                 .padding(2.dp)
                         ) {
                             IosAvatarView(
@@ -216,40 +232,47 @@ fun ChatListScreen(
                                 avatarUrl = currentUser?.photoUrl?.toString() ?: "",
                                 size = 44.dp
                             )
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.BottomEnd)
-                                    .size(14.dp)
-                                    .background(iosBlue, CircleShape)
-                                    .border(2.dp, sidebarBg, CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(Lucide.Plus, contentDescription = null, tint = Color.White, modifier = Modifier.size(8.dp))
+                            if (myStory == null) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomEnd)
+                                        .size(14.dp)
+                                        .background(iosBlue, CircleShape)
+                                        .border(2.dp, sidebarBg, CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Lucide.Plus, contentDescription = null, tint = Color.White, modifier = Modifier.size(8.dp))
+                                }
                             }
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text("Your Story", color = textMuted, fontSize = 11.sp, fontWeight = FontWeight.Medium)
                     }
                 }
-                // Mock Other Stories (Replace with actual data)
-                items(3) { index ->
+                // Real Other Stories
+                itemsIndexed(storyGroups, key = { _, it -> it.userProfile.uid }) { index, group ->
+                    val profile = group.userProfile
+                    val displayName = profile.displayName.ifBlank { "User" }
                     Column(
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.clickable {
+                            viewingStoryGroupIndex = index
+                        }
                     ) {
                         Box(
                             modifier = Modifier
                                 .size(48.dp)
-                                .border(2.dp, Brush.sweepGradient(AppleStatusBlueGradient), CircleShape)
+                                .border(2.dp, Brush.linearGradient(listOf(Color(0xFF007AFF), Color(0xFF00C6FF))), CircleShape)
                                 .padding(2.dp)
                         ) {
                             IosAvatarView(
-                                name = "Friend $index",
-                                avatarUrl = "https://i.pravatar.cc/150?img=${index + 12}",
+                                name = displayName,
+                                avatarUrl = profile.avatarUrl,
                                 size = 44.dp
                             )
                         }
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text("Update $index", color = textDark.copy(alpha = 0.8f), fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                        Text(displayName.split(" ").firstOrNull() ?: displayName, color = textDark.copy(alpha = 0.8f), fontSize = 11.sp, fontWeight = FontWeight.Medium)
                     }
                 }
             }
@@ -332,14 +355,19 @@ fun ChatListScreen(
         ) {
             if (filteredChats.isEmpty()) {
                 item {
-                    Column(
-                        modifier = Modifier.fillMaxWidth().padding(top = 40.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Icon(Lucide.MessageCircle, null, tint = textMuted.copy(alpha = 0.5f), modifier = Modifier.size(32.dp))
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("No chats found", color = textMuted.copy(alpha = 0.7f), fontSize = 13.sp)
-                    }
+                    val chatState = rememberAppleGraphicAnimationState()
+                    AppleEmptyStateView(
+                        graphic = {
+                            AppleChatGraphic(
+                                modifier = Modifier.size(150.dp),
+                                state = chatState,
+                                enableClickToAnimate = true
+                            )
+                        },
+                        title = "No Chats Found",
+                        subtitle = if (searchQuery.isNotEmpty()) "No conversations match “$searchQuery”." else "Start a new conversation to connect with creators.",
+                        modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 24.dp)
+                    )
                 }
             }
             
@@ -454,6 +482,23 @@ fun ChatListScreen(
             }
             Text("v4.1", color = textMuted, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
         }
+    }
+
+    if (viewingStoryGroupIndex != null) {
+        val likedStoryIds by storyViewModel.likedStoryIds.collectAsState()
+        StoryViewerScreen(
+            storyGroups = storyGroups,
+            initialGroupIndex = viewingStoryGroupIndex ?: 0,
+            currentUserId = currentUser?.uid ?: "",
+            storyViewModel = storyViewModel,
+            likedStoryIds = likedStoryIds,
+            myStories = myStories,
+            onClose = { viewingStoryGroupIndex = null },
+            onAuthorClick = { uid ->
+                viewingStoryGroupIndex = null
+                onNavigateToProfile(uid)
+            }
+        )
     }
 }
 
