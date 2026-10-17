@@ -38,6 +38,7 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -953,7 +954,7 @@ fun HomeScreen(
     }
             
             // ── Synchronized Rotating Action Menu (Floating for non-empty state) ──
-            if (showCreatePostMenu) {
+            if (works.isNotEmpty() && showCreatePostMenu) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -1956,17 +1957,42 @@ fun EmptyState(
     modifier: Modifier = Modifier
 ) {
     val colors = LocalOscellionColors.current
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(bottom = 135.dp)
-            .padding(horizontal = 32.dp, vertical = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+    if (isOpen) {
+        androidx.activity.compose.BackHandler {
+            onClose()
+        }
+    }
+    Box(
+        modifier = modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
     ) {
+        if (isOpen) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) {
+                        detectTapGestures { onClose() }
+                    }
+            )
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = 135.dp)
+                .padding(horizontal = 32.dp, vertical = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
         // Center Plus Button with Synchronized Rotating Action Menu
         Box(
-            modifier = Modifier.size(100.dp),
+            modifier = Modifier
+                .layout { measurable, constraints ->
+                    val placeable = measurable.measure(constraints)
+                    val reportedHeight = (placeable.height / 2) + 28.dp.roundToPx()
+                    layout(placeable.width, reportedHeight) {
+                        placeable.placeRelative(0, 0)
+                    }
+                },
             contentAlignment = Alignment.Center
         ) {
             SynchronizedRotatingActionMenu(
@@ -1977,7 +2003,7 @@ fun EmptyState(
             )
         }
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(2.dp))
 
         // "Create" text with signature handwritten font style
         Text(
@@ -1985,7 +2011,7 @@ fun EmptyState(
             color = colors.textMain,
             fontFamily = TheSignatureFontFamily,
             fontWeight = FontWeight.Bold,
-            fontSize = 38.sp,
+            fontSize = 46.sp,
             textAlign = TextAlign.Center,
             modifier = Modifier.clickable(
                 interactionSource = remember { MutableInteractionSource() },
@@ -1995,7 +2021,7 @@ fun EmptyState(
             }
         )
 
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(2.dp))
 
         Text(
             text = "Create your first canvas or generative wallpaper to get started in your studio.",
@@ -2007,6 +2033,8 @@ fun EmptyState(
         )
     }
 }
+}
+
 
 @Composable
 fun ChromaAnimatedBackground() {

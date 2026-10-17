@@ -13,8 +13,11 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -264,13 +267,9 @@ fun SynchronizedRotatingActionMenu(
             alpha = haloAlpha
         )
 
-        // 2. Synchronized Rotating Carrier
+        // 2. Synchronized Carrier
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .graphicsLayer {
-                    rotationZ = spinRotation
-                },
+            modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
             actions.forEachIndexed { index, actionType ->
@@ -294,6 +293,7 @@ fun SynchronizedRotatingActionMenu(
                     isOpen = isOpen,
                     targetTx = targetTx,
                     targetTy = targetTy,
+                    spinRotation = spinRotation,
                     staggerDelayMs = staggerDelayMs,
                     onSelect = {
                         onActionSelected(actionType)
@@ -379,6 +379,7 @@ private fun OrbitalActionNode(
     isOpen: Boolean,
     targetTx: Float,
     targetTy: Float,
+    spinRotation: Float,
     staggerDelayMs: Int,
     onSelect: () -> Unit
 ) {
@@ -428,16 +429,24 @@ private fun OrbitalActionNode(
 
     if (alphaProgress <= 0.001f && !isOpen) return
 
+    val rotRad = (spinRotation * PI / 180.0).toFloat()
+    val localX = targetTx * transformProgress
+    val localY = targetTy * transformProgress
+    val worldTx = localX * cos(rotRad) - localY * sin(rotRad)
+    val worldTy = localX * sin(rotRad) + localY * cos(rotRad)
+
     Box(
         modifier = Modifier
+            .offset {
+                IntOffset(
+                    worldTx.roundToInt(),
+                    worldTy.roundToInt()
+                )
+            }
             .size(ACTION_NODE_SIZE_DP)
             .graphicsLayer {
-                translationX = targetTx * transformProgress
-                translationY = targetTy * transformProgress
                 scaleX = combinedScale
                 scaleY = combinedScale
-                // Counter-rotate by -SPIN_ANGLE_DEG so the icon stays upright when carrier is at +SPIN_ANGLE_DEG
-                rotationZ = -SPIN_ANGLE_DEG
                 alpha = alphaProgress.coerceIn(0f, 1f)
             }
             .clip(CircleShape)
