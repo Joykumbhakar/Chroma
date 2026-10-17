@@ -557,7 +557,7 @@ fun UserProfileScreen(
                             val remixGraphicState = rememberAppleGraphicAnimationState()
                             AppleEmptyTabState(
                                 graphic = {
-                                    AppleHeartHandshakeGraphic(
+                                    AppleRemixGraphic(
                                         modifier = Modifier.size(150.dp),
                                         state = remixGraphicState,
                                         enableClickToAnimate = true
