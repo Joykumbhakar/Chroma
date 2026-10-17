@@ -547,29 +547,26 @@ fun ChatWallpaperPickerSheet(
             // Action Buttons
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 // Apply for this chat
-                Button(
+                LiquidGlassPrimaryButton(
                     onClick = {
                         settingsManager.setWallpaperForRoom(previewConfig, roomId)
                         onDismiss()
                     },
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0A84FF))
+                    modifier = Modifier.fillMaxWidth().height(46.dp)
                 ) {
-                    Text(if (roomId != null) "Set Appearance for This Chat" else "Save Appearance", fontWeight = FontWeight.Bold, fontSize = 15.sp, fontFamily = InterFontFamily)
+                    Text(if (roomId != null) "Set Appearance for This Chat" else "Save Appearance", fontWeight = FontWeight.Bold, fontSize = 14.sp, fontFamily = InterFontFamily, color = Color.White)
                 }
 
                 // Apply as global default
                 if (roomId != null) {
-                    OutlinedButton(
+                    LiquidGlassSecondaryButton(
                         onClick = {
                             settingsManager.setWallpaperForRoom(previewConfig, null)
                             onDismiss()
                         },
-                        modifier = Modifier.fillMaxWidth().height(44.dp),
-                        shape = RoundedCornerShape(14.dp)
+                        modifier = Modifier.fillMaxWidth().height(44.dp)
                     ) {
-                        Text("Set as Default for All Chats", color = Color(0xFF0A84FF), fontWeight = FontWeight.SemiBold, fontFamily = InterFontFamily)
+                        Text("Set as Default for All Chats", color = Color.Black, fontWeight = FontWeight.SemiBold, fontFamily = InterFontFamily, fontSize = 13.5.sp)
                     }
                 }
 

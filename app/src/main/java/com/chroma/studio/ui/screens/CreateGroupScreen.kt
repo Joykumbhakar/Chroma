@@ -38,6 +38,8 @@ import com.chroma.studio.ui.components.GlassIconButton
 import com.chroma.studio.ui.components.OscellionLoadingSpinner
 import com.chroma.studio.ui.components.LiquidGlassProgressBar
 import com.chroma.studio.ui.components.LiquidGlassCheckbox
+import com.chroma.studio.ui.components.AppleHeartHandshakeGraphic
+import com.chroma.studio.ui.components.rememberAppleGraphicAnimationState
 import com.chroma.studio.ui.components.spatialCard
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.chroma.studio.viewmodel.ChatViewModel
@@ -210,11 +212,20 @@ fun CreateGroupScreen(
                             // User list
                             if (allUsers.isEmpty() && searchQuery.isEmpty()) {
                                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Icon(Lucide.Users, null, tint = Color.White.copy(alpha = 0.3f), modifier = Modifier.size(48.dp))
-                                        Spacer(Modifier.height(12.dp))
-                                        Text("No contacts yet", color = Color.White.copy(alpha = 0.4f), fontSize = 15.sp)
-                                        Text("Search by username to add members", color = Color.White.copy(alpha = 0.25f), fontSize = 13.sp)
+                                    val emptyState = rememberAppleGraphicAnimationState()
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier.padding(24.dp)
+                                    ) {
+                                        AppleHeartHandshakeGraphic(
+                                            modifier = Modifier.size(130.dp),
+                                            state = emptyState,
+                                            enableClickToAnimate = true
+                                        )
+                                        Spacer(Modifier.height(16.dp))
+                                        Text("No contacts yet", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                                        Spacer(Modifier.height(4.dp))
+                                        Text("Search by username to add members to your group", color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp, textAlign = TextAlign.Center)
                                     }
                                 }
                             } else {
