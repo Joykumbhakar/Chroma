@@ -255,6 +255,46 @@ fun HomeScreen(
         }
     }
 
+    val handleActionSelected: (ActionMenuType) -> Unit = { actionType ->
+        showCreatePostMenu = false
+        when (actionType) {
+            ActionMenuType.GRADIENTS -> {
+                onNewWork()
+            }
+            ActionMenuType.POST -> {
+                if (FirebaseAuth.getInstance().currentUser != null) {
+                    onNavigateToCreatePost?.invoke()
+                } else {
+                    showLoginScreen = true
+                }
+            }
+            ActionMenuType.VIDEO -> {
+                if (FirebaseAuth.getInstance().currentUser != null) {
+                    onNavigateToFlashPicker?.invoke()
+                } else {
+                    showLoginScreen = true
+                }
+            }
+            ActionMenuType.STORY -> {
+                if (FirebaseAuth.getInstance().currentUser != null) {
+                    onNavigateToCreateTextStatus?.invoke()
+                } else {
+                    showLoginScreen = true
+                }
+            }
+            ActionMenuType.AI_GENERATOR -> {
+                if (FirebaseAuth.getInstance().currentUser != null) {
+                    val intent = Intent(context, com.chroma.studio.MainActivity::class.java).apply {
+                        putExtra("EXTRA_START_AI_GENERATOR", true)
+                    }
+                    context.startActivity(intent)
+                } else {
+                    showLoginScreen = true
+                }
+            }
+        }
+    }
+
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
@@ -780,8 +820,10 @@ fun HomeScreen(
                     HomeSkeletonGrid(viewMode = viewMode, isDarkMode = isDarkMode)
                 } else if (works.isEmpty()) {
                     EmptyState(
-                        onNewWork = onNewWork,
-                        onCreateClick = { showCreatePostMenu = true }
+                        isOpen = showCreatePostMenu,
+                        onToggle = { showCreatePostMenu = !showCreatePostMenu },
+                        onClose = { showCreatePostMenu = false },
+                        onActionSelected = handleActionSelected
                     )
                 } else if (filteredWorks.isEmpty()) {
                     val searchGraphicState = rememberAppleGraphicAnimationState()
@@ -910,9 +952,7 @@ fun HomeScreen(
         }
     }
             
-            // ── Synchronized Rotating Action Menu ──
-            val shouldShowPlusButton = !selectionMode && !isLoading && works.isEmpty()
-
+            // ── Synchronized Rotating Action Menu (Floating for non-empty state) ──
             if (showCreatePostMenu) {
                 Box(
                     modifier = Modifier
@@ -927,7 +967,7 @@ fun HomeScreen(
             }
 
             AnimatedVisibility(
-                visible = shouldShowPlusButton || showCreatePostMenu,
+                visible = works.isNotEmpty() && showCreatePostMenu,
                 enter = scaleIn(spring(stiffness = Spring.StiffnessMediumLow)) + fadeIn(),
                 exit = scaleOut(spring(stiffness = Spring.StiffnessMediumLow)) + fadeOut(),
                 modifier = Modifier
@@ -940,71 +980,8 @@ fun HomeScreen(
                         isOpen = showCreatePostMenu,
                         onToggle = { showCreatePostMenu = !showCreatePostMenu },
                         onClose = { showCreatePostMenu = false },
-                        onActionSelected = { actionType ->
-                            showCreatePostMenu = false
-                            when (actionType) {
-                                ActionMenuType.GRADIENTS -> {
-                                    onNewWork()
-                                }
-                                ActionMenuType.POST -> {
-                                    if (FirebaseAuth.getInstance().currentUser != null) {
-                                        onNavigateToCreatePost?.invoke()
-                                    } else {
-                                        showLoginScreen = true
-                                    }
-                                }
-                                ActionMenuType.VIDEO -> {
-                                    if (FirebaseAuth.getInstance().currentUser != null) {
-                                        onNavigateToFlashPicker?.invoke()
-                                    } else {
-                                        showLoginScreen = true
-                                    }
-                                }
-                                ActionMenuType.STORY -> {
-                                    if (FirebaseAuth.getInstance().currentUser != null) {
-                                        onNavigateToCreateTextStatus?.invoke()
-                                    } else {
-                                        showLoginScreen = true
-                                    }
-                                }
-                                ActionMenuType.AI_GENERATOR -> {
-                                    if (FirebaseAuth.getInstance().currentUser != null) {
-                                        val intent = Intent(context, MainActivity::class.java).apply {
-                                            putExtra("EXTRA_START_AI_GENERATOR", true)
-                                        }
-                                        context.startActivity(intent)
-                                    } else {
-                                        showLoginScreen = true
-                                    }
-                                }
-                            }
-                        }
+                        onActionSelected = handleActionSelected
                     )
-
-                    // "Create" with Bold text using Thesignature.otf above the plus button (empty state only)
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = shouldShowPlusButton && !showCreatePostMenu,
-                        enter = fadeIn(tween(250)),
-                        exit = fadeOut(tween(180)),
-                        modifier = Modifier
-                            .align(Alignment.Center)
-                            .offset(y = (-46).dp)
-                    ) {
-                        Text(
-                            text = "Create",
-                            color = colors.textMain,
-                            fontFamily = TheSignatureFontFamily,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 32.sp,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null
-                            ) {
-                                showCreatePostMenu = true
-                            }
-                        )
-                    }
                 }
             }
         }
@@ -1972,28 +1949,63 @@ fun RenameDialog(
 
 @Composable
 fun EmptyState(
-    onNewWork: () -> Unit,
-    onCreateClick: (() -> Unit)? = null,
+    isOpen: Boolean = false,
+    onToggle: () -> Unit = {},
+    onClose: () -> Unit = {},
+    onActionSelected: (ActionMenuType) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val homeGraphicState = rememberAppleGraphicAnimationState()
-    AppleEmptyStateView(
-        graphic = {
-            AppleHomeGraphic(
-                modifier = Modifier.size(130.dp),
-                state = homeGraphicState,
-                enableClickToAnimate = true
-            )
-        },
-        title = "No Works Yet",
-        subtitle = "Create your first canvas or generative wallpaper to get started in your studio.",
-        actionButtonText = "Create Work",
-        actionButtonIcon = Lucide.Plus,
-        onActionClick = onCreateClick ?: onNewWork,
+    val colors = LocalOscellionColors.current
+    Column(
         modifier = modifier
             .fillMaxSize()
             .padding(bottom = 135.dp)
-    )
+            .padding(horizontal = 32.dp, vertical = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        // Center Plus Button with Synchronized Rotating Action Menu
+        Box(
+            modifier = Modifier.size(100.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            SynchronizedRotatingActionMenu(
+                isOpen = isOpen,
+                onToggle = onToggle,
+                onClose = onClose,
+                onActionSelected = onActionSelected
+            )
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        // "Create" text with signature handwritten font style
+        Text(
+            text = "Create",
+            color = colors.textMain,
+            fontFamily = TheSignatureFontFamily,
+            fontWeight = FontWeight.Bold,
+            fontSize = 38.sp,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) {
+                onToggle()
+            }
+        )
+
+        Spacer(Modifier.height(6.dp))
+
+        Text(
+            text = "Create your first canvas or generative wallpaper to get started in your studio.",
+            color = colors.textMuted,
+            fontSize = 13.sp,
+            textAlign = TextAlign.Center,
+            lineHeight = 18.sp,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+    }
 }
 
 @Composable
