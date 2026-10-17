@@ -757,93 +757,311 @@ fun ApplePhotosGraphic(
     } else Modifier
 
     Canvas(modifier = modifier.then(clickModifier)) {
-        val s = 100f
-        val pearl = Apple3DShaderPalette.pearlBrush(s)
-        val sky = Apple3DShaderPalette.skyBrush(s)
-        val scaleFactor = size.minDimension / 100f
+        val s = size.minDimension / 1000f
+
+        // 1. Volumetric Floor Shadow & Ambient Ground Glow
+        drawOval(
+            brush = AppleHigBluePalette.floorGlowBrush(500f, 875f, 250f, s),
+            topLeft = Offset(220f * s, 850f * s),
+            size = Size(560f * s, 44f * s)
+        )
+        drawOval(
+            color = Color(0x38001235),
+            topLeft = Offset(270f * s, 858f * s),
+            size = Size(460f * s, 26f * s)
+        )
 
         withTransform({
-            scale(scaleFactor, scaleFactor, pivot = Offset.Zero)
-            scale(state.squashX.value, state.squashY.value, pivot = Offset(50f, 85f))
+            scale(state.squashX.value, state.squashY.value, pivot = Offset(500f * s, 840f * s))
         }) {
-            drawFloorShadow(50f, 88f, 36f, 4.8f)
-
-            // Back angled photo frame
-            rotate(degrees = 7f, pivot = Offset(52f, 43f)) {
+            // 2. Secondary Stacked Photo/Wallpaper Card (Fans out dynamically on tap!)
+            val backCardAngle = -7f - (6f * progress)
+            withTransform({
+                rotate(backCardAngle, pivot = Offset(500f * s, 500f * s))
+                translate(left = -20f * s, top = -16f * s)
+            }) {
+                // Ground drop shadow for back card
                 drawRoundRect(
-                    brush = Apple3DShaderPalette.sapphireRecessBrush(s),
-                    topLeft = Offset(21f, 13f),
-                    size = Size(62f, 60f),
-                    cornerRadius = CornerRadius(14f, 14f)
+                    color = Color(0x38001438),
+                    topLeft = Offset(195f * s, 205f * s),
+                    size = Size(610f * s, 610f * s),
+                    cornerRadius = CornerRadius(110f * s, 110f * s)
                 )
+                // Back card chassis
                 drawRoundRect(
-                    brush = Apple3DShaderPalette.specularStrokeBrush(s),
-                    topLeft = Offset(21f, 13f),
-                    size = Size(62f, 60f),
-                    cornerRadius = CornerRadius(14f, 14f),
-                    style = Stroke(2f)
+                    brush = AppleHigBluePalette.secondaryLayerBrush(s),
+                    topLeft = Offset(190f * s, 190f * s),
+                    size = Size(610f * s, 610f * s),
+                    cornerRadius = CornerRadius(110f * s, 110f * s)
+                )
+                // Back card inner viewport hint
+                drawRoundRect(
+                    brush = Brush.linearGradient(
+                        listOf(Color(0xFF00194A), Color(0xFF00388A)),
+                        start = Offset(240f * s, 240f * s),
+                        end = Offset(740f * s, 740f * s)
+                    ),
+                    topLeft = Offset(240f * s, 240f * s),
+                    size = Size(510f * s, 510f * s),
+                    cornerRadius = CornerRadius(72f * s, 72f * s)
+                )
+                // Subtle peeking moon orb on back card
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        listOf(Color.White.copy(alpha = 0.9f), Color(0xFF70D6FF).copy(alpha = 0.35f), Color.Transparent),
+                        center = Offset(360f * s, 345f * s),
+                        radius = 45f * s
+                    ),
+                    radius = 45f * s,
+                    center = Offset(360f * s, 345f * s)
+                )
+                // Specular edge contour
+                drawRoundRect(
+                    brush = AppleHigBluePalette.specularStrokeBrush(s),
+                    topLeft = Offset(190f * s, 190f * s),
+                    size = Size(610f * s, 610f * s),
+                    cornerRadius = CornerRadius(110f * s, 110f * s),
+                    style = Stroke(width = 2.8f * s)
                 )
             }
 
-            // Foreground Photo Card Frame
-            drawSculptedSquircleBase(12f, 18f, 66f, 62f, 15f)
-
-            // Sapphire Recessed Landscape Window
-            drawSapphireRecessRect(18f, 24f, 54f, 50f, 10f)
-
-            // Inner Window Clip Path with smooth 10f rounded corners (including bottom right)
-            val windowClipPath = Path().apply {
+            // 3. Foreground Hero Photo Card Chassis
+            val frameRect = Rect(170f * s, 170f * s, 830f * s, 830f * s)
+            val framePath = Path().apply {
                 addRoundRect(
                     RoundRect(
-                        rect = Rect(18f, 24f, 72f, 74f),
-                        cornerRadius = CornerRadius(10f, 10f)
+                        rect = frameRect,
+                        cornerRadius = CornerRadius(118f * s, 118f * s)
                     )
                 )
             }
 
-            clipPath(windowClipPath) {
-                // Articulated Photo Landscape (Slides up & tilts gracefully!)
-                withTransform({
-                    translate(top = -9f * progress)
-                    rotate(degrees = -5f * progress, pivot = Offset(50f, 50f))
-                }) {
-                    // Radiant Pearl Sun
-                    drawCircle(pearl, radius = 7.5f, center = Offset(33f, 37f))
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(Color.White.copy(alpha = 0.5f), Color.Transparent),
-                            center = Offset(33f, 37f),
-                            radius = 12f
-                        ),
-                        radius = 12f,
-                        center = Offset(33f, 37f)
+            // Foreground chassis cast shadow
+            drawRoundRect(
+                color = Color(0x47001030),
+                topLeft = Offset(175f * s, 182f * s),
+                size = Size(660f * s, 660f * s),
+                cornerRadius = CornerRadius(118f * s, 118f * s)
+            )
+
+            clipPath(framePath) {
+                // Main Cupertino Sapphire Blue Body
+                drawRect(
+                    brush = AppleHigBluePalette.bodyBrush(s),
+                    topLeft = Offset(170f * s, 170f * s),
+                    size = Size(660f * s, 660f * s)
+                )
+                // Cylindrical Metallic Sheen
+                drawRect(
+                    brush = AppleHigBluePalette.cylindricalSheenBrush(s),
+                    topLeft = Offset(170f * s, 170f * s),
+                    size = Size(660f * s, 660f * s)
+                )
+                // Softbox Studio Gloss Stripes
+                with(AppleHigBluePalette) {
+                    drawSoftboxGlossStripes(195f, 170f, 830f, 810f, s)
+                }
+
+                // 4. Recessed Inner Sky Viewport (Physical Depth)
+                val viewportRect = Rect(236f * s, 236f * s, 764f * s, 764f * s)
+                val viewportPath = Path().apply {
+                    addRoundRect(RoundRect(viewportRect, CornerRadius(78f * s, 78f * s)))
+                }
+
+                // Inner recess shadow
+                drawRoundRect(
+                    brush = AppleHigBluePalette.capsuleRecessBrush(236f, 764f, s),
+                    topLeft = Offset(236f * s, 236f * s),
+                    size = Size(528f * s, 528f * s),
+                    cornerRadius = CornerRadius(78f * s, 78f * s)
+                )
+
+                clipPath(viewportPath) {
+                    // Deep Atmospheric Scenic Sky
+                    val skyGradient = Brush.verticalGradient(
+                        0.00f to Color(0xFF00194A), // Deep twilight indigo
+                        0.32f to Color(0xFF0049BA), // Vibrant royal cobalt
+                        0.65f to Color(0xFF0A84FF), // Radiant Apple sapphire
+                        0.88f to Color(0xFF5AC8FA), // Luminous azure horizon
+                        1.00f to Color(0xFFB8EEFF), // Warm atmospheric mist
+                        startY = 236f * s,
+                        endY = 764f * s
+                    )
+                    drawRect(
+                        brush = skyGradient,
+                        topLeft = Offset(236f * s, 236f * s),
+                        size = Size(528f * s, 528f * s)
                     )
 
-                    // Background Emerald/Sky Mountain
-                    val backPeak = Path().apply {
-                        moveTo(37f, 74f)
-                        lineTo(55f, 46f)
-                        cubicTo(57f, 43f, 60.5f, 43f, 62.5f, 46f)
-                        lineTo(72f, 61f)
-                        lineTo(72f, 64f)
-                        cubicTo(72f, 70f, 68f, 74f, 62f, 74f)
-                        close()
-                    }
-                    drawPath(backPeak, brush = sky)
+                    withTransform({
+                        // Landscape elements articulate on interaction
+                        translate(top = -14f * progress * s)
+                    }) {
+                        // 5. Radiant Luminous Celestial Sun Orb
+                        val sunCenter = Offset(372f * s, (365f - 18f * progress) * s)
+                        // Outer atmospheric corona
+                        drawCircle(
+                            color = Color(0x3566D4FF),
+                            radius = 88f * s,
+                            center = sunCenter
+                        )
+                        // Warm solar halo
+                        drawCircle(
+                            color = Color(0x55FFE885),
+                            radius = 68f * s,
+                            center = sunCenter
+                        )
+                        // Sun shadow depth
+                        drawCircle(
+                            color = Color(0x66000D2B),
+                            radius = 58f * s,
+                            center = Offset(sunCenter.x + 4f * s, sunCenter.y + 10f * s)
+                        )
+                        // Glowing Pearl Sun Orb
+                        drawCircle(
+                            brush = AppleHigBluePalette.luminousOrbBrush(sunCenter, 56f * s),
+                            radius = 56f * s,
+                            center = sunCenter
+                        )
+                        // Crisp white specular contour
+                        drawCircle(
+                            color = Color.White.copy(alpha = 0.92f),
+                            radius = 56f * s,
+                            center = sunCenter,
+                            style = Stroke(width = 3.2f * s)
+                        )
 
-                    // Foreground Pearl Mountain
-                    val frontPeak = Path().apply {
-                        moveTo(18f, 64f)
-                        lineTo(33f, 44f)
-                        cubicTo(35.2f, 41.2f, 39f, 41.2f, 41.2f, 44f)
-                        lineTo(64f, 74f)
-                        lineTo(27f, 74f)
-                        cubicTo(22f, 74f, 18f, 70f, 18f, 65f)
+                        // 6. Distant Misty Mountain Peak (Third Ridge)
+                        val farPeak = Path().apply {
+                            moveTo(220f * s, 764f * s)
+                            lineTo(340f * s, 580f * s)
+                            cubicTo(365f * s, 550f * s, 395f * s, 550f * s, 420f * s, 580f * s)
+                            lineTo(510f * s, 660f * s)
+                            lineTo(590f * s, 570f * s)
+                            cubicTo(612f * s, 545f * s, 638f * s, 545f * s, 660f * s, 570f * s)
+                            lineTo(780f * s, 700f * s)
+                            lineTo(780f * s, 764f * s)
+                            close()
+                        }
+                        drawPath(
+                            path = farPeak,
+                            brush = Brush.verticalGradient(
+                                0.0f to Color(0xFF00388A).copy(alpha = 0.85f),
+                                1.0f to Color(0xFF0A68D6).copy(alpha = 0.70f),
+                                startY = 550f * s,
+                                endY = 764f * s
+                            )
+                        )
+
+                        // 7. Secondary Sculpted Left Mountain Peak
+                        val backPeak = Path().apply {
+                            moveTo(220f * s, 770f * s)
+                            lineTo(378f * s, 526f * s)
+                            cubicTo(402f * s, 496f * s, 442f * s, 496f * s, 466f * s, 526f * s)
+                            lineTo(640f * s, 770f * s)
+                            close()
+                        }
+                        // Faceted light side
+                        drawPath(backPeak, brush = AppleHigBluePalette.secondaryLayerBrush(s))
+                        // Crest highlight on secondary peak
+                        val backCrest = Path().apply {
+                            moveTo(260f * s, 680f * s)
+                            lineTo(378f * s, 526f * s)
+                            cubicTo(402f * s, 496f * s, 442f * s, 496f * s, 466f * s, 526f * s)
+                            lineTo(550f * s, 640f * s)
+                        }
+                        drawPath(
+                            path = backCrest,
+                            color = Color(0xFFC7F0FF).copy(alpha = 0.75f),
+                            style = Stroke(width = 3.6f * s, cap = StrokeCap.Round)
+                        )
+
+                        // 8. Primary Hero Right Mountain Peak
+                        val frontPeak = Path().apply {
+                            moveTo(290f * s, 770f * s)
+                            lineTo(574f * s, 462f * s)
+                            cubicTo(606f * s, 428f * s, 656f * s, 428f * s, 688f * s, 462f * s)
+                            lineTo(780f * s, 560f * s)
+                            lineTo(780f * s, 770f * s)
+                            close()
+                        }
+                        drawPath(frontPeak, brush = AppleHigBluePalette.lidTopBrush(s))
+
+                        // Frosted Snow Crest Highlight Along Primary Ridge
+                        val frontCrest = Path().apply {
+                            moveTo(300f * s, 760f * s)
+                            lineTo(576f * s, 464f * s)
+                            cubicTo(606f * s, 432f * s, 656f * s, 432f * s, 686f * s, 464f * s)
+                            lineTo(775f * s, 555f * s)
+                        }
+                        drawPath(
+                            path = frontCrest,
+                            color = Color.White.copy(alpha = 0.94f),
+                            style = Stroke(width = 5.2f * s, cap = StrokeCap.Round)
+                        )
+                        // Secondary inner shimmer on snow ridge
+                        drawPath(
+                            path = frontCrest,
+                            color = Color(0xFFE0F7FF),
+                            style = Stroke(width = 2.4f * s, cap = StrokeCap.Round)
+                        )
+
+                        // 9. Reflective Horizon Lake / Valley Gradient at Base
+                        drawRect(
+                            brush = Brush.verticalGradient(
+                                0.0f to Color.Transparent,
+                                0.4f to Color(0xFF002970).copy(alpha = 0.45f),
+                                1.0f to Color(0xFF001538).copy(alpha = 0.85f),
+                                startY = 700f * s,
+                                endY = 764f * s
+                            ),
+                            topLeft = Offset(236f * s, 700f * s),
+                            size = Size(528f * s, 64f * s)
+                        )
+                    }
+
+                    // 10. Crystal Glass Specular Sheen (Curved 45° diagonal reflection across window)
+                    val glassSheenPath = Path().apply {
+                        moveTo(236f * s, 236f * s)
+                        lineTo(460f * s, 236f * s)
+                        lineTo(236f * s, 460f * s)
                         close()
                     }
-                    drawPath(frontPeak, brush = pearl)
+                    drawPath(
+                        path = glassSheenPath,
+                        brush = Brush.linearGradient(
+                            listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.04f), Color.Transparent),
+                            start = Offset(236f * s, 236f * s),
+                            end = Offset(420f * s, 420f * s)
+                        )
+                    )
+
+                    val glassBar = Path().apply {
+                        moveTo(330f * s, 236f * s)
+                        lineTo(420f * s, 236f * s)
+                        lineTo(236f * s, 420f * s)
+                        lineTo(236f * s, 330f * s)
+                        close()
+                    }
+                    drawPath(glassBar, color = Color.White.copy(alpha = 0.12f))
                 }
+
+                // 11. Anodized Inner Bevel Rim Around Viewport
+                drawRoundRect(
+                    brush = AppleHigBluePalette.capsuleBevelBrush(236f, 764f, s),
+                    topLeft = Offset(236f * s, 236f * s),
+                    size = Size(528f * s, 528f * s),
+                    cornerRadius = CornerRadius(78f * s, 78f * s),
+                    style = Stroke(width = 5.2f * s)
+                )
             }
+
+            // 12. Outer Chassis Specular Bevel Contour
+            drawPath(
+                path = framePath,
+                brush = AppleHigBluePalette.specularStrokeBrush(s),
+                style = Stroke(width = 3.6f * s)
+            )
         }
     }
 }

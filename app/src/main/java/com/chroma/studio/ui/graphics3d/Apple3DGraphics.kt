@@ -169,6 +169,51 @@ object AppleHigShaders {
         center = Offset(s * 0.42f, s * 0.40f),
         radius = s * 0.42f
     )
+
+    fun handleBrush(s: Float) = Brush.linearGradient(
+        0.00f to Color(0xFFA8ECFF),
+        0.30f to Color(0xFF3DB8FF),
+        0.68f to Color(0xFF007AFF),
+        1.00f to Color(0xFF0047BF),
+        start = Offset(s * 0.25f, s * 0.15f),
+        end = Offset(s * 0.75f, s * 0.65f)
+    )
+
+    fun lidTopBrush(s: Float) = Brush.linearGradient(
+        0.00f to Color(0xFF9BE8FF),
+        0.28f to Color(0xFF42B9FF),
+        0.62f to Color(0xFF007AFF),
+        0.88f to Color(0xFF0051D5),
+        1.00f to Color(0xFF003599),
+        start = Offset(s * 0.20f, s * 0.16f),
+        end = Offset(s * 0.84f, s * 0.72f)
+    )
+
+    fun secondaryLayerBrush(s: Float) = Brush.linearGradient(
+        0.00f to Color(0xFF70D6FF),
+        0.45f to Color(0xFF0A84FF),
+        0.85f to Color(0xFF0049C2),
+        1.00f to Color(0xFF00256E),
+        start = Offset(s * 0.18f, s * 0.18f),
+        end = Offset(s * 0.82f, s * 0.82f)
+    )
+
+    fun capsuleRecessBrush(top: Float, bottom: Float, s: Float) = Brush.linearGradient(
+        0.00f to Color(0xFF001440),
+        0.48f to Color(0xFF002975),
+        1.00f to Color(0xFF003DA6),
+        start = Offset(s * 0.40f, top),
+        end = Offset(s * 0.60f, bottom)
+    )
+
+    fun capsuleBevelBrush(top: Float, bottom: Float, s: Float) = Brush.linearGradient(
+        0.00f to Color(0xD9001238),
+        0.45f to Color(0x401A8CFF),
+        0.85f to Color(0xE070D6FF),
+        1.00f to Color(0xF5B8F0FF),
+        start = Offset(s * 0.35f, top),
+        end = Offset(s * 0.70f, bottom)
+    )
 }
 
 /**
@@ -706,23 +751,114 @@ private fun DrawScope.drawApple3DGraphicNormalized(id: Apple3DGraphicId, p: Floa
         }
 
         Apple3DGraphicId.PHOTO_GALLERY -> {
-            rotate(degrees = 7f, pivot = Offset(52f, 43f)) {
-                drawSapphireRecessRect(21f, 13f, 62f, 60f, 14f)
+            rotate(degrees = -7f - 5f * p, pivot = Offset(50f, 50f)) {
+                drawRoundRect(
+                    brush = AppleHigShaders.handleBrush(s),
+                    topLeft = Offset(19f, 19f),
+                    size = Size(61f, 61f),
+                    cornerRadius = CornerRadius(11f, 11f)
+                )
+                drawRoundRect(
+                    brush = Brush.linearGradient(listOf(Color(0xFF00194A), Color(0xFF00388A))),
+                    topLeft = Offset(24f, 24f),
+                    size = Size(51f, 51f),
+                    cornerRadius = CornerRadius(7.2f, 7.2f)
+                )
+                drawCircle(
+                    brush = Brush.radialGradient(listOf(Color.White.copy(alpha = 0.9f), Color(0xFF70D6FF).copy(alpha = 0.35f), Color.Transparent)),
+                    radius = 4.5f,
+                    center = Offset(36f, 34.5f)
+                )
+                drawRoundRect(
+                    brush = AppleHigShaders.specularStrokeBrush(s),
+                    topLeft = Offset(19f, 19f),
+                    size = Size(61f, 61f),
+                    cornerRadius = CornerRadius(11f, 11f),
+                    style = Stroke(width = 0.28f)
+                )
             }
-            drawSculptedSquircleBase(12f, 18f, 66f, 62f, 15f)
-            drawSapphireRecessRect(18f, 24f, 54f, 50f, 10f)
-            translate(top = -5f * p) {
-                drawCircle(pearl, radius = 7.2f, center = Offset(33f, 37f))
+            drawSculptedSquircleBase(17f, 17f, 66f, 66f, 11.8f)
+            val vpPath = Path().apply {
+                addRoundRect(RoundRect(Rect(23.6f, 23.6f, 76.4f, 76.4f), CornerRadius(7.8f, 7.8f)))
             }
-            val peaks = Path().apply {
-                moveTo(18f, 74f)
-                lineTo(36f, 44f)
-                lineTo(52f, 64f)
-                lineTo(60f, 50f)
-                lineTo(72f, 74f)
-                close()
+            drawRoundRect(
+                brush = AppleHigShaders.capsuleRecessBrush(23.6f, 76.4f, s),
+                topLeft = Offset(23.6f, 23.6f),
+                size = Size(52.8f, 52.8f),
+                cornerRadius = CornerRadius(7.8f, 7.8f)
+            )
+            clipPath(vpPath) {
+                drawRect(
+                    brush = Brush.verticalGradient(
+                        0.00f to Color(0xFF00194A),
+                        0.32f to Color(0xFF0049BA),
+                        0.65f to Color(0xFF0A84FF),
+                        0.88f to Color(0xFF5AC8FA),
+                        1.00f to Color(0xFFB8EEFF),
+                        startY = 23.6f,
+                        endY = 76.4f
+                    ),
+                    topLeft = Offset(23.6f, 23.6f),
+                    size = Size(52.8f, 52.8f)
+                )
+                translate(top = -1.4f * p) {
+                    val sunCenter = Offset(37.2f, 36.5f - 1.8f * p)
+                    drawCircle(Color(0x3566D4FF), radius = 8.8f, center = sunCenter)
+                    drawCircle(Color(0x55FFE885), radius = 6.8f, center = sunCenter)
+                    drawCircle(pearl, radius = 5.6f, center = sunCenter)
+                    drawCircle(Color.White.copy(alpha = 0.92f), radius = 5.6f, center = sunCenter, style = Stroke(0.32f))
+
+                    // Secondary Left Mountain Peak
+                    val backPeak = Path().apply {
+                        moveTo(22f, 77f)
+                        lineTo(37.8f, 52.6f)
+                        cubicTo(40.2f, 49.6f, 44.2f, 49.6f, 46.6f, 52.6f)
+                        lineTo(64f, 77f)
+                        close()
+                    }
+                    drawPath(backPeak, brush = AppleHigShaders.secondaryLayerBrush(s))
+
+                    // Primary Hero Right Mountain Peak
+                    val frontPeak = Path().apply {
+                        moveTo(29f, 77f)
+                        lineTo(57.4f, 46.2f)
+                        cubicTo(60.6f, 42.8f, 65.6f, 42.8f, 68.8f, 46.2f)
+                        lineTo(78f, 56f)
+                        lineTo(78f, 77f)
+                        close()
+                    }
+                    drawPath(frontPeak, brush = AppleHigShaders.lidTopBrush(s))
+
+                    val frontCrest = Path().apply {
+                        moveTo(30f, 76f)
+                        lineTo(57.6f, 46.4f)
+                        cubicTo(60.6f, 43.2f, 65.6f, 43.2f, 68.6f, 46.4f)
+                        lineTo(77.5f, 55.5f)
+                    }
+                    drawPath(frontCrest, Color.White.copy(alpha = 0.94f), style = Stroke(0.52f, cap = StrokeCap.Round))
+                }
+                val glassSheen = Path().apply {
+                    moveTo(23.6f, 23.6f)
+                    lineTo(46f, 23.6f)
+                    lineTo(23.6f, 46f)
+                    close()
+                }
+                drawPath(glassSheen, Color.White.copy(alpha = 0.18f))
             }
-            drawPath(peaks, pearl)
+            drawRoundRect(
+                brush = AppleHigShaders.capsuleBevelBrush(23.6f, 76.4f, s),
+                topLeft = Offset(23.6f, 23.6f),
+                size = Size(52.8f, 52.8f),
+                cornerRadius = CornerRadius(7.8f, 7.8f),
+                style = Stroke(0.52f)
+            )
+            drawRoundRect(
+                brush = AppleHigShaders.specularStrokeBrush(s),
+                topLeft = Offset(17f, 17f),
+                size = Size(66f, 66f),
+                cornerRadius = CornerRadius(11.8f, 11.8f),
+                style = Stroke(0.36f)
+            )
         }
 
         Apple3DGraphicId.SPATIAL_MAIL -> {
