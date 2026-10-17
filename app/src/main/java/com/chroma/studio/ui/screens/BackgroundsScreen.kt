@@ -21,6 +21,7 @@ import com.chroma.studio.model.ChromaWork
 import com.chroma.studio.ui.components.CanvasPreview
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.composables.icons.lucide.ChevronLeft
+import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.Lucide
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -69,7 +70,10 @@ fun BackgroundsScreen(
                         )
                     },
                     title = "No Custom Backgrounds",
-                    subtitle = "Create a new 'Full' shape work in the studio to set it as your dynamic home background."
+                    subtitle = "Create a new 'Full' shape work in the studio to set it as your dynamic home background.",
+                    actionButtonText = "Back to Works",
+                    actionButtonIcon = Lucide.ArrowLeft,
+                    onActionClick = onBack
                 )
             }
         } else {

@@ -22,6 +22,7 @@ import com.chroma.studio.ui.components.ApplePhotosGraphic
 import com.chroma.studio.ui.components.AppleFlashGraphic
 import com.chroma.studio.ui.components.AppleRemixGraphic
 import com.chroma.studio.ui.components.AppleHeartHandshakeGraphic
+import com.chroma.studio.ui.components.AppleLockGraphic
 import com.chroma.studio.ui.components.rememberAppleGraphicAnimationState
 import com.chroma.studio.ui.components.AiWaveSphereVector
 // Apple HIG 3D Empty States
@@ -432,35 +433,18 @@ fun UserProfileScreen(
         // Tab Content Items rendered directly into LazyVerticalGrid
         if (isRestricted) {
             item(span = { GridItemSpan(maxLineSpan) }) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 40.dp, bottom = 60.dp, start = 24.dp, end = 24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(72.dp)
-                            ,
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Lucide.Lock, contentDescription = "Private Account", tint = Color(0xFF007AFF), modifier = Modifier.size(32.dp))
-                    }
-                    Spacer(Modifier.height(16.dp))
-                    Text(
-                        text = "This Account is Private",
-                        color = colors.textMain,
-                        fontSize = 19.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        text = "Follow this account to see their works, posts, and videos.",
-                        color = Color(0xFF8E8E93),
-                        fontSize = 13.sp,
-                        textAlign = TextAlign.Center
-                    )
-                }
+                val lockGraphicState = rememberAppleGraphicAnimationState()
+                AppleEmptyTabState(
+                    graphic = {
+                        AppleLockGraphic(
+                            modifier = Modifier.size(150.dp),
+                            state = lockGraphicState,
+                            enableClickToAnimate = true
+                        )
+                    },
+                    title = "This Account is Private",
+                    subtitle = "Follow this account to see their works, posts, and videos."
+                )
             }
         } else {
             when (selectedTabIndex) {
@@ -726,13 +710,12 @@ fun UserProfileScreen(
         modifier = Modifier.fillMaxSize()
     ) {
         if (selectedPostIndex != null) {
-            val activeList = remember(selectedTabIndex, works) {
+            val activeList = remember(selectedTabIndex, normalWorks, imagePosts, remixWorks, works) {
                 when (selectedTabIndex) {
-                    0 -> works
-                    1 -> normalWorks
-                    2 -> imagePosts
-                    4 -> remixWorks
-                    else -> emptyList()
+                    0 -> normalWorks
+                    1 -> imagePosts
+                    3 -> remixWorks
+                    else -> works
                 }
             }
 
@@ -1184,14 +1167,21 @@ fun UserProfileScreen(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(160.dp),
+                                    .height(180.dp),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(Lucide.Image, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(28.dp))
-                                    Spacer(Modifier.height(8.dp))
-                                    Text("No image works published yet", color = colors.textMuted, fontSize = 12.sp)
-                                }
+                                val photosState = rememberAppleGraphicAnimationState()
+                                AppleEmptyTabState(
+                                    graphic = {
+                                        ApplePhotosGraphic(
+                                            modifier = Modifier.size(90.dp),
+                                            state = photosState,
+                                            enableClickToAnimate = true
+                                        )
+                                    },
+                                    title = "No Image Works",
+                                    subtitle = "Publish a work with an image to set it as banner."
+                                )
                             }
                         } else {
                             LazyVerticalGrid(

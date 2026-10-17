@@ -791,46 +791,58 @@ fun ApplePhotosGraphic(
             // Sapphire Recessed Landscape Window
             drawSapphireRecessRect(18f, 24f, 54f, 50f, 10f)
 
-            // Articulated Photo Landscape (Slides up & tilts gracefully!)
-            withTransform({
-                translate(top = -9f * progress)
-                rotate(degrees = -5f * progress, pivot = Offset(50f, 50f))
-            }) {
-                // Radiant Pearl Sun
-                drawCircle(pearl, radius = 7.5f, center = Offset(33f, 37f))
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(Color.White.copy(alpha = 0.5f), Color.Transparent),
-                        center = Offset(33f, 37f),
-                        radius = 12f
-                    ),
-                    radius = 12f,
-                    center = Offset(33f, 37f)
+            // Inner Window Clip Path with smooth 10f rounded corners (including bottom right)
+            val windowClipPath = Path().apply {
+                addRoundRect(
+                    RoundRect(
+                        rect = Rect(18f, 24f, 72f, 74f),
+                        cornerRadius = CornerRadius(10f, 10f)
+                    )
                 )
+            }
 
-                // Background Emerald/Sky Mountain
-                val backPeak = Path().apply {
-                    moveTo(37f, 74f)
-                    lineTo(55f, 46f)
-                    cubicTo(57f, 43f, 60.5f, 43f, 62.5f, 46f)
-                    lineTo(72f, 61f)
-                    lineTo(72f, 65f)
-                    cubicTo(72f, 70f, 68f, 74f, 63f, 74f)
-                    close()
-                }
-                drawPath(backPeak, brush = sky)
+            clipPath(windowClipPath) {
+                // Articulated Photo Landscape (Slides up & tilts gracefully!)
+                withTransform({
+                    translate(top = -9f * progress)
+                    rotate(degrees = -5f * progress, pivot = Offset(50f, 50f))
+                }) {
+                    // Radiant Pearl Sun
+                    drawCircle(pearl, radius = 7.5f, center = Offset(33f, 37f))
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(Color.White.copy(alpha = 0.5f), Color.Transparent),
+                            center = Offset(33f, 37f),
+                            radius = 12f
+                        ),
+                        radius = 12f,
+                        center = Offset(33f, 37f)
+                    )
 
-                // Foreground Pearl Mountain
-                val frontPeak = Path().apply {
-                    moveTo(18f, 64f)
-                    lineTo(33f, 44f)
-                    cubicTo(35.2f, 41.2f, 39f, 41.2f, 41.2f, 44f)
-                    lineTo(64f, 74f)
-                    lineTo(27f, 74f)
-                    cubicTo(22f, 74f, 18f, 70f, 18f, 65f)
-                    close()
+                    // Background Emerald/Sky Mountain
+                    val backPeak = Path().apply {
+                        moveTo(37f, 74f)
+                        lineTo(55f, 46f)
+                        cubicTo(57f, 43f, 60.5f, 43f, 62.5f, 46f)
+                        lineTo(72f, 61f)
+                        lineTo(72f, 64f)
+                        cubicTo(72f, 70f, 68f, 74f, 62f, 74f)
+                        close()
+                    }
+                    drawPath(backPeak, brush = sky)
+
+                    // Foreground Pearl Mountain
+                    val frontPeak = Path().apply {
+                        moveTo(18f, 64f)
+                        lineTo(33f, 44f)
+                        cubicTo(35.2f, 41.2f, 39f, 41.2f, 41.2f, 44f)
+                        lineTo(64f, 74f)
+                        lineTo(27f, 74f)
+                        cubicTo(22f, 74f, 18f, 70f, 18f, 65f)
+                        close()
+                    }
+                    drawPath(frontPeak, brush = pearl)
                 }
-                drawPath(frontPeak, brush = pearl)
             }
         }
     }
@@ -1325,6 +1337,128 @@ fun AppleChatGraphic(
                         radius = 1.4f,
                         center = Offset(dx - 1f, 34f)
                     )
+                }
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 7B. LOCK / PRIVATE ACCOUNT GRAPHICS ICON (Sculpted Padlock + Anodized Steel Shackle)
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+fun AppleLockGraphic(
+    modifier: Modifier = Modifier.size(165.dp),
+    state: AppleGraphicAnimationState = rememberAppleGraphicAnimationState(),
+    enableClickToAnimate: Boolean = true,
+    onClick: (() -> Unit)? = null
+) {
+    val scope = rememberCoroutineScope()
+    val articulate = state.articulationProgress.value
+
+    val clickModifier = if (enableClickToAnimate) {
+        Modifier.clickable(
+            interactionSource = remember { MutableInteractionSource() },
+            indication = null
+        ) {
+            scope.launch {
+                state.triggerArticulateAnimation()
+                onClick?.invoke()
+            }
+        }
+    } else Modifier
+
+    Canvas(modifier = modifier.then(clickModifier)) {
+        val s = 100f
+        val pearl = Apple3DShaderPalette.pearlBrush(s)
+        val sky = Apple3DShaderPalette.skyBrush(s)
+        val scaleFactor = size.minDimension / 100f
+
+        withTransform({
+            scale(scaleFactor, scaleFactor, pivot = Offset.Zero)
+            scale(state.squashX.value, state.squashY.value, pivot = Offset(50f, 85f))
+        }) {
+            // 1. Floor shadow
+            drawFloorShadow(50f, 88f, 36f, 4.8f)
+
+            // 2. Anodized Steel Arched Shackle (Unlocks/Slides up during articulation)
+            withTransform({
+                translate(top = -10f * articulate)
+            }) {
+                // Shackle back shadow
+                val shackleShadowPath = Path().apply {
+                    moveTo(33f, 48f)
+                    lineTo(33f, 32f)
+                    cubicTo(33f, 18f, 67f, 18f, 67f, 32f)
+                    lineTo(67f, 48f)
+                }
+                drawPath(
+                    shackleShadowPath,
+                    color = Color.Black.copy(alpha = 0.22f),
+                    style = Stroke(width = 8.5f, cap = StrokeCap.Round)
+                )
+
+                // Shackle pearl metallic body
+                drawPath(
+                    shackleShadowPath,
+                    brush = pearl,
+                    style = Stroke(width = 7.5f, cap = StrokeCap.Round)
+                )
+
+                // Shackle specular highlight
+                val shackleHighlight = Path().apply {
+                    moveTo(35f, 32f)
+                    cubicTo(35f, 21f, 65f, 21f, 65f, 32f)
+                }
+                drawPath(
+                    shackleHighlight,
+                    brush = Apple3DShaderPalette.specularStrokeBrush(s),
+                    style = Stroke(width = 2.2f, cap = StrokeCap.Round)
+                )
+            }
+
+            // 3. Sculpted Squircle Padlock Body (Cupertino Blue)
+            drawSculptedSquircleBase(22f, 40f, 56f, 45f, 14f)
+
+            // 4. Sapphire Recessed Keyhole Chamber
+            drawSapphireRecessRect(38f, 49f, 24f, 27f, 8f)
+
+            // 5. Keyhole (Circle top + tapered slot)
+            val keyholePath = Path().apply {
+                addOval(Rect(center = Offset(50f, 58f), radius = 4.2f))
+                moveTo(48.2f, 59.5f)
+                lineTo(47f, 68f)
+                cubicTo(47f, 69.5f, 53f, 69.5f, 53f, 68f)
+                lineTo(51.8f, 59.5f)
+                close()
+            }
+            drawPath(keyholePath, brush = sky)
+            drawPath(keyholePath, brush = Apple3DShaderPalette.specularStrokeBrush(s), style = Stroke(1.2f))
+
+            // Luminous core beacon in keyhole
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(Color.White.copy(alpha = 0.85f), Color.Transparent),
+                    center = Offset(50f, 58f),
+                    radius = 4.5f
+                ),
+                radius = 4.5f,
+                center = Offset(50f, 58f)
+            )
+
+            // Cylindrical metallic sheen across padlock body
+            val bodyPath = Path().apply {
+                addRoundRect(
+                    RoundRect(
+                        rect = Rect(22f, 40f, 78f, 85f),
+                        cornerRadius = CornerRadius(14f, 14f)
+                    )
+                )
+            }
+            clipPath(bodyPath) {
+                with(AppleHigBluePalette) {
+                    drawSoftboxGlossStripes(24f, 40f, 78f, 85f, s / 1000f)
                 }
             }
         }
