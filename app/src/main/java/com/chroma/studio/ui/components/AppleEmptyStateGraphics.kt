@@ -1,19 +1,30 @@
 package com.chroma.studio.ui.components
 
+import android.graphics.BlurMaskFilter
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -23,20 +34,25 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chroma.studio.ui.theme.LocalOscellionColors
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.hypot
+
 
 /**
  * Shared Palette and Shaders for Apple HIG 3D Empty State Graphics.
@@ -849,189 +865,1424 @@ fun ApplePhotosGraphic(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 4. WORKS / CANVAS PALETTE GRAPHICS ICON (Sculpted Palette + 3D Paint Wells + Stylus Wand)
+// 4. WORKS / CANVAS PALETTE GRAPHICS ICON (Apple HIG 3D Lucide Palette & Sculpted Pen)
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Represents each CNC-milled recessed paint well on the Lucide palette in 1000x1000 master space.
+ */
+data class PaintWellSpec(
+    val index: Int,
+    val name: String,
+    val center: Offset,
+    val highlightColor: Color,
+    val midColor: Color,
+    val deepColor: Color,
+    val abyssColor: Color,
+    val causticRimColor: Color,
+    val dipDelta: Offset
+)
+
+val AppleSystemPaintWells = listOf(
+    PaintWellSpec(
+        index = 0,
+        name = "System Cyan",
+        center = Offset(242f, 556f),
+        highlightColor = Color(0xFFE0F7FF),
+        midColor = Color(0xFF38BDF8),
+        deepColor = Color(0xFF007AFF),
+        abyssColor = Color(0xFF0040A8),
+        causticRimColor = Color(0xFFBAE6FD),
+        dipDelta = Offset(-105f, -18f)
+    ),
+    PaintWellSpec(
+        index = 1,
+        name = "System Indigo",
+        center = Offset(288f, 382f),
+        highlightColor = Color(0xFFEDE9FE),
+        midColor = Color(0xFF818CF8),
+        deepColor = Color(0xFF5856D6),
+        abyssColor = Color(0xFF2E1065),
+        causticRimColor = Color(0xFFDDD6FE),
+        dipDelta = Offset(-116f, -118f)
+    ),
+    PaintWellSpec(
+        index = 2,
+        name = "System Coral",
+        center = Offset(452f, 284f),
+        highlightColor = Color(0xFFFFFBEB),
+        midColor = Color(0xFFFB923C),
+        deepColor = Color(0xFFFF2D55),
+        abyssColor = Color(0xFF881337),
+        causticRimColor = Color(0xFFFED7AA),
+        dipDelta = Offset(-22f, -168f)
+    ),
+    PaintWellSpec(
+        index = 3,
+        name = "System Mint",
+        center = Offset(636f, 332f),
+        highlightColor = Color(0xFFECFDF5),
+        midColor = Color(0xFF34D399),
+        deepColor = Color(0xFF059669),
+        abyssColor = Color(0xFF064E3B),
+        causticRimColor = Color(0xFFA7F3D0),
+        dipDelta = Offset(82f, -138f)
+    )
+)
+
+enum class AppleBlueFinish(
+    val label: String,
+    val bodyStops: List<Pair<Float, Color>>,
+    val extrusionStops: List<Pair<Float, Color>>,
+    val crownStops: List<Pair<Float, Color>>
+) {
+    Cupertino(
+        label = "Cupertino Blue",
+        bodyStops = listOf(
+            0.00f to Color(0xFF56D0FF),
+            0.20f to Color(0xFF1E9BFF),
+            0.50f to Color(0xFF007AFF),
+            0.78f to Color(0xFF0051D5),
+            1.00f to Color(0xFF002B82)
+        ),
+        extrusionStops = listOf(
+            0.00f to Color(0xFF0051D5),
+            0.35f to Color(0xFF003594),
+            0.72f to Color(0xFF001F5C),
+            1.00f to Color(0xFF001238)
+        ),
+        crownStops = listOf(
+            0.00f to Color(0xFFA6ECFF),
+            0.32f to Color(0xFF42B9FF),
+            0.70f to Color(0xFF007AFF),
+            1.00f to Color(0xFF0045B8)
+        )
+    ),
+    PacificPro(
+        label = "Pacific Pro",
+        bodyStops = listOf(
+            0.00f to Color(0xFF67E8F9),
+            0.22f to Color(0xFF0EA5E9),
+            0.52f to Color(0xFF0284C7),
+            0.80f to Color(0xFF0369A1),
+            1.00f to Color(0xFF0F172A)
+        ),
+        extrusionStops = listOf(
+            0.00f to Color(0xFF0284C7),
+            0.40f to Color(0xFF075985),
+            0.75f to Color(0xFF0C4A6E),
+            1.00f to Color(0xFF082F49)
+        ),
+        crownStops = listOf(
+            0.00f to Color(0xFFCFFAFE),
+            0.35f to Color(0xFF38BDF8),
+            0.72f to Color(0xFF0284C7),
+            1.00f to Color(0xFF0369A1)
+        )
+    ),
+    SequoiaIndigo(
+        label = "Sequoia Indigo",
+        bodyStops = listOf(
+            0.00f to Color(0xFFA5B4FC),
+            0.22f to Color(0xFF6366F1),
+            0.52f to Color(0xFF4F46E5),
+            0.78f to Color(0xFF3730A3),
+            1.00f to Color(0xFF1E1B4B)
+        ),
+        extrusionStops = listOf(
+            0.00f to Color(0xFF4338CA),
+            0.40f to Color(0xFF312E81),
+            0.75f to Color(0xFF1E1B4B),
+            1.00f to Color(0xFF0F0D26)
+        ),
+        crownStops = listOf(
+            0.00f to Color(0xFFE0E7FF),
+            0.35f to Color(0xFF818CF8),
+            0.72f to Color(0xFF4F46E5),
+            1.00f to Color(0xFF3730A3)
+        )
+    )
+}
+
+/**
+ * State controller managing interactive spring animations, well selection, and studio overlays.
+ */
+@Stable
+class ApplePalettePenState(
+    private val scope: CoroutineScope
+) {
+    var selectedWell by mutableStateOf(AppleSystemPaintWells[0])
+        private set
+
+    var isPenPoised by mutableStateOf(false)
+    var isColorWells by mutableStateOf(true)
+    var showSquircle by mutableStateOf(false)
+    var showHigGrid by mutableStateOf(false)
+    var isDarkMode by mutableStateOf(false)
+    var blueFinish by mutableStateOf(AppleBlueFinish.Cupertino)
+
+    // Continuous 0f..1f progress for the 4-stage Pen Dip & Calligraphic Draw animation
+    val strokeTimeline = Animatable(0f)
+
+    // Palette elastic squash & rebound progress (0f = rest, 1f = max squash, <0f = rebound)
+    val paletteSquashX = Animatable(1f)
+    val paletteSquashY = Animatable(1f)
+    val paletteOffsetY = Animatable(0f)
+
+    // Palette remix spin rotation & lift
+    val remixRotation = Animatable(0f)
+    val remixScale = Animatable(1f)
+    val remixOffsetY = Animatable(0f)
+
+    private var isAnimating = false
+
+    fun selectWellAndAnimate(well: PaintWellSpec) {
+        selectedWell = well
+        triggerPaintStrokeAnimation()
+    }
+
+    /**
+     * Executes the exact multi-stage Pen Dip -> Calligraphic Sweep -> Palette Squash Rebound sequence.
+     */
+    fun triggerPaintStrokeAnimation() {
+        if (isAnimating) return
+        isAnimating = true
+
+        scope.launch {
+            coroutineScope {
+                // 1. Pen Dip, Sweep, Poised Lift, and Return (1120ms total)
+                launch {
+                    strokeTimeline.snapTo(0f)
+                    strokeTimeline.animateTo(
+                        targetValue = 1f,
+                        animationSpec = tween(
+                            durationMillis = 1120,
+                            easing = CubicBezierEasing(0.32f, 1.0f, 0.56f, 1f)
+                        )
+                    )
+                    strokeTimeline.snapTo(0f)
+                }
+
+                // 2. Palette Elastic Spring Squash & Rebound when nib dips into the paint well (240ms delay)
+                launch {
+                    delay(240)
+                    launch {
+                        paletteSquashX.animateTo(1.045f, tween(190, easing = FastOutSlowInEasing))
+                        paletteSquashX.animateTo(
+                            targetValue = 1f,
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessMediumLow
+                            )
+                        )
+                    }
+                    launch {
+                        paletteSquashY.animateTo(0.955f, tween(190, easing = FastOutSlowInEasing))
+                        paletteSquashY.animateTo(
+                            targetValue = 1f,
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessMediumLow
+                            )
+                        )
+                    }
+                    launch {
+                        paletteOffsetY.animateTo(11f, tween(190, easing = FastOutSlowInEasing))
+                        paletteOffsetY.animateTo(
+                            targetValue = 0f,
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessMediumLow
+                            )
+                        )
+                    }
+                }
+            }
+            isAnimating = false
+        }
+    }
+
+    /**
+     * Executes the Apple Remix Spin oscillation on the palette and poised lift on the pen.
+     */
+    fun triggerRemixSpin() {
+        if (isAnimating) return
+        isAnimating = true
+        val wasPoised = isPenPoised
+        isPenPoised = true
+
+        scope.launch {
+            coroutineScope {
+                launch {
+                    remixRotation.animateTo(-7.5f, tween(160, easing = FastOutSlowInEasing))
+                    remixRotation.animateTo(6.8f, tween(180, easing = FastOutSlowInEasing))
+                    remixRotation.animateTo(-3.5f, tween(160, easing = FastOutSlowInEasing))
+                    remixRotation.animateTo(
+                        targetValue = 0f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessMedium
+                        )
+                    )
+                }
+                launch {
+                    remixScale.animateTo(1.032f, tween(260))
+                    remixScale.animateTo(1f, spring(Spring.DampingRatioMediumBouncy))
+                }
+                launch {
+                    remixOffsetY.animateTo(-11f, tween(260))
+                    remixOffsetY.animateTo(0f, spring(Spring.DampingRatioMediumBouncy))
+                }
+            }
+            if (!wasPoised) isPenPoised = false
+            isAnimating = false
+        }
+    }
+}
+
 @Composable
-fun AppleCanvasPaletteGraphic(
-    modifier: Modifier = Modifier.size(165.dp),
-    state: AppleGraphicAnimationState = rememberAppleGraphicAnimationState(),
+fun rememberApplePalettePenState(): ApplePalettePenState {
+    val scope = rememberCoroutineScope()
+    return remember { ApplePalettePenState(scope) }
+}
+
+/**
+ * Master 1000x1000 Apple HIG 3D Glossy Lucide Palette & Pen Icon rendered natively on Jetpack Compose Canvas.
+ */
+@Composable
+fun AppleLucidePaletteAndPenIcon(
+    modifier: Modifier = Modifier.size(420.dp),
+    state: ApplePalettePenState = rememberApplePalettePenState(),
     enableClickToAnimate: Boolean = true,
     onClick: (() -> Unit)? = null
 ) {
-    val scope = rememberCoroutineScope()
-    val localScaleX = remember { Animatable(1f) }
-    val localScaleY = remember { Animatable(1f) }
-    val localWandAngle = remember { Animatable(0f) }
+    // Smooth transitions for poised hover state, color well visibility, and active ink color
+    val poisedFraction by animateFloatAsState(
+        targetValue = if (state.isPenPoised) 1f else 0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "PenPoisedSpring"
+    )
 
-    fun triggerPaletteSpring() {
-        scope.launch {
-            launch { localWandAngle.animateTo(-16f, tween(180, easing = FastOutSlowInEasing)) }
-            launch { localScaleX.animateTo(1.055f, tween(180)) }
-            localScaleY.animateTo(0.945f, tween(180))
+    val colorWellsAlpha by animateFloatAsState(
+        targetValue = if (state.isColorWells) 1f else 0f,
+        animationSpec = tween(380, easing = FastOutSlowInEasing),
+        label = "ColorWellsAlpha"
+    )
 
-            launch { localWandAngle.animateTo(0f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow)) }
-            launch { localScaleX.animateTo(1f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow)) }
-            localScaleY.animateTo(1f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow))
-        }
+    val squircleScale by animateFloatAsState(
+        targetValue = if (state.showSquircle) 1f else 0.91f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow),
+        label = "SquircleScale"
+    )
+
+    val squircleAlpha by animateFloatAsState(
+        targetValue = if (state.showSquircle) 1f else 0f,
+        animationSpec = tween(350),
+        label = "SquircleAlpha"
+    )
+
+    val gridAlpha by animateFloatAsState(
+        targetValue = if (state.showHigGrid) 1f else 0f,
+        animationSpec = tween(320),
+        label = "GridAlpha"
+    )
+
+    val activeMidColor by animateColorAsState(
+        targetValue = state.selectedWell.midColor,
+        animationSpec = tween(300),
+        label = "ActiveInkMidColor"
+    )
+
+    val activeDeepColor by animateColorAsState(
+        targetValue = state.selectedWell.deepColor,
+        animationSpec = tween(300),
+        label = "ActiveInkDeepColor"
+    )
+
+    val finish = state.blueFinish
+
+    val appleBodyBrush = remember(finish) {
+        Brush.linearGradient(
+            colorStops = finish.bodyStops.toTypedArray(),
+            start = Offset(140f, 50f),
+            end = Offset(860f, 950f)
+        )
     }
 
-    LaunchedEffect(state.isAnimating) {
-        if (state.isAnimating) {
-            triggerPaletteSpring()
-        }
+    val paletteExtrusionBrush = remember(finish) {
+        Brush.linearGradient(
+            colorStops = finish.extrusionStops.toTypedArray(),
+            start = Offset(80f, 100f),
+            end = Offset(920f, 950f)
+        )
     }
 
-    val clickModifier = if (enableClickToAnimate) {
-        Modifier.clickable(
-            interactionSource = remember { MutableInteractionSource() },
-            indication = null
-        ) {
-            triggerPaletteSpring()
-            scope.launch {
-                state.triggerArticulateAnimation()
+    val lidTopCrownBrush = remember(finish) {
+        Brush.linearGradient(
+            colorStops = finish.crownStops.toTypedArray(),
+            start = Offset(-45f, -310f),
+            end = Offset(45f, 100f)
+        )
+    }
+
+    val cylindricalSheenBrush = remember {
+        Brush.linearGradient(
+            0.00f to Color(0xFF88E0FF).copy(alpha = 0.58f),
+            0.13f to Color(0xFFFFFFFF).copy(alpha = 0.34f),
+            0.28f to Color(0xFF38B6FF).copy(alpha = 0.06f),
+            0.54f to Color(0xFF003EB3).copy(alpha = 0.18f),
+            0.81f to Color(0xFF001F6B).copy(alpha = 0.38f),
+            0.92f to Color(0xFF47B8FF).copy(alpha = 0.40f),
+            1.00f to Color(0xFFA3E8FF).copy(alpha = 0.68f),
+            start = Offset(100f, 0f),
+            end = Offset(900f, 0f)
+        )
+    }
+
+    val penCylindricalSheenBrush = remember {
+        Brush.linearGradient(
+            0.00f to Color(0xFF88E0FF).copy(alpha = 0.58f),
+            0.13f to Color(0xFFFFFFFF).copy(alpha = 0.34f),
+            0.28f to Color(0xFF38B6FF).copy(alpha = 0.06f),
+            0.54f to Color(0xFF003EB3).copy(alpha = 0.18f),
+            0.81f to Color(0xFF001F6B).copy(alpha = 0.38f),
+            0.92f to Color(0xFF47B8FF).copy(alpha = 0.40f),
+            1.00f to Color(0xFFA3E8FF).copy(alpha = 0.68f),
+            start = Offset(-55f, 0f),
+            end = Offset(55f, 0f)
+        )
+    }
+
+    val capsuleRecessBrush = remember {
+        Brush.linearGradient(
+            0.00f to Color(0xFF00123B),
+            0.46f to Color(0xFF002875),
+            1.00f to Color(0xFF003EA8),
+            start = Offset(-35f, -55f),
+            end = Offset(35f, 55f)
+        )
+    }
+
+    val capsuleBevelBrush = remember {
+        Brush.linearGradient(
+            0.00f to Color(0xFF000D2B).copy(alpha = 0.88f),
+            0.42f to Color(0xFF1A8CFF).copy(alpha = 0.24f),
+            0.82f to Color(0xFF75DAFF).copy(alpha = 0.90f),
+            1.00f to Color(0xFFCCF4FF).copy(alpha = 0.98f),
+            start = Offset(-55f, -55f),
+            end = Offset(55f, 55f)
+        )
+    }
+
+    val specularStrokeBrush = remember {
+        Brush.linearGradient(
+            0.00f to Color(0xFFFFFFFF).copy(alpha = 0.95f),
+            0.32f to Color(0xFF88E0FF).copy(alpha = 0.62f),
+            0.68f to Color(0xFF0051D5).copy(alpha = 0.14f),
+            1.00f to Color(0xFF70D6FF).copy(alpha = 0.82f),
+            start = Offset(116f, 184f),
+            end = Offset(886f, 866f)
+        )
+    }
+
+    Canvas(
+        modifier = modifier.pointerInput(enableClickToAnimate) {
+            if (!enableClickToAnimate) return@pointerInput
+            detectTapGestures { tapOffset ->
+                val minDim = kotlin.math.min(size.width, size.height).toFloat()
+                val scale = minDim / 1000f
+                val offsetX = (size.width - 1000f * scale) / 2f
+                val offsetY = (size.height - 1000f * scale) / 2f
+
+                // Convert pointer tap into 1000x1000 master coordinate space
+                val masterPoint = Offset(
+                    x = (tapOffset.x - offsetX) / scale,
+                    y = (tapOffset.y - offsetY) / scale
+                )
+
+                // Check if user tapped directly inside any of the 4 CNC-milled paint wells (r = 58f)
+                val tappedWell = AppleSystemPaintWells.firstOrNull { well ->
+                    hypot(masterPoint.x - well.center.x, masterPoint.y - well.center.y) <= 62f
+                }
+
+                if (tappedWell != null) {
+                    state.selectWellAndAnimate(tappedWell)
+                } else {
+                    state.triggerPaintStrokeAnimation()
+                }
                 onClick?.invoke()
             }
         }
-    } else Modifier
-
-    Canvas(modifier = modifier.then(clickModifier)) {
-        val s = size.minDimension / 1000f
-
-        // Ambient Floor Shadow
-        drawOval(
-            brush = AppleHigBluePalette.floorGlowBrush(485f, 868f, 220f, s),
-            topLeft = Offset(265f * s, 850f * s),
-            size = Size(440f * s, 36f * s)
-        )
-
-        val activeScaleX = if (state.isAnimating) state.squashX.value else localScaleX.value
-        val activeScaleY = if (state.isAnimating) state.squashY.value else localScaleY.value
-        val activeWandAngle = if (state.isAnimating && state.articulationProgress.value > 0f) {
-            -18f * state.articulationProgress.value
-        } else {
-            localWandAngle.value
-        }
+    ) {
+        val masterScale = size.minDimension / 1000f
+        val offsetLeft = (size.width - 1000f * masterScale) / 2f
+        val offsetTop = (size.height - 1000f * masterScale) / 2f
 
         withTransform({
-            scale(activeScaleX, activeScaleY, pivot = Offset(500f * s, 840f * s))
+            translate(left = offsetLeft, top = offsetTop)
+            scale(scaleX = masterScale, scaleY = masterScale, pivot = Offset.Zero)
         }) {
-            val palettePath = Path().apply {
-                moveTo(500f * s, 160f * s)
-                cubicTo(313f * s, 160f * s, 160f * s, 313f * s, 160f * s, 500f * s)
-                cubicTo(160f * s, 687f * s, 313f * s, 840f * s, 500f * s, 840f * s)
-                cubicTo(531.5f * s, 840f * s, 556f * s, 814.6f * s, 556f * s, 782.6f * s)
-                cubicTo(556f * s, 767.7f * s, 549.9f * s, 754.2f * s, 541.1f * s, 744.3f * s)
-                cubicTo(531.3f * s, 734.5f * s, 526.2f * s, 722.2f * s, 526.2f * s, 706.1f * s)
-                cubicTo(526.2f * s, 674.8f * s, 551.6f * s, 649.4f * s, 582.9f * s, 649.4f * s)
-                lineTo(650.8f * s, 649.4f * s)
-                cubicTo(754.5f * s, 649.4f * s, 839.7f * s, 564.3f * s, 839.7f * s, 460.5f * s)
-                cubicTo(838.8f * s, 296.4f * s, 685.7f * s, 160f * s, 500f * s, 160f * s)
-                close()
-            }
-
-            clipPath(palettePath) {
-                // 1. Main Cupertino Blue Body + Cylindrical Metallic Sheen
-                drawRect(
-                    brush = AppleHigBluePalette.bodyBrush(s),
-                    topLeft = Offset(150f * s, 150f * s),
-                    size = Size(700f * s, 700f * s)
-                )
-                drawRect(
-                    brush = AppleHigBluePalette.cylindricalSheenBrush(s),
-                    topLeft = Offset(150f * s, 150f * s),
-                    size = Size(700f * s, 700f * s)
-                )
-
-                with(AppleHigBluePalette) {
-                    drawSoftboxGlossStripes(195f, 175f, 825f, 795f, s)
-                }
-
-                // 2. Four Recessed Sapphire Wells with Luminous 3D Paint Orbs
-                val wells = listOf(
-                    Offset(313f, 517f),
-                    Offset(381f, 347f),
-                    Offset(551f, 313f),
-                    Offset(687f, 449f)
-                )
-
-                wells.forEach { well ->
-                    val center = Offset(well.x * s, well.y * s)
-                    drawCircle(
-                        brush = AppleHigBluePalette.capsuleRecessBrush(well.y - 54f, well.y + 54f, s),
-                        radius = 54f * s,
-                        center = center
-                    )
-                    drawCircle(
-                        brush = AppleHigBluePalette.luminousOrbBrush(center, 32f * s),
-                        radius = 32f * s,
-                        center = center
-                    )
-                    drawCircle(
-                        color = Color.White.copy(alpha = 0.78f),
-                        radius = 9f * s,
-                        center = Offset((well.x - 10f) * s, (well.y - 10f) * s)
-                    )
-                    drawCircle(
-                        brush = AppleHigBluePalette.capsuleBevelBrush(well.y - 54f, well.y + 54f, s),
-                        radius = 54f * s,
-                        center = center,
-                        style = Stroke(width = 4.8f * s)
-                    )
-                }
-
-                // 3. Recessed Sapphire Thumb Grip Well
-                val thumbWell = Offset(432f * s, 692f * s)
-                drawCircle(
-                    brush = AppleHigBluePalette.capsuleRecessBrush(634f, 750f, s),
-                    radius = 56f * s,
-                    center = thumbWell
-                )
-                drawCircle(
-                    brush = AppleHigBluePalette.capsuleBevelBrush(634f, 750f, s),
-                    radius = 56f * s,
-                    center = thumbWell,
-                    style = Stroke(width = 4.8f * s)
-                )
-            }
-
-            // Outer Specular Bevel Contour
-            drawPath(
-                path = palettePath,
-                brush = AppleHigBluePalette.specularStrokeBrush(s),
-                style = Stroke(width = 3.4f * s)
-            )
-
-            // 4. Cantilevered 3D Sculpted Brush / Stylus Wand
-            withTransform({
-                rotate(activeWandAngle, pivot = Offset(610f * s, 560f * s))
-            }) {
+            // =========================================================================
+            // 0. OPTIONAL iOS / macOS APP ICON SQUIRCLE PLINTH
+            // =========================================================================
+            if (squircleAlpha > 0.01f) {
                 withTransform({
-                    rotate(-38f, pivot = Offset(640f * s, 530f * s))
+                    scale(scaleX = squircleScale, scaleY = squircleScale, pivot = Offset(500f, 500f))
                 }) {
-                    drawRoundRect(
-                        color = Color(0x70001238),
-                        topLeft = Offset(612f * s, 342f * s),
-                        size = Size(54f * s, 320f * s),
-                        cornerRadius = CornerRadius(27f * s, 27f * s)
-                    )
-                    drawRoundRect(
-                        brush = AppleHigBluePalette.handleBrush(s),
-                        topLeft = Offset(604f * s, 330f * s),
-                        size = Size(52f * s, 320f * s),
-                        cornerRadius = CornerRadius(26f * s, 26f * s)
-                    )
-                    drawRoundRect(
-                        color = Color.White.copy(alpha = 0.84f),
-                        topLeft = Offset(604f * s, 330f * s),
-                        size = Size(52f * s, 320f * s),
-                        cornerRadius = CornerRadius(26f * s, 26f * s),
-                        style = Stroke(width = 3f * s)
+                    drawIosSquirclePlinth(alpha = squircleAlpha)
+                }
+            }
+
+            // =========================================================================
+            // MAIN LUCIDE PALETTE & PEN GROUP (With Compose Spring Physics)
+            // =========================================================================
+            withTransform({
+                translate(
+                    left = 0f,
+                    top = state.paletteOffsetY.value + state.remixOffsetY.value
+                )
+                rotate(
+                    degrees = state.remixRotation.value,
+                    pivot = Offset(500f, 540f)
+                )
+                scale(
+                    scaleX = state.paletteSquashX.value * state.remixScale.value,
+                    scaleY = state.paletteSquashY.value * state.remixScale.value,
+                    pivot = Offset(500f, 540f)
+                )
+            }) {
+                // 1. Ambient Blue Floor Shadow
+                withTransform({
+                    scale(scaleX = 1f, scaleY = 20f / 272f, pivot = Offset(482f, 898f))
+                }) {
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            0.00f to Color(0xFF0055E0).copy(alpha = 0.34f),
+                            0.55f to Color(0xFF007AFF).copy(alpha = 0.11f),
+                            1.00f to Color.Transparent,
+                            center = Offset(482f, 898f),
+                            radius = 272f
+                        ),
+                        radius = 272f,
+                        center = Offset(482f, 898f)
                     )
                 }
+
+                // 2. Multi-Layer Apple Studio Drop Shadow under Palette Assembly
+                val paletteExtrusionPath = buildLucidePalettePath(yOffset = 24f)
+                val paletteTopPath = buildLucidePalettePath(yOffset = 0f)
+
+                drawBlurredPathShadow(
+                    path = paletteExtrusionPath,
+                    color = Color(0xFF002B78).copy(alpha = 0.30f),
+                    dx = 0f,
+                    dy = 30f,
+                    blurRadius = 26f
+                )
+                drawBlurredPathShadow(
+                    path = paletteExtrusionPath,
+                    color = Color(0xFF001D54).copy(alpha = 0.20f),
+                    dx = 0f,
+                    dy = 10f,
+                    blurRadius = 10f
+                )
+
+                // 3. 3D CNC-Machined Lower Slab Extrusion Wall (24pt slab thickness)
+                drawPath(
+                    path = paletteExtrusionPath,
+                    brush = paletteExtrusionBrush
+                )
+
+                // Bottom Extrusion Rim Specular Catch-Light
+                val bottomRimCatch = Path().apply {
+                    moveTo(195f, 792f)
+                    cubicTo(268f, 864f, 372f, 889f, 476f, 889f)
+                    cubicTo(534f, 889f, 572f, 856f, 581f, 808f)
+                }
+                drawPath(
+                    path = bottomRimCatch,
+                    color = Color(0xFF38B6FF).copy(alpha = 0.45f),
+                    style = Stroke(width = 2.5f, cap = StrokeCap.Round)
+                )
+
+                // 4. Primary Clipped Top Surface of the Lucide Palette
+                clipPath(path = paletteTopPath) {
+                    // Primary Rich Cupertino Blue Gradient Fill
+                    drawRect(
+                        brush = appleBodyBrush,
+                        topLeft = Offset(100f, 170f),
+                        size = Size(800f, 720f)
+                    )
+
+                    // Cylindrical Metallic Anodized Reflection Pass
+                    drawRect(
+                        brush = cylindricalSheenBrush,
+                        topLeft = Offset(100f, 170f),
+                        size = Size(800f, 720f)
+                    )
+
+                    // Recessed Mixing Basin in Center-Right of Palette
+                    withTransform({
+                        rotate(degrees = -14f, pivot = Offset(512f, 482f))
+                    }) {
+                        drawBlurredOval(
+                            center = Offset(512f, 482f),
+                            rx = 124f,
+                            ry = 84f,
+                            color = Color(0xFF001B54).copy(alpha = 0.26f),
+                            blurRadius = 12f
+                        )
+                        drawOval(
+                            color = Color(0xFF70D6FF).copy(alpha = 0.25f),
+                            topLeft = Offset(515f - 120f, 485f - 80f),
+                            size = Size(240f, 160f),
+                            style = Stroke(width = 2.5f)
+                        )
+                    }
+
+                    // Overhead Dome Crown Sheen
+                    drawBlurredOval(
+                        center = Offset(435f, 238f),
+                        rx = 240f,
+                        ry = 48f,
+                        color = Color.White.copy(alpha = 0.28f),
+                        blurRadius = 14f
+                    )
+
+                    // Diagonal Studio Softbox Ribbons (Identical Optical Signature to Trash Bin)
+                    val wideRibbon = Path().apply {
+                        moveTo(152f, 195f)
+                        lineTo(262f, 195f)
+                        lineTo(348f, 865f)
+                        lineTo(238f, 865f)
+                        close()
+                    }
+                    drawBlurredPath(
+                        path = wideRibbon,
+                        color = Color.White.copy(alpha = 0.19f),
+                        blurRadius = 12f
+                    )
+
+                    val coreRibbon = Path().apply {
+                        moveTo(192f, 195f)
+                        lineTo(224f, 195f)
+                        lineTo(310f, 865f)
+                        lineTo(280f, 865f)
+                        close()
+                    }
+                    drawBlurredPath(
+                        path = coreRibbon,
+                        color = Color.White.copy(alpha = 0.31f),
+                        blurRadius = 4f
+                    )
+
+                    // Right Lobe Secondary Anodized Rim Catch
+                    drawBlurredOval(
+                        center = Offset(785f, 405f),
+                        rx = 92f,
+                        ry = 118f,
+                        color = Color(0xFF99E5FF).copy(alpha = 0.24f),
+                        blurRadius = 14f
+                    )
+
+                    // Bottom Continuous Curvature Cushion Highlight
+                    val bottomCushionPath = Path().apply {
+                        moveTo(210f, 784f)
+                        cubicTo(282f, 846f, 384f, 856f, 488f, 850f)
+                    }
+                    drawPath(
+                        path = bottomCushionPath,
+                        color = Color(0xFF88E0FF).copy(alpha = 0.52f),
+                        style = Stroke(width = 10f, cap = StrokeCap.Round)
+                    )
+
+                    // Dynamic Realistic Cast Shadow from Floating Pen onto Palette Surface
+                    val penPose = computePenPose(
+                        t = state.strokeTimeline.value,
+                        poisedFraction = poisedFraction,
+                        dipDelta = state.selectedWell.dipDelta
+                    )
+
+                    withTransform({
+                        translate(left = penPose.shadowTranslateX, top = penPose.shadowTranslateY)
+                        rotate(degrees = penPose.shadowRotation, pivot = Offset(545f, 465f))
+                        scale(
+                            scaleX = penPose.shadowScale,
+                            scaleY = penPose.shadowScale,
+                            pivot = Offset(545f, 465f)
+                        )
+                    }) {
+                        val surfaceShadowPath = Path().apply {
+                            moveTo(466f, 538f)
+                            lineTo(685f, 275f)
+                            cubicTo(712f, 245f, 755f, 285f, 725f, 318f)
+                            lineTo(494f, 552f)
+                            close()
+                        }
+                        drawBlurredPath(
+                            path = surfaceShadowPath,
+                            color = Color(0xFF000B26).copy(alpha = penPose.shadowAlpha),
+                            blurRadius = 18f
+                        )
+                    }
+                }
+
+                // 5. Crisp Specular Outer Diamond-Cut Chamfer on Palette Silhouette
+                val outerContourOnly = buildLucidePaletteOuterContour(yOffset = 0f)
+                drawPath(
+                    path = outerContourOnly,
+                    brush = specularStrokeBrush,
+                    style = Stroke(width = 3.5f)
+                )
+
+                // 6. Recessed Ergonomic Thumbport Bevel & Inner Wall Shadow
+                drawCircle(
+                    color = Color(0xFF000D2B).copy(alpha = 0.70f),
+                    radius = 67f,
+                    center = Offset(394f, 744f),
+                    style = Stroke(width = 7f)
+                )
+                withTransform({
+                    translate(left = 394f, top = 744f)
+                }) {
+                    drawCircle(
+                        brush = capsuleBevelBrush,
+                        radius = 66f,
+                        center = Offset.Zero,
+                        style = Stroke(width = 4.5f)
+                    )
+                }
+
+                // =========================================================================
+                // 7. FOUR INTERACTIVE CNC-MILLED PAINT WELLS
+                // =========================================================================
+                AppleSystemPaintWells.forEach { well ->
+                    val isSelected = well.index == state.selectedWell.index
+                    val wellScale = if (isSelected) 1.04f else 1f
+
+                    withTransform({
+                        translate(left = well.center.x, top = well.center.y)
+                        scale(scaleX = wellScale, scaleY = wellScale, pivot = Offset.Zero)
+                    }) {
+                        // Deep Sapphire Recessed Channel
+                        drawCircle(
+                            brush = capsuleRecessBrush,
+                            radius = 55f,
+                            center = Offset.Zero
+                        )
+
+                        // Inner Top-Left Machined Wall Shadow
+                        drawArc(
+                            color = Color(0xFF000A24).copy(alpha = 0.75f),
+                            startAngle = 144f,
+                            sweepAngle = 138f,
+                            useCenter = false,
+                            topLeft = Offset(-49f, -49f),
+                            size = Size(98f, 98f),
+                            style = Stroke(width = 8.5f, cap = StrokeCap.Round)
+                        )
+
+                        // Subsurface Liquid Acrylic Paint Dome
+                        if (colorWellsAlpha > 0.01f) {
+                            val domeScale = 0.75f + 0.25f * colorWellsAlpha
+                            withTransform({
+                                scale(scaleX = domeScale, scaleY = domeScale, pivot = Offset.Zero)
+                            }) {
+                                val dropletBrush = Brush.radialGradient(
+                                    0.00f to well.highlightColor.copy(alpha = colorWellsAlpha),
+                                    0.32f to well.midColor.copy(alpha = colorWellsAlpha),
+                                    0.72f to well.deepColor.copy(alpha = colorWellsAlpha),
+                                    0.92f to well.abyssColor.copy(alpha = colorWellsAlpha),
+                                    1.00f to well.midColor.copy(alpha = colorWellsAlpha),
+                                    center = Offset(-13f, -15f),
+                                    radius = 68f
+                                )
+                                drawCircle(
+                                    brush = dropletBrush,
+                                    radius = 41f,
+                                    center = Offset(0f, 2f)
+                                )
+
+                                // Subsurface Bottom-Right Caustic Glow
+                                drawArc(
+                                    color = well.causticRimColor.copy(alpha = 0.75f * colorWellsAlpha),
+                                    startAngle = 18f,
+                                    sweepAngle = 104f,
+                                    useCenter = false,
+                                    topLeft = Offset(-34f, -32f),
+                                    size = Size(68f, 68f),
+                                    style = Stroke(width = 5f, cap = StrokeCap.Round)
+                                )
+
+                                // Crisp Studio Softbox Specular Meniscus Highlight
+                                withTransform({
+                                    rotate(degrees = -32f, pivot = Offset(-14f, -14f))
+                                }) {
+                                    drawOval(
+                                        color = Color.White.copy(alpha = 0.88f * colorWellsAlpha),
+                                        topLeft = Offset(-14f - 14f, -14f - 7.5f),
+                                        size = Size(28f, 15f)
+                                    )
+                                }
+                                drawCircle(
+                                    color = Color.White.copy(alpha = 0.65f * colorWellsAlpha),
+                                    radius = 3f,
+                                    center = Offset(-4f, -22f)
+                                )
+                            }
+                        }
+
+                        // Precision Anodized Outer Bevel Rim
+                        drawCircle(
+                            brush = capsuleBevelBrush,
+                            radius = 55f,
+                            center = Offset.Zero,
+                            style = Stroke(width = 4.5f)
+                        )
+                    }
+                }
+
+                // =========================================================================
+                // 8. ACTIVE INK CONTACT GLOW & CALLIGRAPHIC STROKE RIBBON
+                // =========================================================================
+                val glowScale = 1f + 0.38f * poisedFraction
+                val glowAlpha = 0.48f + 0.47f * poisedFraction
+                withTransform({
+                    scale(scaleX = glowScale, scaleY = glowScale, pivot = Offset(472f, 534f))
+                }) {
+                    drawBlurredOval(
+                        center = Offset(472f, 534f),
+                        rx = 48f,
+                        ry = 26f,
+                        color = activeMidColor.copy(alpha = glowAlpha),
+                        blurRadius = 14f
+                    )
+                }
+
+                // Animated Calligraphic Vector Stroke Ribbon (Trimmed via PathMeasure)
+                val t = state.strokeTimeline.value
+                if (t > 0.16f) {
+                    val ribbonAlpha = when {
+                        t < 0.24f -> ((t - 0.16f) / 0.08f).coerceIn(0f, 1f)
+                        t < 0.74f -> 1f
+                        else -> (1f - (t - 0.74f) / 0.26f).coerceIn(0f, 1f)
+                    }
+
+                    val fullRibbonPath = Path().apply {
+                        moveTo(288f, 382f)
+                        cubicTo(332f, 492f, 418f, 575f, 508f, 518f)
+                        cubicTo(590f, 468f, 648f, 498f, 728f, 432f)
+                    }
+
+                    val pathMeasure = PathMeasure()
+                    pathMeasure.setPath(fullRibbonPath, false)
+                    val totalLength = pathMeasure.length
+
+                    val endFraction = ((t - 0.16f) / 0.58f).coerceIn(0f, 1f)
+                    val startFraction = if (t > 0.74f) {
+                        ((t - 0.74f) / 0.26f * 0.22f).coerceIn(0f, 0.3f)
+                    } else 0f
+
+                    val trimmedRibbon = Path()
+                    pathMeasure.getSegment(
+                        startDistance = totalLength * startFraction,
+                        stopDistance = totalLength * endFraction,
+                        destination = trimmedRibbon,
+                        startWithMoveTo = true
+                    )
+
+                    val ribbonBrush = Brush.linearGradient(
+                        0.00f to Color.White.copy(alpha = ribbonAlpha),
+                        0.38f to activeMidColor.copy(alpha = ribbonAlpha),
+                        1.00f to activeDeepColor.copy(alpha = ribbonAlpha),
+                        start = Offset(288f, 382f),
+                        end = Offset(728f, 432f)
+                    )
+
+                    drawPath(
+                        path = trimmedRibbon,
+                        brush = ribbonBrush,
+                        style = Stroke(width = 20f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                    )
+                    drawPath(
+                        path = trimmedRibbon,
+                        color = Color.White.copy(alpha = 0.85f * ribbonAlpha),
+                        style = Stroke(width = 5f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                    )
+                }
+
+                // =========================================================================
+                // 9. LUCIDE SCULPTED STUDIO PEN (45.0° Optical Axis + Spring Kinematics)
+                // =========================================================================
+                val penPose = computePenPose(
+                    t = state.strokeTimeline.value,
+                    poisedFraction = poisedFraction,
+                    dipDelta = state.selectedWell.dipDelta
+                )
+
+                withTransform({
+                    translate(left = penPose.translateX, top = penPose.translateY)
+                    rotate(degrees = penPose.rotation, pivot = Offset(640f, 360f))
+                    scale(scaleX = penPose.scale, scaleY = penPose.scale, pivot = Offset(640f, 360f))
+                    translate(left = 644f, top = 362f)
+                    rotate(degrees = 45f, pivot = Offset.Zero)
+                }) {
+                    drawSculptedApplePen(
+                        appleBodyBrush = appleBodyBrush,
+                        lidTopCrownBrush = lidTopCrownBrush,
+                        penCylindricalSheenBrush = penCylindricalSheenBrush,
+                        capsuleRecessBrush = capsuleRecessBrush,
+                        activeMidColor = activeMidColor
+                    )
+                }
+            }
+
+            // =========================================================================
+            // 10. APPLE HIG 1024×1024 OPTICAL CONSTRUCTION GRID OVERLAY
+            // =========================================================================
+            if (gridAlpha > 0.01f) {
+                drawAppleHigConstructionGrid(alpha = gridAlpha)
             }
         }
     }
+}
+
+/**
+ * Renders the local-space 45° Apple Studio Pen assembly (Nib, Ferrule, Anodized Barrel, and Pocket Clip).
+ */
+private fun DrawScope.drawSculptedApplePen(
+    appleBodyBrush: Brush,
+    lidTopCrownBrush: Brush,
+    penCylindricalSheenBrush: Brush,
+    capsuleRecessBrush: Brush,
+    activeMidColor: Color
+) {
+    val barrelPath = Path().apply {
+        moveTo(-47f, -258f)
+        cubicTo(-47f, -292f, -25f, -314f, 0f, -314f)
+        cubicTo(25f, -314f, 47f, -292f, 47f, -258f)
+        lineTo(42f, 86f)
+        cubicTo(42f, 96f, 35f, 102f, 24f, 102f)
+        lineTo(-24f, 102f)
+        cubicTo(-35f, 102f, -42f, 96f, -42f, 86f)
+        close()
+    }
+
+    val nibConePath = Path().apply {
+        moveTo(-38f, 96f)
+        lineTo(38f, 96f)
+        lineTo(22f, 176f)
+        cubicTo(16f, 204f, 7f, 228f, 0f, 244f)
+        cubicTo(-7f, 228f, -16f, 204f, -22f, 176f)
+        close()
+    }
+
+    // Floating Drop Shadow beneath Pen Assembly
+    drawBlurredPathShadow(
+        path = barrelPath,
+        color = Color(0xFF001542).copy(alpha = 0.38f),
+        dx = -16f,
+        dy = 28f,
+        blurRadius = 18f
+    )
+    drawBlurredPathShadow(
+        path = nibConePath,
+        color = Color(0xFF001542).copy(alpha = 0.34f),
+        dx = -12f,
+        dy = 22f,
+        blurRadius = 14f
+    )
+
+    // ---------------- 1. PRECISION FOUNTAIN / STYLUS NIB & FERRULE ----------------
+    val nibBrush = Brush.linearGradient(
+        0.00f to Color(0xFFF0FAFF),
+        0.24f to Color(0xFF8AE2FF),
+        0.56f to Color(0xFF0A84FF),
+        0.84f to Color(0xFF0044B5),
+        1.00f to Color(0xFF001E5A),
+        start = Offset(-38f, 100f),
+        end = Offset(38f, 240f)
+    )
+    drawPath(path = nibConePath, brush = nibBrush)
+
+    // Right Facet Shaded Depth on Nib Cone
+    val rightNibFacet = Path().apply {
+        moveTo(0f, 96f)
+        lineTo(38f, 96f)
+        lineTo(22f, 176f)
+        cubicTo(16f, 204f, 7f, 228f, 0f, 244f)
+        close()
+    }
+    drawPath(path = rightNibFacet, color = Color(0xFF001A57).copy(alpha = 0.34f))
+
+    // Left Facet Specular Highlight Streak
+    drawLine(
+        color = Color.White.copy(alpha = 0.78f),
+        start = Offset(-29f, 102f),
+        end = Offset(-12f, 198f),
+        strokeWidth = 5.5f,
+        cap = StrokeCap.Round
+    )
+
+    // Precision Machined Ferrule Collar Band
+    val ferruleBrush = Brush.linearGradient(
+        0.00f to Color(0xFF9BE7FF),
+        0.22f to Color(0xFFFFFFFF),
+        0.52f to Color(0xFF38B2FF),
+        0.82f to Color(0xFF0040B0),
+        1.00f to Color(0xFF80DCFF),
+        start = Offset(-41f, 88f),
+        end = Offset(41f, 88f)
+    )
+    drawRoundRect(
+        brush = ferruleBrush,
+        topLeft = Offset(-41f, 88f),
+        size = Size(82f, 14f),
+        cornerRadius = CornerRadius(4f, 4f)
+    )
+    drawRoundRect(
+        color = Color(0xFF002B80),
+        topLeft = Offset(-41f, 88f),
+        size = Size(82f, 14f),
+        cornerRadius = CornerRadius(4f, 4f),
+        style = Stroke(width = 1.5f)
+    )
+
+    // Classic Lucide Fountain Capillary Slit & Breather Hole
+    drawLine(
+        color = Color(0xFF001238),
+        start = Offset(0f, 154f),
+        end = Offset(0f, 238f),
+        strokeWidth = 4f,
+        cap = StrokeCap.Round
+    )
+    drawCircle(
+        color = Color(0xFF001238),
+        radius = 8f,
+        center = Offset(0f, 150f)
+    )
+    drawCircle(
+        color = activeMidColor,
+        radius = 8f,
+        center = Offset(0f, 150f),
+        style = Stroke(width = 2.5f)
+    )
+
+    // Dynamic Glowing Ink Tip Droplet
+    drawCircle(
+        color = activeMidColor,
+        radius = 8f,
+        center = Offset(0f, 242f)
+    )
+    drawCircle(
+        color = Color.White,
+        radius = 3.5f,
+        center = Offset(-2f, 240f)
+    )
+
+    // Outer Specular Bevel on Nib Cone
+    val penSpecularBrush = Brush.linearGradient(
+        0.00f to Color.White.copy(alpha = 0.92f),
+        0.50f to Color(0xFF88E0FF).copy(alpha = 0.55f),
+        1.00f to Color(0xFF70D6FF).copy(alpha = 0.80f),
+        start = Offset(-47f, -314f),
+        end = Offset(47f, 244f)
+    )
+    drawPath(
+        path = nibConePath,
+        brush = penSpecularBrush,
+        style = Stroke(width = 2.2f)
+    )
+
+    // ---------------- 2. UNIBODY ANODIZED PEN BARREL ----------------
+    clipPath(path = barrelPath) {
+        drawRect(
+            brush = appleBodyBrush,
+            topLeft = Offset(-55f, -320f),
+            size = Size(110f, 430f)
+        )
+        drawRect(
+            brush = penCylindricalSheenBrush,
+            topLeft = Offset(-55f, -320f),
+            size = Size(110f, 430f)
+        )
+
+        // Top Dome Crown Cap Surface
+        drawOval(
+            brush = lidTopCrownBrush,
+            topLeft = Offset(-50f, -268f - 34f),
+            size = Size(100f, 68f)
+        )
+        val crownHighlight = Path().apply {
+            moveTo(-38f, -258f)
+            cubicTo(-18f, -248f, 18f, -248f, 38f, -258f)
+        }
+        drawPath(
+            path = crownHighlight,
+            color = Color.White.copy(alpha = 0.65f),
+            style = Stroke(width = 3.5f, cap = StrokeCap.Round)
+        )
+
+        // Recessed Sapphire Grip Channel Band
+        drawRect(
+            brush = capsuleRecessBrush,
+            topLeft = Offset(-50f, 34f),
+            size = Size(100f, 20f)
+        )
+        drawLine(
+            color = Color(0xFF000A24).copy(alpha = 0.85f),
+            start = Offset(-50f, 35f),
+            end = Offset(50f, 35f),
+            strokeWidth = 3f
+        )
+        drawLine(
+            color = Color(0xFF88E0FF).copy(alpha = 0.80f),
+            start = Offset(-50f, 54f),
+            end = Offset(50f, 54f),
+            strokeWidth = 2.2f
+        )
+
+        // Recessed Center Barrel Precision Ring
+        drawRect(
+            brush = capsuleRecessBrush,
+            topLeft = Offset(-50f, -138f),
+            size = Size(100f, 12f)
+        )
+        drawLine(
+            color = Color(0xFF75DAFF).copy(alpha = 0.70f),
+            start = Offset(-50f, -126f),
+            end = Offset(50f, -126f),
+            strokeWidth = 2f
+        )
+
+        // Long Vertical Studio Softbox Highlight Strip Down Left of Barrel
+        drawRoundRect(
+            color = Color.White.copy(alpha = 0.32f),
+            topLeft = Offset(-33f, -298f),
+            size = Size(14f, 390f),
+            cornerRadius = CornerRadius(7f, 7f)
+        )
+        drawRoundRect(
+            color = Color.White.copy(alpha = 0.58f),
+            topLeft = Offset(-26f, -292f),
+            size = Size(5.5f, 380f),
+            cornerRadius = CornerRadius(2.75f, 2.75f)
+        )
+
+        // Right Edge Rim Catch
+        drawRoundRect(
+            color = Color(0xFF99E5FF).copy(alpha = 0.30f),
+            topLeft = Offset(25f, -288f),
+            size = Size(9f, 375f),
+            cornerRadius = CornerRadius(4.5f, 4.5f)
+        )
+    }
+
+    // Crisp Specular Outer Bevel Contour on Pen Barrel
+    drawPath(
+        path = barrelPath,
+        brush = penSpecularBrush,
+        style = Stroke(width = 2.8f)
+    )
+
+    // ---------------- 3. SCULPTED POCKET CLIP ARCH ----------------
+    // Clip Cast Shadow on Barrel
+    drawRoundRect(
+        color = Color(0xFF000E30).copy(alpha = 0.48f),
+        topLeft = Offset(-10f, -244f),
+        size = Size(24f, 154f),
+        cornerRadius = CornerRadius(12f, 12f)
+    )
+
+    // Sculpted Anodized Clip Body
+    drawRoundRect(
+        brush = lidTopCrownBrush,
+        topLeft = Offset(-12f, -252f),
+        size = Size(24f, 150f),
+        cornerRadius = CornerRadius(12f, 12f)
+    )
+    drawRoundRect(
+        brush = penSpecularBrush,
+        topLeft = Offset(-12f, -252f),
+        size = Size(24f, 150f),
+        cornerRadius = CornerRadius(12f, 12f),
+        style = Stroke(width = 2.4f)
+    )
+
+    // Recessed Sapphire Slot inside Clip
+    drawRoundRect(
+        brush = capsuleRecessBrush,
+        topLeft = Offset(-4.5f, -228f),
+        size = Size(9f, 102f),
+        cornerRadius = CornerRadius(4.5f, 4.5f)
+    )
+
+    // Top Specular Highlight Ridge on Clip
+    drawLine(
+        color = Color.White.copy(alpha = 0.88f),
+        start = Offset(-2.5f, -242f),
+        end = Offset(-2.5f, -114f),
+        strokeWidth = 3.2f,
+        cap = StrokeCap.Round
+    )
+}
+
+/**
+ * Builds the exact G2-continuous Lucide Palette silhouette with the EvenOdd ergonomic thumbport cutout.
+ */
+private fun buildLucidePalettePath(yOffset: Float): Path = Path().apply {
+    fillType = PathFillType.EvenOdd
+    addPath(buildLucidePaletteOuterContour(yOffset))
+    // Ergonomic Thumbport Cutout at (394, 744 + yOffset) with r = 66f
+    addOval(
+        Rect(
+            left = 328f,
+            top = 678f + yOffset,
+            right = 460f,
+            bottom = 810f + yOffset
+        )
+    )
+}
+
+private fun buildLucidePaletteOuterContour(yOffset: Float): Path = Path().apply {
+    moveTo(476f, 184f + yOffset)
+    cubicTo(258f, 184f + yOffset, 116f, 336f + yOffset, 116f, 530f + yOffset)
+    cubicTo(116f, 724f + yOffset, 268f, 866f + yOffset, 476f, 866f + yOffset)
+    cubicTo(542f, 866f + yOffset, 584f, 824f + yOffset, 584f, 770f + yOffset)
+    cubicTo(584f, 742f + yOffset, 570f, 718f + yOffset, 552f, 698f + yOffset)
+    cubicTo(534f, 678f + yOffset, 522f, 656f + yOffset, 522f, 628f + yOffset)
+    cubicTo(522f, 580f + yOffset, 560f, 544f + yOffset, 612f, 544f + yOffset)
+    lineTo(696f, 544f + yOffset)
+    cubicTo(810f, 544f + yOffset, 886f, 466f + yOffset, 886f, 358f + yOffset)
+    cubicTo(886f, 242f + yOffset, 704f, 184f + yOffset, 476f, 184f + yOffset)
+    close()
+}
+
+private data class PenPoseKinematics(
+    val translateX: Float,
+    val translateY: Float,
+    val rotation: Float,
+    val scale: Float,
+    val shadowTranslateX: Float,
+    val shadowTranslateY: Float,
+    val shadowRotation: Float,
+    val shadowScale: Float,
+    val shadowAlpha: Float
+)
+
+/**
+ * Computes the exact 4-keyframe Pen & Shadow kinematics matching `applePenDipAndDraw` and `pen-poised`.
+ */
+private fun computePenPose(
+    t: Float,
+    poisedFraction: Float,
+    dipDelta: Offset
+): PenPoseKinematics {
+    if (t <= 0.001f) {
+        return PenPoseKinematics(
+            translateX = 26f * poisedFraction,
+            translateY = -36f * poisedFraction,
+            rotation = 9.5f * poisedFraction,
+            scale = 1f + 0.032f * poisedFraction,
+            shadowTranslateX = 34f * poisedFraction,
+            shadowTranslateY = 16f * poisedFraction,
+            shadowRotation = 7f * poisedFraction,
+            shadowScale = 1f - 0.12f * poisedFraction,
+            shadowAlpha = 0.45f - 0.21f * poisedFraction
+        )
+    }
+
+    fun lerp(a: Float, b: Float, f: Float) = a + (b - a) * f.coerceIn(0f, 1f)
+
+    return when {
+        // Stage 1 (0% -> 22%): Dip into active paint well
+        t < 0.22f -> {
+            val f = t / 0.22f
+            PenPoseKinematics(
+                translateX = lerp(0f, dipDelta.x, f),
+                translateY = lerp(0f, dipDelta.y, f),
+                rotation = lerp(0f, -13f, f),
+                scale = lerp(1f, 0.97f, f),
+                shadowTranslateX = lerp(0f, dipDelta.x, f),
+                shadowTranslateY = lerp(0f, dipDelta.y, f),
+                shadowRotation = 0f,
+                shadowScale = lerp(1f, 0.92f, f),
+                shadowAlpha = lerp(0.45f, 0.60f, f)
+            )
+        }
+        // Stage 2 (22% -> 54%): Fluid calligraphic sweep across mixing basin
+        t < 0.54f -> {
+            val f = (t - 0.22f) / 0.32f
+            PenPoseKinematics(
+                translateX = lerp(dipDelta.x, -14f, f),
+                translateY = lerp(dipDelta.y, 34f, f),
+                rotation = lerp(-13f, 6.5f, f),
+                scale = lerp(0.97f, 1.035f, f),
+                shadowTranslateX = lerp(dipDelta.x, -8f, f),
+                shadowTranslateY = lerp(dipDelta.y, 38f, f),
+                shadowRotation = 0f,
+                shadowScale = lerp(0.92f, 1.02f, f),
+                shadowAlpha = lerp(0.60f, 0.50f, f)
+            )
+        }
+        // Stage 3 (54% -> 80%): Poised follow-through lift
+        t < 0.80f -> {
+            val f = (t - 0.54f) / 0.26f
+            PenPoseKinematics(
+                translateX = lerp(-14f, 32f, f),
+                translateY = lerp(34f, -26f, f),
+                rotation = lerp(6.5f, 11f, f),
+                scale = lerp(1.035f, 1.02f, f),
+                shadowTranslateX = lerp(-8f, 38f, f),
+                shadowTranslateY = lerp(38f, -12f, f),
+                shadowRotation = lerp(0f, 7f, f),
+                shadowScale = lerp(1.02f, 0.85f, f),
+                shadowAlpha = lerp(0.50f, 0.22f, f)
+            )
+        }
+        // Stage 4 (80% -> 100%): Settle smoothly back to 45° rest position
+        else -> {
+            val f = (t - 0.80f) / 0.20f
+            PenPoseKinematics(
+                translateX = lerp(32f, 0f, f),
+                translateY = lerp(-26f, 0f, f),
+                rotation = lerp(11f, 0f, f),
+                scale = lerp(1.02f, 1f, f),
+                shadowTranslateX = lerp(38f, 0f, f),
+                shadowTranslateY = lerp(-12f, 0f, f),
+                shadowRotation = lerp(7f, 0f, f),
+                shadowScale = lerp(0.85f, 1f, f),
+                shadowAlpha = lerp(0.22f, 0.45f, f)
+            )
+        }
+    }
+}
+
+private fun DrawScope.drawIosSquirclePlinth(alpha: Float) {
+    // 3D Plinth Bottom Lip Extrusion
+    drawRoundRect(
+        color = Color(0xFFB8D3FA).copy(alpha = alpha),
+        topLeft = Offset(88f, 98f),
+        size = Size(824f, 824f),
+        cornerRadius = CornerRadius(192f, 192f)
+    )
+    // Main Ceramic Glass Squircle Surface
+    val squircleBrush = Brush.linearGradient(
+        0.00f to Color.White.copy(alpha = alpha),
+        0.48f to Color(0xFFF4F8FF).copy(alpha = alpha),
+        0.85f to Color(0xFFE1EDFF).copy(alpha = alpha),
+        1.00f to Color(0xFFCFE2FF).copy(alpha = alpha),
+        start = Offset(150f, 88f),
+        end = Offset(850f, 912f)
+    )
+    drawRoundRect(
+        brush = squircleBrush,
+        topLeft = Offset(88f, 88f),
+        size = Size(824f, 824f),
+        cornerRadius = CornerRadius(192f, 192f)
+    )
+    drawRoundRect(
+        color = Color(0xFF9AC2FF).copy(alpha = 0.85f * alpha),
+        topLeft = Offset(88f, 88f),
+        size = Size(824f, 824f),
+        cornerRadius = CornerRadius(192f, 192f),
+        style = Stroke(width = 3.5f)
+    )
+}
+
+private fun DrawScope.drawAppleHigConstructionGrid(alpha: Float) {
+    val gridBlue = Color(0xFF007AFF).copy(alpha = 0.55f * alpha)
+    val dashEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f), 0f)
+
+    // Squircle Safe Area Boundary (824x824)
+    drawRoundRect(
+        color = gridBlue,
+        topLeft = Offset(88f, 88f),
+        size = Size(824f, 824f),
+        cornerRadius = CornerRadius(192f, 192f),
+        style = Stroke(width = 1.8f, pathEffect = dashEffect)
+    )
+
+    // Golden Ratio Concentric Keyline Circles
+    drawCircle(color = gridBlue, radius = 384f, center = Offset(500f, 500f), style = Stroke(width = 1.4f))
+    drawCircle(color = gridBlue, radius = 272f, center = Offset(500f, 500f), style = Stroke(width = 1.4f))
+    drawCircle(
+        color = gridBlue,
+        radius = 168f,
+        center = Offset(500f, 500f),
+        style = Stroke(width = 1.4f, pathEffect = dashEffect)
+    )
+
+    // Orthogonal & Diagonal Optical Axes
+    drawLine(color = gridBlue, start = Offset(88f, 500f), end = Offset(912f, 500f), strokeWidth = 1.2f)
+    drawLine(color = gridBlue, start = Offset(500f, 88f), end = Offset(500f, 912f), strokeWidth = 1.2f)
+    drawLine(color = gridBlue, start = Offset(150f, 150f), end = Offset(850f, 850f), strokeWidth = 1.2f)
+
+    // 45.0° Pen Trajectory Axis (Magenta Keyline)
+    drawLine(
+        color = Color(0xFFFF2D55).copy(alpha = 0.80f * alpha),
+        start = Offset(260f, 746f),
+        end = Offset(860f, 146f),
+        strokeWidth = 2f,
+        pathEffect = dashEffect
+    )
+
+    // Paint Well Center Crosshairs
+    val crosshairColor = Color(0xFF00C7BE).copy(alpha = 0.90f * alpha)
+    AppleSystemPaintWells.forEach { well ->
+        val c = well.center
+        drawLine(crosshairColor, Offset(c.x - 16f, c.y), Offset(c.x + 16f, c.y), strokeWidth = 2f)
+        drawLine(crosshairColor, Offset(c.x, c.y - 16f), Offset(c.x, c.y + 16f), strokeWidth = 2f)
+    }
+}
+
+/**
+ * Native Android Canvas BlurMaskFilter helpers so softbox highlights and drop shadows match SVG filters.
+ */
+private fun DrawScope.drawBlurredPathShadow(
+    path: Path,
+    color: Color,
+    dx: Float,
+    dy: Float,
+    blurRadius: Float
+) {
+    drawIntoCanvas { canvas ->
+        val frameworkPaint = android.graphics.Paint().apply {
+            isAntiAlias = true
+            this.color = color.toArgb()
+            if (blurRadius > 0f) {
+                maskFilter = BlurMaskFilter(blurRadius, BlurMaskFilter.Blur.NORMAL)
+            }
+        }
+        canvas.save()
+        canvas.translate(dx, dy)
+        canvas.nativeCanvas.drawPath(path.asAndroidPath(), frameworkPaint)
+        canvas.restore()
+    }
+}
+
+private fun DrawScope.drawBlurredPath(
+    path: Path,
+    color: Color,
+    blurRadius: Float
+) {
+    drawBlurredPathShadow(path = path, color = color, dx = 0f, dy = 0f, blurRadius = blurRadius)
+}
+
+private fun DrawScope.drawBlurredOval(
+    center: Offset,
+    rx: Float,
+    ry: Float,
+    color: Color,
+    blurRadius: Float
+) {
+    val ovalPath = Path().apply {
+        addOval(Rect(center.x - rx, center.y - ry, center.x + rx, center.y + ry))
+    }
+    drawBlurredPath(path = ovalPath, color = color, blurRadius = blurRadius)
 }
 
 @Composable
@@ -1041,7 +2292,36 @@ fun AppleWorksGraphic(
     enableClickToAnimate: Boolean = true,
     onClick: (() -> Unit)? = null
 ) {
-    AppleCanvasPaletteGraphic(
+    val scope = rememberCoroutineScope()
+    val paletteState = rememberApplePalettePenState()
+
+    LaunchedEffect(state.isAnimating) {
+        if (state.isAnimating) {
+            paletteState.triggerPaintStrokeAnimation()
+        }
+    }
+
+    AppleLucidePaletteAndPenIcon(
+        modifier = modifier,
+        state = paletteState,
+        enableClickToAnimate = enableClickToAnimate,
+        onClick = {
+            scope.launch {
+                state.triggerArticulateAnimation()
+            }
+            onClick?.invoke()
+        }
+    )
+}
+
+@Composable
+fun AppleCanvasPaletteGraphic(
+    modifier: Modifier = Modifier.size(165.dp),
+    state: AppleGraphicAnimationState = rememberAppleGraphicAnimationState(),
+    enableClickToAnimate: Boolean = true,
+    onClick: (() -> Unit)? = null
+) {
+    AppleWorksGraphic(
         modifier = modifier,
         state = state,
         enableClickToAnimate = enableClickToAnimate,
@@ -1054,12 +2334,204 @@ fun AppleCanvasPaletteIcon(
     modifier: Modifier = Modifier.size(140.dp),
     onClick: (() -> Unit)? = null
 ) {
-    AppleCanvasPaletteGraphic(
+    AppleWorksGraphic(
         modifier = modifier,
         enableClickToAnimate = true,
         onClick = onClick
     )
 }
+
+/**
+ * Complete Interactive Apple HIG Senior Design Studio Screen with Frosted Glass Controller Dock.
+ */
+@Composable
+fun AppleLucidePaletteStudioScreen() {
+    val state = rememberApplePalettePenState()
+
+    val bgBrush = if (state.isDarkMode) {
+        Brush.radialGradient(
+            0.0f to Color(0xFF0E1C3E),
+            0.55f to Color(0xFF070C1A),
+            1.0f to Color(0xFF03060E)
+        )
+    } else {
+        Brush.radialGradient(
+            0.0f to Color(0xFFFFFFFF),
+            0.55f to Color(0xFFEBF3FF),
+            1.0f to Color(0xFFDAE6F8)
+        )
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(brush = bgBrush)
+            .padding(16.dp)
+    ) {
+        // Top Studio Header Pill
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(
+                        if (state.isDarkMode) Color(0xCC0D1426) else Color(0xCCFFFFFF)
+                    )
+                    .border(1.dp, Color(0x33007AFF), CircleShape)
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(state.selectedWell.midColor)
+                )
+                Text(
+                    text = "APPLE HIG ICON STUDIO",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (state.isDarkMode) Color.White else Color(0xFF1E293B)
+                )
+                Text(
+                    text = state.selectedWell.name,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFF007AFF)
+                )
+            }
+        }
+
+        // Center Interactive 3D Palette & Pen Canvas
+        AppleLucidePaletteAndPenIcon(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                .padding(24.dp),
+            state = state
+        )
+
+        // Bottom Frosted Glass Controller Dock
+        Column(
+            modifier = Modifier.align(Alignment.BottomCenter),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "Tip: Tap any of the 4 paint wells on the palette to dip & switch ink color",
+                fontSize = 11.sp,
+                color = if (state.isDarkMode) Color(0xFF94A3B8) else Color(0xFF64748B)
+            )
+
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(
+                        if (state.isDarkMode) Color(0xD90D1426) else Color(0xD9FFFFFF)
+                    )
+                    .border(1.dp, Color(0x26007AFF), RoundedCornerShape(18.dp))
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                StudioActionButton(
+                    label = "Animate Stroke",
+                    isPrimary = true,
+                    isActive = false,
+                    isDark = state.isDarkMode,
+                    onClick = { state.triggerPaintStrokeAnimation() }
+                )
+                StudioActionButton(
+                    label = "Remix Spin",
+                    isPrimary = false,
+                    isActive = false,
+                    isDark = state.isDarkMode,
+                    onClick = { state.triggerRemixSpin() }
+                )
+                StudioActionButton(
+                    label = "Pen Hover",
+                    isPrimary = false,
+                    isActive = state.isPenPoised,
+                    isDark = state.isDarkMode,
+                    onClick = { state.isPenPoised = !state.isPenPoised }
+                )
+                StudioActionButton(
+                    label = "Color Wells",
+                    isPrimary = false,
+                    isActive = state.isColorWells,
+                    isDark = state.isDarkMode,
+                    onClick = { state.isColorWells = !state.isColorWells }
+                )
+                StudioActionButton(
+                    label = "HIG Grid",
+                    isPrimary = false,
+                    isActive = state.showHigGrid,
+                    isDark = state.isDarkMode,
+                    onClick = { state.showHigGrid = !state.showHigGrid }
+                )
+                StudioActionButton(
+                    label = "Squircle",
+                    isPrimary = false,
+                    isActive = state.showSquircle,
+                    isDark = state.isDarkMode,
+                    onClick = { state.showSquircle = !state.showSquircle }
+                )
+                StudioActionButton(
+                    label = "Dark",
+                    isPrimary = false,
+                    isActive = state.isDarkMode,
+                    isDark = state.isDarkMode,
+                    onClick = { state.isDarkMode = !state.isDarkMode }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StudioActionButton(
+    label: String,
+    isPrimary: Boolean,
+    isActive: Boolean,
+    isDark: Boolean,
+    onClick: () -> Unit
+) {
+    val bgColor = when {
+        isPrimary -> Color(0xFF007AFF)
+        isActive -> Color(0x24007AFF)
+        else -> Color.Transparent
+    }
+    val textColor = when {
+        isPrimary -> Color.White
+        isActive -> Color(0xFF007AFF)
+        isDark -> Color(0xFFE2E8F0)
+        else -> Color(0xFF334155)
+    }
+
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(bgColor)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        Text(
+            text = label,
+            fontSize = 12.sp,
+            fontWeight = if (isPrimary || isActive) FontWeight.SemiBold else FontWeight.Medium,
+            color = textColor
+        )
+    }
+}
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 5. FLASH (VIDEOS) GRAPHICS ICON (Director's Clapperboard + Hinged Clapper Arm)
