@@ -826,6 +826,14 @@ class HomeActivity : ComponentActivity() {
                                             vm.refresh()
                                             com.chroma.studio.ui.components.ToastManager.showToast(message = "Home background updated")
                                         },
+                                        onResetHomeBackground = {
+                                            prefs.edit()
+                                                .remove("custom_home_background_layers")
+                                                .remove("custom_home_background_shape")
+                                                .apply()
+                                            vm.refresh()
+                                            com.chroma.studio.ui.components.ToastManager.showToast(message = "Home background reset to default")
+                                        },
                                         onSetAsLiveWallpaper = { work ->
                                             vm.repository.setLiveWallpaperId(work.id)
                                             val liveWallpaperIntent = Intent(android.app.WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
@@ -1228,6 +1236,7 @@ class HomeActivity : ComponentActivity() {
                         com.chroma.studio.ui.screens.BackgroundsScreen(
                             works = vm.works,
                             repository = vm.repository,
+                            isCustomBackgroundActive = vm.customHomeBgLayersJson != null,
                             onBack = { navController.popBackStack() },
                             onSetAsBackground = { work ->
                                 prefs.edit()
@@ -1236,6 +1245,15 @@ class HomeActivity : ComponentActivity() {
                                     .apply()
                                 vm.refresh()
                                 com.chroma.studio.ui.components.ToastManager.showToast(message = "Home background updated")
+                                navController.popBackStack()
+                            },
+                            onResetToDefault = {
+                                prefs.edit()
+                                    .remove("custom_home_background_layers")
+                                    .remove("custom_home_background_shape")
+                                    .apply()
+                                vm.refresh()
+                                com.chroma.studio.ui.components.ToastManager.showToast(message = "Home background reset to default")
                                 navController.popBackStack()
                             }
                         )

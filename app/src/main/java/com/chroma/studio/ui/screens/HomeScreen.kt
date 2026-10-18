@@ -2,6 +2,7 @@ package com.chroma.studio.ui.screens
 import com.chroma.studio.ui.components.GlassIconButton
 import com.chroma.studio.ui.components.GlassButton
 import com.chroma.studio.ui.components.IosAlertDialog
+import com.chroma.studio.ui.components.AppleDialog
 import com.chroma.studio.ui.components.LiquidGlassSecondaryButton
 import com.chroma.studio.ui.components.SynchronizedRotatingActionMenu
 import com.chroma.studio.ui.components.ActionMenuType
@@ -161,6 +162,7 @@ fun HomeScreen(
     onNavigateToBackgrounds: () -> Unit,
     onNavigateToTrash: () -> Unit,
     onSetAsBackground: (ChromaWork) -> Unit,
+    onResetHomeBackground: (() -> Unit)? = null,
     onNavigateToDiscover: () -> Unit,
     onRequireLogin: () -> Unit,
     onSetAsLiveWallpaper: (ChromaWork) -> Unit,
@@ -230,6 +232,8 @@ fun HomeScreen(
     var showLoginScreen by remember { mutableStateOf(false) }
     var showCreatePostMenu by remember { mutableStateOf(false) }
     var showViewModeSheet by remember { mutableStateOf(false) }
+    var backgroundWorkToConfirm by remember { mutableStateOf<ChromaWork?>(null) }
+    var showResetBgConfirm by remember { mutableStateOf(false) }
 
     if (showLoginScreen) {
         LoginScreen(
@@ -327,6 +331,18 @@ fun HomeScreen(
                     ) {
                         scope.launch { drawerState.close() }
                         onNavigateToBackgrounds()
+                    }
+
+                    if (customHomeBgLayersJson != null) {
+                        Spacer(Modifier.height(4.dp))
+                        DrawerItem(
+                            icon = Lucide.RotateCcw,
+                            label = "Reset Background to Default",
+                            selected = false
+                        ) {
+                            scope.launch { drawerState.close() }
+                            showResetBgConfirm = true
+                        }
                     }
 
                     Spacer(Modifier.height(4.dp))
@@ -937,7 +953,7 @@ fun HomeScreen(
                                 onRename = { name, desc -> onRenameWork(work.id, name, desc) },
                                 onDuplicate = { onDuplicateWork(work) },
                                 onSoftDelete = { onSoftDelete(work.id) },
-                                onSetAsBackground = { onSetAsBackground(work) },
+                                onSetAsBackground = { backgroundWorkToConfirm = work },
                                 onSetAsLiveWallpaper = { onSetAsLiveWallpaper(work) },
                                 onShareToDiscover = { onShareToDiscover(work.id) },
                                 onExportWork = {
@@ -996,6 +1012,41 @@ fun HomeScreen(
                 onViewModeChanged(newMode)
             },
             onDismiss = { showViewModeSheet = false }
+        )
+    }
+
+    // Set Background Confirmation Dialog
+    if (backgroundWorkToConfirm != null) {
+        val work = backgroundWorkToConfirm!!
+        AppleDialog(
+            title = "Set as Home Background?",
+            message = "Do you want to set \"${work.name}\" as your Home screen background?",
+            primaryButtonText = "Set Background",
+            onPrimaryClick = {
+                val target = work
+                backgroundWorkToConfirm = null
+                onSetAsBackground(target)
+            },
+            secondaryButtonText = "Cancel",
+            onSecondaryClick = { backgroundWorkToConfirm = null },
+            onDismiss = { backgroundWorkToConfirm = null }
+        )
+    }
+
+    // Reset to Default Confirmation Dialog
+    if (showResetBgConfirm) {
+        AppleDialog(
+            title = "Reset to Default Background?",
+            message = "Are you sure you want to remove your custom Home background and restore the default animated gradient?",
+            primaryButtonText = "Reset",
+            primaryIsDestructive = true,
+            onPrimaryClick = {
+                showResetBgConfirm = false
+                onResetHomeBackground?.invoke()
+            },
+            secondaryButtonText = "Cancel",
+            onSecondaryClick = { showResetBgConfirm = false },
+            onDismiss = { showResetBgConfirm = false }
         )
     }
 }

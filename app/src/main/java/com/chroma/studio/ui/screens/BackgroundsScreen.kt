@@ -32,17 +32,26 @@ import com.chroma.studio.ui.components.AppleEmptyStateView
 import com.chroma.studio.ui.components.rememberAppleGraphicAnimationState
 import com.chroma.studio.ui.graphics3d.Apple3DGraphicId
 import com.chroma.studio.ui.graphics3d.Apple3DGraphicIcon
+import com.composables.icons.lucide.RotateCcw
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import com.chroma.studio.ui.components.AppleDialog
+import com.chroma.studio.ui.components.ChromaHeaderActionButton
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BackgroundsScreen(
     works: List<ChromaWork>,
     repository: com.chroma.studio.data.WorkRepository,
+    isCustomBackgroundActive: Boolean = false,
     onBack: () -> Unit,
-    onSetAsBackground: (ChromaWork) -> Unit
+    onSetAsBackground: (ChromaWork) -> Unit,
+    onResetToDefault: () -> Unit = {}
 ) {
     val colors = LocalOscellionColors.current
     val backgroundWorks = remember(works) { works.filter { it.isHomeBackground } }
+
+    var workToConfirm by remember { mutableStateOf<ChromaWork?>(null) }
+    var showResetDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -50,7 +59,17 @@ fun BackgroundsScreen(
                 title = "Oscellion",
                 badgeText = "Backgrounds",
                 showBackButton = true,
-                onBack = onBack
+                onBack = onBack,
+                actions = {
+                    if (isCustomBackgroundActive) {
+                        ChromaHeaderActionButton(
+                            icon = Lucide.RotateCcw,
+                            contentDescription = "Reset to Default Background",
+                            tint = colors.textMuted,
+                            onClick = { showResetDialog = true }
+                        )
+                    }
+                }
             )
         },
         containerColor = colors.bg
@@ -70,10 +89,20 @@ fun BackgroundsScreen(
                         )
                     },
                     title = "No Custom Backgrounds",
-                    subtitle = "Create a new 'Full' shape work in the studio to set it as your dynamic home background.",
-                    actionButtonText = "Back to Works",
-                    actionButtonIcon = Lucide.ArrowLeft,
-                    onActionClick = onBack
+                    subtitle = if (isCustomBackgroundActive) {
+                        "A custom background is currently active. You can restore the system default animated gradient anytime."
+                    } else {
+                        "Create a new 'Full' shape work in the studio to set it as your dynamic home background."
+                    },
+                    actionButtonText = if (isCustomBackgroundActive) "Reset to Default" else "Back to Works",
+                    actionButtonIcon = if (isCustomBackgroundActive) Lucide.RotateCcw else Lucide.ArrowLeft,
+                    onActionClick = {
+                        if (isCustomBackgroundActive) {
+                            showResetDialog = true
+                        } else {
+                            onBack()
+                        }
+                    }
                 )
             }
         } else {
@@ -84,15 +113,106 @@ fun BackgroundsScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 modifier = Modifier.padding(padding).fillMaxSize()
             ) {
+                if (isCustomBackgroundActive) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(18.dp))
+                                .glossyBorder(RoundedCornerShape(18.dp), colors)
+                                .background(colors.glassBg)
+                                .clickable { showResetDialog = true }
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(colors.primary.copy(alpha = 0.15f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        Lucide.RotateCcw,
+                                        contentDescription = null,
+                                        tint = colors.primary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                                Column {
+                                    Text(
+                                        "Custom Background Active",
+                                        color = colors.textMain,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        "Tap to restore system default gradient",
+                                        color = colors.textMuted,
+                                        fontSize = 12.sp
+                                    )
+                                }
+                            }
+                            Text(
+                                "Reset",
+                                color = colors.primary,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
+                        }
+                    }
+                }
+
                 items(backgroundWorks, key = { it.id }) { work ->
                     BackgroundCard(
                         work = work,
                         repository = repository,
-                        onClick = { onSetAsBackground(work) }
+                        onClick = { workToConfirm = work }
                     )
                 }
             }
         }
+    }
+
+    // Set Background Confirmation Dialog
+    if (workToConfirm != null) {
+        val work = workToConfirm!!
+        AppleDialog(
+            title = "Set as Home Background?",
+            message = "Do you want to set \"${work.name}\" as your Home screen background?",
+            primaryButtonText = "Set Background",
+            onPrimaryClick = {
+                val target = work
+                workToConfirm = null
+                onSetAsBackground(target)
+            },
+            secondaryButtonText = "Cancel",
+            onSecondaryClick = { workToConfirm = null },
+            onDismiss = { workToConfirm = null }
+        )
+    }
+
+    // Reset to Default Confirmation Dialog
+    if (showResetDialog) {
+        AppleDialog(
+            title = "Reset to Default Background?",
+            message = "Are you sure you want to remove your custom Home background and restore the default animated gradient?",
+            primaryButtonText = "Reset",
+            primaryIsDestructive = true,
+            onPrimaryClick = {
+                showResetDialog = false
+                onResetToDefault()
+            },
+            secondaryButtonText = "Cancel",
+            onSecondaryClick = { showResetDialog = false },
+            onDismiss = { showResetDialog = false }
+        )
     }
 }
 
