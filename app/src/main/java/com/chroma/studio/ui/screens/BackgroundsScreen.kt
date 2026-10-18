@@ -33,9 +33,12 @@ import com.chroma.studio.ui.components.rememberAppleGraphicAnimationState
 import com.chroma.studio.ui.graphics3d.Apple3DGraphicId
 import com.chroma.studio.ui.graphics3d.Apple3DGraphicIcon
 import com.composables.icons.lucide.RotateCcw
+import com.composables.icons.lucide.Check
+import com.composables.icons.lucide.Palette
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import com.chroma.studio.ui.components.AppleDialog
 import com.chroma.studio.ui.components.ChromaHeaderActionButton
+import com.chroma.studio.ui.components.ToastManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,6 +46,7 @@ fun BackgroundsScreen(
     works: List<ChromaWork>,
     repository: com.chroma.studio.data.WorkRepository,
     isCustomBackgroundActive: Boolean = false,
+    currentCustomBgLayersJson: String? = null,
     onBack: () -> Unit,
     onSetAsBackground: (ChromaWork) -> Unit,
     onResetToDefault: () -> Unit = {}
@@ -74,118 +78,122 @@ fun BackgroundsScreen(
         },
         containerColor = colors.bg
     ) { padding ->
-        if (backgroundWorks.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxSize().padding(padding),
-                contentAlignment = Alignment.Center
-            ) {
-                val photosState = rememberAppleGraphicAnimationState()
-                AppleEmptyStateView(
-                    graphic = {
-                        ApplePhotosGraphic(
-                            modifier = Modifier.size(160.dp),
-                            state = photosState,
-                            enableClickToAnimate = true
-                        )
-                    },
-                    title = "No Custom Backgrounds",
-                    subtitle = if (isCustomBackgroundActive) {
-                        "A custom background is currently active. You can restore the system default animated gradient anytime."
-                    } else {
-                        "Create a new 'Full' shape work in the studio to set it as your dynamic home background."
-                    },
-                    actionButtonText = if (isCustomBackgroundActive) "Reset to Default" else "Back to Works",
-                    actionButtonIcon = if (isCustomBackgroundActive) Lucide.RotateCcw else Lucide.ArrowLeft,
-                    onActionClick = {
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(minSize = 145.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 48.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.padding(padding).fillMaxSize()
+        ) {
+            // Section Header
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                    Text(
+                        text = "WALLPAPERS",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = colors.textMuted.copy(alpha = 0.8f),
+                        letterSpacing = 0.8.sp
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = "Select a design to set as your dynamic Home screen background.",
+                        fontSize = 13.sp,
+                        color = colors.textMuted
+                    )
+                }
+            }
+
+            // 1. System Default Background Card
+            item(key = "system_default_background") {
+                DefaultBackgroundCard(
+                    repository = repository,
+                    isActive = !isCustomBackgroundActive,
+                    onClick = {
                         if (isCustomBackgroundActive) {
                             showResetDialog = true
                         } else {
-                            onBack()
+                            ToastManager.showToast("Default gradient is already active")
                         }
                     }
                 )
             }
-        } else {
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 140.dp),
-                contentPadding = PaddingValues(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.padding(padding).fillMaxSize()
-            ) {
-                if (isCustomBackgroundActive) {
-                    item(span = { GridItemSpan(maxLineSpan) }) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(18.dp))
-                                .glossyBorder(RoundedCornerShape(18.dp), colors)
-                                .background(colors.glassBg)
-                                .clickable { showResetDialog = true }
-                                .padding(horizontal = 16.dp, vertical = 14.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+
+            // 2. Custom Background Cards
+            items(backgroundWorks, key = { it.id }) { work ->
+                val isActive = currentCustomBgLayersJson != null && work.layersJson == currentCustomBgLayersJson
+                BackgroundCard(
+                    work = work,
+                    repository = repository,
+                    isActive = isActive,
+                    onClick = {
+                        if (isActive) {
+                            ToastManager.showToast("\"${work.name}\" is already active")
+                        } else {
+                            workToConfirm = work
+                        }
+                    }
+                )
+            }
+
+            // 3. Informative prompt when no custom works exist
+            if (backgroundWorks.isEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(20.dp))
+                            .border(1.dp, colors.glassBorder, RoundedCornerShape(20.dp))
+                            .background(colors.glassBg)
+                            .clickable { onBack() }
+                            .padding(22.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                modifier = Modifier.weight(1f)
+                            Box(
+                                modifier = Modifier
+                                    .size(42.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(colors.primary.copy(alpha = 0.12f)),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(colors.primary.copy(alpha = 0.15f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        Lucide.RotateCcw,
-                                        contentDescription = null,
-                                        tint = colors.primary,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                                Column {
-                                    Text(
-                                        "Custom Background Active",
-                                        color = colors.textMain,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                    Text(
-                                        "Tap to restore system default gradient",
-                                        color = colors.textMuted,
-                                        fontSize = 12.sp
-                                    )
-                                }
+                                Icon(
+                                    imageVector = Lucide.Palette,
+                                    contentDescription = null,
+                                    tint = colors.primary,
+                                    modifier = Modifier.size(22.dp)
+                                )
                             }
                             Text(
-                                "Reset",
-                                color = colors.primary,
+                                text = "Design Custom Backgrounds",
+                                fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp
+                                color = colors.textMain
+                            )
+                            Text(
+                                text = "Create a work with 'Full' canvas shape in the studio and it will automatically appear here as a wallpaper option.",
+                                fontSize = 12.sp,
+                                color = colors.textMuted,
+                                textAlign = TextAlign.Center,
+                                lineHeight = 16.sp
                             )
                         }
                     }
-                }
-
-                items(backgroundWorks, key = { it.id }) { work ->
-                    BackgroundCard(
-                        work = work,
-                        repository = repository,
-                        onClick = { workToConfirm = work }
-                    )
                 }
             }
         }
     }
 
-    // Set Background Confirmation Dialog
+    // Set Background Confirmation Dialog with Live Animated Preview
     if (workToConfirm != null) {
         val work = workToConfirm!!
+        val previewLayers = remember(work.layersJson) { repository.deserializeLayers(work.layersJson) }
         AppleDialog(
             title = "Set as Home Background?",
-            message = "Do you want to set \"${work.name}\" as your Home screen background?",
+            message = "Apply \"${work.name}\" to your Home screen?",
             primaryButtonText = "Set Background",
             onPrimaryClick = {
                 val target = work
@@ -194,15 +202,42 @@ fun BackgroundsScreen(
             },
             secondaryButtonText = "Cancel",
             onSecondaryClick = { workToConfirm = null },
-            onDismiss = { workToConfirm = null }
+            onDismiss = { workToConfirm = null },
+            customContent = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(136.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .border(1.dp, colors.glassBorder, RoundedCornerShape(14.dp))
+                ) {
+                    CanvasPreview(
+                        layers = previewLayers,
+                        shape = work.canvasShape,
+                        borderColor = Color.Transparent,
+                        colorBlindMode = com.chroma.studio.model.ColorBlindMode.NONE,
+                        postFxMode = com.chroma.studio.model.PostProcessingFx.NONE,
+                        animStatus = com.chroma.studio.model.AnimStatus.PLAYING,
+                        animStyle = com.chroma.studio.model.AnimStyle.DRIFT,
+                        animSpeed = 35f,
+                        animAmount = 35f,
+                        reactOffset = androidx.compose.ui.geometry.Offset.Zero,
+                        textContent = "",
+                        onTextContentChange = {},
+                        blobDragOverrides = emptyMap(),
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
         )
     }
 
-    // Reset to Default Confirmation Dialog
+    // Reset to Default Confirmation Dialog with Live Animated Default Preview
     if (showResetDialog) {
+        val defaultLayers = remember { repository.deserializeLayers(DEFAULT_HOME_BG_JSON) }
         AppleDialog(
-            title = "Reset to Default Background?",
-            message = "Are you sure you want to remove your custom Home background and restore the default animated gradient?",
+            title = "Reset to Default?",
+            message = "Restore the original animated gradient background for your Home screen?",
             primaryButtonText = "Reset",
             primaryIsDestructive = true,
             onPrimaryClick = {
@@ -211,8 +246,135 @@ fun BackgroundsScreen(
             },
             secondaryButtonText = "Cancel",
             onSecondaryClick = { showResetDialog = false },
-            onDismiss = { showResetDialog = false }
+            onDismiss = { showResetDialog = false },
+            customContent = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(136.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .border(1.dp, colors.glassBorder, RoundedCornerShape(14.dp))
+                ) {
+                    CanvasPreview(
+                        layers = defaultLayers,
+                        shape = "full",
+                        borderColor = Color.Transparent,
+                        colorBlindMode = com.chroma.studio.model.ColorBlindMode.NONE,
+                        postFxMode = com.chroma.studio.model.PostProcessingFx.NONE,
+                        animStatus = com.chroma.studio.model.AnimStatus.PLAYING,
+                        animStyle = com.chroma.studio.model.AnimStyle.DRIFT,
+                        animSpeed = 35f,
+                        animAmount = 35f,
+                        reactOffset = androidx.compose.ui.geometry.Offset.Zero,
+                        textContent = "",
+                        onTextContentChange = {},
+                        blobDragOverrides = emptyMap(),
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
         )
+    }
+}
+
+@Composable
+private fun DefaultBackgroundCard(
+    repository: com.chroma.studio.data.WorkRepository,
+    isActive: Boolean,
+    onClick: () -> Unit
+) {
+    val colors = LocalOscellionColors.current
+    val defaultLayers = remember { repository.deserializeLayers(DEFAULT_HOME_BG_JSON) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .border(
+                width = if (isActive) 2.dp else 1.dp,
+                color = if (isActive) colors.primary else colors.glassBorder,
+                shape = RoundedCornerShape(22.dp)
+            )
+            .background(colors.glassBg)
+            .clickable(onClick = onClick)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(180.dp)
+                .clip(RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp))
+        ) {
+            CanvasPreview(
+                layers = defaultLayers,
+                shape = "full",
+                borderColor = Color.Transparent,
+                colorBlindMode = com.chroma.studio.model.ColorBlindMode.NONE,
+                postFxMode = com.chroma.studio.model.PostProcessingFx.NONE,
+                animStatus = com.chroma.studio.model.AnimStatus.PLAYING,
+                animStyle = com.chroma.studio.model.AnimStyle.DRIFT,
+                animSpeed = 30f,
+                animAmount = 30f,
+                reactOffset = androidx.compose.ui.geometry.Offset.Zero,
+                textContent = "",
+                onTextContentChange = {},
+                blobDragOverrides = emptyMap(),
+                modifier = Modifier.fillMaxSize()
+            )
+
+            if (isActive) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(10.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFF007AFF))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Lucide.Check,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(11.dp)
+                        )
+                        Text(
+                            text = "Active",
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "System Default",
+                    color = colors.textMain,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
+                Text(
+                    text = if (isActive) "Current Background" else "Original Gradient",
+                    color = if (isActive) colors.primary else colors.textMuted,
+                    fontSize = 11.sp,
+                    maxLines = 1
+                )
+            }
+        }
     }
 }
 
@@ -220,15 +382,20 @@ fun BackgroundsScreen(
 private fun BackgroundCard(
     work: ChromaWork,
     repository: com.chroma.studio.data.WorkRepository,
+    isActive: Boolean,
     onClick: () -> Unit
 ) {
     val colors = LocalOscellionColors.current
-    
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(22.dp))
-            .border(1.dp, colors.glassBorder, RoundedCornerShape(22.dp))
+            .border(
+                width = if (isActive) 2.dp else 1.dp,
+                color = if (isActive) colors.primary else colors.glassBorder,
+                shape = RoundedCornerShape(22.dp)
+            )
             .background(colors.glassBg)
             .clickable(onClick = onClick)
     ) {
@@ -244,32 +411,68 @@ private fun BackgroundCard(
                 borderColor = Color.Transparent,
                 colorBlindMode = com.chroma.studio.model.ColorBlindMode.NONE,
                 postFxMode = com.chroma.studio.model.PostProcessingFx.NONE,
-                animStatus = com.chroma.studio.model.AnimStatus.PAUSED,
+                animStatus = if (isActive) com.chroma.studio.model.AnimStatus.PLAYING else com.chroma.studio.model.AnimStatus.PAUSED,
                 animStyle = com.chroma.studio.model.AnimStyle.DRIFT,
-                animSpeed = 0f,
-                animAmount = 0f,
+                animSpeed = 30f,
+                animAmount = 30f,
                 reactOffset = androidx.compose.ui.geometry.Offset.Zero,
                 textContent = "CHROMA",
                 onTextContentChange = {},
                 blobDragOverrides = emptyMap(),
                 modifier = Modifier.fillMaxSize()
             )
+
+            if (isActive) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(10.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFF007AFF))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Lucide.Check,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(11.dp)
+                        )
+                        Text(
+                            text = "Active",
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
         }
-        
+
         Row(
             modifier = Modifier.fillMaxWidth().padding(12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                work.name,
-                color = colors.textMain,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = work.name,
+                    color = colors.textMain,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
+                Text(
+                    text = if (isActive) "Current Background" else "Custom Artwork",
+                    color = if (isActive) colors.primary else colors.textMuted,
+                    fontSize = 11.sp,
+                    maxLines = 1
+                )
+            }
         }
     }
 }

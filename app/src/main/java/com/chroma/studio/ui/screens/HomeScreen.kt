@@ -954,6 +954,7 @@ fun HomeScreen(
                                 onDuplicate = { onDuplicateWork(work) },
                                 onSoftDelete = { onSoftDelete(work.id) },
                                 onSetAsBackground = { backgroundWorkToConfirm = work },
+                                isCurrentHomeBg = (customHomeBgLayersJson != null && work.layersJson == customHomeBgLayersJson),
                                 onSetAsLiveWallpaper = { onSetAsLiveWallpaper(work) },
                                 onShareToDiscover = { onShareToDiscover(work.id) },
                                 onExportWork = {
@@ -1015,12 +1016,13 @@ fun HomeScreen(
         )
     }
 
-    // Set Background Confirmation Dialog
+    // Set Background Confirmation Dialog with Live Animated Preview
     if (backgroundWorkToConfirm != null) {
         val work = backgroundWorkToConfirm!!
+        val previewLayers = remember(work.layersJson) { repository.deserializeLayers(work.layersJson) }
         AppleDialog(
             title = "Set as Home Background?",
-            message = "Do you want to set \"${work.name}\" as your Home screen background?",
+            message = "Apply \"${work.name}\" to your Home screen?",
             primaryButtonText = "Set Background",
             onPrimaryClick = {
                 val target = work
@@ -1029,15 +1031,42 @@ fun HomeScreen(
             },
             secondaryButtonText = "Cancel",
             onSecondaryClick = { backgroundWorkToConfirm = null },
-            onDismiss = { backgroundWorkToConfirm = null }
+            onDismiss = { backgroundWorkToConfirm = null },
+            customContent = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(136.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .border(1.dp, colors.glassBorder, RoundedCornerShape(14.dp))
+                ) {
+                    CanvasPreview(
+                        layers = previewLayers,
+                        shape = work.canvasShape,
+                        borderColor = Color.Transparent,
+                        colorBlindMode = com.chroma.studio.model.ColorBlindMode.NONE,
+                        postFxMode = com.chroma.studio.model.PostProcessingFx.NONE,
+                        animStatus = com.chroma.studio.model.AnimStatus.PLAYING,
+                        animStyle = com.chroma.studio.model.AnimStyle.DRIFT,
+                        animSpeed = 35f,
+                        animAmount = 35f,
+                        reactOffset = Offset.Zero,
+                        textContent = "",
+                        onTextContentChange = {},
+                        blobDragOverrides = emptyMap(),
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
         )
     }
 
-    // Reset to Default Confirmation Dialog
+    // Reset to Default Confirmation Dialog with Live Animated Default Preview
     if (showResetBgConfirm) {
+        val defaultLayers = remember { repository.deserializeLayers(DEFAULT_HOME_BG_JSON) }
         AppleDialog(
-            title = "Reset to Default Background?",
-            message = "Are you sure you want to remove your custom Home background and restore the default animated gradient?",
+            title = "Reset to Default?",
+            message = "Restore the original animated gradient background for your Home screen?",
             primaryButtonText = "Reset",
             primaryIsDestructive = true,
             onPrimaryClick = {
@@ -1046,7 +1075,33 @@ fun HomeScreen(
             },
             secondaryButtonText = "Cancel",
             onSecondaryClick = { showResetBgConfirm = false },
-            onDismiss = { showResetBgConfirm = false }
+            onDismiss = { showResetBgConfirm = false },
+            customContent = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(136.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .border(1.dp, colors.glassBorder, RoundedCornerShape(14.dp))
+                ) {
+                    CanvasPreview(
+                        layers = defaultLayers,
+                        shape = "full",
+                        borderColor = Color.Transparent,
+                        colorBlindMode = com.chroma.studio.model.ColorBlindMode.NONE,
+                        postFxMode = com.chroma.studio.model.PostProcessingFx.NONE,
+                        animStatus = com.chroma.studio.model.AnimStatus.PLAYING,
+                        animStyle = com.chroma.studio.model.AnimStyle.DRIFT,
+                        animSpeed = 35f,
+                        animAmount = 35f,
+                        reactOffset = Offset.Zero,
+                        textContent = "",
+                        onTextContentChange = {},
+                        blobDragOverrides = emptyMap(),
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
         )
     }
 }
@@ -1393,6 +1448,7 @@ fun WorkCard(
     onDuplicate: () -> Unit,
     onSoftDelete: () -> Unit,
     onSetAsBackground: () -> Unit,
+    isCurrentHomeBg: Boolean = false,
     onSetAsLiveWallpaper: () -> Unit = {},
     onShareToDiscover: () -> Unit = {},
     onExportWork: () -> Unit = {},
@@ -1476,9 +1532,42 @@ fun WorkCard(
                         )
                         if (work.isHomeBackground) {
                             DropdownMenuItem(
-                                text = { Text("Set as Home Background", fontSize = 13.sp, color = colors.textMain) },
-                                leadingIcon = { Icon(Lucide.Image, null, tint = colors.textMain, modifier = Modifier.size(15.dp)) },
-                                onClick = { showMenu = false; onSetAsBackground() }
+                                text = {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            if (isCurrentHomeBg) "Home Background" else "Set as Home Background",
+                                            fontSize = 13.sp,
+                                            color = colors.textMain
+                                        )
+                                        if (isCurrentHomeBg) {
+                                            Text(
+                                                "(Active)",
+                                                fontSize = 11.sp,
+                                                color = colors.primary,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        if (isCurrentHomeBg) Lucide.Check else Lucide.Image,
+                                        null,
+                                        tint = if (isCurrentHomeBg) colors.primary else colors.textMain,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                },
+                                onClick = {
+                                    showMenu = false
+                                    if (isCurrentHomeBg) {
+                                        com.chroma.studio.ui.components.ToastManager.showToast("\"${work.name}\" is already your active background")
+                                    } else {
+                                        onSetAsBackground()
+                                    }
+                                }
                             )
                         }
                         DropdownMenuItem(

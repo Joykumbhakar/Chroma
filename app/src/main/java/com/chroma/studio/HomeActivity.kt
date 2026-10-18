@@ -1237,6 +1237,7 @@ class HomeActivity : ComponentActivity() {
                             works = vm.works,
                             repository = vm.repository,
                             isCustomBackgroundActive = vm.customHomeBgLayersJson != null,
+                            currentCustomBgLayersJson = vm.customHomeBgLayersJson,
                             onBack = { navController.popBackStack() },
                             onSetAsBackground = { work ->
                                 prefs.edit()
