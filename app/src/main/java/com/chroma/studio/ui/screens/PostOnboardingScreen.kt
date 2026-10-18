@@ -9,7 +9,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -20,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -55,14 +55,16 @@ fun PostOnboardingScreen(
     val prefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
 
     // Accent Color Palette
-    val accentColors = listOf(
-        Color(0xFF007AFF) to "System Blue",
-        Color(0xFF6366F1) to "Indigo Studio",
-        Color(0xFF10B981) to "Emerald Mint",
-        Color(0xFFF59E0B) to "Amber Sun",
-        Color(0xFFF43F5E) to "Rose Bloom"
-    )
-    var selectedAccentIndex by remember { mutableIntStateOf(0) }
+    val accentColors = remember {
+        listOf(
+            Color(0xFF007AFF) to "System Blue",
+            Color(0xFF6366F1) to "Indigo Studio",
+            Color(0xFF10B981) to "Emerald Mint",
+            Color(0xFFF59E0B) to "Amber Sun",
+            Color(0xFFF43F5E) to "Rose Bloom"
+        )
+    }
+    var selectedAccentIndex by remember { mutableIntStateOf(prefs.getInt("selected_accent_index", 0).coerceIn(0, 4)) }
     val activeAccent = accentColors[selectedAccentIndex].first
 
     // Preferences States
@@ -98,7 +100,7 @@ fun PostOnboardingScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(if (colors.isDark) Color(0xFF000000) else Color(0xFFF2F2F7))
+            .background(colors.bg)
     ) {
         Column(
             modifier = Modifier
@@ -114,8 +116,8 @@ fun PostOnboardingScreen(
             // ── 1. Hero Apple Header ─────────────────────────────────────────
             Box(
                 modifier = Modifier
-                    .size(68.dp)
-                    .clip(RoundedCornerShape(18.dp))
+                    .size(72.dp)
+                    .clip(RoundedCornerShape(20.dp))
                     .background(
                         Brush.linearGradient(
                             colors = listOf(
@@ -125,14 +127,14 @@ fun PostOnboardingScreen(
                         )
                     )
                     .border(
-                        0.5.dp,
+                        1.dp,
                         Color.White.copy(alpha = 0.35f),
-                        RoundedCornerShape(18.dp)
+                        RoundedCornerShape(20.dp)
                     ),
                 contentAlignment = Alignment.Center
             ) {
                 AiWaveSphereIcon(
-                    modifier = Modifier.size(44.dp)
+                    modifier = Modifier.size(46.dp)
                 )
             }
 
@@ -142,7 +144,7 @@ fun PostOnboardingScreen(
                 text = "Welcome to Chroma Studio",
                 fontSize = 26.sp,
                 fontWeight = FontWeight.Bold,
-                color = if (colors.isDark) Color.White else Color(0xFF1C1C1E),
+                color = colors.textMain,
                 textAlign = TextAlign.Center,
                 letterSpacing = (-0.6).sp
             )
@@ -153,7 +155,7 @@ fun PostOnboardingScreen(
                 text = "Personalize your studio appearance, privacy controls, and workspace intelligence before launching.",
                 fontSize = 14.5.sp,
                 lineHeight = 20.sp,
-                color = if (colors.isDark) Color(0xFF8E8E93) else Color(0xFF6E6E73),
+                color = colors.textMuted,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(horizontal = 12.dp)
             )
@@ -187,6 +189,10 @@ fun PostOnboardingScreen(
                                 .clickable {
                                     SoundManager.playReaction()
                                     selectedAccentIndex = index
+                                    prefs.edit()
+                                        .putInt("selected_accent_index", index)
+                                        .putInt("studio_accent_color", color.toArgb())
+                                        .apply()
                                 },
                             contentAlignment = Alignment.Center
                         ) {
@@ -288,11 +294,16 @@ fun PostOnboardingScreen(
             Spacer(Modifier.height(20.dp))
 
             // ── 5. Hardware-Backed Encryption Card ────────────────────────────
+            val encBg = if (colors.isDark) Color(0xFF112217) else Color(0xFFF0FDF4)
+            val encBorder = if (colors.isDark) Color(0xFF166534) else Color(0xFF86EFAC)
+            val encTitle = if (colors.isDark) Color(0xFFBBF7D0) else Color(0xFF14532D)
+            val encSub = if (colors.isDark) Color(0xFF86EFAC).copy(alpha = 0.85f) else Color(0xFF15803D)
+
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                color = if (colors.isDark) Color(0xFF112217) else Color(0xFFF0FDF4),
-                border = BorderStroke(0.5.dp, if (colors.isDark) Color(0xFF166534) else Color(0xFF86EFAC))
+                shape = RoundedCornerShape(14.dp),
+                color = encBg,
+                border = BorderStroke(0.5.dp, encBorder)
             ) {
                 Row(
                     modifier = Modifier
@@ -321,14 +332,14 @@ fun PostOnboardingScreen(
                             text = "Hardware Encryption Active",
                             fontSize = 14.5.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = if (colors.isDark) Color(0xFFBBF7D0) else Color(0xFF14532D)
+                            color = encTitle
                         )
                         Spacer(Modifier.height(2.dp))
                         Text(
                             text = "Real-time communication and assets are verified with Android Keystore hardware protection.",
                             fontSize = 12.5.sp,
                             lineHeight = 16.sp,
-                            color = if (colors.isDark) Color(0xFF86EFAC).copy(alpha = 0.85f) else Color(0xFF15803D)
+                            color = encSub
                         )
                     }
                 }
@@ -358,7 +369,7 @@ fun PostOnboardingScreen(
                                 modifier = Modifier
                                     .size(42.dp)
                                     .clip(RoundedCornerShape(12.dp))
-                                    .background(if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)),
+                                    .background(colors.glassBg),
                                 contentScale = androidx.compose.ui.layout.ContentScale.Crop
                             )
 
@@ -367,18 +378,25 @@ fun PostOnboardingScreen(
                                     text = creator.name,
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = if (colors.isDark) Color.White else Color(0xFF1C1C1E)
+                                    color = colors.textMain
                                 )
                                 Text(
                                     text = creator.handle + " • " + creator.tagline,
                                     fontSize = 12.5.sp,
-                                    color = Color(0xFF8E8E93),
+                                    color = colors.textMuted,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
                             }
 
                             // Follow Action (Clean Squircle, NO Pill)
+                            val btnBg by animateColorAsState(
+                                targetValue = if (isFollowed) (if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)) else activeAccent,
+                                animationSpec = tween(180),
+                                label = "followBg"
+                            )
+                            val btnText = if (isFollowed) (if (colors.isDark) Color.White else Color(0xFF1C1C1E)) else Color.White
+
                             Surface(
                                 onClick = {
                                     SoundManager.playReaction()
@@ -386,7 +404,7 @@ fun PostOnboardingScreen(
                                     else followedCreatorIds.add(creator.id)
                                 },
                                 shape = RoundedCornerShape(8.dp),
-                                color = if (isFollowed) (if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)) else activeAccent,
+                                color = btnBg,
                                 modifier = Modifier.height(32.dp)
                             ) {
                                 Box(
@@ -397,7 +415,7 @@ fun PostOnboardingScreen(
                                         text = if (isFollowed) "Following" else "Follow",
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.SemiBold,
-                                        color = if (isFollowed) (if (colors.isDark) Color.White else Color(0xFF1C1C1E)) else Color.White
+                                        color = btnText
                                     )
                                 }
                             }
@@ -432,6 +450,8 @@ fun PostOnboardingScreen(
                         putBoolean("typing_indicator_enabled", isTypingBroadcastEnabled)
                         putBoolean("push_notifications_dm", isDmPushEnabled)
                         putBoolean("push_notifications_drops", isCreatorDropsEnabled)
+                        putInt("selected_accent_index", selectedAccentIndex)
+                        putInt("studio_accent_color", activeAccent.toArgb())
                         putBoolean("has_completed_post_onboarding", true)
                         apply()
                     }
