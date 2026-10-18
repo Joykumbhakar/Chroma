@@ -474,6 +474,12 @@ fun DiscoverScreen(
                                 }
                             }
                         }
+                        item(key = "trending_divider") {
+                            HorizontalDivider(
+                                color = if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.08f),
+                                thickness = 0.5.dp
+                            )
+                        }
                     }
 
                     // Feed Posts List
@@ -800,28 +806,16 @@ fun FeedPostCard(
 
     val isRemixPost = !work.remixedFromAuthorUsername.isNullOrEmpty()
 
-    Card(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 7.dp),
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (colors.isDark) Color(0xFF161618) else Color(0xFFFFFFFF)
-        ),
-        border = androidx.compose.foundation.BorderStroke(
-            0.5.dp,
-            if (colors.isDark) Color(0x28FFFFFF) else Color(0x18000000)
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            .padding(top = 4.dp)
     ) {
-        Column(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            // Header Row (Avatar + Name + Handle + Time + Menu)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
+        // Header Row (Avatar + Name + Handle + Time + Menu)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -1250,8 +1244,16 @@ fun FeedPostCard(
                     }
                 }
             }
+
+            Spacer(Modifier.height(14.dp))
+
+            // HR Line (Horizontal Rule Divider separating posts)
+            HorizontalDivider(
+                modifier = Modifier.fillMaxWidth(),
+                thickness = 0.5.dp,
+                color = if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.08f)
+            )
         }
-    }
 
     // Counter Privacy Settings Bottom Sheet / Dialog
     if (showVisibilitySettings) {
@@ -1438,53 +1440,49 @@ fun SkeletonPost() {
     )
     val colors = LocalOscellionColors.current
 
-    Card(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 7.dp),
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (colors.isDark) Color(0xFF161618) else Color(0xFFFFFFFF)
-        ),
-        border = androidx.compose.foundation.BorderStroke(
-            0.5.dp,
-            if (colors.isDark) Color(0x28FFFFFF) else Color(0x18000000)
-        )
+            .padding(top = 4.dp)
     ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp)) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(modifier = Modifier.size(42.dp).clip(CircleShape).background(Color.Gray.copy(alpha = alpha)))
-                Spacer(Modifier.width(10.dp))
-                Column {
-                    Box(modifier = Modifier.width(130.dp).height(14.dp).clip(RoundedCornerShape(4.dp)).background(Color.Gray.copy(alpha = alpha)))
-                    Spacer(Modifier.height(5.dp))
-                    Box(modifier = Modifier.width(85.dp).height(10.dp).clip(RoundedCornerShape(4.dp)).background(Color.Gray.copy(alpha = alpha)))
-                }
-            }
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 10.dp)
-                    .aspectRatio(4f / 3f)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(Color.Gray.copy(alpha = alpha))
-            )
-            Spacer(Modifier.height(14.dp))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(Color.Gray.copy(alpha = alpha)))
-                Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(Color.Gray.copy(alpha = alpha)))
-                Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(Color.Gray.copy(alpha = alpha)))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(modifier = Modifier.size(42.dp).clip(CircleShape).background(Color.Gray.copy(alpha = alpha)))
+            Spacer(Modifier.width(10.dp))
+            Column {
+                Box(modifier = Modifier.width(130.dp).height(14.dp).clip(RoundedCornerShape(4.dp)).background(Color.Gray.copy(alpha = alpha)))
+                Spacer(Modifier.height(5.dp))
+                Box(modifier = Modifier.width(85.dp).height(10.dp).clip(RoundedCornerShape(4.dp)).background(Color.Gray.copy(alpha = alpha)))
             }
         }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp)
+                .aspectRatio(4f / 3f)
+                .clip(RoundedCornerShape(16.dp))
+                .background(Color.Gray.copy(alpha = alpha))
+        )
+        Spacer(Modifier.height(14.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(Color.Gray.copy(alpha = alpha)))
+            Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(Color.Gray.copy(alpha = alpha)))
+            Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(Color.Gray.copy(alpha = alpha)))
+        }
+        Spacer(Modifier.height(14.dp))
+        HorizontalDivider(
+            modifier = Modifier.fillMaxWidth(),
+            thickness = 0.5.dp,
+            color = if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.08f)
+        )
     }
 }
