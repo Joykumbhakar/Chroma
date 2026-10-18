@@ -189,169 +189,157 @@ fun DiscoverScreen(
 
     Box(modifier = Modifier.fillMaxSize().background(colors.bg)) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // Apple Frosted Glass Top Navigation Bar
-            val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(colors.bg.copy(alpha = 0.9f))
-                    .border(0.5.dp, colors.glassBorder)
-                    .padding(top = statusBarTop + 6.dp, bottom = 10.dp, start = 16.dp, end = 16.dp)
-            ) {
-                if (isSearchExpanded) {
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        placeholder = { Text("Search creations, tags, creators...", color = Color(0xFF8E8E93), fontSize = 14.sp) },
-                        leadingIcon = { Icon(Lucide.Search, contentDescription = "Search", tint = Color(0xFF007AFF), modifier = Modifier.size(18.dp)) },
-                        trailingIcon = {
-                            Icon(
-                                Lucide.X,
-                                contentDescription = "Close",
-                                tint = Color(0xFF8E8E93),
-                                modifier = Modifier
-                                    .size(18.dp)
-                                    .clickable {
-                                        isSearchExpanded = false
-                                        searchQuery = ""
-                                    }
-                            )
-                        },
+            // Standard Cupertino Frosted Glass Top Navigation Header
+            ChromaScreenHeader(
+                title = "Oscellion",
+                badgeText = "Community",
+                badgeColor = Color(0xFF007AFF),
+                isSearchExpanded = isSearchExpanded,
+                searchContent = {
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(48.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = colors.glassBgHover,
-                            unfocusedContainerColor = colors.glassBgHover,
-                            focusedBorderColor = Color(0xFF007AFF),
-                            unfocusedBorderColor = Color.Transparent,
-                            focusedTextColor = colors.textMain,
-                            unfocusedTextColor = colors.textMain
-                        ),
-                        shape = RoundedCornerShape(24.dp),
-                        singleLine = true
-                    )
-                } else {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                            .height(44.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(colors.glassBgHover)
+                            .border(0.5.dp, colors.glassBorder, RoundedCornerShape(14.dp))
+                            .padding(horizontal = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Title + Apple Sub-Badge
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "Oscellion",
-                                fontSize = 23.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = colors.textMain,
-                                letterSpacing = (-0.5).sp
-                            )
-                            Text(
-                                text = ".",
-                                fontSize = 23.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = Color(0xFF007AFF)
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(Color(0x14007AFF))
-                                    .padding(horizontal = 7.dp, vertical = 2.dp)
-                            ) {
+                        Icon(
+                            Lucide.Search,
+                            contentDescription = null,
+                            tint = Color(0xFF007AFF),
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                            if (searchQuery.isEmpty()) {
                                 Text(
-                                    "Community",
-                                    color = Color(0xFF007AFF),
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
+                                    text = "Search creations, tags, creators...",
+                                    color = Color(0xFF8E8E93),
+                                    fontSize = 14.sp
                                 )
                             }
+                            BasicTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                singleLine = true,
+                                textStyle = androidx.compose.ui.text.TextStyle(
+                                    color = colors.textMain,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Normal
+                                ),
+                                cursorBrush = androidx.compose.ui.graphics.SolidColor(Color(0xFF007AFF)),
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
+                        if (searchQuery.isNotEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF8E8E93).copy(alpha = 0.5f))
+                                    .clickable { searchQuery = "" },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Lucide.X,
+                                    contentDescription = "Clear",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                            }
+                            Spacer(Modifier.width(8.dp))
+                        }
+                        Text(
+                            text = "Cancel",
+                            color = Color(0xFF007AFF),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.clickable {
+                                isSearchExpanded = false
+                                searchQuery = ""
+                            }
+                        )
+                    }
+                },
+                actions = {
+                    // Create Action Button with Apple Liquid Glass Menu
+                    Box {
+                        ChromaHeaderActionButton(
+                            icon = Lucide.Plus,
+                            contentDescription = "Create",
+                            onClick = { showCreateMenu = true }
+                        )
 
-                        // Actions (Create + Search + Notifications)
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        DropdownMenu(
+                            expanded = showCreateMenu,
+                            onDismissRequest = { showCreateMenu = false },
+                            modifier = Modifier
+                                .shadow(16.dp, RoundedCornerShape(20.dp), ambientColor = Color.Black.copy(alpha = 0.25f), spotColor = Color.Black.copy(alpha = 0.15f))
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(if (colors.isDark) Color(0xFF1E1E20) else Color(0xFFFAFAFA))
+                                .border(0.5.dp, colors.glassBorder, RoundedCornerShape(20.dp))
                         ) {
-                            // Create Button with Apple Glass Menu
-                            Box {
-                                Box(
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .clip(CircleShape)
-                                        .background(colors.glassBgHover)
-                                        .border(1.dp, colors.glassBorder, CircleShape)
-                                        .clickable { showCreateMenu = true },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(Lucide.Plus, contentDescription = "Create", tint = colors.textMain, modifier = Modifier.size(18.dp))
-                                }
-
-                                DropdownMenu(
-                                    expanded = showCreateMenu,
-                                    onDismissRequest = { showCreateMenu = false },
-                                    modifier = Modifier
-                                        .shadow(16.dp, RoundedCornerShape(24.dp), ambientColor = Color.Black.copy(alpha = 0.25f), spotColor = Color.Black.copy(alpha = 0.15f))
-                                        .clip(RoundedCornerShape(24.dp))
-                                        .background(colors.bg)
-                                        .border(0.5.dp, colors.glassBorder, RoundedCornerShape(24.dp))
-                                ) {
-                                    DropdownMenuItem(
-                                        text = { Text("New Image Post", color = colors.textMain, fontWeight = FontWeight.Medium) },
-                                        onClick = {
-                                            showCreateMenu = false
-                                            onCreatePost()
-                                        },
-                                        leadingIcon = { Icon(Lucide.Image, null, tint = Color(0xFF007AFF), modifier = Modifier.size(18.dp)) }
-                                    )
-                                    HorizontalDivider(color = colors.glassBorder, thickness = 0.5.dp)
-                                    DropdownMenuItem(
-                                        text = { Text("Publish Canvas Work", color = colors.textMain, fontWeight = FontWeight.Medium) },
-                                        onClick = {
-                                            showCreateMenu = false
-                                            onPublishWork()
-                                        },
-                                        leadingIcon = { Icon(Lucide.Briefcase, null, tint = Color(0xFF007AFF), modifier = Modifier.size(18.dp)) }
-                                    )
-                                    HorizontalDivider(color = colors.glassBorder, thickness = 0.5.dp)
-                                    DropdownMenuItem(
-                                        text = { Text("Add Story Moment", color = colors.textMain, fontWeight = FontWeight.Medium) },
-                                        onClick = {
-                                            showCreateMenu = false
-                                            mediaPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                                        },
-                                        leadingIcon = { Icon(Lucide.Camera, null, tint = Color(0xFF32ADE6), modifier = Modifier.size(18.dp)) }
-                                    )
-                                }
-                            }
-
-                            // Search Trigger
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(colors.glassBgHover)
-                                    .border(1.dp, colors.glassBorder, CircleShape)
-                                    .clickable { isSearchExpanded = true },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(Lucide.Search, contentDescription = "Search", tint = colors.textMain, modifier = Modifier.size(18.dp))
-                            }
-
-                            // Notifications / Activity
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(colors.glassBgHover)
-                                    .border(1.dp, colors.glassBorder, CircleShape)
-                                    .clickable { onNavigateToNotifications() },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(Lucide.Heart, contentDescription = "Activity", tint = colors.textMain, modifier = Modifier.size(18.dp))
-                            }
+                            DropdownMenuItem(
+                                text = { Text("New Image Post", color = colors.textMain, fontWeight = FontWeight.Medium, fontSize = 14.sp) },
+                                onClick = {
+                                    showCreateMenu = false
+                                    onCreatePost()
+                                },
+                                leadingIcon = { Icon(Lucide.Image, null, tint = Color(0xFF007AFF), modifier = Modifier.size(18.dp)) }
+                            )
+                            HorizontalDivider(color = colors.glassBorder, thickness = 0.5.dp)
+                            DropdownMenuItem(
+                                text = { Text("Publish Canvas Work", color = colors.textMain, fontWeight = FontWeight.Medium, fontSize = 14.sp) },
+                                onClick = {
+                                    showCreateMenu = false
+                                    onPublishWork()
+                                },
+                                leadingIcon = { Icon(Lucide.Briefcase, null, tint = Color(0xFF007AFF), modifier = Modifier.size(18.dp)) }
+                            )
+                            HorizontalDivider(color = colors.glassBorder, thickness = 0.5.dp)
+                            DropdownMenuItem(
+                                text = { Text("Add Story Moment", color = colors.textMain, fontWeight = FontWeight.Medium, fontSize = 14.sp) },
+                                onClick = {
+                                    showCreateMenu = false
+                                    mediaPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                },
+                                leadingIcon = { Icon(Lucide.Camera, null, tint = Color(0xFF32ADE6), modifier = Modifier.size(18.dp)) }
+                            )
                         }
                     }
+
+                    // Search Trigger
+                    ChromaHeaderActionButton(
+                        icon = Lucide.Search,
+                        contentDescription = "Search",
+                        onClick = { isSearchExpanded = true }
+                    )
+
+                    // Notifications / Activity
+                    ChromaHeaderActionButton(
+                        icon = Lucide.Heart,
+                        contentDescription = "Activity",
+                        onClick = { onNavigateToNotifications() }
+                    )
+                }
+            )
+
+            // Pull to Refresh / Active Refreshing Indicator
+            AnimatedVisibility(
+                visible = isRefreshing,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    OscellionLoadingSpinner(color = Color(0xFF007AFF), modifier = Modifier.size(24.dp))
                 }
             }
 
@@ -362,7 +350,6 @@ fun DiscoverScreen(
                     }
                     items(3) {
                         SkeletonPost()
-                        Spacer(modifier = Modifier.fillMaxWidth().height(8.dp).background(if (colors.isDark) Color(0xFF000000) else Color(0xFFE5E5EA)))
                     }
                 }
             } else {
@@ -371,39 +358,53 @@ fun DiscoverScreen(
                     contentPadding = PaddingValues(top = 4.dp, bottom = 120.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    // Stories Section
+                    // Stories & Moments Tray
                     item(key = "stories") {
-                        StoriesSection(
-                            stories = stories,
-                            isLoading = false,
-                            hasMyStory = myStories.isNotEmpty(),
-                            myStoryAvatarUrl = myProfile?.avatarUrl ?: "",
-                            myStoryGender = myProfile?.gender,
-                            onMyStoryClick = {
-                                if (myStories.isNotEmpty()) {
-                                    storyViewerInitialIndex = -1
-                                    showStoryViewer = true
-                                } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp, bottom = 4.dp)
+                        ) {
+                            StoriesSection(
+                                stories = stories,
+                                isLoading = false,
+                                hasMyStory = myStories.isNotEmpty(),
+                                myStoryAvatarUrl = myProfile?.avatarUrl ?: "",
+                                myStoryGender = myProfile?.gender,
+                                onMyStoryClick = {
+                                    if (myStories.isNotEmpty()) {
+                                        storyViewerInitialIndex = -1
+                                        showStoryViewer = true
+                                    } else {
+                                        mediaPicker.launch(
+                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                        )
+                                    }
+                                },
+                                onAddStoryClick = {
                                     mediaPicker.launch(
                                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                                     )
+                                },
+                                onStoryClick = { groupIndex ->
+                                    storyViewerInitialIndex = groupIndex
+                                    showStoryViewer = true
                                 }
-                            },
-                            onAddStoryClick = {
-                                mediaPicker.launch(
-                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                )
-                            },
-                            onStoryClick = { groupIndex ->
-                                storyViewerInitialIndex = groupIndex
-                                showStoryViewer = true
-                            }
-                        )
-                        if (isUploadingStory) {
-                            LiquidGlassProgressBar(
-                                modifier = Modifier.fillMaxWidth().height(4.dp).padding(horizontal = 16.dp, vertical = 2.dp)
                             )
                         }
+                        if (isUploadingStory) {
+                            LiquidGlassProgressBar(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(4.dp)
+                                    .padding(horizontal = 16.dp, vertical = 2.dp)
+                            )
+                        }
+                        HorizontalDivider(
+                            color = colors.glassBorder.copy(alpha = 0.5f),
+                            thickness = 0.5.dp,
+                            modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
+                        )
                     }
 
                     // Trending Section (Vision Pro Spatial Glass Carousel)
@@ -412,12 +413,31 @@ fun DiscoverScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                                    .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Icon(Lucide.Flame, null, tint = Color(0xFFFF9500), modifier = Modifier.size(18.dp))
-                                Text("Trending Creations", color = colors.textMain, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(Lucide.Flame, null, tint = Color(0xFFFF9500), modifier = Modifier.size(18.dp))
+                                    Text(
+                                        "Trending Creations",
+                                        color = colors.textMain,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 16.sp,
+                                        letterSpacing = (-0.3).sp
+                                    )
+                                }
+                                if (trendingWorks.isNotEmpty()) {
+                                    Text(
+                                        "${trendingWorks.size} Top Artworks",
+                                        color = Color(0xFF8E8E93),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
                             }
                         }
                         item(key = "trending_row") {
@@ -430,10 +450,11 @@ fun DiscoverScreen(
                                     items(4, key = { "trendsk_$it" }) {
                                         Box(
                                             modifier = Modifier
-                                                .width(150.dp)
-                                                .height(118.dp)
-                                                .clip(androidx.compose.ui.graphics.RectangleShape)
-                                                .background(colors.glassBgHover.copy(alpha = 0.5f))
+                                                .width(160.dp)
+                                                .height(126.dp)
+                                                .clip(RoundedCornerShape(18.dp))
+                                                .background(colors.glassBgHover.copy(alpha = 0.6f))
+                                                .border(0.5.dp, colors.glassBorder, RoundedCornerShape(18.dp))
                                         )
                                     }
                                 }
@@ -497,6 +518,10 @@ fun DiscoverScreen(
                                 onDeleteWork = { onDeleteWork(work.id) },
                                 onEditWork = { workId, title, desc -> onEditWork(workId, title, desc) },
                                 onNavigateToOriginal = { authorId, postId -> onAuthorClick(authorId, postId) },
+                                onTagClick = { tag ->
+                                    searchQuery = tag
+                                    isSearchExpanded = true
+                                },
                                 onShareClick = {
                                     discoverViewModel?.trackShare(work.id)
                                     val shareIntent = Intent(Intent.ACTION_SEND).apply {
@@ -517,7 +542,6 @@ fun DiscoverScreen(
                                     )
                                 }
                             )
-                            Spacer(modifier = Modifier.fillMaxWidth().height(8.dp).background(if (colors.isDark) Color(0xFF000000) else Color(0xFFE5E5EA)))
                         }
 
                         // End Point Stretch Loader / All Caught Up indicator
@@ -617,12 +641,18 @@ fun TrendingCard(
 
     Card(
         modifier = Modifier
-            .width(150.dp)
-            .height(118.dp)
+            .width(160.dp)
+            .height(126.dp)
             .clickable { onClick() },
-        shape = androidx.compose.ui.graphics.RectangleShape,
-        colors = CardDefaults.cardColors(containerColor = colors.glassBg),
-        border = androidx.compose.foundation.BorderStroke(1.dp, colors.glassBorder)
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (colors.isDark) Color(0xFF1C1C1E) else Color(0xFFF2F2F7)
+        ),
+        border = androidx.compose.foundation.BorderStroke(
+            0.5.dp,
+            if (colors.isDark) Color(0x33FFFFFF) else Color(0x18000000)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             if (work.postType == "image" && work.imageUrl != null) {
@@ -643,30 +673,57 @@ fun TrendingCard(
                 )
             }
 
-            // Gradient Overlay
+            // Scrim Gradient
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
-                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f))
+                            listOf(
+                                Color.Black.copy(alpha = 0.25f),
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.85f)
+                            )
                         )
                     )
             )
 
+            // Top-Left Format Pill
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(8.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color.Black.copy(alpha = 0.55f))
+                    .border(0.5.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+            ) {
+                val label = if (layers != null && layers!!.isNotEmpty()) "✨ Vector" else "🖼️ Art"
+                Text(label, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+            }
+
+            // Bottom Info Column
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(8.dp)
+                    .padding(horizontal = 10.dp, vertical = 8.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     Icon(ChromaIcons.HeartFilled, null, tint = Color(0xFFFF2D55), modifier = Modifier.size(11.dp))
-                    Text("${work.likesCount}", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        "${work.likesCount}",
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
                 Text(
                     work.title.ifEmpty { "Untitled" },
                     color = Color.White,
-                    fontSize = 12.sp,
+                    fontSize = 12.5.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -696,6 +753,7 @@ fun FeedPostCard(
     onSaveClick: (() -> Unit)? = null,
     onReportClick: ((String) -> Unit)? = null,
     onMentionClick: ((String) -> Unit)? = null,
+    onTagClick: ((String) -> Unit)? = null,
     onUpdateVisibility: ((hideLikes: Boolean, hideShares: Boolean, hideRemixes: Boolean, hideDownloads: Boolean, hideSaves: Boolean) -> Unit)? = null
 ) {
     val colors = LocalOscellionColors.current
@@ -709,6 +767,7 @@ fun FeedPostCard(
     var showVisibilitySettings by remember { mutableStateOf(false) }
     var editTitle by remember(work.id) { mutableStateOf(work.title) }
     var editDescription by remember(work.id) { mutableStateOf(work.description) }
+    var isDescriptionExpanded by remember { mutableStateOf(false) }
 
     val doubleTapLikeState = rememberDoubleTapLikeState()
 
@@ -741,343 +800,452 @@ fun FeedPostCard(
 
     val isRemixPost = !work.remixedFromAuthorUsername.isNullOrEmpty()
 
-    Column(
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .background(colors.bg)
+            .padding(horizontal = 12.dp, vertical = 7.dp),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (colors.isDark) Color(0xFF161618) else Color(0xFFFFFFFF)
+        ),
+        border = androidx.compose.foundation.BorderStroke(
+            0.5.dp,
+            if (colors.isDark) Color(0x28FFFFFF) else Color(0x18000000)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        // Header Row (Avatar + Name + Handle + Time + Menu)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+        Column(
+            modifier = Modifier.fillMaxWidth()
         ) {
+            // Header Row (Avatar + Name + Handle + Time + Menu)
             Row(
-                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
-                    .weight(1f)
-                    .clickable { onAuthorClick(work.creatorId) }
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                IosAvatarView(
-                    name = resolvedDisplayName,
-                    avatarUrl = resolvedAvatarUrl,
-                    size = 42.dp
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { onAuthorClick(work.creatorId) }
+                ) {
+                    IosAvatarView(
+                        name = resolvedDisplayName,
+                        avatarUrl = resolvedAvatarUrl,
+                        size = 42.dp
+                    )
 
-                Spacer(Modifier.width(10.dp))
+                    Spacer(Modifier.width(10.dp))
 
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = resolvedDisplayName,
-                            color = colors.textMain,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        if (resolvedVerified) {
-                            Spacer(Modifier.width(4.dp))
-                            Icon(
-                                painter = painterResource(id = R.drawable.verification_badge),
-                                contentDescription = "Verified",
-                                tint = Color.Unspecified,
-                                modifier = Modifier.size(14.dp)
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = resolvedDisplayName,
+                                color = colors.textMain,
+                                fontSize = 14.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            if (resolvedVerified) {
+                                Spacer(Modifier.width(4.dp))
+                                Icon(
+                                    painter = painterResource(id = R.drawable.verification_badge),
+                                    contentDescription = "Verified",
+                                    tint = Color.Unspecified,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        }
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "@${work.authorUsername}",
+                                color = Color(0xFF8E8E93),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(" • ", color = Color(0xFF8E8E93), fontSize = 12.sp)
+                            Text(
+                                text = getTimeAgo(work.timestamp),
+                                color = Color(0xFF8E8E93),
+                                fontSize = 11.5.sp
                             )
                         }
                     }
+                }
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "@${work.authorUsername}",
-                            color = Color(0xFF8E8E93),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(" • ", color = Color(0xFF8E8E93), fontSize = 12.sp)
-                        Text(
-                            text = getTimeAgo(work.timestamp),
-                            color = Color(0xFF8E8E93),
-                            fontSize = 11.sp
-                        )
+                // 3-Dot Options Button
+                Box {
+                    IconButton(
+                        onClick = { showMenu = true },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(Lucide.EllipsisVertical, contentDescription = "Options", tint = Color(0xFF8E8E93), modifier = Modifier.size(18.dp))
                     }
-                }
-            }
 
-            // 3-Dot Options Button
-            Box {
-                IconButton(
-                    onClick = { showMenu = true },
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Icon(Lucide.EllipsisVertical, contentDescription = "Options", tint = Color(0xFF8E8E93), modifier = Modifier.size(18.dp))
-                }
-
-                if (showMenu) {
-                    val items = if (isOwner) {
-                        listOf(
-                            IosActionSheetItem("Counter Privacy", false) { showMenu = false; showVisibilitySettings = true },
-                            IosActionSheetItem("Edit Post", false) { showMenu = false; showEditDialog = true },
-                            IosActionSheetItem("Delete", true) { showMenu = false; showDeleteConfirm = true }
-                        )
-                    } else {
-                        listOf(
-                            IosActionSheetItem("Share", false) { showMenu = false; onShareClick?.invoke() }
-                        )
-                    }
-                    IosActionSheet(
-                        items = items,
-                        onDismiss = { showMenu = false }
-                    )
-                }
-            }
-        }
-
-        // Remixed Attribution Banner if applicable
-        if (isRemixPost) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 2.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0x14007AFF))
-                    .clickable {
-                        if (!work.remixedFromAuthorId.isNullOrBlank() && !work.remixedFromPostId.isNullOrBlank()) {
-                            onNavigateToOriginal(work.remixedFromAuthorId!!, work.remixedFromPostId!!)
+                    if (showMenu) {
+                        val items = if (isOwner) {
+                            listOf(
+                                IosActionSheetItem("Counter Privacy", false) { showMenu = false; showVisibilitySettings = true },
+                                IosActionSheetItem("Edit Post", false) { showMenu = false; showEditDialog = true },
+                                IosActionSheetItem("Delete", true) { showMenu = false; showDeleteConfirm = true }
+                            )
+                        } else {
+                            listOf(
+                                IosActionSheetItem("Share Creation", false) { showMenu = false; onShareClick?.invoke() },
+                                IosActionSheetItem("Remix Artwork", false) {
+                                    showMenu = false
+                                    if (currentUserId == null) onRequireLogin()
+                                    else if (onRemixWork != null) onRemixWork(work)
+                                    else onRemixClick()
+                                },
+                                IosActionSheetItem("Save to Studio Library", false) {
+                                    showMenu = false
+                                    if (currentUserId == null) onRequireLogin()
+                                    else onDownloadClick()
+                                },
+                                IosActionSheetItem("Save / Bookmark", false) { showMenu = false; onSaveClick?.invoke() }
+                            )
                         }
+                        IosActionSheet(
+                            items = items,
+                            onDismiss = { showMenu = false }
+                        )
                     }
-                    .padding(horizontal = 10.dp, vertical = 5.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Icon(Lucide.HeartHandshake, contentDescription = null, tint = Color(0xFF007AFF), modifier = Modifier.size(14.dp))
-                    Text(
-                        text = "Remixed from @${work.remixedFromAuthorUsername}",
-                        color = Color(0xFF007AFF),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
                 }
             }
-        }
 
-        Spacer(Modifier.height(4.dp))
-
-        // Media Viewport - Sharp edge-to-edge (0dp corner radius) with Double-Tap Heart Animation
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(4f / 3f)
-                .clip(androidx.compose.ui.graphics.RectangleShape)
-                .background(Color.Black.copy(alpha = 0.05f))
-                .pointerInput(Unit) {
-                    detectTapGestures(
-                        onDoubleTap = { offset ->
-                            val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
-                            if (!uid.isNullOrBlank()) {
-                                if (!isLiked) onLikeClick()
-                            } else {
-                                onRequireLogin()
+            // Remixed Attribution Banner if applicable
+            if (isRemixPost) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 2.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0x18007AFF))
+                        .border(0.5.dp, Color(0x33007AFF), RoundedCornerShape(10.dp))
+                        .clickable {
+                            val origAuthorId = work.remixedFromAuthorId
+                            val origPostId = work.remixedFromPostId
+                            if (!origAuthorId.isNullOrBlank() && !origPostId.isNullOrBlank()) {
+                                onNavigateToOriginal(origAuthorId, origPostId)
                             }
-                            doubleTapLikeState.trigger(offset)
                         }
-                    )
-                },
-            contentAlignment = Alignment.Center
-        ) {
-            if (work.postType == "image" && !work.imageUrl.isNullOrBlank()) {
-                AsyncImage(
-                    model = ImageRequest.Builder(context).data(work.imageUrl).crossfade(true).build(),
-                    contentDescription = work.title,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-            } else if (layers != null && layers!!.isNotEmpty()) {
-                CanvasPreview(
-                    layers = layers!!,
-                    shape = "full",
-                    borderColor = Color.Transparent,
-                    isStatic = true,
-                    timeMillisOverride = 5000L,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-
-            // Flat, smooth, clean double tap heart reaction
-            FlatDoubleTapHeartOverlay(
-                state = doubleTapLikeState,
-                modifier = Modifier.fillMaxSize()
-            )
-        }
-
-        // Interactive Action Bar (Like | Remix | Download | Bookmark | Share) with full counter privacy controls
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Left: Like, Remix & Download Actions
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Like Action
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable {
-                        val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
-                        if (uid.isNullOrBlank()) onRequireLogin()
-                        else onLikeClick()
-                    }
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
-                    Icon(
-                        imageVector = if (isLiked) ChromaIcons.HeartFilled else Lucide.Heart,
-                        contentDescription = if (isLiked) "Liked" else "Like",
-                        tint = if (isLiked) Color(0xFFFF2D55) else colors.textMain,
-                        modifier = Modifier.size(22.dp)
-                    )
-                    if (!work.hideLikesCount && work.likesCount > 0) {
-                        Spacer(Modifier.width(5.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(Lucide.HeartHandshake, contentDescription = null, tint = Color(0xFF007AFF), modifier = Modifier.size(15.dp))
                         Text(
-                            text = "${work.likesCount}",
-                            color = if (isLiked) Color(0xFFFF2D55) else colors.textMain,
-                            fontSize = 13.sp,
+                            text = "Remixed from @${work.remixedFromAuthorUsername}",
+                            color = Color(0xFF007AFF),
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
                 }
-
-                                // Remix Action
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable {
-                        if (currentUserId == null) onRequireLogin()
-                        else if (onRemixWork != null) onRemixWork(work)
-                        else onRemixClick()
-                    }
-                ) {
-                    Icon(
-                        imageVector = Lucide.HeartHandshake,
-                        contentDescription = "Remix",
-                        tint = colors.textMain,
-                        modifier = Modifier.size(22.dp)
-                    )
-                    if (!work.hideRemixesCount && work.remixCount > 0) {
-                        Spacer(Modifier.width(6.dp))
-                        Text("", color = colors.textMain, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                    }
-                }
-// Download / Save to Studio Library Action
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable {
-                        if (currentUserId == null) onRequireLogin()
-                        else onDownloadClick()
-                    }
-                ) {
-                    Icon(Lucide.Download, contentDescription = "Save to Studio", tint = colors.textMain, modifier = Modifier.size(20.dp))
-                    if (!work.hideDownloadsCount && work.downloadCount > 0) {
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            text = "${work.downloadCount}",
-                            color = colors.textMain.copy(alpha = 0.75f),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
+                Spacer(Modifier.height(4.dp))
             }
 
-            // Right: Bookmark & Share Actions
+            // Media Viewport - Contained Picture-Frame with Rounded Corners and Double-Tap Heart Animation
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp)
+                    .aspectRatio(4f / 3f)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(if (colors.isDark) Color(0xFF101012) else Color(0xFFE5E5EA))
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onDoubleTap = { offset ->
+                                val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                                if (!uid.isNullOrBlank()) {
+                                    if (!isLiked) onLikeClick()
+                                } else {
+                                    onRequireLogin()
+                                }
+                                doubleTapLikeState.trigger(offset)
+                            }
+                        )
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                if (work.postType == "image" && !work.imageUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(context).data(work.imageUrl).crossfade(true).build(),
+                        contentDescription = work.title,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else if (layers != null && layers!!.isNotEmpty()) {
+                    CanvasPreview(
+                        layers = layers!!,
+                        shape = "full",
+                        borderColor = Color.Transparent,
+                        isStatic = true,
+                        timeMillisOverride = 5000L,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+
+                // Top-Left Floating Badge
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(10.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color.Black.copy(alpha = 0.55f))
+                        .border(0.5.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(10.dp))
+                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                ) {
+                    val label = if (layers != null && layers!!.isNotEmpty()) "✨ Vector Mesh" else "🖼️ Artwork"
+                    Text(label, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                }
+
+                // Top-Right Floating Badge (Layers count)
+                if (layers != null && layers!!.isNotEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(10.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color.Black.copy(alpha = 0.55f))
+                            .border(0.5.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(10.dp))
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    ) {
+                        Text("${layers!!.size} Layers", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+
+                // Flat, smooth, clean double tap heart reaction
+                FlatDoubleTapHeartOverlay(
+                    state = doubleTapLikeState,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+
+            // Interactive Action Bar (Like | Remix | Download | Bookmark | Share) with full counter privacy controls
             Row(
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Save / Bookmark Action
+                // Left: Like, Remix & Download Actions
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable { onSaveClick?.invoke() }
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = if (isSaved) Lucide.BookmarkCheck else Lucide.Bookmark,
-                        contentDescription = "Bookmark",
-                        tint = if (isSaved) Color(0xFF007AFF) else colors.textMain,
-                        modifier = Modifier.size(20.dp)
+                    // Like Action
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable {
+                                val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                                if (uid.isNullOrBlank()) onRequireLogin()
+                                else onLikeClick()
+                            }
+                            .padding(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isLiked) ChromaIcons.HeartFilled else Lucide.Heart,
+                            contentDescription = if (isLiked) "Liked" else "Like",
+                            tint = if (isLiked) Color(0xFFFF2D55) else colors.textMain,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        if (!work.hideLikesCount && work.likesCount > 0) {
+                            Spacer(Modifier.width(5.dp))
+                            Text(
+                                text = "${work.likesCount}",
+                                color = if (isLiked) Color(0xFFFF2D55) else colors.textMain,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    // Remix Action with accurate count
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable {
+                                if (currentUserId == null) onRequireLogin()
+                                else if (onRemixWork != null) onRemixWork(work)
+                                else onRemixClick()
+                            }
+                            .padding(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Lucide.HeartHandshake,
+                            contentDescription = "Remix",
+                            tint = colors.textMain,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        if (!work.hideRemixesCount && work.remixCount > 0) {
+                            Spacer(Modifier.width(5.dp))
+                            Text(
+                                text = "${work.remixCount}",
+                                color = colors.textMain.copy(alpha = 0.75f),
+                                fontSize = 12.5.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+
+                    // Download / Save to Studio Library Action
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable {
+                                if (currentUserId == null) onRequireLogin()
+                                else onDownloadClick()
+                            }
+                            .padding(4.dp)
+                    ) {
+                        Icon(
+                            Lucide.Download,
+                            contentDescription = "Save to Studio",
+                            tint = colors.textMain,
+                            modifier = Modifier.size(21.dp)
+                        )
+                        if (!work.hideDownloadsCount && work.downloadCount > 0) {
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = "${work.downloadCount}",
+                                color = colors.textMain.copy(alpha = 0.75f),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+
+                // Right: Bookmark & Share Actions
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Save / Bookmark Action
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { onSaveClick?.invoke() }
+                            .padding(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isSaved) Lucide.BookmarkCheck else Lucide.Bookmark,
+                            contentDescription = "Bookmark",
+                            tint = if (isSaved) Color(0xFF007AFF) else colors.textMain,
+                            modifier = Modifier.size(21.dp)
+                        )
+                        if (!work.hideSavesCount && work.saveCount > 0) {
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = "${work.saveCount}",
+                                color = if (isSaved) Color(0xFF007AFF) else colors.textMain.copy(alpha = 0.75f),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+
+                    // Share Action
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { onShareClick?.invoke() }
+                            .padding(4.dp)
+                    ) {
+                        Icon(
+                            Lucide.Share2,
+                            contentDescription = "Share",
+                            tint = colors.textMain,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        if (!work.hideSharesCount && work.shareCount > 0) {
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = "${work.shareCount}",
+                                color = colors.textMain.copy(alpha = 0.75f),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Caption & Tags
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp)
+                    .padding(bottom = 14.dp)
+            ) {
+                if (work.title.isNotBlank()) {
+                    Text(
+                        text = work.title,
+                        color = colors.textMain,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.5.sp,
+                        letterSpacing = (-0.2).sp
                     )
-                    if (!work.hideSavesCount && work.saveCount > 0) {
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            text = "${work.saveCount}",
-                            color = if (isSaved) Color(0xFF007AFF) else colors.textMain.copy(alpha = 0.75f),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
                 }
 
-                // Share Action
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable { onShareClick?.invoke() }
-                ) {
-                    Icon(Lucide.Share2, contentDescription = "Share", tint = colors.textMain, modifier = Modifier.size(20.dp))
-                    if (!work.hideSharesCount && work.shareCount > 0) {
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            text = "${work.shareCount}",
-                            color = colors.textMain.copy(alpha = 0.75f),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
+                if (work.description.isNotBlank()) {
+                    Spacer(Modifier.height(4.dp))
+                    val isLong = work.description.length > 90
+                    val displayDesc = if (isLong && !isDescriptionExpanded) work.description.take(90).trimEnd() + "..." else work.description
+
+                    Text(
+                        text = buildAnnotatedString {
+                            append(displayDesc)
+                            if (isLong && !isDescriptionExpanded) {
+                                append(" ")
+                                withStyle(SpanStyle(color = Color(0xFF007AFF), fontWeight = FontWeight.SemiBold)) {
+                                    append("more")
+                                }
+                            }
+                        },
+                        color = colors.textMain.copy(alpha = 0.85f),
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp,
+                        modifier = Modifier.clickable(enabled = isLong) {
+                            isDescriptionExpanded = !isDescriptionExpanded
+                        }
+                    )
                 }
-            }
-        }
 
-        // Caption & Tags
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp)
-                .padding(bottom = 12.dp)
-        ) {
-            if (work.title.isNotBlank()) {
-                Text(
-                    text = work.title,
-                    color = colors.textMain,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp
-                )
-            }
-
-            if (work.description.isNotBlank()) {
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    text = work.description,
-                    color = colors.textMain.copy(alpha = 0.85f),
-                    fontSize = 13.sp,
-                    lineHeight = 17.sp
-                )
-            }
-
-            if (work.tags.isNotEmpty()) {
-                Spacer(Modifier.height(6.dp))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(work.tags) { tag ->
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(colors.glassBgHover.copy(alpha = 0.6f))
-                                .border(0.5.dp, colors.glassBorder, RoundedCornerShape(8.dp))
-                                .padding(horizontal = 7.dp, vertical = 2.dp)
-                        ) {
-                            Text("#$tag", color = Color(0xFF007AFF), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                if (work.tags.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(work.tags) { tag ->
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFF007AFF).copy(alpha = 0.10f))
+                                    .border(0.5.dp, Color(0xFF007AFF).copy(alpha = 0.25f), RoundedCornerShape(8.dp))
+                                    .clickable { onTagClick?.invoke(tag) }
+                                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                            ) {
+                                Text(
+                                    "#$tag",
+                                    color = Color(0xFF007AFF),
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
                         }
                     }
                 }
@@ -1260,37 +1428,63 @@ private fun CounterToggleRow(
 fun SkeletonPost() {
     val infiniteTransition = rememberInfiniteTransition(label = "skeleton_transition")
     val alpha by infiniteTransition.animateFloat(
-        initialValue = 0.2f,
-        targetValue = 0.45f,
+        initialValue = 0.15f,
+        targetValue = 0.40f,
         animationSpec = infiniteRepeatable(
             animation = tween(1000),
             repeatMode = RepeatMode.Reverse
         ),
         label = "skeleton_alpha"
     )
+    val colors = LocalOscellionColors.current
 
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(modifier = Modifier.size(42.dp).clip(CircleShape).background(Color.Gray.copy(alpha = alpha)))
-            Spacer(Modifier.width(10.dp))
-            Column {
-                Box(modifier = Modifier.width(120.dp).height(14.dp).clip(RoundedCornerShape(4.dp)).background(Color.Gray.copy(alpha = alpha)))
-                Spacer(Modifier.height(4.dp))
-                Box(modifier = Modifier.width(80.dp).height(10.dp).clip(RoundedCornerShape(4.dp)).background(Color.Gray.copy(alpha = alpha)))
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 7.dp),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (colors.isDark) Color(0xFF161618) else Color(0xFFFFFFFF)
+        ),
+        border = androidx.compose.foundation.BorderStroke(
+            0.5.dp,
+            if (colors.isDark) Color(0x28FFFFFF) else Color(0x18000000)
+        )
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(modifier = Modifier.size(42.dp).clip(CircleShape).background(Color.Gray.copy(alpha = alpha)))
+                Spacer(Modifier.width(10.dp))
+                Column {
+                    Box(modifier = Modifier.width(130.dp).height(14.dp).clip(RoundedCornerShape(4.dp)).background(Color.Gray.copy(alpha = alpha)))
+                    Spacer(Modifier.height(5.dp))
+                    Box(modifier = Modifier.width(85.dp).height(10.dp).clip(RoundedCornerShape(4.dp)).background(Color.Gray.copy(alpha = alpha)))
+                }
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp)
+                    .aspectRatio(4f / 3f)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color.Gray.copy(alpha = alpha))
+            )
+            Spacer(Modifier.height(14.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(Color.Gray.copy(alpha = alpha)))
+                Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(Color.Gray.copy(alpha = alpha)))
+                Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(Color.Gray.copy(alpha = alpha)))
             }
         }
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(4f / 3f)
-                .clip(androidx.compose.ui.graphics.RectangleShape)
-                .background(Color.Gray.copy(alpha = alpha))
-        )
-        Spacer(Modifier.height(14.dp))
     }
 }
