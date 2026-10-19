@@ -488,7 +488,8 @@ data class FcpCustomAudio(
     val durationSec: Float = 0f,
     val volume: Float = 1.0f,
     val isExtractedFromVideo: Boolean = false,
-    val muteOriginalVideo: Boolean = true
+    val muteOriginalVideo: Boolean = true,
+    val loopAudio: Boolean = true
 )
 
 private fun queryMediaFileName(context: Context, uri: Uri): String {
@@ -824,11 +825,15 @@ fun FinalCutProVideoEditorScreen(
             .setSeekParameters(SeekParameters.EXACT)
             .build().apply {
                 playWhenReady = false
-                repeatMode = Player.REPEAT_MODE_OFF
+                repeatMode = Player.REPEAT_MODE_ONE
             }
     }
     DisposableEffect(Unit) {
         onDispose { customAudioPlayer.release() }
+    }
+
+    LaunchedEffect(customAudio?.loopAudio) {
+        customAudioPlayer.repeatMode = if (customAudio?.loopAudio != false) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
     }
 
     // Synchronize customAudioPlayer media source and volume with customAudio state
@@ -836,6 +841,7 @@ fun FinalCutProVideoEditorScreen(
         val audio = customAudio
         if (audio != null) {
             customAudioPlayer.setMediaItem(MediaItem.fromUri(audio.uri))
+            customAudioPlayer.repeatMode = if (audio.loopAudio) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
             customAudioPlayer.prepare()
             val posMs = (currentTimeSec * 1000f).toLong().coerceAtLeast(0L)
             customAudioPlayer.seekTo(posMs)
@@ -1013,6 +1019,9 @@ fun FinalCutProVideoEditorScreen(
         val clamped = targetGlobalSec.coerceIn(0f, totalDurationSec)
         currentTimeSec = clamped
         if (customAudio != null) {
+            if (customAudioPlayer.playbackState == Player.STATE_ENDED || customAudioPlayer.playbackState == Player.STATE_IDLE) {
+                customAudioPlayer.prepare()
+            }
             customAudioPlayer.seekTo((clamped * 1000f).toLong().coerceAtLeast(0L))
         }
         val span = getActiveSpanAt(clamped) ?: return
@@ -1104,6 +1113,9 @@ fun FinalCutProVideoEditorScreen(
 
     LaunchedEffect(isPlaying) {
         if (customAudio != null) {
+            if (isPlaying && (customAudioPlayer.playbackState == Player.STATE_ENDED || customAudioPlayer.playbackState == Player.STATE_IDLE)) {
+                customAudioPlayer.prepare()
+            }
             customAudioPlayer.playWhenReady = isPlaying
             if (isPlaying) {
                 if (!customAudioPlayer.isPlaying) customAudioPlayer.play()
@@ -1154,6 +1166,9 @@ fun FinalCutProVideoEditorScreen(
                     val audioPosMs = customAudioPlayer.currentPosition
                     val targetMs = (currentTimeSec * 1000f).toLong()
                     if (abs(audioPosMs - targetMs) > 180L) {
+                        if (customAudioPlayer.playbackState == Player.STATE_ENDED || customAudioPlayer.playbackState == Player.STATE_IDLE) {
+                            customAudioPlayer.prepare()
+                        }
                         customAudioPlayer.seekTo(targetMs)
                     }
                 }
@@ -1744,7 +1759,7 @@ fun FinalCutProVideoEditorScreen(
                     if (isCurrentClipPhoto && selectedClip != null) {
                         AsyncImage(
                             model = ImageRequest.Builder(context)
-                                .data(selectedClip?.uri)
+                                .data(selectedClip.uri)
                                 .crossfade(true)
                                 .build(),
                             contentDescription = "Photo Clip",
@@ -1756,12 +1771,12 @@ fun FinalCutProVideoEditorScreen(
                                     translationX = activePanX
                                     translationY = activePanY
                                     if (supportsRenderEffect) {
-                                        val hasCustomColor = (selectedClip?.exposure ?: 0f) != 0f ||
-                                            (selectedClip?.contrast ?: 100f) != 100f ||
-                                            (selectedClip?.saturation ?: 100f) != 100f ||
-                                            (selectedClip?.temperature ?: 0f) != 0f ||
-                                            (selectedClip?.tint ?: 0f) != 0f ||
-                                            (selectedClip?.lut ?: FcpLutPreset.NONE) != FcpLutPreset.NONE
+                                        val hasCustomColor = selectedClip.exposure != 0f ||
+                                            selectedClip.contrast != 100f ||
+                                            selectedClip.saturation != 100f ||
+                                            selectedClip.temperature != 0f ||
+                                            selectedClip.tint != 0f ||
+                                            selectedClip.lut != FcpLutPreset.NONE
 
                                         renderEffect = if (hasCustomColor) {
                                             RenderEffect
@@ -2347,6 +2362,9 @@ fun FinalCutProVideoEditorScreen(
                                         customAudio = customAudio?.copy(muteOriginalVideo = mute)
                                         ToastManager.showToast(if (mute) "Original audio muted (replaced)" else "Original audio unmuted (mixed)")
                                     },
+                                    onLoopAudioChange = { loop ->
+                                        customAudio = customAudio?.copy(loopAudio = loop)
+                                    },
                                     onRemoveCustomAudio = {
                                         customAudio = null
                                         ToastManager.showToast("Custom audio removed")
@@ -2455,6 +2473,7 @@ fun FinalCutProVideoEditorScreen(
                 clipCount = clips.size,
                 textLayerCount = textLayers.size,
                 aspectRatio = aspectRatio,
+                customAudio = customAudio,
                 isExporting = isExporting,
                 exportProgress = exportProgress,
                 onStartExport = { res: String, fps: String ->
@@ -2475,7 +2494,7 @@ fun FinalCutProVideoEditorScreen(
                             val draft = CreatorPostDraft(
                                 mode = "flash",
                                 title = textLayers.firstOrNull()?.primaryText ?: "Chroma Studio Video",
-                                description = "Rendered at $res $fps in ChromaStudio Final Cut Pro Editor",
+                                description = "Rendered at $res $fps" + (if (customAudio != null) " with soundtrack '${customAudio?.name}'" else "") + " in ChromaStudio Final Cut Pro Editor",
                                 aspectRatio = aspectRatio.label,
                                 videoUri = clips.firstOrNull()?.uri?.toString(),
                                 flashTrimStartMs = startMs,
@@ -2498,7 +2517,7 @@ fun FinalCutProVideoEditorScreen(
                         val draft = CreatorPostDraft(
                             mode = "flash",
                             title = textLayers.firstOrNull()?.primaryText ?: "Draft Video Project",
-                            description = "Saved ${clips.size} clips with ${textLayers.size} text layers",
+                            description = "Saved ${clips.size} clips with ${textLayers.size} text layers" + (if (customAudio != null) " and soundtrack '${customAudio?.name}'" else ""),
                             aspectRatio = aspectRatio.label,
                             videoUri = clips.firstOrNull()?.uri?.toString(),
                             flashTrimStartMs = startMs,
@@ -3314,6 +3333,28 @@ private fun TimelineTabContent(
                             .padding(horizontal = 6.dp),
                         contentAlignment = Alignment.CenterStart
                     ) {
+                        // Stylized Waveform Bars background
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val barWidth = 2.dp.toPx()
+                            val barGap = 2.dp.toPx()
+                            val totalBarStep = barWidth + barGap
+                            val count = (size.width / totalBarStep).toInt()
+                            val centerY = size.height / 2f
+                            val maxBarHeight = size.height * 0.7f
+
+                            for (i in 0 until count) {
+                                val factor = ((Math.sin(i * 0.45) * 0.45 + Math.cos(i * 0.22) * 0.35 + 0.8).toFloat()).coerceIn(0.2f, 1.0f)
+                                val barH = maxBarHeight * factor
+                                val x = i * totalBarStep + barGap
+                                drawRoundRect(
+                                    color = Color(0xFF34D399).copy(alpha = 0.25f),
+                                    topLeft = Offset(x, centerY - barH / 2f),
+                                    size = Size(barWidth, barH),
+                                    cornerRadius = CornerRadius(1.dp.toPx(), 1.dp.toPx())
+                                )
+                            }
+                        }
+
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -4152,6 +4193,7 @@ private fun AudioTabContent(
     onExtractAudioFromVideo: () -> Unit = {},
     onAudioVolumeChange: (Float) -> Unit = {},
     onMuteOriginalVideoChange: (Boolean) -> Unit = {},
+    onLoopAudioChange: (Boolean) -> Unit = {},
     onRemoveCustomAudio: () -> Unit = {},
     isPlaying: Boolean = false,
     currentTimeSec: Float = 0f
@@ -4376,6 +4418,39 @@ private fun AudioTabContent(
                             SmallSwitch(
                                 checked = customAudio.muteOriginalVideo,
                                 onCheckedChange = onMuteOriginalVideoChange
+                            )
+                        }
+
+                        // Toggle: Loop Soundtrack
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(colors.glassBg)
+                                .border(0.5.dp, colors.glassBorder, RoundedCornerShape(8.dp))
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                Text(
+                                    text = "Loop Soundtrack",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = colors.textMain
+                                )
+                                Text(
+                                    text = if (customAudio.loopAudio)
+                                        "Soundtrack repeats continuously across entire project"
+                                    else
+                                        "Plays once and stops when track ends",
+                                    fontSize = 10.sp,
+                                    color = if (customAudio.loopAudio) Color(0xFF34D399) else colors.textMuted
+                                )
+                            }
+                            SmallSwitch(
+                                checked = customAudio.loopAudio,
+                                onCheckedChange = onLoopAudioChange
                             )
                         }
 
@@ -7879,6 +7954,7 @@ fun FcpExportSheet(
     clipCount: Int,
     textLayerCount: Int,
     aspectRatio: FcpAspectRatio,
+    customAudio: FcpCustomAudio? = null,
     isExporting: Boolean,
     exportProgress: Float,
     onStartExport: (String, String) -> Unit,
@@ -7988,6 +8064,60 @@ fun FcpExportSheet(
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text("Format", fontSize = 11.sp, color = colors.textMuted)
                                 Text(aspectRatio.label.split(" ").firstOrNull() ?: "9:16", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = colors.primary)
+                            }
+                        }
+                    }
+
+                    // Active Custom Soundtrack Badge (if attached)
+                    if (customAudio != null) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF064E3B).copy(alpha = 0.45f))
+                                .border(0.5.dp, Color(0xFF10B981).copy(alpha = 0.45f), RoundedCornerShape(12.dp))
+                                .padding(horizontal = 12.dp, vertical = 9.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(Color(0xFF10B981).copy(alpha = 0.25f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = if (customAudio.isExtractedFromVideo) Lucide.Film else Lucide.Music,
+                                    contentDescription = null,
+                                    tint = Color(0xFF34D399),
+                                    modifier = Modifier.size(15.dp)
+                                )
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = customAudio.name,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = colors.textMain,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = if (customAudio.muteOriginalVideo) "Replaces video audio (original muted)" else "Mixed with original video audio",
+                                    fontSize = 10.sp,
+                                    color = Color(0xFF34D399)
+                                )
+                            }
+                            if (customAudio.loopAudio) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(Color(0xFF10B981).copy(alpha = 0.25f))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text("Looping", fontSize = 8.5.sp, color = Color(0xFF34D399), fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     }
