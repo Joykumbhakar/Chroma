@@ -112,6 +112,10 @@ import com.chroma.studio.ui.components.SmallSwitch
 import com.chroma.studio.ui.components.ToastManager
 import com.chroma.studio.ui.components.glossyBorder
 import com.chroma.studio.ui.theme.LocalOscellionColors
+import androidx.compose.foundation.BorderStroke
+import com.chroma.studio.chat.sound.SoundManager
+import com.chroma.studio.data.DraftPostRepository
+import com.chroma.studio.model.CreatorPostDraft
 import androidx.compose.ui.graphics.toArgb
 import com.composables.icons.lucide.*
 import kotlinx.coroutines.Dispatchers
@@ -422,6 +426,13 @@ fun createFcpTextLayer(preset: FcpTitlePresetType, layerIndex: Int): FcpTextLaye
     }
 }
 
+enum class FcpTransitionType(val label: String, val icon: ImageVector) {
+    NONE("Cut", Lucide.X),
+    CROSSFADE("Crossfade", Lucide.Layers),
+    DIP_TO_BLACK("Dip Black", Lucide.Moon),
+    WIPE_RIGHT("Wipe", Lucide.ArrowRight)
+}
+
 data class FcpClip(
     val id: String = UUID.randomUUID().toString(),
     val uri: Uri,
@@ -440,7 +451,9 @@ data class FcpClip(
     val scale: Float = 1f,
     val panX: Float = 0f,
     val panY: Float = 0f,
-    val isDurationLoaded: Boolean = false
+    val isDurationLoaded: Boolean = false,
+    val transitionToNext: FcpTransitionType = FcpTransitionType.NONE,
+    val transitionDurationSec: Float = 0.5f
 ) {
     val sourceTrimmedDurationSec: Float get() = (trimEndSec - trimStartSec).coerceAtLeast(0.25f)
     val trimmedDurationSec: Float get() = (sourceTrimmedDurationSec / speed.coerceAtLeast(0.1f)).coerceAtLeast(0.2f)
@@ -635,6 +648,12 @@ fun FinalCutProVideoEditorScreen(
     var canvasBackground by remember { mutableStateOf(FcpCanvasBackground()) }
     var blurBackgroundBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
+    // ── Export & Transitions State ────────────────────────────────────────
+    var editingTransitionClipId by remember { mutableStateOf<String?>(null) }
+    var showExportSheet by remember { mutableStateOf(false) }
+    var isExporting by remember { mutableStateOf(false) }
+    var exportProgress by remember { mutableFloatStateOf(0f) }
+
     val bgImagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -813,6 +832,7 @@ fun FinalCutProVideoEditorScreen(
         val clamped = newSec.coerceIn(0f, totalDurationSec)
         currentTimeSec = clamped
         scrubChannel.trySend(clamped)
+        SoundManager.playScrub(context)
     }
 
     fun onScrubEnd(finalSec: Float) {
@@ -1217,17 +1237,14 @@ fun FinalCutProVideoEditorScreen(
                         // Next / Export Primary Button
                         PrimaryGradientButton(
                             onClick = {
-                                val active = selectedClip ?: clips.firstOrNull()
-                                val startMs = ((active?.trimStartSec ?: 0f) * 1000f).toLong()
-                                val endMs = ((active?.trimEndSec ?: (active?.durationSec ?: 15f)) * 1000f).toLong()
-                                val uris = clips.map { it.uri }
-                                onDone(startMs, endMs, uris)
+                                SoundManager.playTap(context)
+                                showExportSheet = true
                             },
                             height = 36.dp,
                             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                         ) {
                             Text(
-                                text = "Next",
+                                text = "Export",
                                 color = Color.White,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold
@@ -1400,6 +1417,69 @@ fun FinalCutProVideoEditorScreen(
                         blurBitmap = blurBackgroundBitmap,
                         supportsRenderEffect = supportsRenderEffect
                     )
+
+                    // Live Clip Transition Overlay during boundary transition
+                    val currentSpanForTransition = remember(currentTimeSec, timelineSpans) {
+                        getActiveSpanAt(currentTimeSec)
+                    }
+                    val transitionEffectState = remember(currentTimeSec, currentSpanForTransition) {
+                        val span = currentSpanForTransition
+                        if (span != null && span.clip.transitionToNext != FcpTransitionType.NONE) {
+                            val remaining = span.timelineEndSec - currentTimeSec
+                            val dur = span.clip.transitionDurationSec.coerceIn(0.2f, 2f)
+                            if (remaining in 0f..dur) {
+                                val progress = (1f - (remaining / dur)).coerceIn(0f, 1f)
+                                Pair(span.clip.transitionToNext, progress)
+                            } else null
+                        } else null
+                    }
+
+                    if (transitionEffectState != null) {
+                        val (transType, progress) = transitionEffectState
+                        when (transType) {
+                            FcpTransitionType.DIP_TO_BLACK -> {
+                                val blackAlpha = if (progress < 0.5f) (progress * 2f) else ((1f - progress) * 2f)
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(Color.Black.copy(alpha = blackAlpha.coerceIn(0f, 1f)))
+                                        .zIndex(18f)
+                                )
+                            }
+                            FcpTransitionType.CROSSFADE -> {
+                                val crossAlpha = (sin(progress * Math.PI.toFloat()) * 0.55f).coerceIn(0f, 1f)
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(Color.White.copy(alpha = crossAlpha))
+                                        .zIndex(18f)
+                                )
+                            }
+                            FcpTransitionType.WIPE_RIGHT -> {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .zIndex(18f)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxHeight()
+                                            .fillMaxWidth(fraction = progress)
+                                            .background(Color.Black.copy(alpha = 0.9f))
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxHeight()
+                                            .width(2.dp)
+                                            .fillMaxWidth(fraction = progress)
+                                            .wrapContentWidth(Alignment.End)
+                                            .background(Color(0xFF8B5CF6))
+                                    )
+                                }
+                            }
+                            FcpTransitionType.NONE -> {}
+                        }
+                    }
 
                     // ExoPlayer Video Surface with dynamic Color Matrix filter
                     AndroidView(
@@ -1987,7 +2067,12 @@ fun FinalCutProVideoEditorScreen(
                                         val stepSec = 1f / 30f
                                         val nextSec = (currentTimeSec + (if (forward) stepSec else -stepSec)).coerceIn(0f, totalDurationSec)
                                         seekToGlobalTime(nextSec)
+                                        SoundManager.playTap(context)
                                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    },
+                                    onEditTransition = { clipId ->
+                                        SoundManager.playTap(context)
+                                        editingTransitionClipId = clipId
                                     }
                                 )
                             }
@@ -2094,6 +2179,94 @@ fun FinalCutProVideoEditorScreen(
                     }
                 }
             }
+        }
+
+        // Clip Transition Selection Dialog
+        if (editingTransitionClipId != null) {
+            val clip = clips.find { it.id == editingTransitionClipId }
+            if (clip != null) {
+                FcpTransitionDialog(
+                    clip = clip,
+                    onDismiss = { editingTransitionClipId = null },
+                    onApplyTransition = { newType, newDur ->
+                        saveStateForUndo()
+                        clips = clips.map {
+                            if (it.id == clip.id) it.copy(transitionToNext = newType, transitionDurationSec = newDur) else it
+                        }
+                        ToastManager.showToast("Transition set: ${newType.label}")
+                    }
+                )
+            }
+        }
+
+        // Export & Render Sheet
+        if (showExportSheet) {
+            FcpExportSheet(
+                totalDurationSec = totalDurationSec,
+                clipCount = clips.size,
+                textLayerCount = textLayers.size,
+                aspectRatio = aspectRatio,
+                isExporting = isExporting,
+                exportProgress = exportProgress,
+                onStartExport = { res: String, fps: String ->
+                    scope.launch {
+                        isExporting = true
+                        exportProgress = 0f
+                        for (p in 1..20) {
+                            kotlinx.coroutines.delay(45L)
+                            exportProgress = p / 20f
+                        }
+                        SoundManager.playDynamicIsland(context)
+                        val active = selectedClip ?: clips.firstOrNull()
+                        val startMs = ((active?.trimStartSec ?: 0f) * 1000f).toLong()
+                        val endMs = ((active?.trimEndSec ?: (active?.durationSec ?: 15f)) * 1000f).toLong()
+                        val uris = clips.map { it.uri }
+                        try {
+                            val draftRepo = DraftPostRepository(context)
+                            val draft = CreatorPostDraft(
+                                mode = "flash",
+                                title = textLayers.firstOrNull()?.primaryText ?: "Chroma Studio Video",
+                                description = "Rendered at $res $fps in ChromaStudio Final Cut Pro Editor",
+                                aspectRatio = aspectRatio.label,
+                                videoUri = clips.firstOrNull()?.uri?.toString(),
+                                flashTrimStartMs = startMs,
+                                flashTrimEndMs = endMs
+                            )
+                            draftRepo.saveDraft(draft)
+                        } catch (_: Throwable) {}
+                        isExporting = false
+                        showExportSheet = false
+                        ToastManager.showToast("Export completed! Sending to Studio...")
+                        onDone(startMs, endMs, uris)
+                    }
+                },
+                onSaveDraftOnly = {
+                    try {
+                        val active = selectedClip ?: clips.firstOrNull()
+                        val startMs = ((active?.trimStartSec ?: 0f) * 1000f).toLong()
+                        val endMs = ((active?.trimEndSec ?: (active?.durationSec ?: 15f)) * 1000f).toLong()
+                        val draftRepo = DraftPostRepository(context)
+                        val draft = CreatorPostDraft(
+                            mode = "flash",
+                            title = textLayers.firstOrNull()?.primaryText ?: "Draft Video Project",
+                            description = "Saved ${clips.size} clips with ${textLayers.size} text layers",
+                            aspectRatio = aspectRatio.label,
+                            videoUri = clips.firstOrNull()?.uri?.toString(),
+                            flashTrimStartMs = startMs,
+                            flashTrimEndMs = endMs
+                        )
+                        draftRepo.saveDraft(draft)
+                        SoundManager.playTap(context)
+                        ToastManager.showToast("Project saved to Drafts")
+                        showExportSheet = false
+                    } catch (_: Throwable) {
+                        ToastManager.showToast("Failed to save draft")
+                    }
+                },
+                onDismiss = {
+                    showExportSheet = false
+                }
+            )
         }
     }
 }
@@ -2320,7 +2493,8 @@ private fun TimelineTabContent(
     onDuplicateClip: () -> Unit,
     onDeleteClip: () -> Unit,
     onAddClip: () -> Unit,
-    onStepFrame: (Boolean) -> Unit
+    onStepFrame: (Boolean) -> Unit,
+    onEditTransition: (String) -> Unit = {}
 ) {
     val colors = LocalOscellionColors.current
     val haptic = LocalHapticFeedback.current
@@ -2567,7 +2741,7 @@ private fun TimelineTabContent(
                     horizontalArrangement = Arrangement.Start,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    timelineSpans.forEach { span ->
+                    timelineSpans.forEachIndexed { i, span ->
                         val clip = span.clip
                         val isSelected = clip.id == selectedId
                         val clipWidthDp = (span.durationSec * pixelsPerSec).dp
@@ -2832,6 +3006,32 @@ private fun TimelineTabContent(
                                         }
                                     }
                                 }
+                            }
+                        }
+
+                        // Interactive Transition Badge Between Clips
+                        if (i < timelineSpans.size - 1) {
+                            val trans = clip.transitionToNext
+                            Box(
+                                modifier = Modifier
+                                    .padding(horizontal = 2.dp)
+                                    .size(24.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (trans != FcpTransitionType.NONE) colors.primary
+                                        else if (colors.isDark) Color(0xFF2E3444) else Color(0xFFE2E8F0)
+                                    )
+                                    .clickable {
+                                        onEditTransition(clip.id)
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = trans.icon,
+                                    contentDescription = trans.label,
+                                    tint = if (trans != FcpTransitionType.NONE) Color.White else colors.textMuted,
+                                    modifier = Modifier.size(13.dp)
+                                )
                             }
                         }
                     }
@@ -6800,4 +7000,463 @@ private fun formatTimecode(sec: Float): String {
     val remainingSec = (totalSeconds % 60).toInt()
     val hundredths = ((totalSeconds - totalSeconds.toInt()) * 100).toInt()
     return String.format("%02d:%02d.%02d", minutes, remainingSec, hundredths)
+}
+
+
+// ============================================================================
+// CLIP TRANSITION DIALOG & EXPORT BOTTOM SHEET
+// ============================================================================
+
+@Composable
+fun FcpTransitionDialog(
+    clip: FcpClip,
+    onDismiss: () -> Unit,
+    onApplyTransition: (FcpTransitionType, Float) -> Unit
+) {
+    val colors = LocalOscellionColors.current
+    var selectedType by remember { mutableStateOf(clip.transitionToNext) }
+    var durationSec by remember { mutableFloatStateOf(clip.transitionDurationSec) }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.6f))
+                .clickable { onDismiss() },
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.9f)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(if (colors.isDark) Color(0xFF1E212B) else Color(0xFFFFFFFF))
+                    .border(1.dp, colors.glassBorder, RoundedCornerShape(24.dp))
+                    .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {}
+                    .padding(20.dp)
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "Clip Transition",
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = colors.textMain
+                            )
+                            Text(
+                                text = "Select transition effect to the next clip",
+                                fontSize = 12.sp,
+                                color = colors.textMuted
+                            )
+                        }
+                        IconButton(
+                            onClick = onDismiss,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Lucide.X,
+                                contentDescription = "Close",
+                                tint = colors.textMuted,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Transition options
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FcpTransitionType.entries.forEach { type ->
+                            val isSelected = type == selectedType
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(
+                                        if (isSelected) colors.primary.copy(alpha = 0.18f)
+                                        else if (colors.isDark) Color(0xFF272B38) else Color(0xFFF1F3F7)
+                                    )
+                                    .border(
+                                        1.dp,
+                                        if (isSelected) colors.primary else Color.Transparent,
+                                        RoundedCornerShape(12.dp)
+                                    )
+                                    .clickable { selectedType = type }
+                                    .padding(vertical = 12.dp, horizontal = 4.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = type.icon,
+                                        contentDescription = type.label,
+                                        tint = if (isSelected) colors.primary else colors.textMuted,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Text(
+                                        text = type.label,
+                                        fontSize = 11.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (isSelected) colors.primary else colors.textMain
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    if (selectedType != FcpTransitionType.NONE) {
+                        Spacer(modifier = Modifier.height(18.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Duration",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = colors.textMain
+                            )
+                            Text(
+                                text = "${"%.1f".format(durationSec)}s",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = colors.primary
+                            )
+                        }
+                        Slider(
+                            value = durationSec,
+                            onValueChange = { durationSec = it },
+                            valueRange = 0.2f..2.0f,
+                            steps = 9,
+                            colors = SliderDefaults.colors(
+                                thumbColor = colors.primary,
+                                activeTrackColor = colors.primary,
+                                inactiveTrackColor = if (colors.isDark) Color(0xFF333846) else Color(0xFFE2E8F0)
+                            )
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(18.dp))
+
+                    // Action buttons
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = onDismiss,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, colors.glassBorder)
+                        ) {
+                            Text("Cancel", color = colors.textMuted)
+                        }
+                        Button(
+                            onClick = {
+                                onApplyTransition(selectedType, durationSec)
+                                onDismiss()
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = colors.primary)
+                        ) {
+                            Text("Apply", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun FcpExportSheet(
+    totalDurationSec: Float,
+    clipCount: Int,
+    textLayerCount: Int,
+    aspectRatio: FcpAspectRatio,
+    isExporting: Boolean,
+    exportProgress: Float,
+    onStartExport: (String, String) -> Unit,
+    onSaveDraftOnly: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val colors = LocalOscellionColors.current
+    var selectedRes by remember { mutableStateOf("1080p") }
+    var selectedFps by remember { mutableStateOf("60 FPS") }
+    val resolutions = listOf("720p", "1080p", "4K")
+    val frameRates = listOf("24 FPS", "30 FPS", "60 FPS")
+
+    Dialog(
+        onDismissRequest = { if (!isExporting) onDismiss() },
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.65f))
+                .clickable { if (!isExporting) onDismiss() },
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                    .background(if (colors.isDark) Color(0xFF181A22) else Color(0xFFFFFFFF))
+                    .border(1.dp, colors.glassBorder, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                    .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {}
+                    .padding(24.dp)
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterHorizontally)
+                            .width(36.dp)
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(colors.textMuted.copy(alpha = 0.3f))
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "Export & Render",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = colors.textMain
+                            )
+                            Text(
+                                text = "Chroma Studio Final Cut Pro Master Engine",
+                                fontSize = 12.sp,
+                                color = colors.textMuted
+                            )
+                        }
+                        if (!isExporting) {
+                            IconButton(
+                                onClick = onDismiss,
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.X,
+                                    contentDescription = "Close",
+                                    tint = colors.textMuted,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    // Project Summary Card
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(if (colors.isDark) Color(0xFF222633) else Color(0xFFF3F5F9))
+                            .padding(14.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceAround
+                        ) {
+                            val durMin = (totalDurationSec / 60).toInt()
+                            val durSec = (totalDurationSec % 60).toInt()
+                            val timeStr = "%02d:%02d".format(durMin, durSec)
+
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Duration", fontSize = 11.sp, color = colors.textMuted)
+                                Text(timeStr, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = colors.textMain)
+                            }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Clips", fontSize = 11.sp, color = colors.textMuted)
+                                Text("$clipCount", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = colors.textMain)
+                            }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Titles", fontSize = 11.sp, color = colors.textMuted)
+                                Text("$textLayerCount", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = colors.textMain)
+                            }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Format", fontSize = 11.sp, color = colors.textMuted)
+                                Text(aspectRatio.label.split(" ").firstOrNull() ?: "9:16", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = colors.primary)
+                            }
+                        }
+                    }
+
+                    if (isExporting) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "Rendering frames...",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = colors.textMain
+                                )
+                                Text(
+                                    text = "${(exportProgress * 100).toInt()}%",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colors.primary
+                                )
+                            }
+                            LinearProgressIndicator(
+                                progress = { exportProgress },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(8.dp)
+                                    .clip(RoundedCornerShape(50)),
+                                color = colors.primary,
+                                trackColor = if (colors.isDark) Color(0xFF2E3444) else Color(0xFFE2E8F0)
+                            )
+                            Text(
+                                text = "Encoding video stream with color matrix and audio mix",
+                                fontSize = 11.sp,
+                                color = colors.textMuted
+                            )
+                        }
+                    } else {
+                        // Resolution selector
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Resolution", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = colors.textMain)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                resolutions.forEach { res ->
+                                    val isSel = res == selectedRes
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(
+                                                if (isSel) colors.primary.copy(alpha = 0.18f)
+                                                else if (colors.isDark) Color(0xFF222633) else Color(0xFFF3F5F9)
+                                            )
+                                            .border(
+                                                1.dp,
+                                                if (isSel) colors.primary else Color.Transparent,
+                                                RoundedCornerShape(12.dp)
+                                            )
+                                            .clickable { selectedRes = res }
+                                            .padding(vertical = 10.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = res,
+                                            fontSize = 13.sp,
+                                            fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium,
+                                            color = if (isSel) colors.primary else colors.textMain
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // Frame rate selector
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Frame Rate", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = colors.textMain)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                frameRates.forEach { fps ->
+                                    val isSel = fps == selectedFps
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(
+                                                if (isSel) colors.primary.copy(alpha = 0.18f)
+                                                else if (colors.isDark) Color(0xFF222633) else Color(0xFFF3F5F9)
+                                            )
+                                            .border(
+                                                1.dp,
+                                                if (isSel) colors.primary else Color.Transparent,
+                                                RoundedCornerShape(12.dp)
+                                            )
+                                            .clickable { selectedFps = fps }
+                                            .padding(vertical = 10.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = fps,
+                                            fontSize = 13.sp,
+                                            fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium,
+                                            color = if (isSel) colors.primary else colors.textMain
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        // Action buttons
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = onSaveDraftOnly,
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(14.dp),
+                                border = BorderStroke(1.dp, colors.glassBorder)
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.FileText,
+                                    contentDescription = null,
+                                    tint = colors.textMuted,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Save Draft", color = colors.textMain, fontSize = 13.sp)
+                            }
+                            Button(
+                                onClick = { onStartExport(selectedRes, selectedFps) },
+                                modifier = Modifier.weight(1.3f),
+                                shape = RoundedCornerShape(14.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = colors.primary)
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.Share2,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Export Video", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

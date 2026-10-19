@@ -158,6 +158,17 @@ class HomeActivity : ComponentActivity() {
             }
     }
 
+    fun enterPictureInPicture(aspectRatioNumerator: Int = 9, aspectRatioDenominator: Int = 16) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            try {
+                val params = android.app.PictureInPictureParams.Builder()
+                    .setAspectRatio(android.util.Rational(aspectRatioNumerator, aspectRatioDenominator))
+                    .build()
+                enterPictureInPictureMode(params)
+            } catch (_: Throwable) {}
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         splashScreen.setOnExitAnimationListener { splashScreenViewProvider ->
@@ -180,6 +191,7 @@ class HomeActivity : ComponentActivity() {
             animatorSet.start()
         }
         super.onCreate(savedInstanceState)
+        com.chroma.studio.chat.sound.SoundManager.init(this)
         askNotificationPermission()
         startChatNotificationListener()
         window.statusBarColor = android.graphics.Color.TRANSPARENT
