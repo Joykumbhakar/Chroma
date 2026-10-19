@@ -13,6 +13,7 @@ import android.media.audiofx.LoudnessEnhancer
 import android.net.Uri
 import android.os.Build
 import android.util.LruCache
+import coil.compose.AsyncImage
 import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import android.view.Gravity
@@ -619,6 +620,7 @@ private enum class VideoDrawerLevel(val heightDp: Dp) {
 @Composable
 fun FinalCutProVideoEditorScreen(
     initialUri: Uri? = null,
+    initialUris: List<Uri> = emptyList(),
     onDone: (startMs: Long, endMs: Long, clips: List<Uri>) -> Unit,
     onBack: () -> Unit
 ) {
@@ -1135,23 +1137,37 @@ fun FinalCutProVideoEditorScreen(
         }
     }
 
-    // Initialize with initialUri if provided
-    LaunchedEffect(initialUri) {
-        if (initialUri != null && clips.isEmpty()) {
-            val realDur = withContext(Dispatchers.IO) {
-                extractVideoDurationSec(context, initialUri)
+    // Initialize with initialUri or initialUris if provided
+    LaunchedEffect(initialUri, initialUris) {
+        if (clips.isEmpty()) {
+            val toLoad = when {
+                initialUris.isNotEmpty() -> initialUris
+                initialUri != null -> listOf(initialUri)
+                else -> emptyList()
             }
-            val dur = realDur ?: 15f
-            val initialClip = FcpClip(
-                uri = initialUri,
-                name = initialUri.lastPathSegment?.takeLast(14) ?: "Main_Video",
-                durationSec = dur,
-                trimStartSec = 0f,
-                trimEndSec = dur,
-                isDurationLoaded = realDur != null
-            )
-            clips = listOf(initialClip)
-            selectedId = initialClip.id
+            if (toLoad.isNotEmpty()) {
+                val loadedClips = withContext(Dispatchers.IO) {
+                    toLoad.mapIndexed { idx, uri ->
+                        val fileName = uri.lastPathSegment?.takeLast(14) ?: "Clip_${idx + 1}"
+                        val realDur = extractVideoDurationSec(context, uri)
+                        val isPhoto = try {
+                            val type = context.contentResolver.getType(uri)
+                            type?.startsWith("image/") == true
+                        } catch (_: Exception) { false }
+                        val dur = realDur ?: if (isPhoto) 4f else 15f
+                        FcpClip(
+                            uri = uri,
+                            name = fileName,
+                            durationSec = dur,
+                            trimStartSec = 0f,
+                            trimEndSec = dur,
+                            isDurationLoaded = realDur != null || isPhoto
+                        )
+                    }
+                }
+                clips = loadedClips
+                selectedId = loadedClips.firstOrNull()?.id
+            }
         }
     }
 
@@ -1558,6 +1574,49 @@ fun FinalCutProVideoEditorScreen(
                                 }
                             }
                     )
+
+                    // Photo Overlay for Image Clips
+                    val isCurrentClipPhoto = remember(selectedClip?.uri) {
+                        selectedClip?.let { clip ->
+                            try {
+                                val type = context.contentResolver.getType(clip.uri)
+                                type?.startsWith("image/") == true
+                            } catch (_: Exception) { false }
+                        } ?: false
+                    }
+
+                    if (isCurrentClipPhoto && selectedClip != null) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(context)
+                                .data(selectedClip?.uri)
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = "Photo Clip",
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer {
+                                    scaleX = activeScale
+                                    scaleY = activeScale
+                                    translationX = activePanX
+                                    translationY = activePanY
+                                    if (supportsRenderEffect) {
+                                        val hasCustomColor = (selectedClip?.exposure ?: 0f) != 0f ||
+                                            (selectedClip?.contrast ?: 100f) != 100f ||
+                                            (selectedClip?.saturation ?: 100f) != 100f ||
+                                            (selectedClip?.temperature ?: 0f) != 0f ||
+                                            (selectedClip?.tint ?: 0f) != 0f ||
+                                            (selectedClip?.lut ?: FcpLutPreset.NONE) != FcpLutPreset.NONE
+
+                                        renderEffect = if (hasCustomColor) {
+                                            RenderEffect
+                                                .createColorFilterEffect(ColorMatrixColorFilter(activeColorMatrix))
+                                                .asComposeRenderEffect()
+                                        } else null
+                                    }
+                                },
+                            contentScale = ContentScale.Fit
+                        )
+                    }
 
                     // Floating Zoom / Crop Indicator Badge with Reset Button
                     if (activeScale != 1f || activePanX != 0f || activePanY != 0f) {

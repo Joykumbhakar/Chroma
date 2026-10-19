@@ -306,6 +306,7 @@ class HomeActivity : ComponentActivity() {
                 // ── Flash editor pass-through state ────────────────────────
                 var flashPickerVideoUri by remember { mutableStateOf<Uri?>(null) }
                 var flashPickerPhotoUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
+                var flashImportedMediaUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
                 var flashTrimStart by remember { androidx.compose.runtime.mutableLongStateOf(0L) }
                 var flashTrimEnd by remember { androidx.compose.runtime.mutableLongStateOf(0L) }
                 var flashFilterName by remember { mutableStateOf("None") }
@@ -1030,7 +1031,7 @@ class HomeActivity : ComponentActivity() {
                              onDeleteWork = { workId -> discoverVm.deleteWork(workId) },
                              onEditWork = { workId, newTitle, newDesc -> discoverVm.updateWork(workId, newTitle, newDesc) },
                              onCreatePost = { navController.navigate("creator_studio/post") },
-                             onCreateFlash = { navController.navigate("creator_studio/flash") },
+                             onCreateFlash = { navController.navigate("flash_projects_hub") },
                              onPublishWork = { navController.navigate("creator_studio/work") },
                              onNavigateToNotifications = { navController.navigate("notifications_feed") },
                              onStoryViewerChange = { isDiscoverStoryViewerActive = it }
@@ -1200,12 +1201,35 @@ class HomeActivity : ComponentActivity() {
                         com.chroma.studio.ui.screens.CreatorPostOnboardingStudioScreen(
                             initialMode = studioMode,
                             initialDraftId = draftIdParam,
+                            initialImportedUris = flashImportedMediaUris,
                             workRepository = vm.repository,
                             discoverRepository = remember { com.chroma.studio.data.DiscoverRepository() },
                             flashViewModel = flashVm,
-                            onNavigateBack = { navController.popBackStack() },
-                            onPostSuccess = {
+                            onNavigateBack = {
+                                flashImportedMediaUris = emptyList()
                                 navController.popBackStack()
+                            },
+                            onPostSuccess = {
+                                flashImportedMediaUris = emptyList()
+                                navController.popBackStack()
+                            }
+                        )
+                    }
+
+                    composable("flash_projects_hub") {
+                        com.chroma.studio.ui.screens.FlashProjectsHubScreen(
+                            onBack = { navController.popBackStack() },
+                            onImportMedia = { uris ->
+                                flashImportedMediaUris = uris
+                                navController.navigate("creator_studio/flash")
+                            },
+                            onOpenDraft = { draft ->
+                                flashImportedMediaUris = emptyList()
+                                navController.navigate("creator_studio/${draft.mode}?draftId=${draft.id}")
+                            },
+                            onOpenSavedVideo = { videoUri ->
+                                flashImportedMediaUris = listOf(videoUri)
+                                navController.navigate("creator_studio/flash")
                             }
                         )
                     }

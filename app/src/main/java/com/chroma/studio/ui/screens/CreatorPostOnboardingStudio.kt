@@ -218,6 +218,7 @@ fun buildStudioColorMatrix(
 fun CreatorPostOnboardingStudioScreen(
     initialMode: CreatorStudioMode = CreatorStudioMode.POST,
     initialDraftId: String? = null,
+    initialImportedUris: List<Uri> = emptyList(),
     workRepository: WorkRepository,
     discoverRepository: DiscoverRepository,
     flashViewModel: FlashViewModel? = null,
@@ -327,9 +328,17 @@ fun CreatorPostOnboardingStudioScreen(
         }
     }
 
-    // Load Draft if initialDraftId is provided, or launch picker if slides are empty
-    LaunchedEffect(initialDraftId) {
-        if (!initialDraftId.isNullOrBlank()) {
+    // Load Draft if initialDraftId is provided, or initialize with imported URIs, or launch picker if slides are empty
+    LaunchedEffect(initialDraftId, initialImportedUris) {
+        if (initialImportedUris.isNotEmpty()) {
+            slides.clear()
+            initialImportedUris.forEachIndexed { idx, uri ->
+                slides.add(StudioSlide(videoUri = uri, label = "Clip ${idx + 1}"))
+            }
+            if (slides.isNotEmpty()) {
+                currentSlideIndex = 0
+            }
+        } else if (!initialDraftId.isNullOrBlank()) {
             val draft = draftRepo.getDraftById(initialDraftId)
             if (draft != null) {
                 currentDraftId = draft.id
@@ -727,18 +736,16 @@ fun CreatorPostOnboardingStudioScreen(
                         // or null so the user can pick from inside the editor.
                         FinalCutProVideoEditorScreen(
                             initialUri = videoSlide?.videoUri,
+                            initialUris = slides.mapNotNull { it.videoUri },
                             onDone = { startMs, endMs, uris ->
                                 // Update trim params
                                 flashTrimStartMs = startMs
                                 flashTrimEndMs = endMs
                                 flashVideoDurationMs = endMs - startMs
-                                // Sync first URI back to slides
-                                uris.firstOrNull()?.let { uri ->
-                                    if (slides.isEmpty()) {
-                                        slides.add(StudioSlide(videoUri = uri, label = "Flash Video"))
-                                    } else {
-                                        slides[0] = slides[0].copy(videoUri = uri)
-                                    }
+                                // Sync all URIs back to slides
+                                slides.clear()
+                                uris.forEachIndexed { idx, uri ->
+                                    slides.add(StudioSlide(videoUri = uri, label = "Clip ${idx + 1}"))
                                 }
                                 currentStep = StudioStep.STEP_1_PREVIEW
                             },
