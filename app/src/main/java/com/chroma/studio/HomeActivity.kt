@@ -25,7 +25,10 @@ import kotlinx.coroutines.tasks.await
 import androidx.compose.runtime.rememberCoroutineScope
 import android.widget.Toast
 import com.chroma.studio.model.ChromaWork
+import com.chroma.studio.model.DiscoverPost
 import com.chroma.studio.model.FlashMediaType
+import com.chroma.studio.ui.components.isVideoPost
+import com.chroma.studio.ui.components.extractVideoUrlFromPost
 import com.chroma.studio.ui.screens.HomeScreen
 import com.chroma.studio.ui.screens.FlashFeedScreen
 import com.chroma.studio.ui.screens.FlashPickerScreen
@@ -319,6 +322,125 @@ class HomeActivity : ComponentActivity() {
                 var flashDurationPerSlide by remember { androidx.compose.runtime.mutableLongStateOf(3000L) }
                 var flashRemixPostId by remember { mutableStateOf<String?>(null) }
                 var flashRemixAuthorUsername by remember { mutableStateOf<String?>(null) }
+
+                val onRemixCommunityPost: (DiscoverPost) -> Unit = { work ->
+                    val videoUrl = extractVideoUrlFromPost(work)
+                    val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                    if (!currentUid.isNullOrBlank()) {
+                        coroutineScope.launch {
+                            val repo = com.chroma.studio.data.DiscoverRepository()
+                            repo.incrementRemixCount(work.id, currentUid)
+                        }
+                    }
+
+                    if (!videoUrl.isNullOrBlank()) {
+                        com.chroma.studio.ui.components.ToastManager.showToast("Opening in Video Editor...")
+                        if (videoUrl.startsWith("http://") || videoUrl.startsWith("https://")) {
+                            flashVm.downloadVideoForRemix(
+                                context = this@HomeActivity,
+                                videoUrl = videoUrl,
+                                onProgress = { },
+                                onComplete = { downloadedUri ->
+                                    val finalUri = downloadedUri ?: Uri.parse(videoUrl)
+                                    flashRemixPostId = work.id
+                                    flashRemixAuthorUsername = work.authorUsername
+                                    flashImportedMediaUris = listOf(finalUri)
+                                    navController.navigate("creator_studio/flash")
+                                }
+                            )
+                        } else {
+                            flashRemixPostId = work.id
+                            flashRemixAuthorUsername = work.authorUsername
+                            flashImportedMediaUris = listOf(Uri.parse(videoUrl))
+                            navController.navigate("creator_studio/flash")
+                        }
+                    } else {
+                        coroutineScope.launch {
+                            val steps = listOf(10, 25, 50, 75, 90, 100)
+                            for (pct in steps) {
+                                if (pct < 100) {
+                                    com.chroma.studio.ui.components.ToastManager.showToast("Downloading... $pct%")
+                                    kotlinx.coroutines.delay(300)
+                                } else {
+                                    com.chroma.studio.ui.components.ToastManager.showToast("Download complete! Opening workspace...")
+                                }
+                            }
+                            val remixId = java.util.UUID.randomUUID().toString()
+                            vm.repository.save(
+                                ChromaWork(
+                                    id = remixId,
+                                    name = "Remix of ${work.title}",
+                                    description = "Remixed from @${work.authorUsername}",
+                                    layersJson = work.jsonUrl,
+                                    canvasShape = "rounded",
+                                    lastModifiedAt = System.currentTimeMillis(),
+                                    remixedFromPostId = work.id,
+                                    remixedFromAuthorId = work.creatorId,
+                                    remixedFromAuthorUsername = work.authorUsername,
+                                    remixedFromAuthorDisplayName = work.authorDisplayName,
+                                    remixedFromAuthorAvatar = work.authorAvatarUrl,
+                                    remixedFromAuthorVerified = work.authorVerified
+                                )
+                            )
+                            val intent = Intent(this@HomeActivity, MainActivity::class.java).apply {
+                                putExtra(MainActivity.EXTRA_WORK_ID, remixId)
+                                putExtra(MainActivity.EXTRA_WORK_NAME, "Remix of ${work.title}")
+                                putExtra(MainActivity.EXTRA_WORK_DESCRIPTION, "Remixed from @${work.authorUsername}")
+                                putExtra(MainActivity.EXTRA_LAYERS_JSON, work.jsonUrl)
+                                putExtra(MainActivity.EXTRA_CANVAS_SHAPE, "rounded")
+                                putExtra(MainActivity.EXTRA_REMIX_POST_ID, work.id)
+                                putExtra(MainActivity.EXTRA_REMIX_AUTHOR_ID, work.creatorId)
+                                putExtra(MainActivity.EXTRA_REMIX_AUTHOR_USERNAME, work.authorUsername)
+                                putExtra(MainActivity.EXTRA_REMIX_AUTHOR_DISPLAY_NAME, work.authorDisplayName)
+                                putExtra(MainActivity.EXTRA_REMIX_AUTHOR_AVATAR, work.authorAvatarUrl)
+                                putExtra(MainActivity.EXTRA_REMIX_AUTHOR_VERIFIED, work.authorVerified)
+                            }
+                            startActivity(intent)
+                        }
+                    }
+                }
+
+                val onDownloadCommunityPost: (DiscoverPost) -> Unit = { work ->
+                    val videoUrl = extractVideoUrlFromPost(work)
+                    coroutineScope.launch {
+                        val repo = com.chroma.studio.data.DiscoverRepository()
+                        com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid?.let { repo.incrementDownloadCount(work.id, it) }
+                    }
+                    if (!videoUrl.isNullOrBlank()) {
+                        try {
+                            val downloadUri = Uri.parse(videoUrl)
+                            if (videoUrl.startsWith("http://") || videoUrl.startsWith("https://")) {
+                                val request = android.app.DownloadManager.Request(downloadUri).apply {
+                                    setTitle(work.title.ifBlank { "Flash Video" })
+                                    setDescription("Downloading video from @${work.authorUsername}...")
+                                    setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                                    setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_MOVIES, "Chroma_${System.currentTimeMillis()}.mp4")
+                                    setAllowedOverMetered(true)
+                                    setAllowedOverRoaming(true)
+                                }
+                                val manager = getSystemService(Context.DOWNLOAD_SERVICE) as? android.app.DownloadManager
+                                manager?.enqueue(request)
+                                com.chroma.studio.ui.components.ToastManager.showToast("Downloading video to Movies...")
+                            } else {
+                                com.chroma.studio.ui.components.ToastManager.showToast("Video saved to library!")
+                            }
+                        } catch (e: Exception) {
+                            com.chroma.studio.ui.components.ToastManager.showToast("Video saved to library!")
+                        }
+                    } else {
+                        vm.repository.save(
+                            ChromaWork(
+                                id = java.util.UUID.randomUUID().toString(),
+                                name = work.title,
+                                description = "Downloaded from @${work.authorUsername}",
+                                layersJson = work.jsonUrl,
+                                canvasShape = "rounded",
+                                lastModifiedAt = System.currentTimeMillis()
+                            )
+                        )
+                        com.chroma.studio.ui.components.ToastManager.showToast("Saved to library!")
+                    }
+                }
 
                 // ── Old home bottom sheet state ────────────────────────────
                 var showOldHomeSheet by remember { mutableStateOf(false) }
@@ -882,46 +1004,7 @@ class HomeActivity : ComponentActivity() {
                             onNavigateToPost = { creatorId, postId ->
                                 navController.navigate("userProfile/$creatorId?postId=$postId")
                             },
-                            onRemixWork = { work ->
-                                val remixId = java.util.UUID.randomUUID().toString()
-                                vm.repository.save(
-                                    com.chroma.studio.model.ChromaWork(
-                                        id = remixId,
-                                        name = "Remix of ${work.title}",
-                                        description = "Remixed from @${work.authorUsername}",
-                                        layersJson = work.jsonUrl,
-                                        canvasShape = "rounded",
-                                        lastModifiedAt = System.currentTimeMillis(),
-                                        remixedFromPostId = work.id,
-                                        remixedFromAuthorId = work.creatorId,
-                                        remixedFromAuthorUsername = work.authorUsername,
-                                        remixedFromAuthorDisplayName = work.authorDisplayName,
-                                        remixedFromAuthorAvatar = work.authorAvatarUrl,
-                                        remixedFromAuthorVerified = work.authorVerified
-                                    )
-                                )
-                                val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
-                                if (!currentUid.isNullOrBlank()) {
-                                    coroutineScope.launch {
-                                        val repo = com.chroma.studio.data.DiscoverRepository()
-                                        repo.incrementRemixCount(work.id, currentUid)
-                                    }
-                                }
-                                val intent = android.content.Intent(this@HomeActivity, MainActivity::class.java).apply {
-                                    putExtra(MainActivity.EXTRA_WORK_ID, remixId)
-                                    putExtra(MainActivity.EXTRA_WORK_NAME, "Remix of ${work.title}")
-                                    putExtra(MainActivity.EXTRA_WORK_DESCRIPTION, "Remixed from @${work.authorUsername}")
-                                    putExtra(MainActivity.EXTRA_LAYERS_JSON, work.jsonUrl)
-                                    putExtra(MainActivity.EXTRA_CANVAS_SHAPE, "rounded")
-                                    putExtra(MainActivity.EXTRA_REMIX_POST_ID, work.id)
-                                    putExtra(MainActivity.EXTRA_REMIX_AUTHOR_ID, work.creatorId)
-                                    putExtra(MainActivity.EXTRA_REMIX_AUTHOR_USERNAME, work.authorUsername)
-                                    putExtra(MainActivity.EXTRA_REMIX_AUTHOR_DISPLAY_NAME, work.authorDisplayName)
-                                    putExtra(MainActivity.EXTRA_REMIX_AUTHOR_AVATAR, work.authorAvatarUrl)
-                                    putExtra(MainActivity.EXTRA_REMIX_AUTHOR_VERIFIED, work.authorVerified)
-                                }
-                                startActivity(intent)
-                            },
+                            onRemixWork = onRemixCommunityPost,
                             onBack = {
                                 coroutineScope.launch { pagerState.animateScrollToPage(0) }
                             }
@@ -961,73 +1044,8 @@ class HomeActivity : ComponentActivity() {
                                     navController.navigate("userProfile/$creatorId")
                                 }
                             },
-                            onDownloadWork = { work ->
-                                vm.repository.save(
-                                    ChromaWork(
-                                        id = java.util.UUID.randomUUID().toString(),
-                                        name = work.title,
-                                        description = "Downloaded from @${work.authorUsername}",
-                                        layersJson = work.jsonUrl,
-                                        canvasShape = "rounded",
-                                        lastModifiedAt = System.currentTimeMillis()
-                                    )
-                                )
-                                coroutineScope.launch {
-                                    val repo = com.chroma.studio.data.DiscoverRepository()
-                                    com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid?.let { repo.incrementDownloadCount(work.id, it) }
-                                }
-                                com.chroma.studio.ui.components.ToastManager.showToast("Saved to library!")
-                            },
-                            onRemixWork = { work ->
-                                coroutineScope.launch {
-                                    // Simulate download with progress toasts
-                                    val steps = listOf(10, 25, 50, 75, 90, 100)
-                                    for (pct in steps) {
-                                        if (pct < 100) {
-                                            com.chroma.studio.ui.components.ToastManager.showToast("Downloading... $pct%")
-                                            kotlinx.coroutines.delay(300)
-                                        } else {
-                                            com.chroma.studio.ui.components.ToastManager.showToast("Download complete! Opening workspace...")
-                                        }
-                                    }
-                                    val remixId = java.util.UUID.randomUUID().toString()
-                                    vm.repository.save(
-                                        ChromaWork(
-                                            id = remixId,
-                                            name = "Remix of ${work.title}",
-                                            description = "Remixed from @${work.authorUsername}",
-                                            layersJson = work.jsonUrl,
-                                            canvasShape = "rounded",
-                                            lastModifiedAt = System.currentTimeMillis(),
-                                            remixedFromPostId = work.id,
-                                            remixedFromAuthorId = work.creatorId,
-                                            remixedFromAuthorUsername = work.authorUsername,
-                                            remixedFromAuthorDisplayName = work.authorDisplayName,
-                                            remixedFromAuthorAvatar = work.authorAvatarUrl,
-                                            remixedFromAuthorVerified = work.authorVerified
-                                        )
-                                    )
-                                    val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
-                                    if (!currentUid.isNullOrBlank()) {
-                                        val repo = com.chroma.studio.data.DiscoverRepository()
-                                        repo.incrementRemixCount(work.id, currentUid)
-                                    }
-                                    val intent = android.content.Intent(this@HomeActivity, MainActivity::class.java).apply {
-                                        putExtra(MainActivity.EXTRA_WORK_ID, remixId)
-                                        putExtra(MainActivity.EXTRA_WORK_NAME, "Remix of ${work.title}")
-                                        putExtra(MainActivity.EXTRA_WORK_DESCRIPTION, "Remixed from @${work.authorUsername}")
-                                        putExtra(MainActivity.EXTRA_LAYERS_JSON, work.jsonUrl)
-                                        putExtra(MainActivity.EXTRA_CANVAS_SHAPE, "rounded")
-                                        putExtra(MainActivity.EXTRA_REMIX_POST_ID, work.id)
-                                        putExtra(MainActivity.EXTRA_REMIX_AUTHOR_ID, work.creatorId)
-                                        putExtra(MainActivity.EXTRA_REMIX_AUTHOR_USERNAME, work.authorUsername)
-                                        putExtra(MainActivity.EXTRA_REMIX_AUTHOR_DISPLAY_NAME, work.authorDisplayName)
-                                        putExtra(MainActivity.EXTRA_REMIX_AUTHOR_AVATAR, work.authorAvatarUrl)
-                                        putExtra(MainActivity.EXTRA_REMIX_AUTHOR_VERIFIED, work.authorVerified)
-                                    }
-                                    startActivity(intent)
-                                }
-                            },
+                            onDownloadWork = onDownloadCommunityPost,
+                            onRemixWork = onRemixCommunityPost,
                              onDeleteWork = { workId -> discoverVm.deleteWork(workId) },
                              onEditWork = { workId, newTitle, newDesc -> discoverVm.updateWork(workId, newTitle, newDesc) },
                              onCreatePost = { navController.navigate("creator_studio/post") },
@@ -1085,70 +1103,11 @@ class HomeActivity : ComponentActivity() {
                                 },
                                 onNavigateToEditProfile = { navController.navigate("profile_identity") },
                                 onNavigateToSettings = { navController.navigate("settings") },
-                                onDownloadWork = { work ->
-                                    vm.repository.save(
-                                        ChromaWork(
-                                            id = java.util.UUID.randomUUID().toString(),
-                                            name = work.title,
-                                            description = "Downloaded from @${work.authorUsername}",
-                                            layersJson = work.jsonUrl,
-                                            canvasShape = "rounded",
-                                            lastModifiedAt = System.currentTimeMillis()
-                                        )
-                                    )
-                                    coroutineScope.launch {
-                                        val repo = com.chroma.studio.data.DiscoverRepository()
-                                        com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid?.let { repo.incrementDownloadCount(work.id, it) }
-                                    }
-                                    com.chroma.studio.ui.components.ToastManager.showToast("Saved to library!")
-                                },
+                                onDownloadWork = onDownloadCommunityPost,
                                 onNavigateToUserList = { targetUserId, type ->
                                     navController.navigate("user_list/$targetUserId/$type")
                                 },
-                                onRemixWork = { work ->
-                                    coroutineScope.launch {
-                                        val steps = listOf(10, 25, 50, 75, 90, 100)
-                                        for (pct in steps) {
-                                            if (pct < 100) {
-                                                com.chroma.studio.ui.components.ToastManager.showToast("Downloading... $pct%")
-                                                kotlinx.coroutines.delay(300)
-                                            } else {
-                                                com.chroma.studio.ui.components.ToastManager.showToast("Download complete! Opening workspace...")
-                                            }
-                                        }
-                                        val remixId = java.util.UUID.randomUUID().toString()
-                                        vm.repository.save(
-                                            ChromaWork(
-                                                id = remixId,
-                                                name = "Remix of ${work.title}",
-                                                description = "Remixed from @${work.authorUsername}",
-                                                layersJson = work.jsonUrl,
-                                                canvasShape = "rounded",
-                                                lastModifiedAt = System.currentTimeMillis(),
-                                                remixedFromPostId = work.id,
-                                                remixedFromAuthorId = work.creatorId,
-                                                remixedFromAuthorUsername = work.authorUsername,
-                                                remixedFromAuthorDisplayName = work.authorDisplayName,
-                                                remixedFromAuthorAvatar = work.authorAvatarUrl,
-                                                remixedFromAuthorVerified = work.authorVerified
-                                            )
-                                        )
-                                        val intent = android.content.Intent(this@HomeActivity, MainActivity::class.java).apply {
-                                            putExtra(MainActivity.EXTRA_WORK_ID, remixId)
-                                            putExtra(MainActivity.EXTRA_WORK_NAME, "Remix of ${work.title}")
-                                            putExtra(MainActivity.EXTRA_WORK_DESCRIPTION, "Remixed from @${work.authorUsername}")
-                                            putExtra(MainActivity.EXTRA_LAYERS_JSON, work.jsonUrl)
-                                            putExtra(MainActivity.EXTRA_CANVAS_SHAPE, "rounded")
-                                            putExtra(MainActivity.EXTRA_REMIX_POST_ID, work.id)
-                                            putExtra(MainActivity.EXTRA_REMIX_AUTHOR_ID, work.creatorId)
-                                            putExtra(MainActivity.EXTRA_REMIX_AUTHOR_USERNAME, work.authorUsername)
-                                            putExtra(MainActivity.EXTRA_REMIX_AUTHOR_DISPLAY_NAME, work.authorDisplayName)
-                                            putExtra(MainActivity.EXTRA_REMIX_AUTHOR_AVATAR, work.authorAvatarUrl)
-                                            putExtra(MainActivity.EXTRA_REMIX_AUTHOR_VERIFIED, work.authorVerified)
-                                        }
-                                        startActivity(intent)
-                                    }
-                                },
+                                onRemixWork = onRemixCommunityPost,
                                 onNavigateToOriginal = { authorId, origPostId ->
                                     if (origPostId != null) {
                                         navController.navigate("userProfile/$authorId?postId=$origPostId")
@@ -1737,68 +1696,8 @@ class HomeActivity : ComponentActivity() {
                             },
                             onNavigateToEditProfile = { navController.navigate("profile_identity") },
                             onNavigateToSettings = { navController.navigate("settings") },
-                            onDownloadWork = { work ->
-                                vm.repository.save(
-                                    ChromaWork(
-                                        id = java.util.UUID.randomUUID().toString(),
-                                        name = work.title,
-                                        description = "Downloaded from @${work.authorUsername}",
-                                        layersJson = work.jsonUrl,
-                                        canvasShape = "rounded",
-                                        lastModifiedAt = System.currentTimeMillis()
-                                    )
-                                )
-                                coroutineScope.launch {
-                                    val repo = com.chroma.studio.data.DiscoverRepository()
-                                    com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid?.let { repo.incrementDownloadCount(work.id, it) }
-                                }
-                                com.chroma.studio.ui.components.ToastManager.showToast("Saved to library!")
-                            },
-                            onRemixWork = { work ->
-                                coroutineScope.launch {
-                                    // Simulate download with progress toasts
-                                    val steps = listOf(10, 25, 50, 75, 90, 100)
-                                    for (pct in steps) {
-                                        if (pct < 100) {
-                                            com.chroma.studio.ui.components.ToastManager.showToast("Downloading... $pct%")
-                                            kotlinx.coroutines.delay(300)
-                                        } else {
-                                            com.chroma.studio.ui.components.ToastManager.showToast("Download complete! Opening workspace...")
-                                        }
-                                    }
-                                    val remixId = java.util.UUID.randomUUID().toString()
-                                    vm.repository.save(
-                                        ChromaWork(
-                                            id = remixId,
-                                            name = "Remix of ${work.title}",
-                                            description = "Remixed from @${work.authorUsername}",
-                                            layersJson = work.jsonUrl,
-                                            canvasShape = "rounded",
-                                            lastModifiedAt = System.currentTimeMillis(),
-                                            remixedFromPostId = work.id,
-                                            remixedFromAuthorId = work.creatorId,
-                                            remixedFromAuthorUsername = work.authorUsername,
-                                            remixedFromAuthorDisplayName = work.authorDisplayName,
-                                            remixedFromAuthorAvatar = work.authorAvatarUrl,
-                                            remixedFromAuthorVerified = work.authorVerified
-                                        )
-                                    )
-                                    val intent = android.content.Intent(this@HomeActivity, MainActivity::class.java).apply {
-                                        putExtra(MainActivity.EXTRA_WORK_ID, remixId)
-                                        putExtra(MainActivity.EXTRA_WORK_NAME, "Remix of ${work.title}")
-                                        putExtra(MainActivity.EXTRA_WORK_DESCRIPTION, "Remixed from @${work.authorUsername}")
-                                        putExtra(MainActivity.EXTRA_LAYERS_JSON, work.jsonUrl)
-                                        putExtra(MainActivity.EXTRA_CANVAS_SHAPE, "rounded")
-                                        putExtra(MainActivity.EXTRA_REMIX_POST_ID, work.id)
-                                        putExtra(MainActivity.EXTRA_REMIX_AUTHOR_ID, work.creatorId)
-                                        putExtra(MainActivity.EXTRA_REMIX_AUTHOR_USERNAME, work.authorUsername)
-                                        putExtra(MainActivity.EXTRA_REMIX_AUTHOR_DISPLAY_NAME, work.authorDisplayName)
-                                        putExtra(MainActivity.EXTRA_REMIX_AUTHOR_AVATAR, work.authorAvatarUrl)
-                                        putExtra(MainActivity.EXTRA_REMIX_AUTHOR_VERIFIED, work.authorVerified)
-                                    }
-                                    startActivity(intent)
-                                }
-                            },
+                            onDownloadWork = onDownloadCommunityPost,
+                            onRemixWork = onRemixCommunityPost,
                             onNavigateToOriginal = { authorId, origPostId ->
                                 if (origPostId != null) {
                                     navController.navigate("userProfile/$authorId?postId=$origPostId")

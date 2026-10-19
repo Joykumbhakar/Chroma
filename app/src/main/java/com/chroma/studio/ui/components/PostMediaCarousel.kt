@@ -32,6 +32,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.ui.graphics.graphicsLayer
+import com.composables.icons.lucide.Volume2
+import com.composables.icons.lucide.VolumeX
+import com.composables.icons.lucide.Film
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.chroma.studio.data.WorkRepository
@@ -55,28 +63,73 @@ sealed class PostMediaSlide {
     data class VideoSlide(val videoUrl: String, val thumbnailUrl: String? = null) : PostMediaSlide()
 }
 
+fun isVideoMediaUrl(url: String): Boolean {
+    val lower = url.lowercase().substringBefore('?')
+    return lower.endsWith(".mp4") || lower.endsWith(".mov") || lower.endsWith(".webm") ||
+           lower.endsWith(".m4v") || lower.endsWith(".3gp") || lower.contains("/video/upload/") ||
+           lower.contains("flash_video") || lower.contains("video_upload")
+}
+
+fun isVideoPost(work: DiscoverPost): Boolean {
+    if (work.postType.equals("video", ignoreCase = true) ||
+        work.postType.equals("flash", ignoreCase = true) ||
+        !work.videoUrl.isNullOrBlank()) {
+        return true
+    }
+    if (work.imageUrls.any { isVideoMediaUrl(it) }) return true
+    if (!work.imageUrl.isNullOrBlank() && work.imageUrl.split(",").any { isVideoMediaUrl(it.trim()) }) return true
+    return false
+}
+
+fun extractVideoUrlFromPost(work: DiscoverPost): String? {
+    if (!work.videoUrl.isNullOrBlank()) return work.videoUrl.trim()
+    if (work.imageUrls.isNotEmpty()) {
+        val match = work.imageUrls.firstOrNull { isVideoMediaUrl(it) }
+        if (!match.isNullOrBlank()) return match.trim()
+    }
+    if (!work.imageUrl.isNullOrBlank()) {
+        val match = work.imageUrl.split(",").map { it.trim() }.firstOrNull { isVideoMediaUrl(it) }
+        if (!match.isNullOrBlank()) return match
+        if (work.postType.equals("video", ignoreCase = true) || work.postType.equals("flash", ignoreCase = true)) {
+            return work.imageUrl.trim()
+        }
+    }
+    return null
+}
+
 /**
  * Resolves all media slides for a [DiscoverPost].
  * Supports:
- * 1. Multi-image array (`imageUrls`)
- * 2. Multi-work array (`workUrls`)
- * 3. Comma-separated image URLs in `imageUrl`
- * 4. Comma-separated JSON URLs in `jsonUrl`
- * 5. Single work or image fallback
+ * 1. Single and multi-video Flash posts
+ * 2. Mixed video and image carousels
+ * 3. Multi-image array (`imageUrls`)
+ * 4. Multi-work array (`workUrls`)
+ * 5. Comma-separated media fallbacks
  */
 fun resolvePostMediaSlides(work: DiscoverPost): List<PostMediaSlide> {
     val slides = mutableListOf<PostMediaSlide>()
 
-    // 0. Video post (postType = "video") — highest priority
-    if (work.postType == "video" && !work.videoUrl.isNullOrBlank()) {
+    // 0. Explicit Video post (postType = "video" or "flash", or explicit videoUrl)
+    val isExplicitVideo = work.postType.equals("video", ignoreCase = true) ||
+                          work.postType.equals("flash", ignoreCase = true) ||
+                          !work.videoUrl.isNullOrBlank()
+
+    if (isExplicitVideo && !work.videoUrl.isNullOrBlank()) {
         slides.add(PostMediaSlide.VideoSlide(work.videoUrl.trim(), work.thumbnailUrl))
         return slides
     }
 
-    // 1. Array of images
+    // 1. Array of images/videos (supports multi-video or mixed media carousels from editor)
     if (work.imageUrls.isNotEmpty()) {
         work.imageUrls.forEach { url ->
-            if (url.isNotBlank()) slides.add(PostMediaSlide.ImageSlide(url.trim()))
+            val trimmed = url.trim()
+            if (trimmed.isNotBlank()) {
+                if (isVideoMediaUrl(trimmed)) {
+                    slides.add(PostMediaSlide.VideoSlide(trimmed, work.thumbnailUrl))
+                } else {
+                    slides.add(PostMediaSlide.ImageSlide(trimmed))
+                }
+            }
         }
     }
 
@@ -93,7 +146,13 @@ fun resolvePostMediaSlides(work: DiscoverPost): List<PostMediaSlide> {
             work.imageUrl.split(",")
                 .map { it.trim() }
                 .filter { it.isNotEmpty() }
-                .forEach { slides.add(PostMediaSlide.ImageSlide(it)) }
+                .forEach { url ->
+                    if (isVideoMediaUrl(url)) {
+                        slides.add(PostMediaSlide.VideoSlide(url, work.thumbnailUrl))
+                    } else {
+                        slides.add(PostMediaSlide.ImageSlide(url))
+                    }
+                }
         }
     }
 
@@ -107,12 +166,17 @@ fun resolvePostMediaSlides(work: DiscoverPost): List<PostMediaSlide> {
 
     // 5. Single media fallback
     if (slides.isEmpty()) {
-        if (work.postType == "image" && !work.imageUrl.isNullOrBlank()) {
-            slides.add(PostMediaSlide.ImageSlide(work.imageUrl.trim()))
+        if (!work.videoUrl.isNullOrBlank()) {
+            slides.add(PostMediaSlide.VideoSlide(work.videoUrl.trim(), work.thumbnailUrl))
+        } else if (!work.imageUrl.isNullOrBlank()) {
+            val url = work.imageUrl.trim()
+            if (isVideoMediaUrl(url)) {
+                slides.add(PostMediaSlide.VideoSlide(url, work.thumbnailUrl))
+            } else {
+                slides.add(PostMediaSlide.ImageSlide(url))
+            }
         } else if (work.jsonUrl.isNotBlank()) {
             slides.add(PostMediaSlide.WorkSlide(work.jsonUrl.trim()))
-        } else if (!work.imageUrl.isNullOrBlank()) {
-            slides.add(PostMediaSlide.ImageSlide(work.imageUrl.trim()))
         }
     }
 
@@ -257,41 +321,124 @@ fun PostWorkSlideView(
 
 /**
  * Renders a video slide for community feed posts inline.
- * Shows thumbnail while buffering, plays/pauses on tap with an ExoPlayer.
+ * - Tap anywhere on video to Play/Pause.
+ * - Clean solid white Play icon with NO background overlay when paused.
+ * - Floating audio Mute/Unmute button in the bottom-right corner.
+ * - Slim progress bar at bottom showing playback position.
+ * - Automatic looping with repeat mode.
+ * - Lifecycle-aware: pauses when app goes to background.
+ * - Double tap forwards to post double-tap like.
  */
 @Composable
 fun PostVideoSlideView(
     videoUrl: String,
     thumbnailUrl: String?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onDoubleTap: ((Offset) -> Unit)? = null,
+    isActivePage: Boolean = true
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+
     var isPlaying by remember { mutableStateOf(false) }
     var isPlayerReady by remember { mutableStateOf(false) }
+    var isBuffering by remember { mutableStateOf(false) }
+    var isMuted by remember { mutableStateOf(true) } // Feed videos default to muted
+    var currentProgress by remember { mutableFloatStateOf(0f) }
 
     val player = remember(videoUrl) {
         androidx.media3.exoplayer.ExoPlayer.Builder(context).build().apply {
             setMediaItem(androidx.media3.common.MediaItem.fromUri(videoUrl))
             repeatMode = androidx.media3.common.Player.REPEAT_MODE_ONE
             playWhenReady = false
+            volume = 0f
             prepare()
             addListener(object : androidx.media3.common.Player.Listener {
                 override fun onIsPlayingChanged(playing: Boolean) { isPlaying = playing }
                 override fun onPlaybackStateChanged(state: Int) {
-                    if (state == androidx.media3.common.Player.STATE_READY) isPlayerReady = true
+                    when (state) {
+                        androidx.media3.common.Player.STATE_READY -> {
+                            isPlayerReady = true
+                            isBuffering = false
+                        }
+                        androidx.media3.common.Player.STATE_BUFFERING -> {
+                            isBuffering = true
+                        }
+                        else -> {
+                            isBuffering = false
+                        }
+                    }
                 }
             })
         }
     }
-    DisposableEffect(videoUrl) { onDispose { player.release() } }
 
-    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+    // Pause playback when swiped away in pager
+    LaunchedEffect(isActivePage) {
+        if (!isActivePage && isPlaying) {
+            player.pause()
+        }
+    }
+
+    // Sync volume with mute state
+    LaunchedEffect(isMuted) {
+        player.volume = if (isMuted) 0f else 1f
+    }
+
+    // Smooth progress updates while playing
+    LaunchedEffect(isPlaying) {
+        while (isPlaying) {
+            val dur = player.duration
+            if (dur > 0L) {
+                currentProgress = (player.currentPosition.toFloat() / dur.toFloat()).coerceIn(0f, 1f)
+            }
+            kotlinx.coroutines.delay(120L)
+        }
+    }
+
+    // Lifecycle observer: pause on background
+    DisposableEffect(lifecycleOwner, player) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_PAUSE || event == Lifecycle.Event.ON_STOP) {
+                player.pause()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            player.release()
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .background(Color.Black)
+            .pointerInput(videoUrl) {
+                detectTapGestures(
+                    onDoubleTap = { offset ->
+                        onDoubleTap?.invoke(offset)
+                    },
+                    onTap = {
+                        if (isPlaying) {
+                            player.pause()
+                        } else {
+                            if (player.playbackState == androidx.media3.common.Player.STATE_ENDED) {
+                                player.seekTo(0L)
+                            }
+                            player.play()
+                        }
+                    }
+                )
+            },
+        contentAlignment = Alignment.Center
+    ) {
         // Video player surface
         androidx.compose.ui.viewinterop.AndroidView(
             factory = { ctx ->
                 android.widget.FrameLayout(ctx).also { frame ->
                     val tv = android.view.TextureView(ctx)
-                    frame.addView(tv,
+                    frame.addView(
+                        tv,
                         android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
                         android.widget.FrameLayout.LayoutParams.MATCH_PARENT
                     )
@@ -301,34 +448,77 @@ fun PostVideoSlideView(
             modifier = Modifier.fillMaxSize()
         )
 
-        // Thumbnail poster while buffering
+        // Thumbnail poster while buffering / not yet ready
         if (!isPlayerReady && !thumbnailUrl.isNullOrBlank()) {
             AsyncImage(
-                model = thumbnailUrl,
+                model = ImageRequest.Builder(context).data(thumbnailUrl).crossfade(true).build(),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
             )
         }
 
-        // Tap-to-play/pause overlay
+        // Clean Solid White Play Icon (ONLY visible when paused, NO background overlay)
+        if (!isPlaying) {
+            Icon(
+                imageVector = Lucide.Play,
+                contentDescription = "Play Video",
+                tint = Color.White,
+                modifier = Modifier
+                    .size(46.dp)
+                    .graphicsLayer {
+                        shadowElevation = 16f
+                    }
+            )
+        }
+
+        // Buffering indicator
+        if (isBuffering && isPlaying) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(36.dp),
+                color = Color.White.copy(alpha = 0.85f),
+                strokeWidth = 3.dp
+            )
+        }
+
+        // Floating Audio Mute/Unmute toggle button in bottom-right corner
         Box(
             modifier = Modifier
-                .size(54.dp)
+                .align(Alignment.BottomEnd)
+                .padding(bottom = 10.dp, end = 10.dp)
+                .size(32.dp)
                 .clip(CircleShape)
-                .background(Color.Black.copy(alpha = 0.55f))
+                .background(Color.Black.copy(alpha = 0.45f))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null
-                ) { if (isPlaying) player.pause() else player.play() },
+                ) {
+                    isMuted = !isMuted
+                },
             contentAlignment = Alignment.Center
         ) {
-            if (!isPlaying) {
-                Icon(
-                    imageVector = com.composables.icons.lucide.Lucide.Play,
-                    contentDescription = "Play",
-                    tint = Color.White,
-                    modifier = Modifier.size(26.dp)
+            Icon(
+                imageVector = if (isMuted) Lucide.VolumeX else Lucide.Volume2,
+                contentDescription = if (isMuted) "Unmute" else "Mute",
+                tint = Color.White,
+                modifier = Modifier.size(16.dp)
+            )
+        }
+
+        // Bottom slim video progress bar
+        if (isPlayerReady) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .height(2.5.dp)
+                    .background(Color.White.copy(alpha = 0.2f))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(currentProgress)
+                        .background(Color.White.copy(alpha = 0.9f))
                 )
             }
         }
@@ -365,14 +555,20 @@ fun PostMediaCarousel(
                 modifier = Modifier.fillMaxSize()
             ) { pageIndex ->
                 val slide = slides.getOrNull(pageIndex)
+                val isVideoSlide = slide is PostMediaSlide.VideoSlide
+                val isActive = (pagerState.currentPage == pageIndex)
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .pointerInput(pageIndex) {
-                            detectTapGestures(
-                                onDoubleTap = onDoubleTap
-                            )
-                        },
+                        .then(
+                            if (!isVideoSlide) {
+                                Modifier.pointerInput(pageIndex) {
+                                    detectTapGestures(
+                                        onDoubleTap = onDoubleTap
+                                    )
+                                }
+                            } else Modifier
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
                     when (slide) {
@@ -396,6 +592,8 @@ fun PostMediaCarousel(
                             PostVideoSlideView(
                                 videoUrl = slide.videoUrl,
                                 thumbnailUrl = slide.thumbnailUrl,
+                                onDoubleTap = onDoubleTap,
+                                isActivePage = isActive,
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
@@ -433,14 +631,19 @@ fun PostMediaCarousel(
         } else {
             // Single slide: Direct rendering without pager overhead
             val singleSlide = slides.firstOrNull()
+            val isVideoSlide = singleSlide is PostMediaSlide.VideoSlide
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .pointerInput(work.id) {
-                        detectTapGestures(
-                            onDoubleTap = onDoubleTap
-                        )
-                    },
+                    .then(
+                        if (!isVideoSlide) {
+                            Modifier.pointerInput(work.id) {
+                                detectTapGestures(
+                                    onDoubleTap = onDoubleTap
+                                )
+                            }
+                        } else Modifier
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 when {
@@ -448,6 +651,8 @@ fun PostMediaCarousel(
                         PostVideoSlideView(
                             videoUrl = singleSlide.videoUrl,
                             thumbnailUrl = singleSlide.thumbnailUrl,
+                            onDoubleTap = onDoubleTap,
+                            isActivePage = true,
                             modifier = Modifier.fillMaxSize()
                         )
                     }

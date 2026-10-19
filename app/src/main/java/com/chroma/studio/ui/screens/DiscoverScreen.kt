@@ -17,6 +17,8 @@ import com.chroma.studio.ui.components.rememberDoubleTapLikeState
 import com.chroma.studio.ui.components.PostMediaCarousel
 import com.chroma.studio.ui.components.PostScrollDotsIndicator
 import com.chroma.studio.ui.components.resolvePostMediaSlides
+import com.chroma.studio.ui.components.isVideoPost
+import com.chroma.studio.ui.components.extractVideoUrlFromPost
 import androidx.compose.foundation.pager.rememberPagerState
 import android.content.Context
 import android.content.Intent
@@ -609,7 +611,27 @@ fun TrendingCard(
         contentPadding = PaddingValues(0.dp)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            if (work.postType == "image" && work.imageUrl != null) {
+            val isVideo = isVideoPost(work)
+
+            if (isVideo) {
+                val thumb = work.thumbnailUrl?.takeIf { it.isNotBlank() } ?: work.imageUrl
+                if (!thumb.isNullOrBlank()) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current).data(thumb).crossfade(true).build(),
+                        contentDescription = work.title,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+                Icon(
+                    imageVector = Lucide.Play,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier
+                        .size(28.dp)
+                        .align(Alignment.Center)
+                )
+            } else if (work.postType == "image" && work.imageUrl != null) {
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current).data(work.imageUrl).crossfade(true).build(),
                     contentDescription = work.title,
@@ -652,7 +674,11 @@ fun TrendingCard(
                     .border(0.5.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
                     .padding(horizontal = 6.dp, vertical = 2.dp)
             ) {
-                val label = if (layers != null && layers!!.isNotEmpty()) "✨ Vector" else "🖼️ Art"
+                val label = when {
+                    isVideo -> "🎬 Flash"
+                    layers != null && layers!!.isNotEmpty() -> "✨ Vector"
+                    else -> "🖼️ Art"
+                }
                 Text(label, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
             }
 
@@ -1458,8 +1484,11 @@ fun parseAspectRatio(ratioStr: String?): Float {
         clean == "1:1" || clean == "1/1" || clean == "square" -> 1f / 1f
         clean == "4:3" || clean == "4/3" -> 4f / 3f
         clean == "5:4" || clean == "5/4" -> 5f / 4f
+        clean == "4:5" || clean == "4/5" -> 4f / 5f
+        clean == "3:4" || clean == "3/4" -> 3f / 4f
         clean == "16:9" || clean == "16/9" -> 16f / 9f
         clean == "9:16" || clean == "9/16" -> 9f / 16f
+        clean == "21:9" || clean == "21/9" || clean == "cinematic" -> 21f / 9f
         else -> 4f / 3f
     }
 }
@@ -1703,6 +1732,25 @@ fun FeedPostCard(
             }
 
             Row(verticalAlignment = Alignment.CenterVertically) {
+                val isVideo = isVideoPost(work)
+                if (isVideo) {
+                    Box(
+                        modifier = Modifier
+                            .padding(end = 6.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color(0xFF007AFF).copy(alpha = 0.12f))
+                            .border(0.5.dp, Color(0xFF007AFF).copy(alpha = 0.35f), RoundedCornerShape(6.dp))
+                            .padding(horizontal = 5.dp, vertical = 2.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            Icon(Lucide.Video, contentDescription = null, tint = Color(0xFF007AFF), modifier = Modifier.size(11.dp))
+                            Text("Flash", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF007AFF))
+                        }
+                    }
+                }
                 Text(
                     text = getTimeAgo(work.timestamp),
                     color = Color(0xFF8E8E93),
