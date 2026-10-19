@@ -30,6 +30,7 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -101,6 +102,7 @@ import androidx.compose.ui.zIndex
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
@@ -714,12 +716,25 @@ fun FinalCutProVideoEditorScreen(
         }
     }
 
-    // ── ExoPlayer Engine ──────────────────────────────────────────────────
+    // ── ExoPlayer Engine (Low Latency Realtime LoadControl) ───────────────
     val exoPlayer = remember {
-        ExoPlayer.Builder(context).build().apply {
-            playWhenReady = false
-            repeatMode = Player.REPEAT_MODE_OFF
-        }
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                /* minBufferMs = */ 1500,
+                /* maxBufferMs = */ 5000,
+                /* bufferForPlaybackMs = */ 250,
+                /* bufferForPlaybackAfterRebufferMs = */ 500
+            )
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
+
+        ExoPlayer.Builder(context)
+            .setLoadControl(loadControl)
+            .setSeekParameters(SeekParameters.EXACT)
+            .build().apply {
+                playWhenReady = false
+                repeatMode = Player.REPEAT_MODE_OFF
+            }
     }
     DisposableEffect(Unit) {
         onDispose { exoPlayer.release() }
@@ -811,6 +826,7 @@ fun FinalCutProVideoEditorScreen(
                 exoPlayer.seekTo(mediaMs)
             }
         }
+        exoPlayer.playWhenReady = shouldPlay
         if (shouldPlay) {
             if (!exoPlayer.isPlaying) exoPlayer.play()
         } else {
@@ -856,7 +872,7 @@ fun FinalCutProVideoEditorScreen(
         isUserScrubbing = false
     }
 
-    // High performance throttled frame seek loop (smooth 50 FPS decoder pacing without frame drops)
+    // High performance throttled frame seek loop (smooth 60/120 FPS display pacing without frame drops)
     LaunchedEffect(exoPlayer, totalDurationSec, clips) {
         for (targetGlobalSec in scrubChannel) {
             val clamped = targetGlobalSec.coerceIn(0f, totalDurationSec)
@@ -872,7 +888,7 @@ fun FinalCutProVideoEditorScreen(
                 shouldPlay = false,
                 forceExactSeek = false
             )
-            delay(16L)
+            withFrameNanos { /* VSYNC display tick pacing */ }
         }
     }
 
@@ -941,10 +957,14 @@ fun FinalCutProVideoEditorScreen(
                         )
                         currentTimeSec = nextSpan.timelineStartSec
                     } else {
-                        // Reached end of entire project: stop playhead right at timeline end
-                        isPlaying = false
-                        exoPlayer.pause()
-                        currentTimeSec = totalDurationSec
+                        // Reached end of entire project
+                        if (isAutoReplay) {
+                            seekToGlobalTime(0f, autoPlay = true)
+                        } else {
+                            isPlaying = false
+                            exoPlayer.pause()
+                            currentTimeSec = totalDurationSec
+                        }
                     }
                 }
             }
@@ -953,7 +973,7 @@ fun FinalCutProVideoEditorScreen(
         onDispose { exoPlayer.removeListener(listener) }
     }
 
-    // High precision sync loop between ExoPlayer and timeline playhead
+    // High precision sync loop between ExoPlayer and timeline playhead (Synchronized to Hardware VSYNC)
     LaunchedEffect(isPlaying, isUserScrubbing, clips, isAutoReplay) {
         while (isActive && isPlaying && !isUserScrubbing) {
             val span = getActiveSpanAt(currentTimeSec)
@@ -988,7 +1008,7 @@ fun FinalCutProVideoEditorScreen(
                     currentTimeSec = getGlobalTimeForMedia(span, curMediaSec)
                 }
             }
-            delay(16L)
+            withFrameNanos { /* Hardware VSYNC display synchronization */ }
         }
     }
 
@@ -1021,8 +1041,10 @@ fun FinalCutProVideoEditorScreen(
     val quantizedTimeSec = remember(currentTimeSec) {
         (currentTimeSec / 1.5f).toInt() * 1.5f
     }
-    LaunchedEffect(selectedClip?.uri, quantizedTimeSec, canvasBackground.type) {
+    LaunchedEffect(selectedClip?.uri, quantizedTimeSec, canvasBackground.type, isPlaying) {
         if (canvasBackground.type != FcpCanvasBgType.BLUR) return@LaunchedEffect
+        // While actively playing, do not churn MediaMetadataRetriever to avoid disk I/O contention
+        if (isPlaying && blurBackgroundBitmap != null) return@LaunchedEffect
         val curClip = selectedClip ?: return@LaunchedEffect
         withContext(Dispatchers.IO) {
             val timeUs = (quantizedTimeSec * 1_000_000L).toLong()
@@ -1373,6 +1395,7 @@ fun FinalCutProVideoEditorScreen(
                                     ToastManager.showToast(if (nextScale == 1.0f) "Reset to Fit (1.0x)" else "Fill & Crop (1.35x)")
                                 },
                                 onTap = {
+                                    SoundManager.playTap(context)
                                     val isAtEnd = totalDurationSec > 0f && currentTimeSec >= totalDurationSec - 0.08f
                                     if (isAtEnd) {
                                         seekToGlobalTime(0f, autoPlay = true)
@@ -1523,9 +1546,18 @@ fun FinalCutProVideoEditorScreen(
                                 translationX = activePanX
                                 translationY = activePanY
                                 if (supportsRenderEffect) {
-                                    renderEffect = RenderEffect
-                                        .createColorFilterEffect(ColorMatrixColorFilter(activeColorMatrix))
-                                        .asComposeRenderEffect()
+                                    val hasCustomColor = (selectedClip?.exposure ?: 0f) != 0f ||
+                                        (selectedClip?.contrast ?: 100f) != 100f ||
+                                        (selectedClip?.saturation ?: 100f) != 100f ||
+                                        (selectedClip?.temperature ?: 0f) != 0f ||
+                                        (selectedClip?.tint ?: 0f) != 0f ||
+                                        (selectedClip?.lut ?: FcpLutPreset.NONE) != FcpLutPreset.NONE
+
+                                    renderEffect = if (hasCustomColor) {
+                                        RenderEffect
+                                            .createColorFilterEffect(ColorMatrixColorFilter(activeColorMatrix))
+                                            .asComposeRenderEffect()
+                                    } else null
                                 }
                             }
                     )
@@ -2498,15 +2530,15 @@ private fun TimelineTabContent(
         val leftThreshold = scrollOffset + (30 * density)
 
         if (currentTimeSec <= 0.05f && isPlaying) {
-            // When at or reset to start, always scroll timeline back to start
-            timelineScrollState.scrollTo(0)
+            // When at or reset to start, smoothly scroll timeline back to start
+            timelineScrollState.animateScrollTo(0, animationSpec = tween(durationMillis = 220, easing = LinearOutSlowInEasing))
         } else if (isPlaying && viewportWidthPx > 0) {
             if (playheadPx > rightThreshold) {
-                val targetScroll = (playheadPx - viewportWidthPx * 0.45f).coerceAtLeast(0f).toInt()
-                timelineScrollState.scrollTo(targetScroll)
+                val targetScroll = (playheadPx - viewportWidthPx * 0.38f).coerceAtLeast(0f).toInt()
+                timelineScrollState.animateScrollTo(targetScroll, animationSpec = tween(durationMillis = 350, easing = LinearOutSlowInEasing))
             } else if (playheadPx < leftThreshold) {
                 val targetScroll = (playheadPx - 30 * density).coerceAtLeast(0f).toInt()
-                timelineScrollState.scrollTo(targetScroll)
+                timelineScrollState.animateScrollTo(targetScroll, animationSpec = tween(durationMillis = 250, easing = LinearOutSlowInEasing))
             }
         } else if (!isPlaying && viewportWidthPx > 0) {
             val isAtEnd = totalDurationSec > 0f && currentTimeSec >= totalDurationSec - 0.08f
