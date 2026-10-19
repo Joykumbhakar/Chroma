@@ -21,7 +21,9 @@ import android.view.TextureView
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import android.provider.OpenableColumns
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.animateColorAsState
@@ -480,6 +482,35 @@ private fun buildTimelineSpans(clips: List<FcpClip>): List<FcpTimelineClipSpan> 
     }
 }
 
+data class FcpCustomAudio(
+    val uri: Uri,
+    val name: String,
+    val durationSec: Float = 0f,
+    val volume: Float = 1.0f,
+    val isExtractedFromVideo: Boolean = false,
+    val muteOriginalVideo: Boolean = true
+)
+
+private fun queryMediaFileName(context: Context, uri: Uri): String {
+    var name: String? = null
+    if (uri.scheme == "content") {
+        try {
+            context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val nameIdx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (nameIdx != -1) {
+                        name = cursor.getString(nameIdx)
+                    }
+                }
+            }
+        } catch (_: Throwable) {}
+    }
+    if (name.isNullOrBlank()) {
+        name = uri.lastPathSegment?.substringAfterLast('/')?.substringAfterLast(':') ?: "Audio Track"
+    }
+    return name
+}
+
 private fun extractVideoDurationSec(context: Context, uri: Uri): Float? {
     val retriever = MediaMetadataRetriever()
     return try {
@@ -671,6 +702,46 @@ fun FinalCutProVideoEditorScreen(
         }
     }
 
+    // ── Custom Soundtrack & Video Audio Extraction State ──────────────────
+    var customAudio by remember { mutableStateOf<FcpCustomAudio?>(null) }
+
+    // ── Custom Soundtrack & Video Audio Extraction Pickers ───────────────
+    val audioFilePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val fileName = queryMediaFileName(context, uri)
+            val dur = extractVideoDurationSec(context, uri) ?: 0f
+            customAudio = FcpCustomAudio(
+                uri = uri,
+                name = fileName,
+                durationSec = dur,
+                volume = 1f,
+                isExtractedFromVideo = false,
+                muteOriginalVideo = true
+            )
+            ToastManager.showToast("Audio added: $fileName")
+        }
+    }
+
+    val videoExtractPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val fileName = queryMediaFileName(context, uri)
+            val dur = extractVideoDurationSec(context, uri) ?: 0f
+            customAudio = FcpCustomAudio(
+                uri = uri,
+                name = "Extracted: $fileName",
+                durationSec = dur,
+                volume = 1f,
+                isExtractedFromVideo = true,
+                muteOriginalVideo = true
+            )
+            ToastManager.showToast("Audio extracted from video: $fileName")
+        }
+    }
+
     // ── Overlay & Filter State ────────────────────────────────────────────
     var textLayers by remember {
         mutableStateOf(emptyList<FcpTextLayer>())
@@ -740,6 +811,43 @@ fun FinalCutProVideoEditorScreen(
     }
     DisposableEffect(Unit) {
         onDispose { exoPlayer.release() }
+    }
+
+    // ── Secondary Low-Latency ExoPlayer Engine (Dedicated to Custom Soundtrack) ──
+    val customAudioPlayer = remember {
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(1500, 5000, 250, 500)
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
+        ExoPlayer.Builder(context)
+            .setLoadControl(loadControl)
+            .setSeekParameters(SeekParameters.EXACT)
+            .build().apply {
+                playWhenReady = false
+                repeatMode = Player.REPEAT_MODE_OFF
+            }
+    }
+    DisposableEffect(Unit) {
+        onDispose { customAudioPlayer.release() }
+    }
+
+    // Synchronize customAudioPlayer media source and volume with customAudio state
+    LaunchedEffect(customAudio?.uri) {
+        val audio = customAudio
+        if (audio != null) {
+            customAudioPlayer.setMediaItem(MediaItem.fromUri(audio.uri))
+            customAudioPlayer.prepare()
+            val posMs = (currentTimeSec * 1000f).toLong().coerceAtLeast(0L)
+            customAudioPlayer.seekTo(posMs)
+            customAudioPlayer.volume = audio.volume.coerceIn(0f, 1f)
+            customAudioPlayer.playWhenReady = isPlaying
+            if (isPlaying && !customAudioPlayer.isPlaying) {
+                customAudioPlayer.play()
+            }
+        } else {
+            customAudioPlayer.stop()
+            customAudioPlayer.clearMediaItems()
+        }
     }
 
     // Hardware LoudnessEnhancer for positive dialogue gain and voice isolation
@@ -843,6 +951,7 @@ fun FinalCutProVideoEditorScreen(
         if (isPlaying) {
             isPlaying = false
             if (exoPlayer.isPlaying) exoPlayer.pause()
+            if (customAudioPlayer.isPlaying) customAudioPlayer.pause()
         }
         exoPlayer.setSeekParameters(SeekParameters.CLOSEST_SYNC)
     }
@@ -851,12 +960,18 @@ fun FinalCutProVideoEditorScreen(
         val clamped = newSec.coerceIn(0f, totalDurationSec)
         currentTimeSec = clamped
         scrubChannel.trySend(clamped)
+        if (customAudio != null) {
+            customAudioPlayer.seekTo((clamped * 1000f).toLong().coerceAtLeast(0L))
+        }
         SoundManager.playScrub(context)
     }
 
     fun onScrubEnd(finalSec: Float) {
         val clamped = finalSec.coerceIn(0f, totalDurationSec)
         currentTimeSec = clamped
+        if (customAudio != null) {
+            customAudioPlayer.seekTo((clamped * 1000f).toLong().coerceAtLeast(0L))
+        }
         exoPlayer.setSeekParameters(SeekParameters.EXACT)
         val span = getActiveSpanAt(clamped)
         if (span != null) {
@@ -897,6 +1012,9 @@ fun FinalCutProVideoEditorScreen(
     fun seekToGlobalTime(targetGlobalSec: Float, autoPlay: Boolean? = null) {
         val clamped = targetGlobalSec.coerceIn(0f, totalDurationSec)
         currentTimeSec = clamped
+        if (customAudio != null) {
+            customAudioPlayer.seekTo((clamped * 1000f).toLong().coerceAtLeast(0L))
+        }
         val span = getActiveSpanAt(clamped) ?: return
         val targetMediaSec = getMediaTimeForGlobal(span, clamped)
 
@@ -906,6 +1024,14 @@ fun FinalCutProVideoEditorScreen(
         val shouldPlay = autoPlay ?: isPlaying
         if (autoPlay != null) {
             isPlaying = autoPlay
+        }
+        if (customAudio != null) {
+            customAudioPlayer.playWhenReady = shouldPlay
+            if (shouldPlay) {
+                if (!customAudioPlayer.isPlaying) customAudioPlayer.play()
+            } else {
+                if (customAudioPlayer.isPlaying) customAudioPlayer.pause()
+            }
         }
         exoPlayer.setSeekParameters(SeekParameters.EXACT)
         ensureClipLoadedInPlayer(
@@ -965,6 +1091,7 @@ fun FinalCutProVideoEditorScreen(
                         } else {
                             isPlaying = false
                             exoPlayer.pause()
+                            if (customAudioPlayer.isPlaying) customAudioPlayer.pause()
                             currentTimeSec = totalDurationSec
                         }
                     }
@@ -975,8 +1102,19 @@ fun FinalCutProVideoEditorScreen(
         onDispose { exoPlayer.removeListener(listener) }
     }
 
+    LaunchedEffect(isPlaying) {
+        if (customAudio != null) {
+            customAudioPlayer.playWhenReady = isPlaying
+            if (isPlaying) {
+                if (!customAudioPlayer.isPlaying) customAudioPlayer.play()
+            } else {
+                if (customAudioPlayer.isPlaying) customAudioPlayer.pause()
+            }
+        }
+    }
+
     // High precision sync loop between ExoPlayer and timeline playhead (Synchronized to Hardware VSYNC)
-    LaunchedEffect(isPlaying, isUserScrubbing, clips, isAutoReplay) {
+    LaunchedEffect(isPlaying, isUserScrubbing, clips, isAutoReplay, customAudio) {
         while (isActive && isPlaying && !isUserScrubbing) {
             val span = getActiveSpanAt(currentTimeSec)
             if (span != null) {
@@ -1003,11 +1141,21 @@ fun FinalCutProVideoEditorScreen(
                         } else {
                             isPlaying = false
                             exoPlayer.pause()
+                            if (customAudioPlayer.isPlaying) customAudioPlayer.pause()
                             currentTimeSec = totalDurationSec
                         }
                     }
                 } else {
                     currentTimeSec = getGlobalTimeForMedia(span, curMediaSec)
+                }
+
+                // Drift compensation: keep custom audio player synchronized to playhead
+                if (customAudio != null) {
+                    val audioPosMs = customAudioPlayer.currentPosition
+                    val targetMs = (currentTimeSec * 1000f).toLong()
+                    if (abs(audioPosMs - targetMs) > 180L) {
+                        customAudioPlayer.seekTo(targetMs)
+                    }
                 }
             }
             withFrameNanos { /* Hardware VSYNC display synchronization */ }
@@ -1021,9 +1169,14 @@ fun FinalCutProVideoEditorScreen(
         }
     }
 
-    // Audio Gain & Voice Isolation mapping (attenuation via Player volume + boost via LoudnessEnhancer)
-    LaunchedEffect(dialogueGainDb, voiceIsolation) {
-        if (dialogueGainDb < 0f) {
+    // Audio Gain, Voice Isolation & Custom Audio Volume/Muting mapping
+    LaunchedEffect(dialogueGainDb, voiceIsolation, customAudio?.muteOriginalVideo, customAudio?.volume) {
+        val audio = customAudio
+        val isMuted = audio?.muteOriginalVideo == true
+        if (isMuted) {
+            exoPlayer.volume = 0f
+            try { loudnessEnhancer?.setTargetGain(0) } catch (_: Throwable) {}
+        } else if (dialogueGainDb < 0f) {
             val volume = (10f.pow(dialogueGainDb / 20f)).coerceIn(0f, 1f)
             exoPlayer.volume = volume
             try { loudnessEnhancer?.setTargetGain(0) } catch (_: Throwable) {}
@@ -1036,6 +1189,9 @@ fun FinalCutProVideoEditorScreen(
                     enabled = true
                 }
             } catch (_: Throwable) {}
+        }
+        if (audio != null) {
+            customAudioPlayer.volume = audio.volume.coerceIn(0f, 1f)
         }
     }
 
@@ -2141,6 +2297,13 @@ fun FinalCutProVideoEditorScreen(
                                     onEditTransition = { clipId ->
                                         SoundManager.playTap(context)
                                         editingTransitionClipId = clipId
+                                    },
+                                    customAudio = customAudio,
+                                    onOpenAudioTab = {
+                                        activeTab = FcpWorkspaceTab.AUDIO
+                                        if (drawerLevel == VideoDrawerLevel.COLLAPSED) {
+                                            drawerLevel = VideoDrawerLevel.MID
+                                        }
                                     }
                                 )
                             }
@@ -2170,6 +2333,24 @@ fun FinalCutProVideoEditorScreen(
                                     onGainChange = { dialogueGainDb = it },
                                     voiceIsolation = voiceIsolation,
                                     onVoiceIsolationChange = { voiceIsolation = it },
+                                    customAudio = customAudio,
+                                    onAddAudioFile = {
+                                        audioFilePicker.launch("audio/*")
+                                    },
+                                    onExtractAudioFromVideo = {
+                                        videoExtractPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
+                                    },
+                                    onAudioVolumeChange = { newVol ->
+                                        customAudio = customAudio?.copy(volume = newVol)
+                                    },
+                                    onMuteOriginalVideoChange = { mute ->
+                                        customAudio = customAudio?.copy(muteOriginalVideo = mute)
+                                        ToastManager.showToast(if (mute) "Original audio muted (replaced)" else "Original audio unmuted (mixed)")
+                                    },
+                                    onRemoveCustomAudio = {
+                                        customAudio = null
+                                        ToastManager.showToast("Custom audio removed")
+                                    },
                                     isPlaying = isPlaying,
                                     currentTimeSec = currentTimeSec
                                 )
@@ -2564,7 +2745,9 @@ private fun TimelineTabContent(
     onDeleteClip: () -> Unit,
     onAddClip: () -> Unit,
     onStepFrame: (Boolean) -> Unit,
-    onEditTransition: (String) -> Unit = {}
+    onEditTransition: (String) -> Unit = {},
+    customAudio: FcpCustomAudio? = null,
+    onOpenAudioTab: () -> Unit = {}
 ) {
     val colors = LocalOscellionColors.current
     val haptic = LocalHapticFeedback.current
@@ -2681,6 +2864,7 @@ private fun TimelineTabContent(
                 TimelineMiniButton(Lucide.Copy, "Duplicate", onClick = onDuplicateClip)
                 TimelineMiniButton(Lucide.Trash2, "Delete", isDanger = true, onClick = onDeleteClip)
                 TimelineMiniButton(Lucide.Plus, "Add Video", onClick = onAddClip)
+                TimelineMiniButton(Lucide.Music, "Audio", onClick = onOpenAudioTab)
                 TimelineMiniButton(Lucide.SkipForward, "Next Frame", onClick = { onStepFrame(true) })
             }
         }
@@ -2689,7 +2873,7 @@ private fun TimelineTabContent(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(86.dp)
+                .height(if (customAudio != null) 112.dp else 86.dp)
                 .onSizeChanged { viewportWidthPx = it.width }
                 .horizontalScroll(timelineScrollState)
         ) {
@@ -2799,7 +2983,7 @@ private fun TimelineTabContent(
                     modifier = Modifier
                         .offset(x = timelineStartPaddingDp + (totalDurationSec * pixelsPerSec).dp, y = 18.dp)
                         .width(1.5.dp)
-                        .height(56.dp)
+                        .height(if (customAudio != null) 84.dp else 56.dp)
                         .background(Color(0xFFEF4444).copy(alpha = 0.4f))
                 )
 
@@ -3101,6 +3285,84 @@ private fun TimelineTabContent(
                                     contentDescription = trans.label,
                                     tint = if (trans != FcpTransitionType.NONE) Color.White else colors.textMuted,
                                     modifier = Modifier.size(13.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // 2b. Custom Soundtrack Lane (Positioned directly under Video Clips Track)
+                if (customAudio != null) {
+                    val audioDuration = if (customAudio.durationSec > 0f) customAudio.durationSec else totalDurationSec
+                    val audioTrackWidthDp = (audioDuration * pixelsPerSec).dp
+                    Box(
+                        modifier = Modifier
+                            .offset(x = timelineStartPaddingDp, y = 78.dp)
+                            .width(audioTrackWidthDp)
+                            .height(24.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(
+                                        Color(0xFF064E3B).copy(alpha = 0.85f),
+                                        Color(0xFF047857).copy(alpha = 0.65f)
+                                    )
+                                )
+                            )
+                            .border(1.dp, Color(0xFF10B981).copy(alpha = 0.6f), RoundedCornerShape(4.dp))
+                            .clickable { onOpenAudioTab() }
+                            .padding(horizontal = 6.dp),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                modifier = Modifier.weight(1f, fill = false)
+                            ) {
+                                Icon(
+                                    imageVector = if (customAudio.isExtractedFromVideo) Lucide.Film else Lucide.Music,
+                                    contentDescription = null,
+                                    tint = Color(0xFF34D399),
+                                    modifier = Modifier.size(11.dp)
+                                )
+                                Text(
+                                    text = customAudio.name,
+                                    fontSize = 9.sp,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                if (customAudio.muteOriginalVideo) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(3.dp))
+                                            .background(Color.Black.copy(alpha = 0.45f))
+                                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                                    ) {
+                                        Text(
+                                            text = "Muted Video",
+                                            fontSize = 7.5.sp,
+                                            color = Color(0xFF34D399),
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                                Text(
+                                    text = "${(customAudio.volume * 100f).toInt()}%",
+                                    fontSize = 8.sp,
+                                    color = Color.White.copy(alpha = 0.85f),
+                                    fontFamily = FontFamily.Monospace
                                 )
                             }
                         }
@@ -3885,6 +4147,12 @@ private fun AudioTabContent(
     onGainChange: (Float) -> Unit,
     voiceIsolation: Boolean,
     onVoiceIsolationChange: (Boolean) -> Unit,
+    customAudio: FcpCustomAudio? = null,
+    onAddAudioFile: () -> Unit = {},
+    onExtractAudioFromVideo: () -> Unit = {},
+    onAudioVolumeChange: (Float) -> Unit = {},
+    onMuteOriginalVideoChange: (Boolean) -> Unit = {},
+    onRemoveCustomAudio: () -> Unit = {},
     isPlaying: Boolean = false,
     currentTimeSec: Float = 0f
 ) {
@@ -3896,9 +4164,309 @@ private fun AudioTabContent(
             .padding(horizontal = 16.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+        // ── 1. CUSTOM SOUNDTRACK & VIDEO AUDIO EXTRACTION CARD ──
         item {
-            WorkspaceSectionCard(title = "AUDIO MIXER", icon = Lucide.Volume2) {
+            WorkspaceSectionCard(title = "SOUNDTRACK & AUDIO REPLACEMENT", icon = Lucide.Music) {
+                if (customAudio == null) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            text = "Replace the video's original audio track with custom music or extract audio from another video.",
+                            fontSize = 11.sp,
+                            color = colors.textMuted,
+                            lineHeight = 15.sp
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            // "Add Audio" Button
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(
+                                        Brush.verticalGradient(
+                                            listOf(
+                                                colors.primary.copy(alpha = 0.22f),
+                                                colors.primary.copy(alpha = 0.08f)
+                                            )
+                                        )
+                                    )
+                                    .border(1.dp, colors.primary.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
+                                    .clickable { onAddAudioFile() }
+                                    .padding(vertical = 12.dp, horizontal = 10.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(32.dp)
+                                            .clip(CircleShape)
+                                            .background(colors.primary.copy(alpha = 0.25f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(Lucide.Music, contentDescription = "Add Audio", tint = colors.primary, modifier = Modifier.size(18.dp))
+                                    }
+                                    Text("Add Audio", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = colors.textMain)
+                                    Text("MP3, M4A, WAV", fontSize = 9.5.sp, color = colors.textMuted)
+                                }
+                            }
+
+                            // "Extract from a video" Button
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(
+                                        Brush.verticalGradient(
+                                            listOf(
+                                                Color(0xFF8B5CF6).copy(alpha = 0.22f),
+                                                Color(0xFF8B5CF6).copy(alpha = 0.08f)
+                                            )
+                                        )
+                                    )
+                                    .border(1.dp, Color(0xFF8B5CF6).copy(alpha = 0.45f), RoundedCornerShape(10.dp))
+                                    .clickable { onExtractAudioFromVideo() }
+                                    .padding(vertical = 12.dp, horizontal = 10.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(32.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFF8B5CF6).copy(alpha = 0.25f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(Lucide.Film, contentDescription = "Extract Audio", tint = Color(0xFFA78BFA), modifier = Modifier.size(18.dp))
+                                    }
+                                    Text("Extract From Video", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = colors.textMain)
+                                    Text("Rip audio from video", fontSize = 9.5.sp, color = colors.textMuted)
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        // Header banner with track info and delete button
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(
+                                    Brush.horizontalGradient(
+                                        listOf(
+                                            Color(0xFF064E3B).copy(alpha = 0.6f),
+                                            colors.glassBg
+                                        )
+                                    )
+                                )
+                                .border(1.dp, Color(0xFF10B981).copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                                .padding(10.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(34.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(Color(0xFF10B981).copy(alpha = 0.2f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = if (customAudio.isExtractedFromVideo) Lucide.Film else Lucide.Music,
+                                            contentDescription = null,
+                                            tint = Color(0xFF34D399),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = customAudio.name,
+                                            fontSize = 12.5.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = colors.textMain,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(4.dp))
+                                                    .background(Color(0xFF10B981).copy(alpha = 0.2f))
+                                                    .padding(horizontal = 5.dp, vertical = 1.dp)
+                                            ) {
+                                                Text(
+                                                    text = if (customAudio.isExtractedFromVideo) "Extracted Audio" else "Custom Audio",
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color(0xFF34D399)
+                                                )
+                                            }
+                                            if (customAudio.durationSec > 0f) {
+                                                Text(
+                                                    text = formatTimecode(customAudio.durationSec),
+                                                    fontSize = 9.5.sp,
+                                                    color = colors.textMuted,
+                                                    fontFamily = FontFamily.Monospace
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                IconButton(
+                                    onClick = onRemoveCustomAudio,
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Lucide.Trash2,
+                                        contentDescription = "Remove soundtrack",
+                                        tint = Color(0xFFEF4444),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        // Toggle: Replace Original Video Audio (Mute Original)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(colors.glassBg)
+                                .border(0.5.dp, colors.glassBorder, RoundedCornerShape(8.dp))
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                Text(
+                                    text = "Replace Video Audio (Mute Original)",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = colors.textMain
+                                )
+                                Text(
+                                    text = if (customAudio.muteOriginalVideo)
+                                        "Original video sound is 100% muted & replaced"
+                                    else
+                                        "Mix custom audio with original video sound",
+                                    fontSize = 10.sp,
+                                    color = if (customAudio.muteOriginalVideo) Color(0xFF34D399) else colors.textMuted
+                                )
+                            }
+                            SmallSwitch(
+                                checked = customAudio.muteOriginalVideo,
+                                onCheckedChange = onMuteOriginalVideoChange
+                            )
+                        }
+
+                        // Soundtrack Volume Slider
+                        FcpColorSliderRow(
+                            title = "Soundtrack Volume",
+                            icon = Lucide.Volume2,
+                            value = customAudio.volume * 100f,
+                            defaultValue = 100f,
+                            valueRange = 0f..150f,
+                            isBipolar = false,
+                            formatValue = { v -> "${v.toInt()}%" },
+                            onValueChange = { onAudioVolumeChange(it / 100f) },
+                            gradientColors = listOf(Color(0xFF10B981), Color(0xFF06B6D4))
+                        )
+
+                        // Quick Action Buttons
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(colors.glassBg)
+                                    .border(0.5.dp, colors.glassBorder, RoundedCornerShape(8.dp))
+                                    .clickable { onAddAudioFile() }
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(Lucide.Music, contentDescription = null, tint = colors.primary, modifier = Modifier.size(13.dp))
+                                    Text("Change Audio", fontSize = 11.sp, color = colors.textMain, fontWeight = FontWeight.Medium)
+                                }
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(colors.glassBg)
+                                    .border(0.5.dp, colors.glassBorder, RoundedCornerShape(8.dp))
+                                    .clickable { onExtractAudioFromVideo() }
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(Lucide.Film, contentDescription = null, tint = Color(0xFFA78BFA), modifier = Modifier.size(13.dp))
+                                    Text("Extract From Video", fontSize = 11.sp, color = colors.textMain, fontWeight = FontWeight.Medium)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── 2. ORIGINAL VIDEO AUDIO MIXER CARD ──
+        item {
+            WorkspaceSectionCard(title = "ORIGINAL VIDEO AUDIO", icon = Lucide.Volume2) {
                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    if (customAudio?.muteOriginalVideo == true) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color(0xFFF59E0B).copy(alpha = 0.12f))
+                                .border(0.5.dp, Color(0xFFF59E0B).copy(alpha = 0.35f), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(Lucide.VolumeX, contentDescription = null, tint = Color(0xFFF59E0B), modifier = Modifier.size(14.dp))
+                                Text(
+                                    text = "Original audio is muted. Toggle 'Replace Video Audio' above to unmute and mix.",
+                                    fontSize = 10.sp,
+                                    color = Color(0xFFF59E0B),
+                                    lineHeight = 14.sp
+                                )
+                            }
+                        }
+                    }
+
                     // Gain Slider
                     FcpColorSliderRow(
                         title = "Dialogue Gain",
@@ -3937,7 +4505,7 @@ private fun AudioTabContent(
             }
         }
 
-        // Live Audio Waveform Canvas
+        // ── 3. LIVE MASTER AUDIO WAVEFORM CANVAS ──
         item {
             WorkspaceSectionCard(title = "MASTER AUDIO WAVEFORM", icon = Lucide.Activity) {
                 Box(
@@ -3951,6 +4519,10 @@ private fun AudioTabContent(
                     contentAlignment = Alignment.Center
                 ) {
                     val gainScale = (1f + (gainDb / 28f)).coerceIn(0.2f, 1.75f)
+                    val effectiveScale = if (customAudio != null) {
+                        if (customAudio.muteOriginalVideo) customAudio.volume.coerceIn(0.2f, 1.75f)
+                        else (gainScale * 0.5f + customAudio.volume * 0.5f).coerceIn(0.2f, 1.75f)
+                    } else gainScale
                     val animPhase = if (isPlaying) (currentTimeSec * 12f) else 0f
                     Canvas(Modifier.fillMaxSize()) {
                         val barCount = 42
@@ -3959,10 +4531,12 @@ private fun AudioTabContent(
                         for (i in 0 until barCount) {
                             val baseSeed = ((i * 17 + 11) % 100) / 100f
                             val liveWave = if (isPlaying) (sin(animPhase + i * 0.45f) * 0.18f + 0.82f) else 1f
-                            val barHeight = (baseSeed * liveWave * gainScale * size.height * 0.78f)
+                            val barHeight = (baseSeed * liveWave * effectiveScale * size.height * 0.78f)
                                 .coerceIn(4f, size.height * 0.92f)
                             val barColor = if (barHeight > size.height * 0.75f) {
                                 Color(0xFFF59E0B)
+                            } else if (customAudio != null) {
+                                Color(0xFF10B981)
                             } else if (voiceIsolation) {
                                 Color(0xFF10B981)
                             } else {
