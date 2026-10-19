@@ -9,6 +9,7 @@ import android.graphics.RenderEffect
 import android.graphics.Shader
 import android.graphics.Typeface
 import android.media.MediaMetadataRetriever
+import android.media.audiofx.LoudnessEnhancer
 import android.net.Uri
 import android.os.Build
 import android.util.LruCache
@@ -438,9 +439,11 @@ data class FcpClip(
     val roleColor: Color = Color(0xFF0A84FF),
     val scale: Float = 1f,
     val panX: Float = 0f,
-    val panY: Float = 0f
+    val panY: Float = 0f,
+    val isDurationLoaded: Boolean = false
 ) {
-    val trimmedDurationSec: Float get() = (trimEndSec - trimStartSec).coerceAtLeast(0.5f)
+    val sourceTrimmedDurationSec: Float get() = (trimEndSec - trimStartSec).coerceAtLeast(0.25f)
+    val trimmedDurationSec: Float get() = (sourceTrimmedDurationSec / speed.coerceAtLeast(0.1f)).coerceAtLeast(0.2f)
 }
 
 data class FcpTimelineClipSpan(
@@ -449,6 +452,38 @@ data class FcpTimelineClipSpan(
     val timelineEndSec: Float
 ) {
     val durationSec: Float get() = (timelineEndSec - timelineStartSec).coerceAtLeast(0.1f)
+}
+
+private fun buildTimelineSpans(clips: List<FcpClip>): List<FcpTimelineClipSpan> {
+    var accum = 0f
+    return clips.map { clip ->
+        val start = accum
+        val dur = clip.trimmedDurationSec
+        accum += dur
+        FcpTimelineClipSpan(clip, start, accum)
+    }
+}
+
+private fun extractVideoDurationSec(context: Context, uri: Uri): Float? {
+    val retriever = MediaMetadataRetriever()
+    return try {
+        try {
+            retriever.setDataSource(context, uri)
+        } catch (_: Throwable) {
+            context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                retriever.setDataSource(pfd.fileDescriptor)
+            }
+        }
+        val durStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+        val durMs = durStr?.toLongOrNull()
+        if (durMs != null && durMs > 0L) {
+            (durMs / 1000f).coerceAtLeast(0.25f)
+        } else null
+    } catch (_: Throwable) {
+        null
+    } finally {
+        try { retriever.release() } catch (_: Throwable) {}
+    }
 }
 
 /**
@@ -623,19 +658,40 @@ fun FinalCutProVideoEditorScreen(
     var voiceIsolation by remember { mutableStateOf(false) }
 
     val timelineSpans = remember(clips) {
-        var accum = 0f
-        clips.map { clip ->
-            val start = accum
-            val dur = clip.trimmedDurationSec
-            accum += dur
-            FcpTimelineClipSpan(clip, start, accum)
-        }
+        buildTimelineSpans(clips)
     }
     val totalDurationSec = remember(timelineSpans) {
         timelineSpans.lastOrNull()?.timelineEndSec?.coerceAtLeast(1f) ?: 1f
     }
     val selectedClip = remember(clips, selectedId) {
         clips.find { it.id == selectedId } ?: clips.firstOrNull()
+    }
+
+    // ── Background Video Duration Extraction (Asynchronous) ──────────────
+    var probedClipIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    LaunchedEffect(clips) {
+        val unprobed = clips.filter { !it.isDurationLoaded && it.id !in probedClipIds }
+        if (unprobed.isNotEmpty()) {
+            val probedMap = withContext(Dispatchers.IO) {
+                unprobed.associate { clip ->
+                    clip.id to extractVideoDurationSec(context, clip.uri)
+                }
+            }
+            probedClipIds = probedClipIds + unprobed.map { it.id }
+            clips = clips.map { clip ->
+                if (!clip.isDurationLoaded && probedMap.containsKey(clip.id)) {
+                    val realDur = probedMap[clip.id]
+                    if (realDur != null && realDur > 0f) {
+                        clip.copy(
+                            durationSec = realDur,
+                            trimStartSec = clip.trimStartSec.coerceIn(0f, (realDur - 0.25f).coerceAtLeast(0f)),
+                            trimEndSec = if (clip.trimEndSec >= clip.durationSec - 0.1f) realDur else clip.trimEndSec.coerceAtMost(realDur),
+                            isDurationLoaded = true
+                        )
+                    } else clip
+                } else clip
+            }
+        }
     }
 
     // ── ExoPlayer Engine ──────────────────────────────────────────────────
@@ -647,6 +703,36 @@ fun FinalCutProVideoEditorScreen(
     }
     DisposableEffect(Unit) {
         onDispose { exoPlayer.release() }
+    }
+
+    // Hardware LoudnessEnhancer for positive dialogue gain and voice isolation
+    var loudnessEnhancer by remember { mutableStateOf<LoudnessEnhancer?>(null) }
+    DisposableEffect(exoPlayer) {
+        val listener = object : Player.Listener {
+            override fun onAudioSessionIdChanged(audioSessionId: Int) {
+                if (audioSessionId != 0) {
+                    try {
+                        loudnessEnhancer?.release()
+                        loudnessEnhancer = LoudnessEnhancer(audioSessionId).apply {
+                            enabled = true
+                        }
+                    } catch (_: Throwable) {}
+                }
+            }
+        }
+        exoPlayer.addListener(listener)
+        val initialSession = exoPlayer.audioSessionId
+        if (initialSession != 0) {
+            try {
+                loudnessEnhancer = LoudnessEnhancer(initialSession).apply {
+                    enabled = true
+                }
+            } catch (_: Throwable) {}
+        }
+        onDispose {
+            exoPlayer.removeListener(listener)
+            try { loudnessEnhancer?.release() } catch (_: Throwable) {}
+        }
     }
 
     fun getActiveSpanAt(timeSec: Float): FcpTimelineClipSpan? {
@@ -663,6 +749,53 @@ fun FinalCutProVideoEditorScreen(
     fun getGlobalTimeForMedia(span: FcpTimelineClipSpan, mediaSec: Float): Float {
         val offset = (mediaSec - span.clip.trimStartSec).coerceIn(0f, span.durationSec)
         return (span.timelineStartSec + offset).coerceIn(0f, totalDurationSec)
+    }
+
+    var loadedClipId by remember { mutableStateOf<String?>(null) }
+    var loadedClipUri by remember { mutableStateOf<Uri?>(null) }
+    var lastPlayerSeekMs by remember { mutableLongStateOf(0L) }
+
+    fun ensureClipLoadedInPlayer(
+        clip: FcpClip,
+        targetMediaSec: Float,
+        shouldPlay: Boolean,
+        seamlessTransition: Boolean = false,
+        forceExactSeek: Boolean = true
+    ) {
+        val mediaMs = (targetMediaSec * 1000f).toLong().coerceAtLeast(0L)
+        if (loadedClipUri != clip.uri) {
+            loadedClipId = clip.id
+            loadedClipUri = clip.uri
+            lastPlayerSeekMs = mediaMs
+            exoPlayer.setMediaItem(MediaItem.fromUri(clip.uri), mediaMs)
+            exoPlayer.prepare()
+            exoPlayer.setPlaybackSpeed(clip.speed)
+        } else {
+            loadedClipId = clip.id
+            if (exoPlayer.playbackState == Player.STATE_IDLE || exoPlayer.playbackState == Player.STATE_ENDED) {
+                exoPlayer.prepare()
+            }
+            if (abs(exoPlayer.playbackParameters.speed - clip.speed) > 0.01f) {
+                exoPlayer.setPlaybackSpeed(clip.speed)
+            }
+            val currentPosMs = exoPlayer.currentPosition
+            val shouldSeek = if (seamlessTransition) {
+                abs(currentPosMs - mediaMs) > 140L
+            } else if (!forceExactSeek) {
+                abs(lastPlayerSeekMs - mediaMs) >= 24L
+            } else {
+                true
+            }
+            if (shouldSeek) {
+                lastPlayerSeekMs = mediaMs
+                exoPlayer.seekTo(mediaMs)
+            }
+        }
+        if (shouldPlay) {
+            if (!exoPlayer.isPlaying) exoPlayer.play()
+        } else {
+            if (exoPlayer.isPlaying) exoPlayer.pause()
+        }
     }
 
     val scrubChannel = remember { Channel<Float>(Channel.CONFLATED) }
@@ -691,10 +824,13 @@ fun FinalCutProVideoEditorScreen(
             val targetMediaSec = getMediaTimeForGlobal(span, clamped)
             if (selectedId != span.clip.id) {
                 selectedId = span.clip.id
-                exoPlayer.setMediaItem(MediaItem.fromUri(span.clip.uri))
-                exoPlayer.prepare()
             }
-            exoPlayer.seekTo((targetMediaSec * 1000f).toLong())
+            ensureClipLoadedInPlayer(
+                clip = span.clip,
+                targetMediaSec = targetMediaSec,
+                shouldPlay = false,
+                forceExactSeek = true
+            )
         }
         isUserScrubbing = false
     }
@@ -708,12 +844,13 @@ fun FinalCutProVideoEditorScreen(
 
             if (selectedId != span.clip.id) {
                 selectedId = span.clip.id
-                exoPlayer.setMediaItem(MediaItem.fromUri(span.clip.uri))
-                exoPlayer.prepare()
-            } else if (exoPlayer.playbackState == Player.STATE_ENDED || exoPlayer.playbackState == Player.STATE_IDLE) {
-                exoPlayer.prepare()
             }
-            exoPlayer.seekTo((targetMediaSec * 1000f).toLong())
+            ensureClipLoadedInPlayer(
+                clip = span.clip,
+                targetMediaSec = targetMediaSec,
+                shouldPlay = false,
+                forceExactSeek = false
+            )
             delay(16L)
         }
     }
@@ -726,22 +863,18 @@ fun FinalCutProVideoEditorScreen(
 
         if (selectedId != span.clip.id) {
             selectedId = span.clip.id
-            exoPlayer.setMediaItem(MediaItem.fromUri(span.clip.uri))
-            exoPlayer.prepare()
-        } else if (exoPlayer.playbackState == Player.STATE_ENDED || exoPlayer.playbackState == Player.STATE_IDLE) {
-            exoPlayer.prepare()
         }
-        exoPlayer.setSeekParameters(SeekParameters.EXACT)
-        exoPlayer.seekTo((targetMediaSec * 1000f).toLong())
         val shouldPlay = autoPlay ?: isPlaying
         if (autoPlay != null) {
             isPlaying = autoPlay
         }
-        if (shouldPlay) {
-            if (!exoPlayer.isPlaying) exoPlayer.play()
-        } else {
-            if (exoPlayer.isPlaying) exoPlayer.pause()
-        }
+        exoPlayer.setSeekParameters(SeekParameters.EXACT)
+        ensureClipLoadedInPlayer(
+            clip = span.clip,
+            targetMediaSec = targetMediaSec,
+            shouldPlay = shouldPlay,
+            forceExactSeek = true
+        )
     }
 
     // Load initial or selected clip into ExoPlayer
@@ -750,10 +883,12 @@ fun FinalCutProVideoEditorScreen(
         if (clip != null) {
             val span = timelineSpans.find { it.clip.id == clip.id }
             val mediaSec = if (span != null) getMediaTimeForGlobal(span, currentTimeSec) else clip.trimStartSec
-            exoPlayer.setMediaItem(MediaItem.fromUri(clip.uri))
-            exoPlayer.prepare()
-            exoPlayer.seekTo((mediaSec * 1000f).toLong())
-            if (isPlaying) exoPlayer.play()
+            ensureClipLoadedInPlayer(
+                clip = clip,
+                targetMediaSec = mediaSec,
+                shouldPlay = isPlaying,
+                forceExactSeek = true
+            )
         }
     }
 
@@ -767,7 +902,7 @@ fun FinalCutProVideoEditorScreen(
                         val durSec = durMs / 1000f
                         if (abs(selectedClip.durationSec - durSec) > 0.5f && selectedClip.durationSec == 15f) {
                             clips = clips.map {
-                                if (it.id == selectedClip.id) it.copy(durationSec = durSec, trimEndSec = durSec) else it
+                                if (it.id == selectedClip.id) it.copy(durationSec = durSec, trimEndSec = durSec, isDurationLoaded = true) else it
                             }
                         }
                     }
@@ -777,11 +912,13 @@ fun FinalCutProVideoEditorScreen(
                     if (span != null && spanIdx >= 0 && spanIdx + 1 < timelineSpans.size) {
                         val nextSpan = timelineSpans[spanIdx + 1]
                         selectedId = nextSpan.clip.id
-                        exoPlayer.setMediaItem(MediaItem.fromUri(nextSpan.clip.uri))
-                        exoPlayer.prepare()
-                        exoPlayer.seekTo((nextSpan.clip.trimStartSec * 1000f).toLong())
+                        ensureClipLoadedInPlayer(
+                            clip = nextSpan.clip,
+                            targetMediaSec = nextSpan.clip.trimStartSec,
+                            shouldPlay = true,
+                            seamlessTransition = true
+                        )
                         currentTimeSec = nextSpan.timelineStartSec
-                        exoPlayer.play()
                     } else {
                         // Reached end of entire project: stop playhead right at timeline end
                         isPlaying = false
@@ -809,11 +946,13 @@ fun FinalCutProVideoEditorScreen(
                     if (spanIdx >= 0 && spanIdx + 1 < timelineSpans.size) {
                         val nextSpan = timelineSpans[spanIdx + 1]
                         selectedId = nextSpan.clip.id
-                        exoPlayer.setMediaItem(MediaItem.fromUri(nextSpan.clip.uri))
-                        exoPlayer.prepare()
-                        exoPlayer.seekTo((nextSpan.clip.trimStartSec * 1000f).toLong())
+                        ensureClipLoadedInPlayer(
+                            clip = nextSpan.clip,
+                            targetMediaSec = nextSpan.clip.trimStartSec,
+                            shouldPlay = true,
+                            seamlessTransition = true
+                        )
                         currentTimeSec = nextSpan.timelineStartSec
-                        exoPlayer.play()
                     } else {
                         // Reached end of entire project: stop playhead right at timeline end
                         isPlaying = false
@@ -835,10 +974,22 @@ fun FinalCutProVideoEditorScreen(
         }
     }
 
-    // Audio Gain volume mapping
-    LaunchedEffect(dialogueGainDb) {
-        val volume = (10f.pow(dialogueGainDb / 20f)).coerceIn(0f, 2f)
-        exoPlayer.volume = volume
+    // Audio Gain & Voice Isolation mapping (attenuation via Player volume + boost via LoudnessEnhancer)
+    LaunchedEffect(dialogueGainDb, voiceIsolation) {
+        if (dialogueGainDb < 0f) {
+            val volume = (10f.pow(dialogueGainDb / 20f)).coerceIn(0f, 1f)
+            exoPlayer.volume = volume
+            try { loudnessEnhancer?.setTargetGain(0) } catch (_: Throwable) {}
+        } else {
+            exoPlayer.volume = 1f
+            val boostMb = (dialogueGainDb * 100f).toInt() + (if (voiceIsolation) 300 else 0)
+            try {
+                loudnessEnhancer?.apply {
+                    setTargetGain(boostMb.coerceIn(0, 2000))
+                    enabled = true
+                }
+            } catch (_: Throwable) {}
+        }
     }
 
     // Dynamic background blur extraction from current video frame (quantized to 1.5s intervals)
@@ -914,25 +1065,43 @@ fun FinalCutProVideoEditorScreen(
     val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
         if (uris.isNotEmpty()) {
             saveStateForUndo()
-            val newClips = uris.mapIndexed { idx, uri ->
-                val fileName = uri.lastPathSegment?.takeLast(14) ?: "Clip_${clips.size + idx + 1}"
-                FcpClip(uri = uri, name = fileName, durationSec = 15f, trimStartSec = 0f, trimEndSec = 15f)
+            scope.launch {
+                val newClips = withContext(Dispatchers.IO) {
+                    uris.mapIndexed { idx, uri ->
+                        val fileName = uri.lastPathSegment?.takeLast(14) ?: "Clip_${clips.size + idx + 1}"
+                        val realDur = extractVideoDurationSec(context, uri)
+                        val dur = realDur ?: 15f
+                        FcpClip(
+                            uri = uri,
+                            name = fileName,
+                            durationSec = dur,
+                            trimStartSec = 0f,
+                            trimEndSec = dur,
+                            isDurationLoaded = realDur != null
+                        )
+                    }
+                }
+                clips = clips + newClips
+                selectedId = newClips.first().id
+                ToastManager.showToast("${newClips.size} clip(s) imported")
             }
-            clips = clips + newClips
-            selectedId = newClips.first().id
-            ToastManager.showToast("${newClips.size} clip(s) imported")
         }
     }
 
     // Initialize with initialUri if provided
     LaunchedEffect(initialUri) {
         if (initialUri != null && clips.isEmpty()) {
+            val realDur = withContext(Dispatchers.IO) {
+                extractVideoDurationSec(context, initialUri)
+            }
+            val dur = realDur ?: 15f
             val initialClip = FcpClip(
                 uri = initialUri,
                 name = initialUri.lastPathSegment?.takeLast(14) ?: "Main_Video",
-                durationSec = 15f,
+                durationSec = dur,
                 trimStartSec = 0f,
-                trimEndSec = 15f
+                trimEndSec = dur,
+                isDurationLoaded = realDur != null
             )
             clips = listOf(initialClip)
             selectedId = initialClip.id
@@ -1847,7 +2016,9 @@ fun FinalCutProVideoEditorScreen(
                                     gainDb = dialogueGainDb,
                                     onGainChange = { dialogueGainDb = it },
                                     voiceIsolation = voiceIsolation,
-                                    onVoiceIsolationChange = { voiceIsolation = it }
+                                    onVoiceIsolationChange = { voiceIsolation = it },
+                                    isPlaying = isPlaying,
+                                    currentTimeSec = currentTimeSec
                                 )
                             }
                             FcpWorkspaceTab.EFFECTS -> {
@@ -3394,7 +3565,9 @@ private fun AudioTabContent(
     gainDb: Float,
     onGainChange: (Float) -> Unit,
     voiceIsolation: Boolean,
-    onVoiceIsolationChange: (Boolean) -> Unit
+    onVoiceIsolationChange: (Boolean) -> Unit,
+    isPlaying: Boolean = false,
+    currentTimeSec: Float = 0f
 ) {
     val colors = LocalOscellionColors.current
 
@@ -3458,15 +3631,26 @@ private fun AudioTabContent(
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
+                    val gainScale = (1f + (gainDb / 28f)).coerceIn(0.2f, 1.75f)
+                    val animPhase = if (isPlaying) (currentTimeSec * 12f) else 0f
                     Canvas(Modifier.fillMaxSize()) {
                         val barCount = 42
                         val barSpacing = size.width / barCount
                         val midY = size.height / 2f
                         for (i in 0 until barCount) {
-                            val seed = (i * 17) % 100
-                            val barHeight = ((seed / 100f) * size.height * 0.8f).coerceAtLeast(4f)
+                            val baseSeed = ((i * 17 + 11) % 100) / 100f
+                            val liveWave = if (isPlaying) (sin(animPhase + i * 0.45f) * 0.18f + 0.82f) else 1f
+                            val barHeight = (baseSeed * liveWave * gainScale * size.height * 0.78f)
+                                .coerceIn(4f, size.height * 0.92f)
+                            val barColor = if (barHeight > size.height * 0.75f) {
+                                Color(0xFFF59E0B)
+                            } else if (voiceIsolation) {
+                                Color(0xFF10B981)
+                            } else {
+                                colors.primary.copy(alpha = 0.78f)
+                            }
                             drawLine(
-                                color = colors.primary.copy(alpha = 0.75f),
+                                color = barColor,
                                 start = Offset(i * barSpacing + 2f, midY - barHeight / 2f),
                                 end = Offset(i * barSpacing + 2f, midY + barHeight / 2f),
                                 strokeWidth = 3f,
