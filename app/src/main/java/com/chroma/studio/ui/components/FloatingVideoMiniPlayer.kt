@@ -13,6 +13,7 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -242,15 +243,15 @@ fun FloatingVideoMiniPlayer(
                     }
                 }
 
-                // Center Play/Pause Glass Control
+                // Center Play/Pause Control (Solid White Icon, No Background)
                 Box(
                     modifier = Modifier
                         .align(Alignment.Center)
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.5f))
-                        .border(0.5.dp, Color.White.copy(alpha = 0.3f), CircleShape)
-                        .clickable {
+                        .size(40.dp)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) {
                             SoundManager.playTap(context)
                             if (exoPlayer.isPlaying) {
                                 exoPlayer.pause()
@@ -264,7 +265,7 @@ fun FloatingVideoMiniPlayer(
                         imageVector = if (isPlaying) Lucide.Pause else Lucide.Play,
                         contentDescription = if (isPlaying) "Pause" else "Play",
                         tint = Color.White,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(24.dp)
                     )
                 }
 

@@ -638,6 +638,7 @@ fun FinalCutProVideoEditorScreen(
     var isPlaying by remember { mutableStateOf(false) }
     var currentTimeSec by remember { mutableFloatStateOf(0f) }
     var isUserScrubbing by remember { mutableStateOf(false) }
+    var isAutoReplay by remember { mutableStateOf(true) }
 
     // ── UI / Workspace State ──────────────────────────────────────────────
     var activeTab by remember { mutableStateOf(FcpWorkspaceTab.TIMELINE) }
@@ -953,7 +954,7 @@ fun FinalCutProVideoEditorScreen(
     }
 
     // High precision sync loop between ExoPlayer and timeline playhead
-    LaunchedEffect(isPlaying, isUserScrubbing, clips) {
+    LaunchedEffect(isPlaying, isUserScrubbing, clips, isAutoReplay) {
         while (isActive && isPlaying && !isUserScrubbing) {
             val span = getActiveSpanAt(currentTimeSec)
             if (span != null) {
@@ -974,10 +975,14 @@ fun FinalCutProVideoEditorScreen(
                         )
                         currentTimeSec = nextSpan.timelineStartSec
                     } else {
-                        // Reached end of entire project: stop playhead right at timeline end
-                        isPlaying = false
-                        exoPlayer.pause()
-                        currentTimeSec = totalDurationSec
+                        // Reached end of entire project
+                        if (isAutoReplay) {
+                            seekToGlobalTime(0f, autoPlay = true)
+                        } else {
+                            isPlaying = false
+                            exoPlayer.pause()
+                            currentTimeSec = totalDurationSec
+                        }
                     }
                 } else {
                     currentTimeSec = getGlobalTimeForMedia(span, curMediaSec)
@@ -1677,44 +1682,26 @@ fun FinalCutProVideoEditorScreen(
                         }
                     }
 
-                    // Animated Play / Replay Central Indicator (Clean Gradient Squircle, No Circle, Pure White Icon)
+                    // Play / Replay Central Indicator (Solid White Icon, No Background)
                     if (clips.isNotEmpty() && !isPlaying && !isUserScrubbing) {
                         val isAtEnd = totalDurationSec > 0f && currentTimeSec >= totalDurationSec - 0.08f
-                        val playBtnShape = RoundedCornerShape(16.dp)
                         val playInteraction = remember { MutableInteractionSource() }
                         val isPlayPressed by playInteraction.collectIsPressedAsState()
                         val playScale by animateFloatAsState(
-                            targetValue = if (isPlayPressed) 0.92f else 1f,
-                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                            targetValue = if (isPlayPressed) 0.85f else 1f,
+                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy),
                             label = "playBtnScale"
                         )
-                        val playGradient = remember {
-                            Brush.linearGradient(
-                                colors = listOf(
-                                    Color(0xFF0A84FF), // Electric Blue
-                                    Color(0xFF6366F1), // Indigo
-                                    Color(0xFF8B5CF6)  // Purple
-                                )
-                            )
-                        }
 
                         Box(
                             modifier = Modifier
                                 .scale(playScale)
-                                .shadow(
-                                    elevation = 8.dp,
-                                    shape = playBtnShape,
-                                    spotColor = Color(0x660A84FF),
-                                    ambientColor = Color(0x33000000)
-                                )
-                                .size(width = 56.dp, height = 46.dp)
-                                .clip(playBtnShape)
-                                .background(playGradient)
-                                .border(1.dp, Color.White.copy(alpha = 0.45f), playBtnShape)
+                                .size(64.dp)
                                 .clickable(
                                     interactionSource = playInteraction,
                                     indication = null
                                 ) {
+                                    SoundManager.playTap(context)
                                     if (isAtEnd) {
                                         seekToGlobalTime(0f, autoPlay = true)
                                     } else {
@@ -1725,29 +1712,13 @@ fun FinalCutProVideoEditorScreen(
                                 },
                             contentAlignment = Alignment.Center
                         ) {
-                            // Subtle upper glass reflection highlight
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(23.dp)
-                                    .align(Alignment.TopCenter)
-                                    .background(
-                                        Brush.verticalGradient(
-                                            listOf(
-                                                Color.White.copy(alpha = 0.22f),
-                                                Color.Transparent
-                                            )
-                                        )
-                                    )
-                            )
-
                             Icon(
                                 imageVector = if (isAtEnd) Lucide.RotateCcw else Lucide.Play,
                                 contentDescription = if (isAtEnd) "Replay" else "Play",
                                 tint = Color.White,
                                 modifier = Modifier
-                                    .size(24.dp)
-                                    .offset(x = if (isAtEnd) 0.dp else 1.5.dp)
+                                    .size(48.dp)
+                                    .offset(x = if (isAtEnd) 0.dp else 2.dp)
                             )
                         }
                     }
@@ -1942,7 +1913,15 @@ fun FinalCutProVideoEditorScreen(
                                     onZoomChange = { pixelsPerSec = it.coerceIn(15f, 120f) },
                                     isPlaying = isPlaying,
                                     isUserScrubbing = isUserScrubbing,
+                                    isAutoReplay = isAutoReplay,
+                                    onAutoReplayToggle = {
+                                        isAutoReplay = !isAutoReplay
+                                        SoundManager.playTap(context)
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        ToastManager.showToast(if (isAutoReplay) "Auto Replay: ON" else "Auto Replay: OFF")
+                                    },
                                     onPlayToggle = {
+                                        SoundManager.playTap(context)
                                         val isAtEnd = totalDurationSec > 0f && currentTimeSec >= totalDurationSec - 0.08f
                                         if (isAtEnd) {
                                             seekToGlobalTime(0f, autoPlay = true)
@@ -1956,6 +1935,7 @@ fun FinalCutProVideoEditorScreen(
                                                 exoPlayer.pause()
                                             }
                                         }
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     },
                                     onSelectClip = { clipId ->
                                         selectedId = clipId
@@ -2480,6 +2460,8 @@ private fun TimelineTabContent(
     onZoomChange: (Float) -> Unit = {},
     isPlaying: Boolean,
     isUserScrubbing: Boolean = false,
+    isAutoReplay: Boolean = true,
+    onAutoReplayToggle: () -> Unit = {},
     onPlayToggle: () -> Unit,
     onSelectClip: (String) -> Unit,
     onTrimLeft: (String, Float) -> Unit,
@@ -3111,11 +3093,27 @@ private fun TimelineTabContent(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             val isAtEnd = totalDurationSec > 0f && currentTimeSec >= totalDurationSec - 0.08f
-            // Play/Pause/Replay Big Button
-            PrimaryGradientButton(
-                onClick = onPlayToggle,
-                height = 44.dp,
-                contentPadding = PaddingValues(horizontal = 18.dp)
+
+            // Play / Pause / Replay Transport Button (Solid White Icon, No Background)
+            val playInteraction = remember { MutableInteractionSource() }
+            val isPlayPressed by playInteraction.collectIsPressedAsState()
+            val playScale by animateFloatAsState(
+                targetValue = if (isPlayPressed) 0.82f else 1f,
+                animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy),
+                label = "transportPlayScale"
+            )
+
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .scale(playScale)
+                    .clickable(
+                        interactionSource = playInteraction,
+                        indication = null
+                    ) {
+                        onPlayToggle()
+                    },
+                contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = when {
@@ -3129,18 +3127,51 @@ private fun TimelineTabContent(
                         else -> "Play"
                     },
                     tint = Color.White,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier
+                        .size(24.dp)
+                        .offset(x = if (!isPlaying && !isAtEnd) 1.5.dp else 0.dp)
                 )
-                Text(
-                    text = when {
-                        isPlaying -> "Pause"
-                        isAtEnd -> "Replay"
-                        else -> "Play"
+            }
+
+            // Auto Replay (Loop) Toggle Button (Solid White Icon, No Background)
+            val loopInteraction = remember { MutableInteractionSource() }
+            val isLoopPressed by loopInteraction.collectIsPressedAsState()
+            val loopScale by animateFloatAsState(
+                targetValue = if (isLoopPressed) 0.82f else 1f,
+                animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy),
+                label = "transportLoopScale"
+            )
+
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .scale(loopScale)
+                    .clickable(
+                        interactionSource = loopInteraction,
+                        indication = null
+                    ) {
+                        onAutoReplayToggle()
                     },
-                    color = Color.White,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Lucide.Repeat,
+                        contentDescription = if (isAutoReplay) "Auto Replay On" else "Auto Replay Off",
+                        tint = if (isAutoReplay) Color.White else Color.White.copy(alpha = 0.35f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(width = 12.dp, height = 3.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(if (isAutoReplay) colors.primary else Color.Transparent)
+                    )
+                }
             }
 
             // Tactile Rotary Jog Wheel for buttery smooth frame scrubbing
