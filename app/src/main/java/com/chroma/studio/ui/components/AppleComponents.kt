@@ -188,7 +188,9 @@ fun AppleSlider(
     valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
     modifier: Modifier = Modifier,
     steps: Int = 0,
-    hazeState: dev.chrisbanes.haze.HazeState? = null
+    hazeState: dev.chrisbanes.haze.HazeState? = null,
+    gradientColors: List<Color>? = null,
+    trackHeight: Dp = 6.5.dp
 ) {
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -214,8 +216,10 @@ fun AppleSlider(
         label = "ts"
     )
 
-    val activeTrackColor = Color(0xFF0A84FF)
-    val inactiveTrackColor = Color(0xFFE5E5EA)
+    val isDark = isSystemInDarkTheme()
+    val inactiveTrackColor = if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
+    val trackBorderColor = if (isDark) Color(0x33FFFFFF) else Color(0x1A000000)
+    val activeGrad = gradientColors ?: listOf(Color(0xFF2997FF), Color(0xFF0071E3))
 
     Slider(
         value = value.coerceIn(valueRange.start, valueRange.endInclusive),
@@ -223,7 +227,7 @@ fun AppleSlider(
         valueRange = valueRange,
         steps = steps,
         interactionSource = interactionSource,
-        modifier = modifier.fillMaxWidth().height(22.dp),
+        modifier = modifier.fillMaxWidth().height(24.dp),
         colors = SliderDefaults.colors(
             activeTrackColor = Color.Transparent,
             inactiveTrackColor = Color.Transparent,
@@ -238,17 +242,20 @@ fun AppleSlider(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(6.dp)
+                    .height(trackHeight)
                     .clip(CircleShape)
                     .background(inactiveTrackColor)
+                    .border(0.5.dp, trackBorderColor, CircleShape)
             ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .fillMaxWidth(fraction)
-                        .clip(CircleShape)
-                        .background(Brush.horizontalGradient(listOf(Color(0xFF2997FF), Color(0xFF0071E3))))
-                )
+                if (fraction > 0.001f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(fraction)
+                            .clip(CircleShape)
+                            .background(Brush.horizontalGradient(activeGrad))
+                    )
+                }
             }
         },
         thumb = {

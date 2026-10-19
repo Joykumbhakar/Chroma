@@ -148,8 +148,12 @@ enum class FcpWorkspaceTab(val label: String, val icon: ImageVector) {
 enum class FcpLutPreset(val label: String, val colors: List<Color>) {
     NONE("Rec.709", listOf(Color(0xFF64748B), Color(0xFF94A3B8))),
     TEAL_ORANGE("Teal/Orange", listOf(Color(0xFF0D9488), Color(0xFFF97316))),
-    CYBER("Vivid", listOf(Color(0xFF3B82F6), Color(0xFFEC4899))),
-    NOIR("Noir", listOf(Color(0xFF1E293B), Color(0xFFF8FAFC)))
+    CYBER("Vivid Cinema", listOf(Color(0xFF3B82F6), Color(0xFFEC4899))),
+    NOIR("Film Noir", listOf(Color(0xFF1E293B), Color(0xFFF8FAFC))),
+    WARM_GOLD("Golden Hour", listOf(Color(0xFFD97706), Color(0xFFFBBF24))),
+    COOL_NORDIC("Nordic Cool", listOf(Color(0xFF0284C7), Color(0xFF38BDF8))),
+    VINTAGE_FADE("Vintage Film", listOf(Color(0xFF78350F), Color(0xFFFDE68A))),
+    EMERALD("Emerald Mood", listOf(Color(0xFF065F46), Color(0xFF10B981)))
 }
 
 enum class FcpAspectRatio(val ratio: Float, val label: String) {
@@ -632,6 +636,55 @@ private fun buildFcpColorMatrix(
             )
             bw.postConcat(contrastBw)
             result.postConcat(bw)
+        }
+        FcpLutPreset.WARM_GOLD -> {
+            result.postConcat(
+                android.graphics.ColorMatrix(
+                    floatArrayOf(
+                        1.15f, 0f, 0f, 0f, 22f,
+                        0f, 1.05f, 0f, 0f, 10f,
+                        0f, 0f, 0.82f, 0f, -16f,
+                        0f, 0f, 0f, 1f, 0f
+                    )
+                )
+            )
+        }
+        FcpLutPreset.COOL_NORDIC -> {
+            result.postConcat(
+                android.graphics.ColorMatrix(
+                    floatArrayOf(
+                        0.90f, 0f, 0f, 0f, -8f,
+                        0f, 1.02f, 0f, 0f, 4f,
+                        0f, 0f, 1.22f, 0f, 24f,
+                        0f, 0f, 0f, 1f, 0f
+                    )
+                )
+            )
+        }
+        FcpLutPreset.VINTAGE_FADE -> {
+            val sat = android.graphics.ColorMatrix().apply { setSaturation(0.78f) }
+            val vintage = android.graphics.ColorMatrix(
+                floatArrayOf(
+                    1.08f, 0f, 0f, 0f, 18f,
+                    0f, 0.98f, 0f, 0f, 8f,
+                    0f, 0f, 0.85f, 0f, 2f,
+                    0f, 0f, 0f, 1f, 0f
+                )
+            )
+            sat.postConcat(vintage)
+            result.postConcat(sat)
+        }
+        FcpLutPreset.EMERALD -> {
+            result.postConcat(
+                android.graphics.ColorMatrix(
+                    floatArrayOf(
+                        0.88f, 0f, 0f, 0f, -10f,
+                        0f, 1.18f, 0f, 0f, 14f,
+                        0f, 0f, 0.95f, 0f, -4f,
+                        0f, 0f, 0f, 1f, 0f
+                    )
+                )
+            )
         }
         FcpLutPreset.NONE -> {}
     }
@@ -1836,33 +1889,93 @@ fun FinalCutProVideoEditorScreen(
                         }
                     }
 
-                    // Cinematic LUT Overlay (Teal & Orange or Cyber Vivid tint)
-                    if (selectedClip?.lut == FcpLutPreset.TEAL_ORANGE) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    Brush.verticalGradient(
-                                        listOf(
-                                            Color(0xFF0D9488).copy(alpha = 0.12f),
-                                            Color(0xFFF97316).copy(alpha = 0.12f)
+                    // Cinematic LUT Atmospheric Overlay
+                    when (selectedClip?.lut) {
+                        FcpLutPreset.TEAL_ORANGE -> {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        Brush.verticalGradient(
+                                            listOf(
+                                                Color(0xFF0D9488).copy(alpha = 0.12f),
+                                                Color(0xFFF97316).copy(alpha = 0.12f)
+                                            )
                                         )
                                     )
-                                )
-                        )
-                    } else if (selectedClip?.lut == FcpLutPreset.CYBER) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    Brush.verticalGradient(
-                                        listOf(
-                                            Color(0xFF3B82F6).copy(alpha = 0.10f),
-                                            Color(0xFFEC4899).copy(alpha = 0.10f)
+                            )
+                        }
+                        FcpLutPreset.CYBER -> {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        Brush.verticalGradient(
+                                            listOf(
+                                                Color(0xFF3B82F6).copy(alpha = 0.10f),
+                                                Color(0xFFEC4899).copy(alpha = 0.10f)
+                                            )
                                         )
                                     )
-                                )
-                        )
+                            )
+                        }
+                        FcpLutPreset.WARM_GOLD -> {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        Brush.verticalGradient(
+                                            listOf(
+                                                Color(0xFFD97706).copy(alpha = 0.10f),
+                                                Color(0xFFFBBF24).copy(alpha = 0.08f)
+                                            )
+                                        )
+                                    )
+                            )
+                        }
+                        FcpLutPreset.COOL_NORDIC -> {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        Brush.verticalGradient(
+                                            listOf(
+                                                Color(0xFF0284C7).copy(alpha = 0.10f),
+                                                Color(0xFF38BDF8).copy(alpha = 0.08f)
+                                            )
+                                        )
+                                    )
+                            )
+                        }
+                        FcpLutPreset.VINTAGE_FADE -> {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        Brush.verticalGradient(
+                                            listOf(
+                                                Color(0xFF78350F).copy(alpha = 0.08f),
+                                                Color(0xFFFDE68A).copy(alpha = 0.06f)
+                                            )
+                                        )
+                                    )
+                            )
+                        }
+                        FcpLutPreset.EMERALD -> {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        Brush.verticalGradient(
+                                            listOf(
+                                                Color(0xFF065F46).copy(alpha = 0.10f),
+                                                Color(0xFF10B981).copy(alpha = 0.08f)
+                                            )
+                                        )
+                                    )
+                            )
+                        }
+                        FcpLutPreset.NOIR, FcpLutPreset.NONE, null -> {}
                     }
 
                     // AI Subject Mask Depth Vignette Simulation
@@ -2334,6 +2447,7 @@ fun FinalCutProVideoEditorScreen(
                             FcpWorkspaceTab.COLOR -> {
                                 ColorTabContent(
                                     selectedClip = selectedClip,
+                                    previewBitmap = blurBackgroundBitmap ?: selectedClip?.let { FcpThumbnailMemoryCache.get("${it.uri}_0") },
                                     onUpdateClip = { updated ->
                                         clips = clips.map { if (it.id == updated.id) updated else it }
                                     },
@@ -2772,6 +2886,10 @@ private fun TimelineTabContent(
     val haptic = LocalHapticFeedback.current
     val density = LocalDensity.current.density
     val currentPlayheadTime by rememberUpdatedState(currentTimeSec)
+    val currentClips by rememberUpdatedState(clips)
+    val currentSpans by rememberUpdatedState(timelineSpans)
+    var draggingClipId by remember { mutableStateOf<String?>(null) }
+    var dragCumulativeOffsetPx by remember { mutableFloatStateOf(0f) }
 
     val timelineScrollState = rememberScrollState()
     val timelineStartPaddingDp = 16.dp
@@ -3016,295 +3134,366 @@ private fun TimelineTabContent(
                 ) {
                     timelineSpans.forEachIndexed { i, span ->
                         val clip = span.clip
-                        val isSelected = clip.id == selectedId
-                        val clipWidthDp = (span.durationSec * pixelsPerSec).dp
-                        val clipIdx = timelineSpans.indexOf(span)
-                        var clipDragOffsetPx by remember { mutableFloatStateOf(0f) }
-                        var isLongPressActive by remember { mutableStateOf(false) }
+                        key(clip.id) {
+                            val isSelected = clip.id == selectedId
+                            val isClipDragging = draggingClipId == clip.id
+                            val clipWidthDp = (span.durationSec * pixelsPerSec).dp
 
-                        val clipBg = if (isSelected) {
-                            if (colors.isDark) Color(0xFF1D4ED8) else Color(0xFF2563EB)
-                        } else {
-                            if (colors.isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)
-                        }
-                        val clipBorderColor = if (isSelected) Color(0xFF60A5FA) else colors.glassBorder
-                        val textColor = if (isSelected) Color.White else colors.textMain
-                        val subTextColor = if (isSelected) Color.White.copy(alpha = 0.8f) else colors.textMuted
+                            val clipBg = if (isSelected) {
+                                if (colors.isDark) Color(0xFF1D4ED8) else Color(0xFF2563EB)
+                            } else {
+                                if (colors.isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)
+                            }
+                            val clipBorderColor = if (isClipDragging) Color(0xFF38BDF8) else if (isSelected) Color(0xFF60A5FA) else colors.glassBorder
+                            val textColor = if (isSelected) Color.White else colors.textMain
+                            val subTextColor = if (isSelected) Color.White.copy(alpha = 0.8f) else colors.textMuted
 
-                        Box(
-                            modifier = Modifier
-                                .width(clipWidthDp)
-                                .fillMaxHeight()
-                                .offset { IntOffset(clipDragOffsetPx.roundToInt(), 0) }
-                                .scale(if (isLongPressActive) 1.04f else 1f)
-                                .shadow(
-                                    elevation = if (isLongPressActive) 12.dp else 0.dp,
-                                    shape = RoundedCornerShape(4.dp),
-                                    spotColor = Color(0xFF60A5FA)
-                                )
-                                .zIndex(if (isLongPressActive) 35f else 1f)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(clipBg)
-                                .border(
-                                    width = if (isSelected) 1.5.dp else 0.5.dp,
-                                    color = clipBorderColor,
-                                    shape = RoundedCornerShape(4.dp)
-                                )
-                                .pointerInput(clip.id, clips.size) {
-                                    detectDragGesturesAfterLongPress(
-                                        onDragStart = {
-                                            isLongPressActive = true
-                                            onSelectClip(clip.id)
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        },
-                                        onDrag = { change, dragAmount ->
-                                            if (clips.size > 1) {
-                                                change.consume()
-                                                clipDragOffsetPx += dragAmount.x
-                                                val thresholdPx = 50 * density
-                                                if (clipDragOffsetPx > thresholdPx && clipIdx < clips.size - 1) {
-                                                    onReorderClips(clipIdx, clipIdx + 1)
-                                                    clipDragOffsetPx = 0f
-                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                } else if (clipDragOffsetPx < -thresholdPx && clipIdx > 0) {
-                                                    onReorderClips(clipIdx, clipIdx - 1)
-                                                    clipDragOffsetPx = 0f
-                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                }
-                                            }
-                                        },
-                                        onDragEnd = {
-                                            isLongPressActive = false
-                                            clipDragOffsetPx = 0f
-                                        },
-                                        onDragCancel = {
-                                            isLongPressActive = false
-                                            clipDragOffsetPx = 0f
-                                        }
-                                    )
-                                }
-                                .pointerInput(clip.id, span.timelineStartSec, span.durationSec, pixelsPerSec, density) {
-                                    detectTapGestures(
-                                        onTap = { offset ->
-                                            onSelectClip(clip.id)
-                                            val tappedSec = (span.timelineStartSec + (offset.x / (pixelsPerSec * density))).coerceIn(0f, totalDurationSec)
-                                            onScrubStart()
-                                            onScrubSec(tappedSec)
-                                            onScrubEnd(tappedSec)
-                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                        }
-                                    )
-                                }
-                        ) {
-                            // 1. Live Video Preview Thumbnails Filmstrip
-                            FcpClipFilmstrip(
-                                clip = clip,
-                                clipWidthDp = clipWidthDp,
-                                modifier = Modifier.fillMaxSize()
-                            )
+                            val dragOffsetX = if (isClipDragging) dragCumulativeOffsetPx else 0f
 
-                            // 2. Cinematic Gradient Scrim (Keeps labels, badges, and trim handles high-contrast & sharp)
                             Box(
                                 modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(
-                                        Brush.verticalGradient(
-                                            colors = if (isSelected) {
-                                                listOf(
-                                                    Color.Black.copy(alpha = 0.52f),
-                                                    Color.Black.copy(alpha = 0.08f),
-                                                    Color.Black.copy(alpha = 0.62f)
-                                                )
-                                            } else {
-                                                listOf(
-                                                    Color.Black.copy(alpha = 0.65f),
-                                                    Color.Black.copy(alpha = 0.35f),
-                                                    Color.Black.copy(alpha = 0.75f)
-                                                )
+                                    .width(clipWidthDp)
+                                    .fillMaxHeight()
+                                    .offset { IntOffset(dragOffsetX.roundToInt(), 0) }
+                                    .scale(if (isClipDragging) 1.05f else 1f)
+                                    .shadow(
+                                        elevation = if (isClipDragging) 16.dp else if (isSelected) 2.dp else 0.dp,
+                                        shape = RoundedCornerShape(6.dp),
+                                        spotColor = Color(0xFF60A5FA)
+                                    )
+                                    .zIndex(if (isClipDragging) 100f else 1f)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(clipBg)
+                                    .border(
+                                        width = if (isClipDragging) 2.dp else if (isSelected) 1.5.dp else 0.5.dp,
+                                        color = clipBorderColor,
+                                        shape = RoundedCornerShape(6.dp)
+                                    )
+                                    .pointerInput(clip.id) {
+                                        detectDragGesturesAfterLongPress(
+                                            onDragStart = {
+                                                draggingClipId = clip.id
+                                                dragCumulativeOffsetPx = 0f
+                                                onSelectClip(clip.id)
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            },
+                                            onDrag = { change, dragAmount ->
+                                                val activeId = draggingClipId ?: clip.id
+                                                val currentList = currentClips
+                                                val currentIdx = currentList.indexOfFirst { it.id == activeId }
+                                                if (currentIdx != -1 && currentList.size > 1) {
+                                                    change.consume()
+                                                    dragCumulativeOffsetPx += dragAmount.x
+
+                                                    // Swap Right
+                                                    if (currentIdx < currentList.size - 1) {
+                                                        val nextSpan = currentSpans.getOrNull(currentIdx + 1)
+                                                        val nextWidthPx = ((nextSpan?.durationSec ?: 1f) * pixelsPerSec * density).coerceAtLeast(20f * density)
+                                                        val swapThreshold = (nextWidthPx * 0.45f).coerceIn(24f * density, 140f * density)
+                                                        if (dragCumulativeOffsetPx > swapThreshold) {
+                                                            onReorderClips(currentIdx, currentIdx + 1)
+                                                            dragCumulativeOffsetPx -= nextWidthPx
+                                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                        }
+                                                    }
+
+                                                    // Swap Left
+                                                    if (currentIdx > 0) {
+                                                        val prevSpan = currentSpans.getOrNull(currentIdx - 1)
+                                                        val prevWidthPx = ((prevSpan?.durationSec ?: 1f) * pixelsPerSec * density).coerceAtLeast(20f * density)
+                                                        val swapThreshold = (prevWidthPx * 0.45f).coerceIn(24f * density, 140f * density)
+                                                        if (dragCumulativeOffsetPx < -swapThreshold) {
+                                                            onReorderClips(currentIdx, currentIdx - 1)
+                                                            dragCumulativeOffsetPx += prevWidthPx
+                                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            onDragEnd = {
+                                                draggingClipId = null
+                                                dragCumulativeOffsetPx = 0f
+                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            },
+                                            onDragCancel = {
+                                                draggingClipId = null
+                                                dragCumulativeOffsetPx = 0f
                                             }
                                         )
-                                    )
-                            )
-                            val handleWidth = if (clipWidthDp < 36.dp) 10.dp else 14.dp
-                            val touchHandleWidth = 32.dp
-
-                            // Left Trim Handle (Amber bracket on active clip)
-                            if (isSelected) {
-                                Box(
-                                    modifier = Modifier
-                                        .align(Alignment.CenterStart)
-                                        .width(touchHandleWidth)
-                                        .fillMaxHeight()
-                                        .zIndex(25f)
-                                        .pointerInput(clip.id, density, pixelsPerSec) {
-                                            detectDragGestures(
-                                                onDragStart = {
-                                                    onScrubStart()
-                                                    onTrimStart()
-                                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                },
-                                                onDrag = { change, dragAmount ->
-                                                    change.consume()
-                                                    val deltaSec = dragAmount.x / (pixelsPerSec * density)
-                                                    onTrimLeft(clip.id, deltaSec)
-                                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                },
-                                                onDragEnd = {
-                                                    onScrubEnd(currentPlayheadTime)
-                                                },
-                                                onDragCancel = {
-                                                    onScrubEnd(currentPlayheadTime)
-                                                }
-                                            )
-                                        },
-                                    contentAlignment = Alignment.CenterStart
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .width(handleWidth)
-                                            .fillMaxHeight()
-                                            .background(Color(0xFFF59E0B)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Row(horizontalArrangement = Arrangement.spacedBy(1.dp)) {
-                                            Box(Modifier.width(1.dp).height(14.dp).background(Color.Black.copy(alpha = 0.6f)))
-                                            Box(Modifier.width(1.dp).height(14.dp).background(Color.Black.copy(alpha = 0.6f)))
-                                        }
                                     }
-                                }
-                            }
-
-                            // Clip Information
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(
-                                        start = if (isSelected) (handleWidth + 6.dp) else 8.dp,
-                                        end = if (isSelected) (handleWidth + 6.dp) else 8.dp,
-                                        top = 4.dp,
-                                        bottom = 4.dp
-                                    ),
-                                verticalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(2.dp))
-                                            .background(if (isSelected) Color.White.copy(alpha = 0.22f) else colors.primary.copy(alpha = 0.15f))
-                                            .padding(horizontal = 4.dp, vertical = 1.dp)
-                                    ) {
-                                        Text(
-                                            text = "V1",
-                                            fontSize = 8.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = if (isSelected) Color.White else colors.primary
+                                    .pointerInput(clip.id, span.timelineStartSec, span.durationSec, pixelsPerSec, density) {
+                                        detectTapGestures(
+                                            onTap = { offset ->
+                                                onSelectClip(clip.id)
+                                                val tappedSec = (span.timelineStartSec + (offset.x / (pixelsPerSec * density))).coerceIn(0f, totalDurationSec)
+                                                onScrubStart()
+                                                onScrubSec(tappedSec)
+                                                onScrubEnd(tappedSec)
+                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            }
                                         )
                                     }
-                                    Text(
-                                        text = clip.name,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = textColor,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "${String.format("%.1f", clip.trimmedDurationSec)}s",
-                                        fontSize = 9.sp,
-                                        color = subTextColor,
-                                        fontFamily = FontFamily.Monospace,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                    if (clip.speed != 1f) {
-                                        Text(
-                                            text = "${clip.speed}x",
-                                            fontSize = 8.5.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = if (isSelected) Color(0xFFFDE047) else colors.primary
-                                        )
-                                    }
-                                }
-                            }
-
-                            // Right Trim Handle (Amber bracket on active clip)
-                            if (isSelected) {
-                                Box(
-                                    modifier = Modifier
-                                        .align(Alignment.CenterEnd)
-                                        .width(touchHandleWidth)
-                                        .fillMaxHeight()
-                                        .zIndex(25f)
-                                        .pointerInput(clip.id, density, pixelsPerSec) {
-                                            detectDragGestures(
-                                                onDragStart = {
-                                                    onScrubStart()
-                                                    onTrimStart()
-                                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                },
-                                                onDrag = { change, dragAmount ->
-                                                    change.consume()
-                                                    val deltaSec = dragAmount.x / (pixelsPerSec * density)
-                                                    onTrimRight(clip.id, deltaSec)
-                                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                },
-                                                onDragEnd = {
-                                                    onScrubEnd(currentPlayheadTime)
-                                                },
-                                                onDragCancel = {
-                                                    onScrubEnd(currentPlayheadTime)
-                                                }
-                                            )
-                                        },
-                                    contentAlignment = Alignment.CenterEnd
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .width(handleWidth)
-                                            .fillMaxHeight()
-                                            .background(Color(0xFFF59E0B)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Row(horizontalArrangement = Arrangement.spacedBy(1.dp)) {
-                                            Box(Modifier.width(1.dp).height(14.dp).background(Color.Black.copy(alpha = 0.6f)))
-                                            Box(Modifier.width(1.dp).height(14.dp).background(Color.Black.copy(alpha = 0.6f)))
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // Interactive Transition Badge Between Clips
-                        if (i < timelineSpans.size - 1) {
-                            val trans = clip.transitionToNext
-                            Box(
-                                modifier = Modifier
-                                    .padding(horizontal = 2.dp)
-                                    .size(24.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        if (trans != FcpTransitionType.NONE) colors.primary
-                                        else if (colors.isDark) Color(0xFF2E3444) else Color(0xFFE2E8F0)
-                                    )
-                                    .clickable {
-                                        onEditTransition(clip.id)
-                                    },
-                                contentAlignment = Alignment.Center
                             ) {
-                                Icon(
-                                    imageVector = trans.icon,
-                                    contentDescription = trans.label,
-                                    tint = if (trans != FcpTransitionType.NONE) Color.White else colors.textMuted,
-                                    modifier = Modifier.size(13.dp)
+                                // 1. Live Video Preview Thumbnails Filmstrip
+                                FcpClipFilmstrip(
+                                    clip = clip,
+                                    clipWidthDp = clipWidthDp,
+                                    modifier = Modifier.fillMaxSize()
                                 )
+
+                                // 2. Cinematic Gradient Scrim (Keeps labels, badges, and trim handles high-contrast & sharp)
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(
+                                            Brush.verticalGradient(
+                                                colors = if (isSelected) {
+                                                    listOf(
+                                                        Color.Black.copy(alpha = 0.52f),
+                                                        Color.Black.copy(alpha = 0.08f),
+                                                        Color.Black.copy(alpha = 0.62f)
+                                                    )
+                                                } else {
+                                                    listOf(
+                                                        Color.Black.copy(alpha = 0.65f),
+                                                        Color.Black.copy(alpha = 0.35f),
+                                                        Color.Black.copy(alpha = 0.75f)
+                                                    )
+                                                }
+                                            )
+                                        )
+                                )
+
+                                // Floating DRAGGING badge when actively dragged
+                                if (isClipDragging) {
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.TopCenter)
+                                            .offset(y = (-14).dp)
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(Color(0xFF007AFF))
+                                            .border(0.5.dp, Color.White.copy(alpha = 0.8f), RoundedCornerShape(4.dp))
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                            .zIndex(150f)
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Lucide.Move,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(9.dp)
+                                            )
+                                            Text(
+                                                text = "DRAGGING",
+                                                fontSize = 8.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White
+                                            )
+                                        }
+                                    }
+                                }
+
+                                val handleWidth = if (clipWidthDp < 36.dp) 10.dp else 14.dp
+                                val touchHandleWidth = 36.dp
+
+                                // Left Trim Handle (Amber bracket on active clip)
+                                if (isSelected && !isClipDragging) {
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.CenterStart)
+                                            .width(touchHandleWidth)
+                                            .fillMaxHeight()
+                                            .zIndex(25f)
+                                            .pointerInput(clip.id, density, pixelsPerSec) {
+                                                detectDragGestures(
+                                                    onDragStart = {
+                                                        onScrubStart()
+                                                        onTrimStart()
+                                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                    },
+                                                    onDrag = { change, dragAmount ->
+                                                        change.consume()
+                                                        val deltaSec = dragAmount.x / (pixelsPerSec * density)
+                                                        onTrimLeft(clip.id, deltaSec)
+                                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                    },
+                                                    onDragEnd = {
+                                                        onScrubEnd(currentPlayheadTime)
+                                                    },
+                                                    onDragCancel = {
+                                                        onScrubEnd(currentPlayheadTime)
+                                                    }
+                                                )
+                                            },
+                                        contentAlignment = Alignment.CenterStart
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .width(handleWidth)
+                                                .fillMaxHeight()
+                                                .clip(RoundedCornerShape(topStart = 4.dp, bottomStart = 4.dp))
+                                                .background(Color(0xFFF59E0B)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Row(horizontalArrangement = Arrangement.spacedBy(1.dp)) {
+                                                Box(Modifier.width(1.dp).height(14.dp).background(Color.Black.copy(alpha = 0.6f)))
+                                                Box(Modifier.width(1.dp).height(14.dp).background(Color.Black.copy(alpha = 0.6f)))
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Clip Information
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(
+                                            start = if (isSelected) (handleWidth + 6.dp) else 8.dp,
+                                            end = if (isSelected) (handleWidth + 6.dp) else 8.dp,
+                                            top = 4.dp,
+                                            bottom = 4.dp
+                                        ),
+                                    verticalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                            modifier = Modifier.weight(1f, fill = false)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(2.dp))
+                                                    .background(if (isSelected) Color.White.copy(alpha = 0.22f) else colors.primary.copy(alpha = 0.15f))
+                                                    .padding(horizontal = 4.dp, vertical = 1.dp)
+                                            ) {
+                                                Text(
+                                                    text = "V1",
+                                                    fontSize = 8.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (isSelected) Color.White else colors.primary
+                                                )
+                                            }
+                                            Text(
+                                                text = clip.name,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = textColor,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+
+                                        // Tactile grip affordance (indicates hold & drag)
+                                        Icon(
+                                            imageVector = Lucide.GripVertical,
+                                            contentDescription = "Hold to drag",
+                                            tint = if (isSelected) Color.White.copy(alpha = 0.8f) else colors.textMuted.copy(alpha = 0.5f),
+                                            modifier = Modifier.size(11.dp)
+                                        )
+                                    }
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "${String.format("%.1f", clip.trimmedDurationSec)}s",
+                                            fontSize = 9.sp,
+                                            color = subTextColor,
+                                            fontFamily = FontFamily.Monospace,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                        if (clip.speed != 1f) {
+                                            Text(
+                                                text = "${clip.speed}x",
+                                                fontSize = 8.5.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (isSelected) Color(0xFFFDE047) else colors.primary
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // Right Trim Handle (Amber bracket on active clip)
+                                if (isSelected && !isClipDragging) {
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.CenterEnd)
+                                            .width(touchHandleWidth)
+                                            .fillMaxHeight()
+                                            .zIndex(25f)
+                                            .pointerInput(clip.id, density, pixelsPerSec) {
+                                                detectDragGestures(
+                                                    onDragStart = {
+                                                        onScrubStart()
+                                                        onTrimStart()
+                                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                    },
+                                                    onDrag = { change, dragAmount ->
+                                                        change.consume()
+                                                        val deltaSec = dragAmount.x / (pixelsPerSec * density)
+                                                        onTrimRight(clip.id, deltaSec)
+                                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                    },
+                                                    onDragEnd = {
+                                                        onScrubEnd(currentPlayheadTime)
+                                                    },
+                                                    onDragCancel = {
+                                                        onScrubEnd(currentPlayheadTime)
+                                                    }
+                                                )
+                                            },
+                                        contentAlignment = Alignment.CenterEnd
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .width(handleWidth)
+                                                .fillMaxHeight()
+                                                .clip(RoundedCornerShape(topEnd = 4.dp, bottomEnd = 4.dp))
+                                                .background(Color(0xFFF59E0B)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Row(horizontalArrangement = Arrangement.spacedBy(1.dp)) {
+                                                Box(Modifier.width(1.dp).height(14.dp).background(Color.Black.copy(alpha = 0.6f)))
+                                                Box(Modifier.width(1.dp).height(14.dp).background(Color.Black.copy(alpha = 0.6f)))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Interactive Transition Badge Between Clips
+                            if (i < timelineSpans.size - 1) {
+                                val trans = clip.transitionToNext
+                                Box(
+                                    modifier = Modifier
+                                        .padding(horizontal = 2.dp)
+                                        .size(24.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            if (trans != FcpTransitionType.NONE) colors.primary
+                                            else if (colors.isDark) Color(0xFF2E3444) else Color(0xFFE2E8F0)
+                                        )
+                                        .clickable {
+                                            onEditTransition(clip.id)
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = trans.icon,
+                                        contentDescription = trans.label,
+                                        tint = if (trans != FcpTransitionType.NONE) Color.White else colors.textMuted,
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                }
                             }
                         }
                     }
@@ -3871,7 +4060,7 @@ private fun FcpColorSliderRow(
                 Canvas(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(6.dp)
+                        .height(7.5.dp)
                 ) {
                     val w = size.width
                     val h = size.height
@@ -3975,6 +4164,7 @@ private fun FcpChromaSliderRow(
 @Composable
 private fun ColorTabContent(
     selectedClip: FcpClip?,
+    previewBitmap: Bitmap? = null,
     onUpdateClip: (FcpClip) -> Unit,
     onCommitClipChange: () -> Unit = {}
 ) {
@@ -4037,7 +4227,7 @@ private fun ColorTabContent(
                 }
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    // Exposure
+                    // Exposure (Sunlight Lux Multi-stop Gradient)
                     FcpColorSliderRow(
                         title = "Exposure",
                         icon = Lucide.Sun,
@@ -4051,10 +4241,10 @@ private fun ColorTabContent(
                         },
                         onValueChange = { onUpdateClip(selectedClip.copy(exposure = it)) },
                         onValueChangeFinished = onCommitClipChange,
-                        gradientColors = listOf(Color(0xFFF59E0B), Color(0xFFFBBF24))
+                        gradientColors = listOf(Color(0xFFD97706), Color(0xFFF59E0B), Color(0xFFFEF08A))
                     )
 
-                    // Contrast
+                    // Contrast (Deep Indigo / Violet Multi-stop Gradient)
                     FcpColorSliderRow(
                         title = "Contrast",
                         icon = Lucide.Contrast,
@@ -4065,10 +4255,10 @@ private fun ColorTabContent(
                         formatValue = { "${it.toInt()}%" },
                         onValueChange = { onUpdateClip(selectedClip.copy(contrast = it)) },
                         onValueChangeFinished = onCommitClipChange,
-                        gradientColors = listOf(Color(0xFF6366F1), Color(0xFF8B5CF6))
+                        gradientColors = listOf(Color(0xFF4338CA), Color(0xFF6366F1), Color(0xFFA5B4FC))
                     )
 
-                    // Saturation
+                    // Saturation (Chromatic Spectrum Multi-stop Gradient)
                     FcpColorSliderRow(
                         title = "Saturation",
                         icon = Lucide.Droplet,
@@ -4079,10 +4269,10 @@ private fun ColorTabContent(
                         formatValue = { "${it.toInt()}%" },
                         onValueChange = { onUpdateClip(selectedClip.copy(saturation = it)) },
                         onValueChangeFinished = onCommitClipChange,
-                        gradientColors = listOf(Color(0xFFEC4899), Color(0xFF8B5CF6), Color(0xFF06B6D4))
+                        gradientColors = listOf(Color(0xFF64748B), Color(0xFF06B6D4), Color(0xFF10B981), Color(0xFFF59E0B), Color(0xFFF43F5E))
                     )
 
-                    // Temperature
+                    // Temperature (Bipolar Arctic Blue to Sunset Amber)
                     FcpColorSliderRow(
                         title = "Temperature",
                         icon = Lucide.SlidersHorizontal,
@@ -4096,10 +4286,10 @@ private fun ColorTabContent(
                         },
                         onValueChange = { onUpdateClip(selectedClip.copy(temperature = it)) },
                         onValueChangeFinished = onCommitClipChange,
-                        gradientColors = listOf(Color(0xFF38BDF8), Color(0xFFF97316))
+                        gradientColors = listOf(Color(0xFF0284C7), Color(0xFF38BDF8), Color(0xFFF8FAFC), Color(0xFFF59E0B), Color(0xFFEA580C))
                     )
 
-                    // Tint
+                    // Tint (Bipolar Mint Emerald to Vivid Magenta)
                     FcpColorSliderRow(
                         title = "Tint",
                         icon = Lucide.Sparkles,
@@ -4113,30 +4303,34 @@ private fun ColorTabContent(
                         },
                         onValueChange = { onUpdateClip(selectedClip.copy(tint = it)) },
                         onValueChangeFinished = onCommitClipChange,
-                        gradientColors = listOf(Color(0xFF10B981), Color(0xFFD946EF))
+                        gradientColors = listOf(Color(0xFF059669), Color(0xFF34D399), Color(0xFFF8FAFC), Color(0xFFE879F9), Color(0xFFC026D3))
                     )
                 }
             }
         }
 
-        // Apple LUT Presets Grid
+        // Apple LUT Presets Grid with Real Video Frame Previews
         item {
             WorkspaceSectionCard(title = "CINEMATIC LUT PRESETS", icon = Lucide.Sparkles) {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
-                    modifier = Modifier.height(130.dp),
+                    modifier = Modifier.height(176.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(FcpLutPreset.entries) { preset ->
                         val isSelected = selectedClip.lut == preset
+                        val presetMatrix = remember(preset) {
+                            val gm = buildFcpColorMatrix(0f, 100f, 100f, 0f, 0f, preset)
+                            androidx.compose.ui.graphics.ColorMatrix(gm.array)
+                        }
+
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(56.dp)
-                                .shadow(if (isSelected) 3.dp else 1.dp, RoundedCornerShape(10.dp))
+                                .height(68.dp)
+                                .shadow(if (isSelected) 4.dp else 1.dp, RoundedCornerShape(10.dp))
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(Brush.linearGradient(preset.colors))
                                 .border(
                                     width = if (isSelected) 2.dp else 1.dp,
                                     color = if (isSelected) colors.primary else colors.glassBorder,
@@ -4147,11 +4341,42 @@ private fun ColorTabContent(
                                     onCommitClipChange()
                                     ToastManager.showToast("LUT: ${preset.label}")
                                 }
-                                .padding(10.dp),
-                            contentAlignment = Alignment.BottomStart
                         ) {
+                            if (previewBitmap != null) {
+                                Image(
+                                    bitmap = previewBitmap.asImageBitmap(),
+                                    contentDescription = preset.label,
+                                    contentScale = ContentScale.Crop,
+                                    colorFilter = androidx.compose.ui.graphics.ColorFilter.colorMatrix(presetMatrix),
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                                // Gradient scrim for high legibility
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(
+                                            Brush.verticalGradient(
+                                                listOf(
+                                                    Color.Transparent,
+                                                    Color(0x44000000),
+                                                    Color(0xCC000000)
+                                                )
+                                            )
+                                        )
+                                )
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(Brush.linearGradient(preset.colors))
+                                )
+                            }
+
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .align(Alignment.BottomStart)
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 9.dp, vertical = 7.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -4159,15 +4384,29 @@ private fun ColorTabContent(
                                     text = preset.label,
                                     color = Color.White,
                                     fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
+                                    style = TextStyle(
+                                        shadow = androidx.compose.ui.graphics.Shadow(
+                                            color = Color.Black.copy(alpha = 0.85f),
+                                            blurRadius = 4f
+                                        )
+                                    )
                                 )
                                 if (isSelected) {
-                                    Icon(
-                                        imageVector = Lucide.Check,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(14.dp)
-                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .size(18.dp)
+                                            .clip(CircleShape)
+                                            .background(colors.primary),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Lucide.Check,
+                                            contentDescription = null,
+                                            tint = Color.White,
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -4464,7 +4703,7 @@ private fun AudioTabContent(
                             isBipolar = false,
                             formatValue = { v -> "${v.toInt()}%" },
                             onValueChange = { onAudioVolumeChange(it / 100f) },
-                            gradientColors = listOf(Color(0xFF10B981), Color(0xFF06B6D4))
+                            gradientColors = listOf(Color(0xFF10B981), Color(0xFF84CC16), Color(0xFFFACC15), Color(0xFF38BDF8))
                         )
 
                         // Quick Action Buttons
@@ -4555,7 +4794,7 @@ private fun AudioTabContent(
                             if (iv > 0) "+$iv dB" else if (iv < 0) "$iv dB" else "0 dB"
                         },
                         onValueChange = onGainChange,
-                        gradientColors = listOf(Color(0xFF10B981), Color(0xFF3B82F6))
+                        gradientColors = listOf(Color(0xFF10B981), Color(0xFF84CC16), Color(0xFFFACC15), Color(0xFF38BDF8))
                     )
 
                     // Voice Isolation Switch
@@ -4685,7 +4924,7 @@ private fun EffectsTabContent(
                             isBipolar = false,
                             formatValue = { "f/${String.format("%.1f", it)}" },
                             onValueChange = onBokehChange,
-                            gradientColors = listOf(Color(0xFF8B5CF6), Color(0xFFEC4899))
+                            gradientColors = listOf(Color(0xFF6366F1), Color(0xFF8B5CF6), Color(0xFF06B6D4))
                         )
                     }
                 }
