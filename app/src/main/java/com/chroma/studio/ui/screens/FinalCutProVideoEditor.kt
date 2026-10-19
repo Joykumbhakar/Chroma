@@ -1169,118 +1169,115 @@ fun FinalCutProVideoEditorScreen(
         ) {
 
             // ══════════════════════════════════════════════════════════════════
-            // 1. CHROMA APP BAR (Crisp Solid Header - No Blur)
+            // 1. CHROMA APP BAR (Streamlined Header - Clean, No Collisions)
             // ══════════════════════════════════════════════════════════════════
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(64.dp)
+                    .height(56.dp)
                     .background(colors.glassBg)
                     .border(width = 0.5.dp, color = colors.glassBorder)
             ) {
-                Box(
+                Row(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 16.dp)
+                        .padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Left: Back button + Clip counter badge
+                    // Left: Back button + Branding & Clip count
                     Row(
-                        modifier = Modifier.align(Alignment.CenterStart),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         IconGhostButton(
                             icon = Lucide.ArrowLeft,
                             contentDesc = "Back",
-                            onClick = onBack
+                            onClick = {
+                                SoundManager.playTap(context)
+                                onBack()
+                            }
                         )
 
-                        // Clip count pill
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(50))
-                                .background(colors.primary.copy(alpha = 0.12f))
-                                .padding(horizontal = 10.dp, vertical = 4.dp)
-                        ) {
+                        Column(verticalArrangement = Arrangement.Center) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "Chroma",
+                                    color = colors.textMain,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp,
+                                    letterSpacing = (-0.3).sp
+                                )
+                                Text(
+                                    text = "Studio",
+                                    color = colors.primary,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp,
+                                    letterSpacing = (-0.3).sp
+                                )
+                            }
                             Text(
-                                text = "${clips.size} ${if (clips.size == 1) "Clip" else "Clips"}",
-                                color = colors.primary,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
+                                text = "${clips.size} ${if (clips.size == 1) "clip" else "clips"}",
+                                color = colors.textMuted,
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.Medium
                             )
                         }
                     }
 
-                    // Center: Chroma Video Studio Branding
+                    // Right: Undo, Redo (No circles), Divider, Export Button
                     Row(
-                        modifier = Modifier.align(Alignment.Center),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Text(
-                            text = "Chroma",
-                            color = colors.textMain,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 17.sp,
-                            letterSpacing = (-0.4).sp
-                        )
-                        Text(
-                            text = "Studio",
-                            color = colors.primary,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 17.sp,
-                            letterSpacing = (-0.4).sp
-                        )
-                    }
-
-                    // Right: Undo, Redo, Divider, Next Button
-                    Row(
-                        modifier = Modifier.align(Alignment.CenterEnd),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         IconGhostButton(
                             icon = Lucide.Undo,
                             contentDesc = "Undo",
                             disabled = undoStack.isEmpty(),
-                            onClick = { undo() }
+                            onClick = {
+                                SoundManager.playTap(context)
+                                undo()
+                            }
                         )
                         IconGhostButton(
                             icon = Lucide.Redo,
                             contentDesc = "Redo",
                             disabled = redoStack.isEmpty(),
-                            onClick = { redo() }
+                            onClick = {
+                                SoundManager.playTap(context)
+                                redo()
+                            }
                         )
 
                         // Divider
                         Box(
                             modifier = Modifier
-                                .padding(horizontal = 2.dp)
+                                .padding(horizontal = 4.dp)
                                 .width(1.dp)
-                                .height(20.dp)
+                                .height(18.dp)
                                 .background(colors.glassBorder)
                         )
 
-                        // Next / Export Primary Button
+                        // Export Primary Button
                         PrimaryGradientButton(
                             onClick = {
                                 SoundManager.playTap(context)
                                 showExportSheet = true
                             },
-                            height = 36.dp,
+                            height = 34.dp,
                             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                         ) {
                             Text(
                                 text = "Export",
                                 color = Color.White,
-                                fontSize = 13.sp,
+                                fontSize = 12.5.sp,
                                 fontWeight = FontWeight.Bold
                             )
                             Icon(
                                 imageVector = Lucide.ChevronRight,
                                 contentDescription = null,
                                 tint = Color.White,
-                                modifier = Modifier.size(14.dp)
+                                modifier = Modifier.size(13.dp)
                             )
                         }
                     }
@@ -6914,8 +6911,6 @@ private fun IconGhostButton(
     Box(
         modifier = Modifier
             .size(36.dp)
-            .clip(CircleShape)
-            .glossyBorder(CircleShape, colors)
             .clickable(
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() },
@@ -6923,11 +6918,11 @@ private fun IconGhostButton(
             ) { onClick() },
         contentAlignment = Alignment.Center
     ) {
-        val tint = if (disabled) colors.textMuted.copy(alpha = 0.35f) else colors.textMain
+        val tint = if (disabled) colors.textMuted.copy(alpha = 0.28f) else colors.textMain
         Icon(
             imageVector = icon,
             contentDescription = contentDesc,
-            modifier = Modifier.size(18.dp),
+            modifier = Modifier.size(19.dp),
             tint = tint
         )
     }
