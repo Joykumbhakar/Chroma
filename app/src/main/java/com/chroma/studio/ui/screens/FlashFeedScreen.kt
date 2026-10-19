@@ -586,10 +586,12 @@ private fun FlashVideoItem(
         )
 
         // ── Right-Side Vertical Action Column (Reels Style) ───────────────────
+        // Bottom padding = nav bar inset + comment bar (≈60dp) + breathing room
+        val navBarBottomDp = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         Column(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(end = 12.dp, bottom = 68.dp),
+                .padding(end = 12.dp, bottom = 68.dp + navBarBottomDp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -597,40 +599,44 @@ private fun FlashVideoItem(
             ReelsActionButton(
                 icon = if (isLiked) ChromaIcons.HeartFilled else Lucide.Heart,
                 tint = if (isLiked) Color(0xFFFF3B30) else Color.White,
-                label = formatCount(video.likesCount),
+                label = if (video.hideLikesCount) "" else formatCount(video.likesCount),
                 scale = likeScale,
                 onClick = onLike
             )
             
-            // Comments
-            ReelsActionButton(
-                icon = Lucide.MessageCircle,
-                tint = Color.White,
-                label = formatCount(video.commentCount),
-                onClick = { showComments = true }
-            )
+            // Comments (only if comments are not turned off)
+            if (!video.turnOffComments) {
+                ReelsActionButton(
+                    icon = Lucide.MessageCircle,
+                    tint = Color.White,
+                    label = formatCount(video.commentCount),
+                    onClick = { showComments = true }
+                )
+            }
 
-            // Remix (Heart-shaped Handshake)
-            ReelsActionButton(
-                icon = Lucide.HeartHandshake,
-                tint = Color.White,
-                label = formatCount(video.remixCount),
-                onClick = {
-                    android.widget.Toast.makeText(context, "Preparing for Remix...", android.widget.Toast.LENGTH_SHORT).show()
-                    flashVm.downloadVideoForRemix(
-                        context = context,
-                        videoUrl = video.videoUrl,
-                        onProgress = { },
-                        onComplete = { uri ->
-                            if (uri != null) {
-                                onRemixRequested(uri, video.id, video.authorUsername)
-                            } else {
-                                android.widget.Toast.makeText(context, "Failed to download video.", android.widget.Toast.LENGTH_SHORT).show()
+            // Remix (Heart-shaped Handshake) (only if remix is not turned off)
+            if (!video.turnOffRemix) {
+                ReelsActionButton(
+                    icon = Lucide.HeartHandshake,
+                    tint = Color.White,
+                    label = formatCount(video.remixCount),
+                    onClick = {
+                        android.widget.Toast.makeText(context, "Preparing for Remix...", android.widget.Toast.LENGTH_SHORT).show()
+                        flashVm.downloadVideoForRemix(
+                            context = context,
+                            videoUrl = video.videoUrl,
+                            onProgress = { },
+                            onComplete = { uri ->
+                                if (uri != null) {
+                                    onRemixRequested(uri, video.id, video.authorUsername)
+                                } else {
+                                    android.widget.Toast.makeText(context, "Failed to download video.", android.widget.Toast.LENGTH_SHORT).show()
+                                }
                             }
-                        }
-                    )
-                }
-            )
+                        )
+                    }
+                )
+            }
 
             // Share / Direct Paper Plane
             ReelsActionButton(
@@ -695,7 +701,7 @@ private fun FlashVideoItem(
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(start = 16.dp, end = 76.dp, bottom = 64.dp)
+                .padding(start = 16.dp, end = 76.dp, bottom = 64.dp + navBarBottomDp)
         ) {
             // User Row (Avatar + @username + Verified + Follow button)
             Row(
@@ -1359,8 +1365,9 @@ fun FlashCommentsSheet(
                 .fillMaxWidth()
                 .fillMaxHeight(0.75f)
         ) {
+            val displayCommentCount = maxOf(video.commentCount, comments.size)
             Text(
-                text = "${video.commentCount} comments",
+                text = "$displayCommentCount comments",
                 color = Color(0xFF1C1C1E),
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
@@ -1418,28 +1425,51 @@ fun FlashCommentsSheet(
                                         )
                                     }
                                     Spacer(Modifier.width(8.dp))
-                                    Text(
-                                        android.text.format.DateUtils.getRelativeTimeSpanString(
-                                            comment.timestamp,
-                                            System.currentTimeMillis(),
-                                            android.text.format.DateUtils.MINUTE_IN_MILLIS
-                                        ).toString(),
-                                        color = Color(0xFF9CA3AF),
-                                        fontSize = 11.sp
-                                    )
+                                    if (comment.isPending) {
+                                        Text(
+                                            "Sending...",
+                                            color = Color(0xFF007AFF),
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    } else if (comment.isError) {
+                                        Text(
+                                            "Failed • Tap to retry",
+                                            color = Color(0xFFFF3B30),
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            modifier = Modifier.clickable { commentVm.retryComment(comment) }
+                                        )
+                                    } else {
+                                        Text(
+                                            android.text.format.DateUtils.getRelativeTimeSpanString(
+                                                comment.timestamp,
+                                                System.currentTimeMillis(),
+                                                android.text.format.DateUtils.MINUTE_IN_MILLIS
+                                            ).toString(),
+                                            color = Color(0xFF9CA3AF),
+                                            fontSize = 11.sp
+                                        )
+                                    }
                                 }
                                 Spacer(Modifier.height(4.dp))
-                                Text(comment.text, color = Color(0xFF374151), fontSize = 14.sp)
-                                Spacer(Modifier.height(6.dp))
                                 Text(
-                                    "Reply",
-                                    color = Color(0xFF6B7280),
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    modifier = Modifier.clickable {
-                                        onReplyWithFlash(comment.id)
-                                    }
+                                    comment.text,
+                                    color = if (comment.isError) Color(0xFF9CA3AF) else Color(0xFF374151),
+                                    fontSize = 14.sp
                                 )
+                                Spacer(Modifier.height(6.dp))
+                                if (!comment.isPending && !comment.isError) {
+                                    Text(
+                                        "Reply",
+                                        color = Color(0xFF6B7280),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        modifier = Modifier.clickable {
+                                            onReplyWithFlash(comment.id)
+                                        }
+                                    )
+                                }
                             }
                             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(start = 8.dp)) {
                                 val liked = FirebaseAuth.getInstance().currentUser?.uid?.let { comment.likedBy.contains(it) } == true
@@ -1549,10 +1579,11 @@ private fun FlashFeedSkeleton() {
         }
 
         // Mock Bottom Info
+        val skeletonNavBarDp = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(start = 16.dp, end = 80.dp, bottom = 64.dp)
+                .padding(start = 16.dp, end = 80.dp, bottom = 64.dp + skeletonNavBarDp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(36.dp).clip(CircleShape).flashShimmerEffect())
@@ -1569,7 +1600,7 @@ private fun FlashFeedSkeleton() {
         Column(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(end = 12.dp, bottom = 68.dp),
+                .padding(end = 12.dp, bottom = 68.dp + skeletonNavBarDp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {

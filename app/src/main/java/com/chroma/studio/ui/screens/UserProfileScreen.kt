@@ -170,8 +170,14 @@ fun UserProfileScreen(
     var profile by remember { mutableStateOf<UserProfile?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var isFollowing by remember { mutableStateOf(false) }
+    val globalFollowingIds by com.chroma.studio.data.mutation.OptimisticFollowManager.followingUserIds.collectAsState()
+    val followerDeltas by com.chroma.studio.data.mutation.OptimisticFollowManager.followerCountDeltas.collectAsState()
+    val isFollowingEffective = globalFollowingIds.contains(userId) || isFollowing
+    val effectiveFollowerCount = maxOf(0, (profile?.followersCount ?: 0) + (followerDeltas[userId] ?: 0))
+    val effectiveProfile = profile?.copy(followersCount = effectiveFollowerCount)
     var mutualFollowers by remember { mutableStateOf<List<UserProfile>>(emptyList()) }
     val likedWorkIds by discoverVm.likedWorkIds.collectAsState()
+    val savedWorkIds by discoverVm.savedWorkIds.collectAsState()
 
     val currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
     val isCurrentUser = currentUserId == userId
@@ -268,7 +274,11 @@ fun UserProfileScreen(
 
         if (currentUserId != null && currentUserId != userId) {
             launch {
-                isFollowing = discoverVm.repository.checkIsFollowing(currentUserId, userId)
+                val serverFollowing = discoverVm.repository.checkIsFollowing(currentUserId, userId)
+                isFollowing = serverFollowing
+                if (serverFollowing) {
+                    com.chroma.studio.data.mutation.OptimisticFollowManager.seedFollowing(setOf(userId))
+                }
             }
             launch {
                 mutualFollowers = discoverVm.repository.getMutualFollowers(currentUserId, userId)
@@ -281,7 +291,7 @@ fun UserProfileScreen(
         }
     }
 
-    val isRestricted = profile?.isPrivateAccount == true && !isCurrentUser && !isFollowing
+    val isRestricted = profile?.isPrivateAccount == true && !isCurrentUser && !isFollowingEffective
 
     if (isLoading) {
         SkeletonUserProfile(onBack = { if (showBackButton) onBack() })
@@ -364,9 +374,9 @@ fun UserProfileScreen(
 
             item(span = { GridItemSpan(maxLineSpan) }) {
                 UserProfileBioDetailsSection(
-                    profile = profile,
+                    profile = effectiveProfile,
                     isCurrentUser = isCurrentUser,
-                    isFollowing = isFollowing,
+                    isFollowing = isFollowingEffective,
                     mutualFollowers = mutualFollowers,
                     userId = userId,
                     onShowShareCard = { showShareCardModal = true },
@@ -376,10 +386,10 @@ fun UserProfileScreen(
             item(span = { GridItemSpan(maxLineSpan) }) {
                 UserProfileActionsStoriesSection(
                     isCurrentUser = isCurrentUser,
-                    isFollowing = isFollowing,
+                    isFollowing = isFollowingEffective,
                     userId = userId,
                     currentUserId = currentUserId,
-                    profile = profile,
+                    profile = effectiveProfile,
                     filteredStories = filteredStories,
                     hasMyStory = isCurrentUser && (myStories.isNotEmpty() || filteredStories.isNotEmpty()),
                     profileTabIcons = profileTabIcons,
@@ -388,18 +398,7 @@ fun UserProfileScreen(
                     onToggleFollow = {
                         if (currentUserId == null) onRequireLogin()
                         else {
-                            val prevFollowing = isFollowing
-                            val prevProfile = profile
-                            isFollowing = !isFollowing
-                            profile = profile?.copy(followersCount = (profile?.followersCount ?: 0) + if (isFollowing) 1 else -1)
-                            scope.launch {
-                                val success = discoverVm.repository.toggleFollow(currentUserId, userId)
-                                if (!success) {
-                                    isFollowing = prevFollowing
-                                    profile = prevProfile
-                                    ToastManager.showToast("Failed to update follow status")
-                                }
-                            }
+                            discoverVm.toggleFollow(userId, currentUserId, baseFollowing = isFollowingEffective)
                         }
                     },
                     onNavigateToEditProfile = onNavigateToEditProfile,
@@ -730,6 +729,7 @@ fun UserProfileScreen(
                         FeedPostCard(
                             work = work,
                             isLiked = likedWorkIds.contains(work.id),
+                            isSaved = savedWorkIds.contains(work.id),
                             repository = repository,
                             onRequireLogin = onRequireLogin,
                             onLikeClick = {
@@ -741,10 +741,37 @@ fun UserProfileScreen(
                             },
                             onAuthorClick = { _ -> },
                             onDownloadClick = {
-                                if (currentUserId != null) onDownloadWork(work) else onRequireLogin()
+                                if (currentUserId != null) {
+                                    discoverVm.trackDownload(work.id)
+                                    onDownloadWork(work)
+                                } else onRequireLogin()
                             },
                             onRemixWork = {
-                                if (currentUserId != null) onRemixWork(work) else onRequireLogin()
+                                if (currentUserId != null) {
+                                    discoverVm.trackRemix(work.id)
+                                    onRemixWork(work)
+                                } else onRequireLogin()
+                            },
+                            onRemixClick = {
+                                if (currentUserId != null) {
+                                    discoverVm.trackRemix(work.id)
+                                    onRemixWork(work)
+                                } else onRequireLogin()
+                            },
+                            onSaveClick = {
+                                if (currentUserId != null) {
+                                    discoverVm.toggleSave(work.id)
+                                } else onRequireLogin()
+                            },
+                            onShareClick = {
+                                val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(android.content.Intent.EXTRA_TEXT, "Check out '${work.title}' by @${work.authorUsername} on Oscellion: Oscellion://post/${work.id}")
+                                }
+                                context.startActivity(android.content.Intent.createChooser(shareIntent, "Share Post"))
+                                if (currentUserId != null) {
+                                    discoverVm.trackShare(work.id)
+                                }
                             },
                             onArchiveWork = { workId -> discoverVm.archiveWork(workId) },
                             onDeleteWork = { workId ->

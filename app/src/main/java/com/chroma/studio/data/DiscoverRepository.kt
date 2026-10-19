@@ -73,13 +73,9 @@ class DiscoverRepository {
         )
         collection.document(newWorkId).set(communityWork).await()
         
-        // Increment remix count on the original post if this is a remix
+        // Increment remix count on the original post if this is a remix (1 count per user)
         if (!work.remixedFromPostId.isNullOrEmpty()) {
-            try {
-                collection.document(work.remixedFromPostId).update("remixCount", FieldValue.increment(1)).await()
-            } catch (e: Exception) {
-                Log.w("DiscoverRepository", "Could not increment remix count", e)
-            }
+            incrementRemixCount(work.remixedFromPostId, user.uid)
         }
     }
 
@@ -127,7 +123,189 @@ class DiscoverRepository {
         }
     }
 
+    suspend fun uploadMultiImagePost(
+        imageBytesList: List<ByteArray>,
+        caption: String,
+        description: String,
+        aspectRatio: String,
+        tags: List<String>,
+        mentions: List<String>,
+        categoryTag: String? = null,
+        hideLikesCount: Boolean = false,
+        turnOffComments: Boolean = false,
+        turnOffRemix: Boolean = false
+    ): Boolean {
+        return try {
+            val user = auth.currentUser ?: throw Exception("User not authenticated")
+            val userProfile = getUserProfile(user.uid) ?: throw Exception("User profile not found")
+
+            val uploadedUrls = mutableListOf<String>()
+            for (bytes in imageBytesList) {
+                val url = CloudinaryClient.uploadImage(bytes, folder = user.uid)
+                if (url != null) {
+                    uploadedUrls.add(url)
+                }
+            }
+            if (uploadedUrls.isEmpty()) {
+                throw Exception("Failed to upload images")
+            }
+
+            val newWorkId = collection.document().id
+            val allTags = if (!categoryTag.isNullOrBlank()) (tags + categoryTag).distinct() else tags
+            val communityWork = DiscoverPost(
+                id = newWorkId,
+                title = caption,
+                description = description,
+                imageUrl = uploadedUrls.firstOrNull(),
+                imageUrls = uploadedUrls,
+                postType = "image",
+                tags = allTags,
+                mentions = mentions,
+                creatorId = user.uid,
+                authorUsername = userProfile.username,
+                authorDisplayName = userProfile.displayName,
+                authorAvatarUrl = userProfile.avatarUrl,
+                authorVerified = userProfile.verified,
+                aspectRatio = aspectRatio,
+                trendingTag = categoryTag,
+                timestamp = System.currentTimeMillis(),
+                likesCount = 0,
+                hideLikesCount = hideLikesCount,
+                hideRemixesCount = turnOffRemix,
+                turnOffComments = turnOffComments,
+                turnOffRemix = turnOffRemix
+            )
+            collection.document(newWorkId).set(communityWork).await()
+            Log.d("DiscoverRepository", "Multi-image post created: $newWorkId with ${uploadedUrls.size} images")
+            true
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("DiscoverRepository", "Error uploading multi-image post", e)
+            false
+        }
+    }
+
+    suspend fun publishMultiWork(
+        works: List<ChromaWork>,
+        caption: String,
+        description: String,
+        aspectRatio: String,
+        tags: List<String>,
+        mentions: List<String>,
+        categoryTag: String? = null,
+        hideLikesCount: Boolean = false,
+        turnOffComments: Boolean = false,
+        turnOffRemix: Boolean = false
+    ): Boolean {
+        return try {
+            val user = auth.currentUser ?: throw Exception("User not authenticated")
+            val userProfile = getUserProfile(user.uid) ?: throw Exception("User profile not found")
+
+            val compressedJsonList = works.map { work ->
+                com.chroma.studio.utils.DataCompressionUtils.compressText(work.layersJson)
+            }
+
+            val newWorkId = collection.document().id
+            val allTags = if (!categoryTag.isNullOrBlank()) (tags + categoryTag).distinct() else tags
+            val primaryWork = works.firstOrNull()
+            val communityWork = DiscoverPost(
+                id = newWorkId,
+                title = if (caption.isNotBlank()) caption else (primaryWork?.name ?: "Untitled Work"),
+                description = if (description.isNotBlank()) description else (primaryWork?.description ?: ""),
+                jsonUrl = compressedJsonList.firstOrNull() ?: "",
+                workUrls = compressedJsonList,
+                postType = "work",
+                tags = allTags,
+                mentions = mentions,
+                creatorId = user.uid,
+                authorUsername = userProfile.username,
+                authorDisplayName = userProfile.displayName,
+                authorAvatarUrl = userProfile.avatarUrl,
+                authorVerified = userProfile.verified,
+                aspectRatio = aspectRatio,
+                trendingTag = categoryTag,
+                timestamp = System.currentTimeMillis(),
+                likesCount = 0,
+                hideLikesCount = hideLikesCount,
+                hideRemixesCount = turnOffRemix,
+                turnOffComments = turnOffComments,
+                turnOffRemix = turnOffRemix,
+                remixedFromPostId = primaryWork?.remixedFromPostId,
+                remixedFromAuthorId = primaryWork?.remixedFromAuthorId,
+                remixedFromAuthorUsername = primaryWork?.remixedFromAuthorUsername,
+                remixedFromAuthorDisplayName = primaryWork?.remixedFromAuthorDisplayName,
+                remixedFromAuthorAvatar = primaryWork?.remixedFromAuthorAvatar,
+                remixedFromAuthorVerified = primaryWork?.remixedFromAuthorVerified ?: false
+            )
+            collection.document(newWorkId).set(communityWork).await()
+            if (!primaryWork?.remixedFromPostId.isNullOrEmpty()) {
+                incrementRemixCount(primaryWork.remixedFromPostId!!, user.uid)
+            }
+            true
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("DiscoverRepository", "Error publishing multi work", e)
+            false
+        }
+    }
+
+    /**
+     * Upload a video post to the Community (community_works) feed.
+     * Expects an already-processed/trimmed video [videoUrl] and optional [thumbnailUrl]
+     * — the ViewModel handles all FFmpeg trimming/compression before calling this.
+     */
+    suspend fun uploadCommunityVideoPost(
+        videoUrl: String,
+        thumbnailUrl: String,
+        caption: String,
+        description: String,
+        aspectRatio: String,
+        tags: List<String>,
+        mentions: List<String>,
+        duration: Long = 0L,
+        hideLikesCount: Boolean = false,
+        turnOffComments: Boolean = false,
+        turnOffRemix: Boolean = false
+    ): Boolean {
+        return try {
+            val user = auth.currentUser ?: throw Exception("User not authenticated")
+            val userProfile = getUserProfile(user.uid) ?: throw Exception("User profile not found")
+
+            val newWorkId = collection.document().id
+            val communityWork = DiscoverPost(
+                id = newWorkId,
+                title = caption,
+                description = description,
+                videoUrl = videoUrl,
+                thumbnailUrl = thumbnailUrl,
+                postType = "video",
+                tags = tags,
+                mentions = mentions,
+                creatorId = user.uid,
+                authorUsername = userProfile.username,
+                authorDisplayName = userProfile.displayName,
+                authorAvatarUrl = userProfile.avatarUrl,
+                authorVerified = userProfile.verified,
+                aspectRatio = aspectRatio,
+                timestamp = System.currentTimeMillis(),
+                likesCount = 0,
+                hideLikesCount = hideLikesCount,
+                hideRemixesCount = turnOffRemix,
+                turnOffComments = turnOffComments,
+                turnOffRemix = turnOffRemix
+            )
+            collection.document(newWorkId).set(communityWork).await()
+            Log.d("DiscoverRepository", "Community video post created: $newWorkId, url=$videoUrl")
+            true
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("DiscoverRepository", "Error uploading community video post", e)
+            false
+        }
+    }
+
     suspend fun incrementDownloadCount(postId: String, userId: String) {
+        if (postId.isBlank() || userId.isBlank()) return
         try {
             val docRef = collection.document(postId)
             db.runTransaction { transaction ->
@@ -144,6 +322,27 @@ class DiscoverRepository {
             }.await()
         } catch (e: Exception) {
             Log.w("DiscoverRepository", "Could not increment download count", e)
+        }
+    }
+
+    suspend fun incrementRemixCount(postId: String, userId: String) {
+        if (postId.isBlank() || userId.isBlank()) return
+        try {
+            val docRef = collection.document(postId)
+            db.runTransaction { transaction ->
+                val snapshot = transaction.get(docRef)
+                val remixedBy = snapshot.get("remixedBy") as? List<String> ?: emptyList()
+                val currentRemixes = snapshot.getLong("remixCount") ?: 0L
+                if (!remixedBy.contains(userId)) {
+                    transaction.update(
+                        docRef,
+                        "remixedBy", FieldValue.arrayUnion(userId),
+                        "remixCount", currentRemixes + 1
+                    )
+                }
+            }.await()
+        } catch (e: Exception) {
+            Log.w("DiscoverRepository", "Could not increment remix count", e)
         }
     }
 
@@ -225,39 +424,50 @@ class DiscoverRepository {
         }
     }
 
-    suspend fun toggleLike(workId: String, userId: String, forceLike: Boolean = false): Boolean {
+    suspend fun setLike(workId: String, userId: String, targetLiked: Boolean): Boolean {
         if (workId.isBlank() || userId.isBlank()) return false
         return try {
             val likeRef = collection.document(workId).collection("likes").document(userId)
             val userLikeRef = usersCollection.document(userId).collection("liked_posts").document(workId)
             val workRef = collection.document(workId)
-            
+
             db.runTransaction { transaction ->
-                val workDoc = transaction.get(workRef)
-                val currentLikes = workDoc.getLong("likesCount") ?: 0L
                 val likeDoc = transaction.get(likeRef)
-                
-                if (likeDoc.exists()) {
-                    if (forceLike) {
-                        return@runTransaction true // already liked, do not toggle off
-                    }
-                    transaction.delete(likeRef)
-                    transaction.delete(userLikeRef)
-                    transaction.update(workRef, "likesCount", maxOf(0, currentLikes - 1))
-                    false
-                } else {
+                val alreadyLiked = likeDoc.exists()
+                if (alreadyLiked == targetLiked) {
+                    return@runTransaction true // idempotent success
+                }
+                val workDoc = transaction.get(workRef)
+                val currentLikes = if (workDoc.exists()) (workDoc.getLong("likesCount") ?: 0L) else 0L
+
+                if (targetLiked) {
                     val now = System.currentTimeMillis()
                     transaction.set(likeRef, mapOf("timestamp" to now))
                     transaction.set(userLikeRef, mapOf("likedAt" to now))
-                    transaction.update(workRef, "likesCount", currentLikes + 1)
-                    true
+                    if (workDoc.exists()) {
+                        transaction.update(workRef, "likesCount", currentLikes + 1)
+                    }
+                } else {
+                    transaction.delete(likeRef)
+                    transaction.delete(userLikeRef)
+                    if (workDoc.exists()) {
+                        transaction.update(workRef, "likesCount", maxOf(0, currentLikes - 1))
+                    }
                 }
+                true
             }.await()
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
-            Log.e("DiscoverRepository", "Error toggling like", e)
+            Log.e("DiscoverRepository", "Error setting like", e)
             false
         }
+    }
+
+    suspend fun toggleLike(workId: String, userId: String, forceLike: Boolean = false): Boolean {
+        if (workId.isBlank() || userId.isBlank()) return false
+        val currentlyLiked = hasLiked(workId, userId)
+        val target = if (forceLike) true else !currentlyLiked
+        return setLike(workId, userId, target)
     }
 
     suspend fun deleteWork(workId: String): Boolean {
@@ -297,37 +507,44 @@ class DiscoverRepository {
         }
     }
 
-    suspend fun toggleFollow(currentUserId: String, targetUserId: String): Boolean {
+    suspend fun setFollow(currentUserId: String, targetUserId: String, targetFollow: Boolean): Boolean {
+        if (currentUserId.isBlank() || targetUserId.isBlank() || currentUserId == targetUserId) return false
         return try {
             val currentUserFollowingRef = usersCollection.document(currentUserId).collection("following").document(targetUserId)
             val targetUserFollowersRef = usersCollection.document(targetUserId).collection("followers").document(currentUserId)
-            
             val currentUserDoc = usersCollection.document(currentUserId)
             val targetUserDoc = usersCollection.document(targetUserId)
 
             db.runTransaction { transaction ->
                 val followingDoc = transaction.get(currentUserFollowingRef)
-                if (followingDoc.exists()) {
-                    // Unfollow
-                    transaction.delete(currentUserFollowingRef)
-                    transaction.delete(targetUserFollowersRef)
-                    transaction.set(currentUserDoc, mapOf("followingCount" to FieldValue.increment(-1)), SetOptions.merge())
-                    transaction.set(targetUserDoc, mapOf("followersCount" to FieldValue.increment(-1)), SetOptions.merge())
-                } else {
-                    // Follow
+                val alreadyFollowing = followingDoc.exists()
+                if (alreadyFollowing == targetFollow) {
+                    return@runTransaction true // idempotent success
+                }
+                if (targetFollow) {
                     val timestamp = mapOf("timestamp" to System.currentTimeMillis())
                     transaction.set(currentUserFollowingRef, timestamp)
                     transaction.set(targetUserFollowersRef, timestamp)
                     transaction.set(currentUserDoc, mapOf("followingCount" to FieldValue.increment(1)), SetOptions.merge())
                     transaction.set(targetUserDoc, mapOf("followersCount" to FieldValue.increment(1)), SetOptions.merge())
+                } else {
+                    transaction.delete(currentUserFollowingRef)
+                    transaction.delete(targetUserFollowersRef)
+                    transaction.set(currentUserDoc, mapOf("followingCount" to FieldValue.increment(-1)), SetOptions.merge())
+                    transaction.set(targetUserDoc, mapOf("followersCount" to FieldValue.increment(-1)), SetOptions.merge())
                 }
+                true
             }.await()
-            true
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
-            Log.e("DiscoverRepository", "Error toggling follow", e)
+            Log.e("DiscoverRepository", "Error setting follow", e)
             false
         }
+    }
+
+    suspend fun toggleFollow(currentUserId: String, targetUserId: String): Boolean {
+        val currentlyFollowing = checkIsFollowing(currentUserId, targetUserId)
+        return setFollow(currentUserId, targetUserId, !currentlyFollowing)
     }
     
     suspend fun hasLiked(workId: String, userId: String): Boolean {
@@ -613,6 +830,7 @@ class DiscoverRepository {
     }
 
     suspend fun incrementShareCount(postId: String, userId: String) {
+        if (postId.isBlank() || userId.isBlank()) return
         try {
             val docRef = collection.document(postId)
             db.runTransaction { transaction ->
@@ -670,32 +888,51 @@ class DiscoverRepository {
         }
     }
 
-    suspend fun toggleSave(workId: String, userId: String): Boolean {
+    suspend fun setSave(workId: String, userId: String, targetSaved: Boolean): Boolean {
+        if (workId.isBlank() || userId.isBlank()) return false
         return try {
             val saveRef = usersCollection.document(userId).collection("saved_posts").document(workId)
             val workRef = collection.document(workId)
             db.runTransaction { transaction ->
                 val saveDoc = transaction.get(saveRef)
+                val alreadySaved = saveDoc.exists()
+                if (alreadySaved == targetSaved) {
+                    return@runTransaction true // idempotent success
+                }
                 val workDoc = transaction.get(workRef)
                 val currentSaves = if (workDoc.exists()) (workDoc.getLong("saveCount") ?: 0L) else 0L
-                if (saveDoc.exists()) {
-                    transaction.delete(saveRef)
-                    if (workDoc.exists()) {
-                        transaction.update(workRef, "saveCount", maxOf(0, currentSaves - 1))
-                    }
-                } else {
+                if (targetSaved) {
                     transaction.set(saveRef, mapOf("savedAt" to System.currentTimeMillis()))
                     if (workDoc.exists()) {
-                        transaction.update(workRef, "saveCount", currentSaves + 1)
+                        transaction.update(
+                            workRef,
+                            "savedBy", FieldValue.arrayUnion(userId),
+                            "saveCount", currentSaves + 1
+                        )
+                    }
+                } else {
+                    transaction.delete(saveRef)
+                    if (workDoc.exists()) {
+                        transaction.update(
+                            workRef,
+                            "savedBy", FieldValue.arrayRemove(userId),
+                            "saveCount", maxOf(0, currentSaves - 1)
+                        )
                     }
                 }
+                true
             }.await()
-            true
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
-            Log.e("DiscoverRepository", "Error toggling save", e)
+            Log.e("DiscoverRepository", "Error setting save", e)
             false
         }
+    }
+
+    suspend fun toggleSave(workId: String, userId: String): Boolean {
+        val savedIds = getSavedWorkIds(userId)
+        val currentlySaved = savedIds.contains(workId)
+        return setSave(workId, userId, !currentlySaved)
     }
 
     // ── Activity History (Likes, Saves, Shares) ──────────────────────────────

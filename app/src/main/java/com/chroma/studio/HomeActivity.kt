@@ -232,13 +232,16 @@ class HomeActivity : ComponentActivity() {
                     "activity_history", "trash", "appearance_settings",
                     "backgrounds",
                     "flash_feed", "flash_picker", "flash_video_editor", "flash_photo_editor", "flash_post",
-                    "create_post", "publish_work", "post_details",
+                    "create_post", "publish_work", "post_details", "creator_studio",
+                    "drafts_list",
                     "terms_agreement", "privacy_terms", "login", "post_onboarding"
                 )
                 val isChatTabActive = isMain && pagerState.currentPage == 3
                 val shouldHideOnChatTab = isChatTabActive && isInsideChatTab
                 val isRouteHidingBottomNav = currentRoute == null ||
                     hideBottomNavRoutes.contains(currentRoute) ||
+                    currentRoute.startsWith("creator_studio") ||
+                    fullRoute.startsWith("creator_studio") ||
                     currentRoute.startsWith("chat") ||
                     fullRoute.startsWith("chat") ||
                     currentRoute.startsWith("story") ||
@@ -815,6 +818,7 @@ class HomeActivity : ComponentActivity() {
                                         customHomeBgShape = vm.customHomeBgShape,
                                         onNavigateToSettings = { navController.navigate("settings") },
                                         onNavigateToBackgrounds = { navController.navigate("backgrounds") },
+                                        onNavigateToDrafts = { navController.navigate("drafts_list") },
                                         onNavigateToDiscover = { coroutineScope.launch { pagerState.animateScrollToPage(2) } },
                                         onNavigateToTrash = { navController.navigate("trash") },
                                         onRequireLogin = { navController.navigate("login") },
@@ -883,6 +887,13 @@ class HomeActivity : ComponentActivity() {
                                         remixedFromAuthorVerified = work.authorVerified
                                     )
                                 )
+                                val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                                if (!currentUid.isNullOrBlank()) {
+                                    coroutineScope.launch {
+                                        val repo = com.chroma.studio.data.DiscoverRepository()
+                                        repo.incrementRemixCount(work.id, currentUid)
+                                    }
+                                }
                                 val intent = android.content.Intent(this@HomeActivity, MainActivity::class.java).apply {
                                     putExtra(MainActivity.EXTRA_WORK_ID, remixId)
                                     putExtra(MainActivity.EXTRA_WORK_NAME, "Remix of ${work.title}")
@@ -983,6 +994,11 @@ class HomeActivity : ComponentActivity() {
                                             remixedFromAuthorVerified = work.authorVerified
                                         )
                                     )
+                                    val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                                    if (!currentUid.isNullOrBlank()) {
+                                        val repo = com.chroma.studio.data.DiscoverRepository()
+                                        repo.incrementRemixCount(work.id, currentUid)
+                                    }
                                     val intent = android.content.Intent(this@HomeActivity, MainActivity::class.java).apply {
                                         putExtra(MainActivity.EXTRA_WORK_ID, remixId)
                                         putExtra(MainActivity.EXTRA_WORK_NAME, "Remix of ${work.title}")
@@ -1001,11 +1017,9 @@ class HomeActivity : ComponentActivity() {
                             },
                              onDeleteWork = { workId -> discoverVm.deleteWork(workId) },
                              onEditWork = { workId, newTitle, newDesc -> discoverVm.updateWork(workId, newTitle, newDesc) },
-                             onCreatePost = { navController.navigate("create_post") },
-                             onPublishWork = {
-                                 coroutineScope.launch { pagerState.animateScrollToPage(0) }
-                                 com.chroma.studio.ui.components.ToastManager.showToast("Select a work from Home to publish")
-                             },
+                             onCreatePost = { navController.navigate("creator_studio/post") },
+                             onCreateFlash = { navController.navigate("creator_studio/flash") },
+                             onPublishWork = { navController.navigate("creator_studio/work") },
                              onNavigateToNotifications = { navController.navigate("notifications_feed") },
                              onStoryViewerChange = { isDiscoverStoryViewerActive = it }
                         )
@@ -1138,13 +1152,57 @@ class HomeActivity : ComponentActivity() {
                     }
                     
                     composable("create_post") {
-                        com.chroma.studio.ui.screens.CreatePostScreen(
-                            onNavigateNext = { uri, template, aspectRatio ->
-                                // Pass URI, template, and aspectRatio to next screen via savedStateHandle
-                                val encodedUri = java.net.URLEncoder.encode(uri.toString(), "UTF-8")
-                                val encodedTemplate = java.net.URLEncoder.encode(template, "UTF-8")
-                                val encodedRatio = java.net.URLEncoder.encode(aspectRatio, "UTF-8")
-                                navController.navigate("post_details/$encodedUri/$encodedTemplate/$encodedRatio")
+                        com.chroma.studio.ui.screens.CreatorPostOnboardingStudioScreen(
+                            initialMode = com.chroma.studio.ui.screens.CreatorStudioMode.POST,
+                            workRepository = vm.repository,
+                            discoverRepository = remember { com.chroma.studio.data.DiscoverRepository() },
+                            flashViewModel = flashVm,
+                            onNavigateBack = { navController.popBackStack() },
+                            onPostSuccess = {
+                                navController.popBackStack()
+                            }
+                        )
+                    }
+
+                    composable(
+                        route = "creator_studio/{mode}?draftId={draftId}",
+                        arguments = listOf(
+                            androidx.navigation.navArgument("mode") {
+                                type = androidx.navigation.NavType.StringType
+                                defaultValue = "post"
+                            },
+                            androidx.navigation.navArgument("draftId") {
+                                type = androidx.navigation.NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            }
+                        )
+                    ) { backStackEntry ->
+                        val modeParam = backStackEntry.arguments?.getString("mode") ?: "post"
+                        val draftIdParam = backStackEntry.arguments?.getString("draftId")
+                        val studioMode = when (modeParam.lowercase()) {
+                            "flash" -> com.chroma.studio.ui.screens.CreatorStudioMode.FLASH
+                            "work" -> com.chroma.studio.ui.screens.CreatorStudioMode.WORK
+                            else -> com.chroma.studio.ui.screens.CreatorStudioMode.POST
+                        }
+                        com.chroma.studio.ui.screens.CreatorPostOnboardingStudioScreen(
+                            initialMode = studioMode,
+                            initialDraftId = draftIdParam,
+                            workRepository = vm.repository,
+                            discoverRepository = remember { com.chroma.studio.data.DiscoverRepository() },
+                            flashViewModel = flashVm,
+                            onNavigateBack = { navController.popBackStack() },
+                            onPostSuccess = {
+                                navController.popBackStack()
+                            }
+                        )
+                    }
+
+                    composable("drafts_list") {
+                        com.chroma.studio.ui.screens.DraftsListScreen(
+                            workRepository = vm.repository,
+                            onOpenDraft = { draft ->
+                                navController.navigate("creator_studio/${draft.mode}?draftId=${draft.id}")
                             },
                             onBack = { navController.popBackStack() }
                         )

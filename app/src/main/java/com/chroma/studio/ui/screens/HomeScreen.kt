@@ -105,7 +105,8 @@ fun DrawerItem(
     ) {
         AppleSettingsSquircleVectorIcon(
             icon = icon,
-            size = 36.dp
+            size = 24.dp,
+            iconTint = if (selected) Color(0xFF0A84FF) else colors.textMain.copy(alpha = 0.85f)
         )
         Text(
             text = label,
@@ -172,7 +173,8 @@ fun HomeScreen(
     showHeader: Boolean = true,
     onNavigateToCreatePost: (() -> Unit)? = null,
     onNavigateToFlashPicker: (() -> Unit)? = null,
-    onNavigateToCreateTextStatus: (() -> Unit)? = null
+    onNavigateToCreateTextStatus: (() -> Unit)? = null,
+    onNavigateToDrafts: () -> Unit = {}
 ) {
     val colors = LocalOscellionColors.current
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -348,6 +350,17 @@ fun HomeScreen(
                     Spacer(Modifier.height(4.dp))
 
                     DrawerItem(
+                        icon = Lucide.FileText,
+                        label = "Drafts",
+                        selected = false
+                    ) {
+                        scope.launch { drawerState.close() }
+                        onNavigateToDrafts()
+                    }
+
+                    Spacer(Modifier.height(4.dp))
+
+                    DrawerItem(
                         icon = Lucide.Settings,
                         label = "Settings & Preferences",
                         selected = false
@@ -405,7 +418,8 @@ fun HomeScreen(
                         ) {
                             AppleSettingsSquircleVectorIcon(
                                 icon = if (isDarkMode) Lucide.Moon else Lucide.Sun,
-                                size = 36.dp
+                                size = 24.dp,
+                                iconTint = Color(0xFF0A84FF)
                             )
                             Column {
                                 Text(

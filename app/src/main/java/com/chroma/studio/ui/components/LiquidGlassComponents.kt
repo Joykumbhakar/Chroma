@@ -88,12 +88,13 @@ fun LiquidGlassCard(
     backgroundColor: Color = LiquidGlassTokens.SurfaceCard,
     borderColor: Color = LiquidGlassTokens.BorderFlat,
     cornerRadius: Dp = LiquidGlassTokens.CardCornerRadius,
+    shape: Shape = RoundedCornerShape(cornerRadius),
     contentPadding: PaddingValues = PaddingValues(16.dp),
     content: @Composable ColumnScope.() -> Unit
 ) {
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(cornerRadius),
+        shape = shape,
         color = backgroundColor,
         border = BorderStroke(1.dp, borderColor)
     ) {
@@ -666,7 +667,7 @@ fun LiquidGlassToggle(
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     activeTrackColor: Color = Color(0xFF0A84FF),
-    inactiveTrackColor: Color = Color(0xFFE5E5EA)
+    inactiveTrackColor: Color = if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFF39393D) else Color(0xFFE5E5EA)
 ) {
     AppleSwitch(
         checked = checked,

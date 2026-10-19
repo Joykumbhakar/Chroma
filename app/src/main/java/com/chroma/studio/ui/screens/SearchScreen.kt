@@ -835,13 +835,14 @@ private fun CreatorSearchResultCard(
     colors: com.chroma.studio.ui.theme.OscellionPalette,
     onClick: () -> Unit
 ) {
-    Card(
+    LiquidGlassCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() },
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = if (colors.isDark) Color(0xFF1C1C1E) else Color(0xFFF2F2F7)),
-        border = androidx.compose.foundation.BorderStroke(0.5.dp, colors.glassBorder)
+        backgroundColor = if (colors.isDark) Color(0xFF1C1C1E) else Color(0xFFFFFFFF),
+        borderColor = colors.glassBorder,
+        contentPadding = PaddingValues(12.dp)
     ) {
         Row(
             modifier = Modifier
@@ -923,13 +924,14 @@ private fun SpotlightCreatorBanner(
     colors: com.chroma.studio.ui.theme.OscellionPalette,
     onClick: () -> Unit
 ) {
-    Card(
+    LiquidGlassCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() },
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = if (colors.isDark) Color(0xFF1C1C1E) else Color(0xFFF2F2F7)),
-        border = androidx.compose.foundation.BorderStroke(0.5.dp, Color(0xFF007AFF).copy(alpha = 0.3f))
+        backgroundColor = if (colors.isDark) Color(0xFF1C1C1E) else Color(0xFFFFFFFF),
+        borderColor = Color(0xFF0A84FF).copy(alpha = 0.35f),
+        contentPadding = PaddingValues(0.dp)
     ) {
         Box(
             modifier = Modifier

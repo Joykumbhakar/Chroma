@@ -146,6 +146,8 @@ class WorkRepository(context: Context) {
         return if (raw.isBlank()) emptyList() else raw.split(",").filter { it.isNotBlank() }
     }
 
+    fun getWorkById(id: String): ChromaWork? = loadWork(id)
+
     private fun loadWork(id: String): ChromaWork? {
         val json = prefs.getString("work_$id", null) ?: return null
         return try {

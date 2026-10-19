@@ -106,7 +106,7 @@ fun AppleSwitch(
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     activeTrackColor: Color = Color(0xFF0A84FF),
-    inactiveTrackColor: Color = Color(0xFFE5E5EA),
+    inactiveTrackColor: Color = if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFF39393D) else Color(0xFFE5E5EA),
     hazeState: dev.chrisbanes.haze.HazeState? = null
 ) {
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current

@@ -263,20 +263,12 @@ fun AppleSettingsHeader(
             if (useMacSettingsIcon) {
                 MacOSSettingsGearIcon(size = 32.dp)
             } else if (icon != null) {
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Brush.linearGradient(iconGradient)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = Color(0xFF0A84FF),
+                    modifier = Modifier.size(26.dp)
+                )
             }
             Text(
                 text = title,
@@ -524,12 +516,12 @@ fun AppleSettingsGroup(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(18.dp))
                 .background(if (isDark) Color(0xFF1C1C1E) else Color.White)
                 .border(
-                    width = 0.5.dp,
-                    color = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.04f),
-                    shape = RoundedCornerShape(12.dp)
+                    width = 1.dp,
+                    color = if (isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFDFE8F3),
+                    shape = RoundedCornerShape(18.dp)
                 )
         ) {
             content()
@@ -557,8 +549,8 @@ val UniversalIconBrush = Brush.verticalGradient(
 )
 
 /**
- * Settings List Graphic Icon Badge (65% Rounded Edge • Single Blue Gradient Background)
- * Reference: e:\liquid_glass_design_system.html Section 4 & e:\apple_hig_3d_graphics_jetpack_compose_library.kt
+ * Settings List Option Icon
+ * Clean thin vector icon without squircle background box (Matching Liquid Glass Design System Section 3)
  */
 @Composable
 fun AppleIconBadge(
@@ -566,50 +558,71 @@ fun AppleIconBadge(
     graphic3dId: Apple3DGraphicId? = null,
     iconColor: Color = Color(0xFF0A84FF),
     iconGradient: List<Color>? = null,
-    size: Dp = 30.dp,
+    size: Dp = 22.dp,
+    hasBackground: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    val squircleShape = RoundedCornerShape(8.dp)
+    if (hasBackground) {
+        val squircleShape = RoundedCornerShape(8.dp)
+        if (icon != null) {
+            Box(
+                modifier = modifier
+                    .size(30.dp)
+                    .clip(squircleShape)
+                    .background(iconColor.copy(alpha = 0.14f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconColor,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        } else if (graphic3dId != null) {
+            val brush = if (iconGradient != null) {
+                Brush.linearGradient(
+                    colors = iconGradient,
+                    start = Offset.Zero,
+                    end = Offset.Infinite
+                )
+            } else {
+                UniversalIconBrush
+            }
 
-    if (icon != null) {
-        // Preferred Icon and Background design method: Soft translucent tinted squircle + vibrant matching Lucide icon
+            Box(
+                modifier = modifier
+                    .size(30.dp)
+                    .clip(squircleShape)
+                    .background(brush)
+                    .border(1.dp, Color.White.copy(alpha = 0.42f), squircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Apple3DGraphicIcon(
+                    id = graphic3dId,
+                    modifier = Modifier.size(21.dp)
+                )
+            }
+        }
+    } else {
+        // Clean thin icon directly rendered with zero background box
         Box(
-            modifier = modifier
-                .size(size)
-                .clip(squircleShape)
-                .background(iconColor.copy(alpha = 0.14f)),
+            modifier = modifier.size(size),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = iconColor,
-                modifier = Modifier.size(size * 0.58f)
-            )
-        }
-    } else if (graphic3dId != null) {
-        val brush = if (iconGradient != null) {
-            Brush.linearGradient(
-                colors = iconGradient,
-                start = Offset.Zero,
-                end = Offset.Infinite
-            )
-        } else {
-            UniversalIconBrush
-        }
-
-        Box(
-            modifier = modifier
-                .size(size)
-                .clip(squircleShape)
-                .background(brush)
-                .border(1.dp, Color.White.copy(alpha = 0.42f), squircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            Apple3DGraphicIcon(
-                id = graphic3dId,
-                modifier = Modifier.size(size * 0.70f)
-            )
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconColor,
+                    modifier = Modifier.size(size)
+                )
+            } else if (graphic3dId != null) {
+                Apple3DGraphicIcon(
+                    id = graphic3dId,
+                    modifier = Modifier.size(size)
+                )
+            }
         }
     }
 }
@@ -916,10 +929,10 @@ fun AppleSettingSegmentedRow(
  * Apple Setting Divider
  */
 @Composable
-fun AppleSettingDivider(paddingStart: Dp = 58.dp) {
+fun AppleSettingDivider(paddingStart: Dp = 50.dp) {
     val isDark = isSystemInDarkTheme()
     HorizontalDivider(
-        color = if (isDark) Color(0xFF38383A) else Color(0xFFE5E5EA),
+        color = if (isDark) Color(0xFF38383A) else Color(0xFFDFE8F3),
         thickness = 0.5.dp,
         modifier = Modifier.padding(start = paddingStart)
     )

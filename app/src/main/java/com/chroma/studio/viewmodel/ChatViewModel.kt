@@ -478,6 +478,33 @@ class ChatViewModel : ViewModel() {
             }
         }
     }
+
+    fun retryMessage(msgId: String) {
+        val roomId = _activeRoomId.value ?: return
+        val targetMsg = _localMessages.value.firstOrNull { it.id == msgId } ?: return
+        if (!targetMsg.isError) return
+
+        // Set back to pending
+        _localMessages.value = _localMessages.value.map {
+            if (it.id == msgId) it.copy(isPending = true, isError = false) else it
+        }
+
+        viewModelScope.launch {
+            val success = repository.sendMessage(
+                roomId,
+                targetMsg.text,
+                workId = targetMsg.workId,
+                preGeneratedId = msgId,
+                replyToMessageId = targetMsg.replyToMessageId
+            )
+            if (!success) {
+                _localMessages.value = _localMessages.value.map {
+                    if (it.id == msgId) it.copy(isPending = false, isError = true) else it
+                }
+                com.chroma.studio.ui.components.ToastManager.showToast("Message failed to send. Tap to retry.")
+            }
+        }
+    }
     
     private var typingDebounceJob: kotlinx.coroutines.Job? = null
 

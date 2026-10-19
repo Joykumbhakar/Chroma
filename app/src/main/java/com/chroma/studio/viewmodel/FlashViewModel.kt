@@ -122,61 +122,46 @@ class FlashViewModel(application: Application) : AndroidViewModel(application) {
 
     // ── Interactions ─────────────────────────────────────────────────────────
 
-    private val likingVideoIds = mutableSetOf<String>()
+    private val mutationCoordinator = com.chroma.studio.data.mutation.OptimisticMutationCoordinator(viewModelScope)
 
     fun toggleLike(videoId: String, forceLike: Boolean = false) {
-        if (likingVideoIds.contains(videoId)) return
-        likingVideoIds.add(videoId)
-
-        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: run {
-            likingVideoIds.remove(videoId)
-            return
-        }
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
         val isLikedNow = _likedVideoIds.value.contains(videoId)
-        
-        if (forceLike && isLikedNow) {
-            likingVideoIds.remove(videoId)
-            return // Already liked, skip toggle
-        }
+        if (forceLike && isLikedNow) return
 
-        val newLiked = _likedVideoIds.value.toMutableSet()
-        if (isLikedNow && !forceLike) newLiked.remove(videoId) else newLiked.add(videoId)
-        _likedVideoIds.value = newLiked
+        val targetLiked = if (forceLike) true else !isLikedNow
+        val prevLikedSet = _likedVideoIds.value
+        val prevFeed = _flashFeed.value
 
-        _flashFeed.value = _flashFeed.value.map { v ->
-            if (v.id == videoId) {
-                val newLikedBy = if (isLikedNow && !forceLike) v.likedBy - uid else v.likedBy + uid
-                v.copy(
-                    likesCount = maxOf(0, v.likesCount + (if (isLikedNow && !forceLike) -1 else 1)),
-                    likedBy = newLikedBy.distinct()
-                )
-            } else v
-        }
+        mutationCoordinator.mutate(
+            key = "flash_like:$videoId",
+            desiredState = targetLiked,
+            onOptimisticApply = { nextLiked ->
+                val newLiked = _likedVideoIds.value.toMutableSet()
+                if (nextLiked) newLiked.add(videoId) else newLiked.remove(videoId)
+                _likedVideoIds.value = newLiked
 
-        viewModelScope.launch {
-            try {
-                val actualLikedState = repository.toggleLike(videoId, uid, forceLike)
-                val expectedState = if (forceLike) true else !isLikedNow
-                
-                if (actualLikedState != expectedState) {
-                    val correctedLiked = _likedVideoIds.value.toMutableSet()
-                    if (actualLikedState) correctedLiked.add(videoId) else correctedLiked.remove(videoId)
-                    _likedVideoIds.value = correctedLiked
-                    
-                    _flashFeed.value = _flashFeed.value.map { v ->
-                        if (v.id == videoId) {
-                            val newLikedBy = if (actualLikedState) v.likedBy + uid else v.likedBy - uid
-                            v.copy(
-                                likesCount = maxOf(0, v.likesCount + (if (actualLikedState) 1 else -1)),
-                                likedBy = newLikedBy.distinct()
-                            )
-                        } else v
-                    }
+                _flashFeed.value = _flashFeed.value.map { v ->
+                    if (v.id == videoId) {
+                        val newLikedBy = if (nextLiked) v.likedBy + uid else v.likedBy - uid
+                        v.copy(
+                            likesCount = maxOf(0, v.likesCount + if (nextLiked) 1 else -1),
+                            likedBy = newLikedBy.distinct()
+                        )
+                    } else v
                 }
-            } finally {
-                likingVideoIds.remove(videoId)
+            },
+            performServerSync = { nextLiked ->
+                repository.setFlashLike(videoId, uid, nextLiked)
+            },
+            onRollback = {
+                _likedVideoIds.value = prevLikedSet
+                _flashFeed.value = prevFeed
+            },
+            onError = {
+                com.chroma.studio.ui.components.ToastManager.showToast("Could not update like. Please try again.")
             }
-        }
+        )
     }
 
     fun shareFlash(videoId: String) {
@@ -195,21 +180,35 @@ class FlashViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleSave(videoId: String) {
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
-        
-        _flashFeed.value = _flashFeed.value.map { v ->
-            if (v.id == videoId) {
-                val isSaved = v.savedBy.contains(uid)
-                val newSavedBy = if (isSaved) v.savedBy - uid else v.savedBy + uid
-                v.copy(
-                    saveCount = maxOf(0, v.saveCount + (if (isSaved) -1 else 1)),
-                    savedBy = newSavedBy.distinct()
-                )
-            } else v
-        }
-        
-        viewModelScope.launch {
-            repository.toggleSave(videoId, uid)
-        }
+        val currentVideo = _flashFeed.value.firstOrNull { it.id == videoId } ?: return
+        val isSavedNow = currentVideo.savedBy.contains(uid)
+        val targetSaved = !isSavedNow
+        val prevFeed = _flashFeed.value
+
+        mutationCoordinator.mutate(
+            key = "flash_save:$videoId",
+            desiredState = targetSaved,
+            onOptimisticApply = { nextSaved ->
+                _flashFeed.value = _flashFeed.value.map { v ->
+                    if (v.id == videoId) {
+                        val newSavedBy = if (nextSaved) v.savedBy + uid else v.savedBy - uid
+                        v.copy(
+                            saveCount = maxOf(0, v.saveCount + if (nextSaved) 1 else -1),
+                            savedBy = newSavedBy.distinct()
+                        )
+                    } else v
+                }
+            },
+            performServerSync = { nextSaved ->
+                repository.setFlashSave(videoId, uid, nextSaved)
+            },
+            onRollback = {
+                _flashFeed.value = prevFeed
+            },
+            onError = {
+                com.chroma.studio.ui.components.ToastManager.showToast("Could not update saved post. Please try again.")
+            }
+        )
     }
 
     private fun syncLikedIds() {
@@ -250,6 +249,9 @@ class FlashViewModel(application: Application) : AndroidViewModel(application) {
         durationPerSlideMs: Long = 3000L,
         remixedFromPostId: String? = null,
         remixedFromAuthorUsername: String? = null,
+        hideLikesCount: Boolean = false,
+        turnOffComments: Boolean = false,
+        turnOffRemix: Boolean = false,
         onSuccess: () -> Unit,
         onError: (String) -> Unit
     ) {
@@ -314,7 +316,10 @@ class FlashViewModel(application: Application) : AndroidViewModel(application) {
                     mentions = mentions,
                     duration = duration.coerceAtMost(30_000L),
                     remixedFromPostId = remixedFromPostId,
-                    remixedFromAuthorUsername = remixedFromAuthorUsername
+                    remixedFromAuthorUsername = remixedFromAuthorUsername,
+                    hideLikesCount = hideLikesCount,
+                    turnOffComments = turnOffComments,
+                    turnOffRemix = turnOffRemix
                 )
 
                 // Cleanup temp files

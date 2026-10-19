@@ -315,7 +315,7 @@ fun ActivityHistoryScreen(
                                     },
                                     onAuthorClick = { authorId -> onNavigateToUser(authorId) },
                                     onDownloadClick = { discoverVm.trackDownload(work.id) },
-                                    onRemixClick = { /* Handled in feed post */ },
+                                    onRemixClick = { discoverVm.trackRemix(work.id) },
                                     onDeleteWork = { workId -> discoverVm.deleteWork(workId) },
                                     onArchiveWork = { workId -> discoverVm.archiveWork(workId) },
                                     onEditWork = { workId, title, desc -> discoverVm.updateWork(workId, title, desc) },

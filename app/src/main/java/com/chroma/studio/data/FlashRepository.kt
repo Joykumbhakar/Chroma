@@ -66,7 +66,10 @@ class FlashRepository {
         mentions: List<String>,
         duration: Long,
         remixedFromPostId: String? = null,
-        remixedFromAuthorUsername: String? = null
+        remixedFromAuthorUsername: String? = null,
+        hideLikesCount: Boolean = false,
+        turnOffComments: Boolean = false,
+        turnOffRemix: Boolean = false
     ): String {
         val user = auth.currentUser ?: throw Exception("User not authenticated")
         val userDoc = usersCollection.document(user.uid).get().await()
@@ -92,7 +95,10 @@ class FlashRepository {
             remixedFromPostId = remixedFromPostId,
             remixedFromAuthorUsername = remixedFromAuthorUsername,
             timestamp = System.currentTimeMillis(),
-            isArchived = false
+            isArchived = false,
+            hideLikesCount = hideLikesCount,
+            turnOffComments = turnOffComments,
+            turnOffRemix = turnOffRemix
         )
         docRef.set(flash).await()
         return docRef.id
@@ -100,34 +106,51 @@ class FlashRepository {
 
     // ── Interactions ────────────────────────────────────────────────────────
 
+    suspend fun setFlashLike(videoId: String, userId: String, targetLiked: Boolean): Boolean {
+        return try {
+            val docRef = collection.document(videoId)
+            db.runTransaction { transaction ->
+                val snapshot = transaction.get(docRef)
+                val likedBy = snapshot.get("likedBy") as? List<String> ?: emptyList()
+                val currentLikes = snapshot.getLong("likesCount") ?: 0L
+                val alreadyLiked = likedBy.contains(userId)
+
+                if (alreadyLiked == targetLiked) {
+                    return@runTransaction true // idempotent success
+                }
+
+                if (targetLiked) {
+                    transaction.update(
+                        docRef,
+                        "likedBy", FieldValue.arrayUnion(userId),
+                        "likesCount", currentLikes + 1
+                    )
+                } else {
+                    transaction.update(
+                        docRef,
+                        "likedBy", FieldValue.arrayRemove(userId),
+                        "likesCount", maxOf(0, currentLikes - 1)
+                    )
+                }
+                true
+            }.await()
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("FlashRepository", "setFlashLike error", e)
+            false
+        }
+    }
+
     suspend fun toggleLike(videoId: String, userId: String, forceLike: Boolean = false): Boolean {
         return try {
             val docRef = collection.document(videoId)
             val isLiked = db.runTransaction { transaction ->
                 val snapshot = transaction.get(docRef)
                 val likedBy = snapshot.get("likedBy") as? List<String> ?: emptyList()
-                val currentLikes = snapshot.getLong("likesCount") ?: 0L
                 val alreadyLiked = likedBy.contains(userId)
-                
-                if (alreadyLiked) {
-                    if (forceLike) {
-                        return@runTransaction true // Double tap logic: don't unlike
-                    }
-                    transaction.update(
-                        docRef,
-                        "likedBy", FieldValue.arrayRemove(userId),
-                        "likesCount", maxOf(0, currentLikes - 1)
-                    )
-                    false
-                } else {
-                    transaction.update(
-                        docRef,
-                        "likedBy", FieldValue.arrayUnion(userId),
-                        "likesCount", currentLikes + 1
-                    )
-                    true
-                }
+                if (forceLike && alreadyLiked) true else !alreadyLiked
             }.await()
+            setFlashLike(videoId, userId, isLiked)
             isLiked
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
@@ -179,31 +202,51 @@ class FlashRepository {
         }
     }
 
+    suspend fun setFlashSave(videoId: String, userId: String, targetSaved: Boolean): Boolean {
+        return try {
+            val docRef = collection.document(videoId)
+            db.runTransaction { transaction ->
+                val snapshot = transaction.get(docRef)
+                val savedBy = snapshot.get("savedBy") as? List<String> ?: emptyList()
+                val currentSaves = snapshot.getLong("saveCount") ?: 0L
+                val alreadySaved = savedBy.contains(userId)
+
+                if (alreadySaved == targetSaved) {
+                    return@runTransaction true // idempotent success
+                }
+
+                if (targetSaved) {
+                    transaction.update(
+                        docRef,
+                        "savedBy", FieldValue.arrayUnion(userId),
+                        "saveCount", currentSaves + 1
+                    )
+                } else {
+                    transaction.update(
+                        docRef,
+                        "savedBy", FieldValue.arrayRemove(userId),
+                        "saveCount", maxOf(0, currentSaves - 1)
+                    )
+                }
+                true
+            }.await()
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("FlashRepository", "setFlashSave error", e)
+            false
+        }
+    }
+
     suspend fun toggleSave(videoId: String, userId: String): Boolean {
         return try {
             val docRef = collection.document(videoId)
             val isSaved = db.runTransaction { transaction ->
                 val snapshot = transaction.get(docRef)
                 val savedBy = snapshot.get("savedBy") as? List<String> ?: emptyList()
-                val currentSaves = snapshot.getLong("saveCount") ?: 0L
                 val alreadySaved = savedBy.contains(userId)
-                
-                if (alreadySaved) {
-                    transaction.update(
-                        docRef,
-                        "savedBy", FieldValue.arrayRemove(userId),
-                        "saveCount", maxOf(0, currentSaves - 1)
-                    )
-                    false
-                } else {
-                    transaction.update(
-                        docRef,
-                        "savedBy", FieldValue.arrayUnion(userId),
-                        "saveCount", currentSaves + 1
-                    )
-                    true
-                }
+                !alreadySaved
             }.await()
+            setFlashSave(videoId, userId, isSaved)
             isSaved
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
@@ -232,7 +275,8 @@ class FlashRepository {
         videoId: String,
         text: String,
         replyToCommentId: String? = null,
-        replyFlashVideoUrl: String? = null
+        replyFlashVideoUrl: String? = null,
+        preGeneratedId: String? = null
     ): com.chroma.studio.model.FlashComment {
         val user = auth.currentUser ?: throw Exception("User not authenticated")
         val userDoc = usersCollection.document(user.uid).get().await()
@@ -241,7 +285,11 @@ class FlashRepository {
         val avatarUrl = userDoc.getString("avatarUrl") ?: ""
         val verified = userDoc.getBoolean("verified") ?: false
 
-        val docRef = db.collection("flash_comments").document()
+        val docRef = if (!preGeneratedId.isNullOrBlank()) {
+            db.collection("flash_comments").document(preGeneratedId)
+        } else {
+            db.collection("flash_comments").document()
+        }
         val comment = com.chroma.studio.model.FlashComment(
             id = docRef.id,
             videoId = videoId,
@@ -267,31 +315,51 @@ class FlashRepository {
         return comment
     }
 
+    suspend fun setCommentLike(commentId: String, userId: String, targetLiked: Boolean): Boolean {
+        return try {
+            val docRef = db.collection("flash_comments").document(commentId)
+            db.runTransaction { transaction ->
+                val snapshot = transaction.get(docRef)
+                val likedBy = snapshot.get("likedBy") as? List<String> ?: emptyList()
+                val currentLikes = snapshot.getLong("likesCount") ?: 0L
+                val alreadyLiked = likedBy.contains(userId)
+
+                if (alreadyLiked == targetLiked) {
+                    return@runTransaction true // idempotent success
+                }
+
+                if (targetLiked) {
+                    transaction.update(
+                        docRef,
+                        "likedBy", FieldValue.arrayUnion(userId),
+                        "likesCount", currentLikes + 1
+                    )
+                } else {
+                    transaction.update(
+                        docRef,
+                        "likedBy", FieldValue.arrayRemove(userId),
+                        "likesCount", maxOf(0, currentLikes - 1)
+                    )
+                }
+                true
+            }.await()
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("FlashRepository", "setCommentLike error", e)
+            false
+        }
+    }
+
     suspend fun toggleCommentLike(commentId: String, userId: String): Boolean {
         return try {
             val docRef = db.collection("flash_comments").document(commentId)
             val isLiked = db.runTransaction { transaction ->
                 val snapshot = transaction.get(docRef)
                 val likedBy = snapshot.get("likedBy") as? List<String> ?: emptyList()
-                val currentLikes = snapshot.getLong("likesCount") ?: 0L
                 val alreadyLiked = likedBy.contains(userId)
-                
-                if (alreadyLiked) {
-                    transaction.update(
-                        docRef,
-                        "likedBy", FieldValue.arrayRemove(userId),
-                        "likesCount", maxOf(0, currentLikes - 1)
-                    )
-                    false
-                } else {
-                    transaction.update(
-                        docRef,
-                        "likedBy", FieldValue.arrayUnion(userId),
-                        "likesCount", currentLikes + 1
-                    )
-                    true
-                }
+                !alreadyLiked
             }.await()
+            setCommentLike(commentId, userId, isLiked)
             isLiked
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e

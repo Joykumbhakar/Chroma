@@ -956,19 +956,19 @@ fun DesignCard(
     val isDark = isSystemInDarkTheme()
     val cardBg = if (isDark) Color(0xFF1C1C1E) else Color.White
     
-    Card(
+    LiquidGlassCard(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = cardBg),
+        backgroundColor = cardBg,
         shape = RoundedCornerShape(22.dp),
-        border = BorderStroke(1.dp, if (isDark) colors.glassBorder else Color(0xFFDFE8F3))
+        borderColor = if (isDark) colors.glassBorder else Color(0xFFDFE8F3),
+        contentPadding = PaddingValues(18.dp)
     ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(18.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp),
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (graphic3dId != null || icon != null) {
-                    AppleIconBadge(icon = icon, graphic3dId = graphic3dId, size = 34.dp)
+                    AppleIconBadge(icon = icon, graphic3dId = graphic3dId, size = 24.dp)
                     Spacer(Modifier.width(12.dp))
                 }
                 Column(modifier = Modifier.weight(1f)) {
@@ -976,9 +976,8 @@ fun DesignCard(
                     Text(subtitle, color = Color(0xFF8E8E93), fontSize = 11.5.sp)
                 }
                 if (action != null) action()
-            }
-            content()
         }
+        content()
     }
 }
 

@@ -200,14 +200,7 @@ fun IosAvatarView(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .clip(CircleShape)
-                    .border(
-                        width = 1.dp,
-                        brush = Brush.linearGradient(
-                            listOf(Color.White.copy(alpha = 0.5f), Color.White.copy(alpha = 0.15f))
-                        ),
-                        shape = CircleShape
-                    ),
+                    .clip(CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Image(
@@ -375,29 +368,38 @@ fun AppleStatusAvatar(
     onAddBadgeClick: (() -> Unit)? = null
 ) {
     val ringBrush = remember(hasStatus, isSeen, isDark) {
-        getAppleStatusRingBrush(hasStatus = hasStatus, isSeen = isSeen, isDark = isDark)
-    }
-    val ringStroke = when {
-        hasStatus && !isSeen -> 2.5.dp
-        hasStatus && isSeen -> 2.dp
-        else -> 1.dp
+        if (hasStatus) {
+            getAppleStatusRingBrush(hasStatus = true, isSeen = isSeen, isDark = isDark)
+        } else {
+            null
+        }
     }
 
     Box(
         modifier = modifier.size(size),
         contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier
-                .size(size - 2.dp)
-                .clip(CircleShape)
-                .background(ringBrush)
-                .padding(ringStroke)
-                .clip(CircleShape)
-                .background(gapColor)
-                .padding(2.dp),
-            contentAlignment = Alignment.Center
-        ) {
+        if (hasStatus && ringBrush != null) {
+            Box(
+                modifier = Modifier
+                    .size(size - 2.dp)
+                    .clip(CircleShape)
+                    .background(ringBrush)
+                    .padding(1.5.dp)
+                    .clip(CircleShape)
+                    .background(gapColor)
+                    .padding(1.5.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                IosAvatarView(
+                    name = name,
+                    avatarUrl = avatarUrl,
+                    size = avatarSize,
+                    gender = gender,
+                    isGroup = isGroup
+                )
+            }
+        } else {
             IosAvatarView(
                 name = name,
                 avatarUrl = avatarUrl,
@@ -407,15 +409,14 @@ fun AppleStatusAvatar(
             )
         }
 
-        // Add (+) badge at bottom-end
+        // Add (+) badge at bottom-end (thick circle border removed)
         if (showAddBadge) {
             Box(
                 modifier = Modifier
-                    .size(20.dp)
+                    .size(19.dp)
                     .align(Alignment.BottomEnd)
                     .clip(CircleShape)
                     .background(Color(0xFF007AFF))
-                    .border(2.dp, gapColor, CircleShape)
                     .then(
                         if (onAddBadgeClick != null) {
                             Modifier.clickable(
@@ -430,18 +431,16 @@ fun AppleStatusAvatar(
                     imageVector = Lucide.Plus,
                     contentDescription = "Add Story",
                     tint = Color.White,
-                    modifier = Modifier.size(13.dp)
+                    modifier = Modifier.size(12.dp)
                 )
             }
         } else if (isOnline) {
-            // Online green indicator dot
+            // Online green indicator dot (thick circle border removed)
             Box(
                 modifier = Modifier
-                    .size(16.dp)
+                    .size(12.dp)
                     .align(Alignment.BottomEnd)
                     .offset(x = (-1).dp, y = (-1).dp)
-                    .background(gapColor, CircleShape)
-                    .padding(2.5.dp)
                     .clip(CircleShape)
                     .background(Color(0xFF34C759))
             )

@@ -62,6 +62,7 @@ fun UserListScreen(
     val currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
     var users by remember { mutableStateOf<List<UserProfile>>(emptyList()) }
     var currentUserFollowingIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    val globalFollowingIds by com.chroma.studio.data.mutation.OptimisticFollowManager.followingUserIds.collectAsState()
     var isLoading by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
     val colors = LocalOscellionColors.current
@@ -79,7 +80,9 @@ fun UserListScreen(
         // Fetch current user's following list to show correct Follow/Following buttons
         if (currentUserId != null) {
             val followingList = discoverVm.repository.getFollowing(currentUserId)
-            currentUserFollowingIds = followingList.map { it.uid }.toSet()
+            val set = followingList.map { it.uid }.toSet()
+            currentUserFollowingIds = set
+            com.chroma.studio.data.mutation.OptimisticFollowManager.seedFollowing(set)
         }
         isLoading = false
     }
@@ -128,7 +131,7 @@ fun UserListScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     items(users, key = { it.uid }) { user ->
-                        val isFollowingUser = currentUserFollowingIds.contains(user.uid)
+                        val isFollowingUser = globalFollowingIds.contains(user.uid)
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -193,12 +196,7 @@ fun UserListScreen(
                                     LiquidGlassSecondaryButton(
                                         text = "Following",
                                         onClick = {
-                                            scope.launch {
-                                                val success = discoverVm.repository.toggleFollow(currentUserId, user.uid)
-                                                if (success) {
-                                                    currentUserFollowingIds = currentUserFollowingIds - user.uid
-                                                }
-                                            }
+                                            discoverVm.toggleFollow(user.uid, currentUserId, baseFollowing = true)
                                         },
                                         isSmall = true
                                     )
@@ -206,12 +204,7 @@ fun UserListScreen(
                                     LiquidGlassPrimaryButton(
                                         text = "Follow",
                                         onClick = {
-                                            scope.launch {
-                                                val success = discoverVm.repository.toggleFollow(currentUserId, user.uid)
-                                                if (success) {
-                                                    currentUserFollowingIds = currentUserFollowingIds + user.uid
-                                                }
-                                            }
+                                            discoverVm.toggleFollow(user.uid, currentUserId, baseFollowing = false)
                                         },
                                         isSmall = true
                                     )

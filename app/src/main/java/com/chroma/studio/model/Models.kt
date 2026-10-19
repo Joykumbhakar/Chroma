@@ -91,9 +91,14 @@ data class DiscoverPost(
     val savedBy: List<String> = emptyList(),
     val jsonUrl: String = "",
     val imageUrl: String? = null,
-    val postType: String = "work", // "work" for JSON, "image" for standard posts
+    val imageUrls: List<String> = emptyList(),
+    val workUrls: List<String> = emptyList(),
+    val videoUrl: String? = null,       // For postType = "video" community posts
+    val thumbnailUrl: String? = null,   // Poster frame for video posts
+    val postType: String = "work", // "work" for JSON, "image" for photos, "video" for video posts
     val tags: List<String> = emptyList(),
     val mentions: List<String> = emptyList(),
+    val trendingTag: String? = null,
     val timestamp: Long = System.currentTimeMillis(),
     
     // Privacy & Visibility Controls for Action Counters
@@ -102,6 +107,8 @@ data class DiscoverPost(
     val hideRemixesCount: Boolean = false,
     val hideDownloadsCount: Boolean = false,
     val hideSavesCount: Boolean = false,
+    val turnOffComments: Boolean = false,
+    val turnOffRemix: Boolean = false,
     
     // Remix Metadata
     val remixedFromPostId: String? = null,
@@ -115,6 +122,26 @@ data class DiscoverPost(
     @get:com.google.firebase.firestore.PropertyName("archived")
     @set:com.google.firebase.firestore.PropertyName("archived")
     var isArchived: Boolean = false
+)
+
+data class CreatorPostDraft(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val mode: String = "post", // "post", "flash", "work"
+    val title: String = "",
+    val description: String = "",
+    val aspectRatio: String = "4:3",
+    val categoryTag: String? = null,
+    val hashtags: List<String> = emptyList(),
+    val mentions: List<String> = emptyList(),
+    val hideLikeCount: Boolean = false,
+    val turnOffComments: Boolean = false,
+    val turnOffRemix: Boolean = false,
+    val imageUris: List<String> = emptyList(),
+    val videoUri: String? = null,
+    val workIds: List<String> = emptyList(),
+    val flashTrimStartMs: Long = 0L,
+    val flashTrimEndMs: Long = 15000L,
+    val timestamp: Long = System.currentTimeMillis()
 )
 
 data class ChatRoom(
@@ -213,7 +240,9 @@ data class FlashComment(
     val likesCount: Int = 0,
     val likedBy: List<String> = emptyList(),
     val replyToCommentId: String? = null,
-    val replyFlashVideoUrl: String? = null
+    val replyFlashVideoUrl: String? = null,
+    val isPending: Boolean = false,
+    val isError: Boolean = false
 )
 
 data class FlashVideo(
@@ -241,6 +270,9 @@ data class FlashVideo(
     val remixedFromPostId: String? = null,
     val remixedFromAuthorUsername: String? = null,
     val timestamp: Long = System.currentTimeMillis(),
+    val hideLikesCount: Boolean = false,
+    val turnOffComments: Boolean = false,
+    val turnOffRemix: Boolean = false,
     @get:com.google.firebase.firestore.PropertyName("archived")
     @set:com.google.firebase.firestore.PropertyName("archived")
     var isArchived: Boolean = false

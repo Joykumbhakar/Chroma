@@ -92,7 +92,7 @@ fun StoriesSection(
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
-                            .width(72.dp)
+                            .width(76.dp)
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null
@@ -114,7 +114,7 @@ fun StoriesSection(
                             showAddBadge = true,
                             gender = myStoryGender,
                             isDark = isDark,
-                            gapColor = if (isDark) Color(0xFF121212) else Color.White,
+                            gapColor = colors.bg,
                             onAddBadgeClick = { onAddStoryClick() }
                         )
 
@@ -122,7 +122,7 @@ fun StoriesSection(
                         Text(
                             text = "Your story",
                             color = colors.textMain,
-                            fontSize = 11.5.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -184,7 +184,7 @@ fun StoriesSection(
                         showAddBadge = false,
                         gender = profile.gender,
                         isDark = isDark,
-                        gapColor = if (isDark) Color(0xFF121212) else Color.White
+                        gapColor = colors.bg
                     )
 
                     Spacer(modifier = Modifier.height(4.dp))

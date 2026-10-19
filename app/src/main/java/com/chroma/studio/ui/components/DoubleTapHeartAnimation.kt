@@ -1,67 +1,295 @@
 package com.chroma.studio.ui.components
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.rotate
-import androidx.compose.ui.graphics.drawscope.scale
-import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
+import kotlin.random.Random
 
 /**
- * State controller for managing double-tap-to-like animations.
+ * Holds trajectory and rotation details for each individual small blast heart.
+ */
+data class ParticleHeartData(
+    val targetOffsetX: Float, // Target X distance in Dp
+    val targetOffsetY: Float, // Target Y distance in Dp
+    val targetRotation: Float // Random spin in degrees (-45f to 45f)
+)
+
+/**
+ * Represents a single double-tap burst event at a specific screen coordinate.
+ */
+data class HeartBurst(
+    val id: Long = System.nanoTime() + Random.nextLong(),
+    val tapOffset: Offset, // Exact pixel coordinate of the double tap
+    val mainRotation: Float, // Random tilt for the big heart (-15f to 15f)
+    val particles: List<ParticleHeartData>
+)
+
+/**
+ * Generates a new [HeartBurst] matching the exact math from the web implementation:
+ * - Main heart tilted between -15 and +15 degrees.
+ * - 6 small hearts arranged in a circle with slight angular variation and 70..130dp travel radius.
+ */
+fun createHeartBurst(tapOffset: Offset): HeartBurst {
+    val particleCount = 6
+    val particles = List(particleCount) { index ->
+        // Evenly spread circular angle with random jitter (-0.25 to +0.25 radians)
+        val baseAngle = (2.0 * PI / particleCount) * index
+        val jitter = Random.nextDouble(-0.25, 0.25)
+        val angle = baseAngle + jitter
+
+        // Travel distance between 70dp and 130dp
+        val distanceDp = 70f + Random.nextFloat() * 60f
+
+        ParticleHeartData(
+            targetOffsetX = (cos(angle) * distanceDp).toFloat(),
+            targetOffsetY = (sin(angle) * distanceDp).toFloat(),
+            targetRotation = Random.nextFloat() * 90f - 45f
+        )
+    }
+
+    return HeartBurst(
+        tapOffset = tapOffset,
+        mainRotation = Random.nextFloat() * 30f - 15f,
+        particles = particles
+    )
+}
+
+/**
+ * Recreates the exact SVG heart path and #FF2D55 fill color from the HTML version
+ * without requiring any external drawable resources or icon libraries.
+ */
+fun createHeartImageVector(fillColor: Color = Color(0xFFFF2D55)): ImageVector {
+    return ImageVector.Builder(
+        name = "LikeHeart",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(fill = SolidColor(fillColor)) {
+            // Exact path: M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z
+            moveTo(12f, 21.35f)
+            lineToRelative(-1.45f, -1.32f)
+            curveTo(5.4f, 15.36f, 2f, 12.28f, 2f, 8.5f)
+            curveTo(2f, 5.42f, 4.42f, 3f, 7.5f, 3f)
+            curveToRelative(1.74f, 0f, 3.41f, 0.81f, 4.5f, 2.09f)
+            curveTo(13.09f, 3.81f, 14.76f, 3f, 16.5f, 3f)
+            curveTo(19.58f, 3f, 22f, 5.42f, 22f, 8.5f)
+            curveToRelative(0f, 3.78f, -3.4f, 6.86f, -8.55f, 11.54f)
+            lineTo(12f, 21.35f)
+            close()
+        }
+    }.build()
+}
+
+/**
+ * Runs the parallel animations for the 6 small blast hearts (600ms) and the
+ * main large heart (1000ms), then triggers cleanup once finished.
+ */
+@Composable
+fun HeartBurstAnimation(
+    burst: HeartBurst,
+    heartVector: ImageVector,
+    mainHeartSize: Dp = 90.dp,
+    onAnimationFinished: (HeartBurst) -> Unit
+) {
+    val density = LocalDensity.current
+    val haptic = LocalHapticFeedback.current
+
+    // Main heart animation states
+    val mainScale = remember { Animatable(0f) }
+    val mainAlpha = remember { Animatable(0f) }
+    val mainOffsetYDp = remember { Animatable(0f) }
+
+    // Blast particles progress (0f to 1f over 600ms with ease-out curve)
+    val blastProgress = remember { Animatable(0f) }
+    val easeOutCubic = remember { CubicBezierEasing(0.0f, 0.0f, 0.58f, 1.0f) }
+    val springPopEasing = remember { CubicBezierEasing(0.175f, 0.885f, 0.32f, 1.275f) }
+
+    LaunchedEffect(burst.id) {
+        try {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        } catch (_: Exception) {}
+
+        coroutineScope {
+            // 1. Main Heart Scale: Pops to 1.2x at 150ms, settles to 1.0x at 300ms, shrinks to 0.9x at 1000ms
+            launch {
+                mainScale.animateTo(
+                    targetValue = 0.9f,
+                    animationSpec = keyframes {
+                        durationMillis = 1000
+                        0f at 0 with springPopEasing
+                        1.2f at 150 with FastOutSlowInEasing
+                        1.0f at 300 with LinearEasing
+                        1.0f at 650 with LinearEasing
+                        0.9f at 1000
+                    }
+                )
+            }
+
+            // 2. Main Heart Alpha: Fades in by 150ms, holds until 650ms, fades out by 1000ms
+            launch {
+                mainAlpha.animateTo(
+                    targetValue = 0f,
+                    animationSpec = keyframes {
+                        durationMillis = 1000
+                        0f at 0
+                        1f at 150
+                        1f at 650
+                        0f at 1000
+                    }
+                )
+            }
+
+            // 3. Main Heart Float Up: Holds Y position until 650ms, then floats up by -60dp
+            launch {
+                mainOffsetYDp.animateTo(
+                    targetValue = -60f,
+                    animationSpec = keyframes {
+                        durationMillis = 1000
+                        0f at 0
+                        0f at 650 with FastOutSlowInEasing
+                        -60f at 1000
+                    }
+                )
+            }
+
+            // 4. Small Hearts Blast: 600ms ease-out outward trajectory
+            launch {
+                blastProgress.animateTo(
+                    targetValue = 1f,
+                    animationSpec = tween(
+                        durationMillis = 600,
+                        easing = easeOutCubic
+                    )
+                )
+            }
+        }
+
+        // Remove this burst from the screen once the 1000ms animation completes
+        onAnimationFinished(burst)
+    }
+
+    val smallHeartSize = (mainHeartSize * (50f / 90f))
+
+    val mainHalfSizePx = with(density) { (mainHeartSize / 2).toPx() }
+    val smallHalfSizePx = with(density) { (smallHeartSize / 2).toPx() }
+
+    // Render the 6 small blast hearts behind the main heart (z-index equivalent)
+    val currentBlast = blastProgress.value
+    if (currentBlast < 1f) {
+        val particleScale = 0.8f + (0.2f - 0.8f) * currentBlast // Scales from 0.8f down to 0.2f
+        val particleAlpha = 1f - currentBlast                    // Fades from 1f down to 0f
+
+        burst.particles.forEach { particle ->
+            val currentTxPx = with(density) { (particle.targetOffsetX * currentBlast).dp.toPx() }
+            val currentTyPx = with(density) { (particle.targetOffsetY * currentBlast).dp.toPx() }
+            val currentRotation = particle.targetRotation * currentBlast
+
+            Image(
+                imageVector = heartVector,
+                contentDescription = null,
+                modifier = Modifier
+                    .offset {
+                        IntOffset(
+                            x = (burst.tapOffset.x - smallHalfSizePx + currentTxPx).roundToInt(),
+                            y = (burst.tapOffset.y - smallHalfSizePx + currentTyPx).roundToInt()
+                        )
+                    }
+                    .size(smallHeartSize)
+                    .graphicsLayer {
+                        scaleX = particleScale
+                        scaleY = particleScale
+                        alpha = particleAlpha
+                        rotationZ = currentRotation
+                    }
+            )
+        }
+    }
+
+    // Render the main 90dp heart on top
+    val currentMainOffsetYPx = with(density) { mainOffsetYDp.value.dp.toPx() }
+    Image(
+        imageVector = heartVector,
+        contentDescription = null,
+        modifier = Modifier
+            .offset {
+                IntOffset(
+                    x = (burst.tapOffset.x - mainHalfSizePx).roundToInt(),
+                    y = (burst.tapOffset.y - mainHalfSizePx + currentMainOffsetYPx).roundToInt()
+                )
+            }
+            .size(mainHeartSize)
+            .graphicsLayer {
+                scaleX = mainScale.value
+                scaleY = mainScale.value
+                alpha = mainAlpha.value
+                rotationZ = burst.mainRotation
+            }
+    )
+}
+
+/**
+ * State controller for managing concurrent double-tap-to-like heart burst animations.
  */
 @Stable
 class DoubleTapLikeState {
-    var isTriggered by mutableStateOf(false)
-        internal set
+    val activeBursts = mutableStateListOf<HeartBurst>()
 
-    var tapOffset by mutableStateOf<Offset?>(null)
-        internal set
+    val isTriggered: Boolean
+        get() = activeBursts.isNotEmpty()
 
-    var triggerToken by mutableLongStateOf(0L)
-        internal set
+    val tapOffset: Offset?
+        get() = activeBursts.lastOrNull()?.tapOffset
 
     fun trigger(offset: Offset? = null) {
-        tapOffset = offset
-        triggerToken++
-        isTriggered = true
+        val tap = offset ?: Offset.Unspecified
+        activeBursts.add(createHeartBurst(tap))
     }
 
-    internal fun finish() {
-        isTriggered = false
+    internal fun finish(burst: HeartBurst) {
+        activeBursts.remove(burst)
+    }
+
+    fun clear() {
+        activeBursts.clear()
     }
 }
 
@@ -71,236 +299,78 @@ fun rememberDoubleTapLikeState(): DoubleTapLikeState {
 }
 
 /**
- * A simple, flat, smooth, clean and professional Double-Tap to Like Heart animation.
- *
- * Features:
- * - Mathematical cubic Bézier vector heart path (sharp, flat and crisp on any resolution).
- * - Flat vibrant crimson red with a clean 2dp high-contrast white border and ambient drop shadow.
- * - Dynamic spring pop-in (scale 0 -> 1.22 -> 1.0) with subtle organic tilt.
- * - Delicate expanding shockwave ring and 6 minimal flat sparkle dots.
- * - Gentle hold followed by smooth upward drift and dissolve exit.
- * - Built-in tactile haptic feedback.
- */
-@Composable
-fun FlatDoubleTapHeartAnimation(
-    isTriggered: Boolean,
-    modifier: Modifier = Modifier,
-    tapOffset: Offset? = null,
-    heartColor: Color = Color(0xFFFF2D55), // Apple System Pink/Red
-    heartSize: Dp = 105.dp,
-    enableHaptics: Boolean = true,
-    rotationDegrees: Float = -6f,
-    onAnimationFinished: () -> Unit = {}
-) {
-    if (!isTriggered) return
-
-    val density = LocalDensity.current
-    val haptic = LocalHapticFeedback.current
-
-    val heartSizePx = with(density) { heartSize.toPx() }
-    val maxUpwardDriftPx = with(density) { 26.dp.toPx() }
-    val ringMaxRadiusPx = heartSizePx * 0.72f
-    val particleMaxDistPx = heartSizePx * 0.65f
-
-    // Animation drivers
-    val scaleAnim = remember { Animatable(0f) }
-    val alphaAnim = remember { Animatable(0f) }
-    val driftAnim = remember { Animatable(0f) }
-    val ringProgress = remember { Animatable(0f) }
-    val ringAlpha = remember { Animatable(0f) }
-    val particleProgress = remember { Animatable(0f) }
-    val particleAlpha = remember { Animatable(0f) }
-
-    LaunchedEffect(isTriggered) {
-        if (!isTriggered) return@LaunchedEffect
-
-        if (enableHaptics) {
-            try {
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-            } catch (_: Exception) {}
-        }
-
-        // Reset
-        scaleAnim.snapTo(0f)
-        alphaAnim.snapTo(0f)
-        driftAnim.snapTo(0f)
-        ringProgress.snapTo(0.2f)
-        ringAlpha.snapTo(0.85f)
-        particleProgress.snapTo(0.2f)
-        particleAlpha.snapTo(1f)
-
-        // Phase 1: Rapid spring pop-in & particle burst
-        launch {
-            scaleAnim.animateTo(
-                targetValue = 1.22f,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMediumLow
-                )
-            )
-            scaleAnim.animateTo(
-                targetValue = 1.0f,
-                animationSpec = tween(120, easing = FastOutSlowInEasing)
-            )
-        }
-        launch {
-            alphaAnim.animateTo(1f, tween(110, easing = LinearEasing))
-        }
-        launch {
-            ringProgress.animateTo(1f, tween(360, easing = FastOutSlowInEasing))
-        }
-        launch {
-            ringAlpha.animateTo(0f, tween(360, easing = FastOutSlowInEasing))
-        }
-        launch {
-            particleProgress.animateTo(1f, tween(400, easing = FastOutSlowInEasing))
-        }
-        launch {
-            particleAlpha.animateTo(0f, tween(400, easing = FastOutSlowInEasing))
-        }
-
-        // Phase 2: Gentle hold
-        delay(480)
-
-        // Phase 3: Smooth float upward & dissolve
-        launch {
-            driftAnim.animateTo(maxUpwardDriftPx, tween(260, easing = FastOutSlowInEasing))
-        }
-        launch {
-            scaleAnim.animateTo(1.12f, tween(260, easing = FastOutSlowInEasing))
-        }
-        launch {
-            alphaAnim.animateTo(0f, tween(260, easing = LinearEasing))
-        }
-
-        delay(270)
-        onAnimationFinished()
-    }
-
-    val heartPath = remember(heartSizePx) { createCenteredHeartPath(heartSizePx) }
-
-    Canvas(modifier = modifier.fillMaxSize()) {
-        val currentAlpha = alphaAnim.value
-        if (currentAlpha <= 0.001f) return@Canvas
-
-        val w = size.width
-        val h = size.height
-        val centerPos = if (tapOffset != null) {
-            val half = heartSizePx / 2f
-            Offset(
-                x = tapOffset.x.coerceIn(half + 16f, w - half - 16f),
-                y = tapOffset.y.coerceIn(half + 16f, h - half - 16f)
-            )
-        } else {
-            Offset(w / 2f, h / 2f)
-        }
-
-        val currentScale = scaleAnim.value
-        val currentDrift = driftAnim.value
-
-        // 1. Clean Shockwave Ring
-        val rAlpha = ringAlpha.value * currentAlpha
-        if (rAlpha > 0.005f) {
-            val radius = ringMaxRadiusPx * ringProgress.value
-            drawCircle(
-                color = Color.White.copy(alpha = rAlpha * 0.9f),
-                radius = radius,
-                center = centerPos,
-                style = Stroke(width = 2.2.dp.toPx())
-            )
-            drawCircle(
-                color = heartColor.copy(alpha = rAlpha * 0.45f),
-                radius = radius * 1.06f,
-                center = centerPos,
-                style = Stroke(width = 1.2.dp.toPx())
-            )
-        }
-
-        // 2. Minimal Flat Burst Dots (6 geometric particles)
-        val pAlpha = particleAlpha.value * currentAlpha
-        if (pAlpha > 0.005f) {
-            val pDist = particleMaxDistPx * particleProgress.value
-            val angles = floatArrayOf(30f, 90f, 150f, 210f, 270f, 330f)
-            for (ang in angles) {
-                val rad = Math.toRadians(ang.toDouble()).toFloat()
-                val px = centerPos.x + cos(rad) * pDist
-                val py = centerPos.y + sin(rad) * pDist
-                val dotRadius = (3.5.dp.toPx() * (1f - particleProgress.value * 0.45f)).coerceAtLeast(1f)
-
-                // White dot with slight vibrant border
-                drawCircle(
-                    color = Color.White.copy(alpha = pAlpha),
-                    radius = dotRadius,
-                    center = Offset(px, py)
-                )
-                drawCircle(
-                    color = heartColor.copy(alpha = pAlpha * 0.7f),
-                    radius = dotRadius * 1.35f,
-                    center = Offset(px, py),
-                    style = Stroke(width = 0.8.dp.toPx())
-                )
-            }
-        }
-
-        // 3. Flat Heart Drawing (Centered, Scaled, Tilted, Shifted)
-        val animatedCenterY = centerPos.y - currentDrift
-
-        translate(left = centerPos.x, top = animatedCenterY) {
-            rotate(degrees = rotationDegrees, pivot = Offset.Zero) {
-                scale(scale = currentScale, pivot = Offset.Zero) {
-                    // Soft ambient shadow
-                    translate(top = 3.dp.toPx()) {
-                        drawPath(
-                            path = heartPath,
-                            color = Color.Black.copy(alpha = 0.22f * currentAlpha)
-                        )
-                    }
-
-                    // Flat solid heart fill
-                    drawPath(
-                        path = heartPath,
-                        color = heartColor.copy(alpha = currentAlpha)
-                    )
-
-                    // Crisp flat high-contrast white border
-                    drawPath(
-                        path = heartPath,
-                        color = Color.White.copy(alpha = 0.95f * currentAlpha),
-                        style = Stroke(
-                            width = 2.2.dp.toPx() / currentScale.coerceAtLeast(0.1f),
-                            cap = StrokeCap.Round,
-                            join = StrokeJoin.Round
-                        )
-                    )
-                }
-            }
-        }
-    }
-}
-
-/**
- * Overlay wrapper that binds to [DoubleTapLikeState].
+ * Overlay wrapper that binds to [DoubleTapLikeState] and renders concurrent heart bursts.
  */
 @Composable
 fun FlatDoubleTapHeartOverlay(
     state: DoubleTapLikeState,
     modifier: Modifier = Modifier,
     heartColor: Color = Color(0xFFFF2D55),
-    heartSize: Dp = 105.dp
+    heartSize: Dp = 90.dp
 ) {
-    FlatDoubleTapHeartAnimation(
-        isTriggered = state.isTriggered,
-        tapOffset = state.tapOffset,
-        heartColor = heartColor,
-        heartSize = heartSize,
-        modifier = modifier,
-        onAnimationFinished = { state.finish() }
+    val heartVector = remember(heartColor) { createHeartImageVector(heartColor) }
+
+    BoxWithConstraints(modifier = modifier) {
+        val fallbackCenter = remember(constraints.maxWidth, constraints.maxHeight) {
+            Offset(
+                x = (constraints.maxWidth / 2).toFloat().coerceAtLeast(0f),
+                y = (constraints.maxHeight / 2).toFloat().coerceAtLeast(0f)
+            )
+        }
+
+        state.activeBursts.forEach { burst ->
+            val resolvedBurst = remember(burst.id, fallbackCenter) {
+                if (burst.tapOffset == Offset.Unspecified || (burst.tapOffset.x == 0f && burst.tapOffset.y == 0f)) {
+                    burst.copy(tapOffset = fallbackCenter)
+                } else {
+                    burst
+                }
+            }
+
+            key(burst.id) {
+                HeartBurstAnimation(
+                    burst = resolvedBurst,
+                    heartVector = heartVector,
+                    mainHeartSize = heartSize,
+                    onAnimationFinished = { completedBurst ->
+                        state.finish(completedBurst)
+                    }
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Backward-compatible single-burst trigger composable.
+ */
+@Composable
+fun FlatDoubleTapHeartAnimation(
+    isTriggered: Boolean,
+    modifier: Modifier = Modifier,
+    tapOffset: Offset? = null,
+    heartColor: Color = Color(0xFFFF2D55),
+    heartSize: Dp = 90.dp,
+    enableHaptics: Boolean = true,
+    rotationDegrees: Float = 0f,
+    onAnimationFinished: () -> Unit = {}
+) {
+    if (!isTriggered) return
+    val heartVector = remember(heartColor) { createHeartImageVector(heartColor) }
+    val burst = remember(tapOffset) {
+        createHeartBurst(tapOffset ?: Offset.Zero).copy(mainRotation = rotationDegrees)
+    }
+    HeartBurstAnimation(
+        burst = burst,
+        heartVector = heartVector,
+        mainHeartSize = heartSize,
+        onAnimationFinished = { onAnimationFinished() }
     )
 }
 
 /**
  * All-in-one container that handles double-tap gesture detection,
- * triggers haptic feedback and displays the clean flat heart animation.
+ * triggers haptic feedback and displays the clean heart burst animation.
  */
 @Composable
 fun DoubleTapLikeContainer(
@@ -308,7 +378,7 @@ fun DoubleTapLikeContainer(
     modifier: Modifier = Modifier,
     onSingleTap: (() -> Unit)? = null,
     heartColor: Color = Color(0xFFFF2D55),
-    heartSize: Dp = 105.dp,
+    heartSize: Dp = 90.dp,
     content: @Composable BoxScope.() -> Unit
 ) {
     val state = rememberDoubleTapLikeState()
@@ -331,25 +401,5 @@ fun DoubleTapLikeContainer(
             heartColor = heartColor,
             heartSize = heartSize
         )
-    }
-}
-
-/**
- * Canonical mathematical heart path centered at Offset.Zero.
- */
-private fun createCenteredHeartPath(sizePx: Float): Path {
-    val s = sizePx / 24f
-    return Path().apply {
-        // Bottom tip
-        moveTo(0f, 9.35f * s)
-        lineTo(-1.45f * s, 8.03f * s)
-        cubicTo(-6.6f * s, 3.36f * s, -10f * s, 0.28f * s, -10f * s, -3.5f * s)
-        cubicTo(-10f * s, -6.58f * s, -7.58f * s, -9f * s, -4.5f * s, -9f * s)
-        cubicTo(-2.76f * s, -9f * s, -1.09f * s, -8.19f * s, 0f, -6.91f * s)
-        cubicTo(1.09f * s, -8.19f * s, 2.76f * s, -9f * s, 4.5f * s, -9f * s)
-        cubicTo(7.58f * s, -9f * s, 10f * s, -6.58f * s, 10f * s, -3.5f * s)
-        cubicTo(10f * s, 0.28f * s, 6.6f * s, 3.36f * s, 1.45f * s, 8.04f * s)
-        lineTo(0f, 9.35f * s)
-        close()
     }
 }

@@ -225,9 +225,32 @@ fun AppleSettingsSquircleIcon(
     id: Apple3DGraphicId,
     modifier: Modifier = Modifier,
     size: Dp = 42.dp,
+    hasBackground: Boolean = false,
     isOpen: Boolean = false,
     onClick: (() -> Unit)? = null
 ) {
+    if (!hasBackground) {
+        Box(
+            modifier = modifier
+                .size(size)
+                .then(
+                    if (onClick != null) Modifier.clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onClick
+                    ) else Modifier
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Apple3DGraphicIcon(
+                id = id,
+                isOpen = isOpen,
+                modifier = Modifier.size(size)
+            )
+        }
+        return
+    }
+
     val squircleShape = RoundedCornerShape(percent = 32)
     Box(
         modifier = modifier
@@ -273,17 +296,41 @@ fun AppleSettingsSquircleIcon(
 }
 
 /**
- * 65% Rounded Squircle Badge for Vector Icons
- * (32% border-radius • Single Blue Gradient Background • Top Specular Sheen)
+ * Vector Icon for Settings/Drawer Options
+ * By default: Clean, thin icon without background box (Matching Liquid Glass Design System Section 3)
  */
 @Composable
 fun AppleSettingsSquircleVectorIcon(
     icon: ImageVector,
     modifier: Modifier = Modifier,
-    size: Dp = 40.dp,
-    iconTint: Color = Color.White,
+    size: Dp = 24.dp,
+    hasBackground: Boolean = false,
+    iconTint: Color = Color(0xFF0A84FF),
     onClick: (() -> Unit)? = null
 ) {
+    if (!hasBackground) {
+        Box(
+            modifier = modifier
+                .size(size)
+                .then(
+                    if (onClick != null) Modifier.clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onClick
+                    ) else Modifier
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = iconTint,
+                modifier = Modifier.size(size)
+            )
+        }
+        return
+    }
+
     val squircleShape = RoundedCornerShape(percent = 32)
     Box(
         modifier = modifier

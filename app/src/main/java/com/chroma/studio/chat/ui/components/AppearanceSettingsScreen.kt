@@ -193,13 +193,15 @@ fun LiquidGlassKnob(
 fun AppleSwitch(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    activeTrackColor: Color = Color(0xFF0A84FF),
+    inactiveTrackColor: Color = if (isSystemInDarkTheme()) Color(0xFF39393D) else Color(0xFFE5E5EA)
 ) {
     val haptic = LocalHapticFeedback.current
     var isPressed by remember { mutableStateOf(false) }
 
     val trackColor by animateColorAsState(
-        targetValue = if (checked) Color(0xFF34C759) else Color(0xFFE5E5EA),
+        targetValue = if (checked) activeTrackColor else inactiveTrackColor,
         animationSpec = tween(240),
         label = "trackColor"
     )

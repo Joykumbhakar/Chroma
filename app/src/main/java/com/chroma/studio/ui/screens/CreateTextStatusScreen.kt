@@ -32,6 +32,7 @@ import com.chroma.studio.ui.components.IosSegmentedControl
 import com.chroma.studio.ui.components.MarkdownText
 import com.chroma.studio.ui.components.ChromaScreenHeader
 import com.chroma.studio.ui.components.ChromaHeaderActionButton
+import com.chroma.studio.ui.components.LiquidGlassCard
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.composables.icons.lucide.*
 
@@ -182,13 +183,14 @@ fun CreateTextStatusScreen(
             )
 
             // Main Editor / Preview Card
-            Card(
+            LiquidGlassCard(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = colors.glassBgHover),
-                border = androidx.compose.foundation.BorderStroke(0.5.dp, colors.glassBorder)
+                backgroundColor = colors.glassBgHover,
+                borderColor = colors.glassBorder,
+                contentPadding = PaddingValues(0.dp)
             ) {
                 Box(
                     modifier = Modifier
@@ -267,13 +269,14 @@ fun CreateTextStatusScreen(
                 enter = fadeIn(),
                 exit = fadeOut()
             ) {
-                Card(
+                LiquidGlassCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 10.dp),
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = colors.glassBgHover),
-                    border = androidx.compose.foundation.BorderStroke(0.5.dp, colors.glassBorder)
+                    backgroundColor = colors.glassBgHover,
+                    borderColor = colors.glassBorder,
+                    contentPadding = PaddingValues(0.dp)
                 ) {
                     LazyRow(
                         modifier = Modifier
@@ -303,13 +306,14 @@ fun CreateTextStatusScreen(
             // Rich Formatting Toolbar (Edit Mode Only)
             if (selectedTab == 0) {
                 Spacer(Modifier.height(10.dp))
-                Card(
+                LiquidGlassCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .navigationBarsPadding(),
                     shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = colors.glassBgHover),
-                    border = androidx.compose.foundation.BorderStroke(0.5.dp, colors.glassBorder)
+                    backgroundColor = colors.glassBgHover,
+                    borderColor = colors.glassBorder,
+                    contentPadding = PaddingValues(0.dp)
                 ) {
                     Row(
                         modifier = Modifier

@@ -132,6 +132,11 @@ class DiscoverViewModel : ViewModel() {
         }
     }
 
+    private val mutationCoordinator = com.chroma.studio.data.mutation.OptimisticMutationCoordinator(viewModelScope)
+
+    val followingUserIds = com.chroma.studio.data.mutation.OptimisticFollowManager.followingUserIds
+    val followerCountDeltas = com.chroma.studio.data.mutation.OptimisticFollowManager.followerCountDeltas
+
     fun toggleLike(workId: String, currentUserId: String? = null, forceLike: Boolean = false) {
         val uid = if (!currentUserId.isNullOrBlank()) currentUserId else com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
         if (uid.isNullOrBlank()) return
@@ -142,44 +147,114 @@ class DiscoverViewModel : ViewModel() {
             return // Already liked, skip toggle
         }
 
-        // Optimistic UI — update immediately, sync in background
-        _likedWorkIds.value = if (isLikedNow && !forceLike) _likedWorkIds.value - workId else _likedWorkIds.value + workId
-        _works.value = _works.value.map {
-            if (it.id == workId) it.copy(likesCount = maxOf(0, it.likesCount + (if (isLikedNow && !forceLike) -1 else 1))) else it
-        }
-        _trendingWorks.value = _trendingWorks.value.map {
-            if (it.id == workId) it.copy(likesCount = maxOf(0, it.likesCount + (if (isLikedNow && !forceLike) -1 else 1))) else it
-        }
-        viewModelScope.launch {
-            val success = repository.toggleLike(workId, uid, forceLike)
-            if (!success) {
-                // Revert on failure
-                _likedWorkIds.value = if (isLikedNow) _likedWorkIds.value + workId else _likedWorkIds.value - workId
+        val targetLiked = if (forceLike) true else !isLikedNow
+        val prevLikedSet = _likedWorkIds.value
+        val prevWorks = _works.value
+        val prevTrending = _trendingWorks.value
+        val prevLikedWorks = _likedWorks.value
+
+        mutationCoordinator.mutate(
+            key = "like:$workId",
+            desiredState = targetLiked,
+            onOptimisticApply = { nextLiked ->
+                _likedWorkIds.value = if (nextLiked) _likedWorkIds.value + workId else _likedWorkIds.value - workId
                 _works.value = _works.value.map {
-                    if (it.id == workId) it.copy(likesCount = maxOf(0, it.likesCount + (if (isLikedNow) 1 else -1))) else it
+                    if (it.id == workId) it.copy(likesCount = maxOf(0, it.likesCount + if (nextLiked) 1 else -1)) else it
                 }
                 _trendingWorks.value = _trendingWorks.value.map {
-                    if (it.id == workId) it.copy(likesCount = maxOf(0, it.likesCount + (if (isLikedNow) 1 else -1))) else it
+                    if (it.id == workId) it.copy(likesCount = maxOf(0, it.likesCount + if (nextLiked) 1 else -1)) else it
                 }
+                if (!nextLiked) {
+                    _likedWorks.value = _likedWorks.value.filter { it.id != workId }
+                }
+            },
+            performServerSync = { nextLiked ->
+                repository.setLike(workId, uid, nextLiked)
+            },
+            onRollback = {
+                _likedWorkIds.value = prevLikedSet
+                _works.value = prevWorks
+                _trendingWorks.value = prevTrending
+                _likedWorks.value = prevLikedWorks
+            },
+            onError = {
+                com.chroma.studio.ui.components.ToastManager.showToast("Could not update like. Please try again.")
             }
-        }
+        )
     }
 
     fun toggleSave(workId: String) {
         val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser ?: return
         val isSavedNow = _savedWorkIds.value.contains(workId)
-        _savedWorkIds.value = if (isSavedNow) _savedWorkIds.value - workId else _savedWorkIds.value + workId
+        val targetSaved = !isSavedNow
+        val prevSavedSet = _savedWorkIds.value
+        val prevWorks = _works.value
+        val prevTrending = _trendingWorks.value
+        val prevSavedWorks = _savedWorks.value
+
+        mutationCoordinator.mutate(
+            key = "save:$workId",
+            desiredState = targetSaved,
+            onOptimisticApply = { nextSaved ->
+                _savedWorkIds.value = if (nextSaved) _savedWorkIds.value + workId else _savedWorkIds.value - workId
+                _works.value = _works.value.map {
+                    if (it.id == workId) {
+                        val newSavedBy = if (nextSaved) it.savedBy + currentUser.uid else it.savedBy - currentUser.uid
+                        it.copy(saveCount = maxOf(0, it.saveCount + if (nextSaved) 1 else -1), savedBy = newSavedBy)
+                    } else it
+                }
+                _trendingWorks.value = _trendingWorks.value.map {
+                    if (it.id == workId) {
+                        val newSavedBy = if (nextSaved) it.savedBy + currentUser.uid else it.savedBy - currentUser.uid
+                        it.copy(saveCount = maxOf(0, it.saveCount + if (nextSaved) 1 else -1), savedBy = newSavedBy)
+                    } else it
+                }
+                if (!nextSaved) {
+                    _savedWorks.value = _savedWorks.value.filter { it.id != workId }
+                }
+            },
+            performServerSync = { nextSaved ->
+                repository.setSave(workId, currentUser.uid, nextSaved)
+            },
+            onRollback = {
+                _savedWorkIds.value = prevSavedSet
+                _works.value = prevWorks
+                _trendingWorks.value = prevTrending
+                _savedWorks.value = prevSavedWorks
+            },
+            onError = {
+                com.chroma.studio.ui.components.ToastManager.showToast("Could not update saved post. Please try again.")
+            }
+        )
+    }
+
+    fun toggleFollow(targetUserId: String, currentUserId: String? = null, baseFollowing: Boolean? = null) {
+        val uid = if (!currentUserId.isNullOrBlank()) currentUserId else com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
+        com.chroma.studio.data.mutation.OptimisticFollowManager.toggleFollow(
+            currentUserId = uid,
+            targetUserId = targetUserId,
+            baseFollowing = baseFollowing,
+            onError = {
+                com.chroma.studio.ui.components.ToastManager.showToast("Failed to update follow status")
+            }
+        )
+    }
+
+    fun trackRemix(workId: String) {
+        val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
+        
         _works.value = _works.value.map {
-            if (it.id == workId) it.copy(saveCount = maxOf(0, it.saveCount + (if (isSavedNow) -1 else 1))) else it
+            if (it.id == workId && !it.remixedBy.contains(uid)) {
+                it.copy(remixCount = it.remixCount + 1, remixedBy = it.remixedBy + uid)
+            } else it
+        }
+        _trendingWorks.value = _trendingWorks.value.map {
+            if (it.id == workId && !it.remixedBy.contains(uid)) {
+                it.copy(remixCount = it.remixCount + 1, remixedBy = it.remixedBy + uid)
+            } else it
         }
         viewModelScope.launch {
-            val success = repository.toggleSave(workId, currentUser.uid)
-            if (!success) {
-                _savedWorkIds.value = if (isSavedNow) _savedWorkIds.value + workId else _savedWorkIds.value - workId
-                _works.value = _works.value.map {
-                    if (it.id == workId) it.copy(saveCount = maxOf(0, it.saveCount + (if (isSavedNow) 1 else -1))) else it
-                }
-            }
+            repository.incrementRemixCount(workId, uid)
         }
     }
 
@@ -187,6 +262,11 @@ class DiscoverViewModel : ViewModel() {
         val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
         
         _works.value = _works.value.map {
+            if (it.id == workId && !it.sharedBy.contains(uid)) {
+                it.copy(shareCount = it.shareCount + 1, sharedBy = it.sharedBy + uid)
+            } else it
+        }
+        _trendingWorks.value = _trendingWorks.value.map {
             if (it.id == workId && !it.sharedBy.contains(uid)) {
                 it.copy(shareCount = it.shareCount + 1, sharedBy = it.sharedBy + uid)
             } else it
@@ -200,6 +280,11 @@ class DiscoverViewModel : ViewModel() {
         val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
         
         _works.value = _works.value.map {
+            if (it.id == workId && !it.downloadedBy.contains(uid)) {
+                it.copy(downloadCount = it.downloadCount + 1, downloadedBy = it.downloadedBy + uid)
+            } else it
+        }
+        _trendingWorks.value = _trendingWorks.value.map {
             if (it.id == workId && !it.downloadedBy.contains(uid)) {
                 it.copy(downloadCount = it.downloadCount + 1, downloadedBy = it.downloadedBy + uid)
             } else it
