@@ -36,13 +36,22 @@ fun ExportSettingsDialog(
         onDismissRequest = onDismiss
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                .background(Color.White)
+                .padding(horizontal = 24.dp, vertical = 16.dp)
         ) {
-            Text("Export Settings", color = colors.textMain, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text(
+                text = "Export Video",
+                color = Color(0xFF111827),
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold
+            )
             Spacer(Modifier.height(16.dp))
 
             // Resolution
-            Text("Resolution", color = colors.textMuted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp))
+            Text("Resolution", color = Color(0xFF6B7280), fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 6.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 resolutions.forEach { res ->
                     val selected = resolution == res
@@ -51,46 +60,49 @@ fun ExportSettingsDialog(
                 }
             }
             
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(14.dp))
             
             // FPS
-            Text("Frame Rate", color = colors.textMuted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp))
+            Text("Frame Rate", color = Color(0xFF6B7280), fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 6.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 fpsList.forEach { f ->
                     OptionChip("${f}fps", fps == f) { fps = f }
                 }
             }
             
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(14.dp))
             
             // Codec
-            Text("Codec", color = colors.textMuted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp))
+            Text("Format", color = Color(0xFF6B7280), fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 6.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 codecs.forEach { c ->
-                    val label = if (c == "libx264") "H.264" else "HEVC (H.265)"
+                    val label = if (c == "libx264") "H.264" else "HEVC"
                     OptionChip(label, codec == c) { codec = c }
                 }
             }
             
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(22.dp))
             
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                com.chroma.studio.ui.components.LiquidGlassSecondaryButton(
+                Button(
                     onClick = onDismiss,
-                    isSmall = true
+                    modifier = Modifier.weight(1f).height(44.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF3F4F6))
                 ) {
-                    Text("Cancel", color = Color.Black, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    Text("Cancel", color = Color(0xFF374151), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 }
-                Spacer(Modifier.width(10.dp))
-                com.chroma.studio.ui.components.LiquidGlassPrimaryButton(
+                Button(
                     onClick = { onExport(ExportSettings(resolution, fps, codec)) },
-                    isSmall = true
+                    modifier = Modifier.weight(1f).height(44.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
                 ) {
-                    Text("Export", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Text("Export", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -99,24 +111,23 @@ fun ExportSettingsDialog(
 
 @Composable
 private fun RowScope.OptionChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    val colors = LocalOscellionColors.current
     Box(
         modifier = Modifier
             .weight(1f)
-            .height(36.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(if (selected) colors.primary.copy(alpha = 0.2f) else colors.glassBgHover.copy(alpha = 0.3f))
+            .height(38.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (selected) Color(0xFFEFF6FF) else Color(0xFFF9FAFB))
             .border(
                 width = if (selected) 2.dp else 1.dp,
-                color = if (selected) colors.primary else colors.glassBorder,
-                shape = RoundedCornerShape(8.dp)
+                color = if (selected) Color(0xFF2563EB) else Color(0xFFE5E7EB),
+                shape = RoundedCornerShape(10.dp)
             )
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = label,
-            color = if (selected) colors.primary else colors.textMain,
+            color = if (selected) Color(0xFF2563EB) else Color(0xFF374151),
             fontSize = 12.sp,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
         )

@@ -7,6 +7,20 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEvent
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.zIndex
+import com.chroma.studio.ui.components.DynamicIslandManager
+import com.chroma.studio.ui.components.ToastManager
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -538,6 +552,12 @@ class ChromaEditorViewModel : ViewModel() {
         }
     }
 
+    fun updateClipTransform(clipId: String, transform: TransformState) {
+        _state.update { s ->
+            s.copy(clips = s.clips.map { if (it.id == clipId) it.copy(transform = transform) else it })
+        }
+    }
+
     fun updateClipTransition(clipId: String, transitionOut: TransitionType) {
         _state.update { s ->
             s.copy(clips = s.clips.map { if (it.id == clipId) it.copy(transitionOut = transitionOut) else it })
@@ -696,14 +716,35 @@ fun ChromaVideoEditorScreen(
 
     LaunchedEffect(videoUri) { viewModel.initialize(videoUri.toString()) }
 
-    // ExoPlayer for preview
+    // Low-latency ExoPlayer load control
+    val loadControl = remember {
+        androidx.media3.exoplayer.DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                50,   // minBufferMs
+                500,  // maxBufferMs
+                50,   // bufferForPlaybackMs
+                100   // bufferForPlaybackAfterRebufferMs
+            )
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
+    }
     val player = remember {
-        ExoPlayer.Builder(context).build().apply {
-            repeatMode = ExoPlayer.REPEAT_MODE_OFF
-            setSeekParameters(androidx.media3.exoplayer.SeekParameters.CLOSEST_SYNC)
+        ExoPlayer.Builder(context)
+            .setLoadControl(loadControl)
+            .build().apply {
+                repeatMode = ExoPlayer.REPEAT_MODE_OFF
+                setSeekParameters(androidx.media3.exoplayer.SeekParameters.CLOSEST_SYNC)
+            }
+    }
+
+    // Suppress Dynamic Island while in editor
+    DisposableEffect(player) {
+        DynamicIslandManager.isSuppressed = true
+        onDispose {
+            DynamicIslandManager.isSuppressed = false
+            player.release()
         }
     }
-    DisposableEffect(Unit) { onDispose { player.release() } }
 
     val mainClips = state.clips.filter { it.type == MediaType.VIDEO && it.trackId == 1 }.sortedBy { it.startTime }
     
@@ -809,15 +850,35 @@ fun ChromaVideoEditorScreen(
         onDispose { player.removeListener(listener) }
     }
 
-    // Continuously sync the timeline/playhead with actual playback position.
-    LaunchedEffect(isPlaying) {
-        while (isPlaying) {
-            androidx.compose.runtime.withFrameNanos {
+    // Continuously sync the timeline/playhead with buttery-smooth monotonic VSYNC pacing and soft convergence.
+    LaunchedEffect(isPlaying, mainClips) {
+        if (!isPlaying) return@LaunchedEffect
+        var lastFrameNanos = 0L
+
+        while (isActive && isPlaying) {
+            androidx.compose.runtime.withFrameNanos { frameTimeNanos ->
+                if (lastFrameNanos == 0L) {
+                    lastFrameNanos = frameTimeNanos
+                    return@withFrameNanos
+                }
+                val dtNanos = frameTimeNanos - lastFrameNanos
+                lastFrameNanos = frameTimeNanos
+                val dtSec = (dtNanos / 1_000_000_000f).coerceIn(0f, 0.05f)
+
                 val curIdx = player.currentMediaItemIndex
                 val curClip = mainClips.getOrNull(curIdx)
                 if (curClip != null) {
-                    val globalTime = curClip.startTime + (player.currentPosition / 1000f)
-                    viewModel.seekTo(globalTime)
+                    val playerPosSec = player.currentPosition / 1000f
+                    val currentGlobalSec = curClip.startTime + playerPosSec
+                    val speed = curClip.playbackRate.coerceAtLeast(0.1f)
+                    val steppedTime = currentTimeState.value + (dtSec * speed)
+                    val drift = currentGlobalSec - steppedTime
+                    val convergedTime = if (kotlin.math.abs(drift) > 0.10f) {
+                        currentGlobalSec
+                    } else {
+                        steppedTime + (drift * 0.22f)
+                    }
+                    viewModel.seekTo(convergedTime.coerceIn(0f, state.duration))
                 }
             }
         }
@@ -980,7 +1041,10 @@ fun ChromaVideoEditorScreen(
                 selectedClip = selectedClip,
                 isPlaying    = isPlaying,
                 onTogglePlay = { if (player.isPlaying) player.pause() else player.play() },
-                onSeek       = { viewModel.seekTo(it) }
+                onSeek       = { viewModel.seekTo(it) },
+                onTransformChange = { clipId, transform ->
+                    viewModel.updateClipTransform(clipId, transform)
+                }
             )
 
             // Quick Actions Panel
@@ -1134,12 +1198,37 @@ private fun VideoPreviewArea(
     selectedClip: Clip?,
     isPlaying:    Boolean,
     onTogglePlay: () -> Unit,
-    onSeek:       (Float) -> Unit
+    onSeek:       (Float) -> Unit,
+    onTransformChange: (String, TransformState) -> Unit
 ) {
     val colors = LocalOscellionColors.current
+    val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    val haptic = LocalHapticFeedback.current
+
     // The clip that actually feeds the visible video surface (track 1). Its filter and
     // adjustments are what the preview must reflect in real time.
     val mainClip = state.clips.find { it.type == MediaType.VIDEO && it.trackId == 1 }
+    val activeTargetClip = selectedClip ?: mainClip ?: state.clips.firstOrNull()
+    val activeTransform = activeTargetClip?.getInterpolatedTransform(currentTimeState.value) ?: TransformState()
+    val activeScale = activeTransform.scale
+    val activePanX = activeTransform.x
+    val activePanY = activeTransform.y
+
+    var showZoomCropSlider by remember { mutableStateOf(false) }
+    var zoomSliderHideJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    val keepZoomSliderAlive: () -> Unit = {
+        showZoomCropSlider = true
+        zoomSliderHideJob?.cancel()
+        zoomSliderHideJob = scope.launch {
+            delay(2000L)
+            showZoomCropSlider = false
+        }
+    }
+
+    var lastTapTimestamp by remember { mutableLongStateOf(0L) }
+    var pendingTapJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+
     val videoColorMatrixState = remember(mainClip?.filter, mainClip?.adjustments) {
         mutableStateOf(buildPreviewColorMatrix(mainClip?.filter ?: FilterType.NONE, mainClip?.adjustments ?: Adjustments()))
     }
@@ -1147,12 +1236,7 @@ private fun VideoPreviewArea(
 
     Box(
         modifier = modifier
-            .background(Color.Black)
-            .clickable(
-                indication        = null,
-                interactionSource = remember { MutableInteractionSource() },
-                onClick           = onTogglePlay
-            ),
+            .background(Color.Black),
         contentAlignment = Alignment.Center
     ) {
         // ExoPlayer — filter/adjustments are applied here via RenderEffect (Android 12+).
@@ -1302,6 +1386,140 @@ private fun VideoPreviewArea(
             }
         }
 
+        // ══════════════════════════════════════════════════════════
+        // UNIFIED TOUCH GESTURE OVERLAY (Zoom, Pan/Crop & Playback Tap)
+        // ══════════════════════════════════════════════════════════
+        if (state.clips.isNotEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .zIndex(20f)
+                    .pointerInput(Unit) {
+                        awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            var pan = Offset.Zero
+                            var pastTouchSlop = false
+                            val touchSlop = viewConfiguration.touchSlop
+                            var isMultiTouch = false
+                            var gestureConsumed = false
+                            var event: PointerEvent
+
+                            do {
+                                event = awaitPointerEvent()
+                                val canceled = event.changes.any { it.isConsumed }
+                                if (canceled) break
+
+                                val pointerCount = event.changes.count { it.pressed }
+                                if (pointerCount >= 2) {
+                                    isMultiTouch = true
+                                    pastTouchSlop = true
+                                    keepZoomSliderAlive()
+                                }
+
+                                val zoomChange = event.calculateZoom()
+                                val panChange = event.calculatePan()
+
+                                if (pointerCount >= 2) {
+                                    keepZoomSliderAlive()
+                                    val target = activeTargetClip
+                                    if (target != null) {
+                                        val curT = target.transform
+                                        val newScale = (curT.scale * zoomChange).coerceIn(0.5f, 5.0f)
+                                        val dxDp = panChange.x / density.density
+                                        val dyDp = panChange.y / density.density
+                                        val maxPanX = kotlin.math.max(100f, (newScale - 0.7f).coerceAtLeast(0f) * 200f)
+                                        val maxPanY = kotlin.math.max(100f, (newScale - 0.7f).coerceAtLeast(0f) * 200f)
+                                        val newPanX = if (newScale <= 1.02f) 0f else (curT.x + dxDp).coerceIn(-maxPanX, maxPanX)
+                                        val newPanY = if (newScale <= 1.02f) 0f else (curT.y + dyDp).coerceIn(-maxPanY, maxPanY)
+
+                                        onTransformChange(
+                                            target.id,
+                                            curT.copy(scale = newScale, x = newPanX, y = newPanY)
+                                        )
+                                        gestureConsumed = true
+                                    }
+                                    event.changes.forEach {
+                                        if (it.positionChange() != Offset.Zero) {
+                                            it.consume()
+                                        }
+                                    }
+                                } else if (pointerCount == 1) {
+                                    val target = activeTargetClip
+                                    val isZoomed = (target?.transform?.scale ?: 1f) > 1.05f
+
+                                    pan += panChange
+                                    if (!pastTouchSlop) {
+                                        if (pan.getDistance() > touchSlop) {
+                                            pastTouchSlop = true
+                                        }
+                                    }
+
+                                    if (pastTouchSlop && isZoomed && target != null) {
+                                        keepZoomSliderAlive()
+                                        val curT = target.transform
+                                        val dxDp = panChange.x / density.density
+                                        val dyDp = panChange.y / density.density
+                                        val maxPanX = kotlin.math.max(100f, (curT.scale - 0.7f).coerceAtLeast(0f) * 200f)
+                                        val maxPanY = kotlin.math.max(100f, (curT.scale - 0.7f).coerceAtLeast(0f) * 200f)
+                                        val newPanX = (curT.x + dxDp).coerceIn(-maxPanX, maxPanX)
+                                        val newPanY = (curT.y + dyDp).coerceIn(-maxPanY, maxPanY)
+
+                                        onTransformChange(
+                                            target.id,
+                                            curT.copy(x = newPanX, y = newPanY)
+                                        )
+                                        gestureConsumed = true
+                                        event.changes.forEach {
+                                            if (it.positionChange() != Offset.Zero) {
+                                                it.consume()
+                                            }
+                                        }
+                                    }
+                                }
+                            } while (event.changes.any { it.pressed })
+
+                            if (isMultiTouch) {
+                                keepZoomSliderAlive()
+                            }
+
+                            // Tap handling when not dragging or pinching
+                            if (!pastTouchSlop && !isMultiTouch && !gestureConsumed) {
+                                val now = System.currentTimeMillis()
+                                if (now - lastTapTimestamp < 300L) {
+                                    // Double tap: toggle 1.0x Fit vs 1.35x Fill/Crop
+                                    pendingTapJob?.cancel()
+                                    pendingTapJob = null
+                                    lastTapTimestamp = 0L
+
+                                    val target = activeTargetClip
+                                    if (target != null) {
+                                        val curT = target.transform
+                                        val nextScale = if (curT.scale > 1.15f) 1.0f else 1.35f
+                                        val nextPanX = if (nextScale == 1.0f) 0f else curT.x
+                                        val nextPanY = if (nextScale == 1.0f) 0f else curT.y
+                                        onTransformChange(
+                                            target.id,
+                                            curT.copy(scale = nextScale, x = nextPanX, y = nextPanY)
+                                        )
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        ToastManager.showToast(if (nextScale == 1.0f) "Zoom: 1.0x (Fit)" else "Zoom: 1.35x (Fill)")
+                                    }
+                                } else {
+                                    // Single tap: toggle Play / Pause after short debounce
+                                    lastTapTimestamp = now
+                                    pendingTapJob?.cancel()
+                                    pendingTapJob = scope.launch {
+                                        delay(260L)
+                                        onTogglePlay()
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    }
+                                }
+                            }
+                        }
+                    }
+            )
+        }
+
         // Center Big Play Button (Visible when paused)
         if (!isPlaying) {
             Box(
@@ -1310,76 +1528,206 @@ private fun VideoPreviewArea(
                     .clip(CircleShape)
                     .background(Color.Black.copy(alpha = 0.4f))
                     .border(0.5.dp, Color.White.copy(alpha = 0.1f), CircleShape)
-                    .clickable(onClick = onTogglePlay),
+                    .clickable(onClick = onTogglePlay)
+                    .zIndex(25f),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(Lucide.Play, contentDescription = "Play", tint = Color.White, modifier = Modifier.size(24.dp).offset(x = 2.dp))
             }
         }
 
-        // Bottom HUD (Playback bar)
-        Row(
+        // Floating Zoom & Crop Smooth Slider Bar (Revealed by 2-finger zoom, auto-fades after 2s of inactivity)
+        androidx.compose.animation.AnimatedVisibility(
+            visible = showZoomCropSlider && state.clips.isNotEmpty(),
+            enter = fadeIn(tween(220)) + scaleIn(tween(220), initialScale = 0.92f),
+            exit = fadeOut(tween(450)) + scaleOut(tween(450), targetScale = 0.92f),
             modifier = Modifier
-                .fillMaxWidth()
                 .align(Alignment.BottomCenter)
-                .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f))))
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(horizontal = 14.dp, vertical = 10.dp)
+                .zIndex(45f)
         ) {
-            Icon(
-                imageVector = if (isPlaying) Lucide.Pause else Lucide.Play,
-                contentDescription = "Play/Pause",
-                tint = Color.White,
+            Box(
                 modifier = Modifier
-                    .size(20.dp)
-                    .clickable(onClick = onTogglePlay)
-            )
-            
-            // Timecode
-            Text(
-                text = formatTime(currentTimeState.value),
-                color = Color.White,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium,
-                fontFamily = FontFamily.Monospace,
-                modifier = Modifier.width(60.dp)
-            )
-            
-            // Custom Seekbar
-            val progress = if (state.duration > 0f) (currentTimeState.value / state.duration).coerceIn(0f, 1f) else 0f
-            BoxWithConstraints(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(24.dp)
-                    .pointerInput(Unit) {
-                        detectTapGestures { offset ->
-                            val pct = (offset.x / size.width).coerceIn(0f, 1f)
-                            onSeek(pct * state.duration)
+                    .fillMaxWidth(0.92f)
+                    .widthIn(max = 380.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(Color(0xE614161E))
+                    .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(20.dp))
+                    .shadow(16.dp, RoundedCornerShape(20.dp), spotColor = Color.Black)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { keepZoomSliderAlive() }
+                    .padding(horizontal = 14.dp, vertical = 10.dp)
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Header Row: Icon, Title, Multiplier badge, and Reset button
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Lucide.Maximize2,
+                                contentDescription = null,
+                                tint = Color(0xFF0A84FF),
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Text(
+                                text = "ZOOM & CROP",
+                                color = Color.White.copy(alpha = 0.9f),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.8.sp
+                            )
+                        }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(Color(0xFF0A84FF).copy(alpha = 0.2f))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "${String.format("%.2f", activeScale)}x",
+                                    color = Color(0xFF60A5FA),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+
+                            if (activeScale != 1f || activePanX != 0f || activePanY != 0f) {
+                                Text(
+                                    text = "Reset",
+                                    color = Color(0xFFFF453A),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .clickable {
+                                            keepZoomSliderAlive()
+                                            val target = activeTargetClip ?: return@clickable
+                                            onTransformChange(
+                                                target.id,
+                                                target.transform.copy(scale = 1f, x = 0f, y = 0f)
+                                            )
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            ToastManager.showToast("Zoom reset to 1.0x")
+                                        }
+                                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                                )
+                            }
                         }
                     }
-                    .pointerInput(Unit) {
-                        detectDragGestures { change, _ ->
-                            val pct = (change.position.x / size.width).coerceIn(0f, 1f)
-                            onSeek(pct * state.duration)
+
+                    // Slider Row: ZoomOut Icon, Smooth Slider, ZoomIn Icon
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Zoom Out Step Button
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.12f))
+                                .clickable {
+                                    keepZoomSliderAlive()
+                                    val target = activeTargetClip ?: return@clickable
+                                    val curT = target.transform
+                                    val newScale = (curT.scale - 0.2f).coerceAtLeast(0.5f)
+                                    val maxPanX = kotlin.math.max(100f, (newScale - 0.7f).coerceAtLeast(0f) * 200f)
+                                    val maxPanY = kotlin.math.max(100f, (newScale - 0.7f).coerceAtLeast(0f) * 200f)
+                                    val newPanX = if (newScale <= 1.02f) 0f else curT.x.coerceIn(-maxPanX, maxPanX)
+                                    val newPanY = if (newScale <= 1.02f) 0f else curT.y.coerceIn(-maxPanY, maxPanY)
+                                    onTransformChange(
+                                        target.id,
+                                        curT.copy(scale = newScale, x = newPanX, y = newPanY)
+                                    )
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Lucide.ZoomOut,
+                                contentDescription = "Zoom Out",
+                                tint = Color.White,
+                                modifier = Modifier.size(14.dp)
+                            )
                         }
-                    },
-                contentAlignment = Alignment.CenterStart
-            ) {
-                // Background Track
-                Box(modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.3f)))
-                // Fill
-                Box(modifier = Modifier.fillMaxWidth(fraction = progress).height(6.dp).clip(RoundedCornerShape(50)).background(colors.primary))
-                // Thumb
-                val thumbOffset = maxWidth * progress
-                Box(
-                    modifier = Modifier
-                        .offset(x = thumbOffset - 6.dp)
-                        .size(12.dp)
-                        .clip(CircleShape)
-                        .background(Color.White)
-                        .shadow(2.dp, CircleShape)
-                )
+
+                        Slider(
+                            value = activeScale.coerceIn(0.5f, 4.0f),
+                            onValueChange = { newScale ->
+                                keepZoomSliderAlive()
+                                val target = activeTargetClip ?: return@Slider
+                                val curT = target.transform
+                                val maxPanX = kotlin.math.max(100f, (newScale - 0.7f).coerceAtLeast(0f) * 200f)
+                                val maxPanY = kotlin.math.max(100f, (newScale - 0.7f).coerceAtLeast(0f) * 200f)
+                                val newPanX = if (newScale <= 1.02f) 0f else curT.x.coerceIn(-maxPanX, maxPanX)
+                                val newPanY = if (newScale <= 1.02f) 0f else curT.y.coerceIn(-maxPanY, maxPanY)
+                                onTransformChange(
+                                    target.id,
+                                    curT.copy(scale = newScale, x = newPanX, y = newPanY)
+                                )
+                            },
+                            onValueChangeFinished = {
+                                keepZoomSliderAlive()
+                            },
+                            valueRange = 0.5f..4.0f,
+                            modifier = Modifier.weight(1f),
+                            colors = SliderDefaults.colors(
+                                thumbColor = Color(0xFF0A84FF),
+                                activeTrackColor = Color(0xFF0A84FF),
+                                inactiveTrackColor = Color.White.copy(alpha = 0.24f)
+                            )
+                        )
+
+                        // Zoom In Step Button
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.12f))
+                                .clickable {
+                                    keepZoomSliderAlive()
+                                    val target = activeTargetClip ?: return@clickable
+                                    val curT = target.transform
+                                    val newScale = (curT.scale + 0.2f).coerceAtMost(4.0f)
+                                    val maxPanX = kotlin.math.max(100f, (newScale - 0.7f).coerceAtLeast(0f) * 200f)
+                                    val maxPanY = kotlin.math.max(100f, (newScale - 0.7f).coerceAtLeast(0f) * 200f)
+                                    val newPanX = if (newScale <= 1.02f) 0f else curT.x.coerceIn(-maxPanX, maxPanX)
+                                    val newPanY = if (newScale <= 1.02f) 0f else curT.y.coerceIn(-maxPanY, maxPanY)
+                                    onTransformChange(
+                                        target.id,
+                                        curT.copy(scale = newScale, x = newPanX, y = newPanY)
+                                    )
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Lucide.ZoomIn,
+                                contentDescription = "Zoom In",
+                                tint = Color.White,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -1552,13 +1900,17 @@ private fun ChromaTimeline(
                         }
                     }
 
-                    // Auto-scroll when playing, seeking externally, or zooming
-                    LaunchedEffect(currentTimeState.value, pps) {
-                        if (!scrollState.isScrollInProgress) {
-                            val targetDp = currentTimeState.value * pps
-                            val targetPx = with(density) { targetDp.dp.toPx() }.toInt()
-                            scrollState.scrollTo(targetPx)
-                        }
+                    // Auto-scroll when playing, seeking externally, or zooming without continuous coroutine restarts
+                    LaunchedEffect(pps) {
+                        snapshotFlow { currentTimeState.value }
+                            .collect { time ->
+                                if (!scrollState.isScrollInProgress) {
+                                    val targetPx = with(density) { (time * pps).dp.toPx() }.toInt()
+                                    if (kotlin.math.abs(scrollState.value - targetPx) > 1) {
+                                        scrollState.scrollTo(targetPx)
+                                    }
+                                }
+                            }
                     }
 
                     val totalWidthDp = (state.duration * pps).dp + halfWidthDp * 2
@@ -1746,20 +2098,26 @@ private fun TimelineTrackRow(
                 )
             }
 
-            // Transition Badge
+            // Transition Badge (+ icon in the middle of two clips)
             val nextClip = clips.find { kotlin.math.abs(it.startTime - clip.endTime) < 0.1f }
             if (nextClip != null) {
+                val hasTransition = clip.transitionOut != TransitionType.NONE
                 Box(
                     modifier = Modifier
-                        .offset(x = (clip.endTime * pps).dp - 8.dp)
-                        .size(16.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(if (clip.transitionOut != TransitionType.NONE) colors.primary.copy(alpha=0.8f) else colors.glassBgHover.copy(alpha=0.5f))
-                        .border(0.5.dp, colors.glassBorder, RoundedCornerShape(4.dp))
+                        .offset(x = (clip.endTime * pps).dp - 9.dp)
+                        .size(18.dp)
+                        .clip(CircleShape)
+                        .background(if (hasTransition) Color(0xFF2563EB) else Color.White)
+                        .border(1.dp, if (hasTransition) Color(0xFF3B82F6) else Color(0xFFE5E7EB), CircleShape)
                         .clickable { onTransitionClick(clip) },
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Lucide.ChevronRight, contentDescription = null, tint = Color.White, modifier = Modifier.size(10.dp))
+                    Icon(
+                        imageVector = if (hasTransition) Lucide.Sparkles else Lucide.Plus,
+                        contentDescription = "Transition",
+                        tint = if (hasTransition) Color.White else Color(0xFF374151),
+                        modifier = Modifier.size(11.dp)
+                    )
                 }
             }
         }
