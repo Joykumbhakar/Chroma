@@ -1122,6 +1122,7 @@ fun FinalCutProVideoEditorScreen(
                     clips = clips,
                     customAudio = customAudio,
                     textLayers = textLayers,
+                    canvasBackground = canvasBackground,
                     aspectRatio = aspectRatio,
                     res = res,
                     fps = fps,
