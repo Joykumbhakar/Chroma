@@ -924,10 +924,10 @@ fun FinalCutProVideoEditorScreen(
     val exoPlayer = remember {
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                /* minBufferMs = */ 2500,
-                /* maxBufferMs = */ 8000,
-                /* bufferForPlaybackMs = */ 250,
-                /* bufferForPlaybackAfterRebufferMs = */ 500
+                /* minBufferMs = */ 1500,
+                /* maxBufferMs = */ 5000,
+                /* bufferForPlaybackMs = */ 60,
+                /* bufferForPlaybackAfterRebufferMs = */ 120
             )
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
@@ -1260,7 +1260,7 @@ fun FinalCutProVideoEditorScreen(
                 }
                 val dtNanos = frameTimeNanos - lastFrameNanos
                 lastFrameNanos = frameTimeNanos
-                val dtSec = (dtNanos / 1_000_000_000f).coerceIn(0f, 0.1f)
+                val dtSec = (dtNanos / 1_000_000_000f).coerceIn(0f, 0.05f)
 
                 val curSpan = getActiveSpanAt(currentTimeSec)
                 if (curSpan == null) return@withFrameNanos
@@ -1306,9 +1306,11 @@ fun FinalCutProVideoEditorScreen(
 
                     if (isPlayerPlaying && playerState == Player.STATE_READY) {
                         val currentGlobalSec = getGlobalTimeForMedia(curSpan, playerPosSec)
+                        val speed = clip.speed.coerceAtLeast(0.1f)
+                        val boundaryThreshold = (0.035f * speed).coerceIn(0.02f, 0.08f)
 
-                        if (playerPosSec >= clip.trimEndSec - 0.04f || currentGlobalSec >= curSpan.timelineEndSec - 0.04f) {
-                            // Reached cut boundary! Transition to next clip
+                        if (playerPosSec >= clip.trimEndSec - boundaryThreshold || currentGlobalSec >= curSpan.timelineEndSec - boundaryThreshold) {
+                            // Reached cut boundary! Seamlessly transition to next clip
                             val nextSpan = timelineSpans.getOrNull(curSpanIdx + 1)
                             if (nextSpan != null) {
                                 val nextClip = nextSpan.clip
@@ -1331,8 +1333,16 @@ fun FinalCutProVideoEditorScreen(
                                 }
                             }
                         } else {
-                            // Lockstep hardware synchronization: NEVER seek during normal playback!
-                            currentTimeSec = currentGlobalSec.coerceIn(curSpan.timelineStartSec, curSpan.timelineEndSec)
+                            // Hardware Clock Smooth Pacing with Soft Convergence:
+                            // Advance monotonically on every VSYNC frame, then gently converge to hardware position
+                            val steppedTime = currentTimeSec + (dtSec * speed)
+                            val drift = currentGlobalSec - steppedTime
+                            val convergedTime = if (abs(drift) > 0.10f) {
+                                currentGlobalSec
+                            } else {
+                                steppedTime + (drift * 0.22f)
+                            }
+                            currentTimeSec = convergedTime.coerceIn(curSpan.timelineStartSec, curSpan.timelineEndSec)
                         }
                     } else if (playerState == Player.STATE_ENDED) {
                         // Media reached end of file before timeline span end
@@ -1358,13 +1368,10 @@ fun FinalCutProVideoEditorScreen(
                             }
                         }
                     } else {
-                        // Player is preparing, buffering or starting up: smoothly advance playhead without seeking
+                        // Player is preparing or buffering: ensure it starts playing as soon as ready, without advancing timehead prematurely
                         if (!exoPlayer.isPlaying && exoPlayer.playWhenReady && playerState == Player.STATE_READY) {
                             exoPlayer.play()
                         }
-                        val speed = clip.speed.coerceAtLeast(0.1f)
-                        val proposedTime = (currentTimeSec + dtSec * speed).coerceAtMost(curSpan.timelineEndSec)
-                        currentTimeSec = proposedTime
                     }
                 }
 
@@ -1372,13 +1379,13 @@ fun FinalCutProVideoEditorScreen(
                 if (customAudio != null && isPlaying) {
                     val audioPosMs = customAudioPlayer.currentPosition
                     val targetMs = (currentTimeSec * 1000f).toLong()
-                    if (abs(audioPosMs - targetMs) > 250L) {
+                    if (abs(audioPosMs - targetMs) > 400L) {
                         if (customAudioPlayer.playbackState == Player.STATE_ENDED || customAudioPlayer.playbackState == Player.STATE_IDLE) {
                             customAudioPlayer.prepare()
                         }
                         customAudioPlayer.seekTo(targetMs.coerceAtLeast(0L))
                     }
-                    if (!customAudioPlayer.isPlaying && customAudioPlayer.playWhenReady) {
+                    if (!customAudioPlayer.isPlaying && customAudioPlayer.playWhenReady && customAudioPlayer.playbackState == Player.STATE_READY) {
                         customAudioPlayer.play()
                     }
                 }
@@ -1420,8 +1427,10 @@ fun FinalCutProVideoEditorScreen(
     }
 
     // Dynamic background blur extraction from current video frame (quantized to 1.5s intervals)
-    val quantizedTimeSec = remember(currentTimeSec) {
-        (currentTimeSec / 1.5f).toInt() * 1.5f
+    val quantizedTimeSec by remember {
+        derivedStateOf {
+            (currentTimeSec / 1.5f).toInt() * 1.5f
+        }
     }
     LaunchedEffect(selectedClip?.uri, quantizedTimeSec, canvasBackground.type, isPlaying) {
         if (canvasBackground.type != FcpCanvasBgType.BLUR) return@LaunchedEffect
@@ -1771,7 +1780,6 @@ fun FinalCutProVideoEditorScreen(
                 val currentSelectedId by rememberUpdatedState(selectedId)
                 val currentIsPlaying by rememberUpdatedState(isPlaying)
                 val currentTotalDuration by rememberUpdatedState(totalDurationSec)
-                val currentCurrentTime by rememberUpdatedState(currentTimeSec)
 
                 Box(
                     modifier = Modifier
@@ -1826,30 +1834,6 @@ fun FinalCutProVideoEditorScreen(
                         blurBitmap = blurBackgroundBitmap,
                         supportsRenderEffect = supportsRenderEffect
                     )
-
-                    // Live Clip Transition State across cut boundaries (bridges outgoing & incoming clip)
-                    val activeTransitionState = remember(currentTimeSec, timelineSpans) {
-                        var result: Pair<FcpTransitionType, Float>? = null
-                        for (i in 0 until timelineSpans.size - 1) {
-                            val spanA = timelineSpans[i]
-                            val spanB = timelineSpans[i + 1]
-                            val trans = spanA.clip.transitionToNext
-                            if (trans != FcpTransitionType.NONE) {
-                                val cutSec = spanA.timelineEndSec
-                                val dur = spanA.clip.transitionDurationSec.coerceIn(0.2f, 2f)
-                                val halfDur = dur * 0.5f
-                                val startSec = (cutSec - halfDur).coerceAtLeast(spanA.timelineStartSec)
-                                val endSec = (cutSec + halfDur).coerceAtMost(spanB.timelineEndSec)
-                                if (currentTimeSec in startSec..endSec) {
-                                    val totalWindow = (endSec - startSec).coerceAtLeast(0.05f)
-                                    val progress = ((currentTimeSec - startSec) / totalWindow).coerceIn(0f, 1f)
-                                    result = Pair(trans, progress)
-                                    break
-                                }
-                            }
-                        }
-                        result
-                    }
 
                     // ExoPlayer Video Surface with dynamic Color Matrix filter
                     AndroidView(
@@ -1925,163 +1909,10 @@ fun FinalCutProVideoEditorScreen(
                     }
 
                     // Live Transition Visual Overlay Layer (Renders seamlessly across video boundary cut)
-                    if (activeTransitionState != null) {
-                        val (transType, progress) = activeTransitionState
-                        when (transType) {
-                            FcpTransitionType.DIP_TO_BLACK -> {
-                                val blackAlpha = if (progress <= 0.5f) (progress * 2f) else ((1f - progress) * 2f)
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(Color.Black.copy(alpha = blackAlpha.coerceIn(0f, 1f)))
-                                        .zIndex(20f)
-                                )
-                            }
-                            FcpTransitionType.DIP_TO_WHITE -> {
-                                val whiteAlpha = if (progress <= 0.5f) (progress * 2f) else ((1f - progress) * 2f)
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(Color.White.copy(alpha = (whiteAlpha * 0.98f).coerceIn(0f, 1f)))
-                                        .zIndex(20f)
-                                )
-                            }
-                            FcpTransitionType.CROSSFADE -> {
-                                val crossAlpha = (sin(progress * Math.PI.toFloat()) * 0.75f).coerceIn(0f, 1f)
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(
-                                            Brush.radialGradient(
-                                                colors = listOf(
-                                                    Color.White.copy(alpha = crossAlpha * 0.45f),
-                                                    Color.Black.copy(alpha = crossAlpha * 0.7f)
-                                                )
-                                            )
-                                        )
-                                        .zIndex(20f)
-                                )
-                            }
-                            FcpTransitionType.WIPE_RIGHT -> {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .zIndex(20f)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxHeight()
-                                            .fillMaxWidth(fraction = progress)
-                                            .background(Color.Black.copy(alpha = 0.92f))
-                                    )
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxHeight()
-                                            .width(3.dp)
-                                            .fillMaxWidth(fraction = progress)
-                                            .wrapContentWidth(Alignment.End)
-                                            .background(
-                                                Brush.verticalGradient(
-                                                    listOf(Color(0xFF00F5D4), Color(0xFF7B2CBF))
-                                                )
-                                            )
-                                    )
-                                }
-                            }
-                            FcpTransitionType.WIPE_LEFT -> {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .zIndex(20f)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxHeight()
-                                            .fillMaxWidth(fraction = 1f - progress)
-                                            .align(Alignment.CenterEnd)
-                                            .background(Color.Black.copy(alpha = 0.92f))
-                                    )
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxHeight()
-                                            .width(3.dp)
-                                            .fillMaxWidth(fraction = 1f - progress)
-                                            .align(Alignment.CenterEnd)
-                                            .wrapContentWidth(Alignment.Start)
-                                            .background(
-                                                Brush.verticalGradient(
-                                                    listOf(Color(0xFFFF007F), Color(0xFF7B2CBF))
-                                                )
-                                            )
-                                    )
-                                }
-                            }
-                            FcpTransitionType.SLIDE_LEFT -> {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .zIndex(20f)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxHeight()
-                                            .fillMaxWidth(fraction = progress)
-                                            .background(Color(0xFF0A0E1A).copy(alpha = 0.88f))
-                                    )
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxHeight()
-                                            .width(2.dp)
-                                            .fillMaxWidth(fraction = progress)
-                                            .wrapContentWidth(Alignment.End)
-                                            .background(Color.White.copy(alpha = 0.6f))
-                                    )
-                                }
-                            }
-                            FcpTransitionType.ZOOM_IN -> {
-                                val zoomAlpha = sin(progress * Math.PI.toFloat()).coerceIn(0f, 1f)
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(
-                                            Brush.radialGradient(
-                                                colors = listOf(
-                                                    Color.Transparent,
-                                                    Color.Black.copy(alpha = zoomAlpha * 0.85f)
-                                                )
-                                            )
-                                        )
-                                        .zIndex(20f)
-                                )
-                            }
-                            FcpTransitionType.GLITCH -> {
-                                val glitchAlpha = if (progress in 0.25f..0.75f) {
-                                    val subProg = (progress - 0.25f) / 0.5f
-                                    sin(subProg * Math.PI.toFloat()).coerceIn(0f, 1f)
-                                } else 0f
-
-                                if (glitchAlpha > 0.05f) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .background(
-                                                Brush.verticalGradient(
-                                                    listOf(
-                                                        Color.Cyan.copy(alpha = glitchAlpha * 0.45f),
-                                                        Color.Transparent,
-                                                        Color.Magenta.copy(alpha = glitchAlpha * 0.5f),
-                                                        Color.Transparent,
-                                                        Color.Cyan.copy(alpha = glitchAlpha * 0.4f)
-                                                    )
-                                                )
-                                            )
-                                            .zIndex(20f)
-                                    )
-                                }
-                            }
-                            FcpTransitionType.NONE -> {}
-                        }
-                    }
+                    FcpActiveTransitionOverlay(
+                        currentTimeSecProvider = { currentTimeSec },
+                        timelineSpans = timelineSpans
+                    )
 
                     // ══════════════════════════════════════════════════════════
                     // UNIFIED TOUCH GESTURE OVERLAY (Zoom, Pan/Crop & Playback Tap)
@@ -2211,7 +2042,7 @@ fun FinalCutProVideoEditorScreen(
                                                 pendingTapJob?.cancel()
                                                 pendingTapJob = scope.launch {
                                                     kotlinx.coroutines.delay(260L)
-                                                    val isAtEnd = currentTotalDuration > 0f && currentCurrentTime >= currentTotalDuration - 0.08f
+                                                    val isAtEnd = currentTotalDuration > 0f && currentTimeSec >= currentTotalDuration - 0.08f
                                                     if (isAtEnd) {
                                                         seekToGlobalTime(0f, autoPlay = true)
                                                         triggerOverlayFlash(true)
@@ -2838,7 +2669,7 @@ fun FinalCutProVideoEditorScreen(
                                     clips = clips,
                                     timelineSpans = timelineSpans,
                                     selectedId = selectedId,
-                                    currentTimeSec = currentTimeSec,
+                                    currentTimeSecProvider = { currentTimeSec },
                                     totalDurationSec = totalDurationSec,
                                     pixelsPerSec = pixelsPerSec,
                                     onZoomChange = { pixelsPerSec = it.coerceIn(15f, 120f) },
@@ -3043,7 +2874,7 @@ fun FinalCutProVideoEditorScreen(
                                         ToastManager.showToast("Custom audio removed")
                                     },
                                     isPlaying = isPlaying,
-                                    currentTimeSec = currentTimeSec
+                                    currentTimeSecProvider = { currentTimeSec }
                                 )
                             }
                             FcpWorkspaceTab.EFFECTS -> {
@@ -3429,11 +3260,45 @@ private fun FcpClipFilmstrip(
 // ============================================================================
 
 @Composable
+private fun FcpTimecodeIndicator(
+    currentTimeSecProvider: () -> Float,
+    totalDurationSec: Float,
+    isUserScrubbing: Boolean
+) {
+    val colors = LocalOscellionColors.current
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(6.dp))
+                .background(colors.primary.copy(alpha = if (isUserScrubbing) 0.22f else 0.1f))
+                .padding(horizontal = 8.dp, vertical = 3.dp)
+        ) {
+            Text(
+                text = formatTimecode(currentTimeSecProvider()),
+                color = colors.primary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace
+            )
+        }
+        Text(
+            text = "/ ${formatTimecode(totalDurationSec)}",
+            color = colors.textMuted,
+            fontSize = 11.sp,
+            fontFamily = FontFamily.Monospace
+        )
+    }
+}
+
+@Composable
 private fun TimelineTabContent(
     clips: List<FcpClip>,
     timelineSpans: List<FcpTimelineClipSpan>,
     selectedId: String?,
-    currentTimeSec: Float,
+    currentTimeSecProvider: () -> Float,
     totalDurationSec: Float,
     pixelsPerSec: Float,
     onZoomChange: (Float) -> Unit = {},
@@ -3463,11 +3328,11 @@ private fun TimelineTabContent(
     val haptic = LocalHapticFeedback.current
     val density = LocalDensity.current.density
     val context = LocalContext.current
-    val currentPlayheadTime by rememberUpdatedState(currentTimeSec)
     val currentClips by rememberUpdatedState(clips)
     val currentSpans by rememberUpdatedState(timelineSpans)
     var draggingClipId by remember { mutableStateOf<String?>(null) }
     var dragCumulativeOffsetPx by remember { mutableFloatStateOf(0f) }
+    var isAutoScrolling by remember { mutableStateOf(false) }
 
     val timelineScrollState = rememberScrollState()
     val timelineStartPaddingDp = 16.dp
@@ -3479,22 +3344,37 @@ private fun TimelineTabContent(
     // Auto-scroll to follow playhead smoothly during playback and guarantee it never gets lost
     LaunchedEffect(isPlaying) {
         if (!isPlaying) return@LaunchedEffect
-        snapshotFlow { currentTimeSec }
+        snapshotFlow { currentTimeSecProvider() }
             .collect { time ->
-                if (viewportWidthPx > 0 && !timelineScrollState.isScrollInProgress) {
+                if (viewportWidthPx > 0 && !isAutoScrolling && !timelineScrollState.isScrollInProgress) {
                     val playheadPx = (timelineStartPaddingDp.value * density) + (time * pixelsPerSec * density)
                     val scrollOffset = timelineScrollState.value
                     val rightThreshold = scrollOffset + viewportWidthPx - (70 * density)
                     val leftThreshold = scrollOffset + (30 * density)
 
-                    if (time <= 0.05f) {
-                        timelineScrollState.animateScrollTo(0, animationSpec = tween(durationMillis = 220, easing = LinearOutSlowInEasing))
+                    if (time <= 0.05f && scrollOffset > 10) {
+                        isAutoScrolling = true
+                        try {
+                            timelineScrollState.animateScrollTo(0, animationSpec = tween(durationMillis = 220, easing = LinearOutSlowInEasing))
+                        } finally {
+                            isAutoScrolling = false
+                        }
                     } else if (playheadPx > rightThreshold) {
-                        val targetScroll = (playheadPx - viewportWidthPx * 0.38f).coerceAtLeast(0f).toInt()
-                        timelineScrollState.animateScrollTo(targetScroll, animationSpec = tween(durationMillis = 350, easing = LinearOutSlowInEasing))
-                    } else if (playheadPx < leftThreshold) {
+                        val targetScroll = (playheadPx - viewportWidthPx * 0.35f).coerceAtLeast(0f).toInt()
+                        isAutoScrolling = true
+                        try {
+                            timelineScrollState.animateScrollTo(targetScroll, animationSpec = tween(durationMillis = 350, easing = LinearOutSlowInEasing))
+                        } finally {
+                            isAutoScrolling = false
+                        }
+                    } else if (playheadPx < leftThreshold && scrollOffset > 10) {
                         val targetScroll = (playheadPx - 30 * density).coerceAtLeast(0f).toInt()
-                        timelineScrollState.animateScrollTo(targetScroll, animationSpec = tween(durationMillis = 250, easing = LinearOutSlowInEasing))
+                        isAutoScrolling = true
+                        try {
+                            timelineScrollState.animateScrollTo(targetScroll, animationSpec = tween(durationMillis = 250, easing = LinearOutSlowInEasing))
+                        } finally {
+                            isAutoScrolling = false
+                        }
                     }
                 }
             }
@@ -3502,12 +3382,13 @@ private fun TimelineTabContent(
 
     LaunchedEffect(isPlaying, isUserScrubbing, totalDurationSec) {
         if (isPlaying || isUserScrubbing || viewportWidthPx <= 0) return@LaunchedEffect
-        val playheadPx = (timelineStartPaddingDp.value * density) + (currentTimeSec * pixelsPerSec * density)
-        val isAtEnd = totalDurationSec > 0f && currentTimeSec >= totalDurationSec - 0.08f
+        val curTime = currentTimeSecProvider()
+        val playheadPx = (timelineStartPaddingDp.value * density) + (curTime * pixelsPerSec * density)
+        val isAtEnd = totalDurationSec > 0f && curTime >= totalDurationSec - 0.08f
         if (isAtEnd) {
             val targetScroll = (playheadPx - viewportWidthPx + timelineEndPaddingDp.value * density + 16 * density).coerceAtLeast(0f).toInt()
             timelineScrollState.animateScrollTo(targetScroll)
-        } else if (currentTimeSec <= 0.05f) {
+        } else if (curTime <= 0.05f) {
             timelineScrollState.animateScrollTo(0)
         } else if (playheadPx < timelineScrollState.value || playheadPx > timelineScrollState.value + viewportWidthPx) {
             val targetScroll = (playheadPx - viewportWidthPx * 0.35f).coerceAtLeast(0f).toInt()
@@ -3529,31 +3410,11 @@ private fun TimelineTabContent(
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Timecode display & Zoom Indicator
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(colors.primary.copy(alpha = if (isUserScrubbing) 0.22f else 0.1f))
-                        .padding(horizontal = 8.dp, vertical = 3.dp)
-                ) {
-                    Text(
-                        text = formatTimecode(currentTimeSec),
-                        color = colors.primary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace
-                    )
-                }
-                Text(
-                    text = "/ ${formatTimecode(totalDurationSec)}",
-                    color = colors.textMuted,
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace
-                )
-            }
+            FcpTimecodeIndicator(
+                currentTimeSecProvider = currentTimeSecProvider,
+                totalDurationSec = totalDurationSec,
+                isUserScrubbing = isUserScrubbing
+            )
 
             // Transport Action Buttons & Zoom Controls
             Row(
@@ -3887,10 +3748,10 @@ private fun TimelineTabContent(
                                                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                                     },
                                                     onDragEnd = {
-                                                        onScrubEnd(currentPlayheadTime)
+                                                        onScrubEnd(currentTimeSecProvider())
                                                     },
                                                     onDragCancel = {
-                                                        onScrubEnd(currentPlayheadTime)
+                                                        onScrubEnd(currentTimeSecProvider())
                                                     }
                                                 )
                                             },
@@ -4010,10 +3871,10 @@ private fun TimelineTabContent(
                                                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                                     },
                                                     onDragEnd = {
-                                                        onScrubEnd(currentPlayheadTime)
+                                                        onScrubEnd(currentTimeSecProvider())
                                                     },
                                                     onDragCancel = {
-                                                        onScrubEnd(currentPlayheadTime)
+                                                        onScrubEnd(currentTimeSecProvider())
                                                     }
                                                 )
                                             },
@@ -4194,12 +4055,16 @@ private fun TimelineTabContent(
                 }
 
                 // 3. Apple-Style Draggable Playhead Marker & Needle
-                val playheadCenterX = timelineStartPaddingDp + (currentTimeSec * pixelsPerSec).dp
                 val touchWidth = 48.dp
+                val touchWidthPx = touchWidth.value * density
+                val startPaddingPx = timelineStartPaddingDp.value * density
 
                 Box(
                     modifier = Modifier
-                        .offset(x = playheadCenterX - (touchWidth / 2))
+                        .offset {
+                            val playheadPx = startPaddingPx + (currentTimeSecProvider() * pixelsPerSec * density)
+                            IntOffset((playheadPx - (touchWidthPx / 2f)).roundToInt(), 0)
+                        }
                         .width(touchWidth)
                         .fillMaxHeight()
                         .zIndex(50f)
@@ -4208,7 +4073,7 @@ private fun TimelineTabContent(
                             detectDragGestures(
                                 onDragStart = {
                                     onScrubStart()
-                                    dragSec = currentPlayheadTime
+                                    dragSec = currentTimeSecProvider()
                                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 },
                                 onDrag = { change, dragAmount ->
@@ -4268,7 +4133,6 @@ private fun TimelineTabContent(
             // Tactile Rotary Jog Wheel for buttery smooth frame scrubbing
             var isJogActive by remember { mutableStateOf(false) }
             var jogScrollOffsetPx by remember { mutableFloatStateOf(0f) }
-            val jogDragTime by rememberUpdatedState(currentTimeSec)
 
             Box(
                 modifier = Modifier
@@ -4291,7 +4155,7 @@ private fun TimelineTabContent(
                             onDragStart = {
                                 isJogActive = true
                                 onScrubStart()
-                                jogTime = jogDragTime
+                                jogTime = currentTimeSecProvider()
                                 lastHapticFrame = (jogTime * 30f).roundToInt()
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             },
@@ -4381,8 +4245,8 @@ private fun TimelineTabContent(
                 }
 
                 // Interactive Center HUD label
-                val currentFrame = (currentTimeSec * 30f).roundToInt()
                 if (isJogActive) {
+                    val currentFrame = (currentTimeSecProvider() * 30f).roundToInt()
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(12.dp))
@@ -4947,7 +4811,7 @@ private fun AudioTabContent(
     onLoopAudioChange: (Boolean) -> Unit = {},
     onRemoveCustomAudio: () -> Unit = {},
     isPlaying: Boolean = false,
-    currentTimeSec: Float = 0f
+    currentTimeSecProvider: () -> Float = { 0f }
 ) {
     val colors = LocalOscellionColors.current
 
@@ -5349,7 +5213,7 @@ private fun AudioTabContent(
                         if (customAudio.muteOriginalVideo) customAudio.volume.coerceIn(0.2f, 1.75f)
                         else (gainScale * 0.5f + customAudio.volume * 0.5f).coerceIn(0.2f, 1.75f)
                     } else gainScale
-                    val animPhase = if (isPlaying) (currentTimeSec * 12f) else 0f
+                    val animPhase = if (isPlaying) (currentTimeSecProvider() * 12f) else 0f
                     Canvas(Modifier.fillMaxSize()) {
                         val barCount = 42
                         val barSpacing = size.width / barCount
@@ -7868,6 +7732,194 @@ private fun CanvasBgQuickPill(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun FcpActiveTransitionOverlay(
+    currentTimeSecProvider: () -> Float,
+    timelineSpans: List<FcpTimelineClipSpan>
+) {
+    val currentTime = currentTimeSecProvider()
+    val activeTransitionState = remember(currentTime, timelineSpans) {
+        var result: Pair<FcpTransitionType, Float>? = null
+        for (i in 0 until timelineSpans.size - 1) {
+            val spanA = timelineSpans[i]
+            val spanB = timelineSpans[i + 1]
+            val trans = spanA.clip.transitionToNext
+            if (trans != FcpTransitionType.NONE) {
+                val cutSec = spanA.timelineEndSec
+                val dur = spanA.clip.transitionDurationSec.coerceIn(0.2f, 2f)
+                val halfDur = dur * 0.5f
+                val startSec = (cutSec - halfDur).coerceAtLeast(spanA.timelineStartSec)
+                val endSec = (cutSec + halfDur).coerceAtMost(spanB.timelineEndSec)
+                if (currentTime in startSec..endSec) {
+                    val totalWindow = (endSec - startSec).coerceAtLeast(0.05f)
+                    val progress = ((currentTime - startSec) / totalWindow).coerceIn(0f, 1f)
+                    result = Pair(trans, progress)
+                    break
+                }
+            }
+        }
+        result
+    }
+
+    if (activeTransitionState != null) {
+        val (transType, progress) = activeTransitionState
+        when (transType) {
+            FcpTransitionType.DIP_TO_BLACK -> {
+                val blackAlpha = if (progress <= 0.5f) (progress * 2f) else ((1f - progress) * 2f)
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = blackAlpha.coerceIn(0f, 1f)))
+                        .zIndex(20f)
+                )
+            }
+            FcpTransitionType.DIP_TO_WHITE -> {
+                val whiteAlpha = if (progress <= 0.5f) (progress * 2f) else ((1f - progress) * 2f)
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.White.copy(alpha = (whiteAlpha * 0.98f).coerceIn(0f, 1f)))
+                        .zIndex(20f)
+                )
+            }
+            FcpTransitionType.CROSSFADE -> {
+                val crossAlpha = (sin(progress * Math.PI.toFloat()) * 0.75f).coerceIn(0f, 1f)
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.radialGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = crossAlpha * 0.45f),
+                                    Color.Black.copy(alpha = crossAlpha * 0.7f)
+                                )
+                            )
+                        )
+                        .zIndex(20f)
+                )
+            }
+            FcpTransitionType.WIPE_RIGHT -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(20f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(fraction = progress)
+                            .background(Color.Black.copy(alpha = 0.92f))
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .width(3.dp)
+                            .fillMaxWidth(fraction = progress)
+                            .wrapContentWidth(Alignment.End)
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(Color(0xFF00F5D4), Color(0xFF7B2CBF))
+                                )
+                            )
+                    )
+                }
+            }
+            FcpTransitionType.WIPE_LEFT -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(20f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(fraction = 1f - progress)
+                            .align(Alignment.CenterEnd)
+                            .background(Color.Black.copy(alpha = 0.92f))
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .width(3.dp)
+                            .fillMaxWidth(fraction = 1f - progress)
+                            .align(Alignment.CenterEnd)
+                            .wrapContentWidth(Alignment.Start)
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(Color(0xFFFF007F), Color(0xFF7B2CBF))
+                                )
+                            )
+                    )
+                }
+            }
+            FcpTransitionType.SLIDE_LEFT -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(20f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(fraction = progress)
+                            .background(Color(0xFF0A0E1A).copy(alpha = 0.88f))
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .width(2.dp)
+                            .fillMaxWidth(fraction = progress)
+                            .wrapContentWidth(Alignment.End)
+                            .background(Color.White.copy(alpha = 0.6f))
+                    )
+                }
+            }
+            FcpTransitionType.ZOOM_IN -> {
+                val zoomAlpha = sin(progress * Math.PI.toFloat()).coerceIn(0f, 1f)
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.radialGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    Color.Black.copy(alpha = zoomAlpha * 0.85f)
+                                )
+                            )
+                        )
+                        .zIndex(20f)
+                )
+            }
+            FcpTransitionType.GLITCH -> {
+                val glitchAlpha = if (progress in 0.25f..0.75f) {
+                    val subProg = (progress - 0.25f) / 0.5f
+                    sin(subProg * Math.PI.toFloat()).coerceIn(0f, 1f)
+                } else 0f
+
+                if (glitchAlpha > 0.05f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(
+                                        Color.Cyan.copy(alpha = glitchAlpha * 0.45f),
+                                        Color.Transparent,
+                                        Color.Magenta.copy(alpha = glitchAlpha * 0.5f),
+                                        Color.Transparent,
+                                        Color.Cyan.copy(alpha = glitchAlpha * 0.4f)
+                                    )
+                                )
+                            )
+                            .zIndex(20f)
+                    )
+                }
+            }
+            FcpTransitionType.NONE -> {}
         }
     }
 }
