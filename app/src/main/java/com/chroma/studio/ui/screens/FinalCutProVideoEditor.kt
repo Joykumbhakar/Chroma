@@ -2974,164 +2974,168 @@ fun FinalCutProVideoEditorScreen(
                         when (activeTab) {
                             FcpWorkspaceTab.TIMELINE -> {
                                 TimelineTabContent(
-                                    clips = clips,
-                                    timelineSpans = timelineSpans,
-                                    selectedId = selectedId,
-                                    currentTimeSecProvider = { currentTimeSec },
-                                    totalDurationSec = totalDurationSec,
-                                    pixelsPerSec = pixelsPerSec,
-                                    onZoomChange = { pixelsPerSec = it.coerceIn(15f, 120f) },
-                                    isPlaying = isPlaying,
-                                    isUserScrubbing = isUserScrubbing,
-                                    isAutoReplay = isAutoReplay,
-                                    onAutoReplayToggle = {
-                                        isAutoReplay = !isAutoReplay
-                                        SoundManager.playTap(context)
-                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                        ToastManager.showToast(if (isAutoReplay) "Auto Replay: ON" else "Auto Replay: OFF")
-                                    },
-                                    onPlayToggle = {
-                                        SoundManager.playTap(context)
-                                        val isAtEnd = totalDurationSec > 0f && currentTimeSec >= totalDurationSec - 0.08f
-                                        if (isAtEnd) {
-                                            seekToGlobalTime(0f, autoPlay = true)
-                                        } else {
-                                            val nextPlaying = !isPlaying
-                                            if (nextPlaying) {
-                                                isPlaying = true
-                                                exoPlayer.play()
+                                    state = FcpTimelineState(
+                                        clips = clips,
+                                        timelineSpans = timelineSpans,
+                                        selectedId = selectedId,
+                                        totalDurationSec = totalDurationSec,
+                                        pixelsPerSec = pixelsPerSec,
+                                        isPlaying = isPlaying,
+                                        isUserScrubbing = isUserScrubbing,
+                                        isAutoReplay = isAutoReplay,
+                                        activeTransitionClipId = editingTransitionClipId,
+                                        customAudio = customAudio
+                                    ),
+                                    actions = FcpTimelineActions(
+                                        onZoomChange = { pixelsPerSec = it.coerceIn(15f, 120f) },
+                                        onAutoReplayToggle = {
+                                            isAutoReplay = !isAutoReplay
+                                            SoundManager.playTap(context)
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            ToastManager.showToast(if (isAutoReplay) "Auto Replay: ON" else "Auto Replay: OFF")
+                                        },
+                                        onPlayToggle = {
+                                            SoundManager.playTap(context)
+                                            val isAtEnd = totalDurationSec > 0f && currentTimeSec >= totalDurationSec - 0.08f
+                                            if (isAtEnd) {
+                                                seekToGlobalTime(0f, autoPlay = true)
                                             } else {
-                                                isPlaying = false
-                                                exoPlayer.pause()
-                                            }
-                                        }
-                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                    },
-                                    onSelectClip = { clipId ->
-                                        selectedId = clipId
-                                        val span = timelineSpans.find { it.clip.id == clipId }
-                                        if (span != null) {
-                                            seekToGlobalTime(span.timelineStartSec)
-                                        }
-                                    },
-                                    onTrimStart = {
-                                        onScrubStart()
-                                        saveStateForUndo()
-                                    },
-                                    onTrimLeft = { clipId, deltaSec ->
-                                        clips = clips.map { c ->
-                                            if (c.id == clipId) {
-                                                val newStart = (c.trimStartSec + deltaSec).coerceIn(0f, c.trimEndSec - 0.5f)
-                                                c.copy(trimStartSec = newStart)
-                                            } else c
-                                        }
-                                        val clipIdx = clips.indexOfFirst { it.id == clipId }
-                                        val prevSec = if (clipIdx > 0) {
-                                            clips.take(clipIdx).sumOf { it.trimmedDurationSec.toDouble() }.toFloat()
-                                        } else 0f
-                                        onScrubSec(prevSec)
-                                    },
-                                    onTrimRight = { clipId, deltaSec ->
-                                        clips = clips.map { c ->
-                                            if (c.id == clipId) {
-                                                val newEnd = (c.trimEndSec + deltaSec).coerceIn(c.trimStartSec + 0.5f, c.durationSec)
-                                                c.copy(trimEndSec = newEnd)
-                                            } else c
-                                        }
-                                        val clipIdx = clips.indexOfFirst { it.id == clipId }
-                                        val prevSec = if (clipIdx > 0) {
-                                            clips.take(clipIdx).sumOf { it.trimmedDurationSec.toDouble() }.toFloat()
-                                        } else 0f
-                                        val curDur = clips.find { it.id == clipId }?.trimmedDurationSec ?: 0f
-                                        onScrubSec((prevSec + curDur - 0.05f).coerceAtLeast(0f))
-                                    },
-                                    onReorderClips = { fromIdx, toIdx ->
-                                        if (fromIdx in clips.indices && toIdx in clips.indices && fromIdx != toIdx) {
-                                            saveStateForUndo()
-                                            val mutable = clips.toMutableList()
-                                            val item = mutable.removeAt(fromIdx)
-                                            mutable.add(toIdx, item)
-                                            clips = mutable
-                                            selectedId = item.id
-                                            ToastManager.showToast("Clip reordered")
-                                        }
-                                    },
-                                    onScrubStart = { onScrubStart() },
-                                    onScrubSec = { sec -> onScrubSec(sec) },
-                                    onScrubEnd = { sec -> onScrubEnd(sec) },
-                                    onSplitClip = {
-                                        val span = timelineSpans.find { currentTimeSec > it.timelineStartSec + 0.2f && currentTimeSec < it.timelineEndSec - 0.2f }
-                                        if (span != null) {
-                                            saveStateForUndo()
-                                            val active = span.clip
-                                            val splitOffset = currentTimeSec - span.timelineStartSec
-                                            val splitMediaSec = active.trimStartSec + splitOffset
-                                            val firstHalf = active.copy(trimEndSec = splitMediaSec)
-                                            val secondHalf = active.copy(
-                                                id = UUID.randomUUID().toString(),
-                                                name = "${active.name}_b",
-                                                trimStartSec = splitMediaSec
-                                            )
-                                            val idx = clips.indexOfFirst { it.id == active.id }
-                                            if (idx >= 0) {
-                                                clips = clips.toMutableList().apply {
-                                                    set(idx, firstHalf)
-                                                    add(idx + 1, secondHalf)
+                                                val nextPlaying = !isPlaying
+                                                if (nextPlaying) {
+                                                    isPlaying = true
+                                                    exoPlayer.play()
+                                                } else {
+                                                    isPlaying = false
+                                                    exoPlayer.pause()
                                                 }
-                                                selectedId = secondHalf.id
-                                                ToastManager.showToast("Clip split at ${formatTimecode(currentTimeSec)}")
                                             }
-                                        } else {
-                                            ToastManager.showToast("Position playhead inside a clip to split")
-                                        }
-                                    },
-                                    onDuplicateClip = {
-                                        val active = selectedClip
-                                        if (active != null) {
-                                            saveStateForUndo()
-                                            val duplicated = active.copy(id = UUID.randomUUID().toString(), name = "${active.name}_copy")
-                                            val idx = clips.indexOfFirst { it.id == active.id }
-                                            clips = clips.toMutableList().apply { add(idx + 1, duplicated) }
-                                            selectedId = duplicated.id
-                                            ToastManager.showToast("Clip duplicated")
-                                        }
-                                    },
-                                    onDeleteClip = {
-                                        if (clips.size > 1) {
-                                            saveStateForUndo()
-                                            clips = clips.filter { it.id != selectedId }
-                                            selectedId = clips.first().id
-                                            val span = timelineSpans.find { it.clip.id == selectedId }
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        },
+                                        onSelectClip = { clipId ->
+                                            selectedId = clipId
+                                            val span = timelineSpans.find { it.clip.id == clipId }
                                             if (span != null) {
                                                 seekToGlobalTime(span.timelineStartSec)
                                             }
-                                            ToastManager.showToast("Clip removed")
-                                        } else {
-                                            ToastManager.showToast("Cannot delete the only clip")
+                                        },
+                                        onTrimStart = {
+                                            onScrubStart()
+                                            saveStateForUndo()
+                                        },
+                                        onTrimLeft = { clipId, deltaSec ->
+                                            clips = clips.map { c ->
+                                                if (c.id == clipId) {
+                                                    val newStart = (c.trimStartSec + deltaSec).coerceIn(0f, c.trimEndSec - 0.5f)
+                                                    c.copy(trimStartSec = newStart)
+                                                } else c
+                                            }
+                                            val clipIdx = clips.indexOfFirst { it.id == clipId }
+                                            val prevSec = if (clipIdx > 0) {
+                                                clips.take(clipIdx).sumOf { it.trimmedDurationSec.toDouble() }.toFloat()
+                                            } else 0f
+                                            onScrubSec(prevSec)
+                                        },
+                                        onTrimRight = { clipId, deltaSec ->
+                                            clips = clips.map { c ->
+                                                if (c.id == clipId) {
+                                                    val newEnd = (c.trimEndSec + deltaSec).coerceIn(c.trimStartSec + 0.5f, c.durationSec)
+                                                    c.copy(trimEndSec = newEnd)
+                                                } else c
+                                            }
+                                            val clipIdx = clips.indexOfFirst { it.id == clipId }
+                                            val prevSec = if (clipIdx > 0) {
+                                                clips.take(clipIdx).sumOf { it.trimmedDurationSec.toDouble() }.toFloat()
+                                            } else 0f
+                                            val curDur = clips.find { it.id == clipId }?.trimmedDurationSec ?: 0f
+                                            onScrubSec((prevSec + curDur - 0.05f).coerceAtLeast(0f))
+                                        },
+                                        onReorderClips = { fromIdx, toIdx ->
+                                            if (fromIdx in clips.indices && toIdx in clips.indices && fromIdx != toIdx) {
+                                                saveStateForUndo()
+                                                val mutable = clips.toMutableList()
+                                                val item = mutable.removeAt(fromIdx)
+                                                mutable.add(toIdx, item)
+                                                clips = mutable
+                                                selectedId = item.id
+                                                ToastManager.showToast("Clip reordered")
+                                            }
+                                        },
+                                        onScrubStart = { onScrubStart() },
+                                        onScrubSec = { sec -> onScrubSec(sec) },
+                                        onScrubEnd = { sec -> onScrubEnd(sec) },
+                                        onSplitClip = {
+                                            val span = timelineSpans.find { currentTimeSec > it.timelineStartSec + 0.2f && currentTimeSec < it.timelineEndSec - 0.2f }
+                                            if (span != null) {
+                                                saveStateForUndo()
+                                                val active = span.clip
+                                                val splitOffset = currentTimeSec - span.timelineStartSec
+                                                val splitMediaSec = active.trimStartSec + splitOffset
+                                                val firstHalf = active.copy(trimEndSec = splitMediaSec)
+                                                val secondHalf = active.copy(
+                                                    id = UUID.randomUUID().toString(),
+                                                    name = "${active.name}_b",
+                                                    trimStartSec = splitMediaSec
+                                                )
+                                                val idx = clips.indexOfFirst { it.id == active.id }
+                                                if (idx >= 0) {
+                                                    clips = clips.toMutableList().apply {
+                                                        set(idx, firstHalf)
+                                                        add(idx + 1, secondHalf)
+                                                    }
+                                                    selectedId = secondHalf.id
+                                                    ToastManager.showToast("Clip split at ${formatTimecode(currentTimeSec)}")
+                                                }
+                                            } else {
+                                                ToastManager.showToast("Position playhead inside a clip to split")
+                                            }
+                                        },
+                                        onDuplicateClip = {
+                                            val active = selectedClip
+                                            if (active != null) {
+                                                saveStateForUndo()
+                                                val duplicated = active.copy(id = UUID.randomUUID().toString(), name = "${active.name}_copy")
+                                                val idx = clips.indexOfFirst { it.id == active.id }
+                                                clips = clips.toMutableList().apply { add(idx + 1, duplicated) }
+                                                selectedId = duplicated.id
+                                                ToastManager.showToast("Clip duplicated")
+                                            }
+                                        },
+                                        onDeleteClip = {
+                                            if (clips.size > 1) {
+                                                saveStateForUndo()
+                                                clips = clips.filter { it.id != selectedId }
+                                                selectedId = clips.first().id
+                                                val span = timelineSpans.find { it.clip.id == selectedId }
+                                                if (span != null) {
+                                                    seekToGlobalTime(span.timelineStartSec)
+                                                }
+                                                ToastManager.showToast("Clip removed")
+                                            } else {
+                                                ToastManager.showToast("Cannot delete the only clip")
+                                            }
+                                        },
+                                        onAddClip = {
+                                            videoPicker.launch("video/*")
+                                        },
+                                        onStepFrame = { forward ->
+                                            val stepSec = 1f / 30f
+                                            val nextSec = (currentTimeSec + (if (forward) stepSec else -stepSec)).coerceIn(0f, totalDurationSec)
+                                            seekToGlobalTime(nextSec)
+                                            SoundManager.playScrub(context, force = true)
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        },
+                                        onEditTransition = { clipId ->
+                                            SoundManager.playTap(context)
+                                            editingTransitionClipId = clipId
+                                        },
+                                        onOpenAudioTab = {
+                                            activeTab = FcpWorkspaceTab.AUDIO
+                                            if (drawerLevel == VideoDrawerLevel.COLLAPSED) {
+                                                drawerLevel = VideoDrawerLevel.MID
+                                            }
                                         }
-                                    },
-                                    onAddClip = {
-                                        videoPicker.launch("video/*")
-                                    },
-                                    onStepFrame = { forward ->
-                                        val stepSec = 1f / 30f
-                                        val nextSec = (currentTimeSec + (if (forward) stepSec else -stepSec)).coerceIn(0f, totalDurationSec)
-                                        seekToGlobalTime(nextSec)
-                                        SoundManager.playScrub(context, force = true)
-                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                    },
-                                    onEditTransition = { clipId ->
-                                        SoundManager.playTap(context)
-                                        editingTransitionClipId = clipId
-                                    },
-                                    activeTransitionClipId = editingTransitionClipId,
-                                    customAudio = customAudio,
-                                    onOpenAudioTab = {
-                                        activeTab = FcpWorkspaceTab.AUDIO
-                                        if (drawerLevel == VideoDrawerLevel.COLLAPSED) {
-                                            drawerLevel = VideoDrawerLevel.MID
-                                        }
-                                    }
+                                    ),
+                                    currentTimeSecProvider = { currentTimeSec }
                                 )
                             }
                             FcpWorkspaceTab.CANVAS -> {
@@ -3567,44 +3571,932 @@ private fun FcpTimecodeIndicator(
     }
 }
 
+// ============================================================================
+// TIMELINE TAB STATE & ACTIONS (Modularized to keep Dalvik registers < 255)
+// ============================================================================
+
+data class FcpTimelineState(
+    val clips: List<FcpClip>,
+    val timelineSpans: List<FcpTimelineClipSpan>,
+    val selectedId: String?,
+    val totalDurationSec: Float,
+    val pixelsPerSec: Float,
+    val isPlaying: Boolean,
+    val isUserScrubbing: Boolean = false,
+    val isAutoReplay: Boolean = true,
+    val activeTransitionClipId: String? = null,
+    val customAudio: FcpCustomAudio? = null
+)
+
+data class FcpTimelineActions(
+    val onZoomChange: (Float) -> Unit = {},
+    val onAutoReplayToggle: () -> Unit = {},
+    val onPlayToggle: () -> Unit = {},
+    val onSelectClip: (String) -> Unit = {},
+    val onTrimLeft: (String, Float) -> Unit = { _, _ -> },
+    val onTrimRight: (String, Float) -> Unit = { _, _ -> },
+    val onTrimStart: () -> Unit = {},
+    val onReorderClips: (Int, Int) -> Unit = { _, _ -> },
+    val onScrubStart: () -> Unit = {},
+    val onScrubSec: (Float) -> Unit = {},
+    val onScrubEnd: (Float) -> Unit = {},
+    val onSplitClip: () -> Unit = {},
+    val onDuplicateClip: () -> Unit = {},
+    val onDeleteClip: () -> Unit = {},
+    val onAddClip: () -> Unit = {},
+    val onStepFrame: (Boolean) -> Unit = {},
+    val onEditTransition: (String) -> Unit = {},
+    val onOpenAudioTab: () -> Unit = {}
+)
+
 @Composable
-private fun TimelineTabContent(
-    clips: List<FcpClip>,
-    timelineSpans: List<FcpTimelineClipSpan>,
-    selectedId: String?,
-    currentTimeSecProvider: () -> Float,
+private fun TimelineTopBar(
+    state: FcpTimelineState,
+    actions: FcpTimelineActions,
+    currentTimeSecProvider: () -> Float
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Timecode display & Zoom Indicator
+        FcpTimecodeIndicator(
+            currentTimeSecProvider = currentTimeSecProvider,
+            totalDurationSec = state.totalDurationSec,
+            isUserScrubbing = state.isUserScrubbing
+        )
+
+        // Transport Action Buttons & Zoom Controls
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            TimelineMiniButton(Lucide.ZoomOut, "Zoom Out", onClick = { actions.onZoomChange((state.pixelsPerSec * 0.8f).coerceIn(15f, 120f)) })
+            TimelineMiniButton(Lucide.ZoomIn, "Zoom In", onClick = { actions.onZoomChange((state.pixelsPerSec * 1.25f).coerceIn(15f, 120f)) })
+            TimelineMiniButton(Lucide.SkipBack, "Prev Frame", onClick = { actions.onStepFrame(false) })
+            TimelineMiniButton(Lucide.Scissors, "Split", onClick = actions.onSplitClip)
+            TimelineMiniButton(Lucide.Copy, "Duplicate", onClick = actions.onDuplicateClip)
+            TimelineMiniButton(Lucide.Trash2, "Delete", isDanger = true, onClick = actions.onDeleteClip)
+            TimelineMiniButton(Lucide.Plus, "Add Video", onClick = actions.onAddClip)
+            TimelineMiniButton(Lucide.Music, "Audio", onClick = actions.onOpenAudioTab)
+            TimelineMiniButton(Lucide.SkipForward, "Next Frame", onClick = { actions.onStepFrame(true) })
+        }
+    }
+}
+
+@Composable
+private fun TimelineRulerLane(
     totalDurationSec: Float,
     pixelsPerSec: Float,
-    onZoomChange: (Float) -> Unit = {},
-    isPlaying: Boolean,
-    isUserScrubbing: Boolean = false,
-    isAutoReplay: Boolean = true,
-    onAutoReplayToggle: () -> Unit = {},
-    onPlayToggle: () -> Unit,
-    onSelectClip: (String) -> Unit,
-    onTrimLeft: (String, Float) -> Unit,
-    onTrimRight: (String, Float) -> Unit,
-    onTrimStart: () -> Unit = {},
-    onReorderClips: (Int, Int) -> Unit = { _, _ -> },
-    onScrubStart: () -> Unit = {},
+    timelineStartPaddingDp: Dp,
+    onScrubStart: () -> Unit,
     onScrubSec: (Float) -> Unit,
-    onScrubEnd: (Float) -> Unit = {},
-    onSplitClip: () -> Unit,
-    onDuplicateClip: () -> Unit,
-    onDeleteClip: () -> Unit,
-    onAddClip: () -> Unit,
-    onStepFrame: (Boolean) -> Unit,
-    onEditTransition: (String) -> Unit = {},
-    activeTransitionClipId: String? = null,
-    customAudio: FcpCustomAudio? = null,
-    onOpenAudioTab: () -> Unit = {}
+    onScrubEnd: (Float) -> Unit
 ) {
     val colors = LocalOscellionColors.current
     val haptic = LocalHapticFeedback.current
     val density = LocalDensity.current.density
+
+    val majorIntervalSec = when {
+        pixelsPerSec >= 75f -> 2
+        pixelsPerSec >= 35f -> 5
+        else -> 10
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(22.dp)
+            .pointerInput(totalDurationSec, pixelsPerSec, density) {
+                var dragSec = 0f
+                detectDragGestures(
+                    onDragStart = { offset ->
+                        onScrubStart()
+                        val startPx = timelineStartPaddingDp.toPx()
+                        dragSec = ((offset.x - startPx) / (pixelsPerSec * density)).coerceIn(0f, totalDurationSec)
+                        onScrubSec(dragSec)
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    },
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        val deltaSec = dragAmount.x / (pixelsPerSec * density)
+                        dragSec = (dragSec + deltaSec).coerceIn(0f, totalDurationSec)
+                        onScrubSec(dragSec)
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    },
+                    onDragEnd = {
+                        onScrubEnd(dragSec)
+                    },
+                    onDragCancel = {
+                        onScrubEnd(dragSec)
+                    }
+                )
+            }
+            .pointerInput(totalDurationSec, pixelsPerSec, density) {
+                detectTapGestures { offset ->
+                    val startPx = timelineStartPaddingDp.toPx()
+                    val tappedSec = ((offset.x - startPx) / (pixelsPerSec * density)).coerceIn(0f, totalDurationSec)
+                    onScrubStart()
+                    onScrubSec(tappedSec)
+                    onScrubEnd(tappedSec)
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                }
+            }
+    ) {
+        Canvas(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            val startPx = timelineStartPaddingDp.toPx()
+            val pxPerSec = pixelsPerSec * density
+            val totalSecs = totalDurationSec.toInt()
+
+            for (sec in 0..totalSecs) {
+                val x = startPx + (sec * pxPerSec)
+                val isMajor = sec % majorIntervalSec == 0
+                val isMedium = !isMajor && (sec % (majorIntervalSec / 2).coerceAtLeast(1) == 0)
+
+                drawLine(
+                    color = when {
+                        isMajor -> colors.textMuted.copy(alpha = 0.75f)
+                        isMedium -> colors.textMuted.copy(alpha = 0.45f)
+                        else -> colors.glassBorder.copy(alpha = 0.35f)
+                    },
+                    start = Offset(x, 0f),
+                    end = Offset(x, if (isMajor) 11.dp.toPx() else if (isMedium) 7.dp.toPx() else 4.dp.toPx()),
+                    strokeWidth = if (isMajor) 1.5.dp.toPx() else 1.dp.toPx()
+                )
+            }
+
+            // Video End Boundary Line on ruler
+            val endX = startPx + (totalDurationSec * pxPerSec)
+            drawLine(
+                color = Color(0xFFEF4444).copy(alpha = 0.85f),
+                start = Offset(endX, 0f),
+                end = Offset(endX, 18.dp.toPx()),
+                strokeWidth = 2.dp.toPx()
+            )
+        }
+
+        // Native timecode numbers on major intervals
+        val totalSecs = totalDurationSec.toInt()
+        for (sec in majorIntervalSec..totalSecs step majorIntervalSec) {
+            val secOffsetDp = timelineStartPaddingDp + (sec * pixelsPerSec).dp
+            Text(
+                text = formatTimecode(sec.toFloat()),
+                color = colors.textMuted.copy(alpha = 0.65f),
+                fontSize = 8.sp,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.offset(x = secOffsetDp + 2.dp, y = 2.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun TimelineClipCard(
+    span: FcpTimelineClipSpan,
+    isSelected: Boolean,
+    isClipDragging: Boolean,
+    dragCumulativeOffsetPx: Float,
+    pixelsPerSec: Float,
+    totalDurationSec: Float,
+    onDragStart: (String) -> Unit,
+    onDragMove: (String, Float) -> Unit,
+    onDragEnd: () -> Unit,
+    onSelectClip: (String) -> Unit,
+    onScrubStart: () -> Unit,
+    onScrubSec: (Float) -> Unit,
+    onScrubEnd: (Float) -> Unit,
+    onTrimStart: () -> Unit,
+    onTrimLeft: (String, Float) -> Unit,
+    onTrimRight: (String, Float) -> Unit,
+    currentTimeSecProvider: () -> Float
+) {
+    val colors = LocalOscellionColors.current
+    val haptic = LocalHapticFeedback.current
+    val density = LocalDensity.current.density
+    val clip = span.clip
+    val clipWidthDp = (span.durationSec * pixelsPerSec).dp
+
+    val clipBg = if (isSelected) {
+        if (colors.isDark) Color(0xFF1D4ED8) else Color(0xFF2563EB)
+    } else {
+        if (colors.isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)
+    }
+    val clipBorderColor = if (isClipDragging) Color(0xFF38BDF8) else if (isSelected) Color(0xFF60A5FA) else colors.glassBorder
+    val textColor = if (isSelected) Color.White else colors.textMain
+    val subTextColor = if (isSelected) Color.White.copy(alpha = 0.8f) else colors.textMuted
+
+    val dragOffsetX = if (isClipDragging) dragCumulativeOffsetPx else 0f
+
+    Box(
+        modifier = Modifier
+            .width(clipWidthDp)
+            .fillMaxHeight()
+            .offset { IntOffset(dragOffsetX.roundToInt(), 0) }
+            .scale(if (isClipDragging) 1.05f else 1f)
+            .shadow(
+                elevation = if (isClipDragging) 16.dp else if (isSelected) 2.dp else 0.dp,
+                shape = RoundedCornerShape(6.dp),
+                spotColor = Color(0xFF60A5FA)
+            )
+            .zIndex(if (isClipDragging) 100f else 1f)
+            .clip(RoundedCornerShape(6.dp))
+            .background(clipBg)
+            .border(
+                width = if (isClipDragging) 2.dp else if (isSelected) 1.5.dp else 0.5.dp,
+                color = clipBorderColor,
+                shape = RoundedCornerShape(6.dp)
+            )
+            .pointerInput(clip.id) {
+                detectDragGesturesAfterLongPress(
+                    onDragStart = {
+                        onDragStart(clip.id)
+                    },
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        onDragMove(clip.id, dragAmount.x)
+                    },
+                    onDragEnd = {
+                        onDragEnd()
+                    },
+                    onDragCancel = {
+                        onDragEnd()
+                    }
+                )
+            }
+            .pointerInput(clip.id, span.timelineStartSec, span.durationSec, pixelsPerSec, density) {
+                detectTapGestures(
+                    onTap = { offset ->
+                        onSelectClip(clip.id)
+                        val tappedSec = (span.timelineStartSec + (offset.x / (pixelsPerSec * density))).coerceIn(0f, totalDurationSec)
+                        onScrubStart()
+                        onScrubSec(tappedSec)
+                        onScrubEnd(tappedSec)
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    }
+                )
+            }
+    ) {
+        // 1. Live Video Preview Thumbnails Filmstrip
+        FcpClipFilmstrip(
+            clip = clip,
+            clipWidthDp = clipWidthDp,
+            modifier = Modifier.fillMaxSize()
+        )
+
+        // 2. Cinematic Gradient Scrim (Keeps labels, badges, and trim handles high-contrast & sharp)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = if (isSelected) {
+                            listOf(
+                                Color.Black.copy(alpha = 0.52f),
+                                Color.Black.copy(alpha = 0.08f),
+                                Color.Black.copy(alpha = 0.62f)
+                            )
+                        } else {
+                            listOf(
+                                Color.Black.copy(alpha = 0.65f),
+                                Color.Black.copy(alpha = 0.35f),
+                                Color.Black.copy(alpha = 0.75f)
+                            )
+                        }
+                    )
+                )
+        )
+
+        // Floating DRAGGING badge when actively dragged
+        if (isClipDragging) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .offset(y = (-14).dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(Color(0xFF007AFF))
+                    .border(0.5.dp, Color.White.copy(alpha = 0.8f), RoundedCornerShape(4.dp))
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                    .zIndex(150f)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    Icon(
+                        imageVector = Lucide.Move,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(9.dp)
+                    )
+                    Text(
+                        text = "DRAGGING",
+                        fontSize = 8.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
+            }
+        }
+
+        val handleWidth = if (clipWidthDp < 36.dp) 10.dp else 14.dp
+        val touchHandleWidth = 36.dp
+
+        // Left Trim Handle (Amber bracket on active clip)
+        if (isSelected && !isClipDragging) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .width(touchHandleWidth)
+                    .fillMaxHeight()
+                    .zIndex(25f)
+                    .pointerInput(clip.id, density, pixelsPerSec) {
+                        detectDragGestures(
+                            onDragStart = {
+                                onScrubStart()
+                                onTrimStart()
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            },
+                            onDrag = { change, dragAmount ->
+                                change.consume()
+                                val deltaSec = dragAmount.x / (pixelsPerSec * density)
+                                onTrimLeft(clip.id, deltaSec)
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            },
+                            onDragEnd = {
+                                onScrubEnd(currentTimeSecProvider())
+                            },
+                            onDragCancel = {
+                                onScrubEnd(currentTimeSecProvider())
+                            }
+                        )
+                    },
+                contentAlignment = Alignment.CenterStart
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(handleWidth)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(topStart = 4.dp, bottomStart = 4.dp))
+                        .background(Color(0xFFF59E0B)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(1.dp)) {
+                        Box(Modifier.width(1.dp).height(14.dp).background(Color.Black.copy(alpha = 0.6f)))
+                        Box(Modifier.width(1.dp).height(14.dp).background(Color.Black.copy(alpha = 0.6f)))
+                    }
+                }
+            }
+        }
+
+        // Clip Information
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(
+                    start = if (isSelected) (handleWidth + 6.dp) else 8.dp,
+                    end = if (isSelected) (handleWidth + 6.dp) else 8.dp,
+                    top = 4.dp,
+                    bottom = 4.dp
+                ),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.weight(1f, fill = false)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(if (isSelected) Color.White.copy(alpha = 0.22f) else colors.primary.copy(alpha = 0.15f))
+                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                    ) {
+                        Text(
+                            text = "V1",
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isSelected) Color.White else colors.primary
+                        )
+                    }
+                    Text(
+                        text = clip.name,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = textColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                // Tactile grip affordance (indicates hold & drag)
+                Icon(
+                    imageVector = Lucide.GripVertical,
+                    contentDescription = "Hold to drag",
+                    tint = if (isSelected) Color.White.copy(alpha = 0.8f) else colors.textMuted.copy(alpha = 0.5f),
+                    modifier = Modifier.size(11.dp)
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "${String.format("%.1f", clip.trimmedDurationSec)}s",
+                    fontSize = 9.sp,
+                    color = subTextColor,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Medium
+                )
+                if (clip.speed != 1f) {
+                    Text(
+                        text = "${clip.speed}x",
+                        fontSize = 8.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isSelected) Color(0xFFFDE047) else colors.primary
+                    )
+                }
+            }
+        }
+
+        // Right Trim Handle (Amber bracket on active clip)
+        if (isSelected && !isClipDragging) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .width(touchHandleWidth)
+                    .fillMaxHeight()
+                    .zIndex(25f)
+                    .pointerInput(clip.id, density, pixelsPerSec) {
+                        detectDragGestures(
+                            onDragStart = {
+                                onScrubStart()
+                                onTrimStart()
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            },
+                            onDrag = { change, dragAmount ->
+                                change.consume()
+                                val deltaSec = dragAmount.x / (pixelsPerSec * density)
+                                onTrimRight(clip.id, deltaSec)
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            },
+                            onDragEnd = {
+                                onScrubEnd(currentTimeSecProvider())
+                            },
+                            onDragCancel = {
+                                onScrubEnd(currentTimeSecProvider())
+                            }
+                        )
+                    },
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(handleWidth)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(topEnd = 4.dp, bottomEnd = 4.dp))
+                        .background(Color(0xFFF59E0B)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(1.dp)) {
+                        Box(Modifier.width(1.dp).height(14.dp).background(Color.Black.copy(alpha = 0.6f)))
+                        Box(Modifier.width(1.dp).height(14.dp).background(Color.Black.copy(alpha = 0.6f)))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TimelineTransitionBadges(
+    timelineSpans: List<FcpTimelineClipSpan>,
+    activeTransitionClipId: String?,
+    pixelsPerSec: Float,
+    timelineStartPaddingDp: Dp,
+    onEditTransition: (String) -> Unit
+) {
+    val colors = LocalOscellionColors.current
+    if (timelineSpans.size <= 1) return
+
+    timelineSpans.take(timelineSpans.size - 1).forEach { span ->
+        val clip = span.clip
+        val trans = clip.transitionToNext
+        val hasTrans = trans != FcpTransitionType.NONE
+        val isTransitionActive = hasTrans || activeTransitionClipId == clip.id
+        val cutX = timelineStartPaddingDp + (span.timelineEndSec * pixelsPerSec).dp
+
+        // Apple-style machined bevel transition add button
+        val seamButtonSize = 26.dp
+        val outerHalfSize = 15.dp
+
+        Box(
+            modifier = Modifier
+                .offset(x = cutX - outerHalfSize, y = 31.dp)
+                .zIndex(35f)
+        ) {
+            AppleBeveledTransitionButton(
+                isActive = isTransitionActive,
+                onClick = { onEditTransition(clip.id) },
+                buttonSize = seamButtonSize,
+                activeRotationDegrees = if (hasTrans) 0f else 90f,
+                customIcon = if (hasTrans) trans.icon else null
+            )
+        }
+
+        if (hasTrans) {
+            Box(
+                modifier = Modifier
+                    .offset(x = cutX - 22.dp, y = 62.dp)
+                    .width(44.dp)
+                    .zIndex(36f),
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = Color.Black.copy(alpha = 0.78f),
+                    border = BorderStroke(0.5.dp, if (colors.isDark) Color.White.copy(alpha = 0.2f) else Color(0xFFCBD5E1))
+                ) {
+                    Text(
+                        text = "${"%.1f".format(clip.transitionDurationSec)}s",
+                        fontSize = 7.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TimelineAudioTrackLane(
+    customAudio: FcpCustomAudio,
+    totalDurationSec: Float,
+    pixelsPerSec: Float,
+    timelineStartPaddingDp: Dp,
+    onOpenAudioTab: () -> Unit
+) {
+    val audioDuration = if (customAudio.durationSec > 0f) customAudio.durationSec else totalDurationSec
+    val audioTrackWidthDp = (audioDuration * pixelsPerSec).dp
+    Box(
+        modifier = Modifier
+            .offset(x = timelineStartPaddingDp, y = 78.dp)
+            .width(audioTrackWidthDp)
+            .height(24.dp)
+            .clip(RoundedCornerShape(4.dp))
+            .background(
+                Brush.horizontalGradient(
+                    listOf(
+                        Color(0xFF064E3B).copy(alpha = 0.85f),
+                        Color(0xFF047857).copy(alpha = 0.65f)
+                    )
+                )
+            )
+            .border(1.dp, Color(0xFF10B981).copy(alpha = 0.6f), RoundedCornerShape(4.dp))
+            .clickable { onOpenAudioTab() }
+            .padding(horizontal = 6.dp),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        // Fast Vector Waveform Bars (Precalculated Factors)
+        val waveformFactors = remember {
+            FloatArray(120) { i ->
+                ((Math.sin(i * 0.45) * 0.45 + Math.cos(i * 0.22) * 0.35 + 0.8).toFloat()).coerceIn(0.2f, 1.0f)
+            }
+        }
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val barWidth = 2.dp.toPx()
+            val barGap = 2.dp.toPx()
+            val totalBarStep = barWidth + barGap
+            val count = (size.width / totalBarStep).toInt()
+            val centerY = size.height / 2f
+            val maxBarHeight = size.height * 0.7f
+            val factorCount = waveformFactors.size
+
+            for (i in 0 until count) {
+                val factor = waveformFactors[i % factorCount]
+                val barH = maxBarHeight * factor
+                val x = i * totalBarStep + barGap
+                drawRoundRect(
+                    color = Color(0xFF34D399).copy(alpha = 0.25f),
+                    topLeft = Offset(x, centerY - barH / 2f),
+                    size = Size(barWidth, barH),
+                    cornerRadius = CornerRadius(1.dp.toPx(), 1.dp.toPx())
+                )
+            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.weight(1f, fill = false)
+            ) {
+                Icon(
+                    imageVector = if (customAudio.isExtractedFromVideo) Lucide.Film else Lucide.Music,
+                    contentDescription = null,
+                    tint = Color(0xFF34D399),
+                    modifier = Modifier.size(11.dp)
+                )
+                Text(
+                    text = customAudio.name,
+                    fontSize = 9.sp,
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                if (customAudio.muteOriginalVideo) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(Color.Black.copy(alpha = 0.45f))
+                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                    ) {
+                        Text(
+                            text = "Muted Video",
+                            fontSize = 7.5.sp,
+                            color = Color(0xFF34D399),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+                Text(
+                    text = "${(customAudio.volume * 100f).toInt()}%",
+                    fontSize = 8.sp,
+                    color = Color.White.copy(alpha = 0.85f),
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TimelinePlayheadNeedle(
+    currentTimeSecProvider: () -> Float,
+    totalDurationSec: Float,
+    pixelsPerSec: Float,
+    timelineStartPaddingDp: Dp,
+    isUserScrubbing: Boolean,
+    onScrubStart: () -> Unit,
+    onScrubSec: (Float) -> Unit,
+    onScrubEnd: (Float) -> Unit
+) {
+    val haptic = LocalHapticFeedback.current
+    val density = LocalDensity.current.density
+    val touchWidth = 48.dp
+    val touchWidthPx = touchWidth.value * density
+    val startPaddingPx = timelineStartPaddingDp.value * density
+
+    Box(
+        modifier = Modifier
+            .offset {
+                val playheadPx = startPaddingPx + (currentTimeSecProvider() * pixelsPerSec * density)
+                IntOffset((playheadPx - (touchWidthPx / 2f)).roundToInt(), 0)
+            }
+            .width(touchWidth)
+            .fillMaxHeight()
+            .zIndex(50f)
+            .pointerInput(totalDurationSec, pixelsPerSec, density) {
+                var dragSec = 0f
+                detectDragGestures(
+                    onDragStart = {
+                        onScrubStart()
+                        dragSec = currentTimeSecProvider()
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    },
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        val deltaSec = dragAmount.x / (pixelsPerSec * density)
+                        dragSec = (dragSec + deltaSec).coerceIn(0f, totalDurationSec)
+                        onScrubSec(dragSec)
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    },
+                    onDragEnd = {
+                        onScrubEnd(dragSec)
+                    },
+                    onDragCancel = {
+                        onScrubEnd(dragSec)
+                    }
+                )
+            },
+        contentAlignment = Alignment.TopCenter
+    ) {
+        val pinScale by animateFloatAsState(
+            targetValue = if (isUserScrubbing) 1.25f else 1f,
+            animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+            label = "playheadPinScale"
+        )
+        // Top Marker Pin Handle
+        Box(
+            modifier = Modifier
+                .scale(pinScale)
+                .width(16.dp)
+                .height(12.dp)
+                .clip(RoundedCornerShape(bottomStart = 4.dp, bottomEnd = 4.dp))
+                .background(Color(0xFFEF4444))
+                .shadow(
+                    elevation = if (isUserScrubbing) 8.dp else 4.dp,
+                    shape = RoundedCornerShape(bottomStart = 4.dp, bottomEnd = 4.dp),
+                    spotColor = Color(0xFFEF4444)
+                )
+        )
+        // Razor-sharp 2.5dp playhead line extending all the way down
+        Box(
+            modifier = Modifier
+                .width(if (isUserScrubbing) 3.dp else 2.5.dp)
+                .fillMaxHeight()
+                .background(Color(0xFFEF4444))
+        )
+    }
+}
+
+@Composable
+private fun TimelineJogWheel(
+    totalDurationSec: Float,
+    currentTimeSecProvider: () -> Float,
+    onScrubStart: () -> Unit,
+    onScrubSec: (Float) -> Unit,
+    onScrubEnd: (Float) -> Unit
+) {
+    val colors = LocalOscellionColors.current
+    val haptic = LocalHapticFeedback.current
     val context = LocalContext.current
-    val currentClips by rememberUpdatedState(clips)
-    val currentSpans by rememberUpdatedState(timelineSpans)
+    var isJogActive by remember { mutableStateOf(false) }
+    var jogScrollOffsetPx by remember { mutableFloatStateOf(0f) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(44.dp)
+            .clip(RoundedCornerShape(22.dp))
+            .background(
+                if (isJogActive) colors.primary.copy(alpha = 0.08f) else colors.bg
+            )
+            .border(
+                width = if (isJogActive) 1.5.dp else 1.dp,
+                color = if (isJogActive) colors.primary.copy(alpha = 0.7f) else colors.glassBorder,
+                shape = RoundedCornerShape(22.dp)
+            )
+            .pointerInput(totalDurationSec) {
+                var jogTime = 0f
+                var lastHapticFrame = 0
+                val tickSpacingPx = 8.dp.toPx()
+                detectDragGestures(
+                    onDragStart = {
+                        isJogActive = true
+                        onScrubStart()
+                        jogTime = currentTimeSecProvider()
+                        lastHapticFrame = (jogTime * 30f).roundToInt()
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    },
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        jogScrollOffsetPx += dragAmount.x
+                        // 1 frame per tickSpacingPx (8dp)
+                        val frameStep = (dragAmount.x / tickSpacingPx) * (1f / 30f)
+                        jogTime = (jogTime + frameStep).coerceIn(0f, totalDurationSec)
+                        onScrubSec(jogTime)
+
+                        val curFrame = (jogTime * 30f).roundToInt()
+                        if (curFrame != lastHapticFrame) {
+                            lastHapticFrame = curFrame
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            SoundManager.playScrub(context, force = true)
+                        }
+                    },
+                    onDragEnd = {
+                        isJogActive = false
+                        onScrubEnd(jogTime)
+                    },
+                    onDragCancel = {
+                        isJogActive = false
+                        onScrubEnd(jogTime)
+                    }
+                )
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 14.dp)
+        ) {
+            val cx = size.width / 2f
+            val tickSpacing = 8.dp.toPx()
+            val offset = jogScrollOffsetPx % tickSpacing
+            val totalTicks = (size.width / tickSpacing).toInt() + 4
+            val halfTicks = totalTicks / 2
+            val currentBaseFrame = (jogScrollOffsetPx / tickSpacing).roundToInt()
+
+            for (i in -halfTicks..halfTicks) {
+                val x = cx + (i * tickSpacing) + offset
+                if (x < 0f || x > size.width) continue
+
+                val dist = abs(x - cx)
+                val maxDist = size.width / 2f
+                val normDist = (dist / maxDist).coerceIn(0f, 1f)
+                val alpha = cos(normDist * (Math.PI.toFloat() / 2f)).coerceIn(0f, 1f)
+
+                val frameIndex = currentBaseFrame - i
+                val isMajor = frameIndex % 10 == 0
+                val isMedium = frameIndex % 5 == 0
+
+                val tickHeight = when {
+                    isMajor -> size.height * 0.62f
+                    isMedium -> size.height * 0.42f
+                    else -> size.height * 0.25f
+                }
+                val yTop = (size.height - tickHeight) / 2f
+
+                val strokeW = if (isMajor) 2.dp.toPx() else 1.dp.toPx()
+                val color = when {
+                    isMajor -> colors.primary.copy(alpha = alpha * 0.95f)
+                    isMedium -> colors.textMuted.copy(alpha = alpha * 0.75f)
+                    else -> colors.textMuted.copy(alpha = alpha * 0.35f)
+                }
+
+                drawLine(
+                    color = color,
+                    start = Offset(x, yTop),
+                    end = Offset(x, yTop + tickHeight),
+                    strokeWidth = strokeW,
+                    cap = StrokeCap.Round
+                )
+            }
+
+            // Center Optical Needle Indicator
+            drawLine(
+                color = Color(0xFFEF4444),
+                start = Offset(cx, 5.dp.toPx()),
+                end = Offset(cx, size.height - 5.dp.toPx()),
+                strokeWidth = 2.dp.toPx(),
+                cap = StrokeCap.Round
+            )
+        }
+
+        // Interactive Center HUD label
+        if (isJogActive) {
+            val currentFrame = (currentTimeSecProvider() * 30f).roundToInt()
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color.Black.copy(alpha = 0.78f))
+                    .border(0.5.dp, colors.primary.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
+                    .padding(horizontal = 8.dp, vertical = 2.dp)
+            ) {
+                Text(
+                    text = "◀  FRAME $currentFrame  ▶",
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.primary,
+                    letterSpacing = 0.5.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+        } else {
+            Text(
+                text = "◀  SCRUB FRAME  ▶",
+                fontSize = 8.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = colors.textMuted.copy(alpha = 0.65f),
+                letterSpacing = 1.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun TimelineTabContent(
+    state: FcpTimelineState,
+    actions: FcpTimelineActions,
+    currentTimeSecProvider: () -> Float
+) {
+    val density = LocalDensity.current.density
+    val haptic = LocalHapticFeedback.current
+    val currentClips by rememberUpdatedState(state.clips)
+    val currentSpans by rememberUpdatedState(state.timelineSpans)
     var draggingClipId by remember { mutableStateOf<String?>(null) }
     var dragCumulativeOffsetPx by remember { mutableFloatStateOf(0f) }
     var isAutoScrolling by remember { mutableStateOf(false) }
@@ -3612,17 +4504,17 @@ private fun TimelineTabContent(
     val timelineScrollState = rememberScrollState()
     val timelineStartPaddingDp = 16.dp
     val timelineEndPaddingDp = 16.dp
-    val totalContentWidthDp = (totalDurationSec * pixelsPerSec).dp + timelineStartPaddingDp + timelineEndPaddingDp
+    val totalContentWidthDp = (state.totalDurationSec * state.pixelsPerSec).dp + timelineStartPaddingDp + timelineEndPaddingDp
 
     var viewportWidthPx by remember { mutableIntStateOf(0) }
 
     // Auto-scroll to follow playhead smoothly during playback and guarantee it never gets lost
-    LaunchedEffect(isPlaying) {
-        if (!isPlaying) return@LaunchedEffect
+    LaunchedEffect(state.isPlaying) {
+        if (!state.isPlaying) return@LaunchedEffect
         snapshotFlow { currentTimeSecProvider() }
             .collect { time ->
                 if (viewportWidthPx > 0 && !isAutoScrolling && !timelineScrollState.isScrollInProgress) {
-                    val playheadPx = (timelineStartPaddingDp.value * density) + (time * pixelsPerSec * density)
+                    val playheadPx = (timelineStartPaddingDp.value * density) + (time * state.pixelsPerSec * density)
                     val scrollOffset = timelineScrollState.value
                     val rightThreshold = scrollOffset + viewportWidthPx - (70 * density)
                     val leftThreshold = scrollOffset + (30 * density)
@@ -3655,11 +4547,11 @@ private fun TimelineTabContent(
             }
     }
 
-    LaunchedEffect(isPlaying, isUserScrubbing, totalDurationSec) {
-        if (isPlaying || isUserScrubbing || viewportWidthPx <= 0) return@LaunchedEffect
+    LaunchedEffect(state.isPlaying, state.isUserScrubbing, state.totalDurationSec) {
+        if (state.isPlaying || state.isUserScrubbing || viewportWidthPx <= 0) return@LaunchedEffect
         val curTime = currentTimeSecProvider()
-        val playheadPx = (timelineStartPaddingDp.value * density) + (curTime * pixelsPerSec * density)
-        val isAtEnd = totalDurationSec > 0f && curTime >= totalDurationSec - 0.08f
+        val playheadPx = (timelineStartPaddingDp.value * density) + (curTime * state.pixelsPerSec * density)
+        val isAtEnd = state.totalDurationSec > 0f && curTime >= state.totalDurationSec - 0.08f
         if (isAtEnd) {
             val targetScroll = (playheadPx - viewportWidthPx + timelineEndPaddingDp.value * density + 16 * density).coerceAtLeast(0f).toInt()
             timelineScrollState.animateScrollTo(targetScroll)
@@ -3677,42 +4569,18 @@ private fun TimelineTabContent(
             .padding(horizontal = 14.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-
         // ── Top Row: Timecode + Zoom + Transport Actions ─────────────────────
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Timecode display & Zoom Indicator
-            FcpTimecodeIndicator(
-                currentTimeSecProvider = currentTimeSecProvider,
-                totalDurationSec = totalDurationSec,
-                isUserScrubbing = isUserScrubbing
-            )
-
-            // Transport Action Buttons & Zoom Controls
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                TimelineMiniButton(Lucide.ZoomOut, "Zoom Out", onClick = { onZoomChange((pixelsPerSec * 0.8f).coerceIn(15f, 120f)) })
-                TimelineMiniButton(Lucide.ZoomIn, "Zoom In", onClick = { onZoomChange((pixelsPerSec * 1.25f).coerceIn(15f, 120f)) })
-                TimelineMiniButton(Lucide.SkipBack, "Prev Frame", onClick = { onStepFrame(false) })
-                TimelineMiniButton(Lucide.Scissors, "Split", onClick = onSplitClip)
-                TimelineMiniButton(Lucide.Copy, "Duplicate", onClick = onDuplicateClip)
-                TimelineMiniButton(Lucide.Trash2, "Delete", isDanger = true, onClick = onDeleteClip)
-                TimelineMiniButton(Lucide.Plus, "Add Video", onClick = onAddClip)
-                TimelineMiniButton(Lucide.Music, "Audio", onClick = onOpenAudioTab)
-                TimelineMiniButton(Lucide.SkipForward, "Next Frame", onClick = { onStepFrame(true) })
-            }
-        }
+        TimelineTopBar(
+            state = state,
+            actions = actions,
+            currentTimeSecProvider = currentTimeSecProvider
+        )
 
         // ── Middle: Flat Style Unified Timeline (Synchronized ruler & clips) ───
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(if (customAudio != null) 112.dp else 86.dp)
+                .height(if (state.customAudio != null) 112.dp else 86.dp)
                 .onSizeChanged { viewportWidthPx = it.width }
                 .horizontalScroll(timelineScrollState)
         ) {
@@ -3722,107 +4590,21 @@ private fun TimelineTabContent(
                     .fillMaxHeight()
             ) {
                 // 1. Time Ruler (Draggable & Tappable to scrub playhead anywhere)
-                val majorIntervalSec = when {
-                    pixelsPerSec >= 75f -> 2
-                    pixelsPerSec >= 35f -> 5
-                    else -> 10
-                }
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(22.dp)
-                        .pointerInput(totalDurationSec, pixelsPerSec, density) {
-                            var dragSec = 0f
-                            detectDragGestures(
-                                onDragStart = { offset ->
-                                    onScrubStart()
-                                    val startPx = timelineStartPaddingDp.toPx()
-                                    dragSec = ((offset.x - startPx) / (pixelsPerSec * density)).coerceIn(0f, totalDurationSec)
-                                    onScrubSec(dragSec)
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                },
-                                onDrag = { change, dragAmount ->
-                                    change.consume()
-                                    val deltaSec = dragAmount.x / (pixelsPerSec * density)
-                                    dragSec = (dragSec + deltaSec).coerceIn(0f, totalDurationSec)
-                                    onScrubSec(dragSec)
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                },
-                                onDragEnd = {
-                                    onScrubEnd(dragSec)
-                                },
-                                onDragCancel = {
-                                    onScrubEnd(dragSec)
-                                }
-                            )
-                        }
-                        .pointerInput(totalDurationSec, pixelsPerSec, density) {
-                            detectTapGestures { offset ->
-                                val startPx = timelineStartPaddingDp.toPx()
-                                val tappedSec = ((offset.x - startPx) / (pixelsPerSec * density)).coerceIn(0f, totalDurationSec)
-                                onScrubStart()
-                                onScrubSec(tappedSec)
-                                onScrubEnd(tappedSec)
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            }
-                        }
-                ) {
-                    Canvas(
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        val startPx = timelineStartPaddingDp.toPx()
-                        val pxPerSec = pixelsPerSec * density
-                        val totalSecs = totalDurationSec.toInt()
-
-                        for (sec in 0..totalSecs) {
-                            val x = startPx + (sec * pxPerSec)
-                            val isMajor = sec % majorIntervalSec == 0
-                            val isMedium = !isMajor && (sec % (majorIntervalSec / 2).coerceAtLeast(1) == 0)
-
-                            drawLine(
-                                color = when {
-                                    isMajor -> colors.textMuted.copy(alpha = 0.75f)
-                                    isMedium -> colors.textMuted.copy(alpha = 0.45f)
-                                    else -> colors.glassBorder.copy(alpha = 0.35f)
-                                },
-                                start = Offset(x, 0f),
-                                end = Offset(x, if (isMajor) 11.dp.toPx() else if (isMedium) 7.dp.toPx() else 4.dp.toPx()),
-                                strokeWidth = if (isMajor) 1.5.dp.toPx() else 1.dp.toPx()
-                            )
-                        }
-
-                        // Video End Boundary Line on ruler
-                        val endX = startPx + (totalDurationSec * pxPerSec)
-                        drawLine(
-                            color = Color(0xFFEF4444).copy(alpha = 0.85f),
-                            start = Offset(endX, 0f),
-                            end = Offset(endX, 18.dp.toPx()),
-                            strokeWidth = 2.dp.toPx()
-                        )
-                    }
-
-                    // Native timecode numbers on major intervals
-                    val totalSecs = totalDurationSec.toInt()
-                    for (sec in majorIntervalSec..totalSecs step majorIntervalSec) {
-                        val secOffsetDp = timelineStartPaddingDp + (sec * pixelsPerSec).dp
-                        Text(
-                            text = formatTimecode(sec.toFloat()),
-                            color = colors.textMuted.copy(alpha = 0.65f),
-                            fontSize = 8.sp,
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.offset(x = secOffsetDp + 2.dp, y = 2.dp)
-                        )
-                    }
-                }
+                TimelineRulerLane(
+                    totalDurationSec = state.totalDurationSec,
+                    pixelsPerSec = state.pixelsPerSec,
+                    timelineStartPaddingDp = timelineStartPaddingDp,
+                    onScrubStart = actions.onScrubStart,
+                    onScrubSec = actions.onScrubSec,
+                    onScrubEnd = actions.onScrubEnd
+                )
 
                 // Video End Boundary Vertical Guide extending through clips
                 Box(
                     modifier = Modifier
-                        .offset(x = timelineStartPaddingDp + (totalDurationSec * pixelsPerSec).dp, y = 18.dp)
+                        .offset(x = timelineStartPaddingDp + (state.totalDurationSec * state.pixelsPerSec).dp, y = 18.dp)
                         .width(1.5.dp)
-                        .height(if (customAudio != null) 84.dp else 56.dp)
+                        .height(if (state.customAudio != null) 84.dp else 56.dp)
                         .background(Color(0xFFEF4444).copy(alpha = 0.4f))
                 )
 
@@ -3834,573 +4616,102 @@ private fun TimelineTabContent(
                     horizontalArrangement = Arrangement.Start,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    timelineSpans.forEachIndexed { i, span ->
+                    state.timelineSpans.forEach { span ->
                         val clip = span.clip
                         key(clip.id) {
-                            val isSelected = clip.id == selectedId
-                            val isClipDragging = draggingClipId == clip.id
-                            val clipWidthDp = (span.durationSec * pixelsPerSec).dp
+                            TimelineClipCard(
+                                span = span,
+                                isSelected = clip.id == state.selectedId,
+                                isClipDragging = draggingClipId == clip.id,
+                                dragCumulativeOffsetPx = dragCumulativeOffsetPx,
+                                pixelsPerSec = state.pixelsPerSec,
+                                totalDurationSec = state.totalDurationSec,
+                                onDragStart = { clipId ->
+                                    draggingClipId = clipId
+                                    dragCumulativeOffsetPx = 0f
+                                    actions.onSelectClip(clipId)
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                },
+                                onDragMove = { activeId, deltaX ->
+                                    val currentList = currentClips
+                                    val currentIdx = currentList.indexOfFirst { it.id == activeId }
+                                    if (currentIdx != -1 && currentList.size > 1) {
+                                        dragCumulativeOffsetPx += deltaX
 
-                            val clipBg = if (isSelected) {
-                                if (colors.isDark) Color(0xFF1D4ED8) else Color(0xFF2563EB)
-                            } else {
-                                if (colors.isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)
-                            }
-                            val clipBorderColor = if (isClipDragging) Color(0xFF38BDF8) else if (isSelected) Color(0xFF60A5FA) else colors.glassBorder
-                            val textColor = if (isSelected) Color.White else colors.textMain
-                            val subTextColor = if (isSelected) Color.White.copy(alpha = 0.8f) else colors.textMuted
-
-                            val dragOffsetX = if (isClipDragging) dragCumulativeOffsetPx else 0f
-
-                            Box(
-                                modifier = Modifier
-                                    .width(clipWidthDp)
-                                    .fillMaxHeight()
-                                    .offset { IntOffset(dragOffsetX.roundToInt(), 0) }
-                                    .scale(if (isClipDragging) 1.05f else 1f)
-                                    .shadow(
-                                        elevation = if (isClipDragging) 16.dp else if (isSelected) 2.dp else 0.dp,
-                                        shape = RoundedCornerShape(6.dp),
-                                        spotColor = Color(0xFF60A5FA)
-                                    )
-                                    .zIndex(if (isClipDragging) 100f else 1f)
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(clipBg)
-                                    .border(
-                                        width = if (isClipDragging) 2.dp else if (isSelected) 1.5.dp else 0.5.dp,
-                                        color = clipBorderColor,
-                                        shape = RoundedCornerShape(6.dp)
-                                    )
-                                    .pointerInput(clip.id) {
-                                        detectDragGesturesAfterLongPress(
-                                            onDragStart = {
-                                                draggingClipId = clip.id
-                                                dragCumulativeOffsetPx = 0f
-                                                onSelectClip(clip.id)
-                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            },
-                                            onDrag = { change, dragAmount ->
-                                                val activeId = draggingClipId ?: clip.id
-                                                val currentList = currentClips
-                                                val currentIdx = currentList.indexOfFirst { it.id == activeId }
-                                                if (currentIdx != -1 && currentList.size > 1) {
-                                                    change.consume()
-                                                    dragCumulativeOffsetPx += dragAmount.x
-
-                                                    // Swap Right
-                                                    if (currentIdx < currentList.size - 1) {
-                                                        val nextSpan = currentSpans.getOrNull(currentIdx + 1)
-                                                        val nextWidthPx = ((nextSpan?.durationSec ?: 1f) * pixelsPerSec * density).coerceAtLeast(20f * density)
-                                                        val swapThreshold = (nextWidthPx * 0.45f).coerceIn(24f * density, 140f * density)
-                                                        if (dragCumulativeOffsetPx > swapThreshold) {
-                                                            onReorderClips(currentIdx, currentIdx + 1)
-                                                            dragCumulativeOffsetPx -= nextWidthPx
-                                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                        }
-                                                    }
-
-                                                    // Swap Left
-                                                    if (currentIdx > 0) {
-                                                        val prevSpan = currentSpans.getOrNull(currentIdx - 1)
-                                                        val prevWidthPx = ((prevSpan?.durationSec ?: 1f) * pixelsPerSec * density).coerceAtLeast(20f * density)
-                                                        val swapThreshold = (prevWidthPx * 0.45f).coerceIn(24f * density, 140f * density)
-                                                        if (dragCumulativeOffsetPx < -swapThreshold) {
-                                                            onReorderClips(currentIdx, currentIdx - 1)
-                                                            dragCumulativeOffsetPx += prevWidthPx
-                                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                        }
-                                                    }
-                                                }
-                                            },
-                                            onDragEnd = {
-                                                draggingClipId = null
-                                                dragCumulativeOffsetPx = 0f
-                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                            },
-                                            onDragCancel = {
-                                                draggingClipId = null
-                                                dragCumulativeOffsetPx = 0f
-                                            }
-                                        )
-                                    }
-                                    .pointerInput(clip.id, span.timelineStartSec, span.durationSec, pixelsPerSec, density) {
-                                        detectTapGestures(
-                                            onTap = { offset ->
-                                                onSelectClip(clip.id)
-                                                val tappedSec = (span.timelineStartSec + (offset.x / (pixelsPerSec * density))).coerceIn(0f, totalDurationSec)
-                                                onScrubStart()
-                                                onScrubSec(tappedSec)
-                                                onScrubEnd(tappedSec)
+                                        // Swap Right
+                                        if (currentIdx < currentList.size - 1) {
+                                            val nextSpan = currentSpans.getOrNull(currentIdx + 1)
+                                            val nextWidthPx = ((nextSpan?.durationSec ?: 1f) * state.pixelsPerSec * density).coerceAtLeast(20f * density)
+                                            val swapThreshold = (nextWidthPx * 0.45f).coerceIn(24f * density, 140f * density)
+                                            if (dragCumulativeOffsetPx > swapThreshold) {
+                                                actions.onReorderClips(currentIdx, currentIdx + 1)
+                                                dragCumulativeOffsetPx -= nextWidthPx
                                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                             }
-                                        )
-                                    }
-                            ) {
-                                // 1. Live Video Preview Thumbnails Filmstrip
-                                FcpClipFilmstrip(
-                                    clip = clip,
-                                    clipWidthDp = clipWidthDp,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-
-                                // 2. Cinematic Gradient Scrim (Keeps labels, badges, and trim handles high-contrast & sharp)
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(
-                                            Brush.verticalGradient(
-                                                colors = if (isSelected) {
-                                                    listOf(
-                                                        Color.Black.copy(alpha = 0.52f),
-                                                        Color.Black.copy(alpha = 0.08f),
-                                                        Color.Black.copy(alpha = 0.62f)
-                                                    )
-                                                } else {
-                                                    listOf(
-                                                        Color.Black.copy(alpha = 0.65f),
-                                                        Color.Black.copy(alpha = 0.35f),
-                                                        Color.Black.copy(alpha = 0.75f)
-                                                    )
-                                                }
-                                            )
-                                        )
-                                )
-
-                                // Floating DRAGGING badge when actively dragged
-                                if (isClipDragging) {
-                                    Box(
-                                        modifier = Modifier
-                                            .align(Alignment.TopCenter)
-                                            .offset(y = (-14).dp)
-                                            .clip(RoundedCornerShape(4.dp))
-                                            .background(Color(0xFF007AFF))
-                                            .border(0.5.dp, Color.White.copy(alpha = 0.8f), RoundedCornerShape(4.dp))
-                                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                                            .zIndex(150f)
-                                    ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(3.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Lucide.Move,
-                                                contentDescription = null,
-                                                tint = Color.White,
-                                                modifier = Modifier.size(9.dp)
-                                            )
-                                            Text(
-                                                text = "DRAGGING",
-                                                fontSize = 8.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = Color.White
-                                            )
                                         }
-                                    }
-                                }
 
-                                val handleWidth = if (clipWidthDp < 36.dp) 10.dp else 14.dp
-                                val touchHandleWidth = 36.dp
-
-                                // Left Trim Handle (Amber bracket on active clip)
-                                if (isSelected && !isClipDragging) {
-                                    Box(
-                                        modifier = Modifier
-                                            .align(Alignment.CenterStart)
-                                            .width(touchHandleWidth)
-                                            .fillMaxHeight()
-                                            .zIndex(25f)
-                                            .pointerInput(clip.id, density, pixelsPerSec) {
-                                                detectDragGestures(
-                                                    onDragStart = {
-                                                        onScrubStart()
-                                                        onTrimStart()
-                                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                    },
-                                                    onDrag = { change, dragAmount ->
-                                                        change.consume()
-                                                        val deltaSec = dragAmount.x / (pixelsPerSec * density)
-                                                        onTrimLeft(clip.id, deltaSec)
-                                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                    },
-                                                    onDragEnd = {
-                                                        onScrubEnd(currentTimeSecProvider())
-                                                    },
-                                                    onDragCancel = {
-                                                        onScrubEnd(currentTimeSecProvider())
-                                                    }
-                                                )
-                                            },
-                                        contentAlignment = Alignment.CenterStart
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .width(handleWidth)
-                                                .fillMaxHeight()
-                                                .clip(RoundedCornerShape(topStart = 4.dp, bottomStart = 4.dp))
-                                                .background(Color(0xFFF59E0B)),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Row(horizontalArrangement = Arrangement.spacedBy(1.dp)) {
-                                                Box(Modifier.width(1.dp).height(14.dp).background(Color.Black.copy(alpha = 0.6f)))
-                                                Box(Modifier.width(1.dp).height(14.dp).background(Color.Black.copy(alpha = 0.6f)))
+                                        // Swap Left
+                                        if (currentIdx > 0) {
+                                            val prevSpan = currentSpans.getOrNull(currentIdx - 1)
+                                            val prevWidthPx = ((prevSpan?.durationSec ?: 1f) * state.pixelsPerSec * density).coerceAtLeast(20f * density)
+                                            val swapThreshold = (prevWidthPx * 0.45f).coerceIn(24f * density, 140f * density)
+                                            if (dragCumulativeOffsetPx < -swapThreshold) {
+                                                actions.onReorderClips(currentIdx, currentIdx - 1)
+                                                dragCumulativeOffsetPx += prevWidthPx
+                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                             }
                                         }
                                     }
-                                }
-
-                                // Clip Information
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(
-                                            start = if (isSelected) (handleWidth + 6.dp) else 8.dp,
-                                            end = if (isSelected) (handleWidth + 6.dp) else 8.dp,
-                                            top = 4.dp,
-                                            bottom = 4.dp
-                                        ),
-                                    verticalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                            modifier = Modifier.weight(1f, fill = false)
-                                        ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(2.dp))
-                                                    .background(if (isSelected) Color.White.copy(alpha = 0.22f) else colors.primary.copy(alpha = 0.15f))
-                                                    .padding(horizontal = 4.dp, vertical = 1.dp)
-                                            ) {
-                                                Text(
-                                                    text = "V1",
-                                                    fontSize = 8.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = if (isSelected) Color.White else colors.primary
-                                                )
-                                            }
-                                            Text(
-                                                text = clip.name,
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = textColor,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        }
-
-                                        // Tactile grip affordance (indicates hold & drag)
-                                        Icon(
-                                            imageVector = Lucide.GripVertical,
-                                            contentDescription = "Hold to drag",
-                                            tint = if (isSelected) Color.White.copy(alpha = 0.8f) else colors.textMuted.copy(alpha = 0.5f),
-                                            modifier = Modifier.size(11.dp)
-                                        )
-                                    }
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = "${String.format("%.1f", clip.trimmedDurationSec)}s",
-                                            fontSize = 9.sp,
-                                            color = subTextColor,
-                                            fontFamily = FontFamily.Monospace,
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                        if (clip.speed != 1f) {
-                                            Text(
-                                                text = "${clip.speed}x",
-                                                fontSize = 8.5.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = if (isSelected) Color(0xFFFDE047) else colors.primary
-                                            )
-                                        }
-                                    }
-                                }
-
-                                // Right Trim Handle (Amber bracket on active clip)
-                                if (isSelected && !isClipDragging) {
-                                    Box(
-                                        modifier = Modifier
-                                            .align(Alignment.CenterEnd)
-                                            .width(touchHandleWidth)
-                                            .fillMaxHeight()
-                                            .zIndex(25f)
-                                            .pointerInput(clip.id, density, pixelsPerSec) {
-                                                detectDragGestures(
-                                                    onDragStart = {
-                                                        onScrubStart()
-                                                        onTrimStart()
-                                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                    },
-                                                    onDrag = { change, dragAmount ->
-                                                        change.consume()
-                                                        val deltaSec = dragAmount.x / (pixelsPerSec * density)
-                                                        onTrimRight(clip.id, deltaSec)
-                                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                    },
-                                                    onDragEnd = {
-                                                        onScrubEnd(currentTimeSecProvider())
-                                                    },
-                                                    onDragCancel = {
-                                                        onScrubEnd(currentTimeSecProvider())
-                                                    }
-                                                )
-                                            },
-                                        contentAlignment = Alignment.CenterEnd
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .width(handleWidth)
-                                                .fillMaxHeight()
-                                                .clip(RoundedCornerShape(topEnd = 4.dp, bottomEnd = 4.dp))
-                                                .background(Color(0xFFF59E0B)),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Row(horizontalArrangement = Arrangement.spacedBy(1.dp)) {
-                                                Box(Modifier.width(1.dp).height(14.dp).background(Color.Black.copy(alpha = 0.6f)))
-                                                Box(Modifier.width(1.dp).height(14.dp).background(Color.Black.copy(alpha = 0.6f)))
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+                                },
+                                onDragEnd = {
+                                    draggingClipId = null
+                                    dragCumulativeOffsetPx = 0f
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                },
+                                onSelectClip = actions.onSelectClip,
+                                onScrubStart = actions.onScrubStart,
+                                onScrubSec = actions.onScrubSec,
+                                onScrubEnd = actions.onScrubEnd,
+                                onTrimStart = actions.onTrimStart,
+                                onTrimLeft = actions.onTrimLeft,
+                                onTrimRight = actions.onTrimRight,
+                                currentTimeSecProvider = currentTimeSecProvider
+                            )
                         }
                     }
                 }
 
                 // 2a. Interactive Transition Badges Centered on Cut Boundaries
-                if (timelineSpans.size > 1) {
-                    timelineSpans.take(timelineSpans.size - 1).forEach { span ->
-                        val clip = span.clip
-                        val trans = clip.transitionToNext
-                        val hasTrans = trans != FcpTransitionType.NONE
-                        val isTransitionActive = hasTrans || activeTransitionClipId == clip.id
-                        val cutX = timelineStartPaddingDp + (span.timelineEndSec * pixelsPerSec).dp
-
-                        // Apple-style machined bevel transition add button
-                        val seamButtonSize = 26.dp
-                        val outerHalfSize = 15.dp
-
-                        Box(
-                            modifier = Modifier
-                                .offset(x = cutX - outerHalfSize, y = 31.dp)
-                                .zIndex(35f)
-                        ) {
-                            AppleBeveledTransitionButton(
-                                isActive = isTransitionActive,
-                                onClick = { onEditTransition(clip.id) },
-                                buttonSize = seamButtonSize,
-                                activeRotationDegrees = if (hasTrans) 0f else 90f,
-                                customIcon = if (hasTrans) trans.icon else null
-                            )
-                        }
-
-                        if (hasTrans) {
-                            Box(
-                                modifier = Modifier
-                                    .offset(x = cutX - 22.dp, y = 62.dp)
-                                    .width(44.dp)
-                                    .zIndex(36f),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Surface(
-                                    shape = RoundedCornerShape(4.dp),
-                                    color = Color.Black.copy(alpha = 0.78f),
-                                    border = BorderStroke(0.5.dp, if (colors.isDark) Color.White.copy(alpha = 0.2f) else Color(0xFFCBD5E1))
-                                ) {
-                                    Text(
-                                        text = "${"%.1f".format(clip.transitionDurationSec)}s",
-                                        fontSize = 7.5.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White,
-                                        fontFamily = FontFamily.Monospace,
-                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
+                TimelineTransitionBadges(
+                    timelineSpans = state.timelineSpans,
+                    activeTransitionClipId = state.activeTransitionClipId,
+                    pixelsPerSec = state.pixelsPerSec,
+                    timelineStartPaddingDp = timelineStartPaddingDp,
+                    onEditTransition = actions.onEditTransition
+                )
 
                 // 2b. Custom Soundtrack Lane (Positioned directly under Video Clips Track)
-                if (customAudio != null) {
-                    val audioDuration = if (customAudio.durationSec > 0f) customAudio.durationSec else totalDurationSec
-                    val audioTrackWidthDp = (audioDuration * pixelsPerSec).dp
-                    Box(
-                        modifier = Modifier
-                            .offset(x = timelineStartPaddingDp, y = 78.dp)
-                            .width(audioTrackWidthDp)
-                            .height(24.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(
-                                Brush.horizontalGradient(
-                                    listOf(
-                                        Color(0xFF064E3B).copy(alpha = 0.85f),
-                                        Color(0xFF047857).copy(alpha = 0.65f)
-                                    )
-                                )
-                            )
-                            .border(1.dp, Color(0xFF10B981).copy(alpha = 0.6f), RoundedCornerShape(4.dp))
-                            .clickable { onOpenAudioTab() }
-                            .padding(horizontal = 6.dp),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        // Fast Vector Waveform Bars (Precalculated Factors)
-                        val waveformFactors = remember {
-                            FloatArray(120) { i ->
-                                ((Math.sin(i * 0.45) * 0.45 + Math.cos(i * 0.22) * 0.35 + 0.8).toFloat()).coerceIn(0.2f, 1.0f)
-                            }
-                        }
-                        Canvas(modifier = Modifier.fillMaxSize()) {
-                            val barWidth = 2.dp.toPx()
-                            val barGap = 2.dp.toPx()
-                            val totalBarStep = barWidth + barGap
-                            val count = (size.width / totalBarStep).toInt()
-                            val centerY = size.height / 2f
-                            val maxBarHeight = size.height * 0.7f
-                            val factorCount = waveformFactors.size
-
-                            for (i in 0 until count) {
-                                val factor = waveformFactors[i % factorCount]
-                                val barH = maxBarHeight * factor
-                                val x = i * totalBarStep + barGap
-                                drawRoundRect(
-                                    color = Color(0xFF34D399).copy(alpha = 0.25f),
-                                    topLeft = Offset(x, centerY - barH / 2f),
-                                    size = Size(barWidth, barH),
-                                    cornerRadius = CornerRadius(1.dp.toPx(), 1.dp.toPx())
-                                )
-                            }
-                        }
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                modifier = Modifier.weight(1f, fill = false)
-                            ) {
-                                Icon(
-                                    imageVector = if (customAudio.isExtractedFromVideo) Lucide.Film else Lucide.Music,
-                                    contentDescription = null,
-                                    tint = Color(0xFF34D399),
-                                    modifier = Modifier.size(11.dp)
-                                )
-                                Text(
-                                    text = customAudio.name,
-                                    fontSize = 9.sp,
-                                    color = Color.White,
-                                    fontWeight = FontWeight.SemiBold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                if (customAudio.muteOriginalVideo) {
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(3.dp))
-                                            .background(Color.Black.copy(alpha = 0.45f))
-                                            .padding(horizontal = 4.dp, vertical = 1.dp)
-                                    ) {
-                                        Text(
-                                            text = "Muted Video",
-                                            fontSize = 7.5.sp,
-                                            color = Color(0xFF34D399),
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-                                Text(
-                                    text = "${(customAudio.volume * 100f).toInt()}%",
-                                    fontSize = 8.sp,
-                                    color = Color.White.copy(alpha = 0.85f),
-                                    fontFamily = FontFamily.Monospace
-                                )
-                            }
-                        }
-                    }
+                if (state.customAudio != null) {
+                    TimelineAudioTrackLane(
+                        customAudio = state.customAudio,
+                        totalDurationSec = state.totalDurationSec,
+                        pixelsPerSec = state.pixelsPerSec,
+                        timelineStartPaddingDp = timelineStartPaddingDp,
+                        onOpenAudioTab = actions.onOpenAudioTab
+                    )
                 }
 
                 // 3. Apple-Style Draggable Playhead Marker & Needle
-                val touchWidth = 48.dp
-                val touchWidthPx = touchWidth.value * density
-                val startPaddingPx = timelineStartPaddingDp.value * density
-
-                Box(
-                    modifier = Modifier
-                        .offset {
-                            val playheadPx = startPaddingPx + (currentTimeSecProvider() * pixelsPerSec * density)
-                            IntOffset((playheadPx - (touchWidthPx / 2f)).roundToInt(), 0)
-                        }
-                        .width(touchWidth)
-                        .fillMaxHeight()
-                        .zIndex(50f)
-                        .pointerInput(totalDurationSec, pixelsPerSec, density) {
-                            var dragSec = 0f
-                            detectDragGestures(
-                                onDragStart = {
-                                    onScrubStart()
-                                    dragSec = currentTimeSecProvider()
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                },
-                                onDrag = { change, dragAmount ->
-                                    change.consume()
-                                    val deltaSec = dragAmount.x / (pixelsPerSec * density)
-                                    dragSec = (dragSec + deltaSec).coerceIn(0f, totalDurationSec)
-                                    onScrubSec(dragSec)
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                },
-                                onDragEnd = {
-                                    onScrubEnd(dragSec)
-                                },
-                                onDragCancel = {
-                                    onScrubEnd(dragSec)
-                                }
-                            )
-                        },
-                    contentAlignment = Alignment.TopCenter
-                ) {
-                    val pinScale by animateFloatAsState(
-                        targetValue = if (isUserScrubbing) 1.25f else 1f,
-                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                        label = "playheadPinScale"
-                    )
-                    // Top Marker Pin Handle
-                    Box(
-                        modifier = Modifier
-                            .scale(pinScale)
-                            .width(16.dp)
-                            .height(12.dp)
-                            .clip(RoundedCornerShape(bottomStart = 4.dp, bottomEnd = 4.dp))
-                            .background(Color(0xFFEF4444))
-                            .shadow(
-                                elevation = if (isUserScrubbing) 8.dp else 4.dp,
-                                shape = RoundedCornerShape(bottomStart = 4.dp, bottomEnd = 4.dp),
-                                spotColor = Color(0xFFEF4444)
-                            )
-                    )
-                    // Razor-sharp 2.5dp playhead line extending all the way down
-                    Box(
-                        modifier = Modifier
-                            .width(if (isUserScrubbing) 3.dp else 2.5.dp)
-                            .fillMaxHeight()
-                            .background(Color(0xFFEF4444))
-                    )
-                }
+                TimelinePlayheadNeedle(
+                    currentTimeSecProvider = currentTimeSecProvider,
+                    totalDurationSec = state.totalDurationSec,
+                    pixelsPerSec = state.pixelsPerSec,
+                    timelineStartPaddingDp = timelineStartPaddingDp,
+                    isUserScrubbing = state.isUserScrubbing,
+                    onScrubStart = actions.onScrubStart,
+                    onScrubSec = actions.onScrubSec,
+                    onScrubEnd = actions.onScrubEnd
+                )
             }
         }
 
@@ -4411,149 +4722,13 @@ private fun TimelineTabContent(
                 .padding(top = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Tactile Rotary Jog Wheel for buttery smooth frame scrubbing
-            var isJogActive by remember { mutableStateOf(false) }
-            var jogScrollOffsetPx by remember { mutableFloatStateOf(0f) }
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(44.dp)
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(
-                        if (isJogActive) colors.primary.copy(alpha = 0.08f) else colors.bg
-                    )
-                    .border(
-                        width = if (isJogActive) 1.5.dp else 1.dp,
-                        color = if (isJogActive) colors.primary.copy(alpha = 0.7f) else colors.glassBorder,
-                        shape = RoundedCornerShape(22.dp)
-                    )
-                    .pointerInput(totalDurationSec) {
-                        var jogTime = 0f
-                        var lastHapticFrame = 0
-                        val tickSpacingPx = 8.dp.toPx()
-                        detectDragGestures(
-                            onDragStart = {
-                                isJogActive = true
-                                onScrubStart()
-                                jogTime = currentTimeSecProvider()
-                                lastHapticFrame = (jogTime * 30f).roundToInt()
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            },
-                            onDrag = { change, dragAmount ->
-                                change.consume()
-                                jogScrollOffsetPx += dragAmount.x
-                                // 1 frame per tickSpacingPx (8dp)
-                                val frameStep = (dragAmount.x / tickSpacingPx) * (1f / 30f)
-                                jogTime = (jogTime + frameStep).coerceIn(0f, totalDurationSec)
-                                onScrubSec(jogTime)
-
-                                val curFrame = (jogTime * 30f).roundToInt()
-                                if (curFrame != lastHapticFrame) {
-                                    lastHapticFrame = curFrame
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                    SoundManager.playScrub(context, force = true)
-                                }
-                            },
-                            onDragEnd = {
-                                isJogActive = false
-                                onScrubEnd(jogTime)
-                            },
-                            onDragCancel = {
-                                isJogActive = false
-                                onScrubEnd(jogTime)
-                            }
-                        )
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Canvas(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 14.dp)
-                ) {
-                    val cx = size.width / 2f
-                    val tickSpacing = 8.dp.toPx()
-                    val offset = jogScrollOffsetPx % tickSpacing
-                    val totalTicks = (size.width / tickSpacing).toInt() + 4
-                    val halfTicks = totalTicks / 2
-                    val currentBaseFrame = (jogScrollOffsetPx / tickSpacing).roundToInt()
-
-                    for (i in -halfTicks..halfTicks) {
-                        val x = cx + (i * tickSpacing) + offset
-                        if (x < 0f || x > size.width) continue
-
-                        val dist = abs(x - cx)
-                        val maxDist = size.width / 2f
-                        val normDist = (dist / maxDist).coerceIn(0f, 1f)
-                        val alpha = cos(normDist * (Math.PI.toFloat() / 2f)).coerceIn(0f, 1f)
-
-                        val frameIndex = currentBaseFrame - i
-                        val isMajor = frameIndex % 10 == 0
-                        val isMedium = frameIndex % 5 == 0
-
-                        val tickHeight = when {
-                            isMajor -> size.height * 0.62f
-                            isMedium -> size.height * 0.42f
-                            else -> size.height * 0.25f
-                        }
-                        val yTop = (size.height - tickHeight) / 2f
-
-                        val strokeW = if (isMajor) 2.dp.toPx() else 1.dp.toPx()
-                        val color = when {
-                            isMajor -> colors.primary.copy(alpha = alpha * 0.95f)
-                            isMedium -> colors.textMuted.copy(alpha = alpha * 0.75f)
-                            else -> colors.textMuted.copy(alpha = alpha * 0.35f)
-                        }
-
-                        drawLine(
-                            color = color,
-                            start = Offset(x, yTop),
-                            end = Offset(x, yTop + tickHeight),
-                            strokeWidth = strokeW,
-                            cap = StrokeCap.Round
-                        )
-                    }
-
-                    // Center Optical Needle Indicator
-                    drawLine(
-                        color = Color(0xFFEF4444),
-                        start = Offset(cx, 5.dp.toPx()),
-                        end = Offset(cx, size.height - 5.dp.toPx()),
-                        strokeWidth = 2.dp.toPx(),
-                        cap = StrokeCap.Round
-                    )
-                }
-
-                // Interactive Center HUD label
-                if (isJogActive) {
-                    val currentFrame = (currentTimeSecProvider() * 30f).roundToInt()
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color.Black.copy(alpha = 0.78f))
-                            .border(0.5.dp, colors.primary.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
-                            .padding(horizontal = 8.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = "◀  FRAME $currentFrame  ▶",
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = colors.primary,
-                            letterSpacing = 0.5.sp,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    }
-                } else {
-                    Text(
-                        text = "◀  SCRUB FRAME  ▶",
-                        fontSize = 8.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = colors.textMuted.copy(alpha = 0.65f),
-                        letterSpacing = 1.sp
-                    )
-                }
-            }
+            TimelineJogWheel(
+                totalDurationSec = state.totalDurationSec,
+                currentTimeSecProvider = currentTimeSecProvider,
+                onScrubStart = actions.onScrubStart,
+                onScrubSec = actions.onScrubSec,
+                onScrubEnd = actions.onScrubEnd
+            )
         }
     }
 }
