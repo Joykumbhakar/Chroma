@@ -7188,8 +7188,8 @@ private fun FcpTypeButton(
     onClick: () -> Unit
 ) {
     val colors = LocalOscellionColors.current
-    val shape = RoundedCornerShape(12.dp)
-    val bgColor = colors.glassBg
+    val shape = RoundedCornerShape(8.dp)
+    val bgColor = if (active) colors.primary.copy(alpha = 0.12f) else colors.glassBg
     val contentColor = if (active) colors.primary else colors.textMain
 
     Column(
@@ -7197,39 +7197,24 @@ private fun FcpTypeButton(
             .clip(shape)
             .background(bgColor, shape)
             .border(
-                width = if (active) 2.dp else 1.dp,
-                brush = if (active) {
-                    Brush.linearGradient(
-                        colors = listOf(
-                            Color(0xFF60A5FA),
-                            Color(0xFF3B82F6),
-                            Color(0xFF2563EB)
-                        )
-                    )
-                } else {
-                    Brush.linearGradient(
-                        colors = listOf(
-                            colors.glassBorder.copy(alpha = (colors.glassBorder.alpha * 3f).coerceAtMost(1f)),
-                            colors.glassBorder.copy(alpha = (colors.glassBorder.alpha * 0.2f).coerceAtMost(1f))
-                        )
-                    )
-                },
+                width = if (active) 1.5.dp else 1.dp,
+                color = if (active) colors.primary else colors.glassBorder,
                 shape = shape
             )
             .clickable(
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() }
             ) { onClick() }
-            .padding(vertical = 10.dp, horizontal = 4.dp),
+            .padding(vertical = 9.dp, horizontal = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Icon(
             imageVector = icon,
             contentDescription = label,
             tint = contentColor,
-            modifier = Modifier.size(20.dp)
+            modifier = Modifier.size(18.dp)
         )
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(5.dp))
         Text(
             text = label,
             fontSize = 10.sp,
@@ -7331,7 +7316,7 @@ private fun FcpColorControlRow(
                         .background(c)
                         .border(
                             width = if (isSelectedColor) 2.dp else 1.dp,
-                            color = if (isSelectedColor) colors.primary else Color.White.copy(alpha = 0.2f),
+                            color = if (isSelectedColor) colors.primary else colors.glassBorder.copy(alpha = 0.8f),
                             shape = CircleShape
                         )
                         .clickable { onColorChange(c) }
@@ -7377,26 +7362,7 @@ private fun FcpTitleLayerCard(
     val colors = LocalOscellionColors.current
     val haptic = LocalHapticFeedback.current
     val context = LocalContext.current
-    val shape = RoundedCornerShape(16.dp)
-
-    val borderBrush = remember(isSelected, layer.isExpanded, colors.primary, colors.glassBorder) {
-        if (isSelected || layer.isExpanded) {
-            Brush.linearGradient(
-                colors = listOf(
-                    Color(0xFF60A5FA),
-                    Color(0xFF3B82F6),
-                    Color(0xFF2563EB)
-                )
-            )
-        } else {
-            Brush.linearGradient(
-                colors = listOf(
-                    colors.glassBorder.copy(alpha = (colors.glassBorder.alpha * 3f).coerceAtMost(1f)),
-                    colors.glassBorder.copy(alpha = (colors.glassBorder.alpha * 0.2f).coerceAtMost(1f))
-                )
-            )
-        }
-    }
+    val shape = RoundedCornerShape(12.dp)
 
     var isRenaming by remember { mutableStateOf(false) }
     var renameText by remember(layer.name) { mutableStateOf(layer.name) }
@@ -7406,10 +7372,10 @@ private fun FcpTitleLayerCard(
             .fillMaxWidth()
             .animateContentSize(spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow))
             .clip(shape)
-            .background(colors.glassBg, shape)
+            .background(if (isSelected) colors.primary.copy(alpha = 0.05f) else colors.glassBg, shape)
             .border(
-                width = if (isSelected || layer.isExpanded) 2.dp else 1.dp,
-                brush = borderBrush,
+                width = if (isSelected) 1.5.dp else 1.dp,
+                color = if (isSelected) colors.primary else colors.glassBorder,
                 shape = shape
             )
             .padding(12.dp)
@@ -7420,16 +7386,21 @@ private fun FcpTitleLayerCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Reorder handles (ChevronUp & ChevronDown)
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(1.dp)
+            Column(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(colors.bg)
+                    .border(0.5.dp, colors.glassBorder, RoundedCornerShape(6.dp))
+                    .padding(horizontal = 2.dp, vertical = 2.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Icon(
                     imageVector = Lucide.ChevronUp,
                     contentDescription = "Move Layer Up",
                     tint = if (index > 0) colors.textMain else colors.textMuted.copy(alpha = 0.25f),
                     modifier = Modifier
-                        .size(18.dp)
+                        .size(13.dp)
                         .clickable(enabled = index > 0) {
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             onMoveUp()
@@ -7440,7 +7411,7 @@ private fun FcpTitleLayerCard(
                     contentDescription = "Move Layer Down",
                     tint = if (index < totalLayers - 1) colors.textMain else colors.textMuted.copy(alpha = 0.25f),
                     modifier = Modifier
-                        .size(18.dp)
+                        .size(13.dp)
                         .clickable(enabled = index < totalLayers - 1) {
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             onMoveDown()
@@ -7448,32 +7419,37 @@ private fun FcpTitleLayerCard(
                 )
             }
 
-            Spacer(Modifier.width(6.dp))
+            Spacer(Modifier.width(8.dp))
 
             // Visibility toggle (Eye / EyeOff)
-            Icon(
-                imageVector = if (layer.isVisible) Lucide.Eye else Lucide.EyeOff,
-                contentDescription = "Toggle Visibility",
-                tint = if (layer.isVisible) colors.textMain else colors.textMuted.copy(alpha = 0.45f),
+            Box(
                 modifier = Modifier
-                    .size(18.dp)
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() }
-                    ) {
+                    .size(28.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(if (layer.isVisible) colors.primary.copy(alpha = 0.1f) else colors.bg)
+                    .border(0.5.dp, if (layer.isVisible) colors.primary.copy(alpha = 0.3f) else colors.glassBorder, RoundedCornerShape(6.dp))
+                    .clickable {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         onToggleVisibility()
-                    }
-            )
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (layer.isVisible) Lucide.Eye else Lucide.EyeOff,
+                    contentDescription = "Toggle Visibility",
+                    tint = if (layer.isVisible) colors.primary else colors.textMuted.copy(alpha = 0.45f),
+                    modifier = Modifier.size(15.dp)
+                )
+            }
 
             Spacer(Modifier.width(8.dp))
 
-            // Circular Preview Swatch (24.dp) with color gradient and letter badge
+            // Circular/Rounded Preview Swatch (28.dp)
             val isLightText = (0.299f * layer.textColor.red + 0.587f * layer.textColor.green + 0.114f * layer.textColor.blue) > 0.55f
             Box(
                 modifier = Modifier
-                    .size(24.dp)
-                    .clip(CircleShape)
+                    .size(28.dp)
+                    .clip(RoundedCornerShape(7.dp))
                     .background(
                         if (layer.isGradientText) {
                             Brush.linearGradient(listOf(layer.textColor, layer.secondaryTextColor))
@@ -7481,11 +7457,8 @@ private fun FcpTitleLayerCard(
                             Brush.linearGradient(listOf(layer.textColor, layer.accentColor))
                         }
                     )
-                    .border(1.dp, colors.glassBorder, CircleShape)
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() }
-                    ) {
+                    .border(1.dp, colors.glassBorder, RoundedCornerShape(7.dp))
+                    .clickable {
                         onSelect()
                         onToggleExpand()
                     },
@@ -7494,13 +7467,13 @@ private fun FcpTitleLayerCard(
                 val letter = layer.primaryText.take(1).uppercase().ifBlank { "T" }
                 Text(
                     text = letter,
-                    fontSize = 11.sp,
+                    fontSize = 11.5.sp,
                     fontWeight = FontWeight.Black,
                     color = if (isLightText) Color.Black else Color.White
                 )
             }
 
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(10.dp))
 
             // Layer Title & Preset Subtitle OR Inline Renaming Field
             if (isRenaming) {
@@ -7526,50 +7499,61 @@ private fun FcpTitleLayerCard(
                             .border(1.dp, colors.primary, RoundedCornerShape(6.dp))
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                     )
-                    Icon(
-                        imageVector = Lucide.Check,
-                        contentDescription = "Confirm Rename",
-                        tint = colors.primary,
+                    Box(
                         modifier = Modifier
-                            .size(18.dp)
+                            .size(26.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(colors.primary.copy(alpha = 0.15f))
                             .clickable {
                                 if (renameText.isNotBlank()) {
                                     onUpdate(layer.copy(name = renameText.trim()))
                                 }
                                 isRenaming = false
-                            }
-                    )
-                    Icon(
-                        imageVector = Lucide.X,
-                        contentDescription = "Cancel Rename",
-                        tint = colors.textMuted,
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Lucide.Check,
+                            contentDescription = "Confirm Rename",
+                            tint = colors.primary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                    Box(
                         modifier = Modifier
-                            .size(18.dp)
+                            .size(26.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(colors.glassBg)
                             .clickable {
                                 renameText = layer.name
                                 isRenaming = false
-                            }
-                    )
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Lucide.X,
+                            contentDescription = "Cancel Rename",
+                            tint = colors.textMuted,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
                 }
             } else {
                 Column(
                     modifier = Modifier
                         .weight(1f)
-                        .clickable(
-                            indication = null,
-                            interactionSource = remember { MutableInteractionSource() }
-                        ) {
+                        .clickable {
                             onSelect()
                             onToggleExpand()
                         }
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
                         Text(
                             text = layer.name,
-                            fontSize = 13.sp,
+                            fontSize = 12.5.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (isSelected) colors.primary else colors.textMain,
                             maxLines = 1,
@@ -7580,7 +7564,7 @@ private fun FcpTitleLayerCard(
                             contentDescription = "Rename Layer",
                             tint = colors.textMuted.copy(alpha = 0.6f),
                             modifier = Modifier
-                                .size(12.dp)
+                                .size(11.dp)
                                 .clickable {
                                     renameText = layer.name
                                     isRenaming = true
@@ -7597,50 +7581,74 @@ private fun FcpTitleLayerCard(
                 }
             }
 
-            Spacer(Modifier.width(6.dp))
+            Spacer(Modifier.width(8.dp))
 
-            // Expand / Collapse Chevron
-            Icon(
-                imageVector = if (layer.isExpanded) Lucide.ChevronUp else Lucide.ChevronDown,
-                contentDescription = if (layer.isExpanded) "Collapse Layer" else "Expand Layer",
-                tint = colors.textMuted,
+            // Expand / Collapse Chevron button
+            Box(
                 modifier = Modifier
-                    .size(18.dp)
+                    .size(28.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(colors.bg)
+                    .border(0.5.dp, colors.glassBorder, RoundedCornerShape(6.dp))
                     .clickable {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         onToggleExpand()
-                    }
-            )
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (layer.isExpanded) Lucide.ChevronUp else Lucide.ChevronDown,
+                    contentDescription = if (layer.isExpanded) "Collapse Layer" else "Expand Layer",
+                    tint = colors.textMuted,
+                    modifier = Modifier.size(15.dp)
+                )
+            }
 
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(6.dp))
 
             // Duplicate Button
-            Icon(
-                imageVector = Lucide.Copy,
-                contentDescription = "Duplicate Layer",
-                tint = colors.textMuted,
+            Box(
                 modifier = Modifier
-                    .size(16.dp)
+                    .size(28.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(colors.bg)
+                    .border(0.5.dp, colors.glassBorder, RoundedCornerShape(6.dp))
                     .clickable {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         onDuplicate()
-                    }
-            )
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Lucide.Copy,
+                    contentDescription = "Duplicate Layer",
+                    tint = colors.textMuted,
+                    modifier = Modifier.size(13.dp)
+                )
+            }
 
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(6.dp))
 
             // Delete Button
-            Icon(
-                imageVector = Lucide.Trash2,
-                contentDescription = "Delete Layer",
-                tint = Color(0xFFEF4444).copy(alpha = 0.85f),
+            Box(
                 modifier = Modifier
-                    .size(16.dp)
+                    .size(28.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(colors.error.copy(alpha = 0.08f))
+                    .border(0.5.dp, colors.error.copy(alpha = 0.25f), RoundedCornerShape(6.dp))
                     .clickable {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         onDelete()
-                    }
-            )
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Lucide.Trash2,
+                    contentDescription = "Delete Layer",
+                    tint = colors.error,
+                    modifier = Modifier.size(13.dp)
+                )
+            }
         }
 
         // ── 2. Expanded Detail Controls ──────────────────────────────────────
@@ -7678,9 +7686,9 @@ private fun FcpTitleLayerCard(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFF0F172A).copy(alpha = 0.9f))
-                        .border(1.dp, colors.glassBorder, RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (colors.isDark) Color(0xFF070B14) else Color(0xFF0F172A))
+                        .border(1.dp, colors.glassBorder, RoundedCornerShape(10.dp))
                         .padding(horizontal = 14.dp, vertical = 14.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -8684,7 +8692,7 @@ private fun FcpTitlePresetPreviewCard(
             }
         }
 
-        // Action Buttons: + Add Title & Apply Style
+        // Action Buttons: Add Title & Apply Style
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -8695,20 +8703,20 @@ private fun FcpTitlePresetPreviewCard(
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     onAddAsNew()
                 },
-                height = 30.dp,
+                height = 32.dp,
                 modifier = Modifier.weight(1.1f),
                 contentPadding = PaddingValues(horizontal = 8.dp)
             ) {
                 Icon(Lucide.Plus, contentDescription = null, tint = Color.White, modifier = Modifier.size(13.dp))
                 Spacer(Modifier.width(4.dp))
-                Text("+ Add Title", color = Color.White, fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
+                Text("Add Title", color = Color.White, fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
             }
 
             // Apply Style Button
             Box(
                 modifier = Modifier
                     .weight(0.9f)
-                    .height(30.dp)
+                    .height(32.dp)
                     .clip(RoundedCornerShape(8.dp))
                     .background(colors.glassBg)
                     .border(1.dp, colors.glassBorder, RoundedCornerShape(8.dp))
@@ -8762,7 +8770,7 @@ private fun FcpTextAnimationStudio(
             ) {
                 Icon(Lucide.Plus, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("+ Add Text Layer", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text("Add Text Layer", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
         }
         return
@@ -9277,14 +9285,14 @@ private fun TitlesTabContent(
             }
         }
 
-        // ── 2. Top Action Banner: + Add Text and + From Preset ───────────────
+        // ── 2. Top Action Banner: Add Text and Presets Gallery ───────────────
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Primary + Add Text button
+                // Primary Add Text button (Single plus icon only)
                 PrimaryGradientButton(
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -9296,7 +9304,7 @@ private fun TitlesTabContent(
                 ) {
                     Icon(Lucide.Plus, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("+ Add Text", color = Color.White, fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                    Text("Add Text", color = Color.White, fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
                 }
 
                 // Quick Browse Presets button
@@ -9336,7 +9344,7 @@ private fun TitlesTabContent(
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 12.dp),
+                                    .padding(vertical = 14.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
@@ -9361,12 +9369,25 @@ private fun TitlesTabContent(
                                     color = colors.textMain
                                 )
                                 Text(
-                                    text = "Tap '+ Add Text' above or choose a stylized preset below to add titles on your video canvas.",
+                                    text = "Tap 'Add Text' above or choose a stylized preset below to add titles on your video canvas.",
                                     fontSize = 11.sp,
                                     color = colors.textMuted,
                                     textAlign = TextAlign.Center,
                                     modifier = Modifier.padding(horizontal = 20.dp)
                                 )
+                                Spacer(Modifier.height(2.dp))
+                                PrimaryGradientButton(
+                                    onClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        onAddLayer(null)
+                                    },
+                                    height = 34.dp,
+                                    contentPadding = PaddingValues(horizontal = 16.dp)
+                                ) {
+                                    Icon(Lucide.Plus, contentDescription = null, tint = Color.White, modifier = Modifier.size(13.dp))
+                                    Spacer(Modifier.width(5.dp))
+                                    Text("Add Text Layer", color = Color.White, fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     }
@@ -9450,12 +9471,18 @@ private fun TitlesTabContent(
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
                                             )
-                                            Text(
-                                                text = "+ Tap to Add",
-                                                fontSize = 9.sp,
-                                                color = colors.primary,
-                                                fontWeight = FontWeight.Bold
-                                            )
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                            ) {
+                                                Icon(Lucide.Plus, contentDescription = null, tint = colors.primary, modifier = Modifier.size(11.dp))
+                                                Text(
+                                                    text = "Add Preset",
+                                                    fontSize = 9.sp,
+                                                    color = colors.primary,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -9479,9 +9506,9 @@ private fun TitlesTabContent(
                             val isSel = selectedCategoryFilter == cat
                             Box(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(20.dp))
+                                    .clip(RoundedCornerShape(8.dp))
                                     .background(if (isSel) colors.primary else colors.glassBg)
-                                    .border(0.5.dp, if (isSel) colors.primary else colors.glassBorder, RoundedCornerShape(20.dp))
+                                    .border(0.5.dp, if (isSel) colors.primary else colors.glassBorder, RoundedCornerShape(8.dp))
                                     .clickable {
                                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                         selectedCategoryFilter = cat
@@ -9557,23 +9584,28 @@ private fun FcpTextInput(
         onValueChange = onValueChange,
         modifier = Modifier
             .fillMaxWidth()
-            .height(42.dp)
+            .height(40.dp)
             .clip(RoundedCornerShape(8.dp))
             .background(colors.bg)
             .border(1.dp, colors.glassBorder, RoundedCornerShape(8.dp))
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(horizontal = 12.dp),
         textStyle = TextStyle(
-            fontSize = 13.sp,
+            fontSize = 12.5.sp,
             color = colors.textMain,
             fontWeight = FontWeight.Medium
         ),
         singleLine = true,
         cursorBrush = SolidColor(colors.primary),
         decorationBox = { innerTextField ->
-            if (value.isEmpty()) {
-                Text(placeholder, color = colors.textMuted.copy(alpha = 0.5f), fontSize = 13.sp)
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                if (value.isEmpty()) {
+                    Text(placeholder, color = colors.textMuted.copy(alpha = 0.5f), fontSize = 12.5.sp)
+                }
+                innerTextField()
             }
-            innerTextField()
         }
     )
 }
@@ -9589,7 +9621,7 @@ private fun ShapePill(
     onClick: () -> Unit
 ) {
     val colors = LocalOscellionColors.current
-    val shape = remember { RoundedCornerShape(50) }
+    val shape = remember { RoundedCornerShape(8.dp) }
     Text(
         text = label,
         fontSize = 11.sp,
@@ -9603,7 +9635,7 @@ private fun ShapePill(
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() }
             ) { onClick() }
-            .padding(horizontal = 14.dp, vertical = 6.dp)
+            .padding(horizontal = 12.dp, vertical = 6.dp)
     )
 }
 
