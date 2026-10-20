@@ -1548,40 +1548,21 @@ class HomeActivity : ComponentActivity() {
 
                     composable("flash_video_editor") {
                         val uri = flashPickerVideoUri ?: run { navController.popBackStack(); return@composable }
-                        
-                        var isExporting by remember { mutableStateOf(false) }
-                        val coroutineScope = rememberCoroutineScope()
-                        val context = LocalContext.current
-                        
-                        if (isExporting) {
-                            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)), contentAlignment = Alignment.Center) {
-                                OscellionLoadingSpinner(color = Color.White)
-                                Text("Rendering Pro Video...", color = Color.White, modifier = Modifier.padding(top = 48.dp))
-                            }
-                        }
 
-                        com.chroma.studio.ui.screens.ChromaVideoEditorScreen(
-                            videoUri = uri,
-                            onExport = { projectState ->
-                                isExporting = true
-                                coroutineScope.launch {
-                                    val exportedUri = com.chroma.studio.utils.FFmpegExporter.exportProject(context, projectState)
-                                    isExporting = false
-                                    if (exportedUri != null) {
-                                        flashPickerVideoUri = exportedUri
-                                        flashTrimStart = 0L
-                                        flashTrimEnd = 0L
-                                        flashFilterName = "None"
-                                        flashBrightness = 0f
-                                        flashContrast = 1f
-                                        flashSaturation = 1f
-                                        flashHue = 0f
-                                        flashThumbnail = null // you might want to extract a new thumbnail here
-                                        navController.navigate("flash_post")
-                                    } else {
-                                        Toast.makeText(context, "Export Failed", Toast.LENGTH_SHORT).show()
-                                    }
-                                }
+                        com.chroma.studio.ui.screens.FinalCutProVideoEditorScreen(
+                            initialUri = uri,
+                            initialUris = listOf(uri),
+                            onDone = { startMs, endMs, clips ->
+                                flashTrimStart = startMs
+                                flashTrimEnd = endMs
+                                flashPickerVideoUri = clips.firstOrNull() ?: uri
+                                flashFilterName = "None"
+                                flashBrightness = 0f
+                                flashContrast = 1f
+                                flashSaturation = 1f
+                                flashHue = 0f
+                                flashThumbnail = null
+                                navController.navigate("flash_post")
                             },
                             onBack = { navController.popBackStack() }
                         )
