@@ -32,3 +32,6 @@ result.json
 export_firebase.js
 wipe_and_init_database.js
 skills-lock.json
+.env
+.env.*
+
