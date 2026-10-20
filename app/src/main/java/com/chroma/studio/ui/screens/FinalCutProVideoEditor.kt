@@ -36,6 +36,11 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -75,6 +80,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.*
@@ -82,11 +88,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.asComposeRenderEffect
@@ -8252,7 +8260,7 @@ private fun formatTimecode(sec: Float): String {
 
 
 // ============================================================================
-// CLIP TRANSITION DIALOG & EXPORT BOTTOM SHEET
+// CLIP TRANSITION BOTTOM DRAWER & LIVE PREVIEW
 // ============================================================================
 
 @Composable
@@ -8262,190 +8270,654 @@ fun FcpTransitionDialog(
     onApplyTransition: (FcpTransitionType, Float) -> Unit
 ) {
     val colors = LocalOscellionColors.current
+    val haptic = LocalHapticFeedback.current
     var selectedType by remember { mutableStateOf(clip.transitionToNext) }
     var durationSec by remember { mutableFloatStateOf(clip.transitionDurationSec) }
 
+    val slideAnim = remember { Animatable(320f) }
+    val alphaAnim = remember { Animatable(0f) }
+
+    LaunchedEffect(Unit) {
+        launch {
+            slideAnim.animateTo(
+                0f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioLowBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                )
+            )
+        }
+        launch {
+            alphaAnim.animateTo(1f, tween(180, easing = LinearOutSlowInEasing))
+        }
+    }
+
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.6f))
-                .clickable { onDismiss() },
-            contentAlignment = Alignment.Center
+                .background(Color.Black.copy(alpha = 0.6f * alphaAnim.value))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDismiss
+                ),
+            contentAlignment = Alignment.BottomCenter
         ) {
-            Box(
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth(0.9f)
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(if (colors.isDark) Color(0xFF1E212B) else Color(0xFFFFFFFF))
-                    .border(1.dp, colors.glassBorder, RoundedCornerShape(24.dp))
-                    .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {}
-                    .padding(20.dp)
+                    .fillMaxWidth()
+                    .graphicsLayer { translationY = slideAnim.value }
+                    .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                    .background(if (colors.isDark) Color(0xFF181A22) else Color.White)
+                    .border(
+                        1.dp,
+                        if (colors.isDark) Color(0xFF2E3346) else Color(0xFFE2E8F0),
+                        RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+                    )
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {}
+                    .padding(horizontal = 20.dp, vertical = 14.dp)
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Column(modifier = Modifier.fillMaxWidth()) {
+                // Drag handle pill
+                Box(
+                    modifier = Modifier
+                        .width(36.dp)
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(if (colors.isDark) Color.White.copy(alpha = 0.25f) else Color.Black.copy(alpha = 0.15f))
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "Clip Transition",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = colors.textMain
+                        )
+                        Text(
+                            text = "Tap transition below to preview effect",
+                            fontSize = 12.sp,
+                            color = colors.textMuted
+                        )
+                    }
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Lucide.X,
+                            contentDescription = "Close",
+                            tint = colors.textMuted,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Live Interactive Transition Preview Card
+                FcpTransitionPreviewCard(transitionType = selectedType)
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Transition options grid (3 columns x 3 rows)
+                val chunkedTransitions = remember { FcpTransitionType.entries.chunked(3) }
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    chunkedTransitions.forEach { rowTypes ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            rowTypes.forEach { type ->
+                                val isSelected = type == selectedType
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(
+                                            if (isSelected) colors.primary.copy(alpha = 0.16f)
+                                            else if (colors.isDark) Color(0xFF232734) else Color(0xFFF1F4F8)
+                                        )
+                                        .border(
+                                            1.5.dp,
+                                            if (isSelected) colors.primary else Color.Transparent,
+                                            RoundedCornerShape(12.dp)
+                                        )
+                                        .clickable {
+                                            if (selectedType != type) {
+                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                selectedType = type
+                                            }
+                                        }
+                                        .padding(vertical = 10.dp, horizontal = 4.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = type.icon,
+                                            contentDescription = type.label,
+                                            tint = if (isSelected) colors.primary else colors.textMuted,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Text(
+                                            text = type.label,
+                                            fontSize = 11.sp,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                            color = if (isSelected) colors.primary else colors.textMain,
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
+                            }
+                            if (rowTypes.size < 3) {
+                                repeat(3 - rowTypes.size) {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (selectedType != FcpTransitionType.NONE) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = selectedType.description,
+                        fontSize = 11.sp,
+                        color = colors.textMuted,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Start
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
-                            Text(
-                                text = "Clip Transition",
-                                fontSize = 17.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = colors.textMain
-                            )
-                            Text(
-                                text = "Select transition effect to the next clip",
-                                fontSize = 12.sp,
-                                color = colors.textMuted
-                            )
-                        }
-                        IconButton(
-                            onClick = onDismiss,
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = Lucide.X,
-                                contentDescription = "Close",
-                                tint = colors.textMuted,
-                                modifier = Modifier.size(18.dp)
-                            )
+                        Text(
+                            text = "Transition Duration",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = colors.textMain
+                        )
+                        Text(
+                            text = "${"%.1f".format(durationSec)}s",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = colors.primary
+                        )
+                    }
+                    Slider(
+                        value = durationSec,
+                        onValueChange = { durationSec = it },
+                        valueRange = 0.2f..2.0f,
+                        steps = 17,
+                        colors = SliderDefaults.colors(
+                            thumbColor = colors.primary,
+                            activeTrackColor = colors.primary,
+                            inactiveTrackColor = if (colors.isDark) Color(0xFF333846) else Color(0xFFE2E8F0)
+                        )
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Action buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, if (colors.isDark) Color(0xFF333846) else Color(0xFFE2E8F0))
+                    ) {
+                        Text("Cancel", color = colors.textMuted, fontSize = 14.sp)
+                    }
+                    Button(
+                        onClick = {
+                            onApplyTransition(selectedType, durationSec)
+                            onDismiss()
+                        },
+                        modifier = Modifier
+                            .weight(1.2f)
+                            .height(44.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = colors.primary)
+                    ) {
+                        Text("Apply Transition", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
+    }
+}
+
+@Composable
+fun FcpTransitionPreviewCard(
+    transitionType: FcpTransitionType,
+    modifier: Modifier = Modifier
+) {
+    val colors = LocalOscellionColors.current
+    val infiniteTransition = rememberInfiniteTransition(label = "fcpTransitionPreview")
+    val rawProgress by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "previewProgress"
+    )
+
+    // Hold Scene 1 for 0..0.22, Transition for 0.22..0.78, Hold Scene 2 for 0.78..1.0
+    val p = when {
+        rawProgress < 0.22f -> 0f
+        rawProgress > 0.78f -> 1f
+        else -> (rawProgress - 0.22f) / 0.56f
+    }
+
+    BoxWithConstraints(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(124.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color.Black)
+            .border(
+                1.dp,
+                if (colors.isDark) Color(0xFF2C3246) else Color(0xFFE2E8F0),
+                RoundedCornerShape(16.dp)
+            )
+    ) {
+        val cardWidthPx = constraints.maxWidth.toFloat()
+        val cardWidthDp = maxWidth
+
+        // Render transition based on transitionType
+        when (transitionType) {
+            FcpTransitionType.NONE -> {
+                if (p < 0.5f) {
+                    FcpPreviewSceneOne()
+                } else {
+                    FcpPreviewSceneTwo()
+                }
+            }
+            FcpTransitionType.DIP_TO_BLACK -> {
+                Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+                    if (p < 0.5f) {
+                        val alpha = (1f - p / 0.5f).coerceIn(0f, 1f)
+                        FcpPreviewSceneOne(Modifier.graphicsLayer { this.alpha = alpha })
+                    } else {
+                        val alpha = ((p - 0.5f) / 0.5f).coerceIn(0f, 1f)
+                        FcpPreviewSceneTwo(Modifier.graphicsLayer { this.alpha = alpha })
+                    }
+                }
+            }
+            FcpTransitionType.DIP_TO_WHITE -> {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    if (p < 0.5f) {
+                        FcpPreviewSceneOne()
+                    } else {
+                        FcpPreviewSceneTwo()
+                    }
+                    val flashAlpha = (1f - abs(2f * p - 1f)).coerceIn(0f, 1f)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.White.copy(alpha = flashAlpha))
+                    )
+                }
+            }
+            FcpTransitionType.CROSSFADE -> {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    FcpPreviewSceneOne(Modifier.graphicsLayer { this.alpha = (1f - p).coerceIn(0f, 1f) })
+                    FcpPreviewSceneTwo(Modifier.graphicsLayer { this.alpha = p.coerceIn(0f, 1f) })
+                }
+            }
+            FcpTransitionType.WIPE_RIGHT -> {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    FcpPreviewSceneOne()
+                    val wipeShape = remember(p) {
+                        GenericShape { size, _ ->
+                            addRect(Rect(0f, 0f, size.width * p.coerceIn(0f, 1f), size.height))
                         }
                     }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Transition options grid (3 columns x 3 rows)
-                    val chunkedTransitions = remember { FcpTransitionType.entries.chunked(3) }
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(wipeShape)
                     ) {
-                        chunkedTransitions.forEach { rowTypes ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                rowTypes.forEach { type ->
-                                    val isSelected = type == selectedType
-                                    Box(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .background(
-                                                if (isSelected) colors.primary.copy(alpha = 0.18f)
-                                                else if (colors.isDark) Color(0xFF272B38) else Color(0xFFF1F3F7)
-                                            )
-                                            .border(
-                                                1.dp,
-                                                if (isSelected) colors.primary else Color.Transparent,
-                                                RoundedCornerShape(12.dp)
-                                            )
-                                            .clickable { selectedType = type }
-                                            .padding(vertical = 10.dp, horizontal = 4.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Column(
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = type.icon,
-                                                contentDescription = type.label,
-                                                tint = if (isSelected) colors.primary else colors.textMuted,
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                            Text(
-                                                text = type.label,
-                                                fontSize = 11.sp,
-                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                                color = if (isSelected) colors.primary else colors.textMain,
-                                                maxLines = 1
-                                            )
-                                        }
-                                    }
-                                }
-                                if (rowTypes.size < 3) {
-                                    repeat(3 - rowTypes.size) {
-                                        Spacer(modifier = Modifier.weight(1f))
-                                    }
-                                }
+                        FcpPreviewSceneTwo()
+                    }
+                    // Glowing seam line
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .width(2.5.dp)
+                            .offset(x = (cardWidthDp - 2.5.dp) * p.coerceIn(0f, 1f))
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(Color.White.copy(alpha = 0.2f), Color.White, Color.White.copy(alpha = 0.2f))
+                                )
+                            )
+                    )
+                }
+            }
+            FcpTransitionType.WIPE_LEFT -> {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    FcpPreviewSceneOne()
+                    val wipeShape = remember(p) {
+                        GenericShape { size, _ ->
+                            addRect(Rect(size.width * (1f - p.coerceIn(0f, 1f)), 0f, size.width, size.height))
+                        }
+                    }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(wipeShape)
+                    ) {
+                        FcpPreviewSceneTwo()
+                    }
+                    // Glowing seam line
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .width(2.5.dp)
+                            .offset(x = (cardWidthDp - 2.5.dp) * (1f - p.coerceIn(0f, 1f)))
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(Color.White.copy(alpha = 0.2f), Color.White, Color.White.copy(alpha = 0.2f))
+                                )
+                            )
+                    )
+                }
+            }
+            FcpTransitionType.SLIDE_LEFT -> {
+                Box(modifier = Modifier.fillMaxSize().clipToBounds()) {
+                    FcpPreviewSceneOne(
+                        Modifier.graphicsLayer {
+                            translationX = -p * cardWidthPx
+                        }
+                    )
+                    FcpPreviewSceneTwo(
+                        Modifier.graphicsLayer {
+                            translationX = (1f - p) * cardWidthPx
+                        }
+                    )
+                }
+            }
+            FcpTransitionType.ZOOM_IN -> {
+                Box(modifier = Modifier.fillMaxSize().clipToBounds()) {
+                    if (p < 0.5f) {
+                        val norm = p / 0.5f
+                        val scale = 1f + 0.45f * norm
+                        val alpha = (1f - norm * 0.4f).coerceIn(0f, 1f)
+                        FcpPreviewSceneOne(
+                            Modifier.graphicsLayer {
+                                scaleX = scale
+                                scaleY = scale
+                                this.alpha = alpha
+                            }
+                        )
+                    } else {
+                        val norm = (p - 0.5f) / 0.5f
+                        val scale = 1.45f - 0.45f * norm
+                        val alpha = norm.coerceIn(0f, 1f)
+                        FcpPreviewSceneTwo(
+                            Modifier.graphicsLayer {
+                                scaleX = scale
+                                scaleY = scale
+                                this.alpha = alpha
+                            }
+                        )
+                    }
+                }
+            }
+            FcpTransitionType.GLITCH -> {
+                Box(modifier = Modifier.fillMaxSize().clipToBounds()) {
+                    val glitchActive = p in 0.12f..0.88f
+                    val jitterX = if (glitchActive) (sin(p * 75f) * 14f) else 0f
+                    val jitterY = if (glitchActive) (cos(p * 45f) * 6f) else 0f
+
+                    if (p < 0.5f) {
+                        FcpPreviewSceneOne(
+                            Modifier.graphicsLayer {
+                                translationX = jitterX
+                                translationY = jitterY
+                            }
+                        )
+                    } else {
+                        FcpPreviewSceneTwo(
+                            Modifier.graphicsLayer {
+                                translationX = jitterX
+                                translationY = jitterY
+                            }
+                        )
+                    }
+
+                    if (glitchActive) {
+                        val splitAlpha = (sin(p * 35f).absoluteValue * 0.35f).coerceIn(0f, 0.45f)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer { translationX = jitterX + 6f }
+                                .background(Color(0xFF00E5FF).copy(alpha = splitAlpha))
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer { translationX = jitterX - 6f }
+                                .background(Color(0xFFFF0055).copy(alpha = splitAlpha))
+                        )
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val step = 8f
+                            var y = 0f
+                            while (y < size.height) {
+                                drawLine(
+                                    color = Color.Black.copy(alpha = 0.25f),
+                                    start = Offset(0f, y),
+                                    end = Offset(size.width, y),
+                                    strokeWidth = 2f
+                                )
+                                y += step
                             }
                         }
                     }
-
-                    if (selectedType != FcpTransitionType.NONE) {
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Text(
-                            text = selectedType.description,
-                            fontSize = 11.sp,
-                            color = colors.textMuted,
-                            modifier = Modifier.padding(horizontal = 2.dp)
-                        )
-                        Spacer(modifier = Modifier.height(14.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Transition Duration",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = colors.textMain
-                            )
-                            Text(
-                                text = "${"%.1f".format(durationSec)}s",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = colors.primary
-                            )
-                        }
-                        Slider(
-                            value = durationSec,
-                            onValueChange = { durationSec = it },
-                            valueRange = 0.2f..2.0f,
-                            steps = 17,
-                            colors = SliderDefaults.colors(
-                                thumbColor = colors.primary,
-                                activeTrackColor = colors.primary,
-                                inactiveTrackColor = if (colors.isDark) Color(0xFF333846) else Color(0xFFE2E8F0)
-                            )
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(18.dp))
-
-                    // Action buttons
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = onDismiss,
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(1.dp, colors.glassBorder)
-                        ) {
-                            Text("Cancel", color = colors.textMuted)
-                        }
-                        Button(
-                            onClick = {
-                                onApplyTransition(selectedType, durationSec)
-                                onDismiss()
-                            },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = colors.primary)
-                        ) {
-                            Text("Apply", color = Color.White, fontWeight = FontWeight.Bold)
-                        }
-                    }
                 }
+            }
+        }
+
+        // Overlay: Top Left Live Badge
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(8.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(Color.Black.copy(alpha = 0.65f))
+                .padding(horizontal = 7.dp, vertical = 3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFFF3B30))
+            )
+            Text(
+                text = "PREVIEW",
+                color = Color.White,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.5.sp
+            )
+        }
+
+        // Overlay: Top Right Selected Transition Badge
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(8.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(Color.Black.copy(alpha = 0.65f))
+                .padding(horizontal = 8.dp, vertical = 3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            Icon(
+                imageVector = transitionType.icon,
+                contentDescription = null,
+                tint = Color(0xFF0A84FF),
+                modifier = Modifier.size(12.dp)
+            )
+            Text(
+                text = transitionType.label,
+                color = Color.White,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+
+        // Overlay: Bottom Loop Progress Line
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .height(2.5.dp)
+                .background(Color.White.copy(alpha = 0.15f))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(rawProgress.coerceIn(0f, 1f))
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(Color(0xFF0A84FF), Color(0xFF64D2FF))
+                        )
+                    )
+            )
+        }
+    }
+}
+
+@Composable
+private fun FcpPreviewSceneOne(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(
+                Brush.linearGradient(
+                    listOf(Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364))
+                )
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.18f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Lucide.Film,
+                    contentDescription = null,
+                    tint = Color(0xFF60A5FA),
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+            Column {
+                Text(
+                    text = "CLIP 1",
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+                Text(
+                    text = "Scene A • Outgoing",
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Normal
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FcpPreviewSceneTwo(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(
+                Brush.linearGradient(
+                    listOf(Color(0xFF4C0519), Color(0xFF831843), Color(0xFFBE185D))
+                )
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.18f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Lucide.Sparkles,
+                    contentDescription = null,
+                    tint = Color(0xFFF472B6),
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+            Column {
+                Text(
+                    text = "CLIP 2",
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+                Text(
+                    text = "Scene B • Incoming",
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Normal
+                )
             }
         }
     }
