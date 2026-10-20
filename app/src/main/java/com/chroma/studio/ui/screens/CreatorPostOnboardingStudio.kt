@@ -599,15 +599,30 @@ fun CreatorPostOnboardingStudioScreen(
                         if (videoUri == null) {
                             uploadErrorMessage = "No video available to publish."
                         } else {
-                            // Step 1: Trim
-                            uploadStageText = "Trimming video…"
+                            // Step 1: Trim if necessary, otherwise pass through without re-encoding
+                            uploadStageText = "Preparing video…"
                             uploadProgress = 0.10f
                             val trimmed = withContext(Dispatchers.IO) {
-                                com.chroma.studio.utils.VideoProcessor.trimVideo(
-                                    context, videoUri, flashTrimStartMs, flashTrimEndMs
-                                )
+                                val shouldTrim = flashTrimStartMs > 100L || (flashTrimEndMs > 0L && flashTrimEndMs < flashVideoDurationMs - 100L)
+                                if (shouldTrim) {
+                                    com.chroma.studio.utils.VideoProcessor.trimVideo(
+                                        context, videoUri, flashTrimStartMs, flashTrimEndMs
+                                    )
+                                } else {
+                                    if (videoUri.scheme == "file") {
+                                        java.io.File(videoUri.path ?: "")
+                                    } else {
+                                        val tempFile = java.io.File(context.cacheDir, "ready_post_${System.currentTimeMillis()}.mp4")
+                                        try {
+                                            context.contentResolver.openInputStream(videoUri)?.use { input ->
+                                                java.io.FileOutputStream(tempFile).use { output -> input.copyTo(output) }
+                                            }
+                                            if (tempFile.exists() && tempFile.length() > 0L) tempFile else null
+                                        } catch (_: Throwable) { null }
+                                    }
+                                }
                             } ?: run {
-                                uploadErrorMessage = "Video trimming failed."
+                                uploadErrorMessage = "Video processing failed."
                                 return@launch
                             }
 

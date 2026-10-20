@@ -252,6 +252,8 @@ object FFmpegExporter {
         }
         
         val cmdArgs = mutableListOf<String>()
+        cmdArgs.add("ffmpeg")
+        cmdArgs.add("-y")
         cmdArgs.addAll(inputs)
         
         var hasAudio = false
@@ -335,7 +337,6 @@ object FFmpegExporter {
         val maxDur = state.clips.maxOfOrNull { it.startTime + it.duration } ?: 0f
         cmdArgs.add(String.format(java.util.Locale.US, "%.3f", maxDur))
         
-        cmdArgs.add("-y")
         cmdArgs.add(outputFile.absolutePath)
         
         val cmd = cmdArgs.toTypedArray()

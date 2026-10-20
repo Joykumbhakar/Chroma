@@ -3010,7 +3010,8 @@ fun FinalCutProVideoEditorScreen(
                                         onTrimLeft = { clipId, deltaSec ->
                                             clips = clips.map { c ->
                                                 if (c.id == clipId) {
-                                                    val newStart = (c.trimStartSec + deltaSec).coerceIn(0f, c.trimEndSec - 0.5f)
+                                                    val deltaMediaSec = deltaSec * c.speed.coerceAtLeast(0.1f)
+                                                    val newStart = (c.trimStartSec + deltaMediaSec).coerceIn(0f, c.trimEndSec - 0.25f)
                                                     c.copy(trimStartSec = newStart)
                                                 } else c
                                             }
@@ -3023,7 +3024,8 @@ fun FinalCutProVideoEditorScreen(
                                         onTrimRight = { clipId, deltaSec ->
                                             clips = clips.map { c ->
                                                 if (c.id == clipId) {
-                                                    val newEnd = (c.trimEndSec + deltaSec).coerceIn(c.trimStartSec + 0.5f, c.durationSec)
+                                                    val deltaMediaSec = deltaSec * c.speed.coerceAtLeast(0.1f)
+                                                    val newEnd = (c.trimEndSec + deltaMediaSec).coerceIn(c.trimStartSec + 0.25f, c.durationSec)
                                                     c.copy(trimEndSec = newEnd)
                                                 } else c
                                             }
@@ -3053,13 +3055,18 @@ fun FinalCutProVideoEditorScreen(
                                             if (span != null) {
                                                 saveStateForUndo()
                                                 val active = span.clip
-                                                val splitOffset = currentTimeSec - span.timelineStartSec
-                                                val splitMediaSec = active.trimStartSec + splitOffset
-                                                val firstHalf = active.copy(trimEndSec = splitMediaSec)
+                                                val splitMediaSec = getMediaTimeForGlobal(span, currentTimeSec)
+                                                val firstHalf = active.copy(
+                                                    trimEndSec = splitMediaSec,
+                                                    transitionToNext = FcpTransitionType.NONE
+                                                )
                                                 val secondHalf = active.copy(
                                                     id = UUID.randomUUID().toString(),
                                                     name = "${active.name}_b",
-                                                    trimStartSec = splitMediaSec
+                                                    trimStartSec = splitMediaSec,
+                                                    transitionToNext = active.transitionToNext,
+                                                    transitionDurationSec = active.transitionDurationSec,
+                                                    transitionEasing = active.transitionEasing
                                                 )
                                                 val idx = clips.indexOfFirst { it.id == active.id }
                                                 if (idx >= 0) {
@@ -3088,8 +3095,11 @@ fun FinalCutProVideoEditorScreen(
                                         onDeleteClip = {
                                             if (clips.size > 1) {
                                                 saveStateForUndo()
-                                                clips = clips.filter { it.id != selectedId }
-                                                selectedId = clips.firstOrNull()?.id ?: ""
+                                                val deleteIdx = clips.indexOfFirst { it.id == selectedId }
+                                                val remaining = clips.filter { it.id != selectedId }
+                                                clips = remaining
+                                                val nextIdx = if (deleteIdx in remaining.indices) deleteIdx else (remaining.size - 1).coerceAtLeast(0)
+                                                selectedId = remaining.getOrNull(nextIdx)?.id ?: ""
                                                 val span = timelineSpans.find { it.clip.id == selectedId }
                                                 if (span != null) {
                                                     seekToGlobalTime(span.timelineStartSec)

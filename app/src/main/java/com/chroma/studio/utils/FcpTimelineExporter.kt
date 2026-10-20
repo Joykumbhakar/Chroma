@@ -118,8 +118,8 @@ object FcpTimelineExporter {
 
             val customAudioFile = customAudio?.let { getLocalFile(it.uri, isAudio = true) }
 
-            // 3. Inspect audio presence for each clip
-            val hasAudioMap = clips.indices.associateWith { i ->
+            // 3. Inspect audio presence & probe actual duration for each clip
+            val videoMetadataList = clips.indices.map { i ->
                 val clip = clips[i]
                 val f = clipFiles[i]
                 val isImage = try {
@@ -128,29 +128,52 @@ object FcpTimelineExporter {
                 } catch (_: Throwable) { false }
 
                 if (isImage) {
-                    false
+                    Pair(false, 0f)
                 } else {
+                    var hasAudio = false
+                    val extractor = android.media.MediaExtractor()
                     try {
-                        val retriever = MediaMetadataRetriever()
-                        try {
-                            retriever.setDataSource(f.absolutePath)
-                            val audioStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO)
-                            audioStr != null && audioStr == "yes"
-                        } finally {
-                            try { retriever.release() } catch (_: Throwable) {}
+                        extractor.setDataSource(f.absolutePath)
+                        for (t in 0 until extractor.trackCount) {
+                            val format = extractor.getTrackFormat(t)
+                            val mime = format.getString(android.media.MediaFormat.KEY_MIME) ?: ""
+                            if (mime.startsWith("audio/")) {
+                                hasAudio = true
+                                break
+                            }
                         }
-                    } catch (_: Throwable) { false }
+                    } catch (_: Throwable) {
+                    } finally {
+                        try { extractor.release() } catch (_: Throwable) {}
+                    }
+
+                    var probedDurationSec = 0f
+                    val retriever = MediaMetadataRetriever()
+                    try {
+                        retriever.setDataSource(f.absolutePath)
+                        val durMsStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                        val ms = durMsStr?.toLongOrNull() ?: 0L
+                        if (ms > 0L) probedDurationSec = ms / 1000f
+                    } catch (_: Throwable) {
+                    } finally {
+                        try { retriever.release() } catch (_: Throwable) {}
+                    }
+
+                    Pair(hasAudio, probedDurationSec)
                 }
             }
 
             // 4. Build FFmpeg command
             onProgress(0.30f, "Building timeline composition...")
             val cmdArgs = mutableListOf<String>()
+            cmdArgs.add("ffmpeg")
+            cmdArgs.add("-y")
 
             // Add input arguments
             clips.indices.forEach { i ->
                 val clip = clips[i]
                 val f = clipFiles[i]
+                val (hasAudio, _) = videoMetadataList[i]
                 val isImage = try {
                     val type = context.contentResolver.getType(clip.uri)
                     type?.startsWith("image/") == true
@@ -182,8 +205,11 @@ object FcpTimelineExporter {
 
             clips.indices.forEach { i ->
                 val clip = clips[i]
-                val sTime = clip.trimStartSec.coerceAtLeast(0f)
-                val eTime = if (clip.trimEndSec > sTime + 0.1f) clip.trimEndSec else (sTime + 1f)
+                val (hasAudio, probedDur) = videoMetadataList[i]
+                val maxSourceDur = if (probedDur > 0.2f) probedDur else if (clip.durationSec > 0.2f) clip.durationSec else 10000f
+                val sTime = clip.trimStartSec.coerceIn(0f, (maxSourceDur - 0.1f).coerceAtLeast(0f))
+                val eTimeRaw = if (clip.trimEndSec > sTime + 0.1f) clip.trimEndSec else maxSourceDur
+                val eTime = eTimeRaw.coerceIn(sTime + 0.1f, maxSourceDur)
                 val dur = (eTime - sTime).coerceAtLeast(0.1f)
                 val speed = clip.speed.coerceIn(0.25f, 4.0f)
                 val effectiveDur = dur / speed
@@ -196,11 +222,8 @@ object FcpTimelineExporter {
                 // Video filter: trim, speed, scale, pad, fps
                 val vFilter = StringBuilder()
                 if (!isImage) {
-                    vFilter.append(String.format(Locale.US, "trim=start=%.3f:end=%.3f,setpts=PTS-STARTPTS", sTime, eTime))
-                    if (speed != 1.0f) {
-                        vFilter.append(String.format(Locale.US, ",setpts=%.4f*(PTS-STARTPTS)", 1.0f / speed))
-                    }
-                    vFilter.append(",")
+                    val ptsScale = 1.0f / speed
+                    vFilter.append(String.format(Locale.US, "trim=start=%.3f:end=%.3f,setpts=%.4f*(PTS-STARTPTS),", sTime, eTime, ptsScale))
                 }
 
                 // Uniform scale and letterboxing
@@ -225,13 +248,13 @@ object FcpTimelineExporter {
                     val fadeStart = (effectiveDur - halfTrans).coerceAtLeast(0f)
                     when (transToNext) {
                         FcpTransitionType.DIP_TO_BLACK -> {
-                            vFilter.append(String.format(Locale.US, ",fade=t=out:st=%.3f:d=%.3f", fadeStart, halfTrans))
+                            vFilter.append(String.format(Locale.US, ",fade=t=out:st=%.3f:d=%.3f:c=black", fadeStart, halfTrans))
                         }
                         FcpTransitionType.DIP_TO_WHITE, FcpTransitionType.FILM_BLOOM -> {
-                            vFilter.append(String.format(Locale.US, ",fade=t=out:st=%.3f:d=%.3f:color=white", fadeStart, halfTrans))
+                            vFilter.append(String.format(Locale.US, ",fade=t=out:st=%.3f:d=%.3f:c=white", fadeStart, halfTrans))
                         }
                         else -> {
-                            vFilter.append(String.format(Locale.US, ",fade=t=out:st=%.3f:d=%.3f", fadeStart, halfTrans))
+                            vFilter.append(String.format(Locale.US, ",fade=t=out:st=%.3f:d=%.3f:c=black", fadeStart, halfTrans))
                         }
                     }
                 }
@@ -244,13 +267,13 @@ object FcpTimelineExporter {
                     if (prevTrans != FcpTransitionType.NONE && prevHalfTrans > 0.05f) {
                         when (prevTrans) {
                             FcpTransitionType.DIP_TO_BLACK -> {
-                                vFilter.append(String.format(Locale.US, ",fade=t=in:st=0:d=%.3f", prevHalfTrans))
+                                vFilter.append(String.format(Locale.US, ",fade=t=in:st=0:d=%.3f:c=black", prevHalfTrans))
                             }
                             FcpTransitionType.DIP_TO_WHITE, FcpTransitionType.FILM_BLOOM -> {
-                                vFilter.append(String.format(Locale.US, ",fade=t=in:st=0:d=%.3f:color=white", prevHalfTrans))
+                                vFilter.append(String.format(Locale.US, ",fade=t=in:st=0:d=%.3f:c=white", prevHalfTrans))
                             }
                             else -> {
-                                vFilter.append(String.format(Locale.US, ",fade=t=in:st=0:d=%.3f", prevHalfTrans))
+                                vFilter.append(String.format(Locale.US, ",fade=t=in:st=0:d=%.3f:c=black", prevHalfTrans))
                             }
                         }
                     }
@@ -259,8 +282,7 @@ object FcpTimelineExporter {
                 filterGraph.append("[$i:v]$vFilter[v_clip_$i];")
                 concatVideoLabels.add("[v_clip_$i]")
 
-                // Audio filter: trim, speed, or silent track
-                val hasAudio = hasAudioMap[i] == true
+                // Audio filter: trim, speed, smooth fades, standardized to 44.1kHz stereo
                 if (hasAudio) {
                     val aFilter = StringBuilder()
                     aFilter.append(String.format(Locale.US, "atrim=start=%.3f:end=%.3f,asetpts=PTS-STARTPTS", sTime, eTime))
@@ -268,10 +290,30 @@ object FcpTimelineExporter {
                         val tempo = speed.coerceIn(0.5f, 2.0f)
                         aFilter.append(String.format(Locale.US, ",atempo=%.3f", tempo))
                     }
+
+                    // Smooth boundary fades
+                    val audioFadeOut = if (i < clips.size - 1 && transToNext != FcpTransitionType.NONE) halfTrans.coerceAtMost(0.25f) else 0.05f
+                    val audioFadeIn = if (i > 0 && clips[i - 1].transitionToNext != FcpTransitionType.NONE) {
+                        val prevTransDur = clips[i - 1].transitionDurationSec.coerceIn(0.1f, 1.5f)
+                        (prevTransDur / 2f).coerceAtMost(effectiveDur / 2f).coerceAtMost(0.25f)
+                    } else 0.05f
+
+                    if (effectiveDur > 0.2f) {
+                        if (audioFadeIn > 0.01f) {
+                            aFilter.append(String.format(Locale.US, ",afade=t=in:st=0:d=%.3f", audioFadeIn))
+                        }
+                        if (audioFadeOut > 0.01f) {
+                            val aFadeStart = (effectiveDur - audioFadeOut).coerceAtLeast(0f)
+                            aFilter.append(String.format(Locale.US, ",afade=t=out:st=%.3f:d=%.3f", aFadeStart, audioFadeOut))
+                        }
+                    }
+
+                    // Strict uniform format guarantee for concat filter
+                    aFilter.append(",aformat=sample_rates=44100:channel_layouts=stereo,aresample=async=1")
                     filterGraph.append("[$i:a]$aFilter[a_clip_$i];")
                     concatAudioLabels.add("[a_clip_$i]")
                 } else {
-                    // Generate silent audio of exact matching duration
+                    // Generate silent audio of exact matching duration & matching 44.1kHz stereo layout
                     filterGraph.append(String.format(Locale.US, "anullsrc=channel_layout=stereo:sample_rate=44100:d=%.3f[a_clip_$i];", effectiveDur))
                     concatAudioLabels.add("[a_clip_$i]")
                 }
@@ -304,10 +346,10 @@ object FcpTimelineExporter {
                 val muteOrig = customAudio.muteOriginalVideo
 
                 if (muteOrig) {
-                    filterGraph.append(String.format(Locale.US, "[$customAudioInputIndex:a]volume=%.3f[a_custom];", vol))
+                    filterGraph.append(String.format(Locale.US, "[$customAudioInputIndex:a]aformat=sample_rates=44100:channel_layouts=stereo,volume=%.3f[a_custom];", vol))
                     finalAudioStream = "[a_custom]"
                 } else {
-                    filterGraph.append(String.format(Locale.US, "[$customAudioInputIndex:a]volume=%.3f[a_custom];", vol))
+                    filterGraph.append(String.format(Locale.US, "[$customAudioInputIndex:a]aformat=sample_rates=44100:channel_layouts=stereo,volume=%.3f[a_custom];", vol))
                     filterGraph.append("$finalAudioStream[a_custom]amix=inputs=2:duration=first:dropout_transition=2[a_mixed];")
                     finalAudioStream = "[a_mixed]"
                 }
@@ -320,6 +362,11 @@ object FcpTimelineExporter {
             cmdArgs.add(finalVideoStream)
             cmdArgs.add("-map")
             cmdArgs.add(finalAudioStream)
+
+            // Duration limit to protect timeline exact stop
+            val totalTimelineDurationSec = clips.sumOf { it.trimmedDurationSec.toDouble() }.toFloat().coerceAtLeast(0.5f)
+            cmdArgs.add("-t")
+            cmdArgs.add(String.format(Locale.US, "%.3f", totalTimelineDurationSec))
 
             // Encoding flags: ultrafast x264, standard AAC
             cmdArgs.add("-c:v")
@@ -336,7 +383,6 @@ object FcpTimelineExporter {
             cmdArgs.add("-b:a")
             cmdArgs.add("192k")
 
-            cmdArgs.add("-y")
             cmdArgs.add(outputFile.absolutePath)
 
             onProgress(0.45f, "Rendering timeline & transitions...")

@@ -265,8 +265,22 @@ class FlashViewModel(application: Application) : AndroidViewModel(application) {
                 val processedFile = when (mediaType) {
                     FlashMediaType.VIDEO -> {
                         _uploadProgress.value = 0.1f
-                        val trimmed = VideoProcessor.trimVideo(context, mediaUri, trimStartMs, trimEndMs)
-                            ?: throw Exception("Video trimming failed")
+                        val videoDur = VideoProcessor.getVideoDurationMs(context, mediaUri)
+                        val shouldTrim = trimStartMs > 100L || (trimEndMs > 0L && videoDur > 0L && trimEndMs < videoDur - 100L)
+                        val trimmed = if (shouldTrim) {
+                            VideoProcessor.trimVideo(context, mediaUri, trimStartMs, trimEndMs)
+                                ?: throw Exception("Video trimming failed")
+                        } else {
+                            if (mediaUri.scheme == "file") {
+                                java.io.File(mediaUri.path ?: "")
+                            } else {
+                                val tempFile = java.io.File(context.cacheDir, "ready_flash_${System.currentTimeMillis()}.mp4")
+                                context.contentResolver.openInputStream(mediaUri)?.use { input ->
+                                    java.io.FileOutputStream(tempFile).use { output -> input.copyTo(output) }
+                                }
+                                tempFile
+                            }
+                        }
                         _uploadProgress.value = 0.3f
                         val compressed = VideoProcessor.compressVideo(context, Uri.fromFile(trimmed))
                         _uploadProgress.value = 0.5f
