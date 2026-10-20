@@ -1,5 +1,8 @@
 package com.chroma.studio.ui.components
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.vector.ImageVector
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -56,6 +59,8 @@ sealed class DynamicIslandEvent {
  * Singleton manager to post dynamic notifications into the Apple Dynamic Island HUD.
  */
 object DynamicIslandManager {
+    var isSuppressed by mutableStateOf(false)
+
     private val _events = MutableSharedFlow<DynamicIslandEvent>(extraBufferCapacity = 10)
     val events = _events.asSharedFlow()
 

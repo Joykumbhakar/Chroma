@@ -1090,6 +1090,8 @@ fun IosDynamicIslandHost(
     modifier: Modifier = Modifier,
     isNotchMode: Boolean = false
 ) {
+    if (DynamicIslandManager.isSuppressed) return
+
     var currentEvent by remember { mutableStateOf<DynamicIslandEvent?>(null) }
     var isExpanded by remember { mutableStateOf(false) }
     var replyText by remember { mutableStateOf("") }

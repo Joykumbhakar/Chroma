@@ -47,12 +47,18 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroidSize
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.layout.ContentScale
@@ -87,6 +93,7 @@ import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -722,6 +729,14 @@ fun FinalCutProVideoEditorScreen(
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val colors = LocalOscellionColors.current
+
+    // Suppress Dynamic Island HUD overlay while in the Video Editor screen
+    DisposableEffect(Unit) {
+        com.chroma.studio.ui.components.DynamicIslandManager.isSuppressed = true
+        onDispose {
+            com.chroma.studio.ui.components.DynamicIslandManager.isSuppressed = false
+        }
+    }
 
     var pixelsPerSec by remember { mutableFloatStateOf(45f) } // dp per second in storyline (zoomable 15f..120f)
 
@@ -1661,6 +1676,14 @@ fun FinalCutProVideoEditorScreen(
                 val activePanX = selectedClip?.panX ?: 0f
                 val activePanY = selectedClip?.panY ?: 0f
 
+                var lastTapTimestamp by remember { mutableLongStateOf(0L) }
+                var pendingTapJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+                val currentClips by rememberUpdatedState(clips)
+                val currentSelectedId by rememberUpdatedState(selectedId)
+                val currentIsPlaying by rememberUpdatedState(isPlaying)
+                val currentTotalDuration by rememberUpdatedState(totalDurationSec)
+                val currentCurrentTime by rememberUpdatedState(currentTimeSec)
+
                 Box(
                     modifier = Modifier
                         .fillMaxHeight()
@@ -1668,58 +1691,7 @@ fun FinalCutProVideoEditorScreen(
                         .shadow(elevation = 8.dp, shape = previewShape, ambientColor = Color(0x0D1F2687), spotColor = Color(0x0D1F2687))
                         .clip(previewShape)
                         .background(Color(0xFF111317))
-                        .border(1.dp, Color(0xFF2A2F3A), previewShape)
-                        .pointerInput(selectedId) {
-                            detectTransformGestures(panZoomLock = false) { _, pan, zoom, _ ->
-                                val active = selectedClip ?: return@detectTransformGestures
-                                if (zoom != 1f || (active.scale > 1.02f && pan != Offset.Zero)) {
-                                    val newScale = (active.scale * zoom).coerceIn(0.5f, 5.0f)
-                                    val maxPanX = (newScale - 0.7f).coerceAtLeast(0f) * 600f
-                                    val maxPanY = (newScale - 0.7f).coerceAtLeast(0f) * 800f
-                                    val newPanX = (active.panX + pan.x).coerceIn(-maxPanX, maxPanX)
-                                    val newPanY = (active.panY + pan.y).coerceIn(-maxPanY, maxPanY)
-                                    clips = clips.map { c ->
-                                        if (c.id == active.id) {
-                                            c.copy(scale = newScale, panX = newPanX, panY = newPanY)
-                                        } else c
-                                    }
-                                }
-                            }
-                        }
-                        .pointerInput(totalDurationSec, currentTimeSec, isPlaying, selectedId) {
-                            detectTapGestures(
-                                onDoubleTap = {
-                                    val active = selectedClip ?: return@detectTapGestures
-                                    saveStateForUndo()
-                                    val nextScale = if (active.scale > 1.05f) 1.0f else 1.35f
-                                    clips = clips.map { c ->
-                                        if (c.id == active.id) {
-                                            c.copy(scale = nextScale, panX = 0f, panY = 0f)
-                                        } else c
-                                    }
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    ToastManager.showToast(if (nextScale == 1.0f) "Reset to Fit (1.0x)" else "Fill & Crop (1.35x)")
-                                },
-                                onTap = {
-                                    SoundManager.playTap(context)
-                                    val isAtEnd = totalDurationSec > 0f && currentTimeSec >= totalDurationSec - 0.08f
-                                    if (isAtEnd) {
-                                        seekToGlobalTime(0f, autoPlay = true)
-                                        triggerOverlayFlash(true)
-                                    } else {
-                                        val nextPlay = !isPlaying
-                                        isPlaying = nextPlay
-                                        if (nextPlay) {
-                                            exoPlayer.play()
-                                        } else {
-                                            exoPlayer.pause()
-                                        }
-                                        triggerOverlayFlash(nextPlay)
-                                    }
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                }
-                            )
-                        },
+                        .border(1.dp, Color(0xFF2A2F3A), previewShape),
                     contentAlignment = Alignment.Center
                 ) {
                     val supportsRenderEffect = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
@@ -1778,9 +1750,13 @@ fun FinalCutProVideoEditorScreen(
                             val aspectRatioLayout = AspectRatioFrameLayout(ctx).apply {
                                 resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                                 setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                                isClickable = false
+                                isFocusable = false
                             }
                             val textureView = TextureView(ctx).apply {
                                 isOpaque = false
+                                isClickable = false
+                                isFocusable = false
                             }
                             val layoutParams = FrameLayout.LayoutParams(
                                 FrameLayout.LayoutParams.MATCH_PARENT,
@@ -2027,12 +2003,159 @@ fun FinalCutProVideoEditorScreen(
                         }
                     }
 
+                    // ══════════════════════════════════════════════════════════
+                    // UNIFIED TOUCH GESTURE OVERLAY (Zoom, Pan/Crop & Playback Tap)
+                    // ══════════════════════════════════════════════════════════
+                    if (clips.isNotEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .zIndex(22f)
+                                .pointerInput(Unit) {
+                                    awaitEachGesture {
+                                        val down = awaitFirstDown(requireUnconsumed = false)
+                                        var pan = Offset.Zero
+                                        var pastTouchSlop = false
+                                        val touchSlop = viewConfiguration.touchSlop
+                                        var isMultiTouch = false
+                                        var gestureConsumed = false
+                                        var undoSaved = false
+                                        var event: PointerEvent
+
+                                        do {
+                                            event = awaitPointerEvent()
+                                            val canceled = event.changes.any { it.isConsumed }
+                                            if (canceled) break
+
+                                            val pointerCount = event.changes.count { it.pressed }
+                                            if (pointerCount >= 2) {
+                                                isMultiTouch = true
+                                                pastTouchSlop = true
+                                            }
+
+                                            val zoomChange = event.calculateZoom()
+                                            val panChange = event.calculatePan()
+
+                                            if (pointerCount >= 2) {
+                                                val active = currentClips.firstOrNull { it.id == currentSelectedId } ?: currentClips.firstOrNull()
+                                                if (active != null) {
+                                                    if (!undoSaved) {
+                                                        saveStateForUndo()
+                                                        undoSaved = true
+                                                    }
+                                                    val newScale = (active.scale * zoomChange).coerceIn(0.5f, 5.0f)
+                                                    val maxPanX = kotlin.math.max(100f, (newScale - 0.7f).coerceAtLeast(0f) * 600f)
+                                                    val maxPanY = kotlin.math.max(100f, (newScale - 0.7f).coerceAtLeast(0f) * 800f)
+                                                    val newPanX = (active.panX + panChange.x).coerceIn(-maxPanX, maxPanX)
+                                                    val newPanY = (active.panY + panChange.y).coerceIn(-maxPanY, maxPanY)
+
+                                                    clips = clips.map {
+                                                        if (it.id == active.id) {
+                                                            it.copy(scale = newScale, panX = newPanX, panY = newPanY)
+                                                        } else it
+                                                    }
+                                                    gestureConsumed = true
+                                                }
+                                                event.changes.forEach {
+                                                    if (it.positionChange() != Offset.Zero) {
+                                                        it.consume()
+                                                    }
+                                                }
+                                            } else if (pointerCount == 1) {
+                                                val active = currentClips.firstOrNull { it.id == currentSelectedId } ?: currentClips.firstOrNull()
+                                                val isZoomed = (active?.scale ?: 1f) > 1.05f
+
+                                                pan += panChange
+                                                if (!pastTouchSlop) {
+                                                    if (pan.getDistance() > touchSlop) {
+                                                        pastTouchSlop = true
+                                                    }
+                                                }
+
+                                                if (pastTouchSlop && isZoomed && active != null) {
+                                                    if (!undoSaved) {
+                                                        saveStateForUndo()
+                                                        undoSaved = true
+                                                    }
+                                                    val maxPanX = kotlin.math.max(100f, (active.scale - 0.7f).coerceAtLeast(0f) * 600f)
+                                                    val maxPanY = kotlin.math.max(100f, (active.scale - 0.7f).coerceAtLeast(0f) * 800f)
+                                                    val newPanX = (active.panX + panChange.x).coerceIn(-maxPanX, maxPanX)
+                                                    val newPanY = (active.panY + panChange.y).coerceIn(-maxPanY, maxPanY)
+
+                                                    clips = clips.map {
+                                                        if (it.id == active.id) {
+                                                            it.copy(panX = newPanX, panY = newPanY)
+                                                        } else it
+                                                    }
+                                                    gestureConsumed = true
+                                                    event.changes.forEach {
+                                                        if (it.positionChange() != Offset.Zero) {
+                                                            it.consume()
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        } while (event.changes.any { it.pressed })
+
+                                        // Tap handling when not dragging or pinching
+                                        if (!pastTouchSlop && !isMultiTouch && !gestureConsumed) {
+                                            val now = System.currentTimeMillis()
+                                            if (now - lastTapTimestamp < 300L) {
+                                                // Double tap: toggle 1.0x Fit vs 1.35x Fill/Crop
+                                                pendingTapJob?.cancel()
+                                                pendingTapJob = null
+                                                lastTapTimestamp = 0L
+
+                                                val active = currentClips.firstOrNull { it.id == currentSelectedId } ?: currentClips.firstOrNull()
+                                                if (active != null) {
+                                                    saveStateForUndo()
+                                                    val nextScale = if (active.scale > 1.15f) 1.0f else 1.35f
+                                                    val nextPanX = if (nextScale == 1.0f) 0f else active.panX
+                                                    val nextPanY = if (nextScale == 1.0f) 0f else active.panY
+                                                    clips = clips.map { c ->
+                                                        if (c.id == active.id) c.copy(scale = nextScale, panX = nextPanX, panY = nextPanY) else c
+                                                    }
+                                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                    ToastManager.showToast(if (nextScale == 1.0f) "Zoom: 1.0x (Fit)" else "Zoom: 1.35x (Fill)")
+                                                }
+                                            } else {
+                                                // Single tap: toggle Play / Pause after short debounce
+                                                lastTapTimestamp = now
+                                                pendingTapJob?.cancel()
+                                                pendingTapJob = scope.launch {
+                                                    kotlinx.coroutines.delay(260L)
+                                                    val isAtEnd = currentTotalDuration > 0f && currentCurrentTime >= currentTotalDuration - 0.08f
+                                                    if (isAtEnd) {
+                                                        seekToGlobalTime(0f, autoPlay = true)
+                                                        triggerOverlayFlash(true)
+                                                    } else {
+                                                        val nextPlay = !currentIsPlaying
+                                                        if (nextPlay) {
+                                                            exoPlayer.play()
+                                                            isPlaying = true
+                                                            triggerOverlayFlash(true)
+                                                        } else {
+                                                            exoPlayer.pause()
+                                                            isPlaying = false
+                                                            triggerOverlayFlash(false)
+                                                        }
+                                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                        )
+                    }
+
                     // Floating Zoom / Crop Indicator Badge with Reset Button
                     if (activeScale != 1f || activePanX != 0f || activePanY != 0f) {
                         Box(
                             modifier = Modifier
                                 .align(Alignment.TopStart)
                                 .padding(10.dp)
+                                .zIndex(35f)
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(Color.Black.copy(alpha = 0.65f))
                                 .border(0.5.dp, Color.White.copy(alpha = 0.35f), RoundedCornerShape(8.dp))
@@ -2185,6 +2308,7 @@ fun FinalCutProVideoEditorScreen(
                                 modifier = Modifier
                                     .align(Alignment.Center)
                                     .offset(x = layer.offsetX.dp, y = layer.offsetY.dp)
+                                    .zIndex(30f)
                             ) {
                                 FcpTextLayerOverlay(
                                     layer = layer,
@@ -2252,60 +2376,6 @@ fun FinalCutProVideoEditorScreen(
                                 modifier = Modifier.size(72.dp),
                                 tint = Color.White.copy(alpha = 0.90f)
                             )
-                        }
-                    }
-
-                    // Floating Pro Scrub Frame HUD (Appears when dragging playhead, ruler, jog wheel or trims)
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = isUserScrubbing,
-                        enter = fadeIn(tween(120)) + scaleIn(tween(120), initialScale = 0.9f),
-                        exit = fadeOut(tween(150)) + scaleOut(tween(150), targetScale = 0.9f),
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .padding(top = 12.dp)
-                            .zIndex(45f)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(Color.Black.copy(alpha = 0.82f))
-                                .border(1.dp, Color(0xFF0A84FF).copy(alpha = 0.7f), RoundedCornerShape(20.dp))
-                                .shadow(12.dp, spotColor = Color(0xFF0A84FF), shape = RoundedCornerShape(20.dp))
-                                .padding(horizontal = 14.dp, vertical = 6.dp)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(7.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(0xFFEF4444))
-                                )
-                                Text(
-                                    text = formatTimecode(currentTimeSec),
-                                    color = Color.White,
-                                    fontSize = 12.5.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace
-                                )
-                                Box(
-                                    modifier = Modifier
-                                        .width(1.dp)
-                                        .height(10.dp)
-                                        .background(Color.White.copy(alpha = 0.3f))
-                                )
-                                val curFrame = (currentTimeSec * 30f).roundToInt()
-                                Text(
-                                    text = "FRAME $curFrame",
-                                    color = Color(0xFF60A5FA),
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace,
-                                    letterSpacing = 0.5.sp
-                                )
-                            }
                         }
                     }
 
@@ -2788,7 +2858,7 @@ fun FinalCutProVideoEditorScreen(
                             kotlinx.coroutines.delay(45L)
                             exportProgress = p / 20f
                         }
-                        SoundManager.playDynamicIsland(context)
+                        SoundManager.playSend(context)
                         val active = selectedClip ?: clips.firstOrNull()
                         val startMs = ((active?.trimStartSec ?: 0f) * 1000f).toLong()
                         val endMs = ((active?.trimEndSec ?: (active?.durationSec ?: 15f)) * 1000f).toLong()
