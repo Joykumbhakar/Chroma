@@ -20,7 +20,9 @@ import android.view.Gravity
 import android.view.TextureView
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.core.graphics.PathParser
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import android.provider.OpenableColumns
@@ -110,6 +112,7 @@ import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.chroma.studio.ui.components.AppleSlider
+import com.chroma.studio.ui.components.AppleVideosIcon
 import com.chroma.studio.ui.components.InlineColorPicker
 import com.chroma.studio.ui.components.LiquidGlassKnob
 import com.chroma.studio.ui.components.PrimaryGradientButton
@@ -749,6 +752,27 @@ fun FinalCutProVideoEditorScreen(
     var isExporting by remember { mutableStateOf(false) }
     var exportProgress by remember { mutableFloatStateOf(0f) }
 
+    // ── Dialog & Quick Overlay States ─────────────────────────────────────
+    var showExitConfirmationDialog by remember { mutableStateOf(false) }
+    var flashOverlayIcon by remember { mutableStateOf<FlatPlaybackIconType?>(null) }
+    var flashOverlayVisible by remember { mutableStateOf(false) }
+
+    BackHandler(enabled = clips.isNotEmpty()) {
+        showExitConfirmationDialog = true
+    }
+
+    fun triggerOverlayFlash(playing: Boolean) {
+        flashOverlayIcon = if (playing) FlatPlaybackIconType.PLAY else FlatPlaybackIconType.PAUSE
+        flashOverlayVisible = true
+    }
+
+    LaunchedEffect(flashOverlayVisible) {
+        if (flashOverlayVisible) {
+            delay(320)
+            flashOverlayVisible = false
+        }
+    }
+
     val bgImagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -819,6 +843,31 @@ fun FinalCutProVideoEditorScreen(
     }
     val selectedClip = remember(clips, selectedId) {
         clips.find { it.id == selectedId } ?: clips.firstOrNull()
+    }
+
+    fun saveProjectDraft(): Boolean {
+        return try {
+            val active = selectedClip ?: clips.firstOrNull()
+            val startMs = ((active?.trimStartSec ?: 0f) * 1000f).toLong()
+            val endMs = ((active?.trimEndSec ?: (active?.durationSec ?: 15f)) * 1000f).toLong()
+            val draftRepo = DraftPostRepository(context)
+            val draft = CreatorPostDraft(
+                mode = "flash",
+                title = textLayers.firstOrNull()?.primaryText ?: "Draft Video Project",
+                description = "Saved ${clips.size} clips with ${textLayers.size} text layers" + (if (customAudio != null) " and soundtrack '${customAudio?.name}'" else ""),
+                aspectRatio = aspectRatio.label,
+                videoUri = clips.firstOrNull()?.uri?.toString(),
+                flashTrimStartMs = startMs,
+                flashTrimEndMs = endMs
+            )
+            draftRepo.saveDraft(draft)
+            SoundManager.playTap(context)
+            ToastManager.showToast("Project saved to Drafts")
+            true
+        } catch (_: Throwable) {
+            ToastManager.showToast("Failed to save draft")
+            false
+        }
     }
 
     // ── Background Video Duration Extraction (Asynchronous) ──────────────
@@ -951,13 +1000,15 @@ fun FinalCutProVideoEditorScreen(
     }
 
     fun getMediaTimeForGlobal(span: FcpTimelineClipSpan, globalSec: Float): Float {
-        val offset = (globalSec - span.timelineStartSec).coerceIn(0f, span.durationSec)
-        return (span.clip.trimStartSec + offset).coerceIn(span.clip.trimStartSec, span.clip.trimEndSec)
+        val timelineOffset = (globalSec - span.timelineStartSec).coerceIn(0f, span.durationSec)
+        val mediaOffset = timelineOffset * span.clip.speed.coerceAtLeast(0.1f)
+        return (span.clip.trimStartSec + mediaOffset).coerceIn(span.clip.trimStartSec, span.clip.trimEndSec)
     }
 
     fun getGlobalTimeForMedia(span: FcpTimelineClipSpan, mediaSec: Float): Float {
-        val offset = (mediaSec - span.clip.trimStartSec).coerceIn(0f, span.durationSec)
-        return (span.timelineStartSec + offset).coerceIn(0f, totalDurationSec)
+        val mediaOffset = (mediaSec - span.clip.trimStartSec).coerceAtLeast(0f)
+        val timelineOffset = mediaOffset / span.clip.speed.coerceAtLeast(0.1f)
+        return (span.timelineStartSec + timelineOffset).coerceIn(0f, totalDurationSec)
     }
 
     var loadedClipId by remember { mutableStateOf<String?>(null) }
@@ -972,18 +1023,20 @@ fun FinalCutProVideoEditorScreen(
         forceExactSeek: Boolean = true
     ) {
         val mediaMs = (targetMediaSec * 1000f).toLong().coerceAtLeast(0L)
-        if (loadedClipUri != clip.uri) {
-            loadedClipId = clip.id
-            loadedClipUri = clip.uri
+        val isDifferentClip = loadedClipId != clip.id
+        val isDifferentUri = loadedClipUri != clip.uri
+
+        loadedClipId = clip.id
+        loadedClipUri = clip.uri
+
+        if (isDifferentUri) {
             lastPlayerSeekMs = mediaMs
-            if (seamlessTransition) {
-                exoPlayer.setSeekParameters(SeekParameters.CLOSEST_SYNC)
-            }
+            exoPlayer.setSeekParameters(if (seamlessTransition) SeekParameters.CLOSEST_SYNC else SeekParameters.EXACT)
             exoPlayer.setMediaItem(MediaItem.fromUri(clip.uri), mediaMs)
             exoPlayer.prepare()
             exoPlayer.setPlaybackSpeed(clip.speed)
         } else {
-            loadedClipId = clip.id
+            // Same media URI (e.g. split clip or reused media)
             if (exoPlayer.playbackState == Player.STATE_IDLE || exoPlayer.playbackState == Player.STATE_ENDED) {
                 exoPlayer.prepare()
             }
@@ -991,8 +1044,8 @@ fun FinalCutProVideoEditorScreen(
                 exoPlayer.setPlaybackSpeed(clip.speed)
             }
             val currentPosMs = exoPlayer.currentPosition
-            val shouldSeek = if (seamlessTransition) {
-                abs(currentPosMs - mediaMs) > 100L
+            val shouldSeek = isDifferentClip || if (seamlessTransition) {
+                abs(currentPosMs - mediaMs) > 60L
             } else if (!forceExactSeek) {
                 abs(lastPlayerSeekMs - mediaMs) >= 24L
             } else {
@@ -1000,9 +1053,7 @@ fun FinalCutProVideoEditorScreen(
             }
             if (shouldSeek) {
                 lastPlayerSeekMs = mediaMs
-                if (seamlessTransition) {
-                    exoPlayer.setSeekParameters(SeekParameters.CLOSEST_SYNC)
-                }
+                exoPlayer.setSeekParameters(if (seamlessTransition) SeekParameters.CLOSEST_SYNC else SeekParameters.EXACT)
                 exoPlayer.seekTo(mediaMs)
             }
         }
@@ -1129,7 +1180,7 @@ fun FinalCutProVideoEditorScreen(
         }
     }
 
-    // Track playback duration once media is ready and handle completion
+    // Track playback duration once media is ready
     DisposableEffect(exoPlayer) {
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -1141,30 +1192,6 @@ fun FinalCutProVideoEditorScreen(
                             clips = clips.map {
                                 if (it.id == selectedClip.id) it.copy(durationSec = durSec, trimEndSec = durSec, isDurationLoaded = true) else it
                             }
-                        }
-                    }
-                } else if (playbackState == Player.STATE_ENDED) {
-                    val span = getActiveSpanAt(currentTimeSec)
-                    val spanIdx = if (span != null) timelineSpans.indexOf(span) else -1
-                    if (span != null && spanIdx >= 0 && spanIdx + 1 < timelineSpans.size) {
-                        val nextSpan = timelineSpans[spanIdx + 1]
-                        selectedId = nextSpan.clip.id
-                        ensureClipLoadedInPlayer(
-                            clip = nextSpan.clip,
-                            targetMediaSec = nextSpan.clip.trimStartSec,
-                            shouldPlay = true,
-                            seamlessTransition = true
-                        )
-                        currentTimeSec = nextSpan.timelineStartSec
-                    } else {
-                        // Reached end of entire project
-                        if (isAutoReplay) {
-                            seekToGlobalTime(0f, autoPlay = true)
-                        } else {
-                            isPlaying = false
-                            exoPlayer.pause()
-                            if (customAudioPlayer.isPlaying) customAudioPlayer.pause()
-                            currentTimeSec = totalDurationSec
                         }
                     }
                 }
@@ -1188,55 +1215,80 @@ fun FinalCutProVideoEditorScreen(
         }
     }
 
-    // High precision sync loop between ExoPlayer and timeline playhead (Synchronized to Hardware VSYNC)
+    // High precision master playback clock & timeline sync (VSYNC synchronized, buttery smooth transitions)
     LaunchedEffect(isPlaying, isUserScrubbing, clips, isAutoReplay, customAudio) {
-        while (isActive && isPlaying && !isUserScrubbing) {
-            val span = getActiveSpanAt(currentTimeSec)
-            if (span != null) {
-                val curMediaMs = exoPlayer.currentPosition
-                val curMediaSec = curMediaMs / 1000f
+        if (!isPlaying || isUserScrubbing) return@LaunchedEffect
 
-                // Has this clip reached its trimEndSec or has player reached STATE_ENDED?
-                if (curMediaSec >= span.clip.trimEndSec - 0.08f || exoPlayer.playbackState == Player.STATE_ENDED) {
-                    val spanIdx = timelineSpans.indexOf(span)
-                    if (spanIdx >= 0 && spanIdx + 1 < timelineSpans.size) {
-                        val nextSpan = timelineSpans[spanIdx + 1]
-                        selectedId = nextSpan.clip.id
-                        ensureClipLoadedInPlayer(
-                            clip = nextSpan.clip,
-                            targetMediaSec = nextSpan.clip.trimStartSec,
-                            shouldPlay = true,
-                            seamlessTransition = true
-                        )
-                        currentTimeSec = nextSpan.timelineStartSec
+        var lastFrameNanos = 0L
+
+        while (isActive && isPlaying && !isUserScrubbing) {
+            withFrameNanos { frameTimeNanos ->
+                if (lastFrameNanos == 0L) {
+                    lastFrameNanos = frameTimeNanos
+                    return@withFrameNanos
+                }
+                val dtNanos = frameTimeNanos - lastFrameNanos
+                lastFrameNanos = frameTimeNanos
+                val dtSec = (dtNanos / 1_000_000_000f).coerceIn(0f, 0.1f)
+
+                val curSpan = getActiveSpanAt(currentTimeSec)
+                val speed = curSpan?.clip?.speed?.coerceAtLeast(0.1f) ?: 1f
+                val proposedTimeSec = currentTimeSec + (dtSec * speed)
+
+                if (proposedTimeSec >= totalDurationSec) {
+                    if (isAutoReplay) {
+                        seekToGlobalTime(0f, autoPlay = true)
                     } else {
-                        // Reached end of entire project
-                        if (isAutoReplay) {
-                            seekToGlobalTime(0f, autoPlay = true)
-                        } else {
-                            isPlaying = false
-                            exoPlayer.pause()
-                            if (customAudioPlayer.isPlaying) customAudioPlayer.pause()
-                            currentTimeSec = totalDurationSec
-                        }
+                        currentTimeSec = totalDurationSec
+                        isPlaying = false
+                        exoPlayer.pause()
+                        if (customAudioPlayer.isPlaying) customAudioPlayer.pause()
                     }
                 } else {
-                    currentTimeSec = getGlobalTimeForMedia(span, curMediaSec)
+                    currentTimeSec = proposedTimeSec
+
+                    val newSpan = getActiveSpanAt(proposedTimeSec)
+                    if (newSpan != null) {
+                        val clip = newSpan.clip
+                        val targetMediaSec = getMediaTimeForGlobal(newSpan, proposedTimeSec)
+
+                        if (loadedClipId != clip.id) {
+                            // Seamless cut transition across clips!
+                            selectedId = clip.id
+                            ensureClipLoadedInPlayer(
+                                clip = clip,
+                                targetMediaSec = targetMediaSec,
+                                shouldPlay = true,
+                                seamlessTransition = true
+                            )
+                        } else {
+                            if (!exoPlayer.isPlaying && exoPlayer.playbackState == Player.STATE_READY && exoPlayer.playWhenReady) {
+                                exoPlayer.play()
+                            }
+                            // Keep player in tight sync with master timeline clock
+                            val curPosSec = exoPlayer.currentPosition / 1000f
+                            if (abs(curPosSec - targetMediaSec) > 0.22f) {
+                                exoPlayer.seekTo((targetMediaSec * 1000f).toLong().coerceAtLeast(0L))
+                            }
+                        }
+                    }
                 }
 
-                // Drift compensation: keep custom audio player synchronized to playhead
-                if (customAudio != null) {
+                // Drift compensation for custom soundtrack
+                if (customAudio != null && isPlaying) {
                     val audioPosMs = customAudioPlayer.currentPosition
                     val targetMs = (currentTimeSec * 1000f).toLong()
                     if (abs(audioPosMs - targetMs) > 180L) {
                         if (customAudioPlayer.playbackState == Player.STATE_ENDED || customAudioPlayer.playbackState == Player.STATE_IDLE) {
                             customAudioPlayer.prepare()
                         }
-                        customAudioPlayer.seekTo(targetMs)
+                        customAudioPlayer.seekTo(targetMs.coerceAtLeast(0L))
+                    }
+                    if (!customAudioPlayer.isPlaying && customAudioPlayer.playWhenReady) {
+                        customAudioPlayer.play()
                     }
                 }
             }
-            withFrameNanos { /* Hardware VSYNC display synchronization */ }
         }
     }
 
@@ -1409,7 +1461,7 @@ fun FinalCutProVideoEditorScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(colors.bg)
+            .background(if (colors.isDark) Color(0xFF1A1D24) else colors.bg)
     ) {
         Column(
             modifier = Modifier
@@ -1424,9 +1476,9 @@ fun FinalCutProVideoEditorScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp)
-                    .background(colors.glassBg)
-                    .border(width = 0.5.dp, color = colors.glassBorder)
+                    .height(52.dp)
+                    .background(if (colors.isDark) Color(0xFF1E212B) else colors.glassBg)
+                    .border(width = 0.5.dp, color = if (colors.isDark) Color(0xFF2A2F3A) else colors.glassBorder)
             ) {
                 Row(
                     modifier = Modifier
@@ -1445,33 +1497,40 @@ fun FinalCutProVideoEditorScreen(
                             contentDesc = "Back",
                             onClick = {
                                 SoundManager.playTap(context)
-                                onBack()
+                                if (clips.isNotEmpty()) {
+                                    showExitConfirmationDialog = true
+                                } else {
+                                    onBack()
+                                }
                             }
                         )
 
                         Column(verticalArrangement = Arrangement.Center) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    text = "Chroma",
-                                    color = colors.textMain,
+                                    text = "Flash",
+                                    color = Color.White,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 15.sp,
                                     letterSpacing = (-0.3).sp
                                 )
+                                Spacer(modifier = Modifier.width(3.dp))
                                 Text(
                                     text = "Studio",
-                                    color = colors.primary,
+                                    color = Color(0xFF007AFF),
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 15.sp,
                                     letterSpacing = (-0.3).sp
                                 )
                             }
-                            Text(
-                                text = "${clips.size} ${if (clips.size == 1) "clip" else "clips"}",
-                                color = colors.textMuted,
-                                fontSize = 10.5.sp,
-                                fontWeight = FontWeight.Medium
-                            )
+                            if (clips.isNotEmpty()) {
+                                Text(
+                                    text = "${clips.size} ${if (clips.size == 1) "clip" else "clips"}",
+                                    color = Color(0xFF8E98A8),
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
                         }
                     }
 
@@ -1608,8 +1667,8 @@ fun FinalCutProVideoEditorScreen(
                         .aspectRatio(aspectRatio.ratio)
                         .shadow(elevation = 8.dp, shape = previewShape, ambientColor = Color(0x0D1F2687), spotColor = Color(0x0D1F2687))
                         .clip(previewShape)
-                        .background(Color.Black)
-                        .border(1.dp, colors.glassBorder, previewShape)
+                        .background(Color(0xFF111317))
+                        .border(1.dp, Color(0xFF2A2F3A), previewShape)
                         .pointerInput(selectedId) {
                             detectTransformGestures(panZoomLock = false) { _, pan, zoom, _ ->
                                 val active = selectedClip ?: return@detectTransformGestures
@@ -1646,20 +1705,16 @@ fun FinalCutProVideoEditorScreen(
                                     val isAtEnd = totalDurationSec > 0f && currentTimeSec >= totalDurationSec - 0.08f
                                     if (isAtEnd) {
                                         seekToGlobalTime(0f, autoPlay = true)
+                                        triggerOverlayFlash(true)
                                     } else {
                                         val nextPlay = !isPlaying
+                                        isPlaying = nextPlay
                                         if (nextPlay) {
-                                            val cur = selectedClip
-                                            if (cur != null && currentTimeSec >= cur.trimEndSec - 0.15f) {
-                                                seekToGlobalTime(0f, autoPlay = true)
-                                            } else {
-                                                isPlaying = true
-                                                exoPlayer.play()
-                                            }
+                                            exoPlayer.play()
                                         } else {
-                                            isPlaying = false
                                             exoPlayer.pause()
                                         }
+                                        triggerOverlayFlash(nextPlay)
                                     }
                                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 }
@@ -2184,43 +2239,18 @@ fun FinalCutProVideoEditorScreen(
                         }
                     }
 
-                    // Play / Replay Central Indicator (Solid White Icon, No Background)
-                    if (clips.isNotEmpty() && !isPlaying && !isUserScrubbing) {
-                        val isAtEnd = totalDurationSec > 0f && currentTimeSec >= totalDurationSec - 0.08f
-                        val playInteraction = remember { MutableInteractionSource() }
-                        val isPlayPressed by playInteraction.collectIsPressedAsState()
-                        val playScale by animateFloatAsState(
-                            targetValue = if (isPlayPressed) 0.85f else 1f,
-                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy),
-                            label = "playBtnScale"
-                        )
-
-                        Box(
-                            modifier = Modifier
-                                .scale(playScale)
-                                .size(64.dp)
-                                .clickable(
-                                    interactionSource = playInteraction,
-                                    indication = null
-                                ) {
-                                    SoundManager.playTap(context)
-                                    if (isAtEnd) {
-                                        seekToGlobalTime(0f, autoPlay = true)
-                                    } else {
-                                        isPlaying = true
-                                        exoPlayer.play()
-                                    }
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = if (isAtEnd) Lucide.RotateCcw else Lucide.Play,
-                                contentDescription = if (isAtEnd) "Replay" else "Play",
-                                tint = Color.White,
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .offset(x = if (isAtEnd) 0.dp else 2.dp)
+                    // Quick center flash overlay indicator (Matches HTML overlay-icon)
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = flashOverlayVisible,
+                        enter = fadeIn(tween(100)) + scaleIn(tween(140), initialScale = 0.72f),
+                        exit = fadeOut(tween(180)) + scaleOut(tween(180), targetScale = 1.12f),
+                        modifier = Modifier.align(Alignment.Center).zIndex(50f)
+                    ) {
+                        flashOverlayIcon?.let { iconType ->
+                            FlatPlaybackIcon(
+                                type = iconType,
+                                modifier = Modifier.size(72.dp),
+                                tint = Color.White.copy(alpha = 0.90f)
                             )
                         }
                     }
@@ -2279,18 +2309,13 @@ fun FinalCutProVideoEditorScreen(
                         }
                     }
 
-                    // Empty state indicator if no clips loaded
+                    // Empty state indicator if no clips loaded (Apple Video Graphics)
                     if (clips.isEmpty()) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Icon(
-                                imageVector = Lucide.Film,
-                                contentDescription = null,
-                                tint = Color.White.copy(alpha = 0.6f),
-                                modifier = Modifier.size(36.dp)
-                            )
+                            AppleVideosIcon(modifier = Modifier.size(72.dp))
                             Text(
                                 text = "Select or import a video",
                                 color = Color.White.copy(alpha = 0.85f),
@@ -2306,6 +2331,41 @@ fun FinalCutProVideoEditorScreen(
                         }
                     }
                 }
+            }
+
+            // ══════════════════════════════════════════════════════════════════
+            // 3.5. DEDICATED FLAT PLAYBACK TRANSPORT CONTROLS
+            // (Replay, Play/Pause Toggle, Auto-Playback Toggle)
+            // ══════════════════════════════════════════════════════════════════
+            if (clips.isNotEmpty()) {
+                PlaybackTransportControlBar(
+                    isPlaying = isPlaying,
+                    isAutoReplay = isAutoReplay,
+                    onPlayPauseToggle = {
+                        val isAtEnd = totalDurationSec > 0f && currentTimeSec >= totalDurationSec - 0.08f
+                        if (isAtEnd) {
+                            seekToGlobalTime(0f, autoPlay = true)
+                            triggerOverlayFlash(true)
+                        } else {
+                            val nextPlay = !isPlaying
+                            isPlaying = nextPlay
+                            if (nextPlay) {
+                                exoPlayer.play()
+                            } else {
+                                exoPlayer.pause()
+                            }
+                            triggerOverlayFlash(nextPlay)
+                        }
+                    },
+                    onReplay = {
+                        seekToGlobalTime(0f, autoPlay = true)
+                        triggerOverlayFlash(true)
+                    },
+                    onAutoReplayToggle = {
+                        isAutoReplay = !isAutoReplay
+                        ToastManager.showToast(if (isAutoReplay) "Auto Replay: ON" else "Auto Replay: OFF")
+                    }
+                )
             }
 
             // ══════════════════════════════════════════════════════════════════
@@ -2780,6 +2840,24 @@ fun FinalCutProVideoEditorScreen(
                 }
             )
         }
+
+        // Exit Confirmation Dialog (Matching Trash Screen Dialog Style)
+        if (showExitConfirmationDialog) {
+            FcpExitConfirmationDialog(
+                onSaveDraftAndExit = {
+                    saveProjectDraft()
+                    showExitConfirmationDialog = false
+                    onBack()
+                },
+                onDiscardAndExit = {
+                    showExitConfirmationDialog = false
+                    onBack()
+                },
+                onDismiss = {
+                    showExitConfirmationDialog = false
+                }
+            )
+        }
     }
 }
 
@@ -3100,24 +3178,6 @@ private fun TimelineTabContent(
                     fontSize = 11.sp,
                     fontFamily = FontFamily.Monospace
                 )
-
-                // 1-tap reset zoom to 45px/s
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(colors.glassBg)
-                        .border(0.5.dp, colors.glassBorder, RoundedCornerShape(4.dp))
-                        .clickable { onZoomChange(45f) }
-                        .padding(horizontal = 5.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = "${pixelsPerSec.toInt()}px/s",
-                        color = colors.textMuted,
-                        fontSize = 9.sp,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
             }
 
             // Transport Action Buttons & Zoom Controls
@@ -3612,52 +3672,58 @@ private fun TimelineTabContent(
                                     }
                                 }
                             }
+                        }
+                    }
+                }
 
-                            // Interactive Transition Badge Between Clips
-                            if (i < timelineSpans.size - 1) {
-                                val trans = clip.transitionToNext
-                                val hasTrans = trans != FcpTransitionType.NONE
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center,
-                                    modifier = Modifier
-                                        .padding(horizontal = 2.dp)
-                                        .clickable {
-                                            onEditTransition(clip.id)
-                                        }
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(26.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(
-                                                if (hasTrans) colors.primary
-                                                else if (colors.isDark) Color(0xFF222734) else Color(0xFFE2E8F0)
-                                            )
-                                            .border(
-                                                1.dp,
-                                                if (hasTrans) Color.White.copy(alpha = 0.45f) else colors.glassBorder,
-                                                RoundedCornerShape(8.dp)
-                                            ),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = trans.icon,
-                                            contentDescription = trans.label,
-                                            tint = if (hasTrans) Color.White else colors.textMuted,
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                    }
-                                    if (hasTrans) {
-                                        Spacer(modifier = Modifier.height(2.dp))
-                                        Text(
-                                            text = "${"%.1f".format(clip.transitionDurationSec)}s",
-                                            fontSize = 8.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = colors.primary
-                                        )
-                                    }
-                                }
+                // 2a. Interactive Transition Badges Centered on Cut Boundaries
+                if (timelineSpans.size > 1) {
+                    timelineSpans.take(timelineSpans.size - 1).forEach { span ->
+                        val clip = span.clip
+                        val trans = clip.transitionToNext
+                        val hasTrans = trans != FcpTransitionType.NONE
+                        val cutX = timelineStartPaddingDp + (span.timelineEndSec * pixelsPerSec).dp
+
+                        Box(
+                            modifier = Modifier
+                                .offset(x = cutX - 13.dp, y = 18.dp + 15.dp)
+                                .size(26.dp)
+                                .zIndex(35f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(
+                                    if (hasTrans) colors.primary
+                                    else if (colors.isDark) Color(0xFF222734) else Color(0xFFE2E8F0)
+                                )
+                                .border(
+                                    1.dp,
+                                    if (hasTrans) Color.White.copy(alpha = 0.55f) else colors.glassBorder,
+                                    RoundedCornerShape(8.dp)
+                                )
+                                .clickable { onEditTransition(clip.id) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = trans.icon,
+                                contentDescription = trans.label,
+                                tint = if (hasTrans) Color.White else colors.textMuted,
+                                modifier = Modifier.size(13.dp)
+                            )
+                        }
+                        if (hasTrans) {
+                            Box(
+                                modifier = Modifier
+                                    .offset(x = cutX - 20.dp, y = 18.dp + 43.dp)
+                                    .width(40.dp)
+                                    .zIndex(36f),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "${"%.1f".format(clip.transitionDurationSec)}s",
+                                    fontSize = 7.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colors.primary,
+                                    fontFamily = FontFamily.Monospace
+                                )
                             }
                         }
                     }
@@ -3828,96 +3894,13 @@ private fun TimelineTabContent(
             }
         }
 
-        // ── Bottom: Tactile Jog Wheel & Play/Pause Button ─────────────────────
+        // ── Bottom: Tactile Rotary Jog Wheel for buttery smooth frame scrubbing ─────────────
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            val isAtEnd = totalDurationSec > 0f && currentTimeSec >= totalDurationSec - 0.08f
-
-            // Play / Pause / Replay Transport Button (Solid White Icon, No Background)
-            val playInteraction = remember { MutableInteractionSource() }
-            val isPlayPressed by playInteraction.collectIsPressedAsState()
-            val playScale by animateFloatAsState(
-                targetValue = if (isPlayPressed) 0.82f else 1f,
-                animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy),
-                label = "transportPlayScale"
-            )
-
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .scale(playScale)
-                    .clickable(
-                        interactionSource = playInteraction,
-                        indication = null
-                    ) {
-                        onPlayToggle()
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = when {
-                        isPlaying -> Lucide.Pause
-                        isAtEnd -> Lucide.RotateCcw
-                        else -> Lucide.Play
-                    },
-                    contentDescription = when {
-                        isPlaying -> "Pause"
-                        isAtEnd -> "Replay"
-                        else -> "Play"
-                    },
-                    tint = Color.White,
-                    modifier = Modifier
-                        .size(24.dp)
-                        .offset(x = if (!isPlaying && !isAtEnd) 1.5.dp else 0.dp)
-                )
-            }
-
-            // Auto Replay (Loop) Toggle Button (Solid White Icon, No Background)
-            val loopInteraction = remember { MutableInteractionSource() }
-            val isLoopPressed by loopInteraction.collectIsPressedAsState()
-            val loopScale by animateFloatAsState(
-                targetValue = if (isLoopPressed) 0.82f else 1f,
-                animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy),
-                label = "transportLoopScale"
-            )
-
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .scale(loopScale)
-                    .clickable(
-                        interactionSource = loopInteraction,
-                        indication = null
-                    ) {
-                        onAutoReplayToggle()
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        imageVector = Lucide.Repeat,
-                        contentDescription = if (isAutoReplay) "Auto Replay On" else "Auto Replay Off",
-                        tint = if (isAutoReplay) Color.White else Color.White.copy(alpha = 0.35f),
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Box(
-                        modifier = Modifier
-                            .size(width = 12.dp, height = 3.dp)
-                            .clip(RoundedCornerShape(50))
-                            .background(if (isAutoReplay) colors.primary else Color.Transparent)
-                    )
-                }
-            }
-
             // Tactile Rotary Jog Wheel for buttery smooth frame scrubbing
             var isJogActive by remember { mutableStateOf(false) }
             var jogScrollOffsetPx by remember { mutableFloatStateOf(0f) }
@@ -3925,7 +3908,7 @@ private fun TimelineTabContent(
 
             Box(
                 modifier = Modifier
-                    .weight(1f)
+                    .fillMaxWidth()
                     .height(44.dp)
                     .clip(RoundedCornerShape(22.dp))
                     .background(
@@ -8701,6 +8684,376 @@ fun FcpExportSheet(
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+// ============================================================================
+// FLAT WHITE PLAYBACK ICONS & TRANSPORT CONTROLS
+// (100% Vector Geometry matching User HTML/CSS Mockup)
+// ============================================================================
+
+enum class FlatPlaybackIconType {
+    PLAY,
+    PAUSE,
+    REPLAY,
+    RETRY
+}
+
+@Composable
+fun FlatPlaybackIcon(
+    type: FlatPlaybackIconType,
+    modifier: Modifier = Modifier,
+    tint: Color = Color.White
+) {
+    val playPathData = "M148.5,0C66.486,0,0,66.486,0,148.5S66.486,297,148.5,297S297,230.514,297,148.5S230.514,0,148.5,0z M202.79,161.734l-78.501,45.322c-2.421,1.398-5.326,2.138-8.083,2.138c-8.752,0-16.039-7.12-16.039-15.872v-90.645c0-8.752,7.287-15.872,16.039-15.872c2.758,0,5.579,0.739,8.001,2.138l78.542,45.322c4.966,2.867,7.951,8.001,7.951,13.734S207.756,158.867,202.79,161.734z"
+    val pausePathData = "M148.5,0C66.486,0,0,66.486,0,148.5S66.486,297,148.5,297S297,230.514,297,148.5S230.514,0,148.5,0z M116,92 a14,14 0 0 1 14,14 v85 a14,14 0 0 1 -28,0 v-85 a14,14 0 0 1 14,-14 z M181,92 a14,14 0 0 1 14,14 v85 a14,14 0 0 1 -28,0 v-85 a14,14 0 0 1 14,-14 z"
+    val replayMaskPathData = "M86 148.5 A 62.5 62.5 0 1 0 106 102 L 78 128 M78 86 v 42 h 42"
+    val retryMaskPathData = "M228 108 A 82 82 0 0 0 86 122 M 84 80 L 84 124 L 128 124 M 69 189 A 82 82 0 0 0 211 175 M 213 217 L 213 173 L 169 173"
+
+    val composePath = remember(type) {
+        try {
+            when (type) {
+                FlatPlaybackIconType.PLAY -> {
+                    val p = PathParser.createPathFromPathData(playPathData)
+                    p.fillType = android.graphics.Path.FillType.EVEN_ODD
+                    p.asComposePath()
+                }
+                FlatPlaybackIconType.PAUSE -> {
+                    val p = PathParser.createPathFromPathData(pausePathData)
+                    p.fillType = android.graphics.Path.FillType.EVEN_ODD
+                    p.asComposePath()
+                }
+                FlatPlaybackIconType.REPLAY -> {
+                    val p = PathParser.createPathFromPathData(replayMaskPathData)
+                    p.asComposePath()
+                }
+                FlatPlaybackIconType.RETRY -> {
+                    val p = PathParser.createPathFromPathData(retryMaskPathData)
+                    p.asComposePath()
+                }
+            }
+        } catch (_: Throwable) {
+            androidx.compose.ui.graphics.Path()
+        }
+    }
+
+    Canvas(
+        modifier = modifier.graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
+    ) {
+        val scale = size.minDimension / 297f
+        val strokeStyle = Stroke(
+            width = 26f,
+            cap = StrokeCap.Round,
+            join = StrokeJoin.Round
+        )
+        drawContext.canvas.save()
+        drawContext.canvas.scale(scale, scale)
+
+        when (type) {
+            FlatPlaybackIconType.PLAY, FlatPlaybackIconType.PAUSE -> {
+                drawPath(
+                    path = composePath,
+                    color = tint
+                )
+            }
+            FlatPlaybackIconType.REPLAY, FlatPlaybackIconType.RETRY -> {
+                drawCircle(
+                    color = tint,
+                    radius = 148.5f,
+                    center = Offset(148.5f, 148.5f)
+                )
+                drawPath(
+                    path = composePath,
+                    color = Color.Transparent,
+                    style = strokeStyle,
+                    blendMode = androidx.compose.ui.graphics.BlendMode.Clear
+                )
+            }
+        }
+
+        drawContext.canvas.restore()
+    }
+}
+
+@Composable
+fun PlaybackTransportControlBar(
+    isPlaying: Boolean,
+    isAutoReplay: Boolean,
+    onPlayPauseToggle: () -> Unit,
+    onReplay: () -> Unit,
+    onAutoReplayToggle: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
+
+    // Replay interaction & scale
+    val replayInteraction = remember { MutableInteractionSource() }
+    val isReplayPressed by replayInteraction.collectIsPressedAsState()
+    val replayScale by animateFloatAsState(
+        targetValue = if (isReplayPressed) 0.88f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "replayScale"
+    )
+
+    // Play / Pause toggle interaction & scale
+    val playPauseInteraction = remember { MutableInteractionSource() }
+    val isPlayPausePressed by playPauseInteraction.collectIsPressedAsState()
+    val playPauseScale by animateFloatAsState(
+        targetValue = if (isPlayPausePressed) 0.90f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "playPauseScale"
+    )
+
+    // Retry / Auto-replay toggle interaction, scale & spin animation
+    val retryInteraction = remember { MutableInteractionSource() }
+    val isRetryPressed by retryInteraction.collectIsPressedAsState()
+    val retryScale by animateFloatAsState(
+        targetValue = if (isRetryPressed) 0.88f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "retryScale"
+    )
+    var spinDegrees by remember { mutableFloatStateOf(0f) }
+    val animatedSpin by animateFloatAsState(
+        targetValue = spinDegrees,
+        animationSpec = tween(durationMillis = 450, easing = LinearOutSlowInEasing),
+        label = "retrySpin"
+    )
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(36.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // 1. Replay Button
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .scale(replayScale)
+                .clickable(
+                    interactionSource = replayInteraction,
+                    indication = null
+                ) {
+                    SoundManager.playTap(context)
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onReplay()
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            FlatPlaybackIcon(
+                type = FlatPlaybackIconType.REPLAY,
+                modifier = Modifier.size(44.dp),
+                tint = Color.White
+            )
+        }
+
+        // 2. Unified Play / Pause Toggle Button
+        Box(
+            modifier = Modifier
+                .size(60.dp)
+                .scale(playPauseScale)
+                .clickable(
+                    interactionSource = playPauseInteraction,
+                    indication = null
+                ) {
+                    SoundManager.playTap(context)
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onPlayPauseToggle()
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            FlatPlaybackIcon(
+                type = if (isPlaying) FlatPlaybackIconType.PAUSE else FlatPlaybackIconType.PLAY,
+                modifier = Modifier.size(56.dp),
+                tint = Color.White
+            )
+        }
+
+        // 3. Retry / Auto-Playback Toggle Button
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .scale(retryScale)
+                .clickable(
+                    interactionSource = retryInteraction,
+                    indication = null
+                ) {
+                    SoundManager.playTap(context)
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    spinDegrees -= 360f
+                    onAutoReplayToggle()
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                FlatPlaybackIcon(
+                    type = FlatPlaybackIconType.RETRY,
+                    modifier = Modifier
+                        .size(44.dp)
+                        .rotate(animatedSpin),
+                    tint = if (isAutoReplay) Color.White else Color.White.copy(alpha = 0.40f)
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Box(
+                    modifier = Modifier
+                        .size(width = 8.dp, height = 3.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(if (isAutoReplay) Color(0xFF007AFF) else Color.Transparent)
+                )
+            }
+        }
+    }
+}
+
+// ============================================================================
+// EXIT CONFIRMATION DIALOG (Trash Screen Style)
+// ============================================================================
+
+@Composable
+fun FcpExitConfirmationDialog(
+    onSaveDraftAndExit: () -> Unit,
+    onDiscardAndExit: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+    ) {
+        val scaleAnim = remember { Animatable(0.94f) }
+        val alphaAnim = remember { Animatable(0f) }
+
+        LaunchedEffect(Unit) {
+            launch {
+                scaleAnim.animateTo(
+                    1f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioLowBouncy,
+                        stiffness = Spring.StiffnessMedium
+                    )
+                )
+            }
+            launch {
+                alphaAnim.animateTo(1f, tween(180, easing = LinearOutSlowInEasing))
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.55f * alphaAnim.value))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDismiss
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                modifier = Modifier
+                    .width(280.dp)
+                    .graphicsLayer {
+                        scaleX = scaleAnim.value
+                        scaleY = scaleAnim.value
+                        alpha = alphaAnim.value
+                    }
+                    .shadow(32.dp, RoundedCornerShape(16.dp), spotColor = Color.Black)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color(0xFF1E212B))
+                    .border(1.dp, Color(0xFF2A2F3A), RoundedCornerShape(16.dp))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {},
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Video Graphic Header
+                Column(
+                    modifier = Modifier.padding(top = 22.dp, bottom = 14.dp, start = 20.dp, end = 20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    AppleVideosIcon(modifier = Modifier.size(68.dp))
+                    Spacer(Modifier.height(14.dp))
+                    Text(
+                        text = "Exit Video Editor?",
+                        color = Color.White,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 22.sp
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = "You have unsaved changes in this project. Do you want to save before leaving?",
+                        color = Color.White.copy(alpha = 0.72f),
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.Normal,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 17.sp
+                    )
+                }
+
+                HorizontalDivider(color = Color(0xFF2A2F3A), thickness = 0.5.dp)
+
+                // Actions:
+                // 1. Solid Blue Save Draft & Exit Button
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(46.dp)
+                        .background(Color(0xFF007AFF))
+                        .clickable { onSaveDraftAndExit() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Save Draft & Exit",
+                        color = Color.White,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+
+                HorizontalDivider(color = Color(0xFF2A2F3A), thickness = 0.5.dp)
+
+                // 2. Discard Changes Button (Destructive Red)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp)
+                        .clickable { onDiscardAndExit() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Discard Changes",
+                        color = Color(0xFFFF3B30),
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Normal
+                    )
+                }
+
+                HorizontalDivider(color = Color(0xFF2A2F3A), thickness = 0.5.dp)
+
+                // 3. Keep Editing Button
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp)
+                        .clickable { onDismiss() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Keep Editing",
+                        color = Color(0xFF8E98A8),
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             }
         }

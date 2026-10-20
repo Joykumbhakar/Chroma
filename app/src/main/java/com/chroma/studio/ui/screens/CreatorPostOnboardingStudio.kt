@@ -1364,27 +1364,28 @@ fun FlashVideoTrimmerStage(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0F172A))
+            .background(Color(0xFF1A1D24))
     ) {
         // Top Header
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp)
-                .padding(horizontal = 16.dp),
+                .height(52.dp)
+                .background(Color(0xFF1E212B))
+                .padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             IconButton(onClick = onBack) {
-                Icon(Lucide.ArrowLeft, contentDescription = "Back", tint = Color.White, modifier = Modifier.size(22.dp))
+                Icon(Lucide.ArrowLeft, contentDescription = "Back", tint = Color.White, modifier = Modifier.size(20.dp))
             }
-            Text("Trim Flash", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Text("Trim Flash", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
             Button(
                 onClick = {
                     exoPlayer.pause()
                     onTrimmed(trimStartMs, trimEndMs, durationMs)
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF)),
                 shape = RoundedCornerShape(8.dp),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
             ) {
@@ -1397,6 +1398,7 @@ fun FlashVideoTrimmerStage(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
+                .background(Color(0xFF111317))
                 .clickable {
                     if (exoPlayer.isPlaying) {
                         exoPlayer.pause()
@@ -1427,10 +1429,10 @@ fun FlashVideoTrimmerStage(
                     modifier = Modifier
                         .size(56.dp)
                         .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.5f)),
+                        .background(Color.Black.copy(alpha = 0.55f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Lucide.Play, contentDescription = "Play", tint = Color.White, modifier = Modifier.size(28.dp))
+                    Icon(Lucide.Play, contentDescription = "Play", tint = Color.White, modifier = Modifier.size(26.dp))
                 }
             }
         }
@@ -1439,25 +1441,26 @@ fun FlashVideoTrimmerStage(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color(0xFF1E293B))
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+                .background(Color(0xFF1E212B))
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             val trimSeconds = ((trimEndMs - trimStartMs) / 1000L).coerceAtLeast(1L)
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Video Range: %02d:%02d - %02d:%02d".format(
+                Text("Range: %02d:%02d - %02d:%02d".format(
                     (trimStartMs / 1000) / 60, (trimStartMs / 1000) % 60,
                     (trimEndMs / 1000) / 60, (trimEndMs / 1000) % 60
-                ), color = Color(0xFF94A3B8), fontSize = 12.sp)
+                ), color = Color(0xFF8E98A8), fontSize = 12.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
 
                 Text(
-                    text = "${trimSeconds}s duration",
-                    color = if (trimSeconds > 30) Color(0xFFEF4444) else Color(0xFF60A5FA),
+                    text = "${trimSeconds}s duration (Max 30s)",
+                    color = if (trimSeconds > 30) Color(0xFFEF4444) else Color(0xFF007AFF),
                     fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.SemiBold
                 )
             }
 
@@ -1471,14 +1474,6 @@ fun FlashVideoTrimmerStage(
                     trimEndMs = end
                     exoPlayer.seekTo(start)
                 }
-            )
-
-            Text(
-                text = "Drag handles to trim video up to 30 seconds for Flash feed.",
-                color = Color(0xFF64748B),
-                fontSize = 11.sp,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
             )
         }
     }
