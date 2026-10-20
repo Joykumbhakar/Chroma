@@ -324,20 +324,21 @@ fun buildGeometricMaskPath(
     progress: Float,
     size: Size
 ): Path {
-    val w = size.width
-    val h = size.height
+    val p = progress.coerceIn(0f, 1f)
+    val w = size.width.coerceAtLeast(1f)
+    val h = size.height.coerceAtLeast(1f)
     val cx = w / 2f
     val cy = h / 2f
 
     return Path().apply {
         when (effect) {
             VideoTransitionEffect.WIPE_HORIZONTAL -> {
-                addRect(Rect(left = 0f, top = 0f, right = w * progress, bottom = h))
+                addRect(Rect(left = 0f, top = 0f, right = w * p, bottom = h))
             }
 
             VideoTransitionEffect.WIPE_DIAGONAL -> {
                 // Sweeps a 45-degree diagonal polygon from top-left to bottom-right
-                val sweep = (w + h) * progress
+                val sweep = (w + h) * p
                 moveTo(0f, 0f)
                 lineTo(sweep, 0f)
                 lineTo(0f, sweep)
@@ -345,7 +346,7 @@ fun buildGeometricMaskPath(
             }
 
             VideoTransitionEffect.CLOCK_RADIAL_WIPE -> {
-                val maxRadius = hypot(cx, cy) * 1.25f
+                val maxRadius = (hypot(cx, cy) * 1.25f).coerceAtLeast(1f)
                 val ovalRect = Rect(
                     left = cx - maxRadius,
                     top = cy - maxRadius,
@@ -356,14 +357,14 @@ fun buildGeometricMaskPath(
                 arcTo(
                     rect = ovalRect,
                     startAngleDegrees = -90f,
-                    sweepAngleDegrees = 360f * progress,
+                    sweepAngleDegrees = 360f * p,
                     forceMoveTo = false
                 )
                 close()
             }
 
             VideoTransitionEffect.BARN_DOORS_SPLIT -> {
-                val halfSpan = (w / 2f) * progress
+                val halfSpan = (w / 2f) * p
                 addRect(Rect(left = cx - halfSpan, top = 0f, right = cx + halfSpan, bottom = h))
             }
 
@@ -373,7 +374,7 @@ fun buildGeometricMaskPath(
                 for (i in 0 until slatCount) {
                     val topY = i * slatHeight
                     // Stagger each slat slightly for a realistic mechanical blind motion
-                    val localProgress = ((progress * 1.25f) - (i * 0.04f)).coerceIn(0f, 1f)
+                    val localProgress = ((p * 1.25f) - (i * 0.04f)).coerceIn(0f, 1f)
                     addRect(
                         Rect(
                             left = 0f,
@@ -387,11 +388,12 @@ fun buildGeometricMaskPath(
 
             VideoTransitionEffect.CIRCLE_IRIS_OPEN -> {
                 val maxRadius = hypot(cx, cy)
-                addOval(Rect(center = Offset(cx, cy), radius = maxRadius * progress))
+                val safeRadius = (maxRadius * p).coerceAtLeast(0f)
+                addOval(Rect(center = Offset(cx, cy), radius = safeRadius))
             }
 
             VideoTransitionEffect.DIAMOND_SHUTTER -> {
-                val maxSpan = (w + h) * 0.78f * progress
+                val maxSpan = (w + h) * 0.78f * p
                 moveTo(cx, cy - maxSpan)
                 lineTo(cx + maxSpan, cy)
                 lineTo(cx, cy + maxSpan)
@@ -400,8 +402,8 @@ fun buildGeometricMaskPath(
             }
 
             VideoTransitionEffect.CORNER_QUAD_SPLIT -> {
-                val quadW = cx * progress
-                val quadH = cy * progress
+                val quadW = cx * p
+                val quadH = cy * p
                 // Top-left quadrant expanding from center outward
                 addRect(Rect(left = cx - quadW, top = cy - quadH, right = cx, bottom = cy))
                 // Top-right quadrant
@@ -413,7 +415,7 @@ fun buildGeometricMaskPath(
             }
 
             else -> {
-                addRect(Rect(0f, 0f, w * progress, h))
+                addRect(Rect(0f, 0f, w * p, h))
             }
         }
     }
@@ -469,7 +471,8 @@ fun VideoTransitionRenderer(
     outgoingClip: @Composable BoxScope.() -> Unit,
     incomingClip: @Composable BoxScope.() -> Unit
 ) {
-    val p = easing.transform(progress)
+    val rawP = easing.transform(progress)
+    val p = rawP.coerceIn(0f, 1f)
 
     Box(
         modifier = modifier
@@ -485,14 +488,14 @@ fun VideoTransitionRenderer(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .graphicsLayer { alpha = p },
+                        .graphicsLayer { alpha = p.coerceIn(0f, 1f) },
                     content = incomingClip
                 )
             }
 
             VideoTransitionEffect.DIP_TO_BLACK -> {
                 if (p < 0.5f) {
-                    val fadeOut = 1f - (p * 2f)
+                    val fadeOut = (1f - (p * 2f)).coerceIn(0f, 1f)
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -500,7 +503,7 @@ fun VideoTransitionRenderer(
                         content = outgoingClip
                     )
                 } else {
-                    val fadeIn = (p - 0.5f) * 2f
+                    val fadeIn = ((p - 0.5f) * 2f).coerceIn(0f, 1f)
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -511,7 +514,7 @@ fun VideoTransitionRenderer(
             }
 
             VideoTransitionEffect.DIP_TO_WHITE -> {
-                val whiteOverlayAlpha = 1f - abs(p * 2f - 1f)
+                val whiteOverlayAlpha = (1f - abs(p * 2f - 1f)).coerceIn(0f, 1f)
                 if (p < 0.5f) {
                     Box(modifier = Modifier.fillMaxSize(), content = outgoingClip)
                 } else {
@@ -539,7 +542,7 @@ fun VideoTransitionRenderer(
                     modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer {
-                            alpha = p
+                            alpha = p.coerceIn(0f, 1f)
                             scaleX = 1.06f - p * 0.06f
                             scaleY = 1.06f - p * 0.06f
                         },
@@ -552,8 +555,8 @@ fun VideoTransitionRenderer(
                         .background(
                             Brush.radialGradient(
                                 colors = listOf(
-                                    Color(0xFFFFF8E7).copy(alpha = bloomIntensity * 0.72f),
-                                    Color(0xFFFFB347).copy(alpha = bloomIntensity * 0.28f),
+                                    Color(0xFFFFF8E7).copy(alpha = (bloomIntensity * 0.72f).coerceIn(0f, 1f)),
+                                    Color(0xFFFFB347).copy(alpha = (bloomIntensity * 0.28f).coerceIn(0f, 1f)),
                                     Color.Transparent
                                 )
                             )
@@ -633,7 +636,7 @@ fun VideoTransitionRenderer(
                             translationX = -size.width * 0.25f * p
                             scaleX = 1f - 0.06f * p
                             scaleY = 1f - 0.06f * p
-                            alpha = 1f - 0.35f * p
+                            alpha = (1f - 0.35f * p).coerceIn(0f, 1f)
                         },
                     content = outgoingClip
                 )
@@ -656,7 +659,7 @@ fun VideoTransitionRenderer(
                             scaleX = 0.88f + 0.12f * p
                             scaleY = 0.88f + 0.12f * p
                             translationX = -size.width * 0.15f * inv
-                            alpha = 0.45f + 0.55f * p
+                            alpha = (0.45f + 0.55f * p).coerceIn(0f, 1f)
                         },
                     content = incomingClip
                 )
@@ -705,18 +708,18 @@ fun VideoTransitionRenderer(
             VideoTransitionEffect.CIRCLE_PINHOLE_CLOSE -> {
                 // Contracts Clip A to a center pinhole (0..0.5), then expands Clip B (0.5..1.0)
                 val isFirstHalf = p < 0.5f
-                val apertureFraction = if (isFirstHalf) {
+                val apertureFraction = (if (isFirstHalf) {
                     1f - (p * 2f)
                 } else {
                     (p - 0.5f) * 2f
-                }
+                }).coerceIn(0f, 1f)
 
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .drawWithContent {
                             val maxRadius = hypot(size.width / 2f, size.height / 2f)
-                            val radius = (maxRadius * apertureFraction).coerceAtLeast(1f)
+                            val radius = (maxRadius * apertureFraction).coerceAtLeast(0f)
                             val circlePath = Path().apply {
                                 addOval(
                                     Rect(
@@ -758,7 +761,7 @@ fun VideoTransitionRenderer(
                             val zoomInScale = 1f + (inv * inv * 1.6f)
                             scaleX = zoomInScale
                             scaleY = zoomInScale
-                            alpha = p
+                            alpha = p.coerceIn(0f, 1f)
                         },
                     content = incomingClip
                 )
@@ -773,7 +776,7 @@ fun VideoTransitionRenderer(
                             val shrink = (1f - p * 0.65f).coerceAtLeast(0.2f)
                             scaleX = shrink
                             scaleY = shrink
-                            alpha = 1f - p
+                            alpha = (1f - p).coerceIn(0f, 1f)
                         },
                     content = outgoingClip
                 )
@@ -785,7 +788,7 @@ fun VideoTransitionRenderer(
                             val expand = 1.85f - 0.85f * p
                             scaleX = expand
                             scaleY = expand
-                            alpha = p
+                            alpha = p.coerceIn(0f, 1f)
                         },
                     content = incomingClip
                 )
@@ -802,7 +805,7 @@ fun VideoTransitionRenderer(
                                 val sc = 1f + halfT * 0.45f
                                 scaleX = sc
                                 scaleY = sc
-                                alpha = 1f - halfT * 0.5f
+                                alpha = (1f - halfT * 0.5f).coerceIn(0f, 1f)
                             },
                         content = outgoingClip
                     )
@@ -816,7 +819,7 @@ fun VideoTransitionRenderer(
                                 val sc = 1f + halfT * 0.45f
                                 scaleX = sc
                                 scaleY = sc
-                                alpha = 1f - halfT * 0.5f
+                                alpha = (1f - halfT * 0.5f).coerceIn(0f, 1f)
                             },
                         content = incomingClip
                     )

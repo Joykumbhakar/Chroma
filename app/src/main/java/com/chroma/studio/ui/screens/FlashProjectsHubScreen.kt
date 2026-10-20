@@ -168,13 +168,15 @@ fun FlashProjectsHubScreen(
                 val localItems = exportFiles.map { file ->
                     val uri = Uri.fromFile(file)
                     var durSec = 15f
+                    val retriever = MediaMetadataRetriever()
                     try {
-                        val retriever = MediaMetadataRetriever()
                         retriever.setDataSource(context, uri)
                         val ms = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
-                        retriever.release()
-                        if (ms != null) durSec = ms / 1000f
-                    } catch (_: Exception) {}
+                        if (ms != null && ms > 0L) durSec = ms / 1000f
+                    } catch (_: Exception) {
+                    } finally {
+                        try { retriever.release() } catch (_: Throwable) {}
+                    }
 
                     FlashHubItem.LocalExported(
                         id = file.name,

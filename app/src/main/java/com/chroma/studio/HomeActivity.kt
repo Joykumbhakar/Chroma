@@ -1179,6 +1179,7 @@ class HomeActivity : ComponentActivity() {
                         com.chroma.studio.ui.screens.FlashProjectsHubScreen(
                             onBack = { navController.popBackStack() },
                             onImportMedia = { uris ->
+                                flashImportedMediaUris = uris
                                 flashPickerVideoUri = uris.firstOrNull()
                                 navController.navigate("flash_video_editor")
                             },
@@ -1567,14 +1568,21 @@ class HomeActivity : ComponentActivity() {
                     ) { backStackEntry ->
                         val draftId = backStackEntry.arguments?.getString("draftId")
                         val draft = draftId?.let { com.chroma.studio.data.DraftPostRepository(this@HomeActivity).getDraftById(it) }
-                        val uri = draft?.videoUri?.let { Uri.parse(it) } ?: flashPickerVideoUri
+                        val toLoadUris = if (flashImportedMediaUris.isNotEmpty()) {
+                            flashImportedMediaUris
+                        } else {
+                            val singleUri = draft?.videoUri?.let { Uri.parse(it) } ?: flashPickerVideoUri
+                            if (singleUri != null) listOf(singleUri) else emptyList()
+                        }
+                        val uri = toLoadUris.firstOrNull()
                             ?: run { navController.popBackStack(); return@composable }
 
                         com.chroma.studio.ui.screens.FinalCutProVideoEditorScreen(
                             initialUri = uri,
-                            initialUris = listOf(uri),
+                            initialUris = toLoadUris,
                             draftId = draftId,
                             onDone = { startMs, endMs, clips ->
+                                flashImportedMediaUris = emptyList()
                                 flashTrimStart = startMs
                                 flashTrimEnd = endMs
                                 flashPickerVideoUri = clips.firstOrNull() ?: uri
@@ -1586,7 +1594,10 @@ class HomeActivity : ComponentActivity() {
                                 flashThumbnail = null
                                 navController.navigate("flash_post")
                             },
-                            onBack = { navController.popBackStack() }
+                            onBack = {
+                                flashImportedMediaUris = emptyList()
+                                navController.popBackStack()
+                            }
                         )
                     }
 

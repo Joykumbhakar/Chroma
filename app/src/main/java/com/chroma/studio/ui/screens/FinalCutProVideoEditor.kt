@@ -165,6 +165,7 @@ import java.util.Locale
 import java.util.UUID
 import com.chroma.studio.utils.ExportHelper
 import com.chroma.studio.utils.VideoProcessor
+import com.chroma.studio.utils.FcpTimelineExporter
 import kotlin.math.*
 
 // ============================================================================
@@ -1069,67 +1070,40 @@ fun FinalCutProVideoEditorScreen(
     fun performExport(res: String, fps: String, saveToGallery: Boolean) {
         scope.launch {
             try {
-                isExporting = true
-                exportProgress = 0.05f
-                exportStageText = "Preparing timeline & clips..."
-                delay(120L)
-
-                val active = selectedClip ?: clips.firstOrNull()
-                val sourceUri = active?.uri ?: clips.firstOrNull()?.uri
-                if (sourceUri == null) {
+                if (clips.isEmpty()) {
                     ToastManager.showToast("No video clips to export")
                     isExporting = false
                     showExportSheet = false
                     return@launch
                 }
 
-                val startMs = ((active?.trimStartSec ?: 0f) * 1000f).toLong()
-                val endMs = ((active?.trimEndSec ?: (active?.durationSec ?: 15f)) * 1000f).toLong()
-                val totalMs = ((active?.durationSec ?: 15f) * 1000f).toLong()
-                val isTrimmed = startMs > 100L || (totalMs > 0L && endMs < totalMs - 100L)
+                isExporting = true
+                exportProgress = 0.05f
+                exportStageText = "Preparing timeline & ${clips.size} clip(s)..."
+                delay(120L)
 
-                exportStageText = if (isTrimmed) "Trimming video clip..." else "Processing video stream..."
-                exportProgress = 0.25f
-
-                var exportedFile: File? = null
-
-                if (isTrimmed) {
-                    exportProgress = 0.35f
-                    exportedFile = withContext(Dispatchers.IO) {
-                        try {
-                            VideoProcessor.trimVideo(context, sourceUri, startMs, endMs)
-                        } catch (e: Exception) {
-                            null
-                        }
+                val exportedFile = FcpTimelineExporter.exportTimeline(
+                    context = context,
+                    clips = clips,
+                    customAudio = customAudio,
+                    aspectRatio = aspectRatio,
+                    res = res,
+                    fps = fps,
+                    onProgress = { p, stage ->
+                        exportProgress = p
+                        exportStageText = stage
                     }
-                }
-
-                if (exportedFile == null) {
-                    exportStageText = "Encoding video container..."
-                    exportProgress = 0.55f
-                    exportedFile = withContext(Dispatchers.IO) {
-                        try {
-                            val tempFile = File(context.cacheDir, "pro_export_${System.currentTimeMillis()}.mp4")
-                            context.contentResolver.openInputStream(sourceUri)?.use { input ->
-                                FileOutputStream(tempFile).use { output ->
-                                    input.copyTo(output)
-                                }
-                            }
-                            tempFile
-                        } catch (e: Exception) {
-                            null
-                        }
-                    }
-                }
+                )
 
                 if (exportedFile == null || !exportedFile.exists() || exportedFile.length() == 0L) {
-                    ToastManager.showToast("Export failed: unable to process video")
+                    ToastManager.showToast("Export failed: unable to process timeline")
                     isExporting = false
                     showExportSheet = false
                     return@launch
                 }
 
-                exportProgress = 0.85f
+                exportProgress = 0.88f
+                val totalTimelineDurationMs = (totalDurationSec * 1000f).toLong().coerceAtLeast(1000L)
 
                 if (saveToGallery) {
                     exportStageText = "Saving to Gallery (Movies/ChromaStudio)..."
@@ -1156,11 +1130,11 @@ fun FinalCutProVideoEditorScreen(
                             id = draftId ?: java.util.UUID.randomUUID().toString(),
                             mode = "flash",
                             title = textLayers.firstOrNull()?.primaryText ?: "Chroma Studio Video",
-                            description = "Rendered at $res $fps" + (if (customAudio != null) " with soundtrack '${customAudio?.name}'" else "") + " in ChromaStudio Editor",
+                            description = "Rendered at $res $fps (${clips.size} clips)" + (if (customAudio != null) " with soundtrack '${customAudio?.name}'" else "") + " in ChromaStudio Editor",
                             aspectRatio = aspectRatio.label,
                             videoUri = Uri.fromFile(exportedFile).toString(),
                             flashTrimStartMs = 0L,
-                            flashTrimEndMs = (endMs - startMs).coerceAtLeast(1000L)
+                            flashTrimEndMs = totalTimelineDurationMs
                         )
                         draftRepo.saveDraft(draft)
                     } catch (_: Throwable) {}
@@ -1171,7 +1145,7 @@ fun FinalCutProVideoEditorScreen(
                     isExporting = false
                     showExportSheet = false
                     ToastManager.showToast("Export completed! Sending to Studio...")
-                    onDone(0L, (endMs - startMs).coerceAtLeast(1000L), listOf(Uri.fromFile(exportedFile)))
+                    onDone(0L, totalTimelineDurationMs, listOf(Uri.fromFile(exportedFile)))
                 }
             } catch (e: Exception) {
                 isExporting = false
@@ -1226,6 +1200,12 @@ fun FinalCutProVideoEditorScreen(
             .build().apply {
                 playWhenReady = false
                 repeatMode = Player.REPEAT_MODE_OFF
+                addListener(object : Player.Listener {
+                    override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                        android.util.Log.e("FinalCutProVideoEditor", "ExoPlayer playback error: ${error.errorCodeName} - ${error.message}", error)
+                        isPlaying = false
+                    }
+                })
             }
     }
     DisposableEffect(Unit) {
@@ -1244,6 +1224,11 @@ fun FinalCutProVideoEditorScreen(
             .build().apply {
                 playWhenReady = false
                 repeatMode = Player.REPEAT_MODE_ONE
+                addListener(object : Player.Listener {
+                    override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                        android.util.Log.e("FinalCutProVideoEditor", "customAudioPlayer playback error: ${error.errorCodeName} - ${error.message}", error)
+                    }
+                })
             }
     }
     DisposableEffect(Unit) {
@@ -1805,7 +1790,7 @@ fun FinalCutProVideoEditorScreen(
                     }
                 }
                 clips = clips + newClips
-                selectedId = newClips.first().id
+                newClips.firstOrNull()?.id?.let { selectedId = it }
                 ToastManager.showToast("${newClips.size} clip(s) imported")
             }
         }
@@ -3104,7 +3089,7 @@ fun FinalCutProVideoEditorScreen(
                                             if (clips.size > 1) {
                                                 saveStateForUndo()
                                                 clips = clips.filter { it.id != selectedId }
-                                                selectedId = clips.first().id
+                                                selectedId = clips.firstOrNull()?.id ?: ""
                                                 val span = timelineSpans.find { it.clip.id == selectedId }
                                                 if (span != null) {
                                                     seekToGlobalTime(span.timelineStartSec)

@@ -430,6 +430,9 @@ private fun BeveledPlusGlyph(
         modifier = modifier.drawWithCache {
             // Scale factor from the 24x24 SVG viewBox
             val scale = size.minDimension / 24f
+            if (scale <= 0.001f || size.width <= 0f || size.height <= 0f) {
+                return@drawWithCache onDrawBehind { }
+            }
 
             // SVG geometry constants:
             // Vertical bar: x = 10.5..13.5 (width 3), y = 4.25..19.75 (height 15.5), rx = 1.5
@@ -553,6 +556,10 @@ private fun Modifier.drawMachinedInsetBevel(
     borderInset: Dp
 ): Modifier = this.drawWithCache {
     val insetPx = borderInset.toPx()
+    if (size.width <= insetPx * 2f || size.height <= insetPx * 2f) {
+        return@drawWithCache onDrawWithContent { drawContent() }
+    }
+
     val innerRadiusPx = (cornerRadius.toPx() - insetPx).coerceAtLeast(1f)
     val topOffsetPx = topHighlightOffset.toPx()
     val bottomOffsetPx = bottomShadeOffset.toPx()

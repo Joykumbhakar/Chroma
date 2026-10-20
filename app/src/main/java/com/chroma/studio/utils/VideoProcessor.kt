@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.media.*
 import android.net.Uri
 import android.util.Log
+import com.chroma.studio.ui.screens.FcpClip
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -19,38 +20,40 @@ import java.nio.ByteBuffer
 object VideoProcessor {
 
     private const val TAG = "VideoProcessor"
-    private const val MAX_DURATION_MS = 30_000L
+    private const val MAX_DURATION_MS = 600_000L // 10 minutes max duration
 
     // ── Duration ─────────────────────────────────────────────────────────────
 
     suspend fun getVideoDurationMs(context: Context, uri: Uri): Long = withContext(Dispatchers.IO) {
+        val retriever = MediaMetadataRetriever()
         try {
-            val retriever = MediaMetadataRetriever()
             retriever.setDataSource(context, uri)
             val dur = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLong() ?: 0L
-            retriever.release()
             dur
         } catch (e: Exception) {
             Log.e(TAG, "getVideoDurationMs failed", e)
             0L
+        } finally {
+            try { retriever.release() } catch (_: Throwable) {}
         }
     }
 
     // ── Thumbnail extraction ──────────────────────────────────────────────────
 
     suspend fun extractThumbnail(context: Context, uri: Uri, positionMs: Long = 0L): Bitmap? = withContext(Dispatchers.IO) {
+        val retriever = MediaMetadataRetriever()
         try {
-            val retriever = MediaMetadataRetriever()
             retriever.setDataSource(context, uri)
             val bitmap = retriever.getFrameAtTime(
                 positionMs * 1000L,
                 MediaMetadataRetriever.OPTION_CLOSEST_SYNC
             )
-            retriever.release()
             bitmap
         } catch (e: Exception) {
             Log.e(TAG, "extractThumbnail failed", e)
             null
+        } finally {
+            try { retriever.release() } catch (_: Throwable) {}
         }
     }
 
@@ -405,6 +408,145 @@ object VideoProcessor {
         } finally {
             try { encoder?.stop(); encoder?.release() } catch (_: Exception) {}
             try { muxer?.stop(); muxer?.release() } catch (_: Exception) {}
+        }
+    }
+
+    /**
+     * Concatenates multiple [clips], trimming each between [FcpClip.trimStartSec] and [FcpClip.trimEndSec]
+     * directly into [outputFile] using hardware [MediaExtractor] and [MediaMuxer].
+     */
+    suspend fun concatVideoClips(
+        context: Context,
+        clips: List<FcpClip>,
+        outputFile: File
+    ): Boolean = withContext(Dispatchers.IO) {
+        if (clips.isEmpty()) return@withContext false
+
+        var muxer: MediaMuxer? = null
+        try {
+            muxer = MediaMuxer(outputFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+            var videoMuxTrack = -1
+            var audioMuxTrack = -1
+
+            // 1. Find track formats from first playable video clip
+            for (clip in clips) {
+                val extractor = MediaExtractor()
+                try {
+                    extractor.setDataSource(context, clip.uri, null)
+                    for (i in 0 until extractor.trackCount) {
+                        val fmt = extractor.getTrackFormat(i)
+                        val mime = fmt.getString(MediaFormat.KEY_MIME) ?: continue
+                        if (mime.startsWith("video/") && videoMuxTrack < 0) {
+                            videoMuxTrack = muxer.addTrack(fmt)
+                        } else if (mime.startsWith("audio/") && audioMuxTrack < 0) {
+                            audioMuxTrack = muxer.addTrack(fmt)
+                        }
+                    }
+                    if (videoMuxTrack >= 0) break
+                } catch (_: Exception) {
+                } finally {
+                    extractor.release()
+                }
+            }
+
+            if (videoMuxTrack < 0) {
+                Log.e(TAG, "concatVideoClips: No video track found across clips")
+                return@withContext false
+            }
+
+            muxer.start()
+
+            val buffer = ByteBuffer.allocate(2 * 1024 * 1024)
+            val bufferInfo = MediaCodec.BufferInfo()
+            var globalVideoTimeOffsetUs = 0L
+            var globalAudioTimeOffsetUs = 0L
+
+            for (clip in clips) {
+                val extractor = MediaExtractor()
+                try {
+                    extractor.setDataSource(context, clip.uri, null)
+                    var videoTrackIdx = -1
+                    var audioTrackIdx = -1
+                    for (i in 0 until extractor.trackCount) {
+                        val fmt = extractor.getTrackFormat(i)
+                        val mime = fmt.getString(MediaFormat.KEY_MIME) ?: continue
+                        if (mime.startsWith("video/") && videoTrackIdx < 0) videoTrackIdx = i
+                        if (mime.startsWith("audio/") && audioTrackIdx < 0) audioTrackIdx = i
+                    }
+
+                    val startUs = (clip.trimStartSec * 1_000_000L).toLong()
+                    val endUs = (clip.trimEndSec * 1_000_000L).toLong()
+                    val clipDurationUs = (endUs - startUs).coerceAtLeast(100_000L)
+
+                    // Write video track samples
+                    if (videoTrackIdx >= 0 && videoMuxTrack >= 0) {
+                        extractor.selectTrack(videoTrackIdx)
+                        extractor.seekTo(startUs, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
+                        var firstSampleUs = -1L
+                        var lastSampleUs = 0L
+
+                        while (true) {
+                            bufferInfo.offset = 0
+                            val sampleSize = extractor.readSampleData(buffer, 0)
+                            if (sampleSize < 0) break
+                            val sampleTimeUs = extractor.sampleTime
+                            if (sampleTimeUs > endUs) break
+                            if (sampleTimeUs >= startUs) {
+                                if (firstSampleUs < 0) firstSampleUs = sampleTimeUs
+                                bufferInfo.size = sampleSize
+                                val relativeTime = sampleTimeUs - firstSampleUs
+                                bufferInfo.presentationTimeUs = globalVideoTimeOffsetUs + relativeTime
+                                bufferInfo.flags = extractor.sampleFlags
+                                muxer.writeSampleData(videoMuxTrack, buffer, bufferInfo)
+                                lastSampleUs = relativeTime
+                            }
+                            extractor.advance()
+                        }
+                        extractor.unselectTrack(videoTrackIdx)
+                        globalVideoTimeOffsetUs += (lastSampleUs + 33_333L).coerceAtLeast(clipDurationUs)
+                    }
+
+                    // Write audio track samples
+                    if (audioTrackIdx >= 0 && audioMuxTrack >= 0) {
+                        extractor.selectTrack(audioTrackIdx)
+                        extractor.seekTo(startUs, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
+                        var firstAudioSampleUs = -1L
+                        var lastAudioSampleUs = 0L
+
+                        while (true) {
+                            bufferInfo.offset = 0
+                            val sampleSize = extractor.readSampleData(buffer, 0)
+                            if (sampleSize < 0) break
+                            val sampleTimeUs = extractor.sampleTime
+                            if (sampleTimeUs > endUs) break
+                            if (sampleTimeUs >= startUs) {
+                                if (firstAudioSampleUs < 0) firstAudioSampleUs = sampleTimeUs
+                                bufferInfo.size = sampleSize
+                                val relativeTime = sampleTimeUs - firstAudioSampleUs
+                                bufferInfo.presentationTimeUs = globalAudioTimeOffsetUs + relativeTime
+                                bufferInfo.flags = extractor.sampleFlags
+                                muxer.writeSampleData(audioMuxTrack, buffer, bufferInfo)
+                                lastAudioSampleUs = relativeTime
+                            }
+                            extractor.advance()
+                        }
+                        extractor.unselectTrack(audioTrackIdx)
+                        globalAudioTimeOffsetUs += (lastAudioSampleUs + 23_000L).coerceAtLeast(clipDurationUs)
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "concatVideoClips failed on clip ${clip.id}", e)
+                } finally {
+                    extractor.release()
+                }
+            }
+
+            muxer.stop()
+            outputFile.exists() && outputFile.length() > 0L
+        } catch (e: Exception) {
+            Log.e(TAG, "concatVideoClips muxer error", e)
+            false
+        } finally {
+            try { muxer?.release() } catch (_: Exception) {}
         }
     }
 }
