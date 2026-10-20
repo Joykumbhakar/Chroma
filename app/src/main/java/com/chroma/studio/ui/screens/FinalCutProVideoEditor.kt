@@ -1022,7 +1022,6 @@ fun FinalCutProVideoEditorScreen(
         if (customAudio != null) {
             customAudioPlayer.seekTo((clamped * 1000f).toLong().coerceAtLeast(0L))
         }
-        SoundManager.playScrub(context)
     }
 
     fun onScrubEnd(finalSec: Float) {
