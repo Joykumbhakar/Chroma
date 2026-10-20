@@ -1757,6 +1757,16 @@ fun FinalCutProVideoEditorScreen(
 
                 var lastTapTimestamp by remember { mutableLongStateOf(0L) }
                 var pendingTapJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+                var showZoomCropSlider by remember { mutableStateOf(false) }
+                var zoomSliderHideJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+                val currentKeepZoomSliderAlive by rememberUpdatedState {
+                    showZoomCropSlider = true
+                    zoomSliderHideJob?.cancel()
+                    zoomSliderHideJob = scope.launch {
+                        delay(2000L)
+                        showZoomCropSlider = false
+                    }
+                }
                 val currentClips by rememberUpdatedState(clips)
                 val currentSelectedId by rememberUpdatedState(selectedId)
                 val currentIsPlaying by rememberUpdatedState(isPlaying)
@@ -2101,12 +2111,14 @@ fun FinalCutProVideoEditorScreen(
                                             if (pointerCount >= 2) {
                                                 isMultiTouch = true
                                                 pastTouchSlop = true
+                                                currentKeepZoomSliderAlive()
                                             }
 
                                             val zoomChange = event.calculateZoom()
                                             val panChange = event.calculatePan()
 
                                             if (pointerCount >= 2) {
+                                                currentKeepZoomSliderAlive()
                                                 val active = currentClips.firstOrNull { it.id == currentSelectedId } ?: currentClips.firstOrNull()
                                                 if (active != null) {
                                                     if (!undoSaved) {
@@ -2143,6 +2155,7 @@ fun FinalCutProVideoEditorScreen(
                                                 }
 
                                                 if (pastTouchSlop && isZoomed && active != null) {
+                                                    currentKeepZoomSliderAlive()
                                                     if (!undoSaved) {
                                                         saveStateForUndo()
                                                         undoSaved = true
@@ -2166,6 +2179,10 @@ fun FinalCutProVideoEditorScreen(
                                                 }
                                             }
                                         } while (event.changes.any { it.pressed })
+
+                                        if (isMultiTouch) {
+                                            currentKeepZoomSliderAlive()
+                                        }
 
                                         // Tap handling when not dragging or pinching
                                         if (!pastTouchSlop && !isMultiTouch && !gestureConsumed) {
@@ -2449,6 +2466,250 @@ fun FinalCutProVideoEditorScreen(
                                 modifier = Modifier.size(72.dp),
                                 tint = Color.White.copy(alpha = 0.90f)
                             )
+                        }
+                    }
+
+                    // Floating Zoom & Crop Smooth Slider Bar (Revealed by 2-finger zoom, auto-fades after 2s of inactivity)
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = showZoomCropSlider && clips.isNotEmpty(),
+                        enter = fadeIn(tween(220)) + scaleIn(tween(220), initialScale = 0.92f),
+                        exit = fadeOut(tween(450)) + scaleOut(tween(450), targetScale = 0.92f),
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(horizontal = 14.dp, vertical = 10.dp)
+                            .zIndex(45f)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(0.92f)
+                                .widthIn(max = 380.dp)
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(Color(0xE614161E))
+                                .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(20.dp))
+                                .shadow(16.dp, RoundedCornerShape(20.dp), spotColor = Color.Black)
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null
+                                ) { currentKeepZoomSliderAlive() }
+                                .padding(horizontal = 14.dp, vertical = 10.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                // Header Row: Icon, Title, Multiplier badge, and Reset button
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Lucide.Maximize2,
+                                            contentDescription = null,
+                                            tint = Color(0xFF0A84FF),
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                        Text(
+                                            text = "ZOOM & CROP",
+                                            color = Color.White.copy(alpha = 0.9f),
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            letterSpacing = 0.8.sp
+                                        )
+                                    }
+
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(Color(0xFF0A84FF).copy(alpha = 0.2f))
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = "${String.format("%.2f", activeScale)}x",
+                                                color = Color(0xFF60A5FA),
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                fontFamily = FontFamily.Monospace
+                                            )
+                                        }
+
+                                        if (activeScale != 1f || activePanX != 0f || activePanY != 0f) {
+                                            Text(
+                                                text = "Reset",
+                                                color = Color(0xFFFF453A),
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(4.dp))
+                                                    .clickable {
+                                                        currentKeepZoomSliderAlive()
+                                                        val active = selectedClip ?: return@clickable
+                                                        saveStateForUndo()
+                                                        clips = clips.map {
+                                                            if (it.id == active.id) it.copy(scale = 1f, panX = 0f, panY = 0f) else it
+                                                        }
+                                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                        ToastManager.showToast("Zoom reset to 1.0x")
+                                                    }
+                                                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // Slider Row: ZoomOut Icon, Smooth Slider, ZoomIn Icon
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    // Zoom Out Step Button
+                                    Box(
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .clip(CircleShape)
+                                            .background(Color.White.copy(alpha = 0.12f))
+                                            .clickable {
+                                                currentKeepZoomSliderAlive()
+                                                val active = selectedClip ?: return@clickable
+                                                saveStateForUndo()
+                                                val newScale = (active.scale - 0.2f).coerceAtLeast(0.5f)
+                                                val maxPanX = kotlin.math.max(100f, (newScale - 0.7f).coerceAtLeast(0f) * 600f)
+                                                val maxPanY = kotlin.math.max(100f, (newScale - 0.7f).coerceAtLeast(0f) * 800f)
+                                                val newPanX = if (newScale <= 1.02f) 0f else active.panX.coerceIn(-maxPanX, maxPanX)
+                                                val newPanY = if (newScale <= 1.02f) 0f else active.panY.coerceIn(-maxPanY, maxPanY)
+                                                clips = clips.map {
+                                                    if (it.id == active.id) it.copy(scale = newScale, panX = newPanX, panY = newPanY) else it
+                                                }
+                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Lucide.ZoomOut,
+                                            contentDescription = "Zoom Out",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+
+                                    Slider(
+                                        value = activeScale.coerceIn(0.5f, 4.0f),
+                                        onValueChange = { newScale ->
+                                            currentKeepZoomSliderAlive()
+                                            val active = selectedClip ?: return@Slider
+                                            val maxPanX = kotlin.math.max(100f, (newScale - 0.7f).coerceAtLeast(0f) * 600f)
+                                            val maxPanY = kotlin.math.max(100f, (newScale - 0.7f).coerceAtLeast(0f) * 800f)
+                                            val newPanX = if (newScale <= 1.02f) 0f else active.panX.coerceIn(-maxPanX, maxPanX)
+                                            val newPanY = if (newScale <= 1.02f) 0f else active.panY.coerceIn(-maxPanY, maxPanY)
+                                            clips = clips.map {
+                                                if (it.id == active.id) it.copy(scale = newScale, panX = newPanX, panY = newPanY) else it
+                                            }
+                                        },
+                                        onValueChangeFinished = {
+                                            saveStateForUndo()
+                                            currentKeepZoomSliderAlive()
+                                        },
+                                        valueRange = 0.5f..4.0f,
+                                        colors = SliderDefaults.colors(
+                                            thumbColor = Color.White,
+                                            activeTrackColor = Color(0xFF0A84FF),
+                                            inactiveTrackColor = Color.White.copy(alpha = 0.22f)
+                                        ),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(28.dp)
+                                    )
+
+                                    // Zoom In Step Button
+                                    Box(
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .clip(CircleShape)
+                                            .background(Color.White.copy(alpha = 0.12f))
+                                            .clickable {
+                                                currentKeepZoomSliderAlive()
+                                                val active = selectedClip ?: return@clickable
+                                                saveStateForUndo()
+                                                val newScale = (active.scale + 0.2f).coerceAtMost(4.0f)
+                                                val maxPanX = kotlin.math.max(100f, (newScale - 0.7f).coerceAtLeast(0f) * 600f)
+                                                val maxPanY = kotlin.math.max(100f, (newScale - 0.7f).coerceAtLeast(0f) * 800f)
+                                                val newPanX = active.panX.coerceIn(-maxPanX, maxPanX)
+                                                val newPanY = active.panY.coerceIn(-maxPanY, maxPanY)
+                                                clips = clips.map {
+                                                    if (it.id == active.id) it.copy(scale = newScale, panX = newPanX, panY = newPanY) else it
+                                                }
+                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Lucide.ZoomIn,
+                                            contentDescription = "Zoom In",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                }
+
+                                // Quick Preset Chips (Fit, Fill, 1.8x, 2.5x)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    listOf(
+                                        "Fit (1x)" to 1.0f,
+                                        "Fill" to 1.35f,
+                                        "1.8x" to 1.8f,
+                                        "2.5x" to 2.5f
+                                    ).forEach { (label, targetScale) ->
+                                        val isSelected = abs(activeScale - targetScale) < 0.08f
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(
+                                                    if (isSelected) Color(0xFF0A84FF).copy(alpha = 0.35f)
+                                                    else Color.White.copy(alpha = 0.08f)
+                                                )
+                                                .border(
+                                                    0.5.dp,
+                                                    if (isSelected) Color(0xFF0A84FF) else Color.White.copy(alpha = 0.15f),
+                                                    RoundedCornerShape(8.dp)
+                                                )
+                                                .clickable {
+                                                    currentKeepZoomSliderAlive()
+                                                    val active = selectedClip ?: return@clickable
+                                                    saveStateForUndo()
+                                                    val newPanX = if (targetScale <= 1.02f) 0f else active.panX
+                                                    val newPanY = if (targetScale <= 1.02f) 0f else active.panY
+                                                    clips = clips.map {
+                                                        if (it.id == active.id) it.copy(scale = targetScale, panX = newPanX, panY = newPanY) else it
+                                                    }
+                                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                }
+                                                .padding(vertical = 4.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = label,
+                                                color = if (isSelected) Color.White else Color.White.copy(alpha = 0.75f),
+                                                fontSize = 10.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
 
