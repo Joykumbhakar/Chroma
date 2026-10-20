@@ -435,11 +435,16 @@ fun createFcpTextLayer(preset: FcpTitlePresetType, layerIndex: Int): FcpTextLaye
     }
 }
 
-enum class FcpTransitionType(val label: String, val icon: ImageVector) {
-    NONE("Cut", Lucide.X),
-    CROSSFADE("Crossfade", Lucide.Layers),
-    DIP_TO_BLACK("Dip Black", Lucide.Moon),
-    WIPE_RIGHT("Wipe", Lucide.ArrowRight)
+enum class FcpTransitionType(val label: String, val icon: ImageVector, val description: String) {
+    NONE("Cut", Lucide.X, "Direct instant cut with no transition effect"),
+    DIP_TO_BLACK("Dip Black", Lucide.Moon, "Fades down to pure black at cut, then reveals incoming video"),
+    DIP_TO_WHITE("Dip White", Lucide.Sun, "Dynamic cinematic white flash transition between scenes"),
+    CROSSFADE("Crossfade", Lucide.Layers, "Soft atmospheric dissolve bridging outgoing and incoming video"),
+    WIPE_RIGHT("Wipe Right", Lucide.ArrowRight, "Horizontal wipe curtain revealing incoming video left-to-right"),
+    WIPE_LEFT("Wipe Left", Lucide.ArrowLeft, "Horizontal wipe curtain revealing incoming video right-to-left"),
+    SLIDE_LEFT("Slide", Lucide.Move, "Dynamic push slide transition sliding into next video"),
+    ZOOM_IN("Zoom Punch", Lucide.Maximize2, "High-energy camera scale punch into the cut"),
+    GLITCH("Glitch", Lucide.Zap, "Digital RGB chromatic aberration glitch cut")
 }
 
 data class FcpClip(
@@ -847,10 +852,10 @@ fun FinalCutProVideoEditorScreen(
     val exoPlayer = remember {
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                /* minBufferMs = */ 1500,
+                /* minBufferMs = */ 1000,
                 /* maxBufferMs = */ 5000,
-                /* bufferForPlaybackMs = */ 250,
-                /* bufferForPlaybackAfterRebufferMs = */ 500
+                /* bufferForPlaybackMs = */ 60,
+                /* bufferForPlaybackAfterRebufferMs = */ 150
             )
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
@@ -971,6 +976,9 @@ fun FinalCutProVideoEditorScreen(
             loadedClipId = clip.id
             loadedClipUri = clip.uri
             lastPlayerSeekMs = mediaMs
+            if (seamlessTransition) {
+                exoPlayer.setSeekParameters(SeekParameters.CLOSEST_SYNC)
+            }
             exoPlayer.setMediaItem(MediaItem.fromUri(clip.uri), mediaMs)
             exoPlayer.prepare()
             exoPlayer.setPlaybackSpeed(clip.speed)
@@ -984,7 +992,7 @@ fun FinalCutProVideoEditorScreen(
             }
             val currentPosMs = exoPlayer.currentPosition
             val shouldSeek = if (seamlessTransition) {
-                abs(currentPosMs - mediaMs) > 140L
+                abs(currentPosMs - mediaMs) > 100L
             } else if (!forceExactSeek) {
                 abs(lastPlayerSeekMs - mediaMs) >= 24L
             } else {
@@ -992,6 +1000,9 @@ fun FinalCutProVideoEditorScreen(
             }
             if (shouldSeek) {
                 lastPlayerSeekMs = mediaMs
+                if (seamlessTransition) {
+                    exoPlayer.setSeekParameters(SeekParameters.CLOSEST_SYNC)
+                }
                 exoPlayer.seekTo(mediaMs)
             }
         }
@@ -1682,67 +1693,28 @@ fun FinalCutProVideoEditorScreen(
                         supportsRenderEffect = supportsRenderEffect
                     )
 
-                    // Live Clip Transition Overlay during boundary transition
-                    val currentSpanForTransition = remember(currentTimeSec, timelineSpans) {
-                        getActiveSpanAt(currentTimeSec)
-                    }
-                    val transitionEffectState = remember(currentTimeSec, currentSpanForTransition) {
-                        val span = currentSpanForTransition
-                        if (span != null && span.clip.transitionToNext != FcpTransitionType.NONE) {
-                            val remaining = span.timelineEndSec - currentTimeSec
-                            val dur = span.clip.transitionDurationSec.coerceIn(0.2f, 2f)
-                            if (remaining in 0f..dur) {
-                                val progress = (1f - (remaining / dur)).coerceIn(0f, 1f)
-                                Pair(span.clip.transitionToNext, progress)
-                            } else null
-                        } else null
-                    }
-
-                    if (transitionEffectState != null) {
-                        val (transType, progress) = transitionEffectState
-                        when (transType) {
-                            FcpTransitionType.DIP_TO_BLACK -> {
-                                val blackAlpha = if (progress < 0.5f) (progress * 2f) else ((1f - progress) * 2f)
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(Color.Black.copy(alpha = blackAlpha.coerceIn(0f, 1f)))
-                                        .zIndex(18f)
-                                )
-                            }
-                            FcpTransitionType.CROSSFADE -> {
-                                val crossAlpha = (sin(progress * Math.PI.toFloat()) * 0.55f).coerceIn(0f, 1f)
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(Color.White.copy(alpha = crossAlpha))
-                                        .zIndex(18f)
-                                )
-                            }
-                            FcpTransitionType.WIPE_RIGHT -> {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .zIndex(18f)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxHeight()
-                                            .fillMaxWidth(fraction = progress)
-                                            .background(Color.Black.copy(alpha = 0.9f))
-                                    )
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxHeight()
-                                            .width(2.dp)
-                                            .fillMaxWidth(fraction = progress)
-                                            .wrapContentWidth(Alignment.End)
-                                            .background(Color(0xFF8B5CF6))
-                                    )
+                    // Live Clip Transition State across cut boundaries (bridges outgoing & incoming clip)
+                    val activeTransitionState = remember(currentTimeSec, timelineSpans) {
+                        var result: Pair<FcpTransitionType, Float>? = null
+                        for (i in 0 until timelineSpans.size - 1) {
+                            val spanA = timelineSpans[i]
+                            val spanB = timelineSpans[i + 1]
+                            val trans = spanA.clip.transitionToNext
+                            if (trans != FcpTransitionType.NONE) {
+                                val cutSec = spanA.timelineEndSec
+                                val dur = spanA.clip.transitionDurationSec.coerceIn(0.2f, 2f)
+                                val halfDur = dur * 0.5f
+                                val startSec = (cutSec - halfDur).coerceAtLeast(spanA.timelineStartSec)
+                                val endSec = (cutSec + halfDur).coerceAtMost(spanB.timelineEndSec)
+                                if (currentTimeSec in startSec..endSec) {
+                                    val totalWindow = (endSec - startSec).coerceAtLeast(0.05f)
+                                    val progress = ((currentTimeSec - startSec) / totalWindow).coerceIn(0f, 1f)
+                                    result = Pair(trans, progress)
+                                    break
                                 }
                             }
-                            FcpTransitionType.NONE -> {}
                         }
+                        result
                     }
 
                     // ExoPlayer Video Surface with dynamic Color Matrix filter
@@ -1839,6 +1811,165 @@ fun FinalCutProVideoEditorScreen(
                                 },
                             contentScale = ContentScale.Fit
                         )
+                    }
+
+                    // Live Transition Visual Overlay Layer (Renders seamlessly across video boundary cut)
+                    if (activeTransitionState != null) {
+                        val (transType, progress) = activeTransitionState
+                        when (transType) {
+                            FcpTransitionType.DIP_TO_BLACK -> {
+                                val blackAlpha = if (progress <= 0.5f) (progress * 2f) else ((1f - progress) * 2f)
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(Color.Black.copy(alpha = blackAlpha.coerceIn(0f, 1f)))
+                                        .zIndex(20f)
+                                )
+                            }
+                            FcpTransitionType.DIP_TO_WHITE -> {
+                                val whiteAlpha = if (progress <= 0.5f) (progress * 2f) else ((1f - progress) * 2f)
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(Color.White.copy(alpha = (whiteAlpha * 0.98f).coerceIn(0f, 1f)))
+                                        .zIndex(20f)
+                                )
+                            }
+                            FcpTransitionType.CROSSFADE -> {
+                                val crossAlpha = (sin(progress * Math.PI.toFloat()) * 0.75f).coerceIn(0f, 1f)
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(
+                                            Brush.radialGradient(
+                                                colors = listOf(
+                                                    Color.White.copy(alpha = crossAlpha * 0.45f),
+                                                    Color.Black.copy(alpha = crossAlpha * 0.7f)
+                                                )
+                                            )
+                                        )
+                                        .zIndex(20f)
+                                )
+                            }
+                            FcpTransitionType.WIPE_RIGHT -> {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .zIndex(20f)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxHeight()
+                                            .fillMaxWidth(fraction = progress)
+                                            .background(Color.Black.copy(alpha = 0.92f))
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxHeight()
+                                            .width(3.dp)
+                                            .fillMaxWidth(fraction = progress)
+                                            .wrapContentWidth(Alignment.End)
+                                            .background(
+                                                Brush.verticalGradient(
+                                                    listOf(Color(0xFF00F5D4), Color(0xFF7B2CBF))
+                                                )
+                                            )
+                                    )
+                                }
+                            }
+                            FcpTransitionType.WIPE_LEFT -> {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .zIndex(20f)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxHeight()
+                                            .fillMaxWidth(fraction = 1f - progress)
+                                            .align(Alignment.CenterEnd)
+                                            .background(Color.Black.copy(alpha = 0.92f))
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxHeight()
+                                            .width(3.dp)
+                                            .fillMaxWidth(fraction = 1f - progress)
+                                            .align(Alignment.CenterEnd)
+                                            .wrapContentWidth(Alignment.Start)
+                                            .background(
+                                                Brush.verticalGradient(
+                                                    listOf(Color(0xFFFF007F), Color(0xFF7B2CBF))
+                                                )
+                                            )
+                                    )
+                                }
+                            }
+                            FcpTransitionType.SLIDE_LEFT -> {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .zIndex(20f)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxHeight()
+                                            .fillMaxWidth(fraction = progress)
+                                            .background(Color(0xFF0A0E1A).copy(alpha = 0.88f))
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxHeight()
+                                            .width(2.dp)
+                                            .fillMaxWidth(fraction = progress)
+                                            .wrapContentWidth(Alignment.End)
+                                            .background(Color.White.copy(alpha = 0.6f))
+                                    )
+                                }
+                            }
+                            FcpTransitionType.ZOOM_IN -> {
+                                val zoomAlpha = sin(progress * Math.PI.toFloat()).coerceIn(0f, 1f)
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(
+                                            Brush.radialGradient(
+                                                colors = listOf(
+                                                    Color.Transparent,
+                                                    Color.Black.copy(alpha = zoomAlpha * 0.85f)
+                                                )
+                                            )
+                                        )
+                                        .zIndex(20f)
+                                )
+                            }
+                            FcpTransitionType.GLITCH -> {
+                                val glitchAlpha = if (progress in 0.25f..0.75f) {
+                                    val subProg = (progress - 0.25f) / 0.5f
+                                    sin(subProg * Math.PI.toFloat()).coerceIn(0f, 1f)
+                                } else 0f
+
+                                if (glitchAlpha > 0.05f) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(
+                                                Brush.verticalGradient(
+                                                    listOf(
+                                                        Color.Cyan.copy(alpha = glitchAlpha * 0.45f),
+                                                        Color.Transparent,
+                                                        Color.Magenta.copy(alpha = glitchAlpha * 0.5f),
+                                                        Color.Transparent,
+                                                        Color.Cyan.copy(alpha = glitchAlpha * 0.4f)
+                                                    )
+                                                )
+                                            )
+                                            .zIndex(20f)
+                                    )
+                                }
+                            }
+                            FcpTransitionType.NONE -> {}
+                        }
                     }
 
                     // Floating Zoom / Crop Indicator Badge with Reset Button
@@ -2998,6 +3129,18 @@ private fun TimelineTabContent(
                 TimelineMiniButton(Lucide.ZoomIn, "Zoom In", onClick = { onZoomChange((pixelsPerSec * 1.25f).coerceIn(15f, 120f)) })
                 TimelineMiniButton(Lucide.SkipBack, "Prev Frame", onClick = { onStepFrame(false) })
                 TimelineMiniButton(Lucide.Scissors, "Split", onClick = onSplitClip)
+                TimelineMiniButton(Lucide.Sparkles, "Transition", onClick = {
+                    if (timelineSpans.size < 2) {
+                        ToastManager.showToast("Add 2 or more videos to add transitions")
+                    } else {
+                        val targetClipId = if (selectedId != null && selectedId != timelineSpans.last().clip.id) {
+                            selectedId
+                        } else {
+                            timelineSpans[timelineSpans.size - 2].clip.id
+                        }
+                        onEditTransition(targetClipId)
+                    }
+                })
                 TimelineMiniButton(Lucide.Copy, "Duplicate", onClick = onDuplicateClip)
                 TimelineMiniButton(Lucide.Trash2, "Delete", isDanger = true, onClick = onDeleteClip)
                 TimelineMiniButton(Lucide.Plus, "Add Video", onClick = onAddClip)
@@ -3473,26 +3616,47 @@ private fun TimelineTabContent(
                             // Interactive Transition Badge Between Clips
                             if (i < timelineSpans.size - 1) {
                                 val trans = clip.transitionToNext
-                                Box(
+                                val hasTrans = trans != FcpTransitionType.NONE
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center,
                                     modifier = Modifier
                                         .padding(horizontal = 2.dp)
-                                        .size(24.dp)
-                                        .clip(CircleShape)
-                                        .background(
-                                            if (trans != FcpTransitionType.NONE) colors.primary
-                                            else if (colors.isDark) Color(0xFF2E3444) else Color(0xFFE2E8F0)
-                                        )
                                         .clickable {
                                             onEditTransition(clip.id)
-                                        },
-                                    contentAlignment = Alignment.Center
+                                        }
                                 ) {
-                                    Icon(
-                                        imageVector = trans.icon,
-                                        contentDescription = trans.label,
-                                        tint = if (trans != FcpTransitionType.NONE) Color.White else colors.textMuted,
-                                        modifier = Modifier.size(13.dp)
-                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .size(26.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(
+                                                if (hasTrans) colors.primary
+                                                else if (colors.isDark) Color(0xFF222734) else Color(0xFFE2E8F0)
+                                            )
+                                            .border(
+                                                1.dp,
+                                                if (hasTrans) Color.White.copy(alpha = 0.45f) else colors.glassBorder,
+                                                RoundedCornerShape(8.dp)
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = trans.icon,
+                                            contentDescription = trans.label,
+                                            tint = if (hasTrans) Color.White else colors.textMuted,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                    if (hasTrans) {
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = "${"%.1f".format(clip.transitionDurationSec)}s",
+                                            fontSize = 8.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = colors.primary
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -8077,60 +8241,81 @@ fun FcpTransitionDialog(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Transition options
-                    Row(
+                    // Transition options grid (3 columns x 3 rows)
+                    val chunkedTransitions = remember { FcpTransitionType.entries.chunked(3) }
+                    Column(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        FcpTransitionType.entries.forEach { type ->
-                            val isSelected = type == selectedType
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(
-                                        if (isSelected) colors.primary.copy(alpha = 0.18f)
-                                        else if (colors.isDark) Color(0xFF272B38) else Color(0xFFF1F3F7)
-                                    )
-                                    .border(
-                                        1.dp,
-                                        if (isSelected) colors.primary else Color.Transparent,
-                                        RoundedCornerShape(12.dp)
-                                    )
-                                    .clickable { selectedType = type }
-                                    .padding(vertical = 12.dp, horizontal = 4.dp),
-                                contentAlignment = Alignment.Center
+                        chunkedTransitions.forEach { rowTypes ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = type.icon,
-                                        contentDescription = type.label,
-                                        tint = if (isSelected) colors.primary else colors.textMuted,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Text(
-                                        text = type.label,
-                                        fontSize = 11.sp,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                        color = if (isSelected) colors.primary else colors.textMain
-                                    )
+                                rowTypes.forEach { type ->
+                                    val isSelected = type == selectedType
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(
+                                                if (isSelected) colors.primary.copy(alpha = 0.18f)
+                                                else if (colors.isDark) Color(0xFF272B38) else Color(0xFFF1F3F7)
+                                            )
+                                            .border(
+                                                1.dp,
+                                                if (isSelected) colors.primary else Color.Transparent,
+                                                RoundedCornerShape(12.dp)
+                                            )
+                                            .clickable { selectedType = type }
+                                            .padding(vertical = 10.dp, horizontal = 4.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = type.icon,
+                                                contentDescription = type.label,
+                                                tint = if (isSelected) colors.primary else colors.textMuted,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Text(
+                                                text = type.label,
+                                                fontSize = 11.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                color = if (isSelected) colors.primary else colors.textMain,
+                                                maxLines = 1
+                                            )
+                                        }
+                                    }
+                                }
+                                if (rowTypes.size < 3) {
+                                    repeat(3 - rowTypes.size) {
+                                        Spacer(modifier = Modifier.weight(1f))
+                                    }
                                 }
                             }
                         }
                     }
 
                     if (selectedType != FcpTransitionType.NONE) {
-                        Spacer(modifier = Modifier.height(18.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = selectedType.description,
+                            fontSize = 11.sp,
+                            color = colors.textMuted,
+                            modifier = Modifier.padding(horizontal = 2.dp)
+                        )
+                        Spacer(modifier = Modifier.height(14.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Duration",
+                                text = "Transition Duration",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = colors.textMain
@@ -8146,7 +8331,7 @@ fun FcpTransitionDialog(
                             value = durationSec,
                             onValueChange = { durationSec = it },
                             valueRange = 0.2f..2.0f,
-                            steps = 9,
+                            steps = 17,
                             colors = SliderDefaults.colors(
                                 thumbColor = colors.primary,
                                 activeTrackColor = colors.primary,
