@@ -142,4 +142,98 @@ object ExportHelper {
         }
         return uri
     }
+
+    /**
+     * Saves a video [java.io.File] into the device's public Gallery (Movies/ChromaStudio).
+     * Automatically registers with MediaStore so it appears immediately in Google Photos / Gallery.
+     */
+    fun saveVideoToGallery(
+        context: Context,
+        sourceFile: java.io.File,
+        title: String = "ChromaStudio_${System.currentTimeMillis()}"
+    ): Uri? {
+        val fullFileName = if (title.endsWith(".mp4")) title else "$title.mp4"
+        val contentValues = ContentValues().apply {
+            put(MediaStore.Video.Media.DISPLAY_NAME, fullFileName)
+            put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
+            put(MediaStore.Video.Media.TITLE, title.removeSuffix(".mp4"))
+            put(MediaStore.Video.Media.DATE_ADDED, System.currentTimeMillis() / 1000)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/ChromaStudio")
+                put(MediaStore.Video.Media.IS_PENDING, 1)
+            }
+        }
+
+        val resolver = context.contentResolver
+        val uri = resolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, contentValues)
+
+        uri?.let { destUri ->
+            try {
+                resolver.openOutputStream(destUri)?.use { outStream ->
+                    sourceFile.inputStream().use { inStream ->
+                        inStream.copyTo(outStream)
+                    }
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    contentValues.clear()
+                    contentValues.put(MediaStore.Video.Media.IS_PENDING, 0)
+                    resolver.update(destUri, contentValues, null, null)
+                } else {
+                    android.media.MediaScannerConnection.scanFile(
+                        context,
+                        arrayOf(sourceFile.absolutePath),
+                        arrayOf("video/mp4"),
+                        null
+                    )
+                }
+            } catch (e: Exception) {
+                resolver.delete(destUri, null, null)
+                return null
+            }
+        }
+        return uri
+    }
+
+    /**
+     * Saves a video from an input content [Uri] into the device's public Gallery (Movies/ChromaStudio).
+     */
+    fun saveVideoUriToGallery(
+        context: Context,
+        sourceUri: Uri,
+        title: String = "ChromaStudio_${System.currentTimeMillis()}"
+    ): Uri? {
+        val fullFileName = if (title.endsWith(".mp4")) title else "$title.mp4"
+        val contentValues = ContentValues().apply {
+            put(MediaStore.Video.Media.DISPLAY_NAME, fullFileName)
+            put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
+            put(MediaStore.Video.Media.TITLE, title.removeSuffix(".mp4"))
+            put(MediaStore.Video.Media.DATE_ADDED, System.currentTimeMillis() / 1000)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/ChromaStudio")
+                put(MediaStore.Video.Media.IS_PENDING, 1)
+            }
+        }
+
+        val resolver = context.contentResolver
+        val uri = resolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, contentValues)
+
+        uri?.let { destUri ->
+            try {
+                resolver.openOutputStream(destUri)?.use { outStream ->
+                    resolver.openInputStream(sourceUri)?.use { inStream ->
+                        inStream.copyTo(outStream)
+                    }
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    contentValues.clear()
+                    contentValues.put(MediaStore.Video.Media.IS_PENDING, 0)
+                    resolver.update(destUri, contentValues, null, null)
+                }
+            } catch (e: Exception) {
+                resolver.delete(destUri, null, null)
+                return null
+            }
+        }
+        return uri
+    }
 }

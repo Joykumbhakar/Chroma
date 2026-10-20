@@ -1179,16 +1179,18 @@ class HomeActivity : ComponentActivity() {
                         com.chroma.studio.ui.screens.FlashProjectsHubScreen(
                             onBack = { navController.popBackStack() },
                             onImportMedia = { uris ->
-                                flashImportedMediaUris = uris
-                                navController.navigate("creator_studio/flash")
+                                flashPickerVideoUri = uris.firstOrNull()
+                                navController.navigate("flash_video_editor")
                             },
                             onOpenDraft = { draft ->
-                                flashImportedMediaUris = emptyList()
-                                navController.navigate("creator_studio/${draft.mode}?draftId=${draft.id}")
+                                flashPickerVideoUri = draft.videoUri?.let { Uri.parse(it) }
+                                flashTrimStart = draft.flashTrimStartMs
+                                flashTrimEnd = draft.flashTrimEndMs
+                                navController.navigate("flash_video_editor?draftId=${draft.id}")
                             },
                             onOpenSavedVideo = { videoUri ->
-                                flashImportedMediaUris = listOf(videoUri)
-                                navController.navigate("creator_studio/flash")
+                                flashPickerVideoUri = videoUri
+                                navController.navigate("flash_video_editor")
                             }
                         )
                     }
@@ -1197,7 +1199,14 @@ class HomeActivity : ComponentActivity() {
                         com.chroma.studio.ui.screens.DraftsListScreen(
                             workRepository = vm.repository,
                             onOpenDraft = { draft ->
-                                navController.navigate("creator_studio/${draft.mode}?draftId=${draft.id}")
+                                if (draft.mode.equals("flash", ignoreCase = true) || draft.videoUri != null) {
+                                    flashPickerVideoUri = draft.videoUri?.let { Uri.parse(it) }
+                                    flashTrimStart = draft.flashTrimStartMs
+                                    flashTrimEnd = draft.flashTrimEndMs
+                                    navController.navigate("flash_video_editor?draftId=${draft.id}")
+                                } else {
+                                    navController.navigate("creator_studio/${draft.mode}?draftId=${draft.id}")
+                                }
                             },
                             onBack = { navController.popBackStack() }
                         )
@@ -1546,12 +1555,25 @@ class HomeActivity : ComponentActivity() {
                         )
                     }
 
-                    composable("flash_video_editor") {
-                        val uri = flashPickerVideoUri ?: run { navController.popBackStack(); return@composable }
+                    composable(
+                        route = "flash_video_editor?draftId={draftId}",
+                        arguments = listOf(
+                            androidx.navigation.navArgument("draftId") {
+                                type = androidx.navigation.NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            }
+                        )
+                    ) { backStackEntry ->
+                        val draftId = backStackEntry.arguments?.getString("draftId")
+                        val draft = draftId?.let { com.chroma.studio.data.DraftPostRepository(this@HomeActivity).getDraftById(it) }
+                        val uri = draft?.videoUri?.let { Uri.parse(it) } ?: flashPickerVideoUri
+                            ?: run { navController.popBackStack(); return@composable }
 
                         com.chroma.studio.ui.screens.FinalCutProVideoEditorScreen(
                             initialUri = uri,
                             initialUris = listOf(uri),
+                            draftId = draftId,
                             onDone = { startMs, endMs, clips ->
                                 flashTrimStart = startMs
                                 flashTrimEnd = endMs

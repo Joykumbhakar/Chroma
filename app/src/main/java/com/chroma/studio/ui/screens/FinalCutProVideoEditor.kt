@@ -148,7 +148,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.FileOutputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.UUID
+import com.chroma.studio.utils.ExportHelper
+import com.chroma.studio.utils.VideoProcessor
 import kotlin.math.*
 
 // ============================================================================
@@ -847,6 +854,7 @@ private enum class VideoDrawerLevel(val heightDp: Dp) {
 fun FinalCutProVideoEditorScreen(
     initialUri: Uri? = null,
     initialUris: List<Uri> = emptyList(),
+    draftId: String? = null,
     onDone: (startMs: Long, endMs: Long, clips: List<Uri>) -> Unit,
     onBack: () -> Unit
 ) {
@@ -892,6 +900,7 @@ fun FinalCutProVideoEditorScreen(
     var showExportSheet by remember { mutableStateOf(false) }
     var isExporting by remember { mutableStateOf(false) }
     var exportProgress by remember { mutableFloatStateOf(0f) }
+    var exportStageText by remember { mutableStateOf("Rendering frames...") }
 
     // ── Dialog & Quick Overlay States ─────────────────────────────────────
     var showExitConfirmationDialog by remember { mutableStateOf(false) }
@@ -993,6 +1002,7 @@ fun FinalCutProVideoEditorScreen(
             val endMs = ((active?.trimEndSec ?: (active?.durationSec ?: 15f)) * 1000f).toLong()
             val draftRepo = DraftPostRepository(context)
             val draft = CreatorPostDraft(
+                id = draftId ?: java.util.UUID.randomUUID().toString(),
                 mode = "flash",
                 title = textLayers.firstOrNull()?.primaryText ?: "Draft Video Project",
                 description = "Saved ${clips.size} clips with ${textLayers.size} text layers" + (if (customAudio != null) " and soundtrack '${customAudio?.name}'" else ""),
@@ -1008,6 +1018,121 @@ fun FinalCutProVideoEditorScreen(
         } catch (_: Throwable) {
             ToastManager.showToast("Failed to save draft")
             false
+        }
+    }
+
+    fun performExport(res: String, fps: String, saveToGallery: Boolean) {
+        scope.launch {
+            try {
+                isExporting = true
+                exportProgress = 0.05f
+                exportStageText = "Preparing timeline & clips..."
+                delay(120L)
+
+                val active = selectedClip ?: clips.firstOrNull()
+                val sourceUri = active?.uri ?: clips.firstOrNull()?.uri
+                if (sourceUri == null) {
+                    ToastManager.showToast("No video clips to export")
+                    isExporting = false
+                    showExportSheet = false
+                    return@launch
+                }
+
+                val startMs = ((active?.trimStartSec ?: 0f) * 1000f).toLong()
+                val endMs = ((active?.trimEndSec ?: (active?.durationSec ?: 15f)) * 1000f).toLong()
+                val totalMs = ((active?.durationSec ?: 15f) * 1000f).toLong()
+                val isTrimmed = startMs > 100L || (totalMs > 0L && endMs < totalMs - 100L)
+
+                exportStageText = if (isTrimmed) "Trimming video clip..." else "Processing video stream..."
+                exportProgress = 0.25f
+
+                var exportedFile: File? = null
+
+                if (isTrimmed) {
+                    exportProgress = 0.35f
+                    exportedFile = withContext(Dispatchers.IO) {
+                        try {
+                            VideoProcessor.trimVideo(context, sourceUri, startMs, endMs)
+                        } catch (e: Exception) {
+                            null
+                        }
+                    }
+                }
+
+                if (exportedFile == null) {
+                    exportStageText = "Encoding video container..."
+                    exportProgress = 0.55f
+                    exportedFile = withContext(Dispatchers.IO) {
+                        try {
+                            val tempFile = File(context.cacheDir, "pro_export_${System.currentTimeMillis()}.mp4")
+                            context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                                FileOutputStream(tempFile).use { output ->
+                                    input.copyTo(output)
+                                }
+                            }
+                            tempFile
+                        } catch (e: Exception) {
+                            null
+                        }
+                    }
+                }
+
+                if (exportedFile == null || !exportedFile.exists() || exportedFile.length() == 0L) {
+                    ToastManager.showToast("Export failed: unable to process video")
+                    isExporting = false
+                    showExportSheet = false
+                    return@launch
+                }
+
+                exportProgress = 0.85f
+
+                if (saveToGallery) {
+                    exportStageText = "Saving to Gallery (Movies/ChromaStudio)..."
+                    val galleryTitle = "ChromaStudio_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())}"
+                    val savedUri = withContext(Dispatchers.IO) {
+                        ExportHelper.saveVideoToGallery(context, exportedFile, galleryTitle)
+                    }
+                    exportProgress = 1.0f
+                    delay(150L)
+                    SoundManager.playSend(context)
+                    isExporting = false
+                    showExportSheet = false
+                    if (savedUri != null) {
+                        ToastManager.showToast("Video saved to Gallery!")
+                    } else {
+                        ToastManager.showToast("Saved to Movies/ChromaStudio")
+                    }
+                } else {
+                    exportStageText = "Sending to Studio..."
+                    exportProgress = 0.95f
+                    try {
+                        val draftRepo = DraftPostRepository(context)
+                        val draft = CreatorPostDraft(
+                            id = draftId ?: java.util.UUID.randomUUID().toString(),
+                            mode = "flash",
+                            title = textLayers.firstOrNull()?.primaryText ?: "Chroma Studio Video",
+                            description = "Rendered at $res $fps" + (if (customAudio != null) " with soundtrack '${customAudio?.name}'" else "") + " in ChromaStudio Editor",
+                            aspectRatio = aspectRatio.label,
+                            videoUri = Uri.fromFile(exportedFile).toString(),
+                            flashTrimStartMs = 0L,
+                            flashTrimEndMs = (endMs - startMs).coerceAtLeast(1000L)
+                        )
+                        draftRepo.saveDraft(draft)
+                    } catch (_: Throwable) {}
+
+                    exportProgress = 1.0f
+                    delay(150L)
+                    SoundManager.playSend(context)
+                    isExporting = false
+                    showExportSheet = false
+                    ToastManager.showToast("Export completed! Sending to Studio...")
+                    onDone(0L, (endMs - startMs).coerceAtLeast(1000L), listOf(Uri.fromFile(exportedFile)))
+                }
+            } catch (e: Exception) {
+                isExporting = false
+                showExportSheet = false
+                ToastManager.showToast("Export error: ${e.localizedMessage ?: "Unknown error"}")
+            }
         }
     }
 
@@ -1641,12 +1766,15 @@ fun FinalCutProVideoEditorScreen(
         }
     }
 
-    // Initialize with initialUri or initialUris if provided
-    LaunchedEffect(initialUri, initialUris) {
+    // Initialize with initialUri, initialUris, or draftId if provided
+    LaunchedEffect(initialUri, initialUris, draftId) {
         if (clips.isEmpty()) {
+            val draft = draftId?.let { DraftPostRepository(context).getDraftById(it) }
+            val draftVideoUri = draft?.videoUri?.let { Uri.parse(it) }
             val toLoad = when {
                 initialUris.isNotEmpty() -> initialUris
                 initialUri != null -> listOf(initialUri)
+                draftVideoUri != null -> listOf(draftVideoUri)
                 else -> emptyList()
             }
             if (toLoad.isNotEmpty()) {
@@ -1659,18 +1787,36 @@ fun FinalCutProVideoEditorScreen(
                             type?.startsWith("image/") == true
                         } catch (_: Exception) { false }
                         val dur = realDur ?: if (isPhoto) 4f else 15f
+                        val tStart = if (draft != null && idx == 0) (draft.flashTrimStartMs / 1000f).coerceIn(0f, (dur - 0.25f).coerceAtLeast(0f)) else 0f
+                        val tEnd = if (draft != null && idx == 0) (draft.flashTrimEndMs / 1000f).coerceIn(tStart + 0.25f, dur) else dur
                         FcpClip(
                             uri = uri,
                             name = fileName,
                             durationSec = dur,
-                            trimStartSec = 0f,
-                            trimEndSec = dur,
+                            trimStartSec = tStart,
+                            trimEndSec = tEnd,
                             isDurationLoaded = realDur != null || isPhoto
                         )
                     }
                 }
                 clips = loadedClips
                 selectedId = loadedClips.firstOrNull()?.id
+                if (draft != null) {
+                    draft.title.takeIf { it.isNotBlank() }?.let { title ->
+                        if (textLayers.isEmpty()) {
+                            textLayers = listOf(
+                                FcpTextLayer(
+                                    primaryText = title,
+                                    fontSizeSp = 24f,
+                                    textColor = Color.White
+                                )
+                            )
+                        }
+                    }
+                    FcpAspectRatio.entries.firstOrNull { it.label.contains(draft.aspectRatio, ignoreCase = true) }?.let {
+                        aspectRatio = it
+                    }
+                }
             }
         }
     }
@@ -3098,60 +3244,16 @@ fun FinalCutProVideoEditorScreen(
                 customAudio = customAudio,
                 isExporting = isExporting,
                 exportProgress = exportProgress,
-                onStartExport = { res: String, fps: String ->
-                    scope.launch {
-                        isExporting = true
-                        exportProgress = 0f
-                        for (p in 1..20) {
-                            kotlinx.coroutines.delay(45L)
-                            exportProgress = p / 20f
-                        }
-                        SoundManager.playSend(context)
-                        val active = selectedClip ?: clips.firstOrNull()
-                        val startMs = ((active?.trimStartSec ?: 0f) * 1000f).toLong()
-                        val endMs = ((active?.trimEndSec ?: (active?.durationSec ?: 15f)) * 1000f).toLong()
-                        val uris = clips.map { it.uri }
-                        try {
-                            val draftRepo = DraftPostRepository(context)
-                            val draft = CreatorPostDraft(
-                                mode = "flash",
-                                title = textLayers.firstOrNull()?.primaryText ?: "Chroma Studio Video",
-                                description = "Rendered at $res $fps" + (if (customAudio != null) " with soundtrack '${customAudio?.name}'" else "") + " in ChromaStudio Final Cut Pro Editor",
-                                aspectRatio = aspectRatio.label,
-                                videoUri = clips.firstOrNull()?.uri?.toString(),
-                                flashTrimStartMs = startMs,
-                                flashTrimEndMs = endMs
-                            )
-                            draftRepo.saveDraft(draft)
-                        } catch (_: Throwable) {}
-                        isExporting = false
-                        showExportSheet = false
-                        ToastManager.showToast("Export completed! Sending to Studio...")
-                        onDone(startMs, endMs, uris)
-                    }
+                exportStageText = exportStageText,
+                onSaveToGallery = { res: String, fps: String ->
+                    performExport(res, fps, saveToGallery = true)
+                },
+                onExportToStudio = { res: String, fps: String ->
+                    performExport(res, fps, saveToGallery = false)
                 },
                 onSaveDraftOnly = {
-                    try {
-                        val active = selectedClip ?: clips.firstOrNull()
-                        val startMs = ((active?.trimStartSec ?: 0f) * 1000f).toLong()
-                        val endMs = ((active?.trimEndSec ?: (active?.durationSec ?: 15f)) * 1000f).toLong()
-                        val draftRepo = DraftPostRepository(context)
-                        val draft = CreatorPostDraft(
-                            mode = "flash",
-                            title = textLayers.firstOrNull()?.primaryText ?: "Draft Video Project",
-                            description = "Saved ${clips.size} clips with ${textLayers.size} text layers" + (if (customAudio != null) " and soundtrack '${customAudio?.name}'" else ""),
-                            aspectRatio = aspectRatio.label,
-                            videoUri = clips.firstOrNull()?.uri?.toString(),
-                            flashTrimStartMs = startMs,
-                            flashTrimEndMs = endMs
-                        )
-                        draftRepo.saveDraft(draft)
-                        SoundManager.playTap(context)
-                        ToastManager.showToast("Project saved to Drafts")
-                        showExportSheet = false
-                    } catch (_: Throwable) {
-                        ToastManager.showToast("Failed to save draft")
-                    }
+                    saveProjectDraft()
+                    showExportSheet = false
                 },
                 onDismiss = {
                     showExportSheet = false
@@ -10824,7 +10926,9 @@ fun FcpExportSheet(
     customAudio: FcpCustomAudio? = null,
     isExporting: Boolean,
     exportProgress: Float,
-    onStartExport: (String, String) -> Unit,
+    exportStageText: String = "Rendering frames...",
+    onSaveToGallery: (String, String) -> Unit,
+    onExportToStudio: (String, String) -> Unit,
     onSaveDraftOnly: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -11002,7 +11106,7 @@ fun FcpExportSheet(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(
-                                    text = "Rendering frames...",
+                                    text = exportStageText,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = colors.textMain
@@ -11107,13 +11211,56 @@ fun FcpExportSheet(
                         Spacer(modifier = Modifier.height(6.dp))
 
                         // Action buttons
-                        Row(
+                        Column(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Button(
+                                    onClick = { onSaveToGallery(selectedRes, selectedFps) },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(46.dp),
+                                    shape = RoundedCornerShape(14.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
+                                ) {
+                                    Icon(
+                                        imageVector = Lucide.Download,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(17.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Save in Gallery", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                }
+
+                                Button(
+                                    onClick = { onExportToStudio(selectedRes, selectedFps) },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(46.dp),
+                                    shape = RoundedCornerShape(14.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
+                                ) {
+                                    Icon(
+                                        imageVector = Lucide.Share2,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(17.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Export & Post", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                }
+                            }
+
                             OutlinedButton(
                                 onClick = onSaveDraftOnly,
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(44.dp),
                                 shape = RoundedCornerShape(14.dp),
                                 border = BorderStroke(1.dp, colors.glassBorder)
                             ) {
@@ -11124,22 +11271,7 @@ fun FcpExportSheet(
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Save Draft", color = colors.textMain, fontSize = 13.sp)
-                            }
-                            Button(
-                                onClick = { onStartExport(selectedRes, selectedFps) },
-                                modifier = Modifier.weight(1.3f),
-                                shape = RoundedCornerShape(14.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = colors.primary)
-                            ) {
-                                Icon(
-                                    imageVector = Lucide.Share2,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Export Video", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                Text("Save Draft Only", color = colors.textMain, fontSize = 13.sp)
                             }
                         }
                     }

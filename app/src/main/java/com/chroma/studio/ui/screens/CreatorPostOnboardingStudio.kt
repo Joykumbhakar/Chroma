@@ -427,7 +427,11 @@ fun CreatorPostOnboardingStudioScreen(
 
                 if (slides.isNotEmpty()) {
                     currentSlideIndex = 0
-                    currentStep = StudioStep.STEP_1_PREVIEW
+                    currentStep = if (studioMode == CreatorStudioMode.FLASH) {
+                        StudioStep.STEP_0_PRE_TOOL
+                    } else {
+                        StudioStep.STEP_1_PREVIEW
+                    }
                 }
             }
         } else if (slides.isEmpty()) {
