@@ -261,7 +261,7 @@ data class FcpCanvasBackground(
     val solidColor: Color = Color.Black,
     val customImageUri: Uri? = null,
     val studioBackdropId: String = "obsidian",
-    val backdropDim: Float = 0.25f
+    val backdropDim: Float = 0.0f
 )
 
 // ── Typography & Ready-Made Title Models ──────────────────────────────────
@@ -1766,17 +1766,33 @@ fun FinalCutProVideoEditorScreen(
             (currentTimeSec / 1.5f).toInt() * 1.5f
         }
     }
-    LaunchedEffect(selectedClip?.uri, quantizedTimeSec, canvasBackground.type, isPlaying) {
-        if (canvasBackground.type != FcpCanvasBgType.BLUR) return@LaunchedEffect
+    LaunchedEffect(selectedClip?.uri, quantizedTimeSec, canvasBackground.type, activeTab, isPlaying) {
+        if (canvasBackground.type != FcpCanvasBgType.BLUR && activeTab != FcpWorkspaceTab.CANVAS) return@LaunchedEffect
         // While actively playing, do not churn MediaMetadataRetriever to avoid disk I/O contention
         if (isPlaying && blurBackgroundBitmap != null) return@LaunchedEffect
         val curClip = selectedClip ?: return@LaunchedEffect
         withContext(Dispatchers.IO) {
+            val isPhoto = isClipPhoto(curClip)
+            if (isPhoto) {
+                try {
+                    context.contentResolver.openInputStream(curClip.uri)?.use { stream ->
+                        val bmp = android.graphics.BitmapFactory.decodeStream(stream)
+                        if (bmp != null) {
+                            withContext(Dispatchers.Main) {
+                                blurBackgroundBitmap = bmp
+                            }
+                        }
+                    }
+                } catch (_: Throwable) {}
+                return@withContext
+            }
             val timeUs = (quantizedTimeSec * 1_000_000L).toLong()
             val key = "blur_bg_${curClip.uri}_${timeUs / 1_500_000L}"
             val cached = FcpThumbnailMemoryCache.get(key)
             if (cached != null) {
-                blurBackgroundBitmap = cached
+                withContext(Dispatchers.Main) {
+                    blurBackgroundBitmap = cached
+                }
             } else {
                 var retriever: MediaMetadataRetriever? = null
                 try {
@@ -1786,15 +1802,17 @@ fun FinalCutProVideoEditorScreen(
                         retriever.getScaledFrameAtTime(
                             timeUs,
                             MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
-                            160,
-                            200
+                            240,
+                            240
                         )
                     } else {
                         retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
                     }
                     if (bmp != null) {
                         FcpThumbnailMemoryCache.put(key, bmp)
-                        blurBackgroundBitmap = bmp
+                        withContext(Dispatchers.Main) {
+                            blurBackgroundBitmap = bmp
+                        }
                     }
                 } catch (_: Throwable) {
                 } finally {
@@ -3061,7 +3079,7 @@ fun FinalCutProVideoEditorScreen(
                                     background = canvasBackground,
                                     onBackgroundChange = { canvasBackground = it },
                                     onPickImage = { bgImagePicker.launch("image/*") },
-                                    blurBitmap = blurBackgroundBitmap,
+                                    blurBitmap = blurBackgroundBitmap ?: selectedClip?.let { FcpThumbnailMemoryCache.get("${it.uri}_0") },
                                     isDarkMode = colors.isDark
                                 )
                             }
@@ -10457,6 +10475,8 @@ private fun CanvasBackgroundLayer(
                             .then(
                                 if (blurEffect != null) {
                                     Modifier.graphicsLayer {
+                                        scaleX = 1.15f
+                                        scaleY = 1.15f
                                         renderEffect = blurEffect
                                     }
                                 } else {
@@ -10475,12 +10495,14 @@ private fun CanvasBackgroundLayer(
                             )
                     )
                 }
-                // Ambient contrast scrim so foreground video always pops out
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = background.backdropDim.coerceAtLeast(0.35f)))
-                )
+                // Ambient contrast scrim (only applied if user sets backdropDim > 0f)
+                if (background.backdropDim > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = background.backdropDim.coerceIn(0f, 1f)))
+                    )
+                }
             }
             FcpCanvasBgType.COLOR -> {
                 Box(
@@ -10606,15 +10628,34 @@ private fun CanvasTabContent(
         // Mode Content
         when (background.type) {
             FcpCanvasBgType.BLUR -> {
-                // Blur Radius Presets
+                // Blur Radius Presets - Showing users the pure video frame with that specific amount of blur
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = "BLUR INTENSITY",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = colors.textMuted,
-                        letterSpacing = 0.5.sp
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "BLUR INTENSITY",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = colors.textMuted,
+                            letterSpacing = 0.5.sp
+                        )
+                        val activeLabel = when {
+                            abs(background.blurRadius - 15f) < 1f -> "Subtle"
+                            abs(background.blurRadius - 35f) < 1f -> "Frosted"
+                            abs(background.blurRadius - 65f) < 1f -> "Deep"
+                            abs(background.blurRadius - 100f) < 1f -> "Ultra"
+                            else -> "${background.blurRadius.toInt()}px"
+                        }
+                        Text(
+                            text = activeLabel,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = colors.primary
+                        )
+                    }
 
                     val blurPresets = listOf(
                         15f to "Subtle",
@@ -10627,21 +10668,44 @@ private fun CanvasTabContent(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        blurPresets.forEach { (radius, label) ->
+                        blurPresets.forEach { (radius, _) ->
                             val isSelected = abs(background.blurRadius - radius) < 1f
+                            val blurEffect = remember(radius) {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                    android.graphics.RenderEffect.createBlurEffect(
+                                        radius,
+                                        radius,
+                                        android.graphics.Shader.TileMode.CLAMP
+                                    ).asComposeRenderEffect()
+                                } else null
+                            }
+
+                            val previewBmp = remember(blurBitmap, radius) {
+                                if (blurBitmap == null) null
+                                else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) blurBitmap
+                                else {
+                                    try {
+                                        val factor = (radius / 8f).toInt().coerceIn(2, 16)
+                                        val smallW = (blurBitmap.width / factor).coerceAtLeast(1)
+                                        val smallH = (blurBitmap.height / factor).coerceAtLeast(1)
+                                        val scaledDown = Bitmap.createScaledBitmap(blurBitmap, smallW, smallH, true)
+                                        Bitmap.createScaledBitmap(scaledDown, blurBitmap.width, blurBitmap.height, true)
+                                    } catch (_: Throwable) {
+                                        blurBitmap
+                                    }
+                                }
+                            }
+
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(46.dp)
+                                    .height(68.dp)
                                     .clip(RoundedCornerShape(10.dp))
-                                    .background(
-                                        if (isSelected) colors.primary.copy(alpha = 0.15f)
-                                        else (if (isDarkMode) Color(0xFF1A1A1E) else Color(0xFFF3F4F6))
-                                    )
+                                    .background(if (isDarkMode) Color(0xFF141416) else Color(0xFFE5E7EB))
                                     .border(
-                                        1.dp,
-                                        if (isSelected) colors.primary else Color.White.copy(alpha = 0.08f),
-                                        RoundedCornerShape(10.dp)
+                                        width = if (isSelected) 2.dp else 1.dp,
+                                        color = if (isSelected) colors.primary else Color.White.copy(alpha = 0.12f),
+                                        shape = RoundedCornerShape(10.dp)
                                     )
                                     .clickable {
                                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -10649,17 +10713,34 @@ private fun CanvasTabContent(
                                     },
                                 contentAlignment = Alignment.Center
                             ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(
-                                        text = label,
-                                        fontSize = 12.sp,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (isSelected) colors.primary else colors.textMain
+                                if (previewBmp != null) {
+                                    val imgBmp = remember(previewBmp) { previewBmp.asImageBitmap() }
+                                    Image(
+                                        bitmap = imgBmp,
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .graphicsLayer {
+                                                scaleX = 1.25f
+                                                scaleY = 1.25f
+                                                if (blurEffect != null) {
+                                                    renderEffect = blurEffect
+                                                }
+                                            }
                                     )
-                                    Text(
-                                        text = "${radius.toInt()}px",
-                                        fontSize = 9.sp,
-                                        color = colors.textMuted
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(
+                                                Brush.verticalGradient(
+                                                    listOf(
+                                                        Color(0xFF2563EB).copy(alpha = 0.40f),
+                                                        Color(0xFF1E293B).copy(alpha = 0.85f)
+                                                    )
+                                                )
+                                            )
                                     )
                                 }
                             }
