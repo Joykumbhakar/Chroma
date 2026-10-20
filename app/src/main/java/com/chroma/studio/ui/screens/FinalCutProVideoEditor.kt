@@ -1228,9 +1228,6 @@ fun FinalCutProVideoEditorScreen(
         val clamped = newSec.coerceIn(0f, totalDurationSec)
         currentTimeSec = clamped
         scrubChannel.trySend(clamped)
-        if (customAudio != null) {
-            customAudioPlayer.seekTo((clamped * 1000f).toLong().coerceAtLeast(0L))
-        }
     }
 
     fun onScrubEnd(finalSec: Float) {
@@ -2351,7 +2348,7 @@ fun FinalCutProVideoEditorScreen(
                                 FcpTextLayerOverlay(
                                     layer = layer,
                                     isSelected = layer.id == selectedTextLayerId && activeTab == FcpWorkspaceTab.TITLES,
-                                    currentTimeSec = currentTimeSec,
+                                    currentTimeSecProvider = { currentTimeSec },
                                     isPlaying = isPlaying,
                                     onSelect = {
                                         selectedTextLayerId = layer.id
@@ -3266,7 +3263,7 @@ private fun VideoWorkspaceTabs(
 // ============================================================================
 
 object FcpThumbnailMemoryCache {
-    private val cache = LruCache<String, Bitmap>(200)
+    private val cache = LruCache<String, Bitmap>(300)
     fun get(key: String): Bitmap? = cache.get(key)
     fun put(key: String, bitmap: Bitmap) { cache.put(key, bitmap) }
 }
@@ -3283,7 +3280,9 @@ private fun FcpClipFilmstrip(
     val tileCount = (clipWidthDp / tileWidthDp).toInt().coerceIn(1, 40)
     val actualTileWidthDp = clipWidthDp / tileCount
 
-    var refreshTrigger by remember { mutableIntStateOf(0) }
+    val tileBitmaps = remember(clip.id, clip.uri, clip.trimStartSec, clip.trimEndSec, tileCount) {
+        mutableStateMapOf<Int, Bitmap>()
+    }
 
     LaunchedEffect(clip.uri, clip.trimStartSec, clip.trimEndSec, tileCount) {
         withContext(Dispatchers.IO) {
@@ -3295,7 +3294,10 @@ private fun FcpClipFilmstrip(
                     val sec = clip.trimStartSec + fraction * (clip.trimEndSec - clip.trimStartSec)
                     val timeUs = (sec * 1_000_000L).toLong()
                     val key = "${clip.uri}_${timeUs / 500_000L}"
-                    if (FcpThumbnailMemoryCache.get(key) == null) {
+                    val cached = FcpThumbnailMemoryCache.get(key)
+                    if (cached != null) {
+                        tileBitmaps[i] = cached
+                    } else {
                         if (!opened) {
                             retriever = MediaMetadataRetriever()
                             retriever.setDataSource(context, clip.uri)
@@ -3313,7 +3315,7 @@ private fun FcpClipFilmstrip(
                         }
                         if (bmp != null) {
                             FcpThumbnailMemoryCache.put(key, bmp)
-                            refreshTrigger++
+                            tileBitmaps[i] = bmp
                         }
                     }
                 }
@@ -3330,11 +3332,7 @@ private fun FcpClipFilmstrip(
         verticalAlignment = Alignment.CenterVertically
     ) {
         for (i in 0 until tileCount) {
-            val fraction = (i + 0.5f) / tileCount
-            val sec = clip.trimStartSec + fraction * (clip.trimEndSec - clip.trimStartSec)
-            val timeUs = (sec * 1_000_000L).toLong()
-            val key = "${clip.uri}_${timeUs / 500_000L}"
-            val bmp = remember(key, refreshTrigger) { FcpThumbnailMemoryCache.get(key) }
+            val bmp = tileBitmaps[i]
 
             Box(
                 modifier = Modifier
@@ -3344,8 +3342,9 @@ private fun FcpClipFilmstrip(
                 contentAlignment = Alignment.Center
             ) {
                 if (bmp != null) {
+                    val imgBmp = remember(bmp) { bmp.asImageBitmap() }
                     Image(
-                        bitmap = bmp.asImageBitmap(),
+                        bitmap = imgBmp,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
@@ -4096,7 +4095,12 @@ private fun TimelineTabContent(
                             .padding(horizontal = 6.dp),
                         contentAlignment = Alignment.CenterStart
                     ) {
-                        // Stylized Waveform Bars background
+                        // Fast Vector Waveform Bars (Precalculated Factors)
+                        val waveformFactors = remember {
+                            FloatArray(120) { i ->
+                                ((Math.sin(i * 0.45) * 0.45 + Math.cos(i * 0.22) * 0.35 + 0.8).toFloat()).coerceIn(0.2f, 1.0f)
+                            }
+                        }
                         Canvas(modifier = Modifier.fillMaxSize()) {
                             val barWidth = 2.dp.toPx()
                             val barGap = 2.dp.toPx()
@@ -4104,9 +4108,10 @@ private fun TimelineTabContent(
                             val count = (size.width / totalBarStep).toInt()
                             val centerY = size.height / 2f
                             val maxBarHeight = size.height * 0.7f
+                            val factorCount = waveformFactors.size
 
                             for (i in 0 until count) {
-                                val factor = ((Math.sin(i * 0.45) * 0.45 + Math.cos(i * 0.22) * 0.35 + 0.8).toFloat()).coerceIn(0.2f, 1.0f)
+                                val factor = waveformFactors[i % factorCount]
                                 val barH = maxBarHeight * factor
                                 val x = i * totalBarStep + barGap
                                 drawRoundRect(
@@ -5706,7 +5711,7 @@ private fun FcpFontDropdownSelector(
 private fun FcpTextLayerOverlay(
     layer: FcpTextLayer,
     isSelected: Boolean,
-    currentTimeSec: Float = 0f,
+    currentTimeSecProvider: () -> Float = { 0f },
     isPlaying: Boolean = false,
     onSelect: () -> Unit,
     onTransform: (dxDp: Float, dyDp: Float, zoomChange: Float, rotationDelta: Float) -> Unit,
@@ -5752,7 +5757,7 @@ private fun FcpTextLayerOverlay(
         }
     }
 
-    // Interactive Animation Preview Engine
+    // High-performance hardware animation engine
     val infiniteTransition = rememberInfiniteTransition(label = "textAnim_${layer.id}")
     val previewProgress by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -5764,135 +5769,16 @@ private fun FcpTextLayerOverlay(
         label = "textAnimProg_${layer.id}"
     )
 
-    val effectiveTime = if (isPlaying) currentTimeSec else (previewProgress * 3.5f)
     val animDuration = layer.animationDurationSec.coerceIn(0.2f, 2.0f)
-    val inProgress = (effectiveTime / animDuration).coerceIn(0f, 1f)
-    val outStart = (3.5f - animDuration).coerceAtLeast(animDuration)
-    val outProgress = if (effectiveTime >= outStart) {
-        ((effectiveTime - outStart) / animDuration).coerceIn(0f, 1f)
-    } else 0f
-
-    var animAlpha = 1.0f
-    var animScaleX = 1.0f
-    var animScaleY = 1.0f
-    var animTransX = 0f
-    var animTransY = 0f
-    var animRotZ = 0f
-
-    // Entrance Animation
-    if (layer.inAnimation != TextInAnimation.NONE && inProgress < 1f) {
-        when (layer.inAnimation) {
-            TextInAnimation.FADE_IN -> {
-                animAlpha *= inProgress
-            }
-            TextInAnimation.SLIDE_UP -> {
-                animAlpha *= inProgress
-                animTransY += (1f - inProgress) * 45f
-            }
-            TextInAnimation.SLIDE_RIGHT -> {
-                animAlpha *= inProgress
-                animTransX -= (1f - inProgress) * 70f
-            }
-            TextInAnimation.ZOOM_IN -> {
-                animAlpha *= inProgress
-                val s = 0.35f + (0.65f * inProgress)
-                animScaleX *= s
-                animScaleY *= s
-            }
-            TextInAnimation.BOUNCE_IN -> {
-                animAlpha *= inProgress
-                val bounce = if (inProgress < 0.65f) {
-                    (inProgress / 0.65f) * 1.18f
-                } else {
-                    1.18f - ((inProgress - 0.65f) / 0.35f) * 0.18f
-                }
-                animScaleX *= bounce
-                animScaleY *= bounce
-            }
-            TextInAnimation.FLIP_IN -> {
-                animAlpha *= inProgress
-                animRotZ += (1f - inProgress) * 18f
-                animScaleY *= inProgress
-            }
-            TextInAnimation.GLITCH_IN -> {
-                animAlpha *= if (inProgress < 0.3f && ((inProgress * 20).toInt() % 2 == 0)) 0.2f else 1f
-                animTransX += (kotlin.math.sin(inProgress * 25f) * (1f - inProgress) * 14f)
-            }
-        }
-    }
-
-    // Exit Animation
-    if (layer.outAnimation != TextOutAnimation.NONE && outProgress > 0f) {
-        when (layer.outAnimation) {
-            TextOutAnimation.FADE_OUT -> {
-                animAlpha *= (1f - outProgress)
-            }
-            TextOutAnimation.SLIDE_DOWN -> {
-                animAlpha *= (1f - outProgress)
-                animTransY += outProgress * 45f
-            }
-            TextOutAnimation.SLIDE_LEFT -> {
-                animAlpha *= (1f - outProgress)
-                animTransX -= outProgress * 70f
-            }
-            TextOutAnimation.ZOOM_OUT -> {
-                animAlpha *= (1f - outProgress)
-                val s = 1f - (outProgress * 0.5f)
-                animScaleX *= s
-                animScaleY *= s
-            }
-            TextOutAnimation.BLUR_OUT -> {
-                animAlpha *= (1f - outProgress)
-                val s = 1f + (outProgress * 0.22f)
-                animScaleX *= s
-                animScaleY *= s
-            }
-            TextOutAnimation.FLIP_OUT -> {
-                animAlpha *= (1f - outProgress)
-                animScaleY *= (1f - outProgress)
-                animRotZ -= outProgress * 18f
-            }
-        }
-    }
-
-    // Combo Loop Animation
-    if (layer.comboAnimation != TextComboAnimation.NONE) {
-        val t = effectiveTime
-        when (layer.comboAnimation) {
-            TextComboAnimation.PULSE -> {
-                val p = 1f + 0.08f * kotlin.math.sin(t * 5f)
-                animScaleX *= p
-                animScaleY *= p
-            }
-            TextComboAnimation.WAVE_FLOAT -> {
-                animTransY += 6f * kotlin.math.sin(t * 4f)
-            }
-            TextComboAnimation.NEON_FLICKER -> {
-                if (((t * 12).toInt() % 11 == 0)) {
-                    animAlpha *= 0.55f
-                }
-            }
-            TextComboAnimation.SHAKE -> {
-                animTransX += 2.5f * kotlin.math.sin(t * 30f)
-                animTransY += 2f * kotlin.math.cos(t * 26f)
-            }
-            TextComboAnimation.SWING -> {
-                animRotZ += 3.5f * kotlin.math.sin(t * 3.5f)
-            }
-            TextComboAnimation.HEARTBEAT -> {
-                val beat = kotlin.math.sin(t * 6f).coerceAtLeast(0f)
-                val s = 1f + (beat * beat * 0.14f)
-                animScaleX *= s
-                animScaleY *= s
-            }
-            else -> {}
-        }
-    }
 
     // Typewriter text slicing
-    val displayedPrimaryText = if (layer.inAnimation == TextInAnimation.TYPEWRITER && inProgress < 1f) {
-        val len = (layer.primaryText.length * inProgress).toInt().coerceAtLeast(1)
-        layer.primaryText.take(len)
+    val displayedPrimaryText = if (layer.inAnimation == TextInAnimation.TYPEWRITER) {
+        val curT = if (isPlaying) currentTimeSecProvider() else (previewProgress * 3.5f)
+        val inP = (curT / animDuration).coerceIn(0f, 1f)
+        if (inP < 1f) {
+            val len = (layer.primaryText.length * inP).toInt().coerceAtLeast(1)
+            layer.primaryText.take(len)
+        } else layer.primaryText
     } else {
         layer.primaryText
     }
@@ -5913,6 +5799,132 @@ private fun FcpTextLayerOverlay(
                 }
             }
             .graphicsLayer {
+                val effectiveTime = if (isPlaying) currentTimeSecProvider() else (previewProgress * 3.5f)
+                val inProgress = (effectiveTime / animDuration).coerceIn(0f, 1f)
+                val outStart = (3.5f - animDuration).coerceAtLeast(animDuration)
+                val outProgress = if (effectiveTime >= outStart) {
+                    ((effectiveTime - outStart) / animDuration).coerceIn(0f, 1f)
+                } else 0f
+
+                var animAlpha = 1.0f
+                var animScaleX = 1.0f
+                var animScaleY = 1.0f
+                var animTransX = 0f
+                var animTransY = 0f
+                var animRotZ = 0f
+
+                // Entrance Animation
+                if (layer.inAnimation != TextInAnimation.NONE && inProgress < 1f) {
+                    when (layer.inAnimation) {
+                        TextInAnimation.FADE_IN -> {
+                            animAlpha *= inProgress
+                        }
+                        TextInAnimation.SLIDE_UP -> {
+                            animAlpha *= inProgress
+                            animTransY += (1f - inProgress) * 45f
+                        }
+                        TextInAnimation.SLIDE_RIGHT -> {
+                            animAlpha *= inProgress
+                            animTransX -= (1f - inProgress) * 70f
+                        }
+                        TextInAnimation.ZOOM_IN -> {
+                            animAlpha *= inProgress
+                            val s = 0.35f + (0.65f * inProgress)
+                            animScaleX *= s
+                            animScaleY *= s
+                        }
+                        TextInAnimation.BOUNCE_IN -> {
+                            animAlpha *= inProgress
+                            val bounce = if (inProgress < 0.65f) {
+                                (inProgress / 0.65f) * 1.18f
+                            } else {
+                                1.18f - ((inProgress - 0.65f) / 0.35f) * 0.18f
+                            }
+                            animScaleX *= bounce
+                            animScaleY *= bounce
+                        }
+                        TextInAnimation.FLIP_IN -> {
+                            animAlpha *= inProgress
+                            animRotZ += (1f - inProgress) * 18f
+                            animScaleY *= inProgress
+                        }
+                        TextInAnimation.GLITCH_IN -> {
+                            animAlpha *= if (inProgress < 0.3f && ((inProgress * 20).toInt() % 2 == 0)) 0.2f else 1f
+                            animTransX += (kotlin.math.sin(inProgress * 25f) * (1f - inProgress) * 14f)
+                        }
+                        TextInAnimation.NONE, TextInAnimation.TYPEWRITER -> {}
+                    }
+                }
+
+                // Exit Animation
+                if (layer.outAnimation != TextOutAnimation.NONE && outProgress > 0f) {
+                    when (layer.outAnimation) {
+                        TextOutAnimation.FADE_OUT -> {
+                            animAlpha *= (1f - outProgress)
+                        }
+                        TextOutAnimation.SLIDE_DOWN -> {
+                            animAlpha *= (1f - outProgress)
+                            animTransY += outProgress * 45f
+                        }
+                        TextOutAnimation.SLIDE_LEFT -> {
+                            animAlpha *= (1f - outProgress)
+                            animTransX -= outProgress * 70f
+                        }
+                        TextOutAnimation.ZOOM_OUT -> {
+                            animAlpha *= (1f - outProgress)
+                            val s = 1f - (outProgress * 0.5f)
+                            animScaleX *= s
+                            animScaleY *= s
+                        }
+                        TextOutAnimation.BLUR_OUT -> {
+                            animAlpha *= (1f - outProgress)
+                            val s = 1f + (outProgress * 0.22f)
+                            animScaleX *= s
+                            animScaleY *= s
+                        }
+                        TextOutAnimation.FLIP_OUT -> {
+                            animAlpha *= (1f - outProgress)
+                            animScaleY *= (1f - outProgress)
+                            animRotZ -= outProgress * 18f
+                        }
+                        TextOutAnimation.NONE -> {}
+                    }
+                }
+
+                // Combo Loop Animation
+                if (layer.comboAnimation != TextComboAnimation.NONE) {
+                    val t = effectiveTime
+                    when (layer.comboAnimation) {
+                        TextComboAnimation.PULSE -> {
+                            val p = 1f + 0.08f * kotlin.math.sin(t * 5f)
+                            animScaleX *= p
+                            animScaleY *= p
+                        }
+                        TextComboAnimation.WAVE_FLOAT -> {
+                            animTransY += 6f * kotlin.math.sin(t * 4f)
+                        }
+                        TextComboAnimation.NEON_FLICKER -> {
+                            if (((t * 12).toInt() % 11 == 0)) {
+                                animAlpha *= 0.55f
+                            }
+                        }
+                        TextComboAnimation.SHAKE -> {
+                            animTransX += 2.5f * kotlin.math.sin(t * 30f)
+                            animTransY += 2f * kotlin.math.cos(t * 26f)
+                        }
+                        TextComboAnimation.SWING -> {
+                            animRotZ += 3.5f * kotlin.math.sin(t * 3.5f)
+                        }
+                        TextComboAnimation.HEARTBEAT -> {
+                            val beat = kotlin.math.sin(t * 6f).coerceAtLeast(0f)
+                            val s = 1f + (beat * beat * 0.14f)
+                            animScaleX *= s
+                            animScaleY *= s
+                        }
+                        TextComboAnimation.NONE -> {}
+                    }
+                }
+
                 alpha = (effectiveOpacity * animAlpha).coerceIn(0f, 1f)
                 scaleX = animScaleX
                 scaleY = animScaleY
@@ -8400,6 +8412,7 @@ private fun FcpTextAnimationStudio(
                     previewAlpha *= if (inProg < 0.3f && ((inProg * 20).toInt() % 2 == 0)) 0.2f else 1f
                     previewTransX += (kotlin.math.sin(inProg * 25f) * (1f - inProg) * 14f)
                 }
+                TextInAnimation.NONE, TextInAnimation.TYPEWRITER -> {}
             }
         }
 
@@ -8432,6 +8445,7 @@ private fun FcpTextAnimationStudio(
                     previewScaleY *= (1f - outProg)
                     previewRotZ -= outProg * 18f
                 }
+                TextOutAnimation.NONE -> {}
             }
         }
 
@@ -8462,7 +8476,7 @@ private fun FcpTextAnimationStudio(
                     previewScaleX *= s
                     previewScaleY *= s
                 }
-                else -> {}
+                TextComboAnimation.NONE -> {}
             }
         }
 
@@ -9292,6 +9306,11 @@ private fun FcpActiveTransitionOverlay(
     currentTimeSecProvider: () -> Float,
     timelineSpans: List<FcpTimelineClipSpan>
 ) {
+    val hasTransitions = remember(timelineSpans) {
+        timelineSpans.any { it.clip.transitionToNext != FcpTransitionType.NONE }
+    }
+    if (!hasTransitions) return
+
     val currentTime = currentTimeSecProvider()
     val activeTransitionState = remember(currentTime, timelineSpans) {
         var result: Pair<FcpTransitionType, Float>? = null
@@ -9486,21 +9505,27 @@ private fun CanvasBackgroundLayer(
         when (background.type) {
             FcpCanvasBgType.BLUR -> {
                 if (blurBitmap != null) {
+                    val imgBmp = remember(blurBitmap) { blurBitmap.asImageBitmap() }
+                    val blurEffect = remember(background.blurRadius, supportsRenderEffect) {
+                        if (supportsRenderEffect) {
+                            val safeRadius = background.blurRadius.coerceAtLeast(1f)
+                            RenderEffect.createBlurEffect(
+                                safeRadius,
+                                safeRadius,
+                                Shader.TileMode.CLAMP
+                            ).asComposeRenderEffect()
+                        } else null
+                    }
                     Image(
-                        bitmap = blurBitmap.asImageBitmap(),
+                        bitmap = imgBmp,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .fillMaxSize()
                             .then(
-                                if (supportsRenderEffect) {
+                                if (blurEffect != null) {
                                     Modifier.graphicsLayer {
-                                        val safeRadius = background.blurRadius.coerceAtLeast(1f)
-                                        renderEffect = RenderEffect.createBlurEffect(
-                                            safeRadius,
-                                            safeRadius,
-                                            Shader.TileMode.CLAMP
-                                        ).asComposeRenderEffect()
+                                        renderEffect = blurEffect
                                     }
                                 } else {
                                     Modifier
