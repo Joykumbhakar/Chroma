@@ -62,7 +62,7 @@ import java.util.*
  */
 enum class FlashHubFilter(val label: String) {
     ALL("All"),
-    DRAFTS("Drafts"),
+    DRAFTS("Draft"),
     SAVED("Saved")
 }
 
@@ -326,7 +326,7 @@ fun FlashProjectsHubScreen(
             }
 
             // ══════════════════════════════════════════════════════════════════
-            // FILTER TABS: All / Drafts / Saved
+            // FILTER TABS: All / Draft / Saved
             // ══════════════════════════════════════════════════════════════════
             Row(
                 modifier = Modifier
@@ -337,22 +337,17 @@ fun FlashProjectsHubScreen(
             ) {
                 FlashHubFilter.entries.forEach { filter ->
                     val isSelected = selectedFilter == filter
-                    val count = when (filter) {
-                        FlashHubFilter.ALL -> flashDraftItems.size + savedItems.size
-                        FlashHubFilter.DRAFTS -> flashDraftItems.size
-                        FlashHubFilter.SAVED -> savedItems.size
-                    }
 
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(20.dp))
                             .background(
-                                if (isSelected) colors.primary.copy(alpha = 0.16f)
-                                else colors.glassBg.copy(alpha = 0.6f)
+                                if (isSelected) Color(0xFF007AFF)
+                                else if (colors.isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9)
                             )
                             .border(
-                                width = 1.dp,
-                                color = if (isSelected) colors.primary else colors.glassBorder,
+                                width = if (isSelected) 1.5.dp else 1.dp,
+                                color = if (isSelected) Color(0xFF007AFF) else if (colors.isDark) Color(0xFF334155) else Color(0xFFCBD5E1),
                                 shape = RoundedCornerShape(20.dp)
                             )
                             .clickable(
@@ -362,35 +357,15 @@ fun FlashProjectsHubScreen(
                                 SoundManager.playTap(context)
                                 selectedFilter = filter
                             }
-                            .padding(horizontal = 14.dp, vertical = 6.dp),
+                            .padding(horizontal = 16.dp, vertical = 7.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Text(
-                                text = filter.label,
-                                color = if (isSelected) colors.primary else colors.textMuted,
-                                fontSize = 12.5.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .clip(CircleShape)
-                                    .background(
-                                        if (isSelected) colors.primary else colors.textMuted.copy(alpha = 0.2f)
-                                    )
-                                    .padding(horizontal = 6.dp, vertical = 1.dp)
-                            ) {
-                                Text(
-                                    text = "$count",
-                                    color = if (isSelected) Color.White else colors.textMuted,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
+                        Text(
+                            text = filter.label,
+                            color = if (isSelected) Color.White else colors.textMuted,
+                            fontSize = 13.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                        )
                     }
                 }
             }
@@ -420,48 +395,73 @@ fun FlashProjectsHubScreen(
                 }
 
                 if (displayItems.isEmpty()) {
-                    // Empty State Span
+                    // Empty State Span with 3D Video Graphics
                     item(span = { GridItemSpan(maxLineSpan) }) {
+                        var isGraphicOpen by remember { mutableStateOf(false) }
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 48.dp),
+                                .padding(vertical = 36.dp, horizontal = 16.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                                verticalArrangement = Arrangement.Center
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(64.dp)
-                                        .clip(CircleShape)
-                                        .background(colors.primary.copy(alpha = 0.12f))
-                                        .border(1.dp, colors.primary.copy(alpha = 0.3f), CircleShape),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Lucide.Film,
-                                        contentDescription = null,
-                                        tint = colors.primary,
-                                        modifier = Modifier.size(30.dp)
-                                    )
-                                }
+                                com.chroma.studio.ui.graphics3d.Apple3DGraphicIcon(
+                                    id = com.chroma.studio.ui.graphics3d.Apple3DGraphicId.FLASH_VIDEO,
+                                    isOpen = isGraphicOpen,
+                                    modifier = Modifier.size(136.dp),
+                                    onClick = { isGraphicOpen = !isGraphicOpen }
+                                )
+                                Spacer(Modifier.height(16.dp))
                                 Text(
                                     text = if (selectedFilter == FlashHubFilter.DRAFTS) "No Drafted Videos"
                                     else if (selectedFilter == FlashHubFilter.SAVED) "No Saved Flash Videos"
                                     else "No Flash Videos Found",
                                     color = colors.textMain,
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = (-0.3).sp
                                 )
+                                Spacer(Modifier.height(6.dp))
                                 Text(
                                     text = "Tap 'Import' to add multiple videos & photos and begin editing.",
                                     color = colors.textMuted,
-                                    fontSize = 12.sp,
+                                    fontSize = 13.sp,
                                     textAlign = TextAlign.Center,
-                                    modifier = Modifier.padding(horizontal = 32.dp)
+                                    lineHeight = 18.sp,
+                                    modifier = Modifier.padding(horizontal = 24.dp)
                                 )
+                                Spacer(Modifier.height(18.dp))
+                                Button(
+                                    onClick = {
+                                        SoundManager.playTap(context)
+                                        mediaPickerLauncher.launch(
+                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
+                                        )
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFF007AFF),
+                                        contentColor = Color.White
+                                    ),
+                                    shape = RoundedCornerShape(12.dp),
+                                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Lucide.Plus,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        text = "Import Media",
+                                        color = Color.White,
+                                        fontSize = 13.5.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             }
                         }
                     }
@@ -494,64 +494,58 @@ fun FlashProjectsHubScreen(
             }
         }
 
-        // Delete Confirmation Dialog
+        // Delete Confirmation Dialog — Apple HIG Style matching TrashScreen
         if (itemToDelete != null) {
             val item = itemToDelete!!
-            AlertDialog(
+            androidx.compose.ui.window.Dialog(
                 onDismissRequest = { itemToDelete = null },
-                title = {
-                    Text(
-                        text = if (item.isDraft) "Delete Draft?" else "Delete Video?",
-                        fontWeight = FontWeight.Bold,
-                        color = colors.textMain
-                    )
-                },
-                text = {
-                    Text(
-                        text = "Are you sure you want to permanently delete \"${item.title}\"? This action cannot be undone.",
-                        color = colors.textMuted,
-                        fontSize = 13.5.sp
-                    )
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            coroutineScope.launch {
-                                when (item) {
-                                    is FlashHubItem.Draft -> {
-                                        draftRepo.deleteDraft(item.id)
-                                        ToastManager.showToast("Draft deleted")
-                                    }
-                                    is FlashHubItem.LocalExported -> {
-                                        try {
-                                            File(item.fileUri.path ?: "").delete()
-                                            localExportedVideos = localExportedVideos.filter { it.id != item.id }
-                                            ToastManager.showToast("Exported video deleted")
-                                        } catch (_: Exception) {}
-                                    }
-                                    is FlashHubItem.Saved -> {
-                                        try {
-                                            FlashRepository().deleteFlash(item.id)
-                                            userFlashes = userFlashes.filter { it.id != item.id }
-                                            ToastManager.showToast("Video deleted")
-                                        } catch (_: Exception) {}
+                properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.5f))
+                        .clickable { itemToDelete = null },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(modifier = Modifier.clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {}) {
+                        com.chroma.studio.ui.graphics3d.AppleHigDialogCard(
+                            graphicId = com.chroma.studio.ui.graphics3d.Apple3DGraphicId.TRASH_BIN,
+                            title = if (item.isDraft) "Delete Draft?" else "Delete Video?",
+                            description = "Are you sure you want to permanently delete \"${item.title}\"? This action cannot be undone.",
+                            cancelText = "Cancel",
+                            confirmText = "Delete",
+                            onCancel = { itemToDelete = null },
+                            onConfirm = {
+                                val target = item
+                                itemToDelete = null
+                                coroutineScope.launch {
+                                    when (target) {
+                                        is FlashHubItem.Draft -> {
+                                            draftRepo.deleteDraft(target.id)
+                                            ToastManager.showToast("Draft deleted")
+                                        }
+                                        is FlashHubItem.LocalExported -> {
+                                            try {
+                                                File(target.fileUri.path ?: "").delete()
+                                                localExportedVideos = localExportedVideos.filter { it.id != target.id }
+                                                ToastManager.showToast("Exported video deleted")
+                                            } catch (_: Exception) {}
+                                        }
+                                        is FlashHubItem.Saved -> {
+                                            try {
+                                                FlashRepository().deleteFlash(target.id)
+                                                userFlashes = userFlashes.filter { it.id != target.id }
+                                                ToastManager.showToast("Video deleted")
+                                            } catch (_: Exception) {}
+                                        }
                                     }
                                 }
-                                itemToDelete = null
                             }
-                        }
-                    ) {
-                        Text("Delete", color = Color(0xFFFF3B30), fontWeight = FontWeight.Bold)
+                        )
                     }
-                },
-                dismissButton = {
-                    TextButton(onClick = { itemToDelete = null }) {
-                        Text("Cancel", color = colors.textMuted)
-                    }
-                },
-                containerColor = if (colors.isDark) Color(0xFF1E1E22) else Color.White,
-                shape = RoundedCornerShape(16.dp)
-            )
+                }
+            }
         }
     }
 }

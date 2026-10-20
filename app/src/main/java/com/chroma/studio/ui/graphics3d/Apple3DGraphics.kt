@@ -388,12 +388,20 @@ fun AppleHigDialogCard(
     modifier: Modifier = Modifier
 ) {
     var isOpen by remember { mutableStateOf(false) }
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val cardBg = if (isDark) Color(0xFF1E293B) else Color.White
+    val borderCol = if (isDark) Color(0xFF334155) else Color(0xFFDFE8F3)
+    val titleCol = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A)
+    val descCol = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+    val dividerCol = if (isDark) Color(0xFF334155) else Color(0xFFDFE8F3)
+    val bottomBarBg = if (isDark) Color(0xFF0F172A) else Color(0xFFF8FAFD)
+    val cancelTextCol = if (isDark) Color(0xFFE2E8F0) else Color.Black
 
     Surface(
         modifier = modifier.widthIn(max = 320.dp),
         shape = RoundedCornerShape(24.dp),
-        color = Color.White,
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFDFE8F3))
+        color = cardBg,
+        border = androidx.compose.foundation.BorderStroke(1.dp, borderCol)
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Column(
@@ -411,7 +419,7 @@ fun AppleHigDialogCard(
                     text = title,
                     fontSize = 15.5.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFF0F172A),
+                    color = titleCol,
                     textAlign = TextAlign.Center
                 )
                 Spacer(modifier = Modifier.height(6.dp))
@@ -419,15 +427,15 @@ fun AppleHigDialogCard(
                     text = description,
                     fontSize = 12.5.sp,
                     lineHeight = 18.sp,
-                    color = Color(0xFF64748B),
+                    color = descCol,
                     textAlign = TextAlign.Center
                 )
             }
-            HorizontalDivider(color = Color(0xFFDFE8F3), thickness = 1.dp)
+            HorizontalDivider(color = dividerCol, thickness = 1.dp)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFFF8FAFD))
+                    .background(bottomBarBg)
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
@@ -436,7 +444,7 @@ fun AppleHigDialogCard(
                     isSmall = true,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text(cancelText, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color.Black)
+                    Text(cancelText, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = cancelTextCol)
                 }
                 com.chroma.studio.ui.components.LiquidGlassPrimaryButton(
                     onClick = {
