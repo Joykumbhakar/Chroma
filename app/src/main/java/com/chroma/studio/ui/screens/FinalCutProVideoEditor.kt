@@ -2469,44 +2469,6 @@ fun FinalCutProVideoEditorScreen(
             }
 
             // ══════════════════════════════════════════════════════════════════
-            // 3.5. DEDICATED FLAT PLAYBACK TRANSPORT CONTROLS
-            // (Replay, Play/Pause Toggle, Auto-Playback Toggle)
-            // ══════════════════════════════════════════════════════════════════
-            if (clips.isNotEmpty()) {
-                PlaybackTransportControlBar(
-                    isPlaying = isPlaying,
-                    isAutoReplay = isAutoReplay,
-                    onPlayPauseToggle = {
-                        val isAtEnd = totalDurationSec > 0f && currentTimeSec >= totalDurationSec - 0.08f
-                        if (isAtEnd) {
-                            seekToGlobalTime(0f, autoPlay = true)
-                            triggerOverlayFlash(true)
-                        } else {
-                            val nextPlay = !isPlaying
-                            isPlaying = nextPlay
-                            if (nextPlay) {
-                                if (exoPlayer.playbackState == Player.STATE_IDLE || exoPlayer.playbackState == Player.STATE_ENDED) {
-                                    exoPlayer.prepare()
-                                }
-                                exoPlayer.play()
-                            } else {
-                                exoPlayer.pause()
-                            }
-                            triggerOverlayFlash(nextPlay)
-                        }
-                    },
-                    onReplay = {
-                        seekToGlobalTime(0f, autoPlay = true)
-                        triggerOverlayFlash(true)
-                    },
-                    onAutoReplayToggle = {
-                        isAutoReplay = !isAutoReplay
-                        ToastManager.showToast(if (isAutoReplay) "Auto Replay: ON" else "Auto Replay: OFF")
-                    }
-                )
-            }
-
-            // ══════════════════════════════════════════════════════════════════
             // 4. CHROMA BOTTOM DRAWER (Inspector, Tools & Timeline)
             // ══════════════════════════════════════════════════════════════════
             val animatedDrawerHeight by animateDpAsState(
