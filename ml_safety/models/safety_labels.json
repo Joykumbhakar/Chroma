@@ -1,0 +1,49 @@
+{
+  "version": "1.0",
+  "model_name": "chroma_content_safety_mobilenet_v3",
+  "input_shape": [1, 224, 224, 3],
+  "input_mean": [0.485, 0.456, 0.406],
+  "input_std": [0.229, 0.224, 0.225],
+  "categories": [
+    {
+      "id": 0,
+      "name": "NUDITY_EXPLICIT",
+      "display_name": "Explicit Nudity / Adult Acts",
+      "severity": "PROHIBITED",
+      "threshold": 0.65,
+      "description": "Full nudity, exposed genitalia, or explicit sexual interactions"
+    },
+    {
+      "id": 1,
+      "name": "ADULT_SUGGESTIVE",
+      "display_name": "Suggestive / Adult Content",
+      "severity": "PROHIBITED",
+      "threshold": 0.70,
+      "description": "Exposed intimate body areas, erotic underwear, or sexually suggestive poses"
+    },
+    {
+      "id": 2,
+      "name": "VIOLENCE_WEAPONS",
+      "display_name": "Graphic Violence / Weapons",
+      "severity": "PROHIBITED",
+      "threshold": 0.60,
+      "description": "Visible blood, traumatic gore, or brandished weapons"
+    },
+    {
+      "id": 3,
+      "name": "ILLICIT_SUBSTANCES",
+      "display_name": "Illegal Contraband / Drugs",
+      "severity": "PROHIBITED",
+      "threshold": 0.65,
+      "description": "Illegal narcotics, drug paraphernalia, or prohibited contraband"
+    },
+    {
+      "id": 4,
+      "name": "SAFE",
+      "display_name": "Safe for Community",
+      "severity": "SAFE",
+      "threshold": 0.50,
+      "description": "Normal, appropriate content adhering to all community guidelines"
+    }
+  ]
+}

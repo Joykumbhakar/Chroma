@@ -237,6 +237,7 @@ fun CreatorPostOnboardingStudioScreen(
     onPostSuccess: () -> Unit
 ) {
     val context = LocalContext.current
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val draftRepo = remember { com.chroma.studio.data.DraftPostRepository(context) }
     var currentDraftId by remember { mutableStateOf(initialDraftId) }
@@ -293,6 +294,7 @@ fun CreatorPostOnboardingStudioScreen(
     var uploadStageText by remember { mutableStateOf("Syncing details") }
     var isUploadFinished by remember { mutableStateOf(false) }
     var uploadErrorMessage by remember { mutableStateOf<String?>(null) }
+    var safetyViolationResult by remember { mutableStateOf<com.chroma.studio.ml.safety.SafetyScanResult?>(null) }
 
     // Flash-specific trim parameters
     var flashTrimStartMs by remember { mutableLongStateOf(0L) }
@@ -513,9 +515,24 @@ fun CreatorPostOnboardingStudioScreen(
             try {
                 when (studioMode) {
                     CreatorStudioMode.POST -> {
+                        val activeSlides = if (isMultipleMode) slides.toList() else listOfNotNull(slides.getOrNull(currentSlideIndex))
+                        val imageUris = activeSlides.mapNotNull { it.imageUri }
+
+                        // On-Device ML Safety Verification
+                        uploadStageText = "Scanning media for community safety…"
+                        uploadProgress = 0.12f
+                        val safetyResult = com.chroma.studio.ml.safety.ContentSafetyScanner.scanMultipleImageUris(context, imageUris)
+                        if (!safetyResult.isSafe) {
+                            currentStep = StudioStep.STEP_2_DETAILS
+                            safetyViolationResult = safetyResult
+                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                            uploadErrorMessage = "Post blocked: prohibited content detected"
+                            android.widget.Toast.makeText(context, "Upload blocked: Community Guidelines violation detected", android.widget.Toast.LENGTH_LONG).show()
+                            return@launch
+                        }
+
                         uploadStageText = "Processing images"
                         uploadProgress = 0.2f
-                        val activeSlides = if (isMultipleMode) slides.toList() else listOfNotNull(slides.getOrNull(currentSlideIndex))
                         val bytesList = mutableListOf<ByteArray>()
 
                         withContext(Dispatchers.IO) {
@@ -599,6 +616,32 @@ fun CreatorPostOnboardingStudioScreen(
                         if (videoUri == null) {
                             uploadErrorMessage = "No video available to publish."
                         } else {
+                            // On-Device ML Safety Verification (Multi-Frame Keyframe Sampling)
+                            uploadStageText = "Scanning video frames for community safety…"
+                            uploadProgress = 0.08f
+
+                            val videoSafety = com.chroma.studio.ml.safety.ContentSafetyScanner.scanVideoUri(context, videoUri, sampleCount = 6)
+                            if (!videoSafety.isSafe) {
+                                currentStep = StudioStep.STEP_2_DETAILS
+                                safetyViolationResult = videoSafety
+                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                uploadErrorMessage = "Post blocked: prohibited video content detected"
+                                android.widget.Toast.makeText(context, "Upload blocked: Community Guidelines violation detected in video", android.widget.Toast.LENGTH_LONG).show()
+                                return@launch
+                            }
+
+                            if (customThumbUri != null) {
+                                val thumbSafety = com.chroma.studio.ml.safety.ContentSafetyScanner.scanImageUri(context, customThumbUri!!)
+                                if (!thumbSafety.isSafe) {
+                                    currentStep = StudioStep.STEP_2_DETAILS
+                                    safetyViolationResult = thumbSafety
+                                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                    uploadErrorMessage = "Post blocked: prohibited cover thumbnail detected"
+                                    android.widget.Toast.makeText(context, "Upload blocked: Community Guidelines violation in cover image", android.widget.Toast.LENGTH_LONG).show()
+                                    return@launch
+                                }
+                            }
+
                             // Step 1: Trim if necessary, otherwise pass through without re-encoding
                             uploadStageText = "Preparing video…"
                             uploadProgress = 0.10f
@@ -1067,6 +1110,18 @@ fun CreatorPostOnboardingStudioScreen(
                 onDismiss = { showWorkChooserSheet = false }
             )
         }
+
+        // ====================================================================
+        // CONTENT SAFETY VIOLATION MODAL (Pre-Upload Ban Interception)
+        // ====================================================================
+        safetyViolationResult?.let { result ->
+            com.chroma.studio.ui.components.ContentSafetyViolationDialog(
+                scanResult = result,
+                onDismiss = {
+                    safetyViolationResult = null
+                }
+            )
+        }
     }
 }
 
@@ -1081,6 +1136,7 @@ fun GooglePhotosStyleImageEditor(
     onClose: () -> Unit
 ) {
     val context = LocalContext.current
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     var rotationAngle by remember { mutableFloatStateOf(slide.rotationDegrees) }
     var brightness by remember { mutableFloatStateOf(slide.brightness) }
     var contrast by remember { mutableFloatStateOf(slide.contrast) }
@@ -1417,6 +1473,7 @@ fun FlashVideoTrimmerStage(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     var trimStartMs by remember { mutableLongStateOf(initialStartMs) }
     var trimEndMs by remember { mutableLongStateOf(initialEndMs) }
     var durationMs by remember { mutableLongStateOf(15000L) }
@@ -1913,6 +1970,7 @@ fun Step1PreviewAndToolsStage(
     onNext: () -> Unit
 ) {
     val context = LocalContext.current
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     val colors = LocalOscellionColors.current
     val currentRatio = STUDIO_RATIO_CONFIGS.firstOrNull { it.id == selectedRatioId }
         ?: STUDIO_RATIO_CONFIGS[2] // 4:3 default
@@ -2471,6 +2529,7 @@ private fun RatioCardOption(
 @Composable
 fun SlidePreviewContent(slide: StudioSlide, modifier: Modifier = Modifier) {
     val context = LocalContext.current
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     when {
         slide.work != null -> {
             val repo = remember { WorkRepository(context) }
@@ -2608,6 +2667,7 @@ fun Step2PostDetailsStage(
     onPost: () -> Unit
 ) {
     val context = LocalContext.current
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     val colors = LocalOscellionColors.current
     val currentRatio = STUDIO_RATIO_CONFIGS.firstOrNull { it.id == selectedRatioId }
         ?: STUDIO_RATIO_CONFIGS[2]
@@ -3674,6 +3734,7 @@ fun ThumbnailPreviewModal(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     val colors = LocalOscellionColors.current
     val activeSlide = slides.getOrNull(selectedSlideIndex)
     val isVideo = studioMode == CreatorStudioMode.FLASH || activeSlide?.videoUri != null

@@ -1,6 +1,7 @@
 package com.chroma.studio.ui.screens
 
 import android.net.Uri
+import kotlinx.coroutines.launch
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
@@ -58,12 +59,15 @@ fun CreatePostScreen(
     onBack: () -> Unit
 ) {
     val colors = LocalOscellionColors.current
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
     val surfaceColor = if (colors.isDark) Color(0xFF1C1C1E) else Color.White
 
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     var rawOriginalUri by remember { mutableStateOf<Uri?>(null) }
     var selectedTemplate by remember { mutableStateOf("None") }
     var selectedAspectRatio by remember { mutableStateOf("4:5") }
+    var safetyViolationResult by remember { mutableStateOf<com.chroma.studio.ml.safety.SafetyScanResult?>(null) }
 
     val templateStyles = remember {
         listOf(
@@ -89,8 +93,18 @@ fun CreatePostScreen(
     val cropImage = rememberLauncherForActivityResult(com.canhub.cropper.CropImageContract()) { result ->
         if (result.isSuccessful) {
             val uriContent = result.uriContent
-            selectedImageUri = uriContent
-            SoundManager.playPop()
+            if (uriContent != null) {
+                scope.launch {
+                    val safety = com.chroma.studio.ml.safety.ContentSafetyScanner.scanImageUri(context, uriContent)
+                    if (!safety.isSafe) {
+                        selectedImageUri = null
+                        safetyViolationResult = safety
+                    } else {
+                        selectedImageUri = uriContent
+                        SoundManager.playPop()
+                    }
+                }
+            }
         }
     }
 
@@ -576,5 +590,15 @@ fun CreatePostScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
         }
+    }
+
+    // Pre-Upload Content Safety Violation Modal
+    safetyViolationResult?.let { result ->
+        com.chroma.studio.ui.components.ContentSafetyViolationDialog(
+            scanResult = result,
+            onDismiss = {
+                safetyViolationResult = null
+            }
+        )
     }
 }

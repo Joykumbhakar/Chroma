@@ -50,6 +50,10 @@ android {
         buildConfig = true
     }
 
+    androidResources {
+        noCompress += "tflite"
+    }
+
     // composeOptions removed for Kotlin 2.0
 
     compileOptions {
@@ -154,6 +158,10 @@ dependencies {
 
     // FFmpeg for Pro Video Editor Rendering
     implementation("com.github.microshow:RxFFmpeg:4.9.0")
+
+    // TensorFlow Lite for Ultra-Fast On-Device Safety ML Inference
+    implementation("org.tensorflow:tensorflow-lite:2.14.0")
+    implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
 
     // CameraX for Apple iOS Style In-App Camera
     val cameraxVersion = "1.3.4"
