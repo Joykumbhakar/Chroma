@@ -7,7 +7,9 @@ import android.util.Log
 import com.chroma.studio.ui.screens.FcpAspectRatio
 import com.chroma.studio.ui.screens.FcpClip
 import com.chroma.studio.ui.screens.FcpCustomAudio
+import com.chroma.studio.ui.screens.FcpLutPreset
 import com.chroma.studio.ui.screens.FcpTransitionType
+import com.chroma.studio.ui.screens.FcpVisualEffect
 import io.microshow.rxffmpeg.RxFFmpegInvoke
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -206,7 +208,7 @@ object FcpTimelineExporter {
             clips.indices.forEach { i ->
                 val clip = clips[i]
                 val (hasAudio, probedDur) = videoMetadataList[i]
-                val maxSourceDur = if (probedDur > 0.2f) probedDur else if (clip.durationSec > 0.2f) clip.durationSec else 10000f
+                val maxSourceDur = maxOf(probedDur, clip.durationSec, clip.trimEndSec, 10f)
                 val sTime = clip.trimStartSec.coerceIn(0f, (maxSourceDur - 0.1f).coerceAtLeast(0f))
                 val eTimeRaw = if (clip.trimEndSec > sTime + 0.1f) clip.trimEndSec else maxSourceDur
                 val eTime = eTimeRaw.coerceIn(sTime + 0.1f, maxSourceDur)
@@ -231,7 +233,7 @@ object FcpTimelineExporter {
                 vFilter.append("pad=$finalW:$finalH:(ow-iw)/2:(oh-ih)/2:black,")
                 vFilter.append("setsar=1,fps=$targetFps")
 
-                // Color adjustments
+                // 1. Color adjustments (exposure, contrast, saturation)
                 if (clip.exposure != 0f || clip.contrast != 100f || clip.saturation != 100f) {
                     val b = String.format(Locale.US, "%.3f", clip.exposure / 100f)
                     val c = String.format(Locale.US, "%.3f", clip.contrast / 100f)
@@ -239,7 +241,62 @@ object FcpTimelineExporter {
                     vFilter.append(",eq=brightness=$b:contrast=$c:saturation=$s")
                 }
 
-                // Fade transition out at end of clip if transitionToNext is set
+                // 2. White Balance (Temperature & Tint)
+                if (clip.temperature != 0f || clip.tint != 0f) {
+                    val tempNorm = (clip.temperature / 50f).coerceIn(-1f, 1f)
+                    val tintNorm = (clip.tint / 50f).coerceIn(-1f, 1f)
+                    val rBal = String.format(Locale.US, "%.3f", (tempNorm * 0.20f + tintNorm * 0.10f).coerceIn(-0.8f, 0.8f))
+                    val gBal = String.format(Locale.US, "%.3f", (-tintNorm * 0.20f).coerceIn(-0.8f, 0.8f))
+                    val bBal = String.format(Locale.US, "%.3f", (-tempNorm * 0.20f + tintNorm * 0.10f).coerceIn(-0.8f, 0.8f))
+                    vFilter.append(",colorbalance=rs=$rBal:gs=$gBal:bs=$bBal:rm=$rBal:gm=$gBal:bm=$bBal")
+                }
+
+                // 3. Cinematic LUT Presets
+                when (clip.lut) {
+                    FcpLutPreset.TEAL_ORANGE -> vFilter.append(",colorbalance=rs=0.15:gs=-0.02:bs=-0.12:rm=0.10:bm=-0.10")
+                    FcpLutPreset.CYBER -> vFilter.append(",colorbalance=rm=0.15:gm=-0.05:bm=0.25:rh=0.10:bh=0.20")
+                    FcpLutPreset.NOIR -> vFilter.append(",hue=s=0,eq=contrast=1.35:brightness=-0.02")
+                    FcpLutPreset.WARM_GOLD -> vFilter.append(",colorbalance=rh=0.20:gh=0.10:bh=-0.15:rm=0.10:gm=0.05")
+                    FcpLutPreset.COOL_NORDIC -> vFilter.append(",colorbalance=rs=-0.10:bs=0.20:rm=-0.05:bm=0.15")
+                    FcpLutPreset.VINTAGE_FADE -> vFilter.append(",colorbalance=rs=0.08:gs=0.04:bs=-0.05,eq=contrast=0.92:brightness=0.04")
+                    FcpLutPreset.EMERALD -> vFilter.append(",colorbalance=gs=0.12:gm=0.08:bm=-0.05")
+                    FcpLutPreset.NONE -> {}
+                    else -> {}
+                }
+
+                // 4. Visual Effects
+                val effInt = clip.effectIntensity.coerceIn(0.1f, 1.0f)
+                when (clip.effect) {
+                    FcpVisualEffect.VIGNETTE_MOOD -> {
+                        val angle = String.format(Locale.US, "%.3f", (Math.PI / 4.0) * effInt)
+                        vFilter.append(",vignette=angle=$angle")
+                    }
+                    FcpVisualEffect.FILM_GRAIN -> {
+                        val noiseStr = (16 * effInt).toInt().coerceIn(6, 32)
+                        vFilter.append(",noise=alls=$noiseStr:allf=t")
+                    }
+                    FcpVisualEffect.VHS_RETRO -> {
+                        vFilter.append(",eq=contrast=1.12:saturation=1.20,noise=c0s=12:allf=t")
+                    }
+                    FcpVisualEffect.GLITCH -> {
+                        vFilter.append(",noise=c0s=22:c1s=14:allf=t,hue=H=PI/18")
+                    }
+                    FcpVisualEffect.CINEMA_BLOOM -> {
+                        vFilter.append(",eq=brightness=0.05:contrast=1.12:saturation=1.10")
+                    }
+                    FcpVisualEffect.PRISM_SPLIT -> {
+                        vFilter.append(",eq=contrast=1.15:saturation=1.25")
+                    }
+                    FcpVisualEffect.NOIR_CONTRAST -> {
+                        vFilter.append(",hue=s=0,eq=contrast=1.35:brightness=-0.05")
+                    }
+                    FcpVisualEffect.ANAMORPHIC_FLARE -> {
+                        vFilter.append(",eq=contrast=1.10:saturation=1.15")
+                    }
+                    FcpVisualEffect.NONE -> {}
+                }
+
+                // 5. Boundary Transitions (Fade Out on tail of clip i)
                 val transToNext = clip.transitionToNext
                 val nextTransDur = clip.transitionDurationSec.coerceIn(0.1f, 1.5f)
                 val halfTrans = (nextTransDur / 2f).coerceAtMost(effectiveDur / 2f)
@@ -250,16 +307,26 @@ object FcpTimelineExporter {
                         FcpTransitionType.DIP_TO_BLACK -> {
                             vFilter.append(String.format(Locale.US, ",fade=t=out:st=%.3f:d=%.3f:c=black", fadeStart, halfTrans))
                         }
-                        FcpTransitionType.DIP_TO_WHITE, FcpTransitionType.FILM_BLOOM -> {
+                        FcpTransitionType.DIP_TO_WHITE -> {
                             vFilter.append(String.format(Locale.US, ",fade=t=out:st=%.3f:d=%.3f:c=white", fadeStart, halfTrans))
                         }
+                        FcpTransitionType.FILM_BLOOM -> {
+                            vFilter.append(String.format(Locale.US, ",fade=t=out:st=%.3f:d=%.3f:c=0xFFF4D0", fadeStart, halfTrans))
+                        }
+                        FcpTransitionType.GLITCH -> {
+                            vFilter.append(String.format(Locale.US, ",noise=c0s=35:allf=t:enable='between(t,%.3f,%.3f)'", fadeStart, effectiveDur))
+                        }
+                        FcpTransitionType.ZOOM_IN, FcpTransitionType.ZOOM_OUT, FcpTransitionType.WHIP_SPIN -> {
+                            vFilter.append(String.format(Locale.US, ",boxblur=10:enable='between(t,%.3f,%.3f)'", fadeStart, effectiveDur))
+                        }
                         else -> {
-                            vFilter.append(String.format(Locale.US, ",fade=t=out:st=%.3f:d=%.3f:c=black", fadeStart, halfTrans))
+                            // Atmospheric dissolve crossfade
+                            vFilter.append(String.format(Locale.US, ",fade=t=out:st=%.3f:d=%.3f:c=black@0.4", fadeStart, halfTrans))
                         }
                     }
                 }
 
-                // Fade transition in at start of clip if previous clip had a transition
+                // 6. Boundary Transitions (Fade In on head of clip i)
                 if (i > 0) {
                     val prevTrans = clips[i - 1].transitionToNext
                     val prevTransDur = clips[i - 1].transitionDurationSec.coerceIn(0.1f, 1.5f)
@@ -269,11 +336,20 @@ object FcpTimelineExporter {
                             FcpTransitionType.DIP_TO_BLACK -> {
                                 vFilter.append(String.format(Locale.US, ",fade=t=in:st=0:d=%.3f:c=black", prevHalfTrans))
                             }
-                            FcpTransitionType.DIP_TO_WHITE, FcpTransitionType.FILM_BLOOM -> {
+                            FcpTransitionType.DIP_TO_WHITE -> {
                                 vFilter.append(String.format(Locale.US, ",fade=t=in:st=0:d=%.3f:c=white", prevHalfTrans))
                             }
+                            FcpTransitionType.FILM_BLOOM -> {
+                                vFilter.append(String.format(Locale.US, ",fade=t=in:st=0:d=%.3f:c=0xFFF4D0", prevHalfTrans))
+                            }
+                            FcpTransitionType.GLITCH -> {
+                                vFilter.append(String.format(Locale.US, ",noise=c0s=35:allf=t:enable='between(t,0,%.3f)'", prevHalfTrans))
+                            }
+                            FcpTransitionType.ZOOM_IN, FcpTransitionType.ZOOM_OUT, FcpTransitionType.WHIP_SPIN -> {
+                                vFilter.append(String.format(Locale.US, ",boxblur=10:enable='between(t,0,%.3f)'", prevHalfTrans))
+                            }
                             else -> {
-                                vFilter.append(String.format(Locale.US, ",fade=t=in:st=0:d=%.3f:c=black", prevHalfTrans))
+                                vFilter.append(String.format(Locale.US, ",fade=t=in:st=0:d=%.3f:c=black@0.4", prevHalfTrans))
                             }
                         }
                     }
@@ -308,8 +384,8 @@ object FcpTimelineExporter {
                         }
                     }
 
-                    // Strict uniform format guarantee for concat filter
-                    aFilter.append(",aformat=sample_rates=44100:channel_layouts=stereo,aresample=async=1")
+                    // Strict uniform format and duration match guarantee for concat filter
+                    aFilter.append(String.format(Locale.US, ",aformat=sample_rates=44100:channel_layouts=stereo,aresample=async=1,atrim=start=0:end=%.3f,apad=whole_dur=%.3f", effectiveDur, effectiveDur))
                     filterGraph.append("[$i:a]$aFilter[a_clip_$i];")
                     concatAudioLabels.add("[a_clip_$i]")
                 } else {

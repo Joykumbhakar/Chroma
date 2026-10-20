@@ -79,6 +79,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -108,6 +109,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEvent
@@ -635,6 +637,22 @@ enum class FcpTransitionType(
     }
 }
 
+enum class FcpVisualEffect(
+    val label: String,
+    val icon: ImageVector,
+    val description: String
+) {
+    NONE("None", Lucide.X, "Clean unaltered visual look"),
+    GLITCH("Glitch", Lucide.Zap, "Digital RGB chromatic aberration & scanlines"),
+    VHS_RETRO("VHS 90s", Lucide.Tv, "Retro CRT scanlines & tracking tape noise"),
+    FILM_GRAIN("Film Grain", Lucide.Sparkles, "Organic 35mm analog cinema film grain"),
+    CINEMA_BLOOM("Dreamy Bloom", Lucide.Sun, "Soft luminous highlight diffusion glow"),
+    PRISM_SPLIT("Prism RGB", Lucide.Layers, "Chromatic lens dispersion & edge fringes"),
+    VIGNETTE_MOOD("Vignette", Lucide.Circle, "Dramatic cinematic peripheral dark falloff"),
+    NOIR_CONTRAST("Noir Mono", Lucide.Moon, "High-contrast atmospheric monochrome"),
+    ANAMORPHIC_FLARE("Anamorphic", Lucide.Maximize2, "Horizontal cinematic blue streak flare")
+}
+
 data class FcpClip(
     val id: String = UUID.randomUUID().toString(),
     val uri: Uri,
@@ -649,6 +667,8 @@ data class FcpClip(
     val temperature: Float = 0f,   // -50..50 (default 0)
     val tint: Float = 0f,          // -50..50 (default 0)
     val lut: FcpLutPreset = FcpLutPreset.NONE,
+    val effect: FcpVisualEffect = FcpVisualEffect.NONE,
+    val effectIntensity: Float = 0.8f,
     val roleColor: Color = Color(0xFF0A84FF),
     val scale: Float = 1f,
     val panX: Float = 0f,
@@ -2051,10 +2071,19 @@ fun FinalCutProVideoEditorScreen(
                 contentAlignment = Alignment.Center
             ) {
                 val previewShape = RoundedCornerShape(16.dp)
-                val activeScale = selectedClip?.scale ?: 1f
-                val activePanX = selectedClip?.panX ?: 0f
-                val activePanY = selectedClip?.panY ?: 0f
+                val activePlayingSpan = remember(currentTimeSec, timelineSpans) {
+                    timelineSpans.firstOrNull { currentTimeSec >= it.timelineStartSec && currentTimeSec < it.timelineEndSec }
+                }
+                val activeClip = if (isPlaying) {
+                    activePlayingSpan?.clip ?: selectedClip ?: clips.firstOrNull()
+                } else {
+                    selectedClip ?: activePlayingSpan?.clip ?: clips.firstOrNull()
+                }
+                val activeScale = activeClip?.scale ?: 1f
+                val activePanX = activeClip?.panX ?: 0f
+                val activePanY = activeClip?.panY ?: 0f
 
+                var activeTextureView by remember { mutableStateOf<TextureView?>(null) }
                 var lastTapTimestamp by remember { mutableLongStateOf(0L) }
                 var pendingTapJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
                 var showZoomCropSlider by remember { mutableStateOf(false) }
@@ -2092,32 +2121,32 @@ fun FinalCutProVideoEditorScreen(
                 ) {
                     val supportsRenderEffect = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
                     val activeColorMatrix = remember(
-                        selectedClip?.exposure,
-                        selectedClip?.contrast,
-                        selectedClip?.saturation,
-                        selectedClip?.temperature,
-                        selectedClip?.tint,
-                        selectedClip?.lut
+                        activeClip?.exposure,
+                        activeClip?.contrast,
+                        activeClip?.saturation,
+                        activeClip?.temperature,
+                        activeClip?.tint,
+                        activeClip?.lut
                     ) {
                         buildFcpColorMatrix(
-                            exposure = selectedClip?.exposure ?: 0f,
-                            contrast = selectedClip?.contrast ?: 100f,
-                            saturation = selectedClip?.saturation ?: 100f,
-                            temperature = selectedClip?.temperature ?: 0f,
-                            tint = selectedClip?.tint ?: 0f,
-                            lut = selectedClip?.lut ?: FcpLutPreset.NONE
+                            exposure = activeClip?.exposure ?: 0f,
+                            contrast = activeClip?.contrast ?: 100f,
+                            saturation = activeClip?.saturation ?: 100f,
+                            temperature = activeClip?.temperature ?: 0f,
+                            tint = activeClip?.tint ?: 0f,
+                            lut = activeClip?.lut ?: FcpLutPreset.NONE
                         )
                     }
 
-                    val activeRenderEffect = remember(activeColorMatrix, selectedClip?.lut, supportsRenderEffect) {
+                    val activeRenderEffect = remember(activeColorMatrix, activeClip?.lut, supportsRenderEffect) {
                         if (!supportsRenderEffect) null
                         else {
-                            val hasCustomColor = (selectedClip?.exposure ?: 0f) != 0f ||
-                                (selectedClip?.contrast ?: 100f) != 100f ||
-                                (selectedClip?.saturation ?: 100f) != 100f ||
-                                (selectedClip?.temperature ?: 0f) != 0f ||
-                                (selectedClip?.tint ?: 0f) != 0f ||
-                                (selectedClip?.lut ?: FcpLutPreset.NONE) != FcpLutPreset.NONE
+                            val hasCustomColor = (activeClip?.exposure ?: 0f) != 0f ||
+                                (activeClip?.contrast ?: 100f) != 100f ||
+                                (activeClip?.saturation ?: 100f) != 100f ||
+                                (activeClip?.temperature ?: 0f) != 0f ||
+                                (activeClip?.tint ?: 0f) != 0f ||
+                                (activeClip?.lut ?: FcpLutPreset.NONE) != FcpLutPreset.NONE
 
                             if (hasCustomColor) {
                                 RenderEffect
@@ -2148,6 +2177,7 @@ fun FinalCutProVideoEditorScreen(
                                 isClickable = false
                                 isFocusable = false
                             }
+                            activeTextureView = textureView
                             val layoutParams = FrameLayout.LayoutParams(
                                 FrameLayout.LayoutParams.MATCH_PARENT,
                                 FrameLayout.LayoutParams.MATCH_PARENT
@@ -2181,14 +2211,14 @@ fun FinalCutProVideoEditorScreen(
                     )
 
                     // Photo Overlay for Image Clips
-                    val isCurrentClipPhoto = remember(selectedClip?.uri) {
-                        selectedClip?.let { isClipPhoto(it) } ?: false
+                    val isCurrentClipPhoto = remember(activeClip?.uri) {
+                        activeClip?.let { isClipPhoto(it) } ?: false
                     }
 
-                    if (isCurrentClipPhoto && selectedClip != null) {
+                    if (isCurrentClipPhoto && activeClip != null) {
                         AsyncImage(
                             model = ImageRequest.Builder(context)
-                                .data(selectedClip.uri)
+                                .data(activeClip.uri)
                                 .crossfade(true)
                                 .build(),
                             contentDescription = "Photo Clip",
@@ -2207,10 +2237,19 @@ fun FinalCutProVideoEditorScreen(
                         )
                     }
 
+                    // Live Visual Effects Layer (Glitch, VHS, Film Grain, Bloom, Prism, Vignette, etc.)
+                    FcpVisualEffectsOverlay(
+                        effect = activeClip?.effect ?: FcpVisualEffect.NONE,
+                        intensity = activeClip?.effectIntensity ?: 0.8f,
+                        currentTimeSec = currentTimeSec,
+                        modifier = Modifier.fillMaxSize().zIndex(15f)
+                    )
+
                     // Live Transition Visual Overlay Layer (Renders seamlessly across video boundary cut)
                     FcpActiveTransitionOverlay(
                         currentTimeSecProvider = { currentTimeSec },
-                        timelineSpans = timelineSpans
+                        timelineSpans = timelineSpans,
+                        activeTextureViewProvider = { activeTextureView }
                     )
 
                     // ══════════════════════════════════════════════════════════
@@ -2994,6 +3033,19 @@ fun FinalCutProVideoEditorScreen(
                             }
                             FcpWorkspaceTab.EFFECTS -> {
                                 EffectsTabContent(
+                                    selectedEffect = selectedClip?.effect ?: FcpVisualEffect.NONE,
+                                    onSelectEffect = { newEff ->
+                                        selectedClip?.let { cur ->
+                                            saveStateForUndo()
+                                            clips = clips.map { if (it.id == cur.id) it.copy(effect = newEff) else it }
+                                        }
+                                    },
+                                    effectIntensity = selectedClip?.effectIntensity ?: 0.8f,
+                                    onIntensityChange = { newInt ->
+                                        selectedClip?.let { cur ->
+                                            clips = clips.map { if (it.id == cur.id) it.copy(effectIntensity = newInt) else it }
+                                        }
+                                    },
                                     aiMaskEnabled = aiMaskEnabled,
                                     onAiMaskToggle = { aiMaskEnabled = it },
                                     bokehAperture = bokehAperture,
@@ -5598,11 +5650,15 @@ private fun AudioTabContent(
 }
 
 // ============================================================================
-// EFFECTS TAB CONTENT (AI Subject Mask, Cinematic Depth, Speed)
+// EFFECTS TAB CONTENT (Visual Effects Library, AI Subject Mask, Speed)
 // ============================================================================
 
 @Composable
 private fun EffectsTabContent(
+    selectedEffect: FcpVisualEffect,
+    onSelectEffect: (FcpVisualEffect) -> Unit,
+    effectIntensity: Float,
+    onIntensityChange: (Float) -> Unit,
     aiMaskEnabled: Boolean,
     onAiMaskToggle: (Boolean) -> Unit,
     bokehAperture: Float,
@@ -5611,6 +5667,7 @@ private fun EffectsTabContent(
     onSpeedChange: (Float) -> Unit
 ) {
     val colors = LocalOscellionColors.current
+    val haptic = LocalHapticFeedback.current
 
     LazyColumn(
         modifier = Modifier
@@ -5618,7 +5675,158 @@ private fun EffectsTabContent(
             .padding(horizontal = 16.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // AI Subject Mask & Bokeh Depth
+        // 1. VISUAL EFFECTS CATALOG (Capsule/Pill free, Clean Rectangular Cards)
+        item {
+            WorkspaceSectionCard(title = "CINEMATIC VISUAL EFFECTS", icon = Lucide.Sparkles) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // Effects Horizontal Scroll Row
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FcpVisualEffect.entries.forEach { eff ->
+                            val isSelected = selectedEffect == eff
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(
+                                        if (isSelected) colors.primary.copy(alpha = 0.22f) else colors.glassBg,
+                                        RoundedCornerShape(8.dp)
+                                    )
+                                    .border(
+                                        width = if (isSelected) 1.5.dp else 0.5.dp,
+                                        color = if (isSelected) colors.primary else colors.glassBorder,
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    .clickable {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        onSelectEffect(eff)
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = eff.icon,
+                                        contentDescription = eff.label,
+                                        tint = if (isSelected) colors.primary else colors.textMuted,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                    Text(
+                                        text = eff.label,
+                                        fontSize = 11.5.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (isSelected) colors.primary else colors.textMain
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Intensity Slider (When an active effect is chosen)
+                    if (selectedEffect != FcpVisualEffect.NONE) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Effect Intensity",
+                                    fontSize = 11.5.sp,
+                                    color = colors.textMuted,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = "${(effectIntensity * 100).toInt()}%",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = colors.primary
+                                )
+                            }
+
+                            // Range slider with clean thin blue track and LiquidGlassKnob
+                            BoxWithConstraints(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(36.dp),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                val sliderWidthPx = constraints.maxWidth.toFloat().coerceAtLeast(1f)
+                                val fraction = effectIntensity.coerceIn(0.1f, 1f)
+
+                                var isDragging by remember { mutableStateOf(false) }
+                                val animatedScale by animateFloatAsState(
+                                    targetValue = if (isDragging) 1.22f else 1.0f,
+                                    animationSpec = spring(dampingRatio = 0.65f, stiffness = Spring.StiffnessMediumLow),
+                                    label = "effectKnobScale"
+                                )
+
+                                // Base thin track
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(3.dp)
+                                        .clip(RoundedCornerShape(1.5.dp))
+                                        .background(if (colors.isDark) Color(0xFF282C37) else Color(0xFFE2E8F0))
+                                )
+
+                                // Active fill track (Chroma Electric Blue)
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(fraction)
+                                        .height(3.dp)
+                                        .clip(RoundedCornerShape(1.5.dp))
+                                        .background(Color(0xFF007AFF))
+                                )
+
+                                // Draggable Bevel Knob
+                                val knobOffsetDp = with(LocalDensity.current) {
+                                    ((fraction * sliderWidthPx) - 10.dp.toPx()).toDp().coerceIn(0.dp, maxWidth - 20.dp)
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .offset(x = knobOffsetDp)
+                                        .size(20.dp)
+                                        .graphicsLayer {
+                                            scaleX = animatedScale
+                                            scaleY = animatedScale
+                                        }
+                                        .pointerInput(sliderWidthPx) {
+                                            detectHorizontalDragGestures(
+                                                onDragStart = { isDragging = true },
+                                                onDragEnd = { isDragging = false },
+                                                onDragCancel = { isDragging = false },
+                                                onHorizontalDrag = { change, _ ->
+                                                    change.consume()
+                                                    val newFrac = (change.position.x / sliderWidthPx).coerceIn(0.1f, 1.0f)
+                                                    onIntensityChange(newFrac)
+                                                }
+                                            )
+                                        }
+                                ) {
+                                    LiquidGlassKnob(
+                                        width = 20.dp,
+                                        height = 20.dp,
+                                        scale = animatedScale,
+                                        baseAlpha = 0.95f
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. AI Subject Mask & Bokeh Depth
         item {
             WorkspaceSectionCard(title = "AI SUBJECT DEPTH & BOKEH", icon = Lucide.Zap) {
                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -5657,7 +5865,7 @@ private fun EffectsTabContent(
             }
         }
 
-        // Playback Speed Selector
+        // 3. Playback Speed Selector (Capsule/Pill free, Modern Rectangular Chips)
         item {
             WorkspaceSectionCard(title = "PLAYBACK SPEED", icon = Lucide.Activity) {
                 Row(
@@ -5667,14 +5875,34 @@ private fun EffectsTabContent(
                     val speeds = listOf(0.5f, 1.0f, 1.5f, 2.0f)
                     speeds.forEach { s ->
                         val active = speed == s
-                        ShapePill(
-                            label = "${s}x",
-                            active = active,
-                            onClick = {
-                                onSpeedChange(s)
-                                ToastManager.showToast("Speed: ${s}x")
-                            }
-                        )
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(36.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(
+                                    if (active) colors.primary.copy(alpha = 0.22f) else colors.glassBg,
+                                    RoundedCornerShape(6.dp)
+                                )
+                                .border(
+                                    width = if (active) 1.5.dp else 0.5.dp,
+                                    color = if (active) colors.primary else colors.glassBorder,
+                                    shape = RoundedCornerShape(6.dp)
+                                )
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    onSpeedChange(s)
+                                    ToastManager.showToast("Speed: ${s}x")
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "${s}x",
+                                fontSize = 12.sp,
+                                fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
+                                color = if (active) colors.primary else colors.textMain
+                            )
+                        }
                     }
                 }
             }
@@ -9528,9 +9756,221 @@ private fun CanvasBgQuickPill(
 }
 
 @Composable
+private fun FcpVisualEffectsOverlay(
+    effect: FcpVisualEffect,
+    intensity: Float,
+    currentTimeSec: Float,
+    modifier: Modifier = Modifier
+) {
+    if (effect == FcpVisualEffect.NONE || intensity <= 0f) return
+
+    val clampedIntensity = intensity.coerceIn(0f, 1f)
+    val timeSeed = (currentTimeSec * 60f).toInt()
+
+    when (effect) {
+        FcpVisualEffect.GLITCH -> {
+            Canvas(modifier = modifier.fillMaxSize()) {
+                val w = size.width
+                val h = size.height
+                val random = kotlin.random.Random(timeSeed)
+
+                // 1. Digital RGB scanlines
+                val scanlineSpacing = 6.dp.toPx()
+                var y = 0f
+                while (y < h) {
+                    drawLine(
+                        color = Color.Black.copy(alpha = 0.16f * clampedIntensity),
+                        start = Offset(0f, y),
+                        end = Offset(w, y),
+                        strokeWidth = 1.5.dp.toPx()
+                    )
+                    y += scanlineSpacing
+                }
+
+                // 2. Horizontal chromatic glitch bars
+                val barCount = (3 * clampedIntensity).toInt() + 1
+                for (b in 0 until barCount) {
+                    val barY = random.nextFloat() * (h - 20.dp.toPx())
+                    val barH = (random.nextFloat() * 18.dp.toPx() + 6.dp.toPx())
+                    val offsetX = (random.nextFloat() * 30.dp.toPx() - 15.dp.toPx()) * clampedIntensity
+
+                    // Cyan channel slice
+                    drawRect(
+                        color = Color(0xFF00F0FF).copy(alpha = 0.28f * clampedIntensity),
+                        topLeft = Offset(offsetX, barY),
+                        size = Size(w, barH)
+                    )
+                    // Magenta channel slice
+                    drawRect(
+                        color = Color(0xFFFF0055).copy(alpha = 0.28f * clampedIntensity),
+                        topLeft = Offset(-offsetX * 0.8f, barY + 2.dp.toPx()),
+                        size = Size(w, barH)
+                    )
+                }
+            }
+        }
+        FcpVisualEffect.VHS_RETRO -> {
+            Canvas(modifier = modifier.fillMaxSize()) {
+                val w = size.width
+                val h = size.height
+
+                // CRT scanlines
+                var y = 0f
+                while (y < h) {
+                    drawLine(
+                        color = Color.Black.copy(alpha = 0.14f * clampedIntensity),
+                        start = Offset(0f, y),
+                        end = Offset(w, y),
+                        strokeWidth = 1.dp.toPx()
+                    )
+                    y += 4.dp.toPx()
+                }
+
+                // Rolling VHS tracking noise band
+                val trackingY = ((currentTimeSec * 140f) % (h + 60.dp.toPx())) - 30.dp.toPx()
+                drawRect(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            Color.White.copy(alpha = 0.15f * clampedIntensity),
+                            Color(0xFF00FFCC).copy(alpha = 0.12f * clampedIntensity),
+                            Color.Transparent
+                        ),
+                        startY = trackingY - 20.dp.toPx(),
+                        endY = trackingY + 30.dp.toPx()
+                    ),
+                    topLeft = Offset(0f, trackingY - 20.dp.toPx()),
+                    size = Size(w, 50.dp.toPx())
+                )
+            }
+        }
+        FcpVisualEffect.FILM_GRAIN -> {
+            Canvas(modifier = modifier.fillMaxSize()) {
+                val w = size.width
+                val h = size.height
+                val random = kotlin.random.Random(timeSeed)
+
+                // 35mm dynamic grain micro-dots
+                val dotCount = (180 * clampedIntensity).toInt()
+                for (i in 0 until dotCount) {
+                    val dx = random.nextFloat() * w
+                    val dy = random.nextFloat() * h
+                    val radius = random.nextFloat() * 1.5.dp.toPx() + 0.5.dp.toPx()
+                    val isLight = random.nextBoolean()
+                    drawCircle(
+                        color = if (isLight) Color.White.copy(alpha = 0.18f * clampedIntensity)
+                                else Color.Black.copy(alpha = 0.18f * clampedIntensity),
+                        radius = radius,
+                        center = Offset(dx, dy)
+                    )
+                }
+
+                // Subtle warm film emulsion wash
+                drawRect(
+                    color = Color(0xFFFFAA33).copy(alpha = 0.05f * clampedIntensity)
+                )
+            }
+        }
+        FcpVisualEffect.CINEMA_BLOOM -> {
+            Box(
+                modifier = modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(
+                                Color(0xFFFFF6D6).copy(alpha = 0.32f * clampedIntensity),
+                                Color(0xFFFFD180).copy(alpha = 0.16f * clampedIntensity),
+                                Color.Transparent
+                            )
+                        )
+                    )
+            )
+        }
+        FcpVisualEffect.PRISM_SPLIT -> {
+            Box(
+                modifier = modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = listOf(
+                                Color(0xFFFF0055).copy(alpha = 0.22f * clampedIntensity),
+                                Color.Transparent,
+                                Color(0xFF00E5FF).copy(alpha = 0.22f * clampedIntensity)
+                            )
+                        )
+                    )
+            )
+        }
+        FcpVisualEffect.VIGNETTE_MOOD -> {
+            Box(
+                modifier = modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.35f * clampedIntensity),
+                                Color.Black.copy(alpha = 0.85f * clampedIntensity)
+                            )
+                        )
+                    )
+            )
+        }
+        FcpVisualEffect.NOIR_CONTRAST -> {
+            Box(
+                modifier = modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.10f * clampedIntensity),
+                                Color.Black.copy(alpha = 0.40f * clampedIntensity)
+                            )
+                        )
+                    )
+            )
+        }
+        FcpVisualEffect.ANAMORPHIC_FLARE -> {
+            Canvas(modifier = modifier.fillMaxSize()) {
+                val w = size.width
+                val h = size.height
+                val midY = h * 0.45f
+                val flareH = 16.dp.toPx()
+
+                // Horizontal blue anamorphic streak
+                drawRect(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            Color(0xFF007AFF).copy(alpha = 0.35f * clampedIntensity),
+                            Color(0xFF00F0FF).copy(alpha = 0.65f * clampedIntensity),
+                            Color.White.copy(alpha = 0.85f * clampedIntensity),
+                            Color(0xFF00F0FF).copy(alpha = 0.65f * clampedIntensity),
+                            Color(0xFF007AFF).copy(alpha = 0.35f * clampedIntensity),
+                            Color.Transparent
+                        )
+                    ),
+                    topLeft = Offset(0f, midY - flareH / 2f),
+                    size = Size(w, flareH)
+                )
+            }
+        }
+        FcpVisualEffect.NONE -> {}
+    }
+}
+
+private data class FcpActiveTransitionInfo(
+    val type: FcpTransitionType,
+    val rawProgress: Float,
+    val easing: TransitionEasing,
+    val clipAId: String
+)
+
+@Composable
 private fun FcpActiveTransitionOverlay(
     currentTimeSecProvider: () -> Float,
-    timelineSpans: List<FcpTimelineClipSpan>
+    timelineSpans: List<FcpTimelineClipSpan>,
+    activeTextureViewProvider: () -> TextureView? = { null }
 ) {
     val hasTransitions = remember(timelineSpans) {
         timelineSpans.any { it.clip.transitionToNext != FcpTransitionType.NONE }
@@ -9539,7 +9979,7 @@ private fun FcpActiveTransitionOverlay(
 
     val currentTime = currentTimeSecProvider()
     val activeTransitionState = remember(currentTime, timelineSpans) {
-        var result: Triple<FcpTransitionType, Float, TransitionEasing>? = null
+        var result: FcpActiveTransitionInfo? = null
         for (i in 0 until timelineSpans.size - 1) {
             val spanA = timelineSpans[i]
             val spanB = timelineSpans[i + 1]
@@ -9553,7 +9993,7 @@ private fun FcpActiveTransitionOverlay(
                 if (currentTime in startSec..endSec) {
                     val totalWindow = (endSec - startSec).coerceAtLeast(0.05f)
                     val rawProgress = ((currentTime - startSec) / totalWindow).coerceIn(0f, 1f)
-                    result = Triple(trans, rawProgress, spanA.clip.transitionEasing)
+                    result = FcpActiveTransitionInfo(trans, rawProgress, spanA.clip.transitionEasing, spanA.clip.id)
                     break
                 }
             }
@@ -9561,173 +10001,316 @@ private fun FcpActiveTransitionOverlay(
         result
     }
 
+    var capturedFrameA by remember { mutableStateOf<Bitmap?>(null) }
+    var capturedClipId by remember { mutableStateOf<String?>(null) }
+
+    // Proactively capture frame of Clip A when entering the transition window
+    if (activeTransitionState != null) {
+        val rawP = activeTransitionState.rawProgress
+        val clipAId = activeTransitionState.clipAId
+        if (rawP < 0.48f && (capturedFrameA == null || capturedClipId != clipAId)) {
+            val tv = activeTextureViewProvider()
+            if (tv != null && tv.isAvailable && tv.width > 0 && tv.height > 0) {
+                try {
+                    val targetW = (tv.width / 2).coerceIn(320, 1080)
+                    val targetH = (tv.height / 2).coerceIn(180, 1920)
+                    val bmp = tv.getBitmap(targetW, targetH)
+                    if (bmp != null) {
+                        capturedFrameA?.recycle()
+                        capturedFrameA = bmp
+                        capturedClipId = clipAId
+                    }
+                } catch (_: Throwable) {}
+            }
+        }
+    }
+
+    // Clean up cached frame when transition finishes
+    LaunchedEffect(activeTransitionState == null) {
+        if (activeTransitionState == null) {
+            capturedFrameA?.recycle()
+            capturedFrameA = null
+            capturedClipId = null
+        }
+    }
+
     if (activeTransitionState != null) {
         val (transType, rawProgress, easing) = activeTransitionState
         val p = easing.transform(rawProgress)
-        val effect = transType.effect
+        val effect = transType.effect ?: VideoTransitionEffect.CROSS_DISSOLVE
+        val frameAImage = remember(capturedFrameA) { capturedFrameA?.asImageBitmap() }
 
-        if (effect != null) {
-            when (effect) {
-                VideoTransitionEffect.DIP_TO_BLACK -> {
-                    val blackAlpha = if (p <= 0.5f) (p * 2f) else ((1f - p) * 2f)
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.Black.copy(alpha = blackAlpha.coerceIn(0f, 1f)))
-                            .zIndex(20f)
-                    )
-                }
-                VideoTransitionEffect.DIP_TO_WHITE -> {
-                    val whiteAlpha = 1f - abs(p * 2f - 1f)
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.White.copy(alpha = (whiteAlpha * 0.98f).coerceIn(0f, 1f)))
-                            .zIndex(20f)
-                    )
-                }
-                VideoTransitionEffect.FILM_BLOOM_FADE -> {
-                    val bloom = sin(p * Math.PI.toFloat()).coerceIn(0f, 1f)
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                Brush.radialGradient(
-                                    listOf(
-                                        Color(0xFFFFF8E7).copy(alpha = bloom * 0.85f),
-                                        Color(0xFFFFB347).copy(alpha = bloom * 0.45f),
-                                        Color.Transparent
-                                    )
+        when (effect) {
+            VideoTransitionEffect.DIP_TO_BLACK -> {
+                val blackAlpha = if (p <= 0.5f) (p * 2f) else ((1f - p) * 2f)
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = blackAlpha.coerceIn(0f, 1f)))
+                        .zIndex(20f)
+                )
+            }
+            VideoTransitionEffect.DIP_TO_WHITE -> {
+                val whiteAlpha = 1f - abs(p * 2f - 1f)
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.White.copy(alpha = (whiteAlpha * 0.98f).coerceIn(0f, 1f)))
+                        .zIndex(20f)
+                )
+            }
+            VideoTransitionEffect.FILM_BLOOM_FADE -> {
+                val bloom = sin(p * Math.PI.toFloat()).coerceIn(0f, 1f)
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.radialGradient(
+                                listOf(
+                                    Color(0xFFFFF8E7).copy(alpha = bloom * 0.92f),
+                                    Color(0xFFFFB347).copy(alpha = bloom * 0.55f),
+                                    Color.Transparent
                                 )
                             )
-                            .zIndex(20f)
+                        )
+                        .zIndex(20f)
+                )
+            }
+            VideoTransitionEffect.CROSS_DISSOLVE -> {
+                val crossAlpha = (1f - p).coerceIn(0f, 1f)
+                val bloom = (sin(p * Math.PI.toFloat()) * 0.22f).coerceIn(0f, 1f)
+                Box(modifier = Modifier.fillMaxSize().zIndex(20f)) {
+                    if (frameAImage != null && crossAlpha > 0.01f) {
+                        Image(
+                            bitmap = frameAImage,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer { alpha = crossAlpha },
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                    if (bloom > 0.01f) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.White.copy(alpha = bloom))
+                        )
+                    }
+                }
+            }
+            VideoTransitionEffect.PUSH_LEFT, VideoTransitionEffect.COVER_SLIDE_LEFT -> {
+                Box(modifier = Modifier.fillMaxSize().zIndex(20f)) {
+                    if (frameAImage != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer { translationX = -p * size.width }
+                        ) {
+                            Image(
+                                bitmap = frameAImage,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                    }
+                    // Luminous Seam Cut Line
+                    val seamX = (1f - p).coerceIn(0f, 1f)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .width(2.5.dp)
+                            .fillMaxWidth(fraction = seamX)
+                            .wrapContentWidth(Alignment.End)
+                            .background(Color(0xFF00F0FF).copy(alpha = 0.85f))
                     )
                 }
-                VideoTransitionEffect.PUSH_LEFT, VideoTransitionEffect.COVER_SLIDE_LEFT -> {
-                    Box(modifier = Modifier.fillMaxSize().zIndex(20f)) {
+            }
+            VideoTransitionEffect.PUSH_RIGHT -> {
+                Box(modifier = Modifier.fillMaxSize().zIndex(20f)) {
+                    if (frameAImage != null) {
                         Box(
                             modifier = Modifier
-                                .fillMaxHeight()
-                                .fillMaxWidth(fraction = p)
-                                .background(Color(0xFF0A0E1A).copy(alpha = 0.88f))
+                                .fillMaxSize()
+                                .graphicsLayer { translationX = p * size.width }
+                        ) {
+                            Image(
+                                bitmap = frameAImage,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                    }
+                    // Luminous Seam Cut Line
+                    val seamX = p.coerceIn(0f, 1f)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .width(2.5.dp)
+                            .fillMaxWidth(fraction = seamX)
+                            .wrapContentWidth(Alignment.End)
+                            .background(Color(0xFF00F0FF).copy(alpha = 0.85f))
+                    )
+                }
+            }
+            VideoTransitionEffect.PUSH_UP -> {
+                Box(modifier = Modifier.fillMaxSize().zIndex(20f)) {
+                    if (frameAImage != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer { translationY = -p * size.height }
+                        ) {
+                            Image(
+                                bitmap = frameAImage,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                    }
+                }
+            }
+            VideoTransitionEffect.PUSH_DOWN -> {
+                Box(modifier = Modifier.fillMaxSize().zIndex(20f)) {
+                    if (frameAImage != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer { translationY = p * size.height }
+                        ) {
+                            Image(
+                                bitmap = frameAImage,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                    }
+                }
+            }
+            VideoTransitionEffect.WIPE_HORIZONTAL,
+            VideoTransitionEffect.WIPE_DIAGONAL,
+            VideoTransitionEffect.CLOCK_RADIAL_WIPE,
+            VideoTransitionEffect.BARN_DOORS_SPLIT,
+            VideoTransitionEffect.VENETIAN_BLINDS,
+            VideoTransitionEffect.CIRCLE_IRIS_OPEN,
+            VideoTransitionEffect.CIRCLE_PINHOLE_CLOSE,
+            VideoTransitionEffect.DIAMOND_SHUTTER,
+            VideoTransitionEffect.CORNER_QUAD_SPLIT -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .drawWithContent {
+                            if (frameAImage != null) {
+                                val mask = buildGeometricMaskPath(effect, 1f - p, size)
+                                clipPath(mask) {
+                                    drawImage(
+                                        image = frameAImage,
+                                        dstSize = androidx.compose.ui.unit.IntSize(size.width.toInt(), size.height.toInt())
+                                    )
+                                }
+                                drawPath(
+                                    path = mask,
+                                    color = Color(0xFF00F0FF).copy(alpha = 0.5f),
+                                    style = Stroke(width = 2.dp.toPx())
+                                )
+                            } else {
+                                val mask = buildGeometricMaskPath(effect, p, size)
+                                drawPath(
+                                    path = mask,
+                                    color = Color.White.copy(alpha = (sin(p * Math.PI.toFloat()) * 0.35f).coerceIn(0f, 1f))
+                                )
+                            }
+                        }
+                        .zIndex(20f)
+                )
+            }
+            VideoTransitionEffect.CROSS_ZOOM_IN, VideoTransitionEffect.CROSS_ZOOM_OUT -> {
+                val scaleFactor = if (effect == VideoTransitionEffect.CROSS_ZOOM_IN) {
+                    1f + (p * 0.5f)
+                } else {
+                    (1f - (p * 0.3f)).coerceAtLeast(0.7f)
+                }
+                val flash = sin(p * Math.PI.toFloat()) * 0.3f
+                Box(modifier = Modifier.fillMaxSize().zIndex(20f)) {
+                    if (frameAImage != null && p < 0.6f) {
+                        Image(
+                            bitmap = frameAImage,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer {
+                                    scaleX = scaleFactor
+                                    scaleY = scaleFactor
+                                    alpha = (1f - (p * 1.6f)).coerceIn(0f, 1f)
+                                },
+                            contentScale = ContentScale.Crop
                         )
+                    }
+                    if (flash > 0.01f) {
                         Box(
                             modifier = Modifier
-                                .fillMaxHeight()
-                                .width(2.5.dp)
-                                .fillMaxWidth(fraction = p)
-                                .wrapContentWidth(Alignment.End)
-                                .background(Color.White.copy(alpha = 0.7f))
+                                .fillMaxSize()
+                                .background(Color.White.copy(alpha = flash))
                         )
                     }
                 }
-                VideoTransitionEffect.PUSH_RIGHT -> {
-                    Box(modifier = Modifier.fillMaxSize().zIndex(20f)) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .fillMaxWidth(fraction = 1f - p)
-                                .align(Alignment.CenterEnd)
-                                .background(Color(0xFF0A0E1A).copy(alpha = 0.88f))
-                        )
-                        Box(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .width(2.5.dp)
-                                .fillMaxWidth(fraction = 1f - p)
-                                .align(Alignment.CenterEnd)
-                                .wrapContentWidth(Alignment.Start)
-                                .background(Color.White.copy(alpha = 0.7f))
-                        )
-                    }
-                }
-                VideoTransitionEffect.PUSH_UP -> {
-                    Box(modifier = Modifier.fillMaxSize().zIndex(20f)) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .fillMaxHeight(fraction = p)
-                                .background(Color(0xFF0A0E1A).copy(alpha = 0.88f))
-                        )
-                    }
-                }
-                VideoTransitionEffect.PUSH_DOWN -> {
-                    Box(modifier = Modifier.fillMaxSize().zIndex(20f)) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .fillMaxHeight(fraction = 1f - p)
-                                .align(Alignment.BottomCenter)
-                                .background(Color(0xFF0A0E1A).copy(alpha = 0.88f))
-                        )
-                    }
-                }
-                VideoTransitionEffect.WIPE_HORIZONTAL,
-                VideoTransitionEffect.WIPE_DIAGONAL,
-                VideoTransitionEffect.CLOCK_RADIAL_WIPE,
-                VideoTransitionEffect.BARN_DOORS_SPLIT,
-                VideoTransitionEffect.VENETIAN_BLINDS,
-                VideoTransitionEffect.CIRCLE_IRIS_OPEN,
-                VideoTransitionEffect.CIRCLE_PINHOLE_CLOSE,
-                VideoTransitionEffect.DIAMOND_SHUTTER,
-                VideoTransitionEffect.CORNER_QUAD_SPLIT -> {
+            }
+            VideoTransitionEffect.GLITCH_SLICE_SHIFT -> {
+                val glitchEnvelope = sin(p * Math.PI.toFloat()).coerceIn(0f, 1f)
+                if (glitchEnvelope > 0.05f) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .drawWithContent {
-                                val mask = buildGeometricMaskPath(effect, p, size)
-                                drawPath(
-                                    path = mask,
-                                    color = Color.Black.copy(alpha = 0.85f)
+                                val slicePath = buildGlitchSliceMaskPath(p, size)
+                                if (frameAImage != null && p < 0.5f) {
+                                    clipPath(slicePath) {
+                                        drawImage(
+                                            image = frameAImage,
+                                            dstSize = androidx.compose.ui.unit.IntSize(size.width.toInt(), size.height.toInt())
+                                        )
+                                    }
+                                }
+                                drawRect(
+                                    color = Color(0xFF00F0FF).copy(alpha = glitchEnvelope * 0.35f),
+                                    topLeft = Offset(0f, size.height * ((p * 1.7f) % 0.8f)),
+                                    size = Size(size.width, size.height * 0.08f)
                                 )
-                                drawPath(
-                                    path = mask,
-                                    color = Color.White.copy(alpha = 0.35f),
-                                    style = Stroke(width = 2.dp.toPx())
+                                drawRect(
+                                    color = Color(0xFFFF2D55).copy(alpha = glitchEnvelope * 0.35f),
+                                    topLeft = Offset(0f, size.height * ((1f - p * 1.3f).coerceIn(0f, 0.85f))),
+                                    size = Size(size.width, size.height * 0.06f)
                                 )
                             }
                             .zIndex(20f)
                     )
                 }
-                VideoTransitionEffect.GLITCH_SLICE_SHIFT -> {
-                    val glitchEnvelope = sin(p * Math.PI.toFloat()).coerceIn(0f, 1f)
-                    if (glitchEnvelope > 0.05f) {
+            }
+            else -> {
+                val crossAlpha = (1f - p).coerceIn(0f, 1f)
+                val bloom = (sin(p * Math.PI.toFloat()) * 0.25f).coerceIn(0f, 1f)
+                Box(modifier = Modifier.fillMaxSize().zIndex(20f)) {
+                    if (frameAImage != null && crossAlpha > 0.01f) {
+                        Image(
+                            bitmap = frameAImage,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer { alpha = crossAlpha },
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                    if (bloom > 0.01f) {
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .drawWithContent {
-                                    val slicePath = buildGlitchSliceMaskPath(p, size)
-                                    drawPath(slicePath, color = Color.Black.copy(alpha = 0.75f))
-                                    drawRect(
-                                        color = Color(0xFF00F0FF).copy(alpha = glitchEnvelope * 0.35f),
-                                        topLeft = Offset(0f, size.height * ((p * 1.7f) % 0.8f)),
-                                        size = Size(size.width, size.height * 0.08f)
-                                    )
-                                    drawRect(
-                                        color = Color(0xFFFF2D55).copy(alpha = glitchEnvelope * 0.35f),
-                                        topLeft = Offset(0f, size.height * ((1f - p * 1.3f).coerceIn(0f, 0.85f))),
-                                        size = Size(size.width, size.height * 0.06f)
-                                    )
-                                }
-                                .zIndex(20f)
+                                .background(Color.White.copy(alpha = bloom))
                         )
                     }
-                }
-                else -> {
-                    val crossAlpha = (sin(p * Math.PI.toFloat()) * 0.75f).coerceIn(0f, 1f)
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                Brush.radialGradient(
-                                    colors = listOf(
-                                        Color.White.copy(alpha = crossAlpha * 0.45f),
-                                        Color.Black.copy(alpha = crossAlpha * 0.65f)
-                                    )
-                                )
-                            )
-                            .zIndex(20f)
-                    )
                 }
             }
         }

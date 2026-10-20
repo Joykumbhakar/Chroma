@@ -461,6 +461,7 @@ object VideoProcessor {
             var globalVideoTimeOffsetUs = 0L
             var globalAudioTimeOffsetUs = 0L
 
+            var hasClipErrors = false
             for (clip in clips) {
                 val extractor = MediaExtractor()
                 try {
@@ -534,6 +535,7 @@ object VideoProcessor {
                         globalAudioTimeOffsetUs += (lastAudioSampleUs + 23_000L).coerceAtLeast(clipDurationUs)
                     }
                 } catch (e: Exception) {
+                    hasClipErrors = true
                     Log.e(TAG, "concatVideoClips failed on clip ${clip.id}", e)
                 } finally {
                     extractor.release()
@@ -541,7 +543,7 @@ object VideoProcessor {
             }
 
             muxer.stop()
-            outputFile.exists() && outputFile.length() > 0L
+            !hasClipErrors && outputFile.exists() && outputFile.length() > 0L
         } catch (e: Exception) {
             Log.e(TAG, "concatVideoClips muxer error", e)
             false
