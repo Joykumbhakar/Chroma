@@ -9108,10 +9108,10 @@ fun FcpExitConfirmationDialog(
                         scaleY = scaleAnim.value
                         alpha = alphaAnim.value
                     }
-                    .shadow(32.dp, RoundedCornerShape(16.dp), spotColor = Color.Black)
+                    .shadow(24.dp, RoundedCornerShape(16.dp), spotColor = Color(0x33000000))
                     .clip(RoundedCornerShape(16.dp))
-                    .background(Color(0xFF1E212B))
-                    .border(1.dp, Color(0xFF2A2F3A), RoundedCornerShape(16.dp))
+                    .background(Color.White)
+                    .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(16.dp))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
@@ -9123,28 +9123,27 @@ fun FcpExitConfirmationDialog(
                     modifier = Modifier.padding(top = 22.dp, bottom = 14.dp, start = 20.dp, end = 20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    AppleVideosIcon(modifier = Modifier.size(68.dp))
-                    Spacer(Modifier.height(14.dp))
+                    AppleVideosIcon(modifier = Modifier.size(64.dp))
+                    Spacer(Modifier.height(12.dp))
                     Text(
-                        text = "Exit Video Editor?",
-                        color = Color.White,
+                        text = "Save changes?",
+                        color = Color(0xFF0F172A),
                         fontSize = 17.sp,
                         fontWeight = FontWeight.SemiBold,
                         textAlign = TextAlign.Center,
                         lineHeight = 22.sp
                     )
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "You have unsaved changes in this project. Do you want to save before leaving?",
-                        color = Color.White.copy(alpha = 0.72f),
-                        fontSize = 12.5.sp,
+                        text = "Save before leaving?",
+                        color = Color(0xFF64748B),
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.Normal,
-                        textAlign = TextAlign.Center,
-                        lineHeight = 17.sp
+                        textAlign = TextAlign.Center
                     )
                 }
 
-                HorizontalDivider(color = Color(0xFF2A2F3A), thickness = 0.5.dp)
+                HorizontalDivider(color = Color(0xFFE2E8F0), thickness = 0.5.dp)
 
                 // Actions:
                 // 1. Solid Blue Save Draft & Exit Button
@@ -9157,44 +9156,46 @@ fun FcpExitConfirmationDialog(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Save Draft & Exit",
+                        text = "Save & Exit",
                         color = Color.White,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
 
-                HorizontalDivider(color = Color(0xFF2A2F3A), thickness = 0.5.dp)
+                HorizontalDivider(color = Color(0xFFE2E8F0), thickness = 0.5.dp)
 
                 // 2. Discard Changes Button (Destructive Red)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(44.dp)
+                        .background(Color.White)
                         .clickable { onDiscardAndExit() },
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Discard Changes",
+                        text = "Discard",
                         color = Color(0xFFFF3B30),
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Normal
                     )
                 }
 
-                HorizontalDivider(color = Color(0xFF2A2F3A), thickness = 0.5.dp)
+                HorizontalDivider(color = Color(0xFFE2E8F0), thickness = 0.5.dp)
 
                 // 3. Keep Editing Button
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(44.dp)
+                        .background(Color(0xFFF8FAFD))
                         .clickable { onDismiss() },
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Keep Editing",
-                        color = Color(0xFF8E98A8),
+                        text = "Cancel",
+                        color = Color(0xFF64748B),
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Medium
                     )

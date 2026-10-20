@@ -512,7 +512,7 @@ fun FlashProjectsHubScreen(
                         com.chroma.studio.ui.graphics3d.AppleHigDialogCard(
                             graphicId = com.chroma.studio.ui.graphics3d.Apple3DGraphicId.TRASH_BIN,
                             title = if (item.isDraft) "Delete Draft?" else "Delete Video?",
-                            description = "Are you sure you want to permanently delete \"${item.title}\"? This action cannot be undone.",
+                            description = "This action cannot be undone.",
                             cancelText = "Cancel",
                             confirmText = "Delete",
                             onCancel = { itemToDelete = null },

@@ -388,14 +388,13 @@ fun AppleHigDialogCard(
     modifier: Modifier = Modifier
 ) {
     var isOpen by remember { mutableStateOf(false) }
-    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
-    val cardBg = if (isDark) Color(0xFF1E293B) else Color.White
-    val borderCol = if (isDark) Color(0xFF334155) else Color(0xFFDFE8F3)
-    val titleCol = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A)
-    val descCol = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
-    val dividerCol = if (isDark) Color(0xFF334155) else Color(0xFFDFE8F3)
-    val bottomBarBg = if (isDark) Color(0xFF0F172A) else Color(0xFFF8FAFD)
-    val cancelTextCol = if (isDark) Color(0xFFE2E8F0) else Color.Black
+    val cardBg = Color.White
+    val borderCol = Color(0xFFE2E8F0)
+    val titleCol = Color(0xFF0F172A)
+    val descCol = Color(0xFF64748B)
+    val dividerCol = Color(0xFFF1F5F9)
+    val bottomBarBg = Color(0xFFF8FAFD)
+    val cancelTextCol = Color(0xFF0F172A)
 
     Surface(
         modifier = modifier.widthIn(max = 320.dp),

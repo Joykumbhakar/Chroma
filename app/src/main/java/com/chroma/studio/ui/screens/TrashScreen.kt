@@ -376,8 +376,8 @@ fun TrashScreen(
                 Box(modifier = Modifier.clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {}) {
                     com.chroma.studio.ui.graphics3d.AppleHigDialogCard(
                         graphicId = com.chroma.studio.ui.graphics3d.Apple3DGraphicId.TRASH_BIN,
-                        title = "Empty System Trash?",
-                        description = "${deletedWorks.size} cached items will be permanently removed. This action cannot be undone.",
+                        title = "Empty Trash?",
+                        description = "This action cannot be undone.",
                         cancelText = "Cancel",
                         confirmText = "Empty Trash",
                         onCancel = { showEmptyTrashDialog = false },
