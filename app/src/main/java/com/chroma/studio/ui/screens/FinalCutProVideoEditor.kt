@@ -31,6 +31,8 @@ import com.chroma.studio.ui.components.TransitionEasing
 import com.chroma.studio.ui.components.VideoTransitionEffect
 import com.chroma.studio.ui.components.VideoTransitionRenderer
 import com.chroma.studio.ui.components.AppleVideoTransitionStudio
+import com.chroma.studio.ui.components.DemoIncomingVideoClip
+import com.chroma.studio.ui.components.DemoOutgoingVideoClip
 import com.chroma.studio.ui.components.buildGeometricMaskPath
 import com.chroma.studio.ui.components.buildGlitchSliceMaskPath
 import com.chroma.studio.ui.components.transform
@@ -716,6 +718,13 @@ data class FcpEditorSnapshot(
     val customAudio: FcpCustomAudio?
 )
 
+fun isClipPhoto(context: Context, clip: FcpClip): Boolean {
+    return try {
+        val type = context.contentResolver.getType(clip.uri)
+        type?.startsWith("image/") == true
+    } catch (_: Exception) { false }
+}
+
 private fun queryMediaFileName(context: Context, uri: Uri): String {
     var name: String? = null
     if (uri.scheme == "content") {
@@ -1316,12 +1325,7 @@ fun FinalCutProVideoEditorScreen(
         }
     }
 
-    fun isClipPhoto(clip: FcpClip): Boolean {
-        return try {
-            val type = context.contentResolver.getType(clip.uri)
-            type?.startsWith("image/") == true
-        } catch (_: Exception) { false }
-    }
+    fun isClipPhoto(clip: FcpClip): Boolean = isClipPhoto(context, clip)
 
     fun getActiveSpanAt(timeSec: Float): FcpTimelineClipSpan? {
         if (timelineSpans.isEmpty()) return null
@@ -1344,6 +1348,7 @@ fun FinalCutProVideoEditorScreen(
     var loadedClipId by remember { mutableStateOf<String?>(null) }
     var loadedClipUri by remember { mutableStateOf<Uri?>(null) }
     var lastPlayerSeekMs by remember { mutableLongStateOf(0L) }
+    var isClipSwitching by remember { mutableStateOf(false) }
 
     fun ensureClipLoadedInPlayer(
         clip: FcpClip,
@@ -1355,6 +1360,12 @@ fun FinalCutProVideoEditorScreen(
         val mediaMs = (targetMediaSec * 1000f).toLong().coerceAtLeast(0L)
         val isDifferentClip = loadedClipId != clip.id
         val isDifferentUri = loadedClipUri != clip.uri
+
+        if (isDifferentClip && shouldPlay) {
+            isClipSwitching = true
+        } else if (!shouldPlay) {
+            isClipSwitching = false
+        }
 
         loadedClipId = clip.id
         loadedClipUri = clip.uri
@@ -1451,6 +1462,7 @@ fun FinalCutProVideoEditorScreen(
 
     fun onScrubEnd(finalSec: Float) {
         lastSnapPoint = -1f
+        isClipSwitching = false
         val clamped = finalSec.coerceIn(0f, totalDurationSec)
         currentTimeSec = clamped
         if (customAudio != null) {
@@ -1496,6 +1508,7 @@ fun FinalCutProVideoEditorScreen(
     fun seekToGlobalTime(targetGlobalSec: Float, autoPlay: Boolean? = null) {
         val clamped = targetGlobalSec.coerceIn(0f, totalDurationSec)
         currentTimeSec = clamped
+        isClipSwitching = false
         if (customAudio != null) {
             if (customAudioPlayer.playbackState == Player.STATE_ENDED || customAudioPlayer.playbackState == Player.STATE_IDLE) {
                 customAudioPlayer.prepare()
@@ -1550,6 +1563,7 @@ fun FinalCutProVideoEditorScreen(
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_READY) {
+                    isClipSwitching = false
                     val durMs = exoPlayer.duration
                     if (durMs > 0 && selectedClip != null) {
                         val durSec = durMs / 1000f
@@ -1613,6 +1627,7 @@ fun FinalCutProVideoEditorScreen(
                             val nextClip = nextSpan.clip
                             selectedId = nextClip.id
                             currentTimeSec = nextSpan.timelineStartSec
+                            isClipSwitching = true
                             ensureClipLoadedInPlayer(
                                 clip = nextClip,
                                 targetMediaSec = nextClip.trimStartSec,
@@ -1634,22 +1649,42 @@ fun FinalCutProVideoEditorScreen(
                     }
                 } else {
                     // Video clip playback: ExoPlayer's hardware decoder/audio clock is the master ground truth
-                    val playerPosSec = exoPlayer.currentPosition / 1000f
+                    val speed = clip.speed.coerceAtLeast(0.1f)
                     val playerState = exoPlayer.playbackState
                     val isPlayerPlaying = exoPlayer.isPlaying
+                    val isPlayerReadyForClip = !isClipSwitching && loadedClipId == clip.id && playerState == Player.STATE_READY
 
-                    if (isPlayerPlaying && playerState == Player.STATE_READY) {
+                    if (isClipSwitching) {
+                        // ExoPlayer is loading/buffering next clip: advance playhead monotonically on display clock so it NEVER freezes
+                        if (isPlayerPlaying && playerState == Player.STATE_READY && loadedClipId == clip.id) {
+                            isClipSwitching = false
+                        } else {
+                            val nextTime = currentTimeSec + (dtSec * speed)
+                            currentTimeSec = nextTime.coerceAtMost(curSpan.timelineEndSec)
+                            if (exoPlayer.playWhenReady && playerState == Player.STATE_READY && !exoPlayer.isPlaying) {
+                                exoPlayer.play()
+                            }
+                            return@withFrameNanos
+                        }
+                    }
+
+                    val playerPosSec = exoPlayer.currentPosition / 1000f
+                    val boundaryThreshold = (0.04f * speed).coerceIn(0.02f, 0.08f)
+
+                    if (isPlayerReadyForClip && isPlayerPlaying) {
                         val currentGlobalSec = getGlobalTimeForMedia(curSpan, playerPosSec)
-                        val speed = clip.speed.coerceAtLeast(0.1f)
-                        val boundaryThreshold = (0.035f * speed).coerceIn(0.02f, 0.08f)
 
-                        if (playerPosSec >= clip.trimEndSec - boundaryThreshold || currentGlobalSec >= curSpan.timelineEndSec - boundaryThreshold) {
+                        val isAtBoundary = (playerPosSec >= clip.trimEndSec - boundaryThreshold && playerPosSec >= clip.trimStartSec - 0.1f) ||
+                                (currentGlobalSec >= curSpan.timelineEndSec - boundaryThreshold)
+
+                        if (isAtBoundary) {
                             // Reached cut boundary! Seamlessly transition to next clip
                             val nextSpan = timelineSpans.getOrNull(curSpanIdx + 1)
                             if (nextSpan != null) {
                                 val nextClip = nextSpan.clip
                                 selectedId = nextClip.id
                                 currentTimeSec = nextSpan.timelineStartSec
+                                isClipSwitching = true
                                 ensureClipLoadedInPlayer(
                                     clip = nextClip,
                                     targetMediaSec = nextClip.trimStartSec,
@@ -1667,24 +1702,24 @@ fun FinalCutProVideoEditorScreen(
                                 }
                             }
                         } else {
-                            // Hardware Clock Smooth Pacing with Soft Convergence:
-                            // Advance monotonically on every VSYNC frame, then gently converge to hardware position
+                            // Hardware Clock Smooth Pacing with Soft Convergence
                             val steppedTime = currentTimeSec + (dtSec * speed)
                             val drift = currentGlobalSec - steppedTime
-                            val convergedTime = if (abs(drift) > 0.10f) {
+                            val convergedTime = if (abs(drift) > 0.25f) {
                                 currentGlobalSec
                             } else {
-                                steppedTime + (drift * 0.22f)
+                                steppedTime + (drift * 0.18f)
                             }
                             currentTimeSec = convergedTime.coerceIn(curSpan.timelineStartSec, curSpan.timelineEndSec)
                         }
-                    } else if (playerState == Player.STATE_ENDED) {
+                    } else if (playerState == Player.STATE_ENDED && !isClipSwitching && loadedClipId == clip.id) {
                         // Media reached end of file before timeline span end
                         val nextSpan = timelineSpans.getOrNull(curSpanIdx + 1)
                         if (nextSpan != null) {
                             val nextClip = nextSpan.clip
                             selectedId = nextClip.id
                             currentTimeSec = nextSpan.timelineStartSec
+                            isClipSwitching = true
                             ensureClipLoadedInPlayer(
                                 clip = nextClip,
                                 targetMediaSec = nextClip.trimStartSec,
@@ -1702,7 +1737,9 @@ fun FinalCutProVideoEditorScreen(
                             }
                         }
                     } else {
-                        // Player is preparing or buffering: ensure it starts playing as soon as ready, without advancing timehead prematurely
+                        // Player is preparing or buffering: keep playhead advancing smoothly on display clock
+                        val steppedTime = currentTimeSec + (dtSec * speed)
+                        currentTimeSec = steppedTime.coerceIn(curSpan.timelineStartSec, curSpan.timelineEndSec)
                         if (!exoPlayer.isPlaying && exoPlayer.playWhenReady && playerState == Player.STATE_READY) {
                             exoPlayer.play()
                         }
@@ -3062,6 +3099,10 @@ fun FinalCutProVideoEditorScreen(
                                         },
                                         onEditTransition = { clipId ->
                                             SoundManager.playTap(context)
+                                            val span = timelineSpans.find { it.clip.id == clipId }
+                                            if (span != null) {
+                                                seekToGlobalTime(span.timelineEndSec, autoPlay = false)
+                                            }
                                             editingTransitionClipId = clipId
                                         },
                                         onOpenAudioTab = {
@@ -3226,14 +3267,26 @@ fun FinalCutProVideoEditorScreen(
                     onDismiss = { editingTransitionClipId = null },
                     onApplyTransition = { newType, newDur, newEasing ->
                         saveStateForUndo()
-                        clips = clips.map {
+                        val updatedClips = clips.map {
                             if (it.id == clip.id) it.copy(
                                 transitionToNext = newType,
                                 transitionDurationSec = newDur,
                                 transitionEasing = newEasing
                             ) else it
                         }
+                        clips = updatedClips
+                        editingTransitionClipId = null
                         ToastManager.showToast("Transition set: ${newType.label}")
+
+                        if (newType != FcpTransitionType.NONE) {
+                            val updatedSpans = buildTimelineSpans(updatedClips)
+                            val spanA = updatedSpans.find { it.clip.id == clip.id }
+                            if (spanA != null) {
+                                val cutSec = spanA.timelineEndSec
+                                val previewStartSec = (cutSec - (newDur * 0.65f)).coerceAtLeast(spanA.timelineStartSec)
+                                seekToGlobalTime(previewStartSec, autoPlay = true)
+                            }
+                        }
                     }
                 )
             }
@@ -10090,7 +10143,9 @@ private data class FcpActiveTransitionInfo(
     val type: FcpTransitionType,
     val rawProgress: Float,
     val easing: TransitionEasing,
-    val clipAId: String
+    val spanA: FcpTimelineClipSpan,
+    val spanB: FcpTimelineClipSpan,
+    val cutSec: Float
 )
 
 @Composable
@@ -10099,346 +10154,202 @@ private fun FcpActiveTransitionOverlay(
     timelineSpans: List<FcpTimelineClipSpan>,
     activeTextureViewProvider: () -> TextureView? = { null }
 ) {
+    val context = LocalContext.current
     val hasTransitions = remember(timelineSpans) {
         timelineSpans.any { it.clip.transitionToNext != FcpTransitionType.NONE }
     }
     if (!hasTransitions) return
 
     val currentTime = currentTimeSecProvider()
-    val activeTransitionState = remember(currentTime, timelineSpans) {
-        var result: FcpActiveTransitionInfo? = null
+    val activeTransition = remember(currentTime, timelineSpans) {
+        var found: FcpActiveTransitionInfo? = null
         for (i in 0 until timelineSpans.size - 1) {
             val spanA = timelineSpans[i]
             val spanB = timelineSpans[i + 1]
             val trans = spanA.clip.transitionToNext
-            if (trans != FcpTransitionType.NONE) {
+            if (trans != FcpTransitionType.NONE && trans.effect != null) {
                 val cutSec = spanA.timelineEndSec
-                val dur = spanA.clip.transitionDurationSec.coerceIn(0.2f, 2f)
+                val dur = spanA.clip.transitionDurationSec.coerceIn(0.2f, 2.5f)
                 val halfDur = dur * 0.5f
                 val startSec = (cutSec - halfDur).coerceAtLeast(spanA.timelineStartSec)
                 val endSec = (cutSec + halfDur).coerceAtMost(spanB.timelineEndSec)
                 if (currentTime in startSec..endSec) {
                     val totalWindow = (endSec - startSec).coerceAtLeast(0.05f)
                     val rawProgress = ((currentTime - startSec) / totalWindow).coerceIn(0f, 1f)
-                    result = FcpActiveTransitionInfo(trans, rawProgress, spanA.clip.transitionEasing, spanA.clip.id)
+                    found = FcpActiveTransitionInfo(
+                        type = trans,
+                        rawProgress = rawProgress,
+                        easing = spanA.clip.transitionEasing,
+                        spanA = spanA,
+                        spanB = spanB,
+                        cutSec = cutSec
+                    )
                     break
                 }
             }
         }
-        result
+        found
     }
 
-    var capturedFrameA by remember { mutableStateOf<Bitmap?>(null) }
-    var capturedClipId by remember { mutableStateOf<String?>(null) }
+    if (activeTransition == null) return
 
-    // Proactively capture frame of Clip A when entering the transition window
-    if (activeTransitionState != null) {
-        val rawP = activeTransitionState.rawProgress
-        val clipAId = activeTransitionState.clipAId
-        if (rawP < 0.48f && (capturedFrameA == null || capturedClipId != clipAId)) {
-            val tv = activeTextureViewProvider()
-            if (tv != null && tv.isAvailable && tv.width > 0 && tv.height > 0) {
+    val spanA = activeTransition.spanA
+    val spanB = activeTransition.spanB
+    val clipA = spanA.clip
+    val clipB = spanB.clip
+    val cutSec = activeTransition.cutSec
+    val effect = activeTransition.type.effect ?: VideoTransitionEffect.CROSS_DISSOLVE
+
+    var liveFrameA by remember { mutableStateOf<Bitmap?>(null) }
+    var liveFrameB by remember { mutableStateOf<Bitmap?>(null) }
+    var cachedFrameA by remember(clipA.id) { mutableStateOf<Bitmap?>(null) }
+    var cachedFrameB by remember(clipB.id) { mutableStateOf<Bitmap?>(null) }
+
+    // Proactively capture live frames from activeTextureView
+    val tv = activeTextureViewProvider()
+    if (tv != null && tv.isAvailable && tv.width > 0 && tv.height > 0) {
+        try {
+            if (currentTime <= cutSec + 0.04f) {
+                val targetW = (tv.width / 2).coerceIn(320, 1080)
+                val targetH = (tv.height / 2).coerceIn(180, 1920)
+                val bmp = tv.getBitmap(targetW, targetH)
+                if (bmp != null) {
+                    liveFrameA = bmp
+                }
+            } else if (currentTime >= cutSec - 0.04f) {
+                val targetW = (tv.width / 2).coerceIn(320, 1080)
+                val targetH = (tv.height / 2).coerceIn(180, 1920)
+                val bmp = tv.getBitmap(targetW, targetH)
+                if (bmp != null) {
+                    liveFrameB = bmp
+                }
+            }
+        } catch (_: Throwable) {}
+    }
+
+    // Preload fallback frames from thumbnail cache or MediaMetadataRetriever
+    LaunchedEffect(clipA.id, clipA.uri, clipA.trimEndSec) {
+        if (isClipPhoto(context, clipA)) return@LaunchedEffect
+        withContext(Dispatchers.IO) {
+            val keyA = "trans_out_${clipA.id}_${(clipA.trimEndSec * 10).toLong()}"
+            val existing = FcpThumbnailMemoryCache.get(keyA)
+                ?: FcpThumbnailMemoryCache.get("${clipA.uri}_${(clipA.trimEndSec * 2).toLong()}")
+                ?: FcpThumbnailMemoryCache.get("${clipA.uri}_0")
+            if (existing != null) {
+                cachedFrameA = existing
+            } else {
                 try {
-                    val targetW = (tv.width / 2).coerceIn(320, 1080)
-                    val targetH = (tv.height / 2).coerceIn(180, 1920)
-                    val bmp = tv.getBitmap(targetW, targetH)
-                    if (bmp != null) {
-                        capturedFrameA?.recycle()
-                        capturedFrameA = bmp
-                        capturedClipId = clipAId
+                    val mmr = MediaMetadataRetriever()
+                    mmr.setDataSource(context, clipA.uri)
+                    val targetUs = ((clipA.trimEndSec - 0.05f).coerceAtLeast(0f) * 1_000_000L).toLong()
+                    val bmp = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                        mmr.getScaledFrameAtTime(targetUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 720, 1280)
+                    } else {
+                        mmr.getFrameAtTime(targetUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
                     }
+                    if (bmp != null) {
+                        FcpThumbnailMemoryCache.put(keyA, bmp)
+                        cachedFrameA = bmp
+                    }
+                    mmr.release()
                 } catch (_: Throwable) {}
             }
         }
     }
 
-    // Clean up cached frame when transition finishes
-    LaunchedEffect(activeTransitionState == null) {
-        if (activeTransitionState == null) {
-            capturedFrameA?.recycle()
-            capturedFrameA = null
-            capturedClipId = null
+    LaunchedEffect(clipB.id, clipB.uri, clipB.trimStartSec) {
+        if (isClipPhoto(context, clipB)) return@LaunchedEffect
+        withContext(Dispatchers.IO) {
+            val keyB = "trans_in_${clipB.id}_${(clipB.trimStartSec * 10).toLong()}"
+            val existing = FcpThumbnailMemoryCache.get(keyB)
+                ?: FcpThumbnailMemoryCache.get("${clipB.uri}_${(clipB.trimStartSec * 2).toLong()}")
+                ?: FcpThumbnailMemoryCache.get("${clipB.uri}_0")
+            if (existing != null) {
+                cachedFrameB = existing
+            } else {
+                try {
+                    val mmr = MediaMetadataRetriever()
+                    mmr.setDataSource(context, clipB.uri)
+                    val targetUs = (clipB.trimStartSec * 1_000_000L).toLong()
+                    val bmp = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                        mmr.getScaledFrameAtTime(targetUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 720, 1280)
+                    } else {
+                        mmr.getFrameAtTime(targetUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                    }
+                    if (bmp != null) {
+                        FcpThumbnailMemoryCache.put(keyB, bmp)
+                        cachedFrameB = bmp
+                    }
+                    mmr.release()
+                } catch (_: Throwable) {}
+            }
         }
     }
 
-    if (activeTransitionState != null) {
-        val (transType, rawProgress, easing) = activeTransitionState
-        val p = easing.transform(rawProgress)
-        val effect = transType.effect ?: VideoTransitionEffect.CROSS_DISSOLVE
-        val frameAImage = remember(capturedFrameA) { capturedFrameA?.asImageBitmap() }
+    // Render through VideoTransitionRenderer
+    VideoTransitionRenderer(
+        effect = effect,
+        progress = activeTransition.rawProgress,
+        easing = activeTransition.easing,
+        modifier = Modifier
+            .fillMaxSize()
+            .zIndex(20f),
+        outgoingClip = {
+            FcpTransitionClipContent(
+                clip = clipA,
+                liveBitmap = liveFrameA,
+                cachedBitmap = cachedFrameA
+            )
+        },
+        incomingClip = {
+            FcpTransitionClipContent(
+                clip = clipB,
+                liveBitmap = liveFrameB,
+                cachedBitmap = cachedFrameB
+            )
+        }
+    )
+}
 
-        when (effect) {
-            VideoTransitionEffect.DIP_TO_BLACK -> {
-                val blackAlpha = if (p <= 0.5f) (p * 2f) else ((1f - p) * 2f)
+@Composable
+private fun FcpTransitionClipContent(
+    clip: FcpClip,
+    liveBitmap: Bitmap?,
+    cachedBitmap: Bitmap?
+) {
+    val context = LocalContext.current
+    val isPhoto = remember(clip.uri) { isClipPhoto(context, clip) }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black),
+        contentAlignment = Alignment.Center
+    ) {
+        if (isPhoto) {
+            AsyncImage(
+                model = ImageRequest.Builder(context)
+                    .data(clip.uri)
+                    .crossfade(false)
+                    .build(),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Fit
+            )
+        } else {
+            val bmp = liveBitmap ?: cachedBitmap
+            if (bmp != null) {
+                Image(
+                    bitmap = bmp.asImageBitmap(),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit
+                )
+            } else {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color.Black.copy(alpha = blackAlpha.coerceIn(0f, 1f)))
-                        .zIndex(20f)
+                        .background(Color.Black)
                 )
-            }
-            VideoTransitionEffect.DIP_TO_WHITE -> {
-                val whiteAlpha = 1f - abs(p * 2f - 1f)
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.White.copy(alpha = (whiteAlpha * 0.98f).coerceIn(0f, 1f)))
-                        .zIndex(20f)
-                )
-            }
-            VideoTransitionEffect.FILM_BLOOM_FADE -> {
-                val bloom = sin(p * Math.PI.toFloat()).coerceIn(0f, 1f)
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.radialGradient(
-                                listOf(
-                                    Color(0xFFFFF8E7).copy(alpha = bloom * 0.92f),
-                                    Color(0xFFFFB347).copy(alpha = bloom * 0.55f),
-                                    Color.Transparent
-                                )
-                            )
-                        )
-                        .zIndex(20f)
-                )
-            }
-            VideoTransitionEffect.CROSS_DISSOLVE -> {
-                val crossAlpha = (1f - p).coerceIn(0f, 1f)
-                val bloom = (sin(p * Math.PI.toFloat()) * 0.22f).coerceIn(0f, 1f)
-                Box(modifier = Modifier.fillMaxSize().zIndex(20f)) {
-                    if (frameAImage != null && crossAlpha > 0.01f) {
-                        Image(
-                            bitmap = frameAImage,
-                            contentDescription = null,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .graphicsLayer { alpha = crossAlpha },
-                            contentScale = ContentScale.Crop
-                        )
-                    }
-                    if (bloom > 0.01f) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color.White.copy(alpha = bloom))
-                        )
-                    }
-                }
-            }
-            VideoTransitionEffect.PUSH_LEFT, VideoTransitionEffect.COVER_SLIDE_LEFT -> {
-                Box(modifier = Modifier.fillMaxSize().zIndex(20f)) {
-                    if (frameAImage != null) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .graphicsLayer { translationX = -p * size.width }
-                        ) {
-                            Image(
-                                bitmap = frameAImage,
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                        }
-                    }
-                    // Luminous Seam Cut Line
-                    val seamX = (1f - p).coerceIn(0f, 1f)
-                    Box(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .width(2.5.dp)
-                            .fillMaxWidth(fraction = seamX)
-                            .wrapContentWidth(Alignment.End)
-                            .background(Color(0xFF00F0FF).copy(alpha = 0.85f))
-                    )
-                }
-            }
-            VideoTransitionEffect.PUSH_RIGHT -> {
-                Box(modifier = Modifier.fillMaxSize().zIndex(20f)) {
-                    if (frameAImage != null) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .graphicsLayer { translationX = p * size.width }
-                        ) {
-                            Image(
-                                bitmap = frameAImage,
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                        }
-                    }
-                    // Luminous Seam Cut Line
-                    val seamX = p.coerceIn(0f, 1f)
-                    Box(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .width(2.5.dp)
-                            .fillMaxWidth(fraction = seamX)
-                            .wrapContentWidth(Alignment.End)
-                            .background(Color(0xFF00F0FF).copy(alpha = 0.85f))
-                    )
-                }
-            }
-            VideoTransitionEffect.PUSH_UP -> {
-                Box(modifier = Modifier.fillMaxSize().zIndex(20f)) {
-                    if (frameAImage != null) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .graphicsLayer { translationY = -p * size.height }
-                        ) {
-                            Image(
-                                bitmap = frameAImage,
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                        }
-                    }
-                }
-            }
-            VideoTransitionEffect.PUSH_DOWN -> {
-                Box(modifier = Modifier.fillMaxSize().zIndex(20f)) {
-                    if (frameAImage != null) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .graphicsLayer { translationY = p * size.height }
-                        ) {
-                            Image(
-                                bitmap = frameAImage,
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                        }
-                    }
-                }
-            }
-            VideoTransitionEffect.WIPE_HORIZONTAL,
-            VideoTransitionEffect.WIPE_DIAGONAL,
-            VideoTransitionEffect.CLOCK_RADIAL_WIPE,
-            VideoTransitionEffect.BARN_DOORS_SPLIT,
-            VideoTransitionEffect.VENETIAN_BLINDS,
-            VideoTransitionEffect.CIRCLE_IRIS_OPEN,
-            VideoTransitionEffect.CIRCLE_PINHOLE_CLOSE,
-            VideoTransitionEffect.DIAMOND_SHUTTER,
-            VideoTransitionEffect.CORNER_QUAD_SPLIT -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .drawWithContent {
-                            if (frameAImage != null) {
-                                val mask = buildGeometricMaskPath(effect, 1f - p, size)
-                                clipPath(mask) {
-                                    drawImage(
-                                        image = frameAImage,
-                                        dstSize = androidx.compose.ui.unit.IntSize(size.width.toInt(), size.height.toInt())
-                                    )
-                                }
-                                drawPath(
-                                    path = mask,
-                                    color = Color(0xFF00F0FF).copy(alpha = 0.5f),
-                                    style = Stroke(width = 2.dp.toPx())
-                                )
-                            } else {
-                                val mask = buildGeometricMaskPath(effect, p, size)
-                                drawPath(
-                                    path = mask,
-                                    color = Color.White.copy(alpha = (sin(p * Math.PI.toFloat()) * 0.35f).coerceIn(0f, 1f))
-                                )
-                            }
-                        }
-                        .zIndex(20f)
-                )
-            }
-            VideoTransitionEffect.CROSS_ZOOM_IN, VideoTransitionEffect.CROSS_ZOOM_OUT -> {
-                val scaleFactor = if (effect == VideoTransitionEffect.CROSS_ZOOM_IN) {
-                    1f + (p * 0.5f)
-                } else {
-                    (1f - (p * 0.3f)).coerceAtLeast(0.7f)
-                }
-                val flash = sin(p * Math.PI.toFloat()) * 0.3f
-                Box(modifier = Modifier.fillMaxSize().zIndex(20f)) {
-                    if (frameAImage != null && p < 0.6f) {
-                        Image(
-                            bitmap = frameAImage,
-                            contentDescription = null,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .graphicsLayer {
-                                    scaleX = scaleFactor
-                                    scaleY = scaleFactor
-                                    alpha = (1f - (p * 1.6f)).coerceIn(0f, 1f)
-                                },
-                            contentScale = ContentScale.Crop
-                        )
-                    }
-                    if (flash > 0.01f) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color.White.copy(alpha = flash))
-                        )
-                    }
-                }
-            }
-            VideoTransitionEffect.GLITCH_SLICE_SHIFT -> {
-                val glitchEnvelope = sin(p * Math.PI.toFloat()).coerceIn(0f, 1f)
-                if (glitchEnvelope > 0.05f) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .drawWithContent {
-                                val slicePath = buildGlitchSliceMaskPath(p, size)
-                                if (frameAImage != null && p < 0.5f) {
-                                    clipPath(slicePath) {
-                                        drawImage(
-                                            image = frameAImage,
-                                            dstSize = androidx.compose.ui.unit.IntSize(size.width.toInt(), size.height.toInt())
-                                        )
-                                    }
-                                }
-                                drawRect(
-                                    color = Color(0xFF00F0FF).copy(alpha = glitchEnvelope * 0.35f),
-                                    topLeft = Offset(0f, size.height * ((p * 1.7f) % 0.8f)),
-                                    size = Size(size.width, size.height * 0.08f)
-                                )
-                                drawRect(
-                                    color = Color(0xFFFF2D55).copy(alpha = glitchEnvelope * 0.35f),
-                                    topLeft = Offset(0f, size.height * ((1f - p * 1.3f).coerceIn(0f, 0.85f))),
-                                    size = Size(size.width, size.height * 0.06f)
-                                )
-                            }
-                            .zIndex(20f)
-                    )
-                }
-            }
-            else -> {
-                val crossAlpha = (1f - p).coerceIn(0f, 1f)
-                val bloom = (sin(p * Math.PI.toFloat()) * 0.25f).coerceIn(0f, 1f)
-                Box(modifier = Modifier.fillMaxSize().zIndex(20f)) {
-                    if (frameAImage != null && crossAlpha > 0.01f) {
-                        Image(
-                            bitmap = frameAImage,
-                            contentDescription = null,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .graphicsLayer { alpha = crossAlpha },
-                            contentScale = ContentScale.Crop
-                        )
-                    }
-                    if (bloom > 0.01f) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color.White.copy(alpha = bloom))
-                        )
-                    }
-                }
             }
         }
     }
@@ -11172,11 +11083,76 @@ fun FcpTransitionDialog(
     onDismiss: () -> Unit,
     onApplyTransition: (FcpTransitionType, Float, TransitionEasing) -> Unit
 ) {
+    val context = LocalContext.current
     val colors = LocalOscellionColors.current
     val haptic = LocalHapticFeedback.current
     var selectedEffect by remember { mutableStateOf<VideoTransitionEffect?>(clip.transitionToNext.effect) }
     var durationMs by remember { mutableIntStateOf((clip.transitionDurationSec * 1000f).toInt().coerceIn(200, 3000)) }
     var selectedEasing by remember { mutableStateOf(clip.transitionEasing) }
+
+    var cachedBmpA by remember(clip.id) { mutableStateOf<Bitmap?>(null) }
+    var cachedBmpB by remember(nextClip?.id) { mutableStateOf<Bitmap?>(null) }
+
+    LaunchedEffect(clip.id, clip.uri) {
+        if (!isClipPhoto(context, clip)) {
+            withContext(Dispatchers.IO) {
+                val keyA = "trans_out_${clip.id}_${(clip.trimEndSec * 10).toLong()}"
+                val existing = FcpThumbnailMemoryCache.get(keyA)
+                    ?: FcpThumbnailMemoryCache.get("${clip.uri}_${(clip.trimEndSec * 2).toLong()}")
+                    ?: FcpThumbnailMemoryCache.get("${clip.uri}_0")
+                if (existing != null) {
+                    cachedBmpA = existing
+                } else {
+                    try {
+                        val mmr = MediaMetadataRetriever()
+                        mmr.setDataSource(context, clip.uri)
+                        val targetUs = ((clip.trimEndSec - 0.05f).coerceAtLeast(0f) * 1_000_000L).toLong()
+                        val bmp = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                            mmr.getScaledFrameAtTime(targetUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 720, 1280)
+                        } else {
+                            mmr.getFrameAtTime(targetUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                        }
+                        if (bmp != null) {
+                            FcpThumbnailMemoryCache.put(keyA, bmp)
+                            cachedBmpA = bmp
+                        }
+                        mmr.release()
+                    } catch (_: Throwable) {}
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(nextClip?.id, nextClip?.uri) {
+        val nc = nextClip ?: return@LaunchedEffect
+        if (!isClipPhoto(context, nc)) {
+            withContext(Dispatchers.IO) {
+                val keyB = "trans_in_${nc.id}_${(nc.trimStartSec * 10).toLong()}"
+                val existing = FcpThumbnailMemoryCache.get(keyB)
+                    ?: FcpThumbnailMemoryCache.get("${nc.uri}_${(nc.trimStartSec * 2).toLong()}")
+                    ?: FcpThumbnailMemoryCache.get("${nc.uri}_0")
+                if (existing != null) {
+                    cachedBmpB = existing
+                } else {
+                    try {
+                        val mmr = MediaMetadataRetriever()
+                        mmr.setDataSource(context, nc.uri)
+                        val targetUs = (nc.trimStartSec * 1_000_000L).toLong()
+                        val bmp = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                            mmr.getScaledFrameAtTime(targetUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 720, 1280)
+                        } else {
+                            mmr.getFrameAtTime(targetUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                        }
+                        if (bmp != null) {
+                            FcpThumbnailMemoryCache.put(keyB, bmp)
+                            cachedBmpB = bmp
+                        }
+                        mmr.release()
+                    } catch (_: Throwable) {}
+                }
+            }
+        }
+    }
 
     val slideAnim = remember { Animatable(360f) }
     val alphaAnim = remember { Animatable(0f) }
@@ -11278,7 +11254,25 @@ fun FcpTransitionDialog(
                     onEasingChange = { selectedEasing = it },
                     isDark = colors.isDark,
                     clipAName = clip.name,
-                    clipBName = nextClip?.name ?: "Next Scene"
+                    clipBName = nextClip?.name ?: "Next Scene",
+                    customOutgoingClip = {
+                        FcpTransitionClipContent(
+                            clip = clip,
+                            liveBitmap = null,
+                            cachedBitmap = cachedBmpA
+                        )
+                    },
+                    customIncomingClip = {
+                        if (nextClip != null) {
+                            FcpTransitionClipContent(
+                                clip = nextClip,
+                                liveBitmap = null,
+                                cachedBitmap = cachedBmpB
+                            )
+                        } else {
+                            DemoIncomingVideoClip(letterSize = 56.sp)
+                        }
+                    }
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))
