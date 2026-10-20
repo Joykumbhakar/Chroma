@@ -2419,7 +2419,7 @@ fun FinalCutProVideoEditorScreen(
                                         val stepSec = 1f / 30f
                                         val nextSec = (currentTimeSec + (if (forward) stepSec else -stepSec)).coerceIn(0f, totalDurationSec)
                                         seekToGlobalTime(nextSec)
-                                        SoundManager.playTap(context)
+                                        SoundManager.playScrub(context, force = true)
                                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     },
                                     onEditTransition = { clipId ->
@@ -2885,6 +2885,7 @@ private fun TimelineTabContent(
     val colors = LocalOscellionColors.current
     val haptic = LocalHapticFeedback.current
     val density = LocalDensity.current.density
+    val context = LocalContext.current
     val currentPlayheadTime by rememberUpdatedState(currentTimeSec)
     val currentClips by rememberUpdatedState(clips)
     val currentSpans by rememberUpdatedState(timelineSpans)
@@ -3796,6 +3797,7 @@ private fun TimelineTabContent(
                                 if (curFrame != lastHapticFrame) {
                                     lastHapticFrame = curFrame
                                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    SoundManager.playScrub(context, force = true)
                                 }
                             },
                             onDragEnd = {

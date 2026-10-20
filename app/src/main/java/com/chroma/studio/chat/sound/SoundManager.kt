@@ -22,6 +22,7 @@ object SoundManager {
     private var messageSentSoundId: Int = 0
     private var messageSent2ndSoundId: Int = 0
     private var isPoolLoaded = false
+    private val loadedSoundIds = java.util.Collections.synchronizedSet(mutableSetOf<Int>())
 
     private var lastScrubTimestamp = 0L
 
@@ -45,9 +46,10 @@ object SoundManager {
             messageSentSoundId = pool.load(appContext, R.raw.message_sent_default_audio_sound_effect, 1)
             messageSent2ndSoundId = pool.load(appContext, R.raw.message_sent_default_audio_sound_effect_2nd, 1)
 
-            pool.setOnLoadCompleteListener { _, _, status ->
+            pool.setOnLoadCompleteListener { _, sampleId, status ->
                 if (status == 0) {
                     isPoolLoaded = true
+                    loadedSoundIds.add(sampleId)
                 }
             }
 
@@ -57,10 +59,10 @@ object SoundManager {
         }
     }
 
-    fun playScrub(context: Context? = null) {
+    fun playScrub(context: Context? = null, force: Boolean = false, pitchRate: Float = 1.0f) {
         if (!isSoundsEnabled) return
         val now = System.currentTimeMillis()
-        if (now - lastScrubTimestamp < 55L) return // Throttled to prevent audio stutter during smooth 50fps scrub
+        if (!force && (now - lastScrubTimestamp < 28L)) return // Throttled to prevent audio stutter during rapid drag scrub
         lastScrubTimestamp = now
 
         if (soundPool == null && context != null) {
@@ -68,10 +70,10 @@ object SoundManager {
         }
 
         val pool = soundPool
-        if (pool != null && scrubSoundId != 0 && isPoolLoaded) {
-            pool.play(scrubSoundId, 0.45f, 0.45f, 1, 0, 1.0f)
+        if (pool != null && scrubSoundId != 0 && (isPoolLoaded || loadedSoundIds.contains(scrubSoundId))) {
+            pool.play(scrubSoundId, 0.65f, 0.65f, 1, 0, pitchRate.coerceIn(0.8f, 1.25f))
         } else {
-            playTone(frequency = 720.0, durationMs = 20, amplitude = 0.2f)
+            playTone(frequency = 720.0, durationMs = 20, amplitude = 0.25f)
         }
     }
 
