@@ -287,6 +287,38 @@ fun getFcpFontFamily(context: Context, assetFileName: String): FontFamily {
     }
 }
 
+enum class TextInAnimation(val label: String, val description: String) {
+    NONE("None", "No entrance animation"),
+    FADE_IN("Fade In", "Smooth opacity fade"),
+    SLIDE_UP("Slide Up", "Slides up smoothly from bottom"),
+    SLIDE_RIGHT("Slide Right", "Slides in from left side"),
+    ZOOM_IN("Zoom In", "Scales up smoothly from center"),
+    TYPEWRITER("Typewriter", "Types out character by character"),
+    BOUNCE_IN("Bounce In", "Playful springy pop entrance"),
+    FLIP_IN("Flip In", "3D vertical tilt flip entrance"),
+    GLITCH_IN("Glitch", "Digital displacement flash")
+}
+
+enum class TextOutAnimation(val label: String, val description: String) {
+    NONE("None", "No exit animation"),
+    FADE_OUT("Fade Out", "Smooth opacity fade out"),
+    SLIDE_DOWN("Slide Down", "Slides down to bottom"),
+    SLIDE_LEFT("Slide Left", "Slides out to left side"),
+    ZOOM_OUT("Zoom Out", "Shrinks into center"),
+    BLUR_OUT("Dissolve Out", "Expands and dissolves away"),
+    FLIP_OUT("Flip Out", "3D vertical tilt flip away")
+}
+
+enum class TextComboAnimation(val label: String, val description: String) {
+    NONE("None", "Static display"),
+    PULSE("Pulse", "Continuous breathing scale"),
+    WAVE_FLOAT("Wave Float", "Smooth floating vertical wave"),
+    NEON_FLICKER("Neon Flicker", "Cyberpunk electrical flicker"),
+    SHAKE("Shake", "Handheld camera vibration"),
+    SWING("Pendulum", "Gentle rotational swing"),
+    HEARTBEAT("Heartbeat", "Double beat pop pulse")
+}
+
 enum class FcpTitlePresetType(
     val title: String,
     val subtitle: String,
@@ -299,7 +331,11 @@ enum class FcpTitlePresetType(
     BOXED_FRAME("Simplicity Frame", "Clean rectangular border enclosing block text", "Minimal"),
     ABSTRACT_BADGE("Abstract Badge", "High-contrast solid badge with black cutout", "Modern"),
     CYBER_NEON("Cyber Neon", "Vibrant glow with cyan & magenta glass frame", "VFX"),
-    MINIMAL_CLEAN("Minimal Cinematic", "Understated elegant lower-third title", "Clean")
+    MINIMAL_CLEAN("Minimal Cinematic", "Understated elegant lower-third title", "Clean"),
+    RETRO_VHS("Retro 80s VHS", "Vivid synthwave neon with glitch scanlines", "Retro"),
+    LUXURY_SERIF("Luxury Editorial", "Sophisticated high-fashion magazine title", "Luxury"),
+    KINETIC_PUNCH("Kinetic Impact", "High-energy bold social hook for reels", "Social"),
+    SUBTITLE_CARD("Modern Subtitle", "Clean translucent glass pill for captions", "Captions")
 }
 
 data class FcpTextLayer(
@@ -326,7 +362,12 @@ data class FcpTextLayer(
     val hasDropShadow: Boolean = true,
     val hasBackgroundPill: Boolean = false,
     val blendMode: String = "Normal",
-    val isExpanded: Boolean = true
+    val isExpanded: Boolean = true,
+    // Animations
+    val inAnimation: TextInAnimation = TextInAnimation.FADE_IN,
+    val outAnimation: TextOutAnimation = TextOutAnimation.NONE,
+    val comboAnimation: TextComboAnimation = TextComboAnimation.NONE,
+    val animationDurationSec: Float = 0.6f
 )
 
 fun createFcpTextLayer(preset: FcpTitlePresetType, layerIndex: Int): FcpTextLayer {
@@ -449,6 +490,82 @@ fun createFcpTextLayer(preset: FcpTitlePresetType, layerIndex: Int): FcpTextLaye
             accentColor = Color.White,
             isVisible = true,
             offsetY = offsetY
+        )
+        FcpTitlePresetType.RETRO_VHS -> FcpTextLayer(
+            id = id,
+            name = name,
+            presetType = preset,
+            primaryText = "SYNTHWAVE '84",
+            scriptText = "Retro Live",
+            subtitleText = "NEON NIGHTS & CHROME",
+            badgeText = "REC ●",
+            primaryFontAsset = "Wotham.ttf",
+            scriptFontAsset = "Thesignature.ttf",
+            fontSizeSp = 26f,
+            textColor = Color(0xFFFF007F),
+            secondaryTextColor = Color(0xFF00F0FF),
+            isGradientText = true,
+            accentColor = Color(0xFF00F0FF),
+            inAnimation = TextInAnimation.GLITCH_IN,
+            comboAnimation = TextComboAnimation.NEON_FLICKER,
+            isVisible = true,
+            offsetY = offsetY
+        )
+        FcpTitlePresetType.LUXURY_SERIF -> FcpTextLayer(
+            id = id,
+            name = name,
+            presetType = preset,
+            primaryText = "VOGUE NOIR",
+            scriptText = "Collection",
+            subtitleText = "AUTUMN / WINTER EDITION",
+            badgeText = "HAUTE",
+            primaryFontAsset = "Comfortaa-Bold.ttf",
+            scriptFontAsset = "Thesignature.ttf",
+            fontSizeSp = 25f,
+            textColor = Color(0xFFFDE68A),
+            accentColor = Color(0xFFD4AF37),
+            letterSpacingSp = 3.5f,
+            inAnimation = TextInAnimation.FADE_IN,
+            comboAnimation = TextComboAnimation.PULSE,
+            isVisible = true,
+            offsetY = offsetY
+        )
+        FcpTitlePresetType.KINETIC_PUNCH -> FcpTextLayer(
+            id = id,
+            name = name,
+            presetType = preset,
+            primaryText = "DON'T MISS THIS",
+            scriptText = "Wait for it...",
+            subtitleText = "WATCH TILL THE VERY END",
+            badgeText = "VIRAL",
+            primaryFontAsset = "Outfit-Bold.ttf",
+            scriptFontAsset = "Thesignature.ttf",
+            fontSizeSp = 28f,
+            textColor = Color.Black,
+            accentColor = Color(0xFFFFEB3B),
+            hasBackgroundPill = true,
+            inAnimation = TextInAnimation.BOUNCE_IN,
+            comboAnimation = TextComboAnimation.HEARTBEAT,
+            isVisible = true,
+            offsetY = offsetY
+        )
+        FcpTitlePresetType.SUBTITLE_CARD -> FcpTextLayer(
+            id = id,
+            name = name,
+            presetType = preset,
+            primaryText = "Here is what happens next in the scene...",
+            scriptText = "",
+            subtitleText = "",
+            badgeText = "",
+            primaryFontAsset = "Istok-Regular.ttf",
+            fontSizeSp = 18f,
+            textColor = Color.White,
+            accentColor = Color(0xFF38BDF8),
+            hasBackgroundPill = true,
+            inAnimation = TextInAnimation.SLIDE_UP,
+            outAnimation = TextOutAnimation.FADE_OUT,
+            isVisible = true,
+            offsetY = offsetY + 60f
         )
     }
 }
@@ -2234,6 +2351,8 @@ fun FinalCutProVideoEditorScreen(
                                 FcpTextLayerOverlay(
                                     layer = layer,
                                     isSelected = layer.id == selectedTextLayerId && activeTab == FcpWorkspaceTab.TITLES,
+                                    currentTimeSec = currentTimeSec,
+                                    isPlaying = isPlaying,
                                     onSelect = {
                                         selectedTextLayerId = layer.id
                                         activeTab = FcpWorkspaceTab.TITLES
@@ -5587,6 +5706,8 @@ private fun FcpFontDropdownSelector(
 private fun FcpTextLayerOverlay(
     layer: FcpTextLayer,
     isSelected: Boolean,
+    currentTimeSec: Float = 0f,
+    isPlaying: Boolean = false,
     onSelect: () -> Unit,
     onTransform: (dxDp: Float, dyDp: Float, zoomChange: Float, rotationDelta: Float) -> Unit,
     onDuplicate: () -> Unit = {},
@@ -5631,6 +5752,151 @@ private fun FcpTextLayerOverlay(
         }
     }
 
+    // Interactive Animation Preview Engine
+    val infiniteTransition = rememberInfiniteTransition(label = "textAnim_${layer.id}")
+    val previewProgress by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 3500, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "textAnimProg_${layer.id}"
+    )
+
+    val effectiveTime = if (isPlaying) currentTimeSec else (previewProgress * 3.5f)
+    val animDuration = layer.animationDurationSec.coerceIn(0.2f, 2.0f)
+    val inProgress = (effectiveTime / animDuration).coerceIn(0f, 1f)
+    val outStart = (3.5f - animDuration).coerceAtLeast(animDuration)
+    val outProgress = if (effectiveTime >= outStart) {
+        ((effectiveTime - outStart) / animDuration).coerceIn(0f, 1f)
+    } else 0f
+
+    var animAlpha = 1.0f
+    var animScaleX = 1.0f
+    var animScaleY = 1.0f
+    var animTransX = 0f
+    var animTransY = 0f
+    var animRotZ = 0f
+
+    // Entrance Animation
+    if (layer.inAnimation != TextInAnimation.NONE && inProgress < 1f) {
+        when (layer.inAnimation) {
+            TextInAnimation.FADE_IN -> {
+                animAlpha *= inProgress
+            }
+            TextInAnimation.SLIDE_UP -> {
+                animAlpha *= inProgress
+                animTransY += (1f - inProgress) * 45f
+            }
+            TextInAnimation.SLIDE_RIGHT -> {
+                animAlpha *= inProgress
+                animTransX -= (1f - inProgress) * 70f
+            }
+            TextInAnimation.ZOOM_IN -> {
+                animAlpha *= inProgress
+                val s = 0.35f + (0.65f * inProgress)
+                animScaleX *= s
+                animScaleY *= s
+            }
+            TextInAnimation.BOUNCE_IN -> {
+                animAlpha *= inProgress
+                val bounce = if (inProgress < 0.65f) {
+                    (inProgress / 0.65f) * 1.18f
+                } else {
+                    1.18f - ((inProgress - 0.65f) / 0.35f) * 0.18f
+                }
+                animScaleX *= bounce
+                animScaleY *= bounce
+            }
+            TextInAnimation.FLIP_IN -> {
+                animAlpha *= inProgress
+                animRotZ += (1f - inProgress) * 18f
+                animScaleY *= inProgress
+            }
+            TextInAnimation.GLITCH_IN -> {
+                animAlpha *= if (inProgress < 0.3f && ((inProgress * 20).toInt() % 2 == 0)) 0.2f else 1f
+                animTransX += (kotlin.math.sin(inProgress * 25f) * (1f - inProgress) * 14f)
+            }
+        }
+    }
+
+    // Exit Animation
+    if (layer.outAnimation != TextOutAnimation.NONE && outProgress > 0f) {
+        when (layer.outAnimation) {
+            TextOutAnimation.FADE_OUT -> {
+                animAlpha *= (1f - outProgress)
+            }
+            TextOutAnimation.SLIDE_DOWN -> {
+                animAlpha *= (1f - outProgress)
+                animTransY += outProgress * 45f
+            }
+            TextOutAnimation.SLIDE_LEFT -> {
+                animAlpha *= (1f - outProgress)
+                animTransX -= outProgress * 70f
+            }
+            TextOutAnimation.ZOOM_OUT -> {
+                animAlpha *= (1f - outProgress)
+                val s = 1f - (outProgress * 0.5f)
+                animScaleX *= s
+                animScaleY *= s
+            }
+            TextOutAnimation.BLUR_OUT -> {
+                animAlpha *= (1f - outProgress)
+                val s = 1f + (outProgress * 0.22f)
+                animScaleX *= s
+                animScaleY *= s
+            }
+            TextOutAnimation.FLIP_OUT -> {
+                animAlpha *= (1f - outProgress)
+                animScaleY *= (1f - outProgress)
+                animRotZ -= outProgress * 18f
+            }
+        }
+    }
+
+    // Combo Loop Animation
+    if (layer.comboAnimation != TextComboAnimation.NONE) {
+        val t = effectiveTime
+        when (layer.comboAnimation) {
+            TextComboAnimation.PULSE -> {
+                val p = 1f + 0.08f * kotlin.math.sin(t * 5f)
+                animScaleX *= p
+                animScaleY *= p
+            }
+            TextComboAnimation.WAVE_FLOAT -> {
+                animTransY += 6f * kotlin.math.sin(t * 4f)
+            }
+            TextComboAnimation.NEON_FLICKER -> {
+                if (((t * 12).toInt() % 11 == 0)) {
+                    animAlpha *= 0.55f
+                }
+            }
+            TextComboAnimation.SHAKE -> {
+                animTransX += 2.5f * kotlin.math.sin(t * 30f)
+                animTransY += 2f * kotlin.math.cos(t * 26f)
+            }
+            TextComboAnimation.SWING -> {
+                animRotZ += 3.5f * kotlin.math.sin(t * 3.5f)
+            }
+            TextComboAnimation.HEARTBEAT -> {
+                val beat = kotlin.math.sin(t * 6f).coerceAtLeast(0f)
+                val s = 1f + (beat * beat * 0.14f)
+                animScaleX *= s
+                animScaleY *= s
+            }
+            else -> {}
+        }
+    }
+
+    // Typewriter text slicing
+    val displayedPrimaryText = if (layer.inAnimation == TextInAnimation.TYPEWRITER && inProgress < 1f) {
+        val len = (layer.primaryText.length * inProgress).toInt().coerceAtLeast(1)
+        layer.primaryText.take(len)
+    } else {
+        layer.primaryText
+    }
+
     Box(
         modifier = Modifier
             .pointerInput(layer.id) {
@@ -5647,8 +5913,12 @@ private fun FcpTextLayerOverlay(
                 }
             }
             .graphicsLayer {
-                alpha = effectiveOpacity
-                rotationZ = layer.rotationDeg
+                alpha = (effectiveOpacity * animAlpha).coerceIn(0f, 1f)
+                scaleX = animScaleX
+                scaleY = animScaleY
+                translationX = animTransX.dp.toPx()
+                translationY = animTransY.dp.toPx()
+                rotationZ = layer.rotationDeg + animRotZ
             }
             .then(
                 if (layer.hasBackgroundPill) {
@@ -5680,7 +5950,7 @@ private fun FcpTextLayerOverlay(
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Text(
-                            text = layer.primaryText,
+                            text = displayedPrimaryText,
                             fontFamily = primaryFont,
                             fontWeight = FontWeight.Black,
                             fontSize = layer.fontSizeSp.sp,
@@ -6028,7 +6298,7 @@ private fun FcpTextLayerOverlay(
                     )
                     Column {
                         Text(
-                            text = layer.primaryText,
+                            text = displayedPrimaryText,
                             fontFamily = primaryFont,
                             fontWeight = FontWeight.Bold,
                             fontSize = (layer.fontSizeSp * 0.75f).sp,
@@ -6045,6 +6315,172 @@ private fun FcpTextLayerOverlay(
                             )
                         }
                     }
+                }
+            }
+
+            FcpTitlePresetType.RETRO_VHS -> {
+                val vhsBrush = Brush.horizontalGradient(listOf(layer.textColor, layer.secondaryTextColor))
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(6.dp)
+                ) {
+                    if (layer.badgeText.isNotBlank()) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color.Black.copy(alpha = 0.7f))
+                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Box(modifier = Modifier.size(7.dp).clip(CircleShape).background(Color.Red))
+                            Text(
+                                text = layer.badgeText,
+                                color = Color.White,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                        Spacer(Modifier.height(4.dp))
+                    }
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = displayedPrimaryText.uppercase(),
+                            fontFamily = primaryFont,
+                            fontWeight = FontWeight.Black,
+                            fontSize = layer.fontSizeSp.sp,
+                            letterSpacing = (layer.letterSpacingSp * 1.5f).sp,
+                            style = TextStyle(
+                                brush = vhsBrush,
+                                shadow = androidx.compose.ui.graphics.Shadow(
+                                    color = Color(0xFF00F0FF).copy(alpha = 0.8f),
+                                    offset = Offset(-2f, 0f),
+                                    blurRadius = 8f
+                                )
+                            )
+                        )
+                        if (layer.scriptText.isNotBlank()) {
+                            Text(
+                                text = layer.scriptText,
+                                fontFamily = scriptFont,
+                                fontSize = (layer.fontSizeSp * 0.85f).sp,
+                                color = layer.accentColor,
+                                modifier = Modifier.align(Alignment.TopStart).offset(x = (-6).dp, y = (-10).dp).rotate(-6f)
+                            )
+                        }
+                    }
+                    if (layer.subtitleText.isNotBlank()) {
+                        Spacer(Modifier.height(3.dp))
+                        Text(
+                            text = layer.subtitleText,
+                            fontFamily = primaryFont,
+                            fontSize = (layer.fontSizeSp * 0.32f).coerceAtLeast(8.5f).sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.White.copy(alpha = 0.85f),
+                            letterSpacing = (layer.letterSpacingSp * 2f).sp
+                        )
+                    }
+                }
+            }
+
+            FcpTitlePresetType.LUXURY_SERIF -> {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(8.dp)
+                ) {
+                    if (layer.scriptText.isNotBlank()) {
+                        Text(
+                            text = layer.scriptText,
+                            fontFamily = scriptFont,
+                            fontSize = (layer.fontSizeSp * 0.85f).sp,
+                            color = layer.accentColor,
+                            modifier = Modifier.offset(y = 4.dp).rotate(-5f)
+                        )
+                    }
+                    Text(
+                        text = displayedPrimaryText.uppercase(),
+                        fontFamily = primaryFont,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = layer.fontSizeSp.sp,
+                        letterSpacing = (layer.letterSpacingSp * 3.5f + 2f).sp,
+                        style = TextStyle(brush = headlineBrush, shadow = shadowStyle)
+                    )
+                    if (layer.subtitleText.isNotBlank()) {
+                        Spacer(Modifier.height(6.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(Modifier.width(18.dp).height(0.8.dp).background(layer.accentColor))
+                            Text(
+                                text = layer.subtitleText.uppercase(),
+                                fontFamily = primaryFont,
+                                fontSize = (layer.fontSizeSp * 0.28f).coerceAtLeast(8f).sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White.copy(alpha = 0.85f),
+                                letterSpacing = (layer.letterSpacingSp * 2.5f).sp
+                            )
+                            Box(Modifier.width(18.dp).height(0.8.dp).background(layer.accentColor))
+                        }
+                    }
+                }
+            }
+
+            FcpTitlePresetType.KINETIC_PUNCH -> {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(6.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(layer.accentColor)
+                            .shadow(8.dp, RoundedCornerShape(8.dp))
+                            .padding(horizontal = 14.dp, vertical = 6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = displayedPrimaryText.uppercase(),
+                            fontFamily = primaryFont,
+                            fontWeight = FontWeight.Black,
+                            fontSize = layer.fontSizeSp.sp,
+                            color = Color.Black,
+                            letterSpacing = (layer.letterSpacingSp * 0.8f).sp
+                        )
+                    }
+                    if (layer.subtitleText.isNotBlank()) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = layer.subtitleText.uppercase(),
+                            fontFamily = primaryFont,
+                            fontSize = (layer.fontSizeSp * 0.32f).coerceAtLeast(9f).sp,
+                            fontWeight = FontWeight.Black,
+                            color = Color.White,
+                            letterSpacing = 1.sp,
+                            style = TextStyle(shadow = shadowStyle)
+                        )
+                    }
+                }
+            }
+
+            FcpTitlePresetType.SUBTITLE_CARD -> {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color.Black.copy(alpha = 0.65f))
+                        .border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 18.dp, vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = displayedPrimaryText,
+                        fontFamily = primaryFont,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = (layer.fontSizeSp * 0.72f).coerceAtLeast(14f).sp,
+                        color = Color.White,
+                        textAlign = TextAlign.Center
+                    )
                 }
             }
         }
@@ -6191,6 +6627,62 @@ fun applyFcpTitlePreset(cur: FcpTextLayer, preset: FcpTitlePresetType): FcpTextL
             primaryFontAsset = "Comfortaa-Bold.ttf",
             textColor = Color.White,
             accentColor = Color(0xFF94A3B8)
+        )
+        FcpTitlePresetType.RETRO_VHS -> cur.copy(
+            presetType = preset,
+            primaryText = if (cur.primaryText.isBlank() || cur.primaryText.startsWith("Layer")) "SYNTHWAVE '84" else cur.primaryText,
+            scriptText = "Retro Live",
+            subtitleText = "NEON NIGHTS & CHROME",
+            badgeText = "REC ●",
+            primaryFontAsset = "Wotham.ttf",
+            scriptFontAsset = "Thesignature.ttf",
+            textColor = Color(0xFFFF007F),
+            secondaryTextColor = Color(0xFF00F0FF),
+            isGradientText = true,
+            accentColor = Color(0xFF00F0FF),
+            inAnimation = TextInAnimation.GLITCH_IN,
+            comboAnimation = TextComboAnimation.NEON_FLICKER
+        )
+        FcpTitlePresetType.LUXURY_SERIF -> cur.copy(
+            presetType = preset,
+            primaryText = if (cur.primaryText.isBlank() || cur.primaryText.startsWith("Layer")) "VOGUE NOIR" else cur.primaryText,
+            scriptText = "Collection",
+            subtitleText = "AUTUMN / WINTER EDITION",
+            badgeText = "HAUTE",
+            primaryFontAsset = "Comfortaa-Bold.ttf",
+            scriptFontAsset = "Thesignature.ttf",
+            textColor = Color(0xFFFDE68A),
+            accentColor = Color(0xFFD4AF37),
+            letterSpacingSp = 3.5f,
+            inAnimation = TextInAnimation.FADE_IN,
+            comboAnimation = TextComboAnimation.PULSE
+        )
+        FcpTitlePresetType.KINETIC_PUNCH -> cur.copy(
+            presetType = preset,
+            primaryText = if (cur.primaryText.isBlank() || cur.primaryText.startsWith("Layer")) "DON'T MISS THIS" else cur.primaryText,
+            scriptText = "Wait for it...",
+            subtitleText = "WATCH TILL THE VERY END",
+            badgeText = "VIRAL",
+            primaryFontAsset = "Outfit-Bold.ttf",
+            scriptFontAsset = "Thesignature.ttf",
+            textColor = Color.Black,
+            accentColor = Color(0xFFFFEB3B),
+            hasBackgroundPill = true,
+            inAnimation = TextInAnimation.BOUNCE_IN,
+            comboAnimation = TextComboAnimation.HEARTBEAT
+        )
+        FcpTitlePresetType.SUBTITLE_CARD -> cur.copy(
+            presetType = preset,
+            primaryText = if (cur.primaryText.isBlank() || cur.primaryText.startsWith("Layer")) "Here is what happens next in the scene..." else cur.primaryText,
+            scriptText = "",
+            subtitleText = "",
+            badgeText = "",
+            primaryFontAsset = "Istok-Regular.ttf",
+            textColor = Color.White,
+            accentColor = Color(0xFF38BDF8),
+            hasBackgroundPill = true,
+            inAnimation = TextInAnimation.SLIDE_UP,
+            outAnimation = TextOutAnimation.FADE_OUT
         )
     }
 }
@@ -6413,10 +6905,12 @@ private fun FcpTitleLayerCard(
     onDuplicate: () -> Unit,
     onDelete: () -> Unit,
     onMoveUp: () -> Unit,
-    onMoveDown: () -> Unit
+    onMoveDown: () -> Unit,
+    onOpenAnimationStudio: () -> Unit = {}
 ) {
     val colors = LocalOscellionColors.current
     val haptic = LocalHapticFeedback.current
+    val context = LocalContext.current
     val shape = RoundedCornerShape(16.dp)
 
     val borderBrush = remember(isSelected, layer.isExpanded, colors.primary, colors.glassBorder) {
@@ -6555,8 +7049,8 @@ private fun FcpTitleLayerCard(
                         singleLine = true,
                         textStyle = TextStyle(
                             color = colors.textMain,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
                         ),
                         cursorBrush = SolidColor(colors.primary),
                         modifier = Modifier
@@ -6568,17 +7062,27 @@ private fun FcpTitleLayerCard(
                     )
                     Icon(
                         imageVector = Lucide.Check,
-                        contentDescription = "Save Layer Name",
+                        contentDescription = "Confirm Rename",
                         tint = colors.primary,
                         modifier = Modifier
-                            .size(22.dp)
-                            .clip(CircleShape)
+                            .size(18.dp)
                             .clickable {
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                onUpdate(layer.copy(name = renameText.ifBlank { "Title Layer ${index + 1}" }))
+                                if (renameText.isNotBlank()) {
+                                    onUpdate(layer.copy(name = renameText.trim()))
+                                }
                                 isRenaming = false
                             }
-                            .padding(2.dp)
+                    )
+                    Icon(
+                        imageVector = Lucide.X,
+                        contentDescription = "Cancel Rename",
+                        tint = colors.textMuted,
+                        modifier = Modifier
+                            .size(18.dp)
+                            .clickable {
+                                renameText = layer.name
+                                isRenaming = false
+                            }
                     )
                 }
             } else {
@@ -6595,73 +7099,63 @@ private fun FcpTitleLayerCard(
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
-                            text = layer.name.ifBlank { layer.primaryText.ifBlank { "Title Layer ${index + 1}" } },
-                            color = colors.textMain,
-                            fontWeight = FontWeight.SemiBold,
+                            text = layer.name,
                             fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isSelected) colors.primary else colors.textMain,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false)
+                            overflow = TextOverflow.Ellipsis
                         )
                         Icon(
                             imageVector = Lucide.Pencil,
                             contentDescription = "Rename Layer",
-                            tint = colors.textMuted.copy(alpha = 0.55f),
+                            tint = colors.textMuted.copy(alpha = 0.6f),
                             modifier = Modifier
                                 .size(12.dp)
-                                .clickable(
-                                    indication = null,
-                                    interactionSource = remember { MutableInteractionSource() }
-                                ) {
-                                    renameText = layer.name.ifBlank { "Title Layer ${index + 1}" }
+                                .clickable {
+                                    renameText = layer.name
                                     isRenaming = true
                                 }
                         )
                     }
                     Text(
-                        text = layer.presetType.title,
-                        color = colors.textMuted,
+                        text = "${layer.presetType.title} • ${layer.blendMode}",
                         fontSize = 10.sp,
+                        color = colors.textMuted,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
             }
 
-            // Expand Chevron (rotates 180°)
+            Spacer(Modifier.width(6.dp))
+
+            // Expand / Collapse Chevron
             Icon(
-                imageVector = Lucide.ChevronDown,
-                contentDescription = "Expand",
+                imageVector = if (layer.isExpanded) Lucide.ChevronUp else Lucide.ChevronDown,
+                contentDescription = if (layer.isExpanded) "Collapse Layer" else "Expand Layer",
                 tint = colors.textMuted,
                 modifier = Modifier
-                    .size(22.dp)
-                    .rotate(if (layer.isExpanded) 180f else 0f)
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() }
-                    ) {
-                        onSelect()
+                    .size(18.dp)
+                    .clickable {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         onToggleExpand()
                     }
-                    .padding(2.dp)
             )
 
             Spacer(Modifier.width(8.dp))
 
-            // Duplicate button
+            // Duplicate Button
             Icon(
                 imageVector = Lucide.Copy,
                 contentDescription = "Duplicate Layer",
                 tint = colors.textMuted,
                 modifier = Modifier
                     .size(16.dp)
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() }
-                    ) {
+                    .clickable {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         onDuplicate()
                     }
@@ -6669,80 +7163,63 @@ private fun FcpTitleLayerCard(
 
             Spacer(Modifier.width(8.dp))
 
-            // Delete button
+            // Delete Button
             Icon(
                 imageVector = Lucide.Trash2,
                 contentDescription = "Delete Layer",
-                tint = colors.error,
+                tint = Color(0xFFEF4444).copy(alpha = 0.85f),
                 modifier = Modifier
                     .size(16.dp)
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() }
-                    ) {
+                    .clickable {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         onDelete()
                     }
             )
         }
 
-        // ── 2. Expandable Body (ChromaStudio Microscopic Parity) ───────────────
-        AnimatedVisibility(
-            visible = layer.isExpanded,
-            enter = expandVertically(spring(stiffness = Spring.StiffnessMediumLow)) + fadeIn(spring(stiffness = Spring.StiffnessMediumLow)),
-            exit = shrinkVertically(spring(stiffness = Spring.StiffnessMediumLow)) + fadeOut(spring(stiffness = Spring.StiffnessHigh))
-        ) {
-            Column(
-                modifier = Modifier.padding(top = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                // ── Live Mini Preview Box (Real-Time Canvas Lookahead) ─────────
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(86.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFF0B0F19))
-                        .border(1.dp, colors.glassBorder, RoundedCornerShape(12.dp))
-                        .padding(8.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "LIVE CANVAS PREVIEW",
-                        fontSize = 8.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White.copy(alpha = 0.18f),
-                        letterSpacing = 2.sp,
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(4.dp)
-                    )
+        // ── 2. Expanded Detail Controls ──────────────────────────────────────
+        if (layer.isExpanded) {
+            Spacer(Modifier.height(14.dp))
+            HorizontalDivider(color = colors.glassBorder.copy(alpha = 0.4f), thickness = 0.5.dp)
+            Spacer(Modifier.height(14.dp))
 
-                    val miniBrush = if (layer.isGradientText) {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+
+                // Live Layer Mini-Preview Banner
+                val primaryFont = remember(layer.primaryFontAsset) {
+                    getFcpFontFamily(context, layer.primaryFontAsset)
+                }
+                val scriptFont = remember(layer.scriptFontAsset) {
+                    getFcpFontFamily(context, layer.scriptFontAsset)
+                }
+                val miniBrush = remember(layer.isGradientText, layer.textColor, layer.secondaryTextColor) {
+                    if (layer.isGradientText) {
                         Brush.linearGradient(listOf(layer.textColor, layer.secondaryTextColor))
                     } else {
                         SolidColor(layer.textColor)
                     }
-                    val miniShadow = if (layer.hasDropShadow) {
+                }
+                val miniShadow = remember(layer.hasDropShadow) {
+                    if (layer.hasDropShadow) {
                         androidx.compose.ui.graphics.Shadow(
-                            color = Color.Black.copy(alpha = 0.85f),
+                            color = Color.Black.copy(alpha = 0.8f),
                             offset = Offset(2f, 2f),
-                            blurRadius = 4f
+                            blurRadius = 6f
                         )
                     } else null
+                }
 
-                    val context = LocalContext.current
-                    val primaryFont = remember(layer.primaryFontAsset) { getFcpFontFamily(context, layer.primaryFontAsset) }
-                    val scriptFont = remember(layer.scriptFontAsset) { getFcpFontFamily(context, layer.scriptFontAsset) }
-
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF0F172A).copy(alpha = 0.9f))
+                        .border(1.dp, colors.glassBorder, RoundedCornerShape(12.dp))
+                        .padding(horizontal = 14.dp, vertical = 14.dp),
+                    contentAlignment = Alignment.Center
+                ) {
                     Box(
                         modifier = Modifier
-                            .graphicsLayer {
-                                scaleX = 0.72f
-                                scaleY = 0.72f
-                                alpha = layer.opacity
-                                rotationZ = layer.rotationDeg
-                            }
                             .then(
                                 if (layer.hasBackgroundPill) {
                                     Modifier
@@ -6810,7 +7287,10 @@ private fun FcpTitleLayerCard(
                     val usesScript = layer.presetType in listOf(
                         FcpTitlePresetType.SCRIPT_HEADLINE,
                         FcpTitlePresetType.GOLD_3D,
-                        FcpTitlePresetType.DESIGN_CONTRAST
+                        FcpTitlePresetType.DESIGN_CONTRAST,
+                        FcpTitlePresetType.RETRO_VHS,
+                        FcpTitlePresetType.LUXURY_SERIF,
+                        FcpTitlePresetType.KINETIC_PUNCH
                     )
                     if (usesScript) {
                         FcpTextInput(
@@ -6829,17 +7309,116 @@ private fun FcpTitleLayerCard(
                         )
                     }
 
-                    // Badge Input (for 3D gold)
-                    if (layer.presetType == FcpTitlePresetType.GOLD_3D) {
+                    // Badge Input (for 3D gold and retro VHS)
+                    if (layer.presetType == FcpTitlePresetType.GOLD_3D || layer.presetType == FcpTitlePresetType.RETRO_VHS) {
                         FcpTextInput(
                             value = layer.badgeText,
-                            placeholder = "Badge (e.g. AESTHETIC)...",
+                            placeholder = "Badge (e.g. AESTHETIC, REC ●)...",
                             onValueChange = { onUpdate(layer.copy(badgeText = it)) }
                         )
                     }
                 }
 
-                // Section B: Preset Style Engine Grid (Matching TypeButton 3-Col Layout)
+                // Quick Animation Bar inside the Layer Card
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        FieldLabel("Animations", value = "${layer.inAnimation.label} • ${layer.comboAnimation.label}")
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(colors.primary.copy(alpha = 0.15f))
+                                .clickable { onOpenAnimationStudio() }
+                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                        ) {
+                            Text(
+                                text = "Animation Studio",
+                                fontSize = 10.sp,
+                                color = colors.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Icon(
+                                imageVector = Lucide.ChevronRight,
+                                contentDescription = null,
+                                tint = colors.primary,
+                                modifier = Modifier.size(12.dp)
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        // In Chip
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(colors.primary.copy(alpha = 0.12f))
+                                .border(0.5.dp, colors.primary.copy(alpha = 0.35f), RoundedCornerShape(8.dp))
+                                .clickable { onOpenAnimationStudio() }
+                                .padding(vertical = 6.dp, horizontal = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "In: ${layer.inAnimation.label}",
+                                fontSize = 10.sp,
+                                color = colors.primary,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        // Combo Chip
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (layer.comboAnimation != TextComboAnimation.NONE) colors.primary.copy(alpha = 0.12f) else colors.glassBg)
+                                .border(0.5.dp, colors.glassBorder, RoundedCornerShape(8.dp))
+                                .clickable { onOpenAnimationStudio() }
+                                .padding(vertical = 6.dp, horizontal = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Loop: ${layer.comboAnimation.label}",
+                                fontSize = 10.sp,
+                                color = colors.textMain,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        // Out Chip
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (layer.outAnimation != TextOutAnimation.NONE) colors.primary.copy(alpha = 0.12f) else colors.glassBg)
+                                .border(0.5.dp, colors.glassBorder, RoundedCornerShape(8.dp))
+                                .clickable { onOpenAnimationStudio() }
+                                .padding(vertical = 6.dp, horizontal = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Out: ${layer.outAnimation.label}",
+                                fontSize = 10.sp,
+                                color = colors.textMuted,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+
+                // Section B: Preset Style Engine Grid (12 Handcrafted Presets)
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     FieldLabel("Preset Engine", value = layer.presetType.category)
 
@@ -6861,6 +7440,10 @@ private fun FcpTitleLayerCard(
                                     FcpTitlePresetType.ABSTRACT_BADGE -> Lucide.Layers
                                     FcpTitlePresetType.CYBER_NEON -> Lucide.Zap
                                     FcpTitlePresetType.MINIMAL_CLEAN -> Lucide.SlidersHorizontal
+                                    FcpTitlePresetType.RETRO_VHS -> Lucide.Tv
+                                    FcpTitlePresetType.LUXURY_SERIF -> Lucide.Sparkle
+                                    FcpTitlePresetType.KINETIC_PUNCH -> Lucide.Flame
+                                    FcpTitlePresetType.SUBTITLE_CARD -> Lucide.MessageSquare
                                 }
                                 FcpTypeButton(
                                     label = preset.title,
@@ -6873,7 +7456,6 @@ private fun FcpTitleLayerCard(
                                     onUpdate(updated)
                                 }
                             }
-                            // Fill remaining slots in last row if not multiple of 3
                             if (rowPresets.size < 3) {
                                 repeat(3 - rowPresets.size) {
                                     Spacer(Modifier.weight(1f))
@@ -6898,7 +7480,10 @@ private fun FcpTitleLayerCard(
                     val usesScript = layer.presetType in listOf(
                         FcpTitlePresetType.SCRIPT_HEADLINE,
                         FcpTitlePresetType.GOLD_3D,
-                        FcpTitlePresetType.DESIGN_CONTRAST
+                        FcpTitlePresetType.DESIGN_CONTRAST,
+                        FcpTitlePresetType.RETRO_VHS,
+                        FcpTitlePresetType.LUXURY_SERIF,
+                        FcpTitlePresetType.KINETIC_PUNCH
                     )
                     if (usesScript) {
                         FcpFontDropdownSelector(
@@ -6988,7 +7573,7 @@ private fun FcpTitleLayerCard(
                             onColorChange = { onUpdate(layer.copy(secondaryTextColor = it)) }
                         )
 
-                        // 6 Instant Pro Gradient Presets
+                        // Pro Gradient Presets
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text(
                                 text = "PRO GRADIENT PRESETS",
@@ -7047,7 +7632,10 @@ private fun FcpTitleLayerCard(
                     val usesScript = layer.presetType in listOf(
                         FcpTitlePresetType.SCRIPT_HEADLINE,
                         FcpTitlePresetType.GOLD_3D,
-                        FcpTitlePresetType.DESIGN_CONTRAST
+                        FcpTitlePresetType.DESIGN_CONTRAST,
+                        FcpTitlePresetType.RETRO_VHS,
+                        FcpTitlePresetType.LUXURY_SERIF,
+                        FcpTitlePresetType.KINETIC_PUNCH
                     )
                     if (usesScript) {
                         FcpColorControlRow(
@@ -7104,7 +7692,7 @@ private fun FcpTitleLayerCard(
                     }
                 }
 
-                // Section G: Blend Mode Selection (matching LayerCard.kt)
+                // Section G: Blend Mode Selection
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     FieldLabel("Blend Mode", value = layer.blendMode)
                     val blendModes = listOf("Normal", "Screen", "Overlay", "Multiply", "Add")
@@ -7218,6 +7806,922 @@ private fun FcpTitleLayerCard(
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// TITLES SUB-SECTIONS (Layers, Presets, Animations)
+// ─────────────────────────────────────────────────────────────────────────────
+enum class TitlesSubSection(val label: String, val icon: ImageVector) {
+    LAYERS("Layers", Lucide.Layers),
+    PRESETS("Presets", Lucide.Sparkles),
+    ANIMATIONS("Animations", Lucide.Film)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MINI PRESET VISUAL RENDER (Renders actual styled typography for presets)
+// ─────────────────────────────────────────────────────────────────────────────
+@Composable
+private fun MiniPresetVisualRender(
+    preset: FcpTitlePresetType,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color(0xFF0B0F17))
+            .border(0.5.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(10.dp))
+            .padding(8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        when (preset) {
+            FcpTitlePresetType.SCRIPT_HEADLINE -> {
+                val primaryFont = remember { getFcpFontFamily(context, "Outfit-Bold.ttf") }
+                val scriptFont = remember { getFcpFontFamily(context, "Thesignature.ttf") }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = "SCRIPT",
+                            fontFamily = primaryFont,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 14.sp,
+                            color = Color.White,
+                            letterSpacing = 1.sp
+                        )
+                        Text(
+                            text = "Signature",
+                            fontFamily = scriptFont,
+                            fontSize = 17.sp,
+                            color = Color(0xFFFFB800),
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .offset(x = (-6).dp, y = (-7).dp)
+                                .rotate(-8f)
+                        )
+                    }
+                    Text(
+                        text = "EDITORIAL STYLE",
+                        fontFamily = primaryFont,
+                        fontSize = 7.sp,
+                        color = Color.White.copy(alpha = 0.7f),
+                        letterSpacing = 1.5.sp
+                    )
+                }
+            }
+
+            FcpTitlePresetType.GOLD_3D -> {
+                val primaryFont = remember { getFcpFontFamily(context, "Outfit-Bold.ttf") }
+                val goldBrush = Brush.verticalGradient(
+                    listOf(Color(0xFFFFF2A1), Color(0xFFFFDF00), Color(0xFFD4AF37), Color(0xFF996515))
+                )
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(Color(0xFFFFB800).copy(alpha = 0.2f))
+                            .padding(horizontal = 6.dp, vertical = 1.dp)
+                    ) {
+                        Text("3D BEVEL", fontSize = 6.5.sp, color = Color(0xFFFFDF00), fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = "GOLDEN",
+                        fontFamily = primaryFont,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 15.sp,
+                        style = TextStyle(brush = goldBrush)
+                    )
+                }
+            }
+
+            FcpTitlePresetType.MODERN_FOLD -> {
+                val primaryFont = remember { getFcpFontFamily(context, "Wotham.ttf") }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "CINEMATIC",
+                        fontFamily = primaryFont,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 14.sp,
+                        color = Color.White,
+                        letterSpacing = 2.sp
+                    )
+                    Box(
+                        modifier = Modifier
+                            .width(36.dp)
+                            .height(1.5.dp)
+                            .background(Color(0xFF38BDF8))
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = "OFFICIAL TRAILER",
+                        fontFamily = primaryFont,
+                        fontSize = 6.5.sp,
+                        color = Color(0xFF94A3B8),
+                        letterSpacing = 1.5.sp
+                    )
+                }
+            }
+
+            FcpTitlePresetType.DESIGN_CONTRAST -> {
+                val primaryFont = remember { getFcpFontFamily(context, "Comfortaa-Bold.ttf") }
+                val scriptFont = remember { getFcpFontFamily(context, "Thesignature.ttf") }
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = "FASHION",
+                        fontFamily = primaryFont,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 15.sp,
+                        color = Color.White,
+                        letterSpacing = 1.sp
+                    )
+                    Text(
+                        text = "Elegance &",
+                        fontFamily = scriptFont,
+                        fontSize = 16.sp,
+                        color = Color(0xFF67E8F9),
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .offset(x = 6.dp, y = (-5).dp)
+                            .rotate(-6f)
+                    )
+                }
+            }
+
+            FcpTitlePresetType.BOXED_FRAME -> {
+                val primaryFont = remember { getFcpFontFamily(context, "Istok-Regular.ttf") }
+                Box(
+                    modifier = Modifier
+                        .border(1.dp, Color.White, RoundedCornerShape(3.dp))
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "MINIMAL BOX",
+                        fontFamily = primaryFont,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 10.sp,
+                        color = Color.White,
+                        letterSpacing = 2.sp
+                    )
+                }
+            }
+
+            FcpTitlePresetType.ABSTRACT_BADGE -> {
+                val primaryFont = remember { getFcpFontFamily(context, "Nunito-Bold.ttf") }
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color(0xFFFFB800))
+                        .padding(horizontal = 12.dp, vertical = 5.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "STATEMENT",
+                        fontFamily = primaryFont,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 12.sp,
+                        color = Color.Black,
+                        letterSpacing = 1.sp
+                    )
+                }
+            }
+
+            FcpTitlePresetType.CYBER_NEON -> {
+                val primaryFont = remember { getFcpFontFamily(context, "Wotham.ttf") }
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color(0xFF0F172A))
+                        .border(1.dp, Color(0xFF00F0FF), RoundedCornerShape(6.dp))
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "CYBER NEON",
+                        fontFamily = primaryFont,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 12.sp,
+                        color = Color(0xFF00F0FF),
+                        letterSpacing = 1.5.sp
+                    )
+                }
+            }
+
+            FcpTitlePresetType.MINIMAL_CLEAN -> {
+                val primaryFont = remember { getFcpFontFamily(context, "Comfortaa-Bold.ttf") }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(Color.Black.copy(alpha = 0.6f))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Box(Modifier.width(2.5.dp).height(18.dp).background(Color(0xFF38BDF8)))
+                    Column {
+                        Text(
+                            text = "LESS IS MORE",
+                            fontFamily = primaryFont,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 9.sp,
+                            color = Color.White
+                        )
+                        Text(
+                            text = "CINEMATIC CUT",
+                            fontFamily = primaryFont,
+                            fontSize = 6.sp,
+                            color = Color.White.copy(alpha = 0.6f),
+                            letterSpacing = 1.sp
+                        )
+                    }
+                }
+            }
+
+            FcpTitlePresetType.RETRO_VHS -> {
+                val primaryFont = remember { getFcpFontFamily(context, "Wotham.ttf") }
+                val vhsBrush = Brush.horizontalGradient(listOf(Color(0xFFFF007F), Color(0xFF00F0FF)))
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(Color.Black.copy(alpha = 0.8f))
+                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                    ) {
+                        Box(Modifier.size(4.dp).clip(CircleShape).background(Color.Red))
+                        Text("REC ●", fontSize = 6.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = "SYNTHWAVE '84",
+                        fontFamily = primaryFont,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 12.sp,
+                        style = TextStyle(brush = vhsBrush)
+                    )
+                }
+            }
+
+            FcpTitlePresetType.LUXURY_SERIF -> {
+                val primaryFont = remember { getFcpFontFamily(context, "Comfortaa-Bold.ttf") }
+                val scriptFont = remember { getFcpFontFamily(context, "Thesignature.ttf") }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "Collection",
+                        fontFamily = scriptFont,
+                        fontSize = 14.sp,
+                        color = Color(0xFFD4AF37),
+                        modifier = Modifier.offset(y = 2.dp).rotate(-4f)
+                    )
+                    Text(
+                        text = "VOGUE NOIR",
+                        fontFamily = primaryFont,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp,
+                        color = Color(0xFFFDE68A),
+                        letterSpacing = 3.sp
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Box(Modifier.width(10.dp).height(0.6.dp).background(Color(0xFFD4AF37)))
+                        Text("AUTUMN EDITION", fontSize = 5.5.sp, color = Color.White.copy(alpha = 0.8f))
+                        Box(Modifier.width(10.dp).height(0.6.dp).background(Color(0xFFD4AF37)))
+                    }
+                }
+            }
+
+            FcpTitlePresetType.KINETIC_PUNCH -> {
+                val primaryFont = remember { getFcpFontFamily(context, "Outfit-Bold.ttf") }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color(0xFFFFEB3B))
+                            .padding(horizontal = 10.dp, vertical = 3.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "DON'T MISS THIS",
+                            fontFamily = primaryFont,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 11.sp,
+                            color = Color.Black
+                        )
+                    }
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = "WATCH TILL END",
+                        fontFamily = primaryFont,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 6.5.sp,
+                        color = Color.White
+                    )
+                }
+            }
+
+            FcpTitlePresetType.SUBTITLE_CARD -> {
+                val primaryFont = remember { getFcpFontFamily(context, "Istok-Regular.ttf") }
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color.Black.copy(alpha = 0.7f))
+                        .border(0.8.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Modern Subtitle Caption",
+                        fontFamily = primaryFont,
+                        fontSize = 9.sp,
+                        color = Color.White,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PRESET PREVIEW CARD (Visual preview + 1-tap Add / Apply buttons)
+// ─────────────────────────────────────────────────────────────────────────────
+@Composable
+private fun FcpTitlePresetPreviewCard(
+    preset: FcpTitlePresetType,
+    isSelectedPreset: Boolean,
+    onAddAsNew: () -> Unit,
+    onApplyToSelected: () -> Unit
+) {
+    val colors = LocalOscellionColors.current
+    val haptic = LocalHapticFeedback.current
+    val shape = RoundedCornerShape(14.dp)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(colors.glassBg, shape)
+            .border(
+                width = if (isSelectedPreset) 1.5.dp else 0.5.dp,
+                color = if (isSelectedPreset) colors.primary else colors.glassBorder,
+                shape = shape
+            )
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // Visual Typographic Render
+        MiniPresetVisualRender(
+            preset = preset,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(84.dp)
+        )
+
+        // Title and Category
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = preset.title,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.textMain,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = preset.subtitle,
+                    fontSize = 9.5.sp,
+                    color = colors.textMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(colors.primary.copy(alpha = 0.15f))
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+            ) {
+                Text(
+                    text = preset.category,
+                    fontSize = 8.5.sp,
+                    color = colors.primary,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
+        // Action Buttons: + Add Title & Apply Style
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            // Add as New Title Button
+            PrimaryGradientButton(
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onAddAsNew()
+                },
+                height = 30.dp,
+                modifier = Modifier.weight(1.1f),
+                contentPadding = PaddingValues(horizontal = 8.dp)
+            ) {
+                Icon(Lucide.Plus, contentDescription = null, tint = Color.White, modifier = Modifier.size(13.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("+ Add Title", color = Color.White, fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
+            }
+
+            // Apply Style Button
+            Box(
+                modifier = Modifier
+                    .weight(0.9f)
+                    .height(30.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(colors.glassBg)
+                    .border(1.dp, colors.glassBorder, RoundedCornerShape(8.dp))
+                    .clickable {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onApplyToSelected()
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Apply Style",
+                    color = colors.textMain,
+                    fontSize = 10.5.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ANIMATION STUDIO COMPONENT (Live looping preview box, duration, In, Combo, Out)
+// ─────────────────────────────────────────────────────────────────────────────
+@Composable
+private fun FcpTextAnimationStudio(
+    layer: FcpTextLayer?,
+    allLayers: List<FcpTextLayer>,
+    onSelectLayer: (String) -> Unit,
+    onUpdateLayer: (FcpTextLayer) -> Unit,
+    onAddText: () -> Unit
+) {
+    val colors = LocalOscellionColors.current
+    val haptic = LocalHapticFeedback.current
+    val context = LocalContext.current
+
+    if (layer == null) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Icon(Lucide.Film, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(36.dp))
+            Text("No Text Layer Selected", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = colors.textMain)
+            Text("Add or select a text layer to customize its In, Out, and Combo animations.", fontSize = 11.sp, color = colors.textMuted, textAlign = TextAlign.Center)
+            PrimaryGradientButton(
+                onClick = onAddText,
+                height = 36.dp,
+                contentPadding = PaddingValues(horizontal = 16.dp)
+            ) {
+                Icon(Lucide.Plus, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("+ Add Text Layer", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+        return
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+
+        // Layer Switcher (if multiple text layers exist)
+        if (allLayers.size > 1) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = "SELECT LAYER TO ANIMATE",
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.textMuted,
+                    letterSpacing = 1.sp
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    allLayers.forEach { l ->
+                        val isCurr = l.id == layer.id
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isCurr) colors.primary else colors.glassBg)
+                                .border(1.dp, if (isCurr) colors.primary else colors.glassBorder, RoundedCornerShape(8.dp))
+                                .clickable { onSelectLayer(l.id) }
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = l.name,
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isCurr) colors.onPrimary else colors.textMain
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── 1. Live Looping Animated Preview Box ──────────────────────────────
+        val infiniteTransition = rememberInfiniteTransition(label = "studioPreviewTrans_${layer.id}")
+        val loopProgress by infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 3500, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "studioLoopProg_${layer.id}"
+        )
+
+        val t = loopProgress * 3.5f
+        val animDur = layer.animationDurationSec.coerceIn(0.2f, 2.0f)
+        val inProg = (t / animDur).coerceIn(0f, 1f)
+        val outStart = (3.5f - animDur).coerceAtLeast(animDur)
+        val outProg = if (t >= outStart) ((t - outStart) / animDur).coerceIn(0f, 1f) else 0f
+
+        var previewAlpha = 1.0f
+        var previewScaleX = 1.0f
+        var previewScaleY = 1.0f
+        var previewTransX = 0f
+        var previewTransY = 0f
+        var previewRotZ = 0f
+
+        // Entrance calculation
+        if (layer.inAnimation != TextInAnimation.NONE && inProg < 1f) {
+            when (layer.inAnimation) {
+                TextInAnimation.FADE_IN -> previewAlpha *= inProg
+                TextInAnimation.SLIDE_UP -> {
+                    previewAlpha *= inProg
+                    previewTransY += (1f - inProg) * 35f
+                }
+                TextInAnimation.SLIDE_RIGHT -> {
+                    previewAlpha *= inProg
+                    previewTransX -= (1f - inProg) * 50f
+                }
+                TextInAnimation.ZOOM_IN -> {
+                    previewAlpha *= inProg
+                    val s = 0.35f + (0.65f * inProg)
+                    previewScaleX *= s
+                    previewScaleY *= s
+                }
+                TextInAnimation.BOUNCE_IN -> {
+                    previewAlpha *= inProg
+                    val b = if (inProg < 0.65f) (inProg / 0.65f) * 1.18f else 1.18f - ((inProg - 0.65f) / 0.35f) * 0.18f
+                    previewScaleX *= b
+                    previewScaleY *= b
+                }
+                TextInAnimation.FLIP_IN -> {
+                    previewAlpha *= inProg
+                    previewRotZ += (1f - inProg) * 18f
+                    previewScaleY *= inProg
+                }
+                TextInAnimation.GLITCH_IN -> {
+                    previewAlpha *= if (inProg < 0.3f && ((inProg * 20).toInt() % 2 == 0)) 0.2f else 1f
+                    previewTransX += (kotlin.math.sin(inProg * 25f) * (1f - inProg) * 14f)
+                }
+            }
+        }
+
+        // Exit calculation
+        if (layer.outAnimation != TextOutAnimation.NONE && outProg > 0f) {
+            when (layer.outAnimation) {
+                TextOutAnimation.FADE_OUT -> previewAlpha *= (1f - outProg)
+                TextOutAnimation.SLIDE_DOWN -> {
+                    previewAlpha *= (1f - outProg)
+                    previewTransY += outProg * 35f
+                }
+                TextOutAnimation.SLIDE_LEFT -> {
+                    previewAlpha *= (1f - outProg)
+                    previewTransX -= outProg * 50f
+                }
+                TextOutAnimation.ZOOM_OUT -> {
+                    previewAlpha *= (1f - outProg)
+                    val s = 1f - (outProg * 0.5f)
+                    previewScaleX *= s
+                    previewScaleY *= s
+                }
+                TextOutAnimation.BLUR_OUT -> {
+                    previewAlpha *= (1f - outProg)
+                    val s = 1f + (outProg * 0.25f)
+                    previewScaleX *= s
+                    previewScaleY *= s
+                }
+                TextOutAnimation.FLIP_OUT -> {
+                    previewAlpha *= (1f - outProg)
+                    previewScaleY *= (1f - outProg)
+                    previewRotZ -= outProg * 18f
+                }
+            }
+        }
+
+        // Combo continuous motion
+        if (layer.comboAnimation != TextComboAnimation.NONE) {
+            when (layer.comboAnimation) {
+                TextComboAnimation.PULSE -> {
+                    val p = 1f + 0.08f * kotlin.math.sin(t * 5f)
+                    previewScaleX *= p
+                    previewScaleY *= p
+                }
+                TextComboAnimation.WAVE_FLOAT -> {
+                    previewTransY += 6f * kotlin.math.sin(t * 4f)
+                }
+                TextComboAnimation.NEON_FLICKER -> {
+                    if (((t * 12).toInt() % 11 == 0)) previewAlpha *= 0.55f
+                }
+                TextComboAnimation.SHAKE -> {
+                    previewTransX += 2.5f * kotlin.math.sin(t * 30f)
+                    previewTransY += 2f * kotlin.math.cos(t * 26f)
+                }
+                TextComboAnimation.SWING -> {
+                    previewRotZ += 3.5f * kotlin.math.sin(t * 3.5f)
+                }
+                TextComboAnimation.HEARTBEAT -> {
+                    val beat = kotlin.math.sin(t * 6f).coerceAtLeast(0f)
+                    val s = 1f + (beat * beat * 0.14f)
+                    previewScaleX *= s
+                    previewScaleY *= s
+                }
+                else -> {}
+            }
+        }
+
+        val primaryFont = remember(layer.primaryFontAsset) { getFcpFontFamily(context, layer.primaryFontAsset) }
+        val scriptFont = remember(layer.scriptFontAsset) { getFcpFontFamily(context, layer.scriptFontAsset) }
+        val previewBrush = remember(layer.isGradientText, layer.textColor, layer.secondaryTextColor) {
+            if (layer.isGradientText) Brush.linearGradient(listOf(layer.textColor, layer.secondaryTextColor))
+            else SolidColor(layer.textColor)
+        }
+
+        val liveDisplayText = if (layer.inAnimation == TextInAnimation.TYPEWRITER && inProg < 1f) {
+            val len = (layer.primaryText.length * inProg).toInt().coerceAtLeast(1)
+            layer.primaryText.take(len)
+        } else layer.primaryText
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(130.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(Color(0xFF070B12))
+                .border(1.dp, colors.primary.copy(alpha = 0.35f), RoundedCornerShape(14.dp))
+                .padding(10.dp)
+        ) {
+            // Live badge top-left
+            Row(
+                modifier = Modifier.align(Alignment.TopStart),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF22C55E))
+                )
+                Text(
+                    text = "LIVE ANIMATION LOOP",
+                    fontSize = 8.5.sp,
+                    color = Color(0xFF22C55E),
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp
+                )
+            }
+
+            // Central Animated Title
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        alpha = previewAlpha.coerceIn(0f, 1f)
+                        scaleX = previewScaleX
+                        scaleY = previewScaleY
+                        translationX = previewTransX.dp.toPx()
+                        translationY = previewTransY.dp.toPx()
+                        rotationZ = previewRotZ
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = liveDisplayText,
+                            fontFamily = primaryFont,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 20.sp,
+                            style = TextStyle(brush = previewBrush),
+                            letterSpacing = layer.letterSpacingSp.sp,
+                            textAlign = TextAlign.Center
+                        )
+                        if (layer.scriptText.isNotBlank()) {
+                            Text(
+                                text = layer.scriptText,
+                                fontFamily = scriptFont,
+                                fontSize = 22.sp,
+                                color = layer.accentColor,
+                                modifier = Modifier
+                                    .align(Alignment.TopStart)
+                                    .offset(x = (-6).dp, y = (-8).dp)
+                                    .rotate(-6f)
+                            )
+                        }
+                    }
+                    if (layer.subtitleText.isNotBlank()) {
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = layer.subtitleText,
+                            fontFamily = primaryFont,
+                            fontSize = 8.sp,
+                            color = Color.White.copy(alpha = 0.8f),
+                            letterSpacing = 1.sp,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+
+            // Bottom Badges
+            Row(
+                modifier = Modifier.align(Alignment.BottomCenter),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = "In: ${layer.inAnimation.label}",
+                    fontSize = 8.5.sp,
+                    color = colors.primary,
+                    fontWeight = FontWeight.Bold
+                )
+                Text("•", fontSize = 8.5.sp, color = colors.textMuted)
+                Text(
+                    text = "Loop: ${layer.comboAnimation.label}",
+                    fontSize = 8.5.sp,
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text("•", fontSize = 8.5.sp, color = colors.textMuted)
+                Text(
+                    text = "Out: ${layer.outAnimation.label}",
+                    fontSize = 8.5.sp,
+                    color = colors.textMuted,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+
+        // ── 2. Animation Speed Slider ─────────────────────────────────────────
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            FieldLabel("Entrance & Exit Speed", value = "${String.format("%.2f", layer.animationDurationSec)}s")
+            AppleSlider(
+                value = layer.animationDurationSec,
+                onValueChange = { onUpdateLayer(layer.copy(animationDurationSec = it)) },
+                valueRange = 0.2f..2.5f
+            )
+        }
+
+        // ── 3. Entrance Animation (In) ────────────────────────────────────────
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            FieldLabel("Entrance Animation (In)", value = layer.inAnimation.label)
+
+            val inAnims = TextInAnimation.values().toList()
+            val chunks = inAnims.chunked(3)
+            chunks.forEach { rowAnims ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    rowAnims.forEach { anim ->
+                        val active = layer.inAnimation == anim
+                        val icon = when (anim) {
+                            TextInAnimation.NONE -> Lucide.Minus
+                            TextInAnimation.FADE_IN -> Lucide.Sun
+                            TextInAnimation.SLIDE_UP -> Lucide.ArrowUp
+                            TextInAnimation.SLIDE_RIGHT -> Lucide.ArrowRight
+                            TextInAnimation.ZOOM_IN -> Lucide.ZoomIn
+                            TextInAnimation.TYPEWRITER -> Lucide.Pencil
+                            TextInAnimation.BOUNCE_IN -> Lucide.ArrowUpRight
+                            TextInAnimation.FLIP_IN -> Lucide.RotateCw
+                            TextInAnimation.GLITCH_IN -> Lucide.Zap
+                        }
+                        FcpTypeButton(
+                            label = anim.label,
+                            icon = icon,
+                            active = active,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onUpdateLayer(layer.copy(inAnimation = anim))
+                        }
+                    }
+                    if (rowAnims.size < 3) {
+                        repeat(3 - rowAnims.size) { Spacer(Modifier.weight(1f)) }
+                    }
+                }
+            }
+        }
+
+        // ── 4. Combo Animation (Continuous Loop) ──────────────────────────────
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            FieldLabel("Combo Animation (Loop While Visible)", value = layer.comboAnimation.label)
+
+            val comboAnims = TextComboAnimation.values().toList()
+            val chunks = comboAnims.chunked(3)
+            chunks.forEach { rowAnims ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    rowAnims.forEach { anim ->
+                        val active = layer.comboAnimation == anim
+                        val icon = when (anim) {
+                            TextComboAnimation.NONE -> Lucide.Minus
+                            TextComboAnimation.PULSE -> Lucide.Activity
+                            TextComboAnimation.WAVE_FLOAT -> Lucide.Move
+                            TextComboAnimation.NEON_FLICKER -> Lucide.Zap
+                            TextComboAnimation.SHAKE -> Lucide.Smartphone
+                            TextComboAnimation.SWING -> Lucide.RotateCw
+                            TextComboAnimation.HEARTBEAT -> Lucide.Heart
+                        }
+                        FcpTypeButton(
+                            label = anim.label,
+                            icon = icon,
+                            active = active,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onUpdateLayer(layer.copy(comboAnimation = anim))
+                        }
+                    }
+                    if (rowAnims.size < 3) {
+                        repeat(3 - rowAnims.size) { Spacer(Modifier.weight(1f)) }
+                    }
+                }
+            }
+        }
+
+        // ── 5. Exit Animation (Out) ───────────────────────────────────────────
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            FieldLabel("Exit Animation (Out)", value = layer.outAnimation.label)
+
+            val outAnims = TextOutAnimation.values().toList()
+            val chunks = outAnims.chunked(3)
+            chunks.forEach { rowAnims ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    rowAnims.forEach { anim ->
+                        val active = layer.outAnimation == anim
+                        val icon = when (anim) {
+                            TextOutAnimation.NONE -> Lucide.Minus
+                            TextOutAnimation.FADE_OUT -> Lucide.EyeOff
+                            TextOutAnimation.SLIDE_DOWN -> Lucide.ArrowDown
+                            TextOutAnimation.SLIDE_LEFT -> Lucide.ArrowLeft
+                            TextOutAnimation.ZOOM_OUT -> Lucide.ZoomOut
+                            TextOutAnimation.BLUR_OUT -> Lucide.Cloud
+                            TextOutAnimation.FLIP_OUT -> Lucide.RotateCcw
+                        }
+                        FcpTypeButton(
+                            label = anim.label,
+                            icon = icon,
+                            active = active,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onUpdateLayer(layer.copy(outAnimation = anim))
+                        }
+                    }
+                    if (rowAnims.size < 3) {
+                        repeat(3 - rowAnims.size) { Spacer(Modifier.weight(1f)) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TITLES TAB CONTENT (Segmented Navigation: Layers, Presets, Animations)
+// ─────────────────────────────────────────────────────────────────────────────
 @Composable
 private fun TitlesTabContent(
     textLayers: List<FcpTextLayer>,
@@ -7232,6 +8736,9 @@ private fun TitlesTabContent(
     val colors = LocalOscellionColors.current
     val haptic = LocalHapticFeedback.current
 
+    var currentSubSection by remember { mutableStateOf(TitlesSubSection.LAYERS) }
+    var selectedCategoryFilter by remember { mutableStateOf("All") }
+
     val activeLayer = textLayers.find { it.id == selectedLayerId } ?: textLayers.firstOrNull()
 
     LazyColumn(
@@ -7240,291 +8747,335 @@ private fun TitlesTabContent(
             .padding(horizontal = 16.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // ── 1. Top Panel Header (Parity with LayersPanel.kt) ──────────────────
+        // ── 1. Top Sub-Section Segmented Bar ──────────────────────────────────
         item {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(colors.glassBg)
+                    .border(1.dp, colors.glassBorder, RoundedCornerShape(12.dp))
+                    .padding(3.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = "ACTIVE TEXT LAYERS",
-                        color = colors.textMuted,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
-                    )
+                TitlesSubSection.values().forEach { sub ->
+                    val isActive = currentSubSection == sub
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(50))
-                            .background(colors.primary.copy(alpha = 0.15f))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                            .weight(1f)
+                            .height(34.dp)
+                            .clip(RoundedCornerShape(9.dp))
+                            .background(if (isActive) colors.primary else Color.Transparent)
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                currentSubSection = sub
+                            },
+                        contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = "${textLayers.size}",
-                            color = colors.primary,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                // Add Title Glass Button (glossyBorder)
-                Box(
-                    modifier = Modifier
-                        .height(30.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(colors.glassBg)
-                        .glossyBorder(RoundedCornerShape(8.dp), colors)
-                        .clickable {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            onAddLayer(null)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Icon(
+                                imageVector = sub.icon,
+                                contentDescription = sub.label,
+                                tint = if (isActive) colors.onPrimary else colors.textMuted,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Text(
+                                text = sub.label,
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isActive) colors.onPrimary else colors.textMuted
+                            )
+                            if (sub == TitlesSubSection.LAYERS && textLayers.isNotEmpty()) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(CircleShape)
+                                        .background(if (isActive) colors.onPrimary.copy(alpha = 0.25f) else colors.primary.copy(alpha = 0.15f))
+                                        .padding(horizontal = 5.dp, vertical = 1.dp)
+                                ) {
+                                    Text(
+                                        text = "${textLayers.size}",
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isActive) colors.onPrimary else colors.primary
+                                    )
+                                }
+                            }
                         }
-                        .padding(horizontal = 10.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Icon(
-                            imageVector = Lucide.Plus,
-                            contentDescription = "Add Title",
-                            tint = colors.textMain,
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Text(
-                            text = "Add Title",
-                            color = colors.textMain,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
                     }
                 }
             }
         }
 
-        // ── 2. Empty State (When textLayers is Empty) ──────────────────────────
-        if (textLayers.isEmpty()) {
-            item {
-                WorkspaceSectionCard(
-                    title = "TEXT & TITLE LAYERS",
-                    icon = Lucide.Type
+        // ── 2. Top Action Banner: + Add Text and + From Preset ───────────────
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Primary + Add Text button
+                PrimaryGradientButton(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onAddLayer(null)
+                    },
+                    height = 36.dp,
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(horizontal = 12.dp)
                 ) {
-                    Column(
+                    Icon(Lucide.Plus, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("+ Add Text", color = Color.White, fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                }
+
+                // Quick Browse Presets button
+                Box(
+                    modifier = Modifier
+                        .height(36.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(colors.glassBg)
+                        .border(1.dp, colors.glassBorder, RoundedCornerShape(8.dp))
+                        .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            currentSubSection = TitlesSubSection.PRESETS
+                        }
+                        .padding(horizontal = 14.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Icon(Lucide.Sparkles, contentDescription = null, tint = colors.primary, modifier = Modifier.size(13.dp))
+                        Text("Presets Gallery", color = colors.textMain, fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+        }
+
+        // ── 3. Content Routing by Selected Sub-Section ─────────────────────────
+        when (currentSubSection) {
+            TitlesSubSection.LAYERS -> {
+                if (textLayers.isEmpty()) {
+                    item {
+                        WorkspaceSectionCard(
+                            title = "TEXT ON VIDEO",
+                            icon = Lucide.Type
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 12.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(colors.primary.copy(alpha = 0.12f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Lucide.Type,
+                                        contentDescription = null,
+                                        tint = colors.primary,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                                Text(
+                                    text = "No Text on Video",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colors.textMain
+                                )
+                                Text(
+                                    text = "Tap '+ Add Text' above or choose a stylized preset below to add titles on your video canvas.",
+                                    fontSize = 11.sp,
+                                    color = colors.textMuted,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(horizontal = 20.dp)
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    itemsIndexed(textLayers, key = { _, l -> l.id }) { index, layer ->
+                        val isSelected = layer.id == (activeLayer?.id ?: "")
+                        FcpTitleLayerCard(
+                            layer = layer,
+                            index = index,
+                            totalLayers = textLayers.size,
+                            isSelected = isSelected,
+                            onSelect = { onSelectLayer(layer.id) },
+                            onToggleExpand = {
+                                onUpdateLayer(layer.copy(isExpanded = !layer.isExpanded))
+                            },
+                            onToggleVisibility = {
+                                onUpdateLayer(layer.copy(isVisible = !layer.isVisible))
+                            },
+                            onUpdate = { updated ->
+                                onUpdateLayer(updated)
+                            },
+                            onDuplicate = {
+                                onDuplicateLayer(layer.id)
+                            },
+                            onDelete = {
+                                onDeleteLayer(layer.id)
+                            },
+                            onMoveUp = {
+                                if (index > 0) onMoveLayer(index, index - 1)
+                            },
+                            onMoveDown = {
+                                if (index < textLayers.size - 1) onMoveLayer(index, index + 1)
+                            },
+                            onOpenAnimationStudio = {
+                                onSelectLayer(layer.id)
+                                currentSubSection = TitlesSubSection.ANIMATIONS
+                            }
+                        )
+                    }
+                }
+
+                // Quick Presets Row at bottom of Layers tab
+                item {
+                    WorkspaceSectionCard(title = "PREVIEW & ADD FROM PRESETS", icon = Lucide.Sparkles) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                text = "Tap any preset below to add another styled title layer:",
+                                fontSize = 10.sp,
+                                color = colors.textMuted
+                            )
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                FcpTitlePresetType.values().forEach { preset ->
+                                    Box(
+                                        modifier = Modifier
+                                            .width(135.dp)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(colors.bg)
+                                            .border(0.5.dp, colors.glassBorder, RoundedCornerShape(10.dp))
+                                            .clickable {
+                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                onAddLayer(preset)
+                                            }
+                                            .padding(8.dp)
+                                    ) {
+                                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            MiniPresetVisualRender(
+                                                preset = preset,
+                                                modifier = Modifier.fillMaxWidth().height(60.dp)
+                                            )
+                                            Text(
+                                                text = preset.title,
+                                                fontSize = 10.5.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = colors.textMain,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Text(
+                                                text = "+ Tap to Add",
+                                                fontSize = 9.sp,
+                                                color = colors.primary,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            TitlesSubSection.PRESETS -> {
+                // Category Filter Row
+                item {
+                    val categories = listOf("All", "Editorial", "Cinematic", "3D Titles", "Minimal", "Modern", "Retro", "Luxury", "Social", "Captions", "VFX")
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 12.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(colors.primary.copy(alpha = 0.12f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Lucide.Type,
-                                contentDescription = null,
-                                tint = colors.primary,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                        Text(
-                            text = "No Text on Video",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = colors.textMain
-                        )
-                        Text(
-                            text = "Choose a ready-made preset below or tap '+ Add Title' to put text on your video canvas.",
-                            fontSize = 11.sp,
-                            color = colors.textMuted,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(horizontal = 20.dp)
-                        )
-                        PrimaryGradientButton(
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                onAddLayer(null)
-                            },
-                            height = 38.dp,
-                            contentPadding = PaddingValues(horizontal = 18.dp)
-                        ) {
-                            Icon(Lucide.Plus, contentDescription = null, tint = Color.White, modifier = Modifier.size(15.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("+ Add Title Layer", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-            }
-
-            // Quick Presets Row in Empty State
-            item {
-                WorkspaceSectionCard(title = "READY-MADE PROFESSIONAL PRESETS", icon = Lucide.Sparkles) {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(
-                            text = "Tap any preset to instantly add styled text on video:",
-                            fontSize = 10.sp,
-                            color = colors.textMuted
-                        )
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            FcpTitlePresetType.values().forEach { preset ->
-                                Box(
-                                    modifier = Modifier
-                                        .width(140.dp)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(colors.bg)
-                                        .border(0.5.dp, colors.glassBorder, RoundedCornerShape(12.dp))
-                                        .clickable {
-                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                            onAddLayer(preset)
-                                        }
-                                        .padding(10.dp)
-                                ) {
-                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        Text(
-                                            text = preset.category,
-                                            fontSize = 9.sp,
-                                            color = colors.primary,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        Text(
-                                            text = preset.title,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = colors.textMain,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Text(
-                                            text = preset.subtitle,
-                                            fontSize = 9.sp,
-                                            color = colors.textMuted,
-                                            maxLines = 2,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Text(
-                                            text = "+ Tap to Add",
-                                            fontSize = 9.sp,
-                                            color = colors.primary,
-                                            fontWeight = FontWeight.Bold
-                                        )
+                        categories.forEach { cat ->
+                            val isSel = selectedCategoryFilter == cat
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .background(if (isSel) colors.primary else colors.glassBg)
+                                    .border(0.5.dp, if (isSel) colors.primary else colors.glassBorder, RoundedCornerShape(20.dp))
+                                    .clickable {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        selectedCategoryFilter = cat
                                     }
-                                }
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    text = cat,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isSel) colors.onPrimary else colors.textMuted
+                                )
                             }
                         }
                     }
                 }
-            }
-        } else {
-            // ── 3. Populated State: List of FcpTitleLayerCard ──────────────────
-            itemsIndexed(textLayers, key = { _, l -> l.id }) { index, layer ->
-                val isSelected = layer.id == (activeLayer?.id ?: "")
-                FcpTitleLayerCard(
-                    layer = layer,
-                    index = index,
-                    totalLayers = textLayers.size,
-                    isSelected = isSelected,
-                    onSelect = { onSelectLayer(layer.id) },
-                    onToggleExpand = {
-                        onUpdateLayer(layer.copy(isExpanded = !layer.isExpanded))
-                    },
-                    onToggleVisibility = {
-                        onUpdateLayer(layer.copy(isVisible = !layer.isVisible))
-                    },
-                    onUpdate = { updated ->
-                        onUpdateLayer(updated)
-                    },
-                    onDuplicate = {
-                        onDuplicateLayer(layer.id)
-                    },
-                    onDelete = {
-                        onDeleteLayer(layer.id)
-                    },
-                    onMoveUp = {
-                        if (index > 0) onMoveLayer(index, index - 1)
-                    },
-                    onMoveDown = {
-                        if (index < textLayers.size - 1) onMoveLayer(index, index + 1)
-                    }
-                )
-            }
 
-            // Quick Presets Row at bottom to add more styled titles easily
-            item {
-                WorkspaceSectionCard(title = "ADD FROM PRESET", icon = Lucide.Sparkles) {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(
-                            text = "Tap any preset below to add another styled title layer:",
-                            fontSize = 10.sp,
-                            color = colors.textMuted
-                        )
+                // Presets Cards List
+                val allPresets = FcpTitlePresetType.values().toList()
+                val filteredPresets = if (selectedCategoryFilter == "All") allPresets else allPresets.filter { it.category.equals(selectedCategoryFilter, ignoreCase = true) }
 
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            FcpTitlePresetType.values().forEach { preset ->
-                                Box(
-                                    modifier = Modifier
-                                        .width(130.dp)
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(colors.bg)
-                                        .border(0.5.dp, colors.glassBorder, RoundedCornerShape(10.dp))
-                                        .clickable {
-                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                            onAddLayer(preset)
-                                        }
-                                        .padding(10.dp)
-                                ) {
-                                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                        Text(
-                                            text = preset.category,
-                                            fontSize = 8.5.sp,
-                                            color = colors.primary,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        Text(
-                                            text = preset.title,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = colors.textMain,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Text(
-                                            text = "+ Tap to Add",
-                                            fontSize = 9.sp,
-                                            color = colors.primary,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
+                items(filteredPresets, key = { it.name }) { preset ->
+                    val isSelectedPreset = activeLayer?.presetType == preset
+                    FcpTitlePresetPreviewCard(
+                        preset = preset,
+                        isSelectedPreset = isSelectedPreset,
+                        onAddAsNew = {
+                            onAddLayer(preset)
+                            currentSubSection = TitlesSubSection.LAYERS
+                        },
+                        onApplyToSelected = {
+                            if (activeLayer != null) {
+                                onUpdateLayer(applyFcpTitlePreset(activeLayer, preset))
+                                ToastManager.showToast("Applied ${preset.title} style")
+                            } else {
+                                onAddLayer(preset)
                             }
                         }
+                    )
+                }
+            }
+
+            TitlesSubSection.ANIMATIONS -> {
+                item {
+                    WorkspaceSectionCard(
+                        title = "TEXT ANIMATIONS STUDIO",
+                        icon = Lucide.Film
+                    ) {
+                        FcpTextAnimationStudio(
+                            layer = activeLayer,
+                            allLayers = textLayers,
+                            onSelectLayer = onSelectLayer,
+                            onUpdateLayer = onUpdateLayer,
+                            onAddText = { onAddLayer(null) }
+                        )
                     }
                 }
             }
         }
     }
 }
+
 
 @Composable
 private fun FcpTextInput(
