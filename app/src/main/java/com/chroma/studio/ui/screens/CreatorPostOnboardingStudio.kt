@@ -10,6 +10,9 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.media.MediaMetadataRetriever
+import android.os.Build
+import androidx.compose.ui.graphics.asImageBitmap
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
@@ -85,6 +88,14 @@ import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.roundToLong
+
+
+fun formatDurationTime(ms: Long): String {
+    val totalSec = (ms / 1000L).coerceAtLeast(0L)
+    val mins = totalSec / 60L
+    val secs = totalSec % 60L
+    return String.format(Locale.US, "%02d:%02d", mins, secs)
+}
 
 // ============================================================================
 // DATA MODELS & CONSTANTS
@@ -254,6 +265,13 @@ fun CreatorPostOnboardingStudioScreen(
     var thumbCropOffset by remember { mutableFloatStateOf(50f) } // 0 to 100%
     var customThumbUri by remember { mutableStateOf<Uri?>(null) }
     var customThumbSlideIndex by remember { mutableIntStateOf(0) }
+    var selectedCoverFrameMs by remember { mutableLongStateOf(0L) }
+
+    // Video Post Specific Controls
+    var audienceVisibility by remember { mutableStateOf("public") } // "public", "followers", "private"
+    var includeOriginalAudio by remember { mutableStateOf(true) }
+    var allowDownloads by remember { mutableStateOf(true) }
+    var highQualityUpload by remember { mutableStateOf(true) }
 
     // Step 2 Form States
     var postTitle by remember { mutableStateOf("") }
@@ -280,6 +298,20 @@ fun CreatorPostOnboardingStudioScreen(
     var flashTrimStartMs by remember { mutableLongStateOf(0L) }
     var flashTrimEndMs by remember { mutableLongStateOf(15000L) }
     var flashVideoDurationMs by remember { mutableLongStateOf(15000L) }
+
+    // Auto-probe actual video duration when video slide is available
+    LaunchedEffect(slides.firstOrNull()?.videoUri) {
+        val vUri = slides.firstOrNull()?.videoUri ?: return@LaunchedEffect
+        if (flashVideoDurationMs <= 0L || flashVideoDurationMs == 15000L) {
+            val dur = com.chroma.studio.utils.VideoProcessor.getVideoDurationMs(context, vUri)
+            if (dur > 0L) {
+                flashVideoDurationMs = dur
+                if (flashTrimEndMs <= 0L || flashTrimEndMs == 15000L) {
+                    flashTrimEndMs = dur
+                }
+            }
+        }
+    }
 
     // Work Chooser Bottom Sheet / Dialog State
     var showWorkChooserSheet by remember { mutableStateOf(false) }
@@ -362,6 +394,12 @@ fun CreatorPostOnboardingStudioScreen(
                 turnOffRemix = draft.turnOffRemix
                 flashTrimStartMs = draft.flashTrimStartMs
                 flashTrimEndMs = draft.flashTrimEndMs
+                draft.customCoverUri?.let { customThumbUri = Uri.parse(it) }
+                selectedCoverFrameMs = draft.selectedCoverFrameMs
+                audienceVisibility = draft.audienceVisibility
+                includeOriginalAudio = draft.includeOriginalAudio
+                allowDownloads = draft.allowDownloads
+                highQualityUpload = draft.highQualityUpload
 
                 slides.clear()
                 when (draft.mode.lowercase()) {
@@ -444,7 +482,13 @@ fun CreatorPostOnboardingStudioScreen(
             workIds = wIds,
             flashTrimStartMs = flashTrimStartMs,
             flashTrimEndMs = flashTrimEndMs,
-            timestamp = System.currentTimeMillis()
+            timestamp = System.currentTimeMillis(),
+            customCoverUri = customThumbUri?.toString(),
+            selectedCoverFrameMs = selectedCoverFrameMs,
+            audienceVisibility = audienceVisibility,
+            includeOriginalAudio = includeOriginalAudio,
+            allowDownloads = allowDownloads,
+            highQualityUpload = highQualityUpload
         )
 
         draftRepo.saveDraft(draft)
@@ -572,13 +616,25 @@ fun CreatorPostOnboardingStudioScreen(
                                 )
                             } ?: trimmed // fallback to trimmed if compression fails
 
-                            // Step 3: Extract thumbnail
-                            uploadStageText = "Generating thumbnail…"
+                            // Step 3: Extract or use custom cover thumbnail
+                            uploadStageText = "Generating cover thumbnail…"
                             uploadProgress = 0.50f
                             val thumbBitmap = withContext(Dispatchers.IO) {
-                                com.chroma.studio.utils.VideoProcessor.extractThumbnail(
-                                    context, android.net.Uri.fromFile(compressed), 0L
-                                )
+                                if (customThumbUri != null) {
+                                    try {
+                                        val stream = context.contentResolver.openInputStream(customThumbUri!!)
+                                        BitmapFactory.decodeStream(stream)
+                                    } catch (_: Throwable) {
+                                        null
+                                    }
+                                } else {
+                                    val pos = if (selectedCoverFrameMs > 0L) {
+                                        (selectedCoverFrameMs - flashTrimStartMs).coerceAtLeast(0L)
+                                    } else 0L
+                                    com.chroma.studio.utils.VideoProcessor.extractThumbnail(
+                                        context, android.net.Uri.fromFile(compressed), pos
+                                    )
+                                }
                             }
                             val thumbUrl: String = if (thumbBitmap != null) {
                                 val baos = ByteArrayOutputStream()
@@ -622,9 +678,11 @@ fun CreatorPostOnboardingStudioScreen(
                                     tags = hashtags.toList(),
                                     mentions = mentionedUsers.map { it.username },
                                     duration = flashTrimEndMs - flashTrimStartMs,
+                                    categoryTag = selectedCategoryTag ?: customCategoryTag.ifBlank { null },
                                     hideLikesCount = hideLikesCount,
                                     turnOffComments = turnOffComments,
-                                    turnOffRemix = turnOffRemix
+                                    turnOffRemix = turnOffRemix,
+                                    hideDownloadsCount = !allowDownloads
                                 )
                             }
 
@@ -787,6 +845,7 @@ fun CreatorPostOnboardingStudioScreen(
                     selectedRatioId = selectedRatioId,
                     showThirdsGrid = showThirdsGridBriefly,
                     activeToolTab = activeToolTab,
+                    videoDurationMs = flashVideoDurationMs,
                     onSlideChange = { currentSlideIndex = it },
                     onToggleMultipleMode = {
                         isMultipleMode = it
@@ -814,8 +873,9 @@ fun CreatorPostOnboardingStudioScreen(
                     onSelectRatio = { updateRatio(it) },
                     onSelectToolTab = { activeToolTab = it },
                     onOpenThumbnailModal = { showThumbModal = true },
+                    onEditVideo = { currentStep = StudioStep.STEP_0_PRE_TOOL },
                     onCloseStudio = { onNavigateBack() },
-                    onSaveDraft = { saveCurrentDraft(showToast = true) },
+                    onSaveAsDraft = { saveCurrentDraft(showToast = true) },
                     onNext = { currentStep = StudioStep.STEP_2_DETAILS }
                 )
             }
@@ -835,6 +895,13 @@ fun CreatorPostOnboardingStudioScreen(
                     customCategoryTag = customCategoryTag,
                     hashtags = hashtags,
                     mentionedUsers = mentionedUsers,
+                    customCoverUri = customThumbUri,
+                    selectedCoverFrameMs = selectedCoverFrameMs,
+                    videoDurationMs = flashVideoDurationMs,
+                    audienceVisibility = audienceVisibility,
+                    includeOriginalAudio = includeOriginalAudio,
+                    allowDownloads = allowDownloads,
+                    highQualityUpload = highQualityUpload,
                     hideLikesCount = hideLikesCount,
                     turnOffComments = turnOffComments,
                     turnOffRemix = turnOffRemix,
@@ -857,11 +924,16 @@ fun CreatorPostOnboardingStudioScreen(
                     onRemoveHashtag = { hashtags.remove(it) },
                     onOpenMentionSearch = { showMentionModal = true },
                     onRemoveMention = { mentionedUsers.remove(it) },
+                    onAudienceVisibilityChange = { audienceVisibility = it },
+                    onToggleIncludeOriginalAudio = { includeOriginalAudio = it },
+                    onToggleAllowDownloads = { allowDownloads = it },
+                    onToggleHighQualityUpload = { highQualityUpload = it },
                     onToggleHideLikes = { hideLikesCount = it },
                     onToggleTurnOffComments = { turnOffComments = it },
                     onToggleTurnOffRemix = { turnOffRemix = it },
                     onSaveAsDraft = { saveCurrentDraft(showToast = true) },
                     onEditCover = { showThumbModal = true },
+                    onEditVideo = { currentStep = StudioStep.STEP_0_PRE_TOOL },
                     onBack = { currentStep = StudioStep.STEP_1_PREVIEW },
                     onPost = { executePublish() }
                 )
@@ -916,18 +988,23 @@ fun CreatorPostOnboardingStudioScreen(
         // ====================================================================
         if (showThumbModal) {
             ThumbnailPreviewModal(
+                studioMode = studioMode,
                 slides = slides,
                 selectedRatioId = selectedRatioId,
                 selectedSlideIndex = customThumbSlideIndex,
                 cropOffsetPercent = thumbCropOffset,
                 customCoverUri = customThumbUri,
+                selectedCoverFrameMs = selectedCoverFrameMs,
+                videoDurationMs = flashVideoDurationMs,
                 onCropOffsetChange = { thumbCropOffset = it },
                 onSelectSlideIndex = { customThumbSlideIndex = it },
+                onSelectCoverFrameMs = { selectedCoverFrameMs = it },
                 onUploadCustomCover = {
                     customCoverPickerLauncher.launch(
                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                     )
                 },
+                onClearCustomCover = { customThumbUri = null },
                 onDismiss = { showThumbModal = false }
             )
         }
@@ -1804,48 +1881,80 @@ fun Step1PreviewAndToolsStage(
     selectedRatioId: String,
     showThirdsGrid: Boolean,
     activeToolTab: Int,
+    videoDurationMs: Long = 0L,
     onSlideChange: (Int) -> Unit,
     onToggleMultipleMode: (Boolean) -> Unit,
     onAddMediaClick: () -> Unit,
     onSelectRatio: (String) -> Unit,
     onSelectToolTab: (Int) -> Unit,
     onOpenThumbnailModal: () -> Unit,
+    onEditVideo: () -> Unit,
     onCloseStudio: () -> Unit,
-    onSaveDraft: () -> Unit,
+    onSaveAsDraft: () -> Unit,
     onNext: () -> Unit
 ) {
+    val context = LocalContext.current
+    val colors = LocalOscellionColors.current
     val currentRatio = STUDIO_RATIO_CONFIGS.firstOrNull { it.id == selectedRatioId }
         ?: STUDIO_RATIO_CONFIGS[2] // 4:3 default
 
     val currentSlide = slides.getOrNull(currentSlideIndex)
+    val isVideoSlide = currentSlide?.videoUri != null
+
+    var isVideoPlaying by remember { mutableStateOf(false) }
+    var isVideoMuted by remember { mutableStateOf(false) }
+
+    val exoPlayer = remember(currentSlide?.videoUri) {
+        if (currentSlide?.videoUri != null) {
+            ExoPlayer.Builder(context).build().apply {
+                setMediaItem(MediaItem.fromUri(currentSlide.videoUri))
+                repeatMode = Player.REPEAT_MODE_ALL
+                volume = 1f
+                prepare()
+            }
+        } else null
+    }
+
+    DisposableEffect(exoPlayer) {
+        onDispose {
+            exoPlayer?.release()
+        }
+    }
+
+    LaunchedEffect(isVideoPlaying, isVideoMuted) {
+        exoPlayer?.let { player ->
+            player.volume = if (isVideoMuted) 0f else 1f
+            if (isVideoPlaying) player.play() else player.pause()
+        }
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.White)
+            .background(colors.bg)
     ) {
         // ── Top Header ───────────────────────────────────────────────────────
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(56.dp)
-                .background(Color.White)
-                .border(BorderStroke(1.dp, Color(0xFFE2E8F0)))
+                .background(if (colors.isDark) Color(0xFF111827) else Color.White)
+                .border(BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)))
                 .padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             IconButton(onClick = onCloseStudio) {
-                Icon(Lucide.X, contentDescription = "Close", tint = Color(0xFF475569), modifier = Modifier.size(20.dp))
+                Icon(Lucide.X, contentDescription = "Close", tint = colors.textMuted, modifier = Modifier.size(20.dp))
             }
 
             Text(
                 text = when (studioMode) {
                     CreatorStudioMode.POST -> "New Post"
-                    CreatorStudioMode.FLASH -> "New Flash"
+                    CreatorStudioMode.FLASH -> "New Flash Video"
                     CreatorStudioMode.WORK -> "New Work"
                 },
-                color = Color(0xFF0F172A),
+                color = colors.textMain,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold
             )
@@ -1855,19 +1964,23 @@ fun Step1PreviewAndToolsStage(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 OutlinedButton(
-                    onClick = onSaveDraft,
-                    shape = RoundedCornerShape(6.dp),
-                    border = BorderStroke(1.dp, Color(0xFFCBD5E1)),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF475569))
+                    onClick = onSaveAsDraft,
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.2f) else Color(0xFFCBD5E1)),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.textMain)
                 ) {
                     Text("Draft", fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 }
 
                 Button(
-                    onClick = onNext,
+                    onClick = {
+                        exoPlayer?.pause()
+                        isVideoPlaying = false
+                        onNext()
+                    },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
-                    shape = RoundedCornerShape(6.dp),
+                    shape = RoundedCornerShape(8.dp),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
                 ) {
                     Text("Next", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
@@ -1887,7 +2000,6 @@ fun Step1PreviewAndToolsStage(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(BorderStroke(0.dp, Color.Transparent))
                     .padding(bottom = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
@@ -1895,14 +2007,14 @@ fun Step1PreviewAndToolsStage(
                 // Segmented Toggle
                 Row(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(Color(0xFFF1F5F9))
-                        .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(6.dp))
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (colors.isDark) Color(0xFF1F2937) else Color(0xFFF1F5F9))
+                        .border(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.1f) else Color(0xFFE2E8F0), RoundedCornerShape(8.dp))
                         .padding(2.dp)
                 ) {
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
+                            .clip(RoundedCornerShape(6.dp))
                             .background(if (isMultipleMode) Color(0xFF2563EB) else Color.Transparent)
                             .clickable { onToggleMultipleMode(true) }
                             .padding(horizontal = 12.dp, vertical = 6.dp)
@@ -1911,13 +2023,13 @@ fun Step1PreviewAndToolsStage(
                             text = "Multiple (${slides.size})",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
-                            color = if (isMultipleMode) Color.White else Color(0xFF475569)
+                            color = if (isMultipleMode) Color.White else colors.textMuted
                         )
                     }
 
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
+                            .clip(RoundedCornerShape(6.dp))
                             .background(if (!isMultipleMode) Color(0xFF2563EB) else Color.Transparent)
                             .clickable { onToggleMultipleMode(false) }
                             .padding(horizontal = 12.dp, vertical = 6.dp)
@@ -1926,7 +2038,7 @@ fun Step1PreviewAndToolsStage(
                             text = "Single",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
-                            color = if (!isMultipleMode) Color.White else Color(0xFF475569)
+                            color = if (!isMultipleMode) Color.White else colors.textMuted
                         )
                     }
                 }
@@ -1935,7 +2047,7 @@ fun Step1PreviewAndToolsStage(
                 Box(
                     modifier = Modifier
                         .size(36.dp)
-                        .clip(RoundedCornerShape(6.dp))
+                        .clip(RoundedCornerShape(8.dp))
                         .background(Color(0xFF2563EB))
                         .clickable(onClick = onAddMediaClick),
                     contentAlignment = Alignment.Center
@@ -1944,7 +2056,7 @@ fun Step1PreviewAndToolsStage(
                 }
             }
 
-            HorizontalDivider(color = Color(0xFFE2E8F0))
+            HorizontalDivider(color = if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0))
             Spacer(Modifier.height(12.dp))
 
             // ── Main Post Preview Stage (Dynamic Aspect Ratio Box) ───────────
@@ -1955,23 +2067,137 @@ fun Step1PreviewAndToolsStage(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(300.dp),
+                        .height(320.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     // Animated Aspect Ratio Box
                     Box(
                         modifier = Modifier
                             .aspectRatio(currentRatio.wRatio / currentRatio.hRatio)
-                            .fillMaxHeight(0.95f)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color(0xFF0F172A)),
+                            .fillMaxHeight(0.96f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFF0F172A))
+                            .border(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.15f) else Color(0xFFE2E8F0), RoundedCornerShape(12.dp))
+                            .clickable {
+                                if (isVideoSlide) {
+                                    isVideoPlaying = !isVideoPlaying
+                                }
+                            },
                         contentAlignment = Alignment.Center
                     ) {
-                        if (currentSlide != null) {
+                        if (isVideoSlide && isVideoPlaying && exoPlayer != null) {
+                            AndroidView(
+                                factory = { ctx ->
+                                    PlayerView(ctx).apply {
+                                        player = exoPlayer
+                                        useController = false
+                                        layoutParams = FrameLayout.LayoutParams(
+                                            ViewGroup.LayoutParams.MATCH_PARENT,
+                                            ViewGroup.LayoutParams.MATCH_PARENT
+                                        )
+                                    }
+                                },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else if (currentSlide != null) {
                             SlidePreviewContent(
                                 slide = currentSlide,
                                 modifier = Modifier.fillMaxSize()
                             )
+                        }
+
+                        // Play/Pause indicator for video
+                        if (isVideoSlide) {
+                            if (!isVideoPlaying) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.Black.copy(alpha = 0.55f))
+                                        .border(1.5.dp, Color.White.copy(alpha = 0.4f), CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Lucide.Play,
+                                        contentDescription = "Play",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(24.dp).padding(start = 3.dp)
+                                    )
+                                }
+                            }
+
+                            // Top-Right Mute Toggle
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(10.dp)
+                                    .size(34.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.Black.copy(alpha = 0.6f))
+                                    .clickable { isVideoMuted = !isVideoMuted },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = if (isVideoMuted) Lucide.VolumeX else Lucide.Volume2,
+                                    contentDescription = "Mute",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+
+                            // Bottom-Right Duration Pill
+                            if (videoDurationMs > 0L) {
+                                Surface(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomEnd)
+                                        .padding(10.dp),
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = Color.Black.copy(alpha = 0.65f)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Icon(Lucide.Video, contentDescription = null, tint = Color.White, modifier = Modifier.size(11.dp))
+                                        Text(
+                                            text = formatDurationTime(videoDurationMs),
+                                            color = Color.White,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Bottom-Left "Trim & Edit" Shortcut
+                            Surface(
+                                modifier = Modifier
+                                    .align(Alignment.BottomStart)
+                                    .padding(10.dp)
+                                    .clickable {
+                                        exoPlayer?.pause()
+                                        isVideoPlaying = false
+                                        onEditVideo()
+                                    },
+                                shape = RoundedCornerShape(6.dp),
+                                color = Color.Black.copy(alpha = 0.65f),
+                                border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.25f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(Lucide.Scissors, contentDescription = null, tint = Color(0xFF60A5FA), modifier = Modifier.size(12.dp))
+                                    Text(
+                                        text = "Trim & Edit",
+                                        color = Color.White,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
                         }
 
                         // Rule-of-thirds grid overlay
@@ -2032,7 +2258,7 @@ fun Step1PreviewAndToolsStage(
                                     .height(6.dp)
                                     .width(if (isActive) 18.dp else 6.dp)
                                     .clip(RoundedCornerShape(3.dp))
-                                    .background(if (isActive) Color(0xFF2563EB) else Color(0xFFCBD5E1))
+                                    .background(if (isActive) Color(0xFF2563EB) else (if (colors.isDark) Color.White.copy(alpha = 0.2f) else Color(0xFFCBD5E1)))
                             )
                         }
                     }
@@ -2040,7 +2266,7 @@ fun Step1PreviewAndToolsStage(
             }
 
             Spacer(Modifier.height(16.dp))
-            HorizontalDivider(color = Color(0xFFE2E8F0))
+            HorizontalDivider(color = if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0))
             Spacer(Modifier.height(12.dp))
 
             // ── Tools To Adjust (Tab Buttons: Ratio vs Thumbnail Preview) ────
@@ -2053,11 +2279,11 @@ fun Step1PreviewAndToolsStage(
                     onClick = { onSelectToolTab(0) },
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (activeToolTab == 0) Color(0xFF2563EB) else Color.White,
-                        contentColor = if (activeToolTab == 0) Color.White else Color(0xFF334155)
+                        containerColor = if (activeToolTab == 0) Color(0xFF2563EB) else (if (colors.isDark) Color(0xFF1F2937) else Color.White),
+                        contentColor = if (activeToolTab == 0) Color.White else colors.textMain
                     ),
-                    shape = RoundedCornerShape(6.dp),
-                    border = BorderStroke(1.dp, if (activeToolTab == 0) Color(0xFF2563EB) else Color(0xFFCBD5E1))
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, if (activeToolTab == 0) Color(0xFF2563EB) else (if (colors.isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFCBD5E1)))
                 ) {
                     Icon(Lucide.Proportions, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(6.dp))
@@ -2069,15 +2295,15 @@ fun Step1PreviewAndToolsStage(
                     onClick = { onSelectToolTab(1) },
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (activeToolTab == 1) Color(0xFF2563EB) else Color.White,
-                        contentColor = if (activeToolTab == 1) Color.White else Color(0xFF334155)
+                        containerColor = if (activeToolTab == 1) Color(0xFF2563EB) else (if (colors.isDark) Color(0xFF1F2937) else Color.White),
+                        contentColor = if (activeToolTab == 1) Color.White else colors.textMain
                     ),
-                    shape = RoundedCornerShape(6.dp),
-                    border = BorderStroke(1.dp, if (activeToolTab == 1) Color(0xFF2563EB) else Color(0xFFCBD5E1))
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, if (activeToolTab == 1) Color(0xFF2563EB) else (if (colors.isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFCBD5E1)))
                 ) {
                     Icon(Lucide.Scan, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Thumbnail Preview", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Cover & Profile Grid", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
 
@@ -2093,7 +2319,7 @@ fun Step1PreviewAndToolsStage(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Select aspect ratio", color = Color(0xFF64748B), fontSize = 12.sp)
+                        Text("Select aspect ratio", color = colors.textMuted, fontSize = 12.sp)
                         Text(currentRatio.description, color = Color(0xFF2563EB), fontSize = 12.sp, fontWeight = FontWeight.Medium)
                     }
 
@@ -2120,9 +2346,9 @@ fun Step1PreviewAndToolsStage(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFFF8FAFC))
-                        .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (colors.isDark) Color(0xFF1F2937) else Color(0xFFF8FAFC))
+                        .border(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.1f) else Color(0xFFE2E8F0), RoundedCornerShape(10.dp))
                         .padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
@@ -2133,10 +2359,10 @@ fun Step1PreviewAndToolsStage(
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(48.dp)
-                                .clip(RoundedCornerShape(6.dp))
-                                .border(1.dp, Color(0xFF2563EB), RoundedCornerShape(6.dp))
-                                .background(Color(0xFFE2E8F0)),
+                                .size(50.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .border(1.dp, Color(0xFF2563EB), RoundedCornerShape(8.dp))
+                                .background(Color(0xFF0F172A)),
                             contentAlignment = Alignment.Center
                         ) {
                             if (currentSlide != null) {
@@ -2145,18 +2371,18 @@ fun Step1PreviewAndToolsStage(
                         }
 
                         Column {
-                            Text("Profile Grid Thumbnail", color = Color(0xFF0F172A), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                            Text("Only shows in profile grid", color = Color(0xFF2563EB), fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                            Text("Profile Grid Thumbnail", color = colors.textMain, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Visible in 1:1 profile grid & feed", color = Color(0xFF2563EB), fontSize = 11.sp, fontWeight = FontWeight.Medium)
                         }
                     }
 
                     Button(
                         onClick = onOpenThumbnailModal,
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
-                        shape = RoundedCornerShape(6.dp),
+                        shape = RoundedCornerShape(8.dp),
                         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                     ) {
-                        Text("Edit", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Edit Cover", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -2171,14 +2397,15 @@ private fun RatioCardOption(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
+    val colors = LocalOscellionColors.current
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(if (isSelected) Color(0xFFEFF6FF) else Color.White)
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (isSelected) (if (colors.isDark) Color(0xFF1E3A8A).copy(alpha = 0.5f) else Color(0xFFEFF6FF)) else (if (colors.isDark) Color(0xFF1F2937) else Color.White))
             .border(
                 width = if (isSelected) 1.5.dp else 1.dp,
-                color = if (isSelected) Color(0xFF2563EB) else Color(0xFFE2E8F0),
-                shape = RoundedCornerShape(6.dp)
+                color = if (isSelected) Color(0xFF2563EB) else (if (colors.isDark) Color.White.copy(alpha = 0.1f) else Color(0xFFE2E8F0)),
+                shape = RoundedCornerShape(8.dp)
             )
             .clickable(onClick = onClick)
             .padding(vertical = 10.dp, horizontal = 4.dp),
@@ -2197,16 +2424,16 @@ private fun RatioCardOption(
                     .clip(RoundedCornerShape(3.dp))
                     .border(
                         1.5.dp,
-                        if (isSelected) Color(0xFF2563EB) else Color(0xFF94A3B8),
+                        if (isSelected) Color(0xFF2563EB) else (if (colors.isDark) Color.White.copy(alpha = 0.4f) else Color(0xFF94A3B8)),
                         RoundedCornerShape(3.dp)
                     )
-                    .background(if (isSelected) Color.White else Color(0xFFF8FAFC)),
+                    .background(if (isSelected) (if (colors.isDark) Color(0xFF1E293B) else Color.White) else (if (colors.isDark) Color(0xFF111827) else Color(0xFFF8FAFC))),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = config.icon,
                     contentDescription = config.label,
-                    tint = if (isSelected) Color(0xFF2563EB) else Color(0xFF64748B),
+                    tint = if (isSelected) Color(0xFF2563EB) else colors.textMuted,
                     modifier = Modifier.size(12.dp)
                 )
             }
@@ -2217,7 +2444,7 @@ private fun RatioCardOption(
             text = config.label,
             fontSize = 11.sp,
             fontWeight = FontWeight.SemiBold,
-            color = if (isSelected) Color(0xFF1D4ED8) else Color(0xFF1E293B)
+            color = if (isSelected) Color(0xFF2563EB) else colors.textMain
         )
     }
 }
@@ -2249,9 +2476,47 @@ fun SlidePreviewContent(slide: StudioSlide, modifier: Modifier = Modifier) {
             )
         }
         slide.videoUri != null -> {
-            // Flash video thumbnail or placeholder with play icon
-            Box(modifier = modifier.background(Color.Black), contentAlignment = Alignment.Center) {
-                Icon(Lucide.Video, contentDescription = null, tint = Color.White, modifier = Modifier.size(36.dp))
+            var videoThumbnail by remember(slide.videoUri) { mutableStateOf<Bitmap?>(null) }
+            LaunchedEffect(slide.videoUri) {
+                withContext(Dispatchers.IO) {
+                    try {
+                        val retriever = MediaMetadataRetriever()
+                        retriever.setDataSource(context, slide.videoUri)
+                        val bmp = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                            retriever.getScaledFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 480, 640)
+                        } else {
+                            retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                        }
+                        retriever.release()
+                        if (bmp != null) videoThumbnail = bmp
+                    } catch (_: Throwable) {}
+                }
+            }
+
+            Box(modifier = modifier.background(Color(0xFF0F172A)), contentAlignment = Alignment.Center) {
+                if (videoThumbnail != null) {
+                    Image(
+                        bitmap = videoThumbnail!!.asImageBitmap(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.5f))
+                        .border(1.dp, Color.White.copy(alpha = 0.3f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Lucide.Play,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp).padding(start = 2.dp)
+                    )
+                }
             }
         }
     }
@@ -2291,6 +2556,13 @@ fun Step2PostDetailsStage(
     customCategoryTag: String,
     hashtags: List<String>,
     mentionedUsers: List<UserProfile>,
+    customCoverUri: Uri?,
+    selectedCoverFrameMs: Long,
+    videoDurationMs: Long,
+    audienceVisibility: String,
+    includeOriginalAudio: Boolean,
+    allowDownloads: Boolean,
+    highQualityUpload: Boolean,
     hideLikesCount: Boolean,
     turnOffComments: Boolean,
     turnOffRemix: Boolean,
@@ -2303,44 +2575,106 @@ fun Step2PostDetailsStage(
     onRemoveHashtag: (String) -> Unit,
     onOpenMentionSearch: () -> Unit,
     onRemoveMention: (UserProfile) -> Unit,
+    onAudienceVisibilityChange: (String) -> Unit,
+    onToggleIncludeOriginalAudio: (Boolean) -> Unit,
+    onToggleAllowDownloads: (Boolean) -> Unit,
+    onToggleHighQualityUpload: (Boolean) -> Unit,
     onToggleHideLikes: (Boolean) -> Unit,
     onToggleTurnOffComments: (Boolean) -> Unit,
     onToggleTurnOffRemix: (Boolean) -> Unit,
     onSaveAsDraft: () -> Unit,
     onEditCover: () -> Unit,
+    onEditVideo: () -> Unit,
     onBack: () -> Unit,
     onPost: () -> Unit
 ) {
+    val context = LocalContext.current
+    val colors = LocalOscellionColors.current
     val currentRatio = STUDIO_RATIO_CONFIGS.firstOrNull { it.id == selectedRatioId }
         ?: STUDIO_RATIO_CONFIGS[2]
     val currentSlide = slides.getOrNull(currentSlideIndex)
+    val isVideo = studioMode == CreatorStudioMode.FLASH || currentSlide?.videoUri != null
     var localTagInput by remember { mutableStateOf("") }
+
+    val popularHashtagSuggestions = remember {
+        listOf("video", "motion", "art", "creative", "cinematic", "viral", "chroma", "editing", "design")
+    }
+
+    var coverThumbnailBmp by remember(customCoverUri, selectedCoverFrameMs, currentSlide?.videoUri) {
+        mutableStateOf<Bitmap?>(null)
+    }
+
+    LaunchedEffect(customCoverUri, selectedCoverFrameMs, currentSlide?.videoUri) {
+        if (customCoverUri != null) {
+            withContext(Dispatchers.IO) {
+                try {
+                    val stream = context.contentResolver.openInputStream(customCoverUri)
+                    coverThumbnailBmp = BitmapFactory.decodeStream(stream)
+                } catch (_: Throwable) {
+                    coverThumbnailBmp = null
+                }
+            }
+        } else if (currentSlide?.videoUri != null) {
+            withContext(Dispatchers.IO) {
+                try {
+                    val retriever = MediaMetadataRetriever()
+                    retriever.setDataSource(context, currentSlide.videoUri)
+                    val timeUs = selectedCoverFrameMs * 1000L
+                    val bmp = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                        retriever.getScaledFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 320, 400)
+                    } else {
+                        retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                    }
+                    retriever.release()
+                    coverThumbnailBmp = bmp
+                } catch (_: Throwable) {
+                    coverThumbnailBmp = null
+                }
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.White)
+            .background(colors.bg)
     ) {
-        // Top Header
+        // ── Top Header ───────────────────────────────────────────────────────
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(56.dp)
-                .background(Color.White)
-                .border(BorderStroke(1.dp, Color(0xFFE2E8F0)))
+                .background(if (colors.isDark) Color(0xFF111827) else Color.White)
+                .border(BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)))
                 .padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(
-                text = "Back",
-                color = Color(0xFF334155),
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.clickable(onClick = onBack)
-            )
+            ) {
+                Icon(
+                    imageVector = Lucide.ChevronLeft,
+                    contentDescription = "Back",
+                    tint = colors.textMuted,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    text = "Back",
+                    color = colors.textMuted,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
 
-            Text("Post Details", color = Color(0xFF0F172A), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                text = if (isVideo) "Video Details" else "Post Details",
+                color = colors.textMain,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold
+            )
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -2348,10 +2682,10 @@ fun Step2PostDetailsStage(
             ) {
                 OutlinedButton(
                     onClick = onSaveAsDraft,
-                    shape = RoundedCornerShape(6.dp),
-                    border = BorderStroke(1.dp, Color(0xFFCBD5E1)),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF475569))
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.2f) else Color(0xFFCBD5E1)),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.textMain)
                 ) {
                     Text("Draft", fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 }
@@ -2359,500 +2693,746 @@ fun Step2PostDetailsStage(
                 Button(
                     onClick = onPost,
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
-                    shape = RoundedCornerShape(6.dp),
+                    shape = RoundedCornerShape(8.dp),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
                 ) {
-                    Text("Post", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text(if (isVideo) "Publish Video" else "Post", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
 
-        // Details Form Body
+        // ── Details Form Body ────────────────────────────────────────────────
         Column(
             modifier = Modifier
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // 1. TOP ROW: Left Chosen-Ratio Preview + Right Main Title (100 char limit)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                verticalAlignment = Alignment.Top
+            // ── 1. MEDIA & COVER CARD ────────────────────────────────────────
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                color = if (colors.isDark) Color(0xFF1F2937) else Color.White,
+                border = BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0))
             ) {
-                // Left: Mini Chosen-Ratio Preview
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Mini Cover Box
                     Box(
                         modifier = Modifier
-                            .width(84.dp)
-                            .height(64.dp)
-                            .clip(RoundedCornerShape(6.dp))
-                            .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(6.dp))
+                            .width(72.dp)
+                            .height(96.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .border(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.15f) else Color(0xFFE2E8F0), RoundedCornerShape(8.dp))
                             .background(Color(0xFF0F172A)),
                         contentAlignment = Alignment.Center
                     ) {
-                        if (currentSlide != null) {
+                        if (coverThumbnailBmp != null) {
+                            Image(
+                                bitmap = coverThumbnailBmp!!.asImageBitmap(),
+                                contentDescription = "Cover",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else if (currentSlide != null) {
                             SlidePreviewContent(slide = currentSlide, modifier = Modifier.fillMaxSize())
                         }
-                    }
 
-                    Spacer(Modifier.height(4.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Text(currentRatio.label, color = Color(0xFF2563EB), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                        Text("•", color = Color(0xFF94A3B8), fontSize = 10.sp)
-                        Text(
-                            text = "Edit Cover",
-                            color = Color(0xFF2563EB),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.clickable(onClick = onEditCover)
-                        )
-                    }
-                }
-
-                // Right: Main Title Input (100 limit)
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text("Main Title", color = Color(0xFF1E293B), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                        Text("${postTitle.length} / 100", color = Color(0xFF64748B), fontSize = 11.sp)
-                    }
-
-                    Spacer(Modifier.height(4.dp))
-                    BasicTextField(
-                        value = postTitle,
-                        onValueChange = onTitleChange,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(64.dp)
-                            .clip(RoundedCornerShape(6.dp))
-                            .border(1.dp, Color(0xFFCBD5E1), RoundedCornerShape(6.dp))
-                            .background(Color.White)
-                            .padding(8.dp),
-                        textStyle = TextStyle(color = Color(0xFF0F172A), fontSize = 13.sp),
-                        decorationBox = { innerTextField ->
-                            if (postTitle.isEmpty()) {
-                                Text("Enter main title (up to 100 characters)...", color = Color(0xFF94A3B8), fontSize = 12.sp)
-                            }
-                            innerTextField()
-                        }
-                    )
-                }
-            }
-
-            HorizontalDivider(color = Color(0xFFE2E8F0))
-
-            // 2. DESCRIPTION BOX (1500 limit)
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text("Description", color = Color(0xFF1E293B), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                    Text("${postDescription.length} / 1500", color = Color(0xFF64748B), fontSize = 11.sp)
-                }
-
-                BasicTextField(
-                    value = postDescription,
-                    onValueChange = onDescriptionChange,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(96.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .border(1.dp, Color(0xFFCBD5E1), RoundedCornerShape(6.dp))
-                        .background(Color.White)
-                        .padding(10.dp),
-                    textStyle = TextStyle(color = Color(0xFF0F172A), fontSize = 13.sp),
-                    decorationBox = { innerTextField ->
-                        if (postDescription.isEmpty()) {
-                            Text("Write post description (up to 1,500 characters)...", color = Color(0xFF94A3B8), fontSize = 12.sp)
-                        }
-                        innerTextField()
-                    }
-                )
-            }
-
-            HorizontalDivider(color = Color(0xFFE2E8F0))
-
-            // 3. POST TYPE TAG (Invisible to other users)
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Post Type Tag (Invisible to other users)", color = Color(0xFF1E293B), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                Text("Used only by the app algorithm to categorize your post.", color = Color(0xFF64748B), fontSize = 11.sp)
-
-                // Predefined algorithm tag options
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    ALGO_CATEGORIES.forEach { category ->
-                        val isSelected = selectedCategoryTag == category
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(if (isSelected) Color(0xFF2563EB) else Color(0xFFF1F5F9))
-                                .border(1.dp, if (isSelected) Color(0xFF2563EB) else Color(0xFFE2E8F0), RoundedCornerShape(6.dp))
-                                .clickable { onSelectCategory(category) }
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            Text(
-                                text = category,
-                                fontSize = 12.sp,
-                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                color = if (isSelected) Color.White else Color(0xFF334155)
-                            )
-                        }
-                    }
-                }
-
-                // Custom category tag input
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    BasicTextField(
-                        value = customCategoryTag,
-                        onValueChange = onCustomCategoryChange,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(38.dp)
-                            .clip(RoundedCornerShape(6.dp))
-                            .border(1.dp, Color(0xFFCBD5E1), RoundedCornerShape(6.dp))
-                            .background(Color.White)
-                            .padding(horizontal = 10.dp, vertical = 9.dp),
-                        textStyle = TextStyle(color = Color(0xFF0F172A), fontSize = 12.sp),
-                        decorationBox = { innerTextField ->
-                            if (customCategoryTag.isEmpty()) {
-                                Text("Specify other post category...", color = Color(0xFF94A3B8), fontSize = 12.sp)
-                            }
-                            innerTextField()
-                        }
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color(0xFF2563EB))
-                            .clickable(onClick = onAddCustomCategory),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Lucide.Plus, contentDescription = "Add Category", tint = Color.White, modifier = Modifier.size(18.dp))
-                    }
-                }
-            }
-
-            HorizontalDivider(color = Color(0xFFE2E8F0))
-
-            // 4. HASHTAGS SECTION
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text("Hashtags", color = Color(0xFF1E293B), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                    Text("${hashtags.size} tags", color = Color(0xFF64748B), fontSize = 11.sp)
-                }
-
-                if (hashtags.isNotEmpty()) {
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        hashtags.forEach { tag ->
-                            Row(
+                        // Duration pill in corner
+                        if (isVideo && videoDurationMs > 0L) {
+                            Surface(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(Color(0xFFEFF6FF))
-                                    .border(1.dp, Color(0xFFBFDBFE), RoundedCornerShape(6.dp))
-                                    .padding(horizontal = 10.dp, vertical = 5.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    .align(Alignment.BottomEnd)
+                                    .padding(4.dp),
+                                shape = RoundedCornerShape(4.dp),
+                                color = Color.Black.copy(alpha = 0.7f)
                             ) {
-                                Text("#$tag", color = Color(0xFF1D4ED8), fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                                Icon(
-                                    imageVector = Lucide.X,
-                                    contentDescription = "Remove",
-                                    tint = Color(0xFF60A5FA),
-                                    modifier = Modifier
-                                        .size(14.dp)
-                                        .clickable { onRemoveHashtag(tag) }
+                                Text(
+                                    text = formatDurationTime(videoDurationMs),
+                                    color = Color.White,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
                                 )
                             }
                         }
                     }
-                }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    BasicTextField(
-                        value = localTagInput,
-                        onValueChange = { localTagInput = it },
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(onDone = {
-                            if (localTagInput.isNotBlank()) {
-                                onAddHashtag(localTagInput)
-                                localTagInput = ""
+                    // Right Info & Action Buttons
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = Color(0xFF2563EB).copy(alpha = 0.12f)
+                            ) {
+                                Text(
+                                    text = currentRatio.label,
+                                    color = Color(0xFF2563EB),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
                             }
-                        }),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(38.dp)
-                            .clip(RoundedCornerShape(6.dp))
-                            .border(1.dp, Color(0xFFCBD5E1), RoundedCornerShape(6.dp))
-                            .background(Color.White)
-                            .padding(horizontal = 10.dp, vertical = 9.dp),
-                        textStyle = TextStyle(color = Color(0xFF0F172A), fontSize = 12.sp),
-                        decorationBox = { innerTextField ->
-                            if (localTagInput.isEmpty()) {
-                                Text("Add hashtag (e.g. #art) and press +", color = Color(0xFF94A3B8), fontSize = 12.sp)
+
+                            if (isVideo) {
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = Color(0xFF10B981).copy(alpha = 0.12f)
+                                ) {
+                                    Text(
+                                        text = "VIDEO",
+                                        color = Color(0xFF10B981),
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
                             }
-                            innerTextField()
                         }
-                    )
 
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color(0xFF2563EB))
-                            .clickable {
+                        Text(
+                            text = if (customCoverUri != null) "Custom cover photo active" else if (isVideo) "Frame cover selected" else "Slide thumbnail",
+                            color = colors.textMuted,
+                            fontSize = 12.sp
+                        )
+
+                        Spacer(Modifier.height(4.dp))
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(
+                                onClick = onEditCover,
+                                shape = RoundedCornerShape(6.dp),
+                                border = BorderStroke(1.dp, Color(0xFF2563EB)),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                            ) {
+                                Icon(Lucide.Image, contentDescription = null, tint = Color(0xFF2563EB), modifier = Modifier.size(13.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Cover", color = Color(0xFF2563EB), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            }
+
+                            if (isVideo) {
+                                OutlinedButton(
+                                    onClick = onEditVideo,
+                                    shape = RoundedCornerShape(6.dp),
+                                    border = BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.2f) else Color(0xFFCBD5E1)),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                ) {
+                                    Icon(Lucide.Scissors, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(13.dp))
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("Edit Video", color = colors.textMain, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ── 2. TITLE & CAPTION CARD ───────────────────────────────────────
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                color = if (colors.isDark) Color(0xFF1F2937) else Color.White,
+                border = BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0))
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Title
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Main Title", color = colors.textMain, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            Text("${postTitle.length} / 100", color = colors.textMuted, fontSize = 11.sp)
+                        }
+
+                        Spacer(Modifier.height(6.dp))
+                        BasicTextField(
+                            value = postTitle,
+                            onValueChange = onTitleChange,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(56.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .border(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFCBD5E1), RoundedCornerShape(8.dp))
+                                .background(if (colors.isDark) Color(0xFF111827) else Color(0xFFF8FAFC))
+                                .padding(10.dp),
+                            textStyle = TextStyle(color = colors.textMain, fontSize = 13.sp),
+                            decorationBox = { innerTextField ->
+                                if (postTitle.isEmpty()) {
+                                    Text("Enter video title (e.g. Cinematic Motion Reel)...", color = colors.textMuted, fontSize = 12.sp)
+                                }
+                                innerTextField()
+                            }
+                        )
+                    }
+
+                    // Description / Caption
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Caption & Description", color = colors.textMain, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            Text("${postDescription.length} / 1500", color = colors.textMuted, fontSize = 11.sp)
+                        }
+
+                        Spacer(Modifier.height(6.dp))
+                        BasicTextField(
+                            value = postDescription,
+                            onValueChange = onDescriptionChange,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(96.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .border(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFCBD5E1), RoundedCornerShape(8.dp))
+                                .background(if (colors.isDark) Color(0xFF111827) else Color(0xFFF8FAFC))
+                                .padding(10.dp),
+                            textStyle = TextStyle(color = colors.textMain, fontSize = 13.sp),
+                            decorationBox = { innerTextField ->
+                                if (postDescription.isEmpty()) {
+                                    Text("Write a caption, tell the story behind your creation...", color = colors.textMuted, fontSize = 12.sp)
+                                }
+                                innerTextField()
+                            }
+                        )
+                    }
+
+                    // Quick Hashtag Suggestions Bar
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(Lucide.Hash, contentDescription = null, tint = Color(0xFF2563EB), modifier = Modifier.size(13.dp))
+                            Text("Quick Hashtags:", color = colors.textMuted, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                        }
+
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            items(popularHashtagSuggestions) { tag ->
+                                val isSelected = hashtags.contains(tag)
+                                Surface(
+                                    modifier = Modifier.clickable {
+                                        if (isSelected) onRemoveHashtag(tag) else onAddHashtag(tag)
+                                    },
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = if (isSelected) Color(0xFF2563EB) else (if (colors.isDark) Color(0xFF111827) else Color(0xFFEFF6FF)),
+                                    border = BorderStroke(1.dp, if (isSelected) Color(0xFF2563EB) else (if (colors.isDark) Color.White.copy(alpha = 0.1f) else Color(0xFFBFDBFE)))
+                                ) {
+                                    Text(
+                                        text = "#$tag",
+                                        color = if (isSelected) Color.White else Color(0xFF1D4ED8),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Active Hashtags List
+                    if (hashtags.isNotEmpty()) {
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            hashtags.forEach { tag ->
+                                Row(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(if (colors.isDark) Color(0xFF1E3A8A).copy(alpha = 0.4f) else Color(0xFFEFF6FF))
+                                        .border(1.dp, if (colors.isDark) Color(0xFF2563EB).copy(alpha = 0.5f) else Color(0xFFBFDBFE), RoundedCornerShape(6.dp))
+                                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text("#$tag", color = if (colors.isDark) Color(0xFF93C5FD) else Color(0xFF1D4ED8), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                                    Icon(
+                                        imageVector = Lucide.X,
+                                        contentDescription = "Remove",
+                                        tint = if (colors.isDark) Color(0xFF60A5FA) else Color(0xFF60A5FA),
+                                        modifier = Modifier
+                                            .size(13.dp)
+                                            .clickable { onRemoveHashtag(tag) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Custom Hashtag input
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        BasicTextField(
+                            value = localTagInput,
+                            onValueChange = { localTagInput = it },
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(onDone = {
                                 if (localTagInput.isNotBlank()) {
                                     onAddHashtag(localTagInput)
                                     localTagInput = ""
                                 }
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Lucide.Plus, contentDescription = "Add", tint = Color.White, modifier = Modifier.size(18.dp))
+                            }),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(38.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .border(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFCBD5E1), RoundedCornerShape(8.dp))
+                                .background(if (colors.isDark) Color(0xFF111827) else Color(0xFFF8FAFC))
+                                .padding(horizontal = 10.dp, vertical = 9.dp),
+                            textStyle = TextStyle(color = colors.textMain, fontSize = 12.sp),
+                            decorationBox = { innerTextField ->
+                                if (localTagInput.isEmpty()) {
+                                    Text("Add custom hashtag and tap +", color = colors.textMuted, fontSize = 12.sp)
+                                }
+                                innerTextField()
+                            }
+                        )
+
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFF2563EB))
+                                .clickable {
+                                    if (localTagInput.isNotBlank()) {
+                                        onAddHashtag(localTagInput)
+                                        localTagInput = ""
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Lucide.Plus, contentDescription = "Add", tint = Color.White, modifier = Modifier.size(18.dp))
+                        }
                     }
                 }
             }
 
-            HorizontalDivider(color = Color(0xFFE2E8F0))
-
-            // 5. MENTION USER SECTION (Max 5 Users)
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(
+            // ── 3. SOUND & AUDIO ATTRIBUTION CARD (WHEN VIDEO) ───────────────
+            if (isVideo) {
+                Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (colors.isDark) Color(0xFF1F2937) else Color.White,
+                    border = BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFF8B5CF6).copy(alpha = 0.15f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Lucide.Music, contentDescription = null, tint = Color(0xFF8B5CF6), modifier = Modifier.size(18.dp))
+                            }
+
+                            Column {
+                                Text("Original Audio", color = colors.textMain, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                Text("Include original audio stream in video post", color = colors.textMuted, fontSize = 11.sp)
+                            }
+                        }
+
+                        Switch(
+                            checked = includeOriginalAudio,
+                            onCheckedChange = onToggleIncludeOriginalAudio,
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = Color(0xFF8B5CF6),
+                                uncheckedThumbColor = Color.White,
+                                uncheckedTrackColor = if (colors.isDark) Color.White.copy(alpha = 0.2f) else Color(0xFFCBD5E1)
+                            )
+                        )
+                    }
+                }
+            }
+
+            // ── 4. AUDIENCE & VISIBILITY CARD ────────────────────────────────
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                color = if (colors.isDark) Color(0xFF1F2937) else Color.White,
+                border = BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0))
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text("Who Can Watch This Video", color = colors.textMain, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val visOptions = listOf(
+                            Triple("public", "Public", Lucide.Globe),
+                            Triple("followers", "Followers", Lucide.Users),
+                            Triple("private", "Only Me", Lucide.Lock)
+                        )
+
+                        visOptions.forEach { (id, label, icon) ->
+                            val isSel = audienceVisibility == id
+                            Surface(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable { onAudienceVisibilityChange(id) },
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isSel) (if (colors.isDark) Color(0xFF1E3A8A).copy(alpha = 0.5f) else Color(0xFFEFF6FF)) else (if (colors.isDark) Color(0xFF111827) else Color(0xFFF8FAFC)),
+                                border = BorderStroke(1.dp, if (isSel) Color(0xFF2563EB) else (if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)))
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(vertical = 10.dp, horizontal = 6.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = icon,
+                                        contentDescription = label,
+                                        tint = if (isSel) Color(0xFF2563EB) else colors.textMuted,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        text = label,
+                                        fontSize = 11.sp,
+                                        fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (isSel) Color(0xFF2563EB) else colors.textMain
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ── 5. POST TYPE / CATEGORY TAG ──────────────────────────────────
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                color = if (colors.isDark) Color(0xFF1F2937) else Color.White,
+                border = BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0))
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Column {
-                        Text("Mention Users", color = Color(0xFF1E293B), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                        Text("Search and mention up to 5 users (e.g. @thejoykumbhakar)", color = Color(0xFF64748B), fontSize = 11.sp)
+                        Text("Category Tag (Discovery Algorithm)", color = colors.textMain, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Used by the recommendation feed to match viewers", color = colors.textMuted, fontSize = 11.sp)
                     }
-                    Text("${mentionedUsers.size} / 5 Max", color = Color(0xFF2563EB), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                }
 
-                if (mentionedUsers.isNotEmpty()) {
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        mentionedUsers.forEach { user ->
-                            Row(
+                        ALGO_CATEGORIES.forEach { category ->
+                            val isSelected = selectedCategoryTag == category
+                            Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(6.dp))
-                                    .background(Color(0xFFEFF6FF))
-                                    .border(1.dp, Color(0xFFBFDBFE), RoundedCornerShape(6.dp))
-                                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    .background(if (isSelected) Color(0xFF2563EB) else (if (colors.isDark) Color(0xFF111827) else Color(0xFFF1F5F9)))
+                                    .border(1.dp, if (isSelected) Color(0xFF2563EB) else (if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)), RoundedCornerShape(6.dp))
+                                    .clickable { onSelectCategory(category) }
+                                    .padding(horizontal = 10.dp, vertical = 6.dp)
                             ) {
-                                AsyncImage(
-                                    model = user.avatarUrl,
-                                    contentDescription = null,
-                                    modifier = Modifier
-                                        .size(18.dp)
-                                        .clip(CircleShape),
-                                    contentScale = ContentScale.Crop
-                                )
-                                Text("@${user.username}", color = Color(0xFF1D4ED8), fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                                Icon(
-                                    imageVector = Lucide.X,
-                                    contentDescription = "Remove",
-                                    tint = Color(0xFF60A5FA),
-                                    modifier = Modifier
-                                        .size(14.dp)
-                                        .clickable { onRemoveMention(user) }
+                                Text(
+                                    text = category,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                    color = if (isSelected) Color.White else colors.textMain
                                 )
                             }
                         }
                     }
-                }
 
-                // Search Bar Trigger
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(Color(0xFFF8FAFC))
-                        .border(1.dp, Color(0xFFCBD5E1), RoundedCornerShape(6.dp))
-                        .clickable(onClick = onOpenMentionSearch)
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Search users to mention...", color = Color(0xFF64748B), fontSize = 12.sp)
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(Color(0xFF2563EB)),
-                        contentAlignment = Alignment.Center
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Lucide.Search, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                        BasicTextField(
+                            value = customCategoryTag,
+                            onValueChange = onCustomCategoryChange,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(38.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .border(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFCBD5E1), RoundedCornerShape(8.dp))
+                                .background(if (colors.isDark) Color(0xFF111827) else Color(0xFFF8FAFC))
+                                .padding(horizontal = 10.dp, vertical = 9.dp),
+                            textStyle = TextStyle(color = colors.textMain, fontSize = 12.sp),
+                            decorationBox = { innerTextField ->
+                                if (customCategoryTag.isEmpty()) {
+                                    Text("Specify other category...", color = colors.textMuted, fontSize = 12.sp)
+                                }
+                                innerTextField()
+                            }
+                        )
+
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFF2563EB))
+                                .clickable(onClick = onAddCustomCategory),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Lucide.Plus, contentDescription = "Add Category", tint = Color.White, modifier = Modifier.size(18.dp))
+                        }
                     }
                 }
             }
 
-            HorizontalDivider(color = Color(0xFFE2E8F0))
-
-            // 6. POST SETTINGS (Hide Like Count, Turn Off Comments, Turn Off Remix)
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
-                    text = "Post Settings",
-                    color = Color(0xFF1E293B),
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-
-                // Option 1: Hide Like Count
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFFF8FAFC))
-                        .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(8.dp))
-                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-                        Text("Hide Like Count", color = Color(0xFF1E293B), fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                        Text(
-                            "Only you will see the total number of likes on this post",
-                            color = Color(0xFF64748B),
-                            fontSize = 11.sp
-                        )
-                    }
-                    Switch(
-                        checked = hideLikesCount,
-                        onCheckedChange = onToggleHideLikes,
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = Color(0xFF2563EB),
-                            uncheckedThumbColor = Color.White,
-                            uncheckedTrackColor = Color(0xFFCBD5E1)
-                        )
-                    )
-                }
-
-                // Option 2: Turn Off Comments
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFFF8FAFC))
-                        .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(8.dp))
-                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-                        Text("Turn Off Comments", color = Color(0xFF1E293B), fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                        Text(
-                            "No one will be able to comment on this post",
-                            color = Color(0xFF64748B),
-                            fontSize = 11.sp
-                        )
-                    }
-                    Switch(
-                        checked = turnOffComments,
-                        onCheckedChange = onToggleTurnOffComments,
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = Color(0xFF2563EB),
-                            uncheckedThumbColor = Color.White,
-                            uncheckedTrackColor = Color(0xFFCBD5E1)
-                        )
-                    )
-                }
-
-                // Option 3: Turn Off Remix
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFFF8FAFC))
-                        .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(8.dp))
-                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-                        Text("Turn Off Remix", color = Color(0xFF1E293B), fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                        Text(
-                            "Others won't be able to remix this post",
-                            color = Color(0xFF64748B),
-                            fontSize = 11.sp
-                        )
-                    }
-                    Switch(
-                        checked = turnOffRemix,
-                        onCheckedChange = onToggleTurnOffRemix,
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = Color(0xFF2563EB),
-                            uncheckedThumbColor = Color.White,
-                            uncheckedTrackColor = Color(0xFFCBD5E1)
-                        )
-                    )
-                }
-            }
-
-            HorizontalDivider(color = Color(0xFFE2E8F0))
-
-            // 7. SAVE AS DRAFT PROMINENT BUTTON
-            Button(
-                onClick = onSaveAsDraft,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(44.dp),
-                shape = RoundedCornerShape(8.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFFF1F5F9),
-                    contentColor = Color(0xFF334155)
-                ),
-                border = BorderStroke(1.dp, Color(0xFFCBD5E1))
+            // ── 6. MENTION USERS (MAX 5) ──────────────────────────────────────
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                color = if (colors.isDark) Color(0xFF1F2937) else Color.White,
+                border = BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0))
             ) {
-                Icon(
-                    imageVector = Lucide.FileText,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = Color(0xFF475569)
-                )
-                Spacer(Modifier.width(8.dp))
-                Text("Save as Draft", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Mention Collaborators", color = colors.textMain, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Tag featured creators (e.g. @username)", color = colors.textMuted, fontSize = 11.sp)
+                        }
+                        Text("${mentionedUsers.size} / 5 Max", color = Color(0xFF2563EB), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    if (mentionedUsers.isNotEmpty()) {
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            mentionedUsers.forEach { user ->
+                                Row(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(if (colors.isDark) Color(0xFF1E3A8A).copy(alpha = 0.4f) else Color(0xFFEFF6FF))
+                                        .border(1.dp, if (colors.isDark) Color(0xFF2563EB).copy(alpha = 0.5f) else Color(0xFFBFDBFE), RoundedCornerShape(6.dp))
+                                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    AsyncImage(
+                                        model = user.avatarUrl,
+                                        contentDescription = null,
+                                        modifier = Modifier
+                                            .size(18.dp)
+                                            .clip(CircleShape),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                    Text("@${user.username}", color = if (colors.isDark) Color(0xFF93C5FD) else Color(0xFF1D4ED8), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                                    Icon(
+                                        imageVector = Lucide.X,
+                                        contentDescription = "Remove",
+                                        tint = Color(0xFF60A5FA),
+                                        modifier = Modifier
+                                            .size(14.dp)
+                                            .clickable { onRemoveMention(user) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Search Trigger
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (colors.isDark) Color(0xFF111827) else Color(0xFFF8FAFC))
+                            .border(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFCBD5E1), RoundedCornerShape(8.dp))
+                            .clickable(onClick = onOpenMentionSearch)
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Search users to mention...", color = colors.textMuted, fontSize = 12.sp)
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color(0xFF2563EB)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Lucide.Search, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                        }
+                    }
+                }
             }
+
+            // ── 7. ADVANCED POST & VIDEO SETTINGS ─────────────────────────────
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                color = if (colors.isDark) Color(0xFF1F2937) else Color.White,
+                border = BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0))
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text("Advanced Post Settings", color = colors.textMain, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+
+                    // Option 1: Hide Like Count
+                    SettingToggleRow(
+                        title = "Hide Like Count",
+                        subtitle = "Only you will see total likes on this post",
+                        checked = hideLikesCount,
+                        onCheckedChange = onToggleHideLikes
+                    )
+
+                    HorizontalDivider(color = if (colors.isDark) Color.White.copy(alpha = 0.06f) else Color(0xFFF1F5F9))
+
+                    // Option 2: Turn Off Comments
+                    SettingToggleRow(
+                        title = "Turn Off Comments",
+                        subtitle = "No one will be able to comment on this post",
+                        checked = turnOffComments,
+                        onCheckedChange = onToggleTurnOffComments
+                    )
+
+                    HorizontalDivider(color = if (colors.isDark) Color.White.copy(alpha = 0.06f) else Color(0xFFF1F5F9))
+
+                    // Option 3: Turn Off Remix
+                    SettingToggleRow(
+                        title = "Turn Off Remix",
+                        subtitle = "Others won't be able to remix this content",
+                        checked = turnOffRemix,
+                        onCheckedChange = onToggleTurnOffRemix
+                    )
+
+                    if (isVideo) {
+                        HorizontalDivider(color = if (colors.isDark) Color.White.copy(alpha = 0.06f) else Color(0xFFF1F5F9))
+
+                        // Option 4: Allow Video Downloads
+                        SettingToggleRow(
+                            title = "Allow Video Downloads",
+                            subtitle = "Viewers can save and download your video",
+                            checked = allowDownloads,
+                            onCheckedChange = onToggleAllowDownloads
+                        )
+
+                        HorizontalDivider(color = if (colors.isDark) Color.White.copy(alpha = 0.06f) else Color(0xFFF1F5F9))
+
+                        // Option 5: High-Quality Upload
+                        SettingToggleRow(
+                            title = "High-Quality Upload",
+                            subtitle = "Preserve maximum 1080p bitrate and motion clarity",
+                            checked = highQualityUpload,
+                            onCheckedChange = onToggleHighQualityUpload
+                        )
+                    }
+                }
+            }
+
+            // ── 8. ACTION BUTTONS ─────────────────────────────────────────────
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onSaveAsDraft,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(46.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.2f) else Color(0xFFCBD5E1)),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.textMain)
+                ) {
+                    Icon(Lucide.FileText, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Save Draft", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                }
+
+                Button(
+                    onClick = onPost,
+                    modifier = Modifier
+                        .weight(1.5f)
+                        .height(46.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
+                ) {
+                    Icon(if (isVideo) Lucide.Video else Lucide.Share2, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(if (isVideo) "Publish Video" else "Share Post", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            Spacer(Modifier.height(20.dp))
         }
+    }
+}
+
+@Composable
+private fun SettingToggleRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    val colors = LocalOscellionColors.current
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+            Text(title, color = colors.textMain, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            Text(subtitle, color = colors.textMuted, fontSize = 11.sp)
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.White,
+                checkedTrackColor = Color(0xFF2563EB),
+                uncheckedThumbColor = Color.White,
+                uncheckedTrackColor = if (colors.isDark) Color.White.copy(alpha = 0.2f) else Color(0xFFCBD5E1)
+            )
+        )
     }
 }
 
@@ -3059,22 +3639,55 @@ fun Step3UploadingOverlayStage(
 
 @Composable
 fun ThumbnailPreviewModal(
+    studioMode: CreatorStudioMode,
     slides: List<StudioSlide>,
     selectedRatioId: String,
     selectedSlideIndex: Int,
     cropOffsetPercent: Float,
     customCoverUri: Uri?,
+    selectedCoverFrameMs: Long,
+    videoDurationMs: Long,
     onCropOffsetChange: (Float) -> Unit,
     onSelectSlideIndex: (Int) -> Unit,
+    onSelectCoverFrameMs: (Long) -> Unit,
     onUploadCustomCover: () -> Unit,
+    onClearCustomCover: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
+    val colors = LocalOscellionColors.current
     val activeSlide = slides.getOrNull(selectedSlideIndex)
+    val isVideo = studioMode == CreatorStudioMode.FLASH || activeSlide?.videoUri != null
+    val activeVideoUri = slides.firstOrNull { it.videoUri != null }?.videoUri
+
+    var scrubberMs by remember(selectedCoverFrameMs) {
+        mutableFloatStateOf(selectedCoverFrameMs.toFloat())
+    }
+    var scrubbedFrameBmp by remember { mutableStateOf<Bitmap?>(null) }
+
+    LaunchedEffect(scrubberMs, activeVideoUri) {
+        if (activeVideoUri == null) return@LaunchedEffect
+        delay(50)
+        withContext(Dispatchers.IO) {
+            try {
+                val retriever = MediaMetadataRetriever()
+                retriever.setDataSource(context, activeVideoUri)
+                val timeUs = (scrubberMs * 1000f).toLong()
+                val bmp = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                    retriever.getScaledFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 480, 480)
+                } else {
+                    retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                }
+                retriever.release()
+                if (bmp != null) scrubbedFrameBmp = bmp
+            } catch (_: Throwable) {}
+        }
+    }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.White)
+            .background(colors.bg)
     ) {
         Column(
             modifier = Modifier
@@ -3086,25 +3699,25 @@ fun ThumbnailPreviewModal(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp)
-                    .background(Color.White)
-                    .border(BorderStroke(1.dp, Color(0xFFE2E8F0)))
+                    .background(if (colors.isDark) Color(0xFF111827) else Color.White)
+                    .border(BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)))
                     .padding(horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 IconButton(onClick = onDismiss) {
-                    Icon(Lucide.X, contentDescription = "Close", tint = Color(0xFF475569), modifier = Modifier.size(20.dp))
+                    Icon(Lucide.X, contentDescription = "Close", tint = colors.textMuted, modifier = Modifier.size(20.dp))
                 }
 
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Thumbnail Preview", color = Color(0xFF0F172A), fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                    Text("Only shows in profile", color = Color(0xFF2563EB), fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                    Text(if (isVideo) "Video Cover & Thumbnail" else "Profile Thumbnail Preview", color = colors.textMain, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Visible in feed & profile grid", color = Color(0xFF2563EB), fontSize = 11.sp, fontWeight = FontWeight.Medium)
                 }
 
                 Button(
                     onClick = onDismiss,
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
-                    shape = RoundedCornerShape(6.dp),
+                    shape = RoundedCornerShape(8.dp),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
                 ) {
                     Text("Done", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
@@ -3118,124 +3731,248 @@ fun ThumbnailPreviewModal(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 // Info note
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(Color(0xFFF8FAFC))
-                        .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(6.dp))
-                        .padding(12.dp)
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (colors.isDark) Color(0xFF1F2937) else Color(0xFFF8FAFC),
+                    border = BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0))
                 ) {
                     Text(
-                        text = "Your post uses $selectedRatioId in the main feed. Adjust which part appears in your 1:1 profile grid or upload a custom thumbnail below.",
-                        color = Color(0xFF475569),
-                        fontSize = 12.sp
+                        text = "Your post uses $selectedRatioId in feeds. Select the poster frame or upload a custom image. Adjust the 1:1 square crop for your profile grid below.",
+                        color = colors.textMuted,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(12.dp)
                     )
                 }
 
-                // Crop Region Inspector Box
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(8.dp))
-                        .background(Color.White)
-                        .padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                // 1:1 Profile Crop Box
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (colors.isDark) Color(0xFF1F2937) else Color.White,
+                    border = BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0))
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text("Select visible profile region", color = Color(0xFF1E293B), fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                        Text("${cropOffsetPercent.toInt()}%", color = Color(0xFF2563EB), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
-
-                    // 1:1 highlight window over preview
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color(0xFF0F172A)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (activeSlide != null) {
-                            SlidePreviewContent(slide = activeSlide, modifier = Modifier.fillMaxSize())
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("1:1 Profile Grid Preview", color = colors.textMain, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Crop position: ${cropOffsetPercent.toInt()}%", color = Color(0xFF2563EB), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
 
-                        // Square crop box with thirds grid
                         Box(
                             modifier = Modifier
-                                .size(140.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .border(2.dp, Color(0xFF2563EB), RoundedCornerShape(4.dp))
+                                .size(160.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .border(2.dp, Color(0xFF2563EB), RoundedCornerShape(8.dp))
+                                .background(Color(0xFF0F172A)),
+                            contentAlignment = Alignment.Center
                         ) {
+                            if (customCoverUri != null) {
+                                AsyncImage(
+                                    model = customCoverUri,
+                                    contentDescription = "Cover",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else if (scrubbedFrameBmp != null) {
+                                Image(
+                                    bitmap = scrubbedFrameBmp!!.asImageBitmap(),
+                                    contentDescription = "Cover Frame",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else if (activeSlide != null) {
+                                SlidePreviewContent(slide = activeSlide, modifier = Modifier.fillMaxSize())
+                            }
+
                             ThirdsGridOverlay(modifier = Modifier.fillMaxSize())
                         }
-                    }
 
-                    Column {
-                        Text("Adjust crop position", color = Color(0xFF64748B), fontSize = 11.sp)
-                        Slider(
-                            value = cropOffsetPercent,
-                            onValueChange = onCropOffsetChange,
-                            valueRange = 0f..100f,
-                            colors = SliderDefaults.colors(
-                                thumbColor = Color(0xFF2563EB),
-                                activeTrackColor = Color(0xFF2563EB)
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Text("Adjust visible 1:1 crop offset", color = colors.textMuted, fontSize = 11.sp)
+                            Slider(
+                                value = cropOffsetPercent,
+                                onValueChange = onCropOffsetChange,
+                                valueRange = 0f..100f,
+                                colors = SliderDefaults.colors(
+                                    thumbColor = Color(0xFF2563EB),
+                                    activeTrackColor = Color(0xFF2563EB)
+                                )
                             )
-                        )
+                        }
                     }
                 }
 
-                // Choose Slide OR Upload Custom
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(8.dp))
-                        .background(Color.White)
-                        .padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Row(
+                // Video Frame Scrubber (When Video)
+                if (isVideo && activeVideoUri != null) {
+                    Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (colors.isDark) Color(0xFF1F2937) else Color.White,
+                        border = BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0))
                     ) {
-                        Text("Choose Slide or Upload Custom", color = Color(0xFF1E293B), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                        Button(
-                            onClick = onUploadCustomCover,
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
-                            shape = RoundedCornerShape(6.dp),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 5.dp)
+                        Column(
+                            modifier = Modifier.padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Text("Upload Custom", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(Lucide.Film, contentDescription = null, tint = Color(0xFF2563EB), modifier = Modifier.size(16.dp))
+                                    Text("Select Frame from Video", color = colors.textMain, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                }
+
+                                Text(
+                                    text = "${formatDurationTime(scrubberMs.toLong())} / ${formatDurationTime(videoDurationMs)}",
+                                    color = Color(0xFF2563EB),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            Slider(
+                                value = scrubberMs,
+                                onValueChange = {
+                                    scrubberMs = it
+                                    onSelectCoverFrameMs(it.toLong())
+                                },
+                                valueRange = 0f..videoDurationMs.toFloat().coerceAtLeast(1000f),
+                                colors = SliderDefaults.colors(
+                                    thumbColor = Color(0xFF2563EB),
+                                    activeTrackColor = Color(0xFF2563EB)
+                                )
+                            )
+
+                            Button(
+                                onClick = {
+                                    onSelectCoverFrameMs(scrubberMs.toLong())
+                                    onClearCustomCover()
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (customCoverUri == null) Color(0xFF2563EB) else (if (colors.isDark) Color(0xFF111827) else Color(0xFFF1F5F9)),
+                                    contentColor = if (customCoverUri == null) Color.White else colors.textMain
+                                ),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Icon(Lucide.Check, contentDescription = null, modifier = Modifier.size(15.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Use This Frame as Cover", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            }
                         }
                     }
+                }
 
-                    // Slide pickers
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier.fillMaxWidth()
+                // Custom Cover Photo
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (colors.isDark) Color(0xFF1F2937) else Color.White,
+                    border = BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        items(slides.indices.toList()) { index ->
-                            val slide = slides[index]
-                            val isSelected = index == selectedSlideIndex
-                            Box(
-                                modifier = Modifier
-                                    .size(64.dp)
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .border(
-                                        width = if (isSelected) 2.dp else 1.dp,
-                                        color = if (isSelected) Color(0xFF2563EB) else Color(0xFFCBD5E1),
-                                        shape = RoundedCornerShape(6.dp)
-                                    )
-                                    .clickable { onSelectSlideIndex(index) },
-                                contentAlignment = Alignment.Center
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("Upload Custom Cover Image", color = colors.textMain, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                Text("Use any photo from your gallery", color = colors.textMuted, fontSize = 11.sp)
+                            }
+
+                            Button(
+                                onClick = onUploadCustomCover,
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                             ) {
-                                SlidePreviewContent(slide = slide, modifier = Modifier.fillMaxSize())
+                                Icon(Lucide.Upload, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Upload", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+
+                        if (customCoverUri != null) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFF10B981).copy(alpha = 0.12f))
+                                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(Lucide.Check, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(16.dp))
+                                    Text("Custom Photo Cover Active", color = Color(0xFF047857), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                                }
+
+                                Text(
+                                    text = "Reset to Video",
+                                    color = Color(0xFFEF4444),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.clickable { onClearCustomCover() }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Slide Selector for Multi-Slide Photos
+                if (!isVideo && slides.size > 1) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (colors.isDark) Color(0xFF1F2937) else Color.White,
+                        border = BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0))
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Text("Choose Slide for Thumbnail", color = colors.textMain, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                items(slides.indices.toList()) { index ->
+                                    val slide = slides[index]
+                                    val isSelected = index == selectedSlideIndex
+                                    Box(
+                                        modifier = Modifier
+                                            .size(64.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .border(
+                                                width = if (isSelected) 2.dp else 1.dp,
+                                                color = if (isSelected) Color(0xFF2563EB) else (if (colors.isDark) Color.White.copy(alpha = 0.15f) else Color(0xFFCBD5E1)),
+                                                shape = RoundedCornerShape(8.dp)
+                                            )
+                                            .clickable { onSelectSlideIndex(index) },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        SlidePreviewContent(slide = slide, modifier = Modifier.fillMaxSize())
+                                    }
+                                }
                             }
                         }
                     }

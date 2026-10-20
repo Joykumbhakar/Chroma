@@ -141,7 +141,13 @@ data class CreatorPostDraft(
     val workIds: List<String> = emptyList(),
     val flashTrimStartMs: Long = 0L,
     val flashTrimEndMs: Long = 15000L,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val customCoverUri: String? = null,
+    val selectedCoverFrameMs: Long = 0L,
+    val audienceVisibility: String = "public",
+    val includeOriginalAudio: Boolean = true,
+    val allowDownloads: Boolean = true,
+    val highQualityUpload: Boolean = true
 )
 
 data class ChatRoom(

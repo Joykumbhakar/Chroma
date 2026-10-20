@@ -263,9 +263,11 @@ class DiscoverRepository {
         tags: List<String>,
         mentions: List<String>,
         duration: Long = 0L,
+        categoryTag: String? = null,
         hideLikesCount: Boolean = false,
         turnOffComments: Boolean = false,
-        turnOffRemix: Boolean = false
+        turnOffRemix: Boolean = false,
+        hideDownloadsCount: Boolean = false
     ): Boolean {
         return try {
             val user = auth.currentUser ?: throw Exception("User not authenticated")
@@ -287,10 +289,12 @@ class DiscoverRepository {
                 authorAvatarUrl = userProfile.avatarUrl,
                 authorVerified = userProfile.verified,
                 aspectRatio = aspectRatio,
+                trendingTag = categoryTag,
                 timestamp = System.currentTimeMillis(),
                 likesCount = 0,
                 hideLikesCount = hideLikesCount,
                 hideRemixesCount = turnOffRemix,
+                hideDownloadsCount = hideDownloadsCount,
                 turnOffComments = turnOffComments,
                 turnOffRemix = turnOffRemix
             )

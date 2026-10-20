@@ -126,6 +126,7 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import com.chroma.studio.ui.components.AppleBeveledTransitionButton
 import com.chroma.studio.ui.components.AppleSlider
 import com.chroma.studio.ui.components.AppleVideosIcon
 import com.chroma.studio.ui.components.InlineColorPicker
@@ -2932,6 +2933,7 @@ fun FinalCutProVideoEditorScreen(
                                         SoundManager.playTap(context)
                                         editingTransitionClipId = clipId
                                     },
+                                    activeTransitionClipId = editingTransitionClipId,
                                     customAudio = customAudio,
                                     onOpenAudioTab = {
                                         activeTab = FcpWorkspaceTab.AUDIO
@@ -3439,6 +3441,7 @@ private fun TimelineTabContent(
     onAddClip: () -> Unit,
     onStepFrame: (Boolean) -> Unit,
     onEditTransition: (String) -> Unit = {},
+    activeTransitionClipId: String? = null,
     customAudio: FcpCustomAudio? = null,
     onOpenAudioTab: () -> Unit = {}
 ) {
@@ -4024,49 +4027,49 @@ private fun TimelineTabContent(
                         val clip = span.clip
                         val trans = clip.transitionToNext
                         val hasTrans = trans != FcpTransitionType.NONE
+                        val isTransitionActive = hasTrans || activeTransitionClipId == clip.id
                         val cutX = timelineStartPaddingDp + (span.timelineEndSec * pixelsPerSec).dp
+
+                        // Apple-style machined bevel transition add button
+                        val seamButtonSize = 26.dp
+                        val outerHalfSize = 15.dp
 
                         Box(
                             modifier = Modifier
-                                .offset(x = cutX - 13.dp, y = 18.dp + 15.dp)
-                                .size(26.dp)
+                                .offset(x = cutX - outerHalfSize, y = 31.dp)
                                 .zIndex(35f)
-                                .clip(CircleShape)
-                                .background(
-                                    if (hasTrans) colors.primary
-                                    else if (colors.isDark) Color(0xFF1E2430) else Color.White
-                                )
-                                .border(
-                                    1.dp,
-                                    if (hasTrans) Color.White.copy(alpha = 0.55f)
-                                    else (if (colors.isDark) Color(0xFF3B4459) else Color(0xFFCBD5E1)),
-                                    CircleShape
-                                )
-                                .clickable { onEditTransition(clip.id) },
-                            contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                imageVector = if (hasTrans) trans.icon else Lucide.Plus,
-                                contentDescription = if (hasTrans) trans.label else "Add Transition",
-                                tint = if (hasTrans) Color.White else (if (colors.isDark) Color.White.copy(alpha = 0.9f) else Color(0xFF0F172A)),
-                                modifier = Modifier.size(if (hasTrans) 13.dp else 14.dp)
+                            AppleBeveledTransitionButton(
+                                isActive = isTransitionActive,
+                                onClick = { onEditTransition(clip.id) },
+                                buttonSize = seamButtonSize,
+                                activeRotationDegrees = if (hasTrans) 0f else 90f,
+                                customIcon = if (hasTrans) trans.icon else null
                             )
                         }
+
                         if (hasTrans) {
                             Box(
                                 modifier = Modifier
-                                    .offset(x = cutX - 20.dp, y = 18.dp + 43.dp)
-                                    .width(40.dp)
+                                    .offset(x = cutX - 22.dp, y = 62.dp)
+                                    .width(44.dp)
                                     .zIndex(36f),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text(
-                                    text = "${"%.1f".format(clip.transitionDurationSec)}s",
-                                    fontSize = 7.5.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = colors.primary,
-                                    fontFamily = FontFamily.Monospace
-                                )
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = Color.Black.copy(alpha = 0.78f),
+                                    border = BorderStroke(0.5.dp, if (colors.isDark) Color.White.copy(alpha = 0.2f) else Color(0xFFCBD5E1))
+                                ) {
+                                    Text(
+                                        text = "${"%.1f".format(clip.transitionDurationSec)}s",
+                                        fontSize = 7.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                        fontFamily = FontFamily.Monospace,
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                    )
+                                }
                             }
                         }
                     }
