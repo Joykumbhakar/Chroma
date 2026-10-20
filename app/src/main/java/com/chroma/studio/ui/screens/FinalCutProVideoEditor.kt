@@ -1143,20 +1143,38 @@ fun FinalCutProVideoEditorScreen(
                 val totalTimelineDurationMs = (totalDurationSec * 1000f).toLong().coerceAtLeast(1000L)
 
                 if (saveToGallery) {
-                    exportStageText = "Saving to Gallery (Movies/ChromaStudio)..."
+                    exportStageText = "Saving to Gallery (DCIM/ChromaStudio)..."
                     val galleryTitle = "ChromaStudio_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())}"
                     val savedUri = withContext(Dispatchers.IO) {
                         ExportHelper.saveVideoToGallery(context, exportedFile, galleryTitle)
                     }
+                    // Clean up temporary cache file once saved
+                    try { exportedFile.delete() } catch (_: Exception) {}
+
                     exportProgress = 1.0f
                     delay(150L)
                     SoundManager.playSend(context)
                     isExporting = false
                     showExportSheet = false
                     if (savedUri != null) {
-                        ToastManager.showToast("Video saved to Gallery!")
+                        ToastManager.showToast(
+                            message = "Video saved to Gallery!",
+                            actionLabel = "View",
+                            durationMs = 5000L,
+                            onAction = {
+                                try {
+                                    val viewIntent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                                        setDataAndType(savedUri, "video/mp4")
+                                        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    }
+                                    context.startActivity(viewIntent)
+                                } catch (e: Exception) {
+                                    android.util.Log.w("FinalCutProVideoEditor", "Could not open saved video intent", e)
+                                }
+                            }
+                        )
                     } else {
-                        ToastManager.showToast("Saved to Movies/ChromaStudio")
+                        ToastManager.showToast("Failed to save video to Gallery")
                     }
                 } else {
                     exportStageText = "Sending to Studio..."
@@ -11689,7 +11707,7 @@ fun FcpExportSheet(
                                         modifier = Modifier.size(17.dp)
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Save in Gallery", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    Text("Save to Gallery", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                                 }
 
                                 Button(
