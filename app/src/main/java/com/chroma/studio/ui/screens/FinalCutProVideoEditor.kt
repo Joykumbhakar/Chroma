@@ -3295,18 +3295,6 @@ private fun TimelineTabContent(
                 TimelineMiniButton(Lucide.ZoomIn, "Zoom In", onClick = { onZoomChange((pixelsPerSec * 1.25f).coerceIn(15f, 120f)) })
                 TimelineMiniButton(Lucide.SkipBack, "Prev Frame", onClick = { onStepFrame(false) })
                 TimelineMiniButton(Lucide.Scissors, "Split", onClick = onSplitClip)
-                TimelineMiniButton(Lucide.Sparkles, "Transition", onClick = {
-                    if (timelineSpans.size < 2) {
-                        ToastManager.showToast("Add 2 or more videos to add transitions")
-                    } else {
-                        val targetClipId = if (selectedId != null && selectedId != timelineSpans.last().clip.id) {
-                            selectedId
-                        } else {
-                            timelineSpans[timelineSpans.size - 2].clip.id
-                        }
-                        onEditTransition(targetClipId)
-                    }
-                })
                 TimelineMiniButton(Lucide.Copy, "Duplicate", onClick = onDuplicateClip)
                 TimelineMiniButton(Lucide.Trash2, "Delete", isDanger = true, onClick = onDeleteClip)
                 TimelineMiniButton(Lucide.Plus, "Add Video", onClick = onAddClip)
@@ -3795,24 +3783,25 @@ private fun TimelineTabContent(
                                 .offset(x = cutX - 13.dp, y = 18.dp + 15.dp)
                                 .size(26.dp)
                                 .zIndex(35f)
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(CircleShape)
                                 .background(
                                     if (hasTrans) colors.primary
-                                    else if (colors.isDark) Color(0xFF222734) else Color(0xFFE2E8F0)
+                                    else if (colors.isDark) Color(0xFF1E2430) else Color.White
                                 )
                                 .border(
                                     1.dp,
-                                    if (hasTrans) Color.White.copy(alpha = 0.55f) else colors.glassBorder,
-                                    RoundedCornerShape(8.dp)
+                                    if (hasTrans) Color.White.copy(alpha = 0.55f)
+                                    else (if (colors.isDark) Color(0xFF3B4459) else Color(0xFFCBD5E1)),
+                                    CircleShape
                                 )
                                 .clickable { onEditTransition(clip.id) },
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = trans.icon,
-                                contentDescription = trans.label,
-                                tint = if (hasTrans) Color.White else colors.textMuted,
-                                modifier = Modifier.size(13.dp)
+                                imageVector = if (hasTrans) trans.icon else Lucide.Plus,
+                                contentDescription = if (hasTrans) trans.label else "Add Transition",
+                                tint = if (hasTrans) Color.White else (if (colors.isDark) Color.White.copy(alpha = 0.9f) else Color(0xFF0F172A)),
+                                modifier = Modifier.size(if (hasTrans) 13.dp else 14.dp)
                             )
                         }
                         if (hasTrans) {
