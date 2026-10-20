@@ -2164,26 +2164,6 @@ fun FinalCutProVideoEditorScreen(
                             }
                         )
                     }
-
-                    // Vertical Divider
-                    Box(
-                        modifier = Modifier
-                            .height(18.dp)
-                            .width(1.dp)
-                            .background(Color.White.copy(alpha = 0.18f))
-                    )
-
-                    // Quick Canvas Background Pill
-                    CanvasBgQuickPill(
-                        background = canvasBackground,
-                        isActive = activeTab == FcpWorkspaceTab.CANVAS,
-                        onClick = {
-                            activeTab = FcpWorkspaceTab.CANVAS
-                            if (drawerLevel == VideoDrawerLevel.COLLAPSED) {
-                                drawerLevel = VideoDrawerLevel.MID
-                            }
-                        }
-                    )
                 }
             }
 
@@ -9846,92 +9826,6 @@ private fun AspectRatioPill(
             aspect = aspect,
             active = active
         )
-    }
-}
-
-// ============================================================================
-// CANVAS BACKGROUND & LETTERBOX FILL ENGINE
-// ============================================================================
-
-@Composable
-private fun CanvasBgQuickPill(
-    background: FcpCanvasBackground,
-    isActive: Boolean,
-    onClick: () -> Unit
-) {
-    val colors = LocalOscellionColors.current
-    val haptic = LocalHapticFeedback.current
-    val shape = remember { RoundedCornerShape(50) }
-
-    Box(
-        modifier = Modifier
-            .clip(shape)
-            .background(if (isActive) colors.primary.copy(alpha = 0.22f) else colors.glassBg, shape)
-            .border(
-                width = if (isActive) 1.dp else 0.5.dp,
-                color = if (isActive) colors.primary else colors.glassBorder,
-                shape = shape
-            )
-            .clickable(
-                indication = null,
-                interactionSource = remember { MutableInteractionSource() }
-            ) {
-                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                onClick()
-            }
-            .padding(horizontal = 10.dp, vertical = 6.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(5.dp)
-        ) {
-            when (background.type) {
-                FcpCanvasBgType.BLUR -> {
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .clip(CircleShape)
-                            .background(Brush.radialGradient(listOf(Color.White, Color(0xFF6366F1))))
-                    )
-                    Text(
-                        text = "Blur",
-                        color = if (isActive) colors.primary else colors.textMain,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-                FcpCanvasBgType.COLOR -> {
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .clip(CircleShape)
-                            .background(background.solidColor)
-                            .border(0.5.dp, Color.White.copy(alpha = 0.5f), CircleShape)
-                    )
-                    Text(
-                        text = "Color",
-                        color = if (isActive) colors.primary else colors.textMain,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-                FcpCanvasBgType.IMAGE -> {
-                    Icon(
-                        imageVector = Lucide.Image,
-                        contentDescription = null,
-                        tint = if (isActive) colors.primary else colors.textMain,
-                        modifier = Modifier.size(11.dp)
-                    )
-                    Text(
-                        text = "Image",
-                        color = if (isActive) colors.primary else colors.textMain,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
-        }
     }
 }
 
