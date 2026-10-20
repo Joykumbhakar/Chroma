@@ -1,13 +1,25 @@
 package com.chroma.studio.utils
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color as AndroidColor
+import android.graphics.LinearGradient
+import android.graphics.Paint
+import android.graphics.Rect
+import android.graphics.RectF
+import android.graphics.Shader
+import android.graphics.Typeface
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.util.Log
+import androidx.compose.ui.graphics.toArgb
 import com.chroma.studio.ui.screens.FcpAspectRatio
 import com.chroma.studio.ui.screens.FcpClip
 import com.chroma.studio.ui.screens.FcpCustomAudio
 import com.chroma.studio.ui.screens.FcpLutPreset
+import com.chroma.studio.ui.screens.FcpTextLayer
+import com.chroma.studio.ui.screens.FcpTitlePresetType
 import com.chroma.studio.ui.screens.FcpTransitionType
 import com.chroma.studio.ui.screens.FcpVisualEffect
 import io.microshow.rxffmpeg.RxFFmpegInvoke
@@ -25,20 +37,408 @@ import java.util.UUID
  * 1. Multi-clip timelines (cut / split clips, newly imported clips, multiple media sources)
  * 2. Precision in/out trimming per clip ([FcpClip.trimStartSec] to [FcpClip.trimEndSec])
  * 3. Playback speed adjustment per clip ([FcpClip.speed])
- * 4. Hardware color adjustments (exposure, contrast, saturation)
- * 5. Seamless transitions between clips (Dip to Black, Dip to White, Dissolve, etc.)
- * 6. Uniform aspect ratio scaling and letterboxing (9:16, 16:9, 1:1, 21:9)
- * 7. Audio mixing for custom soundtracks / extracted audio
- * 8. Automatic fallback to hardware [VideoProcessor.concatVideoClips] if needed
+ * 4. Precision Zoom & Crop from Preview Screen ([FcpClip.scale], [FcpClip.panX], [FcpClip.panY])
+ * 5. Title & Text Layers overlay rendering ([FcpTextLayer])
+ * 6. Hardware color adjustments (exposure, contrast, saturation, white balance)
+ * 7. Seamless transitions between clips (Dip to Black, Dip to White, Dissolve, etc.)
+ * 8. Uniform aspect ratio scaling and letterboxing (9:16, 16:9, 1:1, 21:9)
+ * 9. Audio mixing for custom soundtracks / extracted audio
+ * 10. Automatic fallback to hardware [VideoProcessor.concatVideoClips] if needed
  */
 object FcpTimelineExporter {
 
     private const val TAG = "FcpTimelineExporter"
 
+    private val typefaceCache = mutableMapOf<String, Typeface>()
+
+    private fun getTypeface(context: Context, fontAsset: String): Typeface {
+        if (fontAsset.isBlank()) return Typeface.DEFAULT_BOLD
+        return typefaceCache.getOrPut(fontAsset) {
+            try {
+                Typeface.createFromAsset(context.assets, "fonts/$fontAsset")
+            } catch (_: Exception) {
+                try {
+                    val clean = fontAsset.replace(" ", "")
+                    Typeface.createFromAsset(context.assets, "fonts/$clean")
+                } catch (_: Exception) {
+                    Typeface.DEFAULT_BOLD
+                }
+            }
+        }
+    }
+
+    /**
+     * Renders all visible title & text layers onto a full-resolution transparent bitmap.
+     */
+    fun renderTextLayersToBitmap(
+        context: Context,
+        textLayers: List<FcpTextLayer>,
+        width: Int,
+        height: Int
+    ): Bitmap? {
+        val visibleLayers = textLayers.filter { it.isVisible && (it.primaryText.isNotBlank() || it.scriptText.isNotBlank()) }
+        if (visibleLayers.isEmpty()) return null
+
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+
+        // Baseline scale factor relative to standard 360dp preview viewport
+        val scale = width / 360f
+
+        visibleLayers.forEach { layer ->
+            canvas.save()
+
+            val cx = width / 2f + (layer.offsetX * scale)
+            val cy = height / 2f + (layer.offsetY * scale)
+            canvas.translate(cx, cy)
+            canvas.rotate(layer.rotationDeg)
+
+            val alphaInt = ((layer.opacity.coerceIn(0f, 1f)) * 255).toInt()
+            val primaryTf = getTypeface(context, layer.primaryFontAsset)
+            val scriptTf = getTypeface(context, layer.scriptFontAsset)
+
+            val primarySizePx = layer.fontSizeSp * scale * 0.95f
+            val primaryPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                typeface = primaryTf
+                textSize = primarySizePx
+                textAlign = Paint.Align.CENTER
+                alpha = alphaInt
+                if (layer.hasDropShadow) {
+                    setShadowLayer(6f * scale, 2f * scale, 3f * scale, AndroidColor.argb((alphaInt * 0.85f).toInt(), 0, 0, 0))
+                }
+                if (layer.fontSizeSp > 0) {
+                    letterSpacing = (layer.letterSpacingSp / layer.fontSizeSp).coerceIn(0f, 0.5f)
+                }
+            }
+
+            if (layer.isGradientText) {
+                val bounds = Rect()
+                primaryPaint.getTextBounds(layer.primaryText, 0, layer.primaryText.length, bounds)
+                val halfW = bounds.width() / 2f
+                primaryPaint.shader = LinearGradient(
+                    -halfW, 0f, halfW, 0f,
+                    layer.textColor.toArgb(),
+                    layer.secondaryTextColor.toArgb(),
+                    Shader.TileMode.CLAMP
+                )
+            } else {
+                primaryPaint.color = layer.textColor.toArgb()
+                primaryPaint.alpha = alphaInt
+            }
+
+            val scriptPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                typeface = scriptTf
+                textSize = primarySizePx * 1.05f
+                textAlign = Paint.Align.CENTER
+                color = layer.accentColor.toArgb()
+                alpha = alphaInt
+                if (layer.hasDropShadow) {
+                    setShadowLayer(5f * scale, 2f * scale, 2f * scale, AndroidColor.argb((alphaInt * 0.85f).toInt(), 0, 0, 0))
+                }
+            }
+
+            val subPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                typeface = primaryTf
+                textSize = (layer.fontSizeSp * 0.32f).coerceAtLeast(9f) * scale
+                textAlign = Paint.Align.CENTER
+                color = AndroidColor.WHITE
+                alpha = (alphaInt * 0.85f).toInt()
+                letterSpacing = ((layer.letterSpacingSp * 2f + 1f) / 12f).coerceIn(0f, 0.4f)
+            }
+
+            // Optional pill background
+            if (layer.hasBackgroundPill) {
+                val pillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = AndroidColor.argb((alphaInt * 0.55f).toInt(), 0, 0, 0)
+                    style = Paint.Style.FILL
+                }
+                val pillStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = AndroidColor.argb((alphaInt * 0.25f).toInt(), 255, 255, 255)
+                    style = Paint.Style.STROKE
+                    strokeWidth = 1.5f * scale
+                }
+                val bounds = Rect()
+                primaryPaint.getTextBounds(layer.primaryText, 0, layer.primaryText.length, bounds)
+                val padX = 24f * scale
+                val padY = 16f * scale
+                val halfW = (bounds.width() / 2f) + padX
+                val halfH = (bounds.height() / 2f) + padY
+                val rect = RectF(-halfW, -halfH, halfW, halfH)
+                val corner = 14f * scale
+                canvas.drawRoundRect(rect, corner, corner, pillPaint)
+                canvas.drawRoundRect(rect, corner, corner, pillStroke)
+            }
+
+            // Render preset styling
+            when (layer.presetType) {
+                FcpTitlePresetType.SCRIPT_HEADLINE -> {
+                    val fm = primaryPaint.fontMetrics
+                    val baseLineY = -(fm.ascent + fm.descent) / 2f
+                    canvas.drawText(layer.primaryText, 0f, baseLineY, primaryPaint)
+
+                    if (layer.scriptText.isNotBlank()) {
+                        canvas.save()
+                        val pBounds = Rect()
+                        primaryPaint.getTextBounds(layer.primaryText, 0, layer.primaryText.length, pBounds)
+                        canvas.translate(-pBounds.width() * 0.22f - (8f * scale), baseLineY - (12f * scale))
+                        canvas.rotate(-7f)
+                        canvas.drawText(layer.scriptText, 0f, 0f, scriptPaint)
+                        canvas.restore()
+                    }
+
+                    if (layer.subtitleText.isNotBlank()) {
+                        val subY = baseLineY + primarySizePx * 0.55f
+                        canvas.drawText(layer.subtitleText, 0f, subY, subPaint)
+                    }
+                }
+
+                FcpTitlePresetType.GOLD_3D -> {
+                    val fm = primaryPaint.fontMetrics
+                    val baseLineY = -(fm.ascent + fm.descent) / 2f
+
+                    // Badge pill if set
+                    if (layer.badgeText.isNotBlank()) {
+                        val badgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                            typeface = primaryTf
+                            textSize = 9f * scale
+                            textAlign = Paint.Align.CENTER
+                            color = layer.accentColor.toArgb()
+                            alpha = alphaInt
+                        }
+                        val badgePillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                            color = AndroidColor.argb((alphaInt * 0.7f).toInt(), 0, 0, 0)
+                            style = Paint.Style.FILL
+                        }
+                        val badgeStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                            color = layer.accentColor.toArgb()
+                            alpha = (alphaInt * 0.7f).toInt()
+                            style = Paint.Style.STROKE
+                            strokeWidth = 1f * scale
+                        }
+                        val badgeBounds = Rect()
+                        badgePaint.getTextBounds(layer.badgeText.uppercase(), 0, layer.badgeText.length, badgeBounds)
+                        val bw = badgeBounds.width() / 2f + 10f * scale
+                        val bh = 8f * scale
+                        val badgeRect = RectF(-bw, baseLineY - primarySizePx - bh * 2, bw, baseLineY - primarySizePx)
+                        canvas.drawRoundRect(badgeRect, 50f, 50f, badgePillPaint)
+                        canvas.drawRoundRect(badgeRect, 50f, 50f, badgeStroke)
+                        canvas.drawText(layer.badgeText.uppercase(), 0f, badgeRect.centerY() + 3f * scale, badgePaint)
+                    }
+
+                    // 3D under-shadow 1
+                    val shadow1 = Paint(primaryPaint).apply {
+                        color = 0xFF261204.toInt()
+                        alpha = alphaInt
+                        clearShadowLayer()
+                        shader = null
+                    }
+                    canvas.drawText(layer.primaryText, 3f * scale, baseLineY + 3f * scale, shadow1)
+
+                    // 3D under-shadow 2
+                    val shadow2 = Paint(primaryPaint).apply {
+                        color = 0xFF78350F.toInt()
+                        alpha = alphaInt
+                        clearShadowLayer()
+                        shader = null
+                    }
+                    canvas.drawText(layer.primaryText, 1.5f * scale, baseLineY + 1.5f * scale, shadow2)
+
+                    // Front Metallic Gold text
+                    val goldPaint = Paint(primaryPaint).apply {
+                        if (!layer.isGradientText) {
+                            shader = LinearGradient(
+                                0f, baseLineY - primarySizePx, 0f, baseLineY,
+                                intArrayOf(0xFFFFF9C4.toInt(), layer.accentColor.toArgb(), 0xFFF59E0B.toInt(), 0xFFB45309.toInt()),
+                                null,
+                                Shader.TileMode.CLAMP
+                            )
+                        }
+                    }
+                    canvas.drawText(layer.primaryText, 0f, baseLineY, goldPaint)
+
+                    // Crossover script
+                    if (layer.scriptText.isNotBlank()) {
+                        canvas.save()
+                        canvas.rotate(-9f)
+                        val sPaint = Paint(scriptPaint).apply {
+                            color = AndroidColor.WHITE
+                            alpha = alphaInt
+                        }
+                        canvas.drawText(layer.scriptText, 0f, baseLineY + 2f * scale, sPaint)
+                        canvas.restore()
+                    }
+
+                    if (layer.subtitleText.isNotBlank()) {
+                        val subY = baseLineY + primarySizePx * 0.55f
+                        canvas.drawText(layer.subtitleText, 0f, subY, subPaint)
+                    }
+                }
+
+                FcpTitlePresetType.BOXED_FRAME -> {
+                    val fm = primaryPaint.fontMetrics
+                    val baseLineY = -(fm.ascent + fm.descent) / 2f
+                    val pBounds = Rect()
+                    primaryPaint.getTextBounds(layer.primaryText.uppercase(), 0, layer.primaryText.length, pBounds)
+                    val padX = 20f * scale
+                    val padY = 12f * scale
+                    val halfW = (pBounds.width() / 2f) + padX
+                    val halfH = (pBounds.height() / 2f) + padY
+                    val frameRect = RectF(-halfW, baseLineY - halfH * 1.2f, halfW, baseLineY + halfH * 0.8f)
+
+                    val boxBg = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = AndroidColor.argb((alphaInt * 0.35f).toInt(), 0, 0, 0)
+                        style = Paint.Style.FILL
+                    }
+                    val boxStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = layer.accentColor.toArgb()
+                        alpha = alphaInt
+                        style = Paint.Style.STROKE
+                        strokeWidth = 2f * scale
+                    }
+                    canvas.drawRoundRect(frameRect, 4f * scale, 4f * scale, boxBg)
+                    canvas.drawRoundRect(frameRect, 4f * scale, 4f * scale, boxStroke)
+                    canvas.drawText(layer.primaryText.uppercase(), 0f, baseLineY, primaryPaint)
+
+                    if (layer.subtitleText.isNotBlank()) {
+                        val subY = frameRect.bottom + 16f * scale
+                        canvas.drawText(layer.subtitleText.uppercase(), 0f, subY, subPaint)
+                        val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                            color = layer.accentColor.toArgb()
+                            alpha = (alphaInt * 0.7f).toInt()
+                            strokeWidth = 1.2f * scale
+                        }
+                        val subBounds = Rect()
+                        subPaint.getTextBounds(layer.subtitleText.uppercase(), 0, layer.subtitleText.length, subBounds)
+                        val subHalfW = subBounds.width() / 2f
+                        canvas.drawLine(-subHalfW - 24f * scale, subY - 4f * scale, -subHalfW - 8f * scale, subY - 4f * scale, linePaint)
+                        canvas.drawLine(subHalfW + 8f * scale, subY - 4f * scale, subHalfW + 24f * scale, subY - 4f * scale, linePaint)
+                    }
+                }
+
+                FcpTitlePresetType.ABSTRACT_BADGE -> {
+                    val fm = primaryPaint.fontMetrics
+                    val baseLineY = -(fm.ascent + fm.descent) / 2f
+                    val pBounds = Rect()
+                    primaryPaint.getTextBounds(layer.primaryText.uppercase(), 0, layer.primaryText.length, pBounds)
+                    val padX = 22f * scale
+                    val padY = 12f * scale
+                    val halfW = (pBounds.width() / 2f) + padX
+                    val halfH = (pBounds.height() / 2f) + padY
+                    val badgeRect = RectF(-halfW, baseLineY - halfH * 1.2f, halfW, baseLineY + halfH * 0.8f)
+
+                    val badgeBg = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = layer.accentColor.toArgb()
+                        alpha = alphaInt
+                        style = Paint.Style.FILL
+                        setShadowLayer(8f * scale, 0f, 4f * scale, AndroidColor.argb((alphaInt * 0.6f).toInt(), 0, 0, 0))
+                    }
+                    canvas.drawRoundRect(badgeRect, 8f * scale, 8f * scale, badgeBg)
+                    canvas.drawText(layer.primaryText.uppercase(), 0f, baseLineY, primaryPaint)
+
+                    if (layer.subtitleText.isNotBlank()) {
+                        val subY = badgeRect.bottom + 16f * scale
+                        canvas.drawText(layer.subtitleText.uppercase(), 0f, subY, subPaint)
+                    }
+                }
+
+                FcpTitlePresetType.CYBER_NEON -> {
+                    val fm = primaryPaint.fontMetrics
+                    val baseLineY = -(fm.ascent + fm.descent) / 2f
+                    val pBounds = Rect()
+                    primaryPaint.getTextBounds(layer.primaryText.uppercase(), 0, layer.primaryText.length, pBounds)
+                    val padX = 20f * scale
+                    val padY = 12f * scale
+                    val halfW = (pBounds.width() / 2f) + padX
+                    val halfH = (pBounds.height() / 2f) + padY
+                    val neonRect = RectF(-halfW, baseLineY - halfH * 1.2f, halfW, baseLineY + halfH * 0.8f)
+
+                    val neonBg = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = AndroidColor.argb((alphaInt * 0.85f).toInt(), 0x0F, 0x17, 0x2A)
+                        style = Paint.Style.FILL
+                    }
+                    val neonStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        shader = LinearGradient(-halfW, 0f, halfW, 0f, layer.textColor.toArgb(), layer.accentColor.toArgb(), Shader.TileMode.CLAMP)
+                        alpha = alphaInt
+                        style = Paint.Style.STROKE
+                        strokeWidth = 2f * scale
+                    }
+                    canvas.drawRoundRect(neonRect, 12f * scale, 12f * scale, neonBg)
+                    canvas.drawRoundRect(neonRect, 12f * scale, 12f * scale, neonStroke)
+
+                    val glowPaint = Paint(primaryPaint).apply {
+                        setShadowLayer(14f * scale, 0f, 0f, layer.textColor.toArgb())
+                    }
+                    canvas.drawText(layer.primaryText.uppercase(), 0f, baseLineY, glowPaint)
+
+                    if (layer.subtitleText.isNotBlank()) {
+                        val subY = neonRect.bottom - 4f * scale
+                        canvas.drawText(layer.subtitleText.uppercase(), 0f, subY, subPaint)
+                    }
+                }
+
+                FcpTitlePresetType.MINIMAL_CLEAN -> {
+                    val fm = primaryPaint.fontMetrics
+                    val baseLineY = -(fm.ascent + fm.descent) / 2f
+                    val cleanPaint = Paint(primaryPaint).apply {
+                        textSize = primarySizePx * 0.8f
+                        textAlign = Paint.Align.LEFT
+                    }
+                    val cleanSubPaint = Paint(subPaint).apply {
+                        textAlign = Paint.Align.LEFT
+                    }
+                    val barPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = layer.accentColor.toArgb()
+                        alpha = alphaInt
+                        style = Paint.Style.FILL
+                    }
+
+                    val pBounds = Rect()
+                    cleanPaint.getTextBounds(layer.primaryText, 0, layer.primaryText.length, pBounds)
+                    val totalW = pBounds.width() + 20f * scale
+                    val startX = -totalW / 2f
+
+                    // Vertical accent indicator bar
+                    val barRect = RectF(startX, baseLineY - primarySizePx * 0.7f, startX + 4f * scale, baseLineY + 6f * scale)
+                    canvas.drawRoundRect(barRect, 2f * scale, 2f * scale, barPaint)
+
+                    canvas.drawText(layer.primaryText, startX + 12f * scale, baseLineY - 2f * scale, cleanPaint)
+                    if (layer.subtitleText.isNotBlank()) {
+                        canvas.drawText(layer.subtitleText, startX + 12f * scale, baseLineY + primarySizePx * 0.42f, cleanSubPaint)
+                    }
+                }
+
+                else -> {
+                    // SCRIPT_HEADLINE, MODERN_FOLD, DESIGN_CONTRAST, RETRO_VHS, LUXURY_SERIF, KINETIC_PUNCH
+                    val fm = primaryPaint.fontMetrics
+                    val baseLineY = -(fm.ascent + fm.descent) / 2f
+                    canvas.drawText(layer.primaryText, 0f, baseLineY, primaryPaint)
+
+                    if (layer.scriptText.isNotBlank()) {
+                        canvas.save()
+                        canvas.translate(0f, -primarySizePx * 0.5f)
+                        canvas.rotate(-5f)
+                        canvas.drawText(layer.scriptText, 0f, 0f, scriptPaint)
+                        canvas.restore()
+                    }
+
+                    if (layer.subtitleText.isNotBlank()) {
+                        val subY = baseLineY + primarySizePx * 0.55f
+                        canvas.drawText(layer.subtitleText, 0f, subY, subPaint)
+                    }
+                }
+            }
+
+            canvas.restore()
+        }
+
+        return bitmap
+    }
+
     suspend fun exportTimeline(
         context: Context,
         clips: List<FcpClip>,
         customAudio: FcpCustomAudio?,
+        textLayers: List<FcpTextLayer> = emptyList(),
         aspectRatio: FcpAspectRatio,
         res: String,
         fps: String,
@@ -50,6 +450,7 @@ object FcpTimelineExporter {
         }
 
         val outputFile = File(context.cacheDir, "pro_export_${System.currentTimeMillis()}.mp4")
+        var overlayPngFile: File? = null
 
         try {
             onProgress(0.10f, "Analyzing timeline & ${clips.size} clip(s)...")
@@ -200,6 +601,28 @@ object FcpTimelineExporter {
                 clips.size
             } else null
 
+            // Render visible Title & Text Layers into a transparent overlay PNG
+            val overlayBitmap = renderTextLayersToBitmap(context, textLayers, finalW, finalH)
+            overlayPngFile = if (overlayBitmap != null) {
+                val f = File(context.cacheDir, "fcp_text_overlay_${UUID.randomUUID().toString().take(8)}.png")
+                try {
+                    FileOutputStream(f).use { out ->
+                        overlayBitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+                    }
+                    overlayBitmap.recycle()
+                    if (f.exists() && f.length() > 0L) f else null
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to write text overlay PNG", e)
+                    null
+                }
+            } else null
+
+            val textOverlayInputIndex = if (overlayPngFile != null) {
+                cmdArgs.add("-i")
+                cmdArgs.add(overlayPngFile.absolutePath)
+                clips.size + (if (customAudioInputIndex != null) 1 else 0)
+            } else null
+
             // Build filter graph
             val filterGraph = StringBuilder()
             val concatVideoLabels = mutableListOf<String>()
@@ -221,11 +644,21 @@ object FcpTimelineExporter {
                     type?.startsWith("image/") == true
                 } catch (_: Throwable) { false }
 
-                // Video filter: trim, speed, scale, pad, fps
+                // Video filter: trim, speed, crop (zoom/pan), scale, pad, fps
                 val vFilter = StringBuilder()
                 if (!isImage) {
                     val ptsScale = 1.0f / speed
                     vFilter.append(String.format(Locale.US, "trim=start=%.3f:end=%.3f,setpts=%.4f*(PTS-STARTPTS),", sTime, eTime, ptsScale))
+                }
+
+                // Precision Zoom & Crop from Preview screen framing
+                if (clip.scale > 1.02f) {
+                    val s = clip.scale.coerceIn(1.02f, 5.0f)
+                    val normPanX = (clip.panX / 360f).coerceIn(-0.6f, 0.6f)
+                    val normPanY = (clip.panY / 480f).coerceIn(-0.6f, 0.6f)
+                    val xExpr = String.format(Locale.US, "min(max(0,(iw-ow)/2-(%.4f*iw)),iw-ow)", normPanX)
+                    val yExpr = String.format(Locale.US, "min(max(0,(ih-oh)/2-(%.4f*ih)),ih-oh)", normPanY)
+                    vFilter.append(String.format(Locale.US, "crop=w=iw/%.3f:h=ih/%.3f:x='%s':y='%s',", s, s, xExpr, yExpr))
                 }
 
                 // Uniform scale and letterboxing
@@ -261,7 +694,6 @@ object FcpTimelineExporter {
                     FcpLutPreset.VINTAGE_FADE -> vFilter.append(",colorbalance=rs=0.08:gs=0.04:bs=-0.05,eq=contrast=0.92:brightness=0.04")
                     FcpLutPreset.EMERALD -> vFilter.append(",colorbalance=gs=0.12:gm=0.08:bm=-0.05")
                     FcpLutPreset.NONE -> {}
-                    else -> {}
                 }
 
                 // 4. Visual Effects
@@ -431,6 +863,12 @@ object FcpTimelineExporter {
                 }
             }
 
+            // Overlay titles and text layers onto final video stream
+            if (textOverlayInputIndex != null) {
+                filterGraph.append("$finalVideoStream[$textOverlayInputIndex:v]overlay=0:0:format=auto[v_titled];")
+                finalVideoStream = "[v_titled]"
+            }
+
             val finalGraph = filterGraph.toString().trimEnd(';')
             cmdArgs.add("-filter_complex")
             cmdArgs.add(finalGraph)
@@ -476,6 +914,8 @@ object FcpTimelineExporter {
             }
         } catch (e: Exception) {
             Log.e(TAG, "exportTimeline encountered exception", e)
+        } finally {
+            try { overlayPngFile?.delete() } catch (_: Throwable) {}
         }
 
         // Native fallback if FFmpeg fails:

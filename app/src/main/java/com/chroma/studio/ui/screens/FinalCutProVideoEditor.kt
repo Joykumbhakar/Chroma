@@ -710,6 +710,12 @@ data class FcpCustomAudio(
     val loopAudio: Boolean = true
 )
 
+data class FcpEditorSnapshot(
+    val clips: List<FcpClip>,
+    val textLayers: List<FcpTextLayer>,
+    val customAudio: FcpCustomAudio?
+)
+
 private fun queryMediaFileName(context: Context, uri: Uri): String {
     var name: String? = null
     if (uri.scheme == "content") {
@@ -943,8 +949,8 @@ fun FinalCutProVideoEditorScreen(
     // ── Clip & History State ──────────────────────────────────────────────
     var clips by remember { mutableStateOf<List<FcpClip>>(emptyList()) }
     var selectedId by remember { mutableStateOf<String?>(null) }
-    var undoStack by remember { mutableStateOf<List<List<FcpClip>>>(emptyList()) }
-    var redoStack by remember { mutableStateOf<List<List<FcpClip>>>(emptyList()) }
+    var undoStack by remember { mutableStateOf<List<FcpEditorSnapshot>>(emptyList()) }
+    var redoStack by remember { mutableStateOf<List<FcpEditorSnapshot>>(emptyList()) }
 
     // ── Playback State ────────────────────────────────────────────────────
     var isPlaying by remember { mutableStateOf(false) }
@@ -1106,6 +1112,7 @@ fun FinalCutProVideoEditorScreen(
                     context = context,
                     clips = clips,
                     customAudio = customAudio,
+                    textLayers = textLayers,
                     aspectRatio = aspectRatio,
                     res = res,
                     fps = fps,
@@ -1389,6 +1396,7 @@ fun FinalCutProVideoEditorScreen(
     }
 
     val scrubChannel = remember { Channel<Float>(Channel.CONFLATED) }
+    var lastSnapPoint by remember { mutableFloatStateOf(-1f) }
 
     fun onScrubStart() {
         isUserScrubbing = true
@@ -1401,12 +1409,48 @@ fun FinalCutProVideoEditorScreen(
     }
 
     fun onScrubSec(newSec: Float) {
-        val clamped = newSec.coerceIn(0f, totalDurationSec)
+        // Magnetic cut boundary snapping (±0.06s)
+        val snapThreshold = 0.06f
+        var snappedSec = newSec
+        var snappedTo = -1f
+
+        if (timelineSpans.isNotEmpty()) {
+            val candidatePoints = ArrayList<Float>(timelineSpans.size * 2 + 2)
+            candidatePoints.add(0f)
+            candidatePoints.add(totalDurationSec)
+            for (s in timelineSpans) {
+                candidatePoints.add(s.timelineStartSec)
+                candidatePoints.add(s.timelineEndSec)
+            }
+            var minDiff = Float.MAX_VALUE
+            var bestPoint = -1f
+            for (pt in candidatePoints) {
+                val diff = kotlin.math.abs(pt - newSec)
+                if (diff < minDiff) {
+                    minDiff = diff
+                    bestPoint = pt
+                }
+            }
+            if (minDiff <= snapThreshold) {
+                snappedSec = bestPoint
+                snappedTo = bestPoint
+            }
+        }
+
+        if (snappedTo >= 0f && lastSnapPoint != snappedTo) {
+            lastSnapPoint = snappedTo
+            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        } else if (snappedTo < 0f) {
+            lastSnapPoint = -1f
+        }
+
+        val clamped = snappedSec.coerceIn(0f, totalDurationSec)
         currentTimeSec = clamped
         scrubChannel.trySend(clamped)
     }
 
     fun onScrubEnd(finalSec: Float) {
+        lastSnapPoint = -1f
         val clamped = finalSec.coerceIn(0f, totalDurationSec)
         currentTimeSec = clamped
         if (customAudio != null) {
@@ -1760,9 +1804,14 @@ fun FinalCutProVideoEditorScreen(
         }
     }
 
-    // Undo / Redo helpers
+    // Undo / Redo helpers (Unified Timeline, Text Layers & Soundtrack Engine)
     fun saveStateForUndo() {
-        undoStack = (undoStack + listOf(clips)).takeLast(25)
+        val snapshot = FcpEditorSnapshot(
+            clips = clips,
+            textLayers = textLayers,
+            customAudio = customAudio
+        )
+        undoStack = (undoStack + listOf(snapshot)).takeLast(25)
         redoStack = emptyList()
     }
 
@@ -1770,10 +1819,20 @@ fun FinalCutProVideoEditorScreen(
         if (undoStack.isNotEmpty()) {
             val previous = undoStack.last()
             undoStack = undoStack.dropLast(1)
-            redoStack = (redoStack + listOf(clips)).takeLast(25)
-            clips = previous
+            val current = FcpEditorSnapshot(
+                clips = clips,
+                textLayers = textLayers,
+                customAudio = customAudio
+            )
+            redoStack = (redoStack + listOf(current)).takeLast(25)
+            clips = previous.clips
+            textLayers = previous.textLayers
+            customAudio = previous.customAudio
             if (clips.none { it.id == selectedId }) {
                 selectedId = clips.firstOrNull()?.id
+            }
+            if (textLayers.none { it.id == selectedTextLayerId }) {
+                selectedTextLayerId = textLayers.firstOrNull()?.id ?: ""
             }
             ToastManager.showToast("Action undone")
         }
@@ -1783,8 +1842,21 @@ fun FinalCutProVideoEditorScreen(
         if (redoStack.isNotEmpty()) {
             val next = redoStack.last()
             redoStack = redoStack.dropLast(1)
-            undoStack = (undoStack + listOf(clips)).takeLast(25)
-            clips = next
+            val current = FcpEditorSnapshot(
+                clips = clips,
+                textLayers = textLayers,
+                customAudio = customAudio
+            )
+            undoStack = (undoStack + listOf(current)).takeLast(25)
+            clips = next.clips
+            textLayers = next.textLayers
+            customAudio = next.customAudio
+            if (clips.none { it.id == selectedId }) {
+                selectedId = clips.firstOrNull()?.id
+            }
+            if (textLayers.none { it.id == selectedTextLayerId }) {
+                selectedTextLayerId = textLayers.firstOrNull()?.id ?: ""
+            }
             ToastManager.showToast("Action redone")
         }
     }
@@ -2897,7 +2969,11 @@ fun FinalCutProVideoEditorScreen(
                                         onScrubSec = { sec -> onScrubSec(sec) },
                                         onScrubEnd = { sec -> onScrubEnd(sec) },
                                         onSplitClip = {
-                                            val span = timelineSpans.find { currentTimeSec > it.timelineStartSec + 0.2f && currentTimeSec < it.timelineEndSec - 0.2f }
+                                            val threshold = 0.08f
+                                            val activeSpan = if (selectedId != null) {
+                                                timelineSpans.find { it.clip.id == selectedId && currentTimeSec >= it.timelineStartSec + threshold && currentTimeSec <= it.timelineEndSec - threshold }
+                                            } else null
+                                            val span = activeSpan ?: timelineSpans.find { currentTimeSec >= it.timelineStartSec + threshold && currentTimeSec <= it.timelineEndSec - threshold }
                                             if (span != null) {
                                                 saveStateForUndo()
                                                 val active = span.clip
@@ -2921,6 +2997,7 @@ fun FinalCutProVideoEditorScreen(
                                                         add(idx + 1, secondHalf)
                                                     }
                                                     selectedId = secondHalf.id
+                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                                     ToastManager.showToast("Clip split at ${formatTimecode(currentTimeSec)}")
                                                 }
                                             } else {
