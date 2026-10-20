@@ -59,20 +59,9 @@ fun TransitionPickerSheet(
             .padding(horizontal = 20.dp, vertical = 14.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Drag Pill Handle
-        Box(
-            modifier = Modifier
-                .width(36.dp)
-                .height(4.dp)
-                .clip(CircleShape)
-                .background(Color(0xFFD1D5DB))
-        )
-
-        Spacer(Modifier.height(12.dp))
-
-        // Header: Title & Close
+        // Header: Title & Close (Capsule/Pill free)
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 2.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -105,37 +94,32 @@ fun TransitionPickerSheet(
 
         Spacer(Modifier.height(14.dp))
 
-        // Live Animated Transition Preview Card
+        // Live Animated Transition Preview Card (Plain Red 'A' to Plain Blue 'B')
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(130.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(Color(0xFF0F172A))
-                .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(16.dp)),
+                .height(140.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(Color(0xFFE53935))
+                .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(14.dp)),
             contentAlignment = Alignment.Center
         ) {
-            // Outgoing Clip Mock (Clip A - Teal Gradient)
+            // Outgoing Clip (Plain Red with big letter 'A')
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(
-                        Brush.linearGradient(
-                            listOf(Color(0xFF0F766E), Color(0xFF06B6D4))
-                        )
-                    )
+                    .background(Color(0xFFE53935)),
+                contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "CLIP A",
-                    color = Color.White.copy(alpha = 0.8f),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
-                    modifier = Modifier.padding(12.dp).align(Alignment.TopStart)
+                    text = "A",
+                    color = Color.White,
+                    fontSize = 44.sp,
+                    fontWeight = FontWeight.Black
                 )
             }
 
-            // Animated Transition Overlay Effect
+            // Animated Transition Overlay Effect (Plain Blue with big letter 'B')
             when (previewType) {
                 TransitionType.NONE -> {
                     // Split boundary line
@@ -150,13 +134,17 @@ fun TransitionPickerSheet(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(
-                                Brush.linearGradient(
-                                    listOf(Color(0xFF7C3AED), Color(0xFFEC4899))
-                                )
-                            )
-                            .alpha(rawProgress)
-                    )
+                            .background(Color(0xFF1E88E5))
+                            .alpha(rawProgress),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "B",
+                            color = Color.White,
+                            fontSize = 44.sp,
+                            fontWeight = FontWeight.Black
+                        )
+                    }
                 }
                 TransitionType.SLIDE_LEFT -> {
                     Box(
@@ -164,12 +152,16 @@ fun TransitionPickerSheet(
                             .fillMaxHeight()
                             .fillMaxWidth(fraction = rawProgress)
                             .align(Alignment.CenterEnd)
-                            .background(
-                                Brush.linearGradient(
-                                    listOf(Color(0xFF7C3AED), Color(0xFFEC4899))
-                                )
-                            )
-                    )
+                            .background(Color(0xFF1E88E5)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "B",
+                            color = Color.White,
+                            fontSize = 44.sp,
+                            fontWeight = FontWeight.Black
+                        )
+                    }
                 }
                 TransitionType.SLIDE_RIGHT -> {
                     Box(
@@ -177,24 +169,32 @@ fun TransitionPickerSheet(
                             .fillMaxHeight()
                             .fillMaxWidth(fraction = rawProgress)
                             .align(Alignment.CenterStart)
-                            .background(
-                                Brush.linearGradient(
-                                    listOf(Color(0xFF7C3AED), Color(0xFFEC4899))
-                                )
-                            )
-                    )
+                            .background(Color(0xFF1E88E5)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "B",
+                            color = Color.White,
+                            fontSize = 44.sp,
+                            fontWeight = FontWeight.Black
+                        )
+                    }
                 }
                 TransitionType.ZOOM_IN -> {
                     val zoomAlpha = sin(rawProgress * Math.PI.toFloat()).coerceIn(0f, 1f)
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(
-                                Brush.radialGradient(
-                                    listOf(Color(0xFFEC4899).copy(alpha = zoomAlpha * 0.9f), Color(0xFF7C3AED).copy(alpha = zoomAlpha * 0.9f))
-                                )
-                            )
-                    )
+                            .background(Color(0xFF1E88E5).copy(alpha = zoomAlpha)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "B",
+                            color = Color.White.copy(alpha = zoomAlpha),
+                            fontSize = (44 * (0.5f + 0.5f * zoomAlpha)).sp,
+                            fontWeight = FontWeight.Black
+                        )
+                    }
                 }
                 TransitionType.WIPE -> {
                     Box(
@@ -202,16 +202,19 @@ fun TransitionPickerSheet(
                             .fillMaxHeight()
                             .fillMaxWidth(fraction = rawProgress)
                             .align(Alignment.CenterStart)
-                            .background(
-                                Brush.linearGradient(
-                                    listOf(Color(0xFF4338CA), Color(0xFF8B5CF6))
-                                )
-                            )
+                            .background(Color(0xFF1E88E5)),
+                        contentAlignment = Alignment.Center
                     ) {
+                        Text(
+                            text = "B",
+                            color = Color.White,
+                            fontSize = 44.sp,
+                            fontWeight = FontWeight.Black
+                        )
                         Box(
                             modifier = Modifier
                                 .fillMaxHeight()
-                                .width(3.dp)
+                                .width(2.5.dp)
                                 .align(Alignment.CenterEnd)
                                 .background(Color.White)
                         )
@@ -219,17 +222,17 @@ fun TransitionPickerSheet(
                 }
             }
 
-            // Preview HUD Tag
+            // Preview HUD Tag (Capsule/Pill free)
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(10.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(Color.Black.copy(alpha = 0.6f))
-                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                    .padding(8.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(Color.Black.copy(alpha = 0.65f))
+                    .padding(horizontal = 7.dp, vertical = 3.dp)
             ) {
                 Text(
-                    text = "PREVIEW: ${previewType.label.uppercase()}",
+                    text = previewType.label.uppercase(),
                     color = Color.White,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,

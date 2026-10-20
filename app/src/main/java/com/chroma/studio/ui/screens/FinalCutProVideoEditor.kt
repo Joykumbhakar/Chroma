@@ -10453,58 +10453,28 @@ fun FcpTransitionDialog(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
                     ) {}
-                    .padding(horizontal = 14.dp, vertical = 12.dp)
+                    .padding(horizontal = 14.dp, vertical = 14.dp)
                     .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Drag handle pill
-                Box(
-                    modifier = Modifier
-                        .width(36.dp)
-                        .height(4.dp)
-                        .clip(RoundedCornerShape(50))
-                        .background(if (colors.isDark) Color.White.copy(alpha = 0.25f) else Color.Black.copy(alpha = 0.15f))
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Header
+                // Header (Professional, Capsule/Pill free)
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Color(0xFF007AFF).copy(alpha = 0.15f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Lucide.Layers,
-                                contentDescription = null,
-                                tint = Color(0xFF007AFF),
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                        Column {
-                            Text(
-                                text = "Transition Studio",
-                                fontSize = 17.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = colors.textMain
-                            )
-                            Text(
-                                text = "25+ Cinematic Apple-Style Transitions",
-                                fontSize = 11.5.sp,
-                                color = colors.textMuted
-                            )
-                        }
+                    Column {
+                        Text(
+                            text = "Transition",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = colors.textMain
+                        )
+                        Text(
+                            text = "Cinematic video transitions",
+                            fontSize = 11.5.sp,
+                            color = colors.textMuted
+                        )
                     }
 
                     IconButton(
@@ -10520,7 +10490,7 @@ fun FcpTransitionDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
                 // Interactive Apple Video Transition Studio Picker Component
                 AppleVideoTransitionStudio(
@@ -10535,59 +10505,7 @@ fun FcpTransitionDialog(
                     onEasingChange = { selectedEasing = it },
                     isDark = colors.isDark,
                     clipAName = clip.name,
-                    clipBName = nextClip?.name ?: "Next Scene",
-                    customOutgoingClip = {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    Brush.verticalGradient(
-                                        listOf(Color(0xFF1E293B), Color(0xFF334155))
-                                    )
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = clip.name,
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp
-                                )
-                                Text(
-                                    text = "Outgoing Clip",
-                                    color = Color.White.copy(alpha = 0.6f),
-                                    fontSize = 10.sp
-                                )
-                            }
-                        }
-                    },
-                    customIncomingClip = {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    Brush.verticalGradient(
-                                        listOf(Color(0xFF0F172A), Color(0xFF1E3A8A))
-                                    )
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = nextClip?.name ?: "Next Scene",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp
-                                )
-                                Text(
-                                    text = "Incoming Clip",
-                                    color = Color(0xFF38BDF8),
-                                    fontSize = 10.sp
-                                )
-                            }
-                        }
-                    }
+                    clipBName = nextClip?.name ?: "Next Scene"
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))
@@ -10692,23 +10610,16 @@ fun FcpTransitionPreviewCard(
             }
         }
 
-        // Overlay: Top Left Live Badge
-        Row(
+        // Overlay: Top Left Live Badge (Capsule/Pill free)
+        Box(
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .padding(8.dp)
-                .clip(RoundedCornerShape(6.dp))
+                .clip(RoundedCornerShape(4.dp))
                 .background(Color.Black.copy(alpha = 0.65f))
                 .padding(horizontal = 7.dp, vertical = 3.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(5.dp)
+            contentAlignment = Alignment.Center
         ) {
-            Box(
-                modifier = Modifier
-                    .size(6.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFFFF3B30))
-            )
             Text(
                 text = "PREVIEW",
                 color = Color.White,
@@ -10770,47 +10681,15 @@ private fun FcpPreviewSceneOne(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(
-                Brush.linearGradient(
-                    listOf(Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364))
-                )
-            ),
+            .background(Color(0xFFE53935)),
         contentAlignment = Alignment.Center
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(34.dp)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.18f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Lucide.Film,
-                    contentDescription = null,
-                    tint = Color(0xFF60A5FA),
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-            Column {
-                Text(
-                    text = "CLIP 1",
-                    color = Color.White,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp
-                )
-                Text(
-                    text = "Scene A • Outgoing",
-                    color = Color.White.copy(alpha = 0.7f),
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Normal
-                )
-            }
-        }
+        Text(
+            text = "A",
+            color = Color.White,
+            fontSize = 44.sp,
+            fontWeight = FontWeight.Black
+        )
     }
 }
 
@@ -10819,47 +10698,15 @@ private fun FcpPreviewSceneTwo(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(
-                Brush.linearGradient(
-                    listOf(Color(0xFF4C0519), Color(0xFF831843), Color(0xFFBE185D))
-                )
-            ),
+            .background(Color(0xFF1E88E5)),
         contentAlignment = Alignment.Center
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(34.dp)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.18f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Lucide.Sparkles,
-                    contentDescription = null,
-                    tint = Color(0xFFF472B6),
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-            Column {
-                Text(
-                    text = "CLIP 2",
-                    color = Color.White,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp
-                )
-                Text(
-                    text = "Scene B • Incoming",
-                    color = Color.White.copy(alpha = 0.7f),
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Normal
-                )
-            }
-        }
+        Text(
+            text = "B",
+            color = Color.White,
+            fontSize = 44.sp,
+            fontWeight = FontWeight.Black
+        )
     }
 }
 

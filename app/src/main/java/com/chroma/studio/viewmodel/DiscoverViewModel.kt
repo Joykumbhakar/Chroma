@@ -295,20 +295,43 @@ class DiscoverViewModel : ViewModel() {
 
     fun trackRemix(workId: String) {
         val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
-        
-        _works.value = _works.value.map {
-            if (it.id == workId && !it.remixedBy.contains(uid)) {
-                it.copy(remixCount = it.remixCount + 1, remixedBy = it.remixedBy + uid)
-            } else it
-        }
-        _trendingWorks.value = _trendingWorks.value.map {
-            if (it.id == workId && !it.remixedBy.contains(uid)) {
-                it.copy(remixCount = it.remixCount + 1, remixedBy = it.remixedBy + uid)
-            } else it
-        }
-        viewModelScope.launch {
-            repository.incrementRemixCount(workId, uid)
-        }
+        val currentWork = _works.value.firstOrNull { it.id == workId }
+        val alreadyRemixed = currentWork?.remixedBy?.contains(uid) == true
+        if (alreadyRemixed) return
+
+        val prevWorks = _works.value
+        val prevTrending = _trendingWorks.value
+
+        mutationCoordinator.mutate(
+            key = "remix:$workId",
+            desiredState = true,
+            onOptimisticApply = {
+                _works.value = _works.value.map {
+                    if (it.id == workId && !it.remixedBy.contains(uid)) {
+                        it.copy(
+                            remixCount = it.remixCount + 1,
+                            remixedBy = (it.remixedBy + uid).distinct()
+                        )
+                    } else it
+                }
+                _trendingWorks.value = _trendingWorks.value.map {
+                    if (it.id == workId && !it.remixedBy.contains(uid)) {
+                        it.copy(
+                            remixCount = it.remixCount + 1,
+                            remixedBy = (it.remixedBy + uid).distinct()
+                        )
+                    } else it
+                }
+            },
+            performServerSync = {
+                repository.incrementRemixCount(workId, uid)
+                true
+            },
+            onRollback = {
+                _works.value = prevWorks
+                _trendingWorks.value = prevTrending
+            }
+        )
     }
 
     fun trackShare(workId: String) {

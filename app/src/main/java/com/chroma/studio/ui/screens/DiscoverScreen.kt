@@ -1665,44 +1665,6 @@ fun FeedPostCard(
                         if (resolvedVerified) {
                             ScallopedVerifiedBadge()
                         }
-
-                        // "Remixed" Tag beside Name & Verified Badge (Clicking opens Original Post Inspector)
-                        if (isRemixPost) {
-                            Spacer(Modifier.width(4.dp))
-                            val remixedGradient = remember {
-                                Brush.linearGradient(
-                                    colors = listOf(
-                                        Color(0xFF007AFF),
-                                        Color(0xFFAF52DE),
-                                        Color(0xFFFF2D55)
-                                    )
-                                )
-                            }
-                            Row(
-                                modifier = Modifier
-                                    .clickable { showOriginalPostModal = true }
-                                    .padding(horizontal = 2.dp, vertical = 2.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(3.dp)
-                            ) {
-                                Icon(
-                                    imageVector = rememberLucideHeartHandshakeIcon(
-                                        isRemixed = true,
-                                        strokeColor = Color(0xFF007AFF),
-                                        heartFillColor = Color(0xFF007AFF).copy(alpha = 0.2f)
-                                    ),
-                                    contentDescription = "View Original Post",
-                                    tint = Color.Unspecified,
-                                    modifier = Modifier.size(12.dp)
-                                )
-                                Text(
-                                    text = "Remixed",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    style = TextStyle(brush = remixedGradient)
-                                )
-                            }
-                        }
                     }
 
                     Row(
@@ -1717,41 +1679,11 @@ fun FeedPostCard(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        if (isRemixPost && !work.remixedFromAuthorUsername.isNullOrEmpty()) {
-                            Text(
-                                text = "• from @${work.remixedFromAuthorUsername}",
-                                color = Color(0xFF007AFF),
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.clickable { showOriginalPostModal = true }
-                            )
-                        }
                     }
                 }
             }
 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                val isVideo = isVideoPost(work)
-                if (isVideo) {
-                    Box(
-                        modifier = Modifier
-                            .padding(end = 6.dp)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color(0xFF007AFF).copy(alpha = 0.12f))
-                            .border(0.5.dp, Color(0xFF007AFF).copy(alpha = 0.35f), RoundedCornerShape(6.dp))
-                            .padding(horizontal = 5.dp, vertical = 2.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(3.dp)
-                        ) {
-                            Icon(Lucide.Video, contentDescription = null, tint = Color(0xFF007AFF), modifier = Modifier.size(11.dp))
-                            Text("Flash", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF007AFF))
-                        }
-                    }
-                }
                 Text(
                     text = getTimeAgo(work.timestamp),
                     color = Color(0xFF8E8E93),
@@ -1905,7 +1837,7 @@ fun FeedPostCard(
                 // 2. Remix Button (HeartShape Handshake)
                 if (!work.turnOffRemix) {
                     val alreadyRemixed = currentUserId != null && work.remixedBy.contains(currentUserId)
-                    val effectiveRemixed = locallyRemixed || isRemixPost || alreadyRemixed
+                    val effectiveRemixed = locallyRemixed || alreadyRemixed
                     val displayRemixCount = (work.remixCount + localRemixCountDelta).coerceAtLeast(0)
 
                     Row(

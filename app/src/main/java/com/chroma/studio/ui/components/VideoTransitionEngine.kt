@@ -4,16 +4,22 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -22,6 +28,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -35,7 +42,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -60,7 +71,10 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -936,145 +950,184 @@ fun VideoTransitionRenderer(
     }
 }
 
+val PlainRedClipColor = Color(0xFFE53935)
+val PlainBlueClipColor = Color(0xFF1E88E5)
+
 /**
- * Synthetic "Clip A" (Golden Sunset Horizon) used inside the interactive transition preview monitor.
+ * Clean "Clip A" (Plain Red background with big letter "A") used across all transition previews.
  */
 @Composable
-fun DemoOutgoingVideoClip(modifier: Modifier = Modifier) {
+fun DemoOutgoingVideoClip(
+    modifier: Modifier = Modifier,
+    letterSize: androidx.compose.ui.unit.TextUnit = 52.sp
+) {
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFF1D2B64),
-                        Color(0xFFBA5370),
-                        Color(0xFFF4E2D8)
-                    )
-                )
-            )
+            .background(PlainRedClipColor),
+        contentAlignment = Alignment.Center
     ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            // Glowing sun disc
-            drawCircle(
-                color = Color(0xFFFFE599).copy(alpha = 0.92f),
-                radius = size.minDimension * 0.18f,
-                center = Offset(size.width * 0.35f, size.height * 0.42f)
+        BasicText(
+            text = "A",
+            style = TextStyle(
+                color = Color.White,
+                fontSize = letterSize,
+                fontWeight = FontWeight.Black,
+                textAlign = TextAlign.Center
             )
-            // Layered mountain silhouettes
-            val mountainBack = Path().apply {
-                moveTo(0f, size.height)
-                lineTo(0f, size.height * 0.65f)
-                lineTo(size.width * 0.28f, size.height * 0.45f)
-                lineTo(size.width * 0.58f, size.height * 0.68f)
-                lineTo(size.width * 0.82f, size.height * 0.48f)
-                lineTo(size.width, size.height * 0.62f)
-                lineTo(size.width, size.height)
-                close()
-            }
-            drawPath(mountainBack, color = Color(0xFF2C1E38).copy(alpha = 0.75f))
-
-            val mountainFront = Path().apply {
-                moveTo(0f, size.height)
-                lineTo(0f, size.height * 0.78f)
-                lineTo(size.width * 0.42f, size.height * 0.56f)
-                lineTo(size.width * 0.75f, size.height * 0.76f)
-                lineTo(size.width, size.height * 0.66f)
-                lineTo(size.width, size.height)
-                close()
-            }
-            drawPath(mountainFront, color = Color(0xFF171123))
-        }
-
-        // Clip A Badge
-        Box(
-            modifier = Modifier
-                .padding(10.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(Color.Black.copy(alpha = 0.55f))
-                .padding(horizontal = 8.dp, vertical = 4.dp)
-        ) {
-            BasicText(
-                text = "CLIP A • 01:12",
-                style = TextStyle(
-                    color = Color.White,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            )
-        }
+        )
     }
 }
 
 /**
- * Synthetic "Clip B" (Alpine Blue Cyber Peak) used inside the interactive transition preview monitor.
+ * Clean "Clip B" (Plain Blue background with big letter "B") used across all transition previews.
  */
 @Composable
-fun DemoIncomingVideoClip(modifier: Modifier = Modifier) {
+fun DemoIncomingVideoClip(
+    modifier: Modifier = Modifier,
+    letterSize: androidx.compose.ui.unit.TextUnit = 52.sp
+) {
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFF004E92),
-                        Color(0xFF007AFF),
-                        Color(0xFF70D6FF)
-                    )
-                )
-            )
+            .background(PlainBlueClipColor),
+        contentAlignment = Alignment.Center
     ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            // Crisp geometric snow peaks & stars
-            drawCircle(
-                color = Color.White.copy(alpha = 0.85f),
-                radius = size.minDimension * 0.13f,
-                center = Offset(size.width * 0.72f, size.height * 0.32f)
+        BasicText(
+            text = "B",
+            style = TextStyle(
+                color = Color.White,
+                fontSize = letterSize,
+                fontWeight = FontWeight.Black,
+                textAlign = TextAlign.Center
             )
-
-            val peakPath = Path().apply {
-                moveTo(0f, size.height)
-                lineTo(0f, size.height * 0.72f)
-                lineTo(size.width * 0.25f, size.height * 0.42f)
-                lineTo(size.width * 0.52f, size.height * 0.70f)
-                lineTo(size.width * 0.78f, size.height * 0.36f)
-                lineTo(size.width, size.height * 0.64f)
-                lineTo(size.width, size.height)
-                close()
-            }
-            drawPath(peakPath, color = Color(0xFF0A192F).copy(alpha = 0.88f))
-        }
-
-        // Clip B Badge
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(10.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(Color(0xFF007AFF).copy(alpha = 0.85f))
-                .padding(horizontal = 8.dp, vertical = 4.dp)
-        ) {
-            BasicText(
-                text = "CLIP B • 01:16",
-                style = TextStyle(
-                    color = Color.White,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            )
-        }
+        )
     }
 }
 
 /**
- * Complete Apple-style Video Transition Picker & Live Preview Studio that pairs directly
- * with [AppleBeveledTransitionButton].
- *
- * Allows users to:
- * 1. Toggle the transition picker open/closed via the beveled `+` button on a timeline seam.
- * 2. Preview all 25 transitions live in real time on a dual-clip monitor.
- * 3. Filter by category (`All`, `Dissolve`, `Slide & Push`, `Geometric Wipe`, `Iris & Shape`, `Zoom & Spin`, `3D & Stylized`).
- * 4. Adjust transition duration (`0.4s`, `0.8s`, `1.2s`, `1.6s`) and easing curve (`Smooth`, `Linear`, `Cubic`, `Snap`).
+ * Professional Range Slider for adjusting transition duration smoothly with the ChromaStudio bevel knob & spring effect.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TransitionTimeRangeSlider(
+    durationMs: Int,
+    onDurationChange: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    rangeMs: ClosedRange<Int> = 200..3000,
+    isDark: Boolean = false
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val isDragged by interactionSource.collectIsDraggedAsState()
+    val isInteracting = isPressed || isDragged
+
+    val haptic = LocalHapticFeedback.current
+
+    LaunchedEffect(isInteracting) {
+        if (isInteracting) {
+            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        }
+    }
+
+    val thumbWidth by animateDpAsState(
+        targetValue = if (isInteracting) 24.dp else 18.dp,
+        animationSpec = spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMediumLow),
+        label = "transThumbWidth"
+    )
+    val thumbScale by animateFloatAsState(
+        targetValue = if (isInteracting) 1.25f else 1.0f,
+        animationSpec = spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMediumLow),
+        label = "transThumbScale"
+    )
+
+    val currentSeconds = durationMs / 1000f
+
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            BasicText(
+                text = "Duration",
+                style = TextStyle(
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (isDark) Color(0xFFE2E8F0) else Color(0xFF1E293B)
+                )
+            )
+            BasicText(
+                text = "${String.format(java.util.Locale.US, "%.1f", currentSeconds)}s",
+                style = TextStyle(
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    color = Color(0xFF007AFF)
+                )
+            )
+        }
+
+        Slider(
+            value = durationMs.toFloat().coerceIn(rangeMs.start.toFloat(), rangeMs.endInclusive.toFloat()),
+            onValueChange = { newVal ->
+                val rounded = (Math.round(newVal / 50f) * 50).coerceIn(rangeMs.start, rangeMs.endInclusive)
+                onDurationChange(rounded)
+            },
+            valueRange = rangeMs.start.toFloat()..rangeMs.endInclusive.toFloat(),
+            interactionSource = interactionSource,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(28.dp),
+            colors = SliderDefaults.colors(
+                activeTrackColor = Color.Transparent,
+                inactiveTrackColor = Color.Transparent,
+                thumbColor = Color.Transparent
+            ),
+            track = { sliderState ->
+                val range = sliderState.valueRange.endInclusive - sliderState.valueRange.start
+                val fraction = if (range > 0f) {
+                    ((sliderState.value - sliderState.valueRange.start) / range).coerceIn(0f, 1f)
+                } else 0f
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(1.5.dp))
+                        .background(if (isDark) Color.White.copy(alpha = 0.18f) else Color.Black.copy(alpha = 0.10f))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(fraction)
+                            .clip(RoundedCornerShape(1.5.dp))
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(Color(0xFF2997FF), Color(0xFF0071E3))
+                                )
+                            )
+                    )
+                }
+            },
+            thumb = {
+                LiquidGlassKnob(
+                    width = thumbWidth,
+                    height = 18.dp,
+                    scale = thumbScale,
+                    baseAlpha = 1.0f
+                )
+            }
+        )
+    }
+}
+
+/**
+ * Professional, capsule-free Video Transition Studio with live dual A/B preview monitor,
+ * continuous range slider for transition time, and unified layout free of secondary card nesting.
  */
 @Composable
 fun AppleVideoTransitionStudio(
@@ -1118,319 +1171,198 @@ fun AppleVideoTransitionStudio(
         }
     }
 
-    val cardBg = if (isDark) Color(0xFF1C1D24) else Color.White
-    val cardBorder = if (isDark) Color(0xFF2E3346) else Color.Black.copy(alpha = 0.08f)
     val textPrimary = if (isDark) Color.White else Color(0xFF1D1D1F)
     val textSecondary = if (isDark) Color(0xFF8E95A5) else Color(0xFF86868B)
-    val pillInactiveBg = if (isDark) Color(0xFF282C3C) else Color(0xFFF5F5F7)
+    val tabInactiveBg = if (isDark) Color(0xFF202330) else Color(0xFFF1F3F5)
+    val monitorBorder = if (isDark) Color(0xFF2E3346) else Color.Black.copy(alpha = 0.12f)
 
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // 1. LIVE PREVIEW MONITOR CARD + DUAL CLIP SEAM
+        // 1. LIVE PREVIEW MONITOR (Plain Red 'A' to Plain Blue 'B', Capsule-free)
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .shadow(
-                    elevation = 6.dp,
-                    shape = RoundedCornerShape(18.dp),
-                    ambientColor = Color.Black.copy(alpha = 0.12f)
-                )
-                .clip(RoundedCornerShape(18.dp))
-                .background(cardBg)
-                .border(1.dp, cardBorder, RoundedCornerShape(18.dp))
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Top Header Row
+            // Live Preview Header (Name and Percentage in clean typography)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    BasicText(
-                        text = if (selectedEffect == null) "Direct Cut (No Transition)" else effectiveEffect.displayName,
-                        style = TextStyle(
-                            color = textPrimary,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                BasicText(
+                    text = if (selectedEffect == null) "Direct Cut (No Transition)" else effectiveEffect.displayName,
+                    style = TextStyle(
+                        color = textPrimary,
+                        fontSize = 14.5.sp,
+                        fontWeight = FontWeight.Bold
                     )
-                    BasicText(
-                        text = if (selectedEffect == null) "Instant boundary splice" else "${effectiveEffect.category.label} • ${"%.1f".format(durationMs / 1000f)}s • ${selectedEasing.label}",
-                        style = TextStyle(
-                            color = textSecondary,
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Medium
-                        )
+                )
+                BasicText(
+                    text = if (selectedEffect == null) "CUT" else "${(liveProgress * 100).toInt()}%",
+                    style = TextStyle(
+                        color = if (selectedEffect == null) textSecondary else Color(0xFF007AFF),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
                     )
-                }
-
-                // Live Progress Pill / Cut indicator
-                Box(
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(if (selectedEffect == null) Color.Gray.copy(alpha = 0.2f) else Color(0xFF007AFF).copy(alpha = 0.15f))
-                        .padding(horizontal = 9.dp, vertical = 4.dp)
-                ) {
-                    BasicText(
-                        text = if (selectedEffect == null) "CUT" else "${(liveProgress * 100).toInt()}%",
-                        style = TextStyle(
-                            color = if (selectedEffect == null) textSecondary else Color(0xFF007AFF),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    )
-                }
+                )
             }
 
             // 16:9 Video Transition Viewport
-            if (selectedEffect == null) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(16f / 9f)
-                        .clip(RoundedCornerShape(12.dp))
-                        .border(1.dp, cardBorder, RoundedCornerShape(12.dp))
-                ) {
-                    if (liveProgress < 0.5f) {
-                        customOutgoingClip?.invoke(this) ?: DemoOutgoingVideoClip()
-                    } else {
-                        customIncomingClip?.invoke(this) ?: DemoIncomingVideoClip()
-                    }
-                }
-            } else {
-                VideoTransitionRenderer(
-                    effect = effectiveEffect,
-                    progress = liveProgress,
-                    easing = selectedEasing,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(16f / 9f)
-                        .clip(RoundedCornerShape(12.dp))
-                        .border(1.dp, cardBorder, RoundedCornerShape(12.dp)),
-                    outgoingClip = { customOutgoingClip?.invoke(this) ?: DemoOutgoingVideoClip() },
-                    incomingClip = { customIncomingClip?.invoke(this) ?: DemoIncomingVideoClip() }
-                )
-            }
-
-            // Dual Clip Seam Bar with Cut indicator
-            Row(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(44.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    .aspectRatio(16f / 9f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .border(1.dp, monitorBorder, RoundedCornerShape(12.dp))
             ) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(34.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(
-                            Brush.horizontalGradient(
-                                listOf(Color(0xFF2C1E38), Color(0xFFBA5370))
-                            )
-                        )
-                        .padding(horizontal = 10.dp),
-                    contentAlignment = Alignment.CenterStart
-                ) {
-                    BasicText(
-                        text = clipAName,
-                        style = TextStyle(
-                            color = Color.White,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold
-                        ),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                // Center Apple Beveled Transition "+" Seam Button
-                AppleBeveledTransitionButton(
-                    isActive = selectedEffect != null,
-                    onClick = {
-                        if (selectedEffect != null) onSelectEffect(null) else onSelectEffect(VideoTransitionEffect.CROSS_DISSOLVE)
-                    },
-                    buttonSize = 34.dp,
-                    activeRotationDegrees = if (selectedEffect != null) 0f else 90f
-                )
-
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(34.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(
-                            Brush.horizontalGradient(
-                                listOf(Color(0xFF004E92), Color(0xFF007AFF))
-                            )
-                        )
-                        .padding(horizontal = 10.dp),
-                    contentAlignment = Alignment.CenterEnd
-                ) {
-                    BasicText(
-                        text = clipBName,
-                        style = TextStyle(
-                            color = Color.White,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold
-                        ),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                if (selectedEffect == null) {
+                    if (liveProgress < 0.5f) {
+                        DemoOutgoingVideoClip(letterSize = 56.sp)
+                    } else {
+                        DemoIncomingVideoClip(letterSize = 56.sp)
+                    }
+                } else {
+                    VideoTransitionRenderer(
+                        effect = effectiveEffect,
+                        progress = liveProgress,
+                        easing = selectedEasing,
+                        modifier = Modifier.fillMaxSize(),
+                        outgoingClip = { DemoOutgoingVideoClip(letterSize = 56.sp) },
+                        incomingClip = { DemoIncomingVideoClip(letterSize = 56.sp) }
                     )
                 }
             }
         }
 
-        // 2. DURATION & EASING CONTROLS
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(cardBg)
-                .border(1.dp, cardBorder, RoundedCornerShape(16.dp))
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+        // 2. DURATION RANGE SLIDER (ChromaStudio Bevel Knob & Spring Effect)
+        TransitionTimeRangeSlider(
+            durationMs = durationMs,
+            onDurationChange = onDurationChange,
+            isDark = isDark
+        )
+
+        // 3. EASING CURVE SELECTOR (Capsule/Pill free, Clean Rectangular Tabs)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // Duration Presets & Easing Curves
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Duration Presets
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf(400, 600, 800, 1200, 1600).forEach { ms ->
-                        val isSelected = durationMs == ms
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(
-                                    if (isSelected) Color(0xFF007AFF) else pillInactiveBg
-                                )
-                                .clickable { onDurationChange(ms) }
-                                .padding(horizontal = 8.dp, vertical = 5.dp)
-                        ) {
-                            BasicText(
-                                text = "${"%.1f".format(ms / 1000f)}s",
-                                style = TextStyle(
-                                    color = if (isSelected) Color.White else textPrimary,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            )
-                        }
-                    }
-                }
-
-                // Easing Curves
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TransitionEasing.entries.forEach { easingItem ->
-                        val isSelected = selectedEasing == easingItem
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(
-                                    if (isSelected) Color(0xFF1D1D1F) else pillInactiveBg
-                                )
-                                .clickable { onEasingChange(easingItem) }
-                                .padding(horizontal = 7.dp, vertical = 5.dp)
-                        ) {
-                            BasicText(
-                                text = easingItem.label,
-                                style = TextStyle(
-                                    color = if (isSelected) Color.White else textSecondary,
-                                    fontSize = 10.5.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Category Filter Horizontal Scroll Bar
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                // "None / Cut" Pill
-                val isNoneSelected = selectedEffect == null
-                Box(
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(if (isNoneSelected) Color(0xFFE53935) else pillInactiveBg)
-                        .clickable { onSelectEffect(null) }
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                ) {
-                    BasicText(
-                        text = "None (Cut)",
-                        style = TextStyle(
-                            color = if (isNoneSelected) Color.White else textPrimary,
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    )
-                }
-
-                TransitionCategory.entries.forEach { category ->
-                    val isSelected = selectedCategory == category
-                    val bgColor by animateColorAsState(
-                        targetValue = if (isSelected) Color(0xFF007AFF) else pillInactiveBg,
-                        animationSpec = tween(150),
-                        label = "CategoryBg"
-                    )
+            BasicText(
+                text = "Curve",
+                style = TextStyle(
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+                )
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                TransitionEasing.entries.forEach { easingItem ->
+                    val isSelected = selectedEasing == easingItem
                     Box(
                         modifier = Modifier
-                            .clip(CircleShape)
-                            .background(bgColor)
-                            .clickable { selectedCategory = category }
-                            .padding(horizontal = 11.dp, vertical = 6.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(
+                                if (isSelected) Color(0xFF007AFF).copy(alpha = 0.14f) else tabInactiveBg
+                            )
+                            .border(
+                                1.dp,
+                                if (isSelected) Color(0xFF007AFF) else Color.Transparent,
+                                RoundedCornerShape(6.dp)
+                            )
+                            .clickable { onEasingChange(easingItem) }
+                            .padding(horizontal = 9.dp, vertical = 5.dp)
                     ) {
                         BasicText(
-                            text = category.label,
+                            text = easingItem.label,
                             style = TextStyle(
-                                color = if (isSelected) Color.White else textPrimary,
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.SemiBold
+                                color = if (isSelected) Color(0xFF007AFF) else (if (isDark) Color(0xFFCBD5E1) else Color(0xFF334155)),
+                                fontSize = 11.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                             )
                         )
                     }
                 }
             }
+        }
 
-            // Grid of 25 Transition Cards with Animated Schematic Mini-Thumbnails
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(3),
+        // 4. CATEGORY SELECTOR (Capsule/Pill free, Clean Tabs)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // "None (Cut)" Tab
+            val isNoneSelected = selectedEffect == null
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(260.dp),
-                contentPadding = PaddingValues(vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(if (isNoneSelected) Color(0xFFE53935).copy(alpha = 0.15f) else tabInactiveBg)
+                    .border(1.dp, if (isNoneSelected) Color(0xFFE53935) else Color.Transparent, RoundedCornerShape(6.dp))
+                    .clickable { onSelectEffect(null) }
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
             ) {
-                items(
-                    items = filteredEffects,
-                    key = { it.id }
-                ) { effectItem ->
-                    TransitionEffectGridCard(
-                        effect = effectItem,
-                        isSelected = effectItem == selectedEffect,
-                        liveProgress = liveProgress,
-                        isDark = isDark,
-                        onClick = {
-                            onSelectEffect(effectItem)
-                        }
+                BasicText(
+                    text = "None (Cut)",
+                    style = TextStyle(
+                        color = if (isNoneSelected) Color(0xFFE53935) else (if (isDark) Color(0xFFCBD5E1) else Color(0xFF334155)),
+                        fontSize = 11.5.sp,
+                        fontWeight = if (isNoneSelected) FontWeight.Bold else FontWeight.Medium
+                    )
+                )
+            }
+
+            TransitionCategory.entries.forEach { category ->
+                val isSelected = selectedCategory == category
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(if (isSelected) Color(0xFF007AFF).copy(alpha = 0.15f) else tabInactiveBg)
+                        .border(1.dp, if (isSelected) Color(0xFF007AFF) else Color.Transparent, RoundedCornerShape(6.dp))
+                    .clickable { selectedCategory = category }
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    BasicText(
+                        text = category.label,
+                        style = TextStyle(
+                            color = if (isSelected) Color(0xFF007AFF) else (if (isDark) Color(0xFFCBD5E1) else Color(0xFF334155)),
+                            fontSize = 11.5.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                        )
                     )
                 }
+            }
+        }
+
+        // 5. TRANSITION GRID (Miniature Plain Red 'A' to Plain Blue 'B' previews)
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(3),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(260.dp),
+            contentPadding = PaddingValues(vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(
+                items = filteredEffects,
+                key = { it.id }
+            ) { effectItem ->
+                TransitionEffectGridCard(
+                    effect = effectItem,
+                    isSelected = effectItem == selectedEffect,
+                    liveProgress = liveProgress,
+                    isDark = isDark,
+                    onClick = {
+                        onSelectEffect(effectItem)
+                    }
+                )
             }
         }
     }
@@ -1438,7 +1370,7 @@ fun AppleVideoTransitionStudio(
 
 /**
  * Individual card inside the Transition Picker grid showing a miniature animated
- * visual diagram of the transition effect and its name.
+ * visual diagram of the transition effect and its name with Plain Red "A" and Plain Blue "B".
  */
 @Composable
 fun TransitionEffectGridCard(
@@ -1457,7 +1389,7 @@ fun TransitionEffectGridCard(
         targetValue = if (isSelected) {
             if (isDark) Color(0xFF1E293B) else Color(0xFFEFF6FF)
         } else {
-            if (isDark) Color(0xFF222533) else Color(0xFFF9F9FB)
+            if (isDark) Color(0xFF1C1E2A) else Color(0xFFF9F9FB)
         },
         animationSpec = tween(150),
         label = "CardContainerBg"
@@ -1465,69 +1397,29 @@ fun TransitionEffectGridCard(
 
     Column(
         modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(10.dp))
             .background(containerBg)
             .border(
                 width = if (isSelected) 2.dp else 1.dp,
                 color = borderColor,
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(10.dp)
             )
             .clickable(onClick = onClick)
             .padding(6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(5.dp)
     ) {
-        // Miniature Real-Time Transition Preview Thumbnail
+        // Miniature Real-Time Transition Preview Thumbnail (Plain Red A and Plain Blue B)
         VideoTransitionRenderer(
             effect = effect,
             progress = if (isSelected) liveProgress else 0.48f,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(44.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .border(0.5.dp, Color.Black.copy(alpha = 0.15f), RoundedCornerShape(8.dp)),
-            outgoingClip = {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.linearGradient(
-                                listOf(Color(0xFF3A3A3C), Color(0xFF8E8E93))
-                            )
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    BasicText(
-                        text = "A",
-                        style = TextStyle(
-                            color = Color.White.copy(alpha = 0.8f),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    )
-                }
-            },
-            incomingClip = {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.linearGradient(
-                                listOf(Color(0xFF148EFF), Color(0xFF0062CC))
-                            )
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    BasicText(
-                        text = "B",
-                        style = TextStyle(
-                            color = Color.White,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    )
-                }
-            }
+                .clip(RoundedCornerShape(6.dp))
+                .border(0.5.dp, Color.Black.copy(alpha = 0.15f), RoundedCornerShape(6.dp)),
+            outgoingClip = { DemoOutgoingVideoClip(letterSize = 18.sp) },
+            incomingClip = { DemoIncomingVideoClip(letterSize = 18.sp) }
         )
 
         // Transition Title

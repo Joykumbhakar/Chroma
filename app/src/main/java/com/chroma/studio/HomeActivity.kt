@@ -369,31 +369,19 @@ class HomeActivity : ComponentActivity() {
                             vm.repository.save(
                                 ChromaWork(
                                     id = remixId,
-                                    name = "Remix of ${work.title}",
-                                    description = "Remixed from @${work.authorUsername}",
+                                    name = work.title,
+                                    description = work.description,
                                     layersJson = work.jsonUrl,
                                     canvasShape = "rounded",
-                                    lastModifiedAt = System.currentTimeMillis(),
-                                    remixedFromPostId = work.id,
-                                    remixedFromAuthorId = work.creatorId,
-                                    remixedFromAuthorUsername = work.authorUsername,
-                                    remixedFromAuthorDisplayName = work.authorDisplayName,
-                                    remixedFromAuthorAvatar = work.authorAvatarUrl,
-                                    remixedFromAuthorVerified = work.authorVerified
+                                    lastModifiedAt = System.currentTimeMillis()
                                 )
                             )
                             val intent = Intent(this@HomeActivity, MainActivity::class.java).apply {
                                 putExtra(MainActivity.EXTRA_WORK_ID, remixId)
-                                putExtra(MainActivity.EXTRA_WORK_NAME, "Remix of ${work.title}")
-                                putExtra(MainActivity.EXTRA_WORK_DESCRIPTION, "Remixed from @${work.authorUsername}")
+                                putExtra(MainActivity.EXTRA_WORK_NAME, work.title)
+                                putExtra(MainActivity.EXTRA_WORK_DESCRIPTION, work.description)
                                 putExtra(MainActivity.EXTRA_LAYERS_JSON, work.jsonUrl)
                                 putExtra(MainActivity.EXTRA_CANVAS_SHAPE, "rounded")
-                                putExtra(MainActivity.EXTRA_REMIX_POST_ID, work.id)
-                                putExtra(MainActivity.EXTRA_REMIX_AUTHOR_ID, work.creatorId)
-                                putExtra(MainActivity.EXTRA_REMIX_AUTHOR_USERNAME, work.authorUsername)
-                                putExtra(MainActivity.EXTRA_REMIX_AUTHOR_DISPLAY_NAME, work.authorDisplayName)
-                                putExtra(MainActivity.EXTRA_REMIX_AUTHOR_AVATAR, work.authorAvatarUrl)
-                                putExtra(MainActivity.EXTRA_REMIX_AUTHOR_VERIFIED, work.authorVerified)
                             }
                             startActivity(intent)
                         }

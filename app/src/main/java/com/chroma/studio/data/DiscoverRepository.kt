@@ -337,19 +337,14 @@ class DiscoverRepository {
         if (postId.isBlank() || userId.isBlank()) return
         try {
             val docRef = collection.document(postId)
-            db.runTransaction { transaction ->
-                val snapshot = transaction.get(docRef)
-                val remixedBy = snapshot.get("remixedBy") as? List<String> ?: emptyList()
-                val currentRemixes = snapshot.getLong("remixCount") ?: 0L
-                if (!remixedBy.contains(userId)) {
-                    transaction.update(
-                        docRef,
-                        "remixedBy", FieldValue.arrayUnion(userId),
-                        "remixCount", currentRemixes + 1
-                    )
-                }
-            }.await()
+            docRef.update(
+                mapOf(
+                    "remixedBy" to FieldValue.arrayUnion(userId),
+                    "remixCount" to FieldValue.increment(1)
+                )
+            ).await()
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
             Log.w("DiscoverRepository", "Could not increment remix count", e)
         }
     }
