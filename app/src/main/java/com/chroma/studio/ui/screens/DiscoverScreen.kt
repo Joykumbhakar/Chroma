@@ -1544,10 +1544,11 @@ fun FeedPostCard(
     val currentOnLikeClick by rememberUpdatedState(onLikeClick)
     val currentOnRequireLogin by rememberUpdatedState(onRequireLogin)
 
-    var locallyLiked by remember(work.id) { mutableStateOf(isLiked) }
+    val initialLiked = isLiked || (!currentUserId.isNullOrBlank() && work.likedBy.contains(currentUserId))
+    var locallyLiked by remember(work.id, isLiked, work.likedBy) { mutableStateOf(initialLiked) }
     var localLikesCountDelta by remember(work.id) { mutableIntStateOf(0) }
-    LaunchedEffect(isLiked) {
-        locallyLiked = isLiked
+    LaunchedEffect(isLiked, work.likedBy) {
+        locallyLiked = isLiked || (!currentUserId.isNullOrBlank() && work.likedBy.contains(currentUserId))
         localLikesCountDelta = 0
     }
 
@@ -1758,9 +1759,12 @@ fun FeedPostCard(
                     fontWeight = FontWeight.Medium
                 )
                 Spacer(Modifier.width(4.dp))
-                IconButton(
-                    onClick = { showMenu = true },
-                    modifier = Modifier.size(32.dp)
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .clickable { showMenu = true },
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = LucideComposeIcons.MoreHorizontal,
@@ -1846,13 +1850,13 @@ fun FeedPostCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp)
-                .padding(top = 12.dp, bottom = 8.dp),
+                .padding(top = 10.dp, bottom = 8.dp),
             contentAlignment = Alignment.CenterStart
         ) {
-            // Left Action Group
+            // Left Action Group: Like, Remix, Download
             Row(
                 modifier = Modifier.align(Alignment.CenterStart),
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // 1. Like Button
@@ -1862,6 +1866,7 @@ fun FeedPostCard(
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
+                        .height(36.dp)
                         .clip(RoundedCornerShape(8.dp))
                         .clickable {
                             val uid = FirebaseAuth.getInstance().currentUser?.uid
@@ -1878,7 +1883,7 @@ fun FeedPostCard(
                                 onLikeClick()
                             }
                         }
-                        .padding(4.dp)
+                        .padding(horizontal = 4.dp, vertical = 6.dp)
                 ) {
                     Icon(
                         imageVector = if (effectiveLiked) ChromaIcons.HeartFilled else Lucide.Heart,
@@ -1892,7 +1897,7 @@ fun FeedPostCard(
                             text = "$displayLikesCount",
                             color = if (effectiveLiked) Color(0xFFFF2D55) else colors.textMain,
                             fontSize = 12.5.sp,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
@@ -1906,6 +1911,7 @@ fun FeedPostCard(
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
+                            .height(36.dp)
                             .clip(RoundedCornerShape(8.dp))
                             .clickable {
                                 val uid = FirebaseAuth.getInstance().currentUser?.uid
@@ -1920,7 +1926,7 @@ fun FeedPostCard(
                                     else onRemixClick()
                                 }
                             }
-                            .padding(4.dp)
+                            .padding(horizontal = 4.dp, vertical = 6.dp)
                     ) {
                         Icon(
                             imageVector = rememberLucideHeartHandshakeIcon(
@@ -1952,6 +1958,7 @@ fun FeedPostCard(
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
+                        .height(36.dp)
                         .clip(RoundedCornerShape(8.dp))
                         .clickable {
                             val uid = FirebaseAuth.getInstance().currentUser?.uid
@@ -1965,20 +1972,20 @@ fun FeedPostCard(
                                 onDownloadClick()
                             }
                         }
-                        .padding(4.dp)
+                        .padding(horizontal = 4.dp, vertical = 6.dp)
                 ) {
                     Icon(
                         imageVector = LucideComposeIcons.Download,
                         contentDescription = "Save to Studio",
                         tint = if (effectiveDownloaded) Color(0xFF007AFF) else colors.textMain,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(22.dp)
                     )
                     if (!work.hideDownloadsCount && displayDownloadCount > 0) {
-                        Spacer(Modifier.width(4.dp))
+                        Spacer(Modifier.width(5.dp))
                         Text(
                             text = "$displayDownloadCount",
                             color = if (effectiveDownloaded) Color(0xFF007AFF) else colors.textMain.copy(alpha = 0.85f),
-                            fontSize = 12.sp,
+                            fontSize = 12.5.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
@@ -2003,7 +2010,7 @@ fun FeedPostCard(
             // Right Action Group: Save & Share
             Row(
                 modifier = Modifier.align(Alignment.CenterEnd),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // 4. Save / Bookmark Button
@@ -2013,6 +2020,7 @@ fun FeedPostCard(
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
+                        .height(36.dp)
                         .clip(RoundedCornerShape(8.dp))
                         .clickable {
                             val uid = FirebaseAuth.getInstance().currentUser?.uid
@@ -2029,7 +2037,7 @@ fun FeedPostCard(
                                 onSaveClick?.invoke()
                             }
                         }
-                        .padding(4.dp)
+                        .padding(horizontal = 4.dp, vertical = 6.dp)
                 ) {
                     Icon(
                         imageVector = LucideComposeIcons.bookmark(
@@ -2039,14 +2047,14 @@ fun FeedPostCard(
                         ),
                         contentDescription = "Bookmark",
                         tint = Color.Unspecified,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(22.dp)
                     )
                     if (!work.hideSavesCount && displaySaveCount > 0) {
-                        Spacer(Modifier.width(4.dp))
+                        Spacer(Modifier.width(5.dp))
                         Text(
                             text = "$displaySaveCount",
                             color = if (effectiveSaved) Color(0xFF007AFF) else colors.textMain.copy(alpha = 0.85f),
-                            fontSize = 12.sp,
+                            fontSize = 12.5.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
@@ -2060,6 +2068,7 @@ fun FeedPostCard(
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
+                        .height(36.dp)
                         .clip(RoundedCornerShape(8.dp))
                         .clickable {
                             val uid = FirebaseAuth.getInstance().currentUser?.uid
@@ -2073,20 +2082,20 @@ fun FeedPostCard(
                                 onShareClick?.invoke()
                             }
                         }
-                        .padding(4.dp)
+                        .padding(horizontal = 4.dp, vertical = 6.dp)
                 ) {
                     Icon(
                         imageVector = Lucide.Share2,
                         contentDescription = "Share",
                         tint = if (effectiveShared) Color(0xFF007AFF) else colors.textMain,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(22.dp)
                     )
                     if (!work.hideSharesCount && displayShareCount > 0) {
-                        Spacer(Modifier.width(4.dp))
+                        Spacer(Modifier.width(5.dp))
                         Text(
                             text = "$displayShareCount",
                             color = if (effectiveShared) Color(0xFF007AFF) else colors.textMain.copy(alpha = 0.85f),
-                            fontSize = 12.sp,
+                            fontSize = 12.5.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
@@ -2268,11 +2277,12 @@ fun FeedPostCard(
             }
         }
 
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(8.dp))
             HorizontalDivider(
                 thickness = 0.5.dp,
-                color = colors.glassBorder
+                color = if (colors.isDark) Color(0xFF24242A) else Color(0xFFE5E5EA)
             )
+            Spacer(Modifier.height(4.dp))
         }
 
     // 3-Dot Options Bottom Sheet (Opens from bottom like bottom drawer, with Normal User & Admin modes)

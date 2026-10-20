@@ -38,7 +38,9 @@ rules_version = '2';
 //      - jsonUrl: string (compressed vector layers)
 //      - imageUrl: string (Cloudinary CDN URL)
 //      - likesCount: int (interaction counter)
+//      - likedBy: list of string
 //      - remixCount: int (interaction counter)
+//      - remixedBy: list of string
 //      - downloadCount: int (interaction counter)
 //      - downloadedBy: list of string
 //      - saveCount: int (interaction counter)
@@ -202,7 +204,7 @@ service cloud.firestore {
       allow update: if isAuthenticated() && (
         request.auth.uid == resource.data.creatorId ||
         request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['likesCount', 'remixCount', 'downloadCount', 'downloadedBy', 'downloadsCount', 'saveCount', 'savedBy', 'shareCount', 'sharedBy'])
+          .hasOnly(['likesCount', 'likedBy', 'remixCount', 'remixedBy', 'downloadCount', 'downloadedBy', 'downloadsCount', 'saveCount', 'savedBy', 'shareCount', 'sharedBy'])
       );
 
       // Only creator can delete their work

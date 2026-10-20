@@ -81,6 +81,7 @@ data class DiscoverPost(
     val description: String = "",
     val aspectRatio: String = "4:3",
     val likesCount: Int = 0,
+    val likedBy: List<String> = emptyList(),
     val remixCount: Int = 0,
     val remixedBy: List<String> = emptyList(),
     val downloadCount: Int = 0,

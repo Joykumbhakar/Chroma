@@ -47,6 +47,39 @@ class DiscoverViewModel : ViewModel() {
     init {
         loadWorks()
         loadTrending()
+        com.google.firebase.auth.FirebaseAuth.getInstance().addAuthStateListener { auth ->
+            val uid = auth.currentUser?.uid
+            if (!uid.isNullOrBlank()) {
+                refreshUserInteractions(uid)
+            }
+        }
+    }
+
+    fun refreshUserInteractions(userId: String) {
+        viewModelScope.launch {
+            try {
+                val currentWorks = _works.value
+                val instantLiked = currentWorks.filter { it.likedBy.contains(userId) }.map { it.id }.toSet()
+                _likedWorkIds.value = _likedWorkIds.value + instantLiked
+
+                coroutineScope {
+                    val likedAsync = async {
+                        val unconfirmedWorks = currentWorks.filter { !it.likedBy.contains(userId) }
+                        val extraLikes = unconfirmedWorks.map { work ->
+                            async { if (repository.hasLiked(work.id, userId)) work.id else null }
+                        }.awaitAll().filterNotNull()
+                        instantLiked + extraLikes
+                    }
+                    val savedAsync = async {
+                        repository.getSavedWorkIds(userId)
+                    }
+                    _likedWorkIds.value = _likedWorkIds.value + likedAsync.await()
+                    _savedWorkIds.value = savedAsync.await()
+                }
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+            }
+        }
     }
 
     fun loadWorks(isRefresh: Boolean = false) {
@@ -63,20 +96,23 @@ class DiscoverViewModel : ViewModel() {
                 _works.value = recentWorks
 
                 val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-                if (currentUser != null) {
+                val currentUid = currentUser?.uid
+                if (!currentUid.isNullOrBlank()) {
+                    val instantLiked = recentWorks.filter { it.likedBy.contains(currentUid) }.map { it.id }.toSet()
+                    _likedWorkIds.value = _likedWorkIds.value + instantLiked
+
                     coroutineScope {
                         val likedAsync = async {
-                            val likedSet = mutableSetOf<String>()
-                            val results = recentWorks.map { work ->
-                                async { if (repository.hasLiked(work.id, currentUser.uid)) work.id else null }
-                            }.awaitAll()
-                            likedSet.addAll(results.filterNotNull())
-                            likedSet
+                            val unconfirmedWorks = recentWorks.filter { !it.likedBy.contains(currentUid) }
+                            val extraLikes = unconfirmedWorks.map { work ->
+                                async { if (repository.hasLiked(work.id, currentUid)) work.id else null }
+                            }.awaitAll().filterNotNull()
+                            instantLiked + extraLikes
                         }
                         val savedAsync = async {
-                            repository.getSavedWorkIds(currentUser.uid)
+                            repository.getSavedWorkIds(currentUid)
                         }
-                        _likedWorkIds.value = likedAsync.await()
+                        _likedWorkIds.value = _likedWorkIds.value + likedAsync.await()
                         _savedWorkIds.value = savedAsync.await()
                     }
                 }
@@ -115,13 +151,18 @@ class DiscoverViewModel : ViewModel() {
                     if (newWorks.size < 10) hasMoreWorks = false
                     _works.value = _works.value + newWorks
                     val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-                    if (currentUser != null) {
-                        val likedSet = _likedWorkIds.value.toMutableSet()
-                        val results = newWorks.map { work ->
-                            async { if (repository.hasLiked(work.id, currentUser.uid)) work.id else null }
-                        }.awaitAll()
-                        likedSet.addAll(results.filterNotNull())
-                        _likedWorkIds.value = likedSet
+                    val currentUid = currentUser?.uid
+                    if (!currentUid.isNullOrBlank()) {
+                        val instantLiked = newWorks.filter { it.likedBy.contains(currentUid) }.map { it.id }.toSet()
+                        _likedWorkIds.value = _likedWorkIds.value + instantLiked
+
+                        val unconfirmedWorks = newWorks.filter { !it.likedBy.contains(currentUid) }
+                        if (unconfirmedWorks.isNotEmpty()) {
+                            val results = unconfirmedWorks.map { work ->
+                                async { if (repository.hasLiked(work.id, currentUid)) work.id else null }
+                            }.awaitAll()
+                            _likedWorkIds.value = _likedWorkIds.value + results.filterNotNull()
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -159,10 +200,22 @@ class DiscoverViewModel : ViewModel() {
             onOptimisticApply = { nextLiked ->
                 _likedWorkIds.value = if (nextLiked) _likedWorkIds.value + workId else _likedWorkIds.value - workId
                 _works.value = _works.value.map {
-                    if (it.id == workId) it.copy(likesCount = maxOf(0, it.likesCount + if (nextLiked) 1 else -1)) else it
+                    if (it.id == workId) {
+                        val newLikedBy = if (nextLiked) (it.likedBy + uid).distinct() else (it.likedBy - uid)
+                        it.copy(
+                            likesCount = maxOf(0, it.likesCount + if (nextLiked) 1 else -1),
+                            likedBy = newLikedBy
+                        )
+                    } else it
                 }
                 _trendingWorks.value = _trendingWorks.value.map {
-                    if (it.id == workId) it.copy(likesCount = maxOf(0, it.likesCount + if (nextLiked) 1 else -1)) else it
+                    if (it.id == workId) {
+                        val newLikedBy = if (nextLiked) (it.likedBy + uid).distinct() else (it.likedBy - uid)
+                        it.copy(
+                            likesCount = maxOf(0, it.likesCount + if (nextLiked) 1 else -1),
+                            likedBy = newLikedBy
+                        )
+                    } else it
                 }
                 if (!nextLiked) {
                     _likedWorks.value = _likedWorks.value.filter { it.id != workId }

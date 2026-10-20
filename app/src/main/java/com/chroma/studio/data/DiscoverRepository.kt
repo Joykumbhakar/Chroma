@@ -34,7 +34,11 @@ class DiscoverRepository {
                 query = query.startAfter(lastTimestamp)
             }
             val snapshot = query.get().await()
-            val posts = snapshot.toObjects(DiscoverPost::class.java)
+            val posts = snapshot.documents.mapNotNull { doc ->
+                doc.toObject(DiscoverPost::class.java)?.copy(
+                    id = if (doc.id.isNotBlank()) doc.id else (doc.toObject(DiscoverPost::class.java)?.id ?: "")
+                )
+            }
             posts.filter { !it.isArchived }
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
@@ -353,7 +357,7 @@ class DiscoverRepository {
     suspend fun fetchPostById(postId: String): DiscoverPost? {
         return try {
             val doc = collection.document(postId).get().await()
-            doc.toObject(DiscoverPost::class.java)
+            doc.toObject(DiscoverPost::class.java)?.copy(id = doc.id)
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("DiscoverRepository", "Error fetching post by ID", e)
@@ -368,7 +372,11 @@ class DiscoverRepository {
                 .orderBy("timestamp", Query.Direction.DESCENDING)
                 .get()
                 .await()
-            val posts = snapshot.toObjects(DiscoverPost::class.java)
+            val posts = snapshot.documents.mapNotNull { doc ->
+                doc.toObject(DiscoverPost::class.java)?.copy(
+                    id = if (doc.id.isNotBlank()) doc.id else (doc.toObject(DiscoverPost::class.java)?.id ?: "")
+                )
+            }
             posts.filter { !it.isArchived }
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
@@ -384,7 +392,11 @@ class DiscoverRepository {
                 .orderBy("timestamp", Query.Direction.DESCENDING)
                 .get()
                 .await()
-            val posts = snapshot.toObjects(DiscoverPost::class.java)
+            val posts = snapshot.documents.mapNotNull { doc ->
+                doc.toObject(DiscoverPost::class.java)?.copy(
+                    id = if (doc.id.isNotBlank()) doc.id else (doc.toObject(DiscoverPost::class.java)?.id ?: "")
+                )
+            }
             posts.filter { it.isArchived }
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
@@ -431,35 +443,65 @@ class DiscoverRepository {
     suspend fun setLike(workId: String, userId: String, targetLiked: Boolean): Boolean {
         if (workId.isBlank() || userId.isBlank()) return false
         return try {
+            val workRef = collection.document(workId)
             val likeRef = collection.document(workId).collection("likes").document(userId)
             val userLikeRef = usersCollection.document(userId).collection("liked_posts").document(workId)
-            val workRef = collection.document(workId)
+            val now = System.currentTimeMillis()
 
-            db.runTransaction { transaction ->
-                val likeDoc = transaction.get(likeRef)
-                val alreadyLiked = likeDoc.exists()
-                if (alreadyLiked == targetLiked) {
-                    return@runTransaction true // idempotent success
+            if (targetLiked) {
+                // 1. Atomically update community_works post: add to likedBy array and increment likesCount
+                val updates = mapOf(
+                    "likedBy" to FieldValue.arrayUnion(userId),
+                    "likesCount" to FieldValue.increment(1)
+                )
+                try {
+                    workRef.update(updates).await()
+                } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    workRef.set(mapOf("likedBy" to listOf(userId), "likesCount" to 1), SetOptions.merge()).await()
                 }
-                val workDoc = transaction.get(workRef)
-                val currentLikes = if (workDoc.exists()) (workDoc.getLong("likesCount") ?: 0L) else 0L
 
-                if (targetLiked) {
-                    val now = System.currentTimeMillis()
-                    transaction.set(likeRef, mapOf("timestamp" to now))
-                    transaction.set(userLikeRef, mapOf("likedAt" to now))
-                    if (workDoc.exists()) {
-                        transaction.update(workRef, "likesCount", currentLikes + 1)
-                    }
-                } else {
-                    transaction.delete(likeRef)
-                    transaction.delete(userLikeRef)
-                    if (workDoc.exists()) {
-                        transaction.update(workRef, "likesCount", maxOf(0, currentLikes - 1))
-                    }
+                // 2. Resilient subcollection updates
+                try {
+                    likeRef.set(mapOf("timestamp" to now)).await()
+                } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    Log.w("DiscoverRepository", "likeRef set warning", e)
                 }
-                true
-            }.await()
+                try {
+                    userLikeRef.set(mapOf("likedAt" to now)).await()
+                } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    Log.w("DiscoverRepository", "userLikeRef set warning", e)
+                }
+            } else {
+                // 1. Atomically update community_works post: remove from likedBy array and decrement likesCount
+                val updates = mapOf(
+                    "likedBy" to FieldValue.arrayRemove(userId),
+                    "likesCount" to FieldValue.increment(-1)
+                )
+                try {
+                    workRef.update(updates).await()
+                } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    Log.w("DiscoverRepository", "workRef unlike update warning", e)
+                }
+
+                // 2. Remove from subcollections
+                try {
+                    likeRef.delete().await()
+                } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    Log.w("DiscoverRepository", "likeRef delete warning", e)
+                }
+                try {
+                    userLikeRef.delete().await()
+                } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    Log.w("DiscoverRepository", "userLikeRef delete warning", e)
+                }
+            }
+            true
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("DiscoverRepository", "Error setting like", e)
@@ -552,9 +594,16 @@ class DiscoverRepository {
     }
     
     suspend fun hasLiked(workId: String, userId: String): Boolean {
+        if (workId.isBlank() || userId.isBlank()) return false
         return try {
-            val likeDoc = collection.document(workId).collection("likes").document(userId).get().await()
-            likeDoc.exists()
+            val doc = collection.document(workId).get().await()
+            val likedBy = doc.get("likedBy") as? List<String>
+            if (likedBy != null) {
+                likedBy.contains(userId)
+            } else {
+                val likeDoc = collection.document(workId).collection("likes").document(userId).get().await()
+                likeDoc.exists()
+            }
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             false
@@ -825,7 +874,11 @@ class DiscoverRepository {
                 .limit(limit)
                 .get()
                 .await()
-            snapshot.toObjects(DiscoverPost::class.java)
+            snapshot.documents.mapNotNull { doc ->
+                doc.toObject(DiscoverPost::class.java)?.copy(
+                    id = if (doc.id.isNotBlank()) doc.id else (doc.toObject(DiscoverPost::class.java)?.id ?: "")
+                )
+            }
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("DiscoverRepository", "Error fetching trending works", e)
