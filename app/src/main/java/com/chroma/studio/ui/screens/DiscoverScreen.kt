@@ -2187,60 +2187,194 @@ fun parseAspectRatio(ratioStr: String?, postType: String = ""): Float {
     }
 }
 
+class FeedPostModalState(
+    val isOwner: Boolean
+) {
+    var showMenu by mutableStateOf(false)
+    var showDeleteConfirm by mutableStateOf(false)
+    var showBlockConfirm by mutableStateOf(false)
+    var showEditModal by mutableStateOf(false)
+    var showVisibilitySettings by mutableStateOf(false)
+    var showAboutDialog by mutableStateOf(false)
+    var showAnalyticsModal by mutableStateOf(false)
+    var showCreatorProfileModal by mutableStateOf(false)
+    var showOriginalPostModal by mutableStateOf(false)
+    var activeRole by mutableStateOf(if (isOwner) DrawerRole.ADMIN else DrawerRole.USER)
+}
+
 @Composable
-fun FeedPostCard(
-    work: DiscoverPost,
-    isLiked: Boolean,
-    isSaved: Boolean = false,
-    isFollowingCreator: Boolean = false,
-    onToggleFollowCreator: (() -> Unit)? = null,
-    onShowGuidelines: (() -> Unit)? = null,
-    onShowToast: ((String) -> Unit)? = null,
-    repository: WorkRepository,
-    onRequireLogin: () -> Unit = {},
-    onLikeClick: () -> Unit = {},
-    onAuthorClick: (String) -> Unit = {},
-    onDownloadClick: () -> Unit = {},
-    onRemixClick: () -> Unit = {},
-    onRemixWork: ((DiscoverPost) -> Unit)? = null,
-    onDeleteWork: (String) -> Unit,
-    onArchiveWork: ((String) -> Unit)? = null,
-    onEditWork: (String, String, String) -> Unit,
-    onNavigateToOriginal: (String, String) -> Unit,
-    onShareClick: (() -> Unit)? = null,
-    onSaveClick: (() -> Unit)? = null,
-    onReportClick: ((String) -> Unit)? = null,
-    onMentionClick: ((String) -> Unit)? = null,
-    onTagClick: ((String) -> Unit)? = null,
-    onUpdateVisibility: ((hideLikes: Boolean, hideShares: Boolean, hideRemixes: Boolean, hideDownloads: Boolean, hideSaves: Boolean) -> Unit)? = null
+private fun FeedPostHeader(
+    displayName: String,
+    avatarUrl: String,
+    username: String,
+    timestamp: Long,
+    verified: Boolean,
+    isRemixPost: Boolean,
+    remixedFromAuthorUsername: String?,
+    isOwner: Boolean,
+    isFollowingCreator: Boolean,
+    onAvatarClick: () -> Unit,
+    onRemixTagClick: () -> Unit,
+    onToggleFollowCreator: (() -> Unit)?,
+    onOptionsClick: () -> Unit
 ) {
     val colors = LocalOscellionColors.current
-    val currentUserId = FirebaseAuth.getInstance().currentUser?.uid
-    val isOwner = !currentUserId.isNullOrBlank() && currentUserId == work.creatorId
-    val context = LocalContext.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Avatar (Clickable to open creator profile)
+        IosAvatarView(
+            name = displayName,
+            avatarUrl = avatarUrl,
+            size = 38.dp,
+            modifier = Modifier.clickable { onAvatarClick() }
+        )
 
-    var showMenu by remember { mutableStateOf(false) }
-    var showDeleteConfirm by remember { mutableStateOf(false) }
-    var showBlockConfirm by remember { mutableStateOf(false) }
-    var showEditModal by remember { mutableStateOf(false) }
-    var showVisibilitySettings by remember { mutableStateOf(false) }
-    var showAboutDialog by remember { mutableStateOf(false) }
-    var showAnalyticsModal by remember { mutableStateOf(false) }
-    var showCreatorProfileModal by remember { mutableStateOf(false) }
-    var showOriginalPostModal by remember { mutableStateOf(false) }
-    var activeRole by remember(isOwner) { mutableStateOf(if (isOwner) DrawerRole.ADMIN else DrawerRole.USER) }
+        Spacer(Modifier.width(10.dp))
 
-    var editTitle by remember(work.id) { mutableStateOf(work.title) }
-    var editDescription by remember(work.id) { mutableStateOf(work.description) }
-    var isTitleExpanded by remember { mutableStateOf(false) }
-    var isDescriptionExpanded by remember { mutableStateOf(false) }
+        // Author metadata column
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .clickable { onAvatarClick() },
+            verticalArrangement = Arrangement.Center
+        ) {
+            // Row 1: Name + Scalloped Verified Seal Badge
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = displayName,
+                    color = colors.textMain,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (verified) {
+                    ScallopedVerifiedBadge()
+                }
+            }
+
+            Spacer(Modifier.height(1.5.dp))
+
+            // Row 2: @username • time ago • [Remix of @author] • [Follow]
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = "@$username",
+                    color = Color(0xFF8E8E93),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "•",
+                    color = Color(0xFF8E8E93),
+                    fontSize = 10.sp
+                )
+                Text(
+                    text = getTimeAgo(timestamp),
+                    color = Color(0xFF8E8E93),
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.Medium
+                )
+
+                if (isRemixPost && !remixedFromAuthorUsername.isNullOrEmpty()) {
+                    Text(
+                        text = "•",
+                        color = Color(0xFF8E8E93),
+                        fontSize = 10.sp
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color(0xFF007AFF).copy(alpha = 0.12f))
+                            .clickable { onRemixTagClick() }
+                            .padding(horizontal = 5.dp, vertical = 1.5.dp)
+                    ) {
+                        Icon(
+                            imageVector = Lucide.Sparkles,
+                            contentDescription = "Remix",
+                            tint = Color(0xFF007AFF),
+                            modifier = Modifier.size(11.dp)
+                        )
+                        Text(
+                            text = "Remix of @$remixedFromAuthorUsername",
+                            color = Color(0xFF007AFF),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                if (!isOwner && username.isNotBlank()) {
+                    Text(
+                        text = "•",
+                        color = Color(0xFF8E8E93),
+                        fontSize = 10.sp
+                    )
+                    Text(
+                        text = if (isFollowingCreator) "Following" else "Follow",
+                        color = if (isFollowingCreator) Color(0xFF8E8E93) else Color(0xFF007AFF),
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.clickable {
+                            onToggleFollowCreator?.invoke()
+                        }
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.width(8.dp))
+
+        // 3-Dot Options Button
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .clickable { onOptionsClick() },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = LucideComposeIcons.MoreHorizontal,
+                contentDescription = "Options",
+                tint = Color(0xFF8E8E93),
+                modifier = Modifier.size(18.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun FeedPostActionRow(
+    work: DiscoverPost,
+    isLiked: Boolean,
+    isSaved: Boolean,
+    currentUserId: String?,
+    onRequireLogin: () -> Unit,
+    onLikeClick: () -> Unit,
+    onRemixClick: () -> Unit,
+    onRemixWork: ((DiscoverPost) -> Unit)?,
+    onDownloadClick: () -> Unit,
+    onSaveClick: (() -> Unit)?,
+    onShareClick: (() -> Unit)?
+) {
+    val colors = LocalOscellionColors.current
 
     // 1. LIKE
-    val doubleTapLikeState = rememberDoubleTapLikeState()
-    val currentIsLiked by rememberUpdatedState(isLiked)
-    val currentOnLikeClick by rememberUpdatedState(onLikeClick)
-    val currentOnRequireLogin by rememberUpdatedState(onRequireLogin)
-
     val initialLiked = isLiked || (!currentUserId.isNullOrBlank() && work.likedBy.contains(currentUserId))
     var locallyLiked by remember(work.id, isLiked, work.likedBy) { mutableStateOf(initialLiked) }
     var localLikesCountDelta by remember(work.id) { mutableIntStateOf(0) }
@@ -2293,7 +2427,664 @@ fun FeedPostCard(
         }
     }
 
-    val coroutineScope = rememberCoroutineScope()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Left Action Group: Like, Remix, Download
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 1. Like Button
+            val effectiveLiked = locallyLiked
+            val displayLikesCount = (work.likesCount + localLikesCountDelta).coerceAtLeast(0)
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .height(36.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable {
+                        val uid = FirebaseAuth.getInstance().currentUser?.uid
+                        if (uid.isNullOrBlank()) {
+                            onRequireLogin()
+                        } else {
+                            val nextLiked = !locallyLiked
+                            locallyLiked = nextLiked
+                            localLikesCountDelta = if (nextLiked) {
+                                if (!isLiked) 1 else 0
+                            } else {
+                                if (isLiked) -1 else 0
+                            }
+                            onLikeClick()
+                        }
+                    }
+                    .padding(horizontal = 4.dp, vertical = 6.dp)
+            ) {
+                Icon(
+                    imageVector = if (effectiveLiked) ChromaIcons.HeartFilled else Lucide.Heart,
+                    contentDescription = if (effectiveLiked) "Liked" else "Like",
+                    tint = if (effectiveLiked) Color(0xFFFF2D55) else colors.textMain,
+                    modifier = Modifier.size(22.dp)
+                )
+                if (!work.hideLikesCount && displayLikesCount > 0) {
+                    Spacer(Modifier.width(5.dp))
+                    Text(
+                        text = "$displayLikesCount",
+                        color = if (effectiveLiked) Color(0xFFFF2D55) else colors.textMain,
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+
+            // 2. Remix Button (HeartShape Handshake)
+            if (!work.turnOffRemix) {
+                val alreadyRemixed = currentUserId != null && work.remixedBy.contains(currentUserId)
+                val effectiveRemixed = locallyRemixed || alreadyRemixed
+                val displayRemixCount = (work.remixCount + localRemixCountDelta).coerceAtLeast(0)
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .height(36.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable {
+                            val uid = FirebaseAuth.getInstance().currentUser?.uid
+                            if (uid.isNullOrBlank()) {
+                                onRequireLogin()
+                            } else {
+                                if (!locallyRemixed && (currentUserId == null || !work.remixedBy.contains(currentUserId))) {
+                                    locallyRemixed = true
+                                    localRemixCountDelta = 1
+                                }
+                                if (onRemixWork != null) onRemixWork(work)
+                                else onRemixClick()
+                            }
+                        }
+                        .padding(horizontal = 4.dp, vertical = 6.dp)
+                ) {
+                    Icon(
+                        imageVector = rememberLucideHeartHandshakeIcon(
+                            isRemixed = effectiveRemixed || displayRemixCount > 0,
+                            strokeColor = if (effectiveRemixed) Color(0xFF007AFF) else colors.textMain,
+                            heartFillColor = if (effectiveRemixed) Color(0xFF007AFF).copy(alpha = 0.15f) else null
+                        ),
+                        contentDescription = "Remix",
+                        tint = Color.Unspecified,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    if (!work.hideRemixesCount && displayRemixCount > 0) {
+                        Spacer(Modifier.width(5.dp))
+                        Text(
+                            text = "$displayRemixCount",
+                            color = if (effectiveRemixed) Color(0xFF007AFF) else colors.textMain.copy(alpha = 0.85f),
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+
+            // 3. Download Button
+            val alreadyDownloaded = currentUserId != null && work.downloadedBy.contains(currentUserId)
+            val effectiveDownloaded = locallyDownloaded || alreadyDownloaded
+            val displayDownloadCount = (work.downloadCount + localDownloadCountDelta).coerceAtLeast(0)
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .height(36.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable {
+                        val uid = FirebaseAuth.getInstance().currentUser?.uid
+                        if (uid.isNullOrBlank()) {
+                            onRequireLogin()
+                        } else {
+                            if (!locallyDownloaded && (currentUserId == null || !work.downloadedBy.contains(currentUserId))) {
+                                locallyDownloaded = true
+                                localDownloadCountDelta = 1
+                            }
+                            onDownloadClick()
+                        }
+                    }
+                    .padding(horizontal = 4.dp, vertical = 6.dp)
+            ) {
+                Icon(
+                    imageVector = LucideComposeIcons.Download,
+                    contentDescription = "Save to Studio",
+                    tint = if (effectiveDownloaded) Color(0xFF007AFF) else colors.textMain,
+                    modifier = Modifier.size(22.dp)
+                )
+                if (!work.hideDownloadsCount && displayDownloadCount > 0) {
+                    Spacer(Modifier.width(5.dp))
+                    Text(
+                        text = "$displayDownloadCount",
+                        color = if (effectiveDownloaded) Color(0xFF007AFF) else colors.textMain.copy(alpha = 0.85f),
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        }
+
+        // Right Action Group: Save & Share
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 4. Save / Bookmark Button
+            val effectiveSaved = locallySaved
+            val displaySaveCount = (work.saveCount + localSaveCountDelta).coerceAtLeast(0)
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .height(36.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable {
+                        val uid = FirebaseAuth.getInstance().currentUser?.uid
+                        if (uid.isNullOrBlank()) {
+                            onRequireLogin()
+                        } else {
+                            val nextSaved = !locallySaved
+                            locallySaved = nextSaved
+                            localSaveCountDelta = if (nextSaved) {
+                                if (!isSaved) 1 else 0
+                            } else {
+                                if (isSaved) -1 else 0
+                            }
+                            onSaveClick?.invoke()
+                        }
+                    }
+                    .padding(horizontal = 4.dp, vertical = 6.dp)
+            ) {
+                Icon(
+                    imageVector = LucideComposeIcons.bookmark(
+                        isSaved = effectiveSaved,
+                        savedColor = Color(0xFF007AFF),
+                        outlineColor = colors.textMain
+                    ),
+                    contentDescription = "Bookmark",
+                    tint = Color.Unspecified,
+                    modifier = Modifier.size(22.dp)
+                )
+                if (!work.hideSavesCount && displaySaveCount > 0) {
+                    Spacer(Modifier.width(5.dp))
+                    Text(
+                        text = "$displaySaveCount",
+                        color = if (effectiveSaved) Color(0xFF007AFF) else colors.textMain.copy(alpha = 0.85f),
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+
+            // 5. Share Button
+            val alreadyShared = currentUserId != null && work.sharedBy.contains(currentUserId)
+            val effectiveShared = locallyShared || alreadyShared
+            val displayShareCount = (work.shareCount + localShareCountDelta).coerceAtLeast(0)
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .height(36.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable {
+                        val uid = FirebaseAuth.getInstance().currentUser?.uid
+                        if (uid.isNullOrBlank()) {
+                            onRequireLogin()
+                        } else {
+                            if (!locallyShared && (currentUserId == null || !work.sharedBy.contains(currentUserId))) {
+                                locallyShared = true
+                                localShareCountDelta = 1
+                            }
+                            onShareClick?.invoke()
+                        }
+                    }
+                    .padding(horizontal = 4.dp, vertical = 6.dp)
+            ) {
+                Icon(
+                    imageVector = Lucide.Share2,
+                    contentDescription = "Share",
+                    tint = if (effectiveShared) Color(0xFF007AFF) else colors.textMain,
+                    modifier = Modifier.size(22.dp)
+                )
+                if (!work.hideSharesCount && displayShareCount > 0) {
+                    Spacer(Modifier.width(5.dp))
+                    Text(
+                        text = "$displayShareCount",
+                        color = if (effectiveShared) Color(0xFF007AFF) else colors.textMain.copy(alpha = 0.85f),
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FeedPostMetadata(
+    work: DiscoverPost,
+    onTagClick: ((String) -> Unit)?,
+    onMentionClick: ((String) -> Unit)?
+) {
+    val colors = LocalOscellionColors.current
+    var isTitleExpanded by remember { mutableStateOf(false) }
+    var isDescriptionExpanded by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .padding(bottom = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        // Main Title (Max 2 lines then ... with smooth expand animation)
+        if (work.title.isNotBlank()) {
+            val needsTitleExpand = work.title.length > 85
+            val shortTitle = if (needsTitleExpand) work.title.take(85).trim() else work.title
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .animateContentSize(animationSpec = tween(380, easing = FluidCubicBezier))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {
+                        if (needsTitleExpand) isTitleExpanded = !isTitleExpanded
+                    }
+            ) {
+                Text(
+                    text = buildAnnotatedString {
+                        if (!needsTitleExpand || isTitleExpanded) {
+                            append(work.title)
+                        } else {
+                            append(shortTitle)
+                            withStyle(
+                                SpanStyle(
+                                    color = Color(0xFF007AFF),
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.5.sp
+                                )
+                            ) {
+                                append(" ...")
+                            }
+                        }
+                    },
+                    fontSize = 13.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.textMain,
+                    lineHeight = 18.5.sp,
+                    maxLines = if (isTitleExpanded) Int.MAX_VALUE else 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        // Description (Max 2 lines then ...more with smooth expand animation)
+        if (work.description.isNotBlank()) {
+            val needsDescExpand = work.description.length > 80
+            val shortDesc = if (needsDescExpand) work.description.take(80).trim() else work.description
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .animateContentSize(animationSpec = tween(380, easing = FluidCubicBezier))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {
+                        if (needsDescExpand) isDescriptionExpanded = !isDescriptionExpanded
+                    }
+            ) {
+                Text(
+                    text = buildAnnotatedString {
+                        if (!needsDescExpand || isDescriptionExpanded) {
+                            append(work.description)
+                            if (needsDescExpand) {
+                                withStyle(
+                                    SpanStyle(
+                                        color = Color(0xFF007AFF),
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                ) {
+                                    append(" (less)")
+                                }
+                            }
+                        } else {
+                            append(shortDesc)
+                            withStyle(
+                                SpanStyle(
+                                    color = Color(0xFF007AFF),
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 11.5.sp
+                                )
+                            ) {
+                                append(" ...more")
+                            }
+                        }
+                    },
+                    fontSize = 12.sp,
+                    color = colors.textMain.copy(alpha = 0.85f),
+                    lineHeight = 16.5.sp,
+                    maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        // Tags, Mentions, Trending (Clean reference inline text style without capsules or pill borders)
+        val trendingLabel = work.trendingTag ?: if (work.tags.any { it.contains("trend", ignoreCase = true) }) "Trending" else null
+        val hasTagsOrMentions = work.tags.isNotEmpty() || work.mentions.isNotEmpty() || trendingLabel != null
+        if (hasTagsOrMentions) {
+            Spacer(Modifier.height(4.dp))
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                if (trendingLabel != null) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) {
+                            val target = work.tags.firstOrNull() ?: trendingLabel
+                            onTagClick?.invoke(target)
+                        }
+                    ) {
+                        Icon(
+                            imageVector = LucideComposeIcons.TrendingUp,
+                            contentDescription = null,
+                            tint = if (colors.isDark) Color(0xFFF59E0B) else Color(0xFFB45309),
+                            modifier = Modifier.size(13.5.dp)
+                        )
+                        Spacer(Modifier.width(3.5.dp))
+                        Text(
+                            text = trendingLabel,
+                            color = if (colors.isDark) Color(0xFFF59E0B) else Color(0xFFB45309),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                work.tags.forEach { rawTag ->
+                    val cleanTag = if (rawTag.startsWith("#")) rawTag else "#$rawTag"
+                    Text(
+                        text = cleanTag,
+                        color = Color(0xFF007AFF),
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) {
+                            onTagClick?.invoke(cleanTag)
+                        }
+                    )
+                }
+
+                work.mentions.forEach { rawMention ->
+                    val handle = if (rawMention.startsWith("@")) rawMention else "@$rawMention"
+                    Text(
+                        text = handle,
+                        color = if (colors.isDark) Color(0xFFA1A1AA) else Color(0xFF334155),
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) {
+                            onMentionClick?.invoke(handle)
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FeedPostModals(
+    work: DiscoverPost,
+    isOwner: Boolean,
+    modalState: FeedPostModalState,
+    resolvedDisplayName: String,
+    resolvedAvatarUrl: String,
+    resolvedVerified: Boolean,
+    isFollowingCreator: Boolean,
+    onToggleFollowCreator: (() -> Unit)?,
+    onAuthorClick: (String) -> Unit,
+    onReportClick: ((String) -> Unit)?,
+    onArchiveWork: ((String) -> Unit)?,
+    onDeleteWork: (String) -> Unit,
+    onEditWork: (String, String, String) -> Unit,
+    onShowGuidelines: (() -> Unit)?,
+    onShowToast: ((String) -> Unit)?,
+    onNavigateToOriginal: (String, String) -> Unit,
+    onRemixWork: ((DiscoverPost) -> Unit)?,
+    onUpdateVisibility: ((hideLikes: Boolean, hideShares: Boolean, hideRemixes: Boolean, hideDownloads: Boolean, hideSaves: Boolean) -> Unit)?
+) {
+    // 3-Dot Options Bottom Sheet (Opens from bottom like bottom drawer, with Normal User & Admin modes)
+    if (modalState.showMenu) {
+        PostOptionsDrawerSheet(
+            work = work,
+            isOwner = isOwner,
+            activeRole = if (isOwner) modalState.activeRole else DrawerRole.USER,
+            onRoleChange = { newRole -> if (isOwner) modalState.activeRole = newRole },
+            onDismiss = { modalState.showMenu = false },
+            onInterested = { modalState.showMenu = false },
+            onNotInterested = { modalState.showMenu = false },
+            onViewProfile = {
+                modalState.showMenu = false
+                modalState.showCreatorProfileModal = true
+            },
+            onAboutPost = {
+                modalState.showMenu = false
+                modalState.showAboutDialog = true
+            },
+            onReport = {
+                modalState.showMenu = false
+                onReportClick?.invoke(work.id)
+            },
+            onBlockUser = {
+                modalState.showMenu = false
+                modalState.showBlockConfirm = true
+            },
+            onCounterPrivacy = {
+                modalState.showMenu = false
+                if (isOwner) modalState.showVisibilitySettings = true
+            },
+            onEditPost = {
+                modalState.showMenu = false
+                if (isOwner) modalState.showEditModal = true
+            },
+            onViewAnalytics = {
+                modalState.showMenu = false
+                if (isOwner) modalState.showAnalyticsModal = true
+            },
+            onArchive = {
+                modalState.showMenu = false
+                if (isOwner) onArchiveWork?.invoke(work.id)
+            },
+            onDeletePost = {
+                modalState.showMenu = false
+                if (isOwner) modalState.showDeleteConfirm = true
+            },
+            onOpenGuidelines = {
+                modalState.showMenu = false
+                onShowGuidelines?.invoke()
+            },
+            onShowToast = onShowToast
+        )
+    }
+
+    // Original Post Inspector Modal/Drawer (Opens when Remixed tag or attribution is clicked)
+    if (modalState.showOriginalPostModal) {
+        OriginalPostInspectorSheet(
+            work = work,
+            onDismiss = { modalState.showOriginalPostModal = false },
+            onNavigateToOriginal = onNavigateToOriginal,
+            onRemixWork = onRemixWork
+        )
+    }
+
+    // Counter Privacy Settings Bottom Sheet
+    if (modalState.showVisibilitySettings) {
+        PostCountersSettingsSheet(
+            work = work,
+            onDismiss = { modalState.showVisibilitySettings = false },
+            onSave = { hideLikes, hideShares, hideRemixes, hideDownloads, hideSaves ->
+                onUpdateVisibility?.invoke(hideLikes, hideShares, hideRemixes, hideDownloads, hideSaves)
+            }
+        )
+    }
+
+    // About This Post Dialog
+    if (modalState.showAboutDialog) {
+        AppleDialog(
+            title = "About this Post",
+            message = "Author: $resolvedDisplayName (@${work.authorUsername})\n" +
+                      "Status: ${if (resolvedVerified) "Verified Creator ✓" else "Standard Account"}\n" +
+                      "Format: ${work.postType.replaceFirstChar { it.uppercase() }} (${work.aspectRatio})\n" +
+                      "Published: ${getTimeAgo(work.timestamp)}\n" +
+                      "Post ID: ${work.id}",
+            primaryButtonText = "Done",
+            onPrimaryClick = { modalState.showAboutDialog = false },
+            onDismiss = { modalState.showAboutDialog = false }
+        )
+    }
+
+    // Owner Analytics & Telemetry Modal (2x2 Telemetry Grid)
+    if (modalState.showAnalyticsModal) {
+        OwnerAnalyticsModal(
+            work = work,
+            onDismiss = { modalState.showAnalyticsModal = false }
+        )
+    }
+
+    // Live Edit Post Modal (Admin Role)
+    if (modalState.showEditModal) {
+        EditPostModal(
+            work = work,
+            onDismiss = { modalState.showEditModal = false },
+            onSaveEdits = { _, title, desc ->
+                modalState.showEditModal = false
+                if (isOwner) {
+                    onEditWork(work.id, title, desc)
+                }
+            }
+        )
+    }
+
+    // Creator Studio Profile Modal
+    if (modalState.showCreatorProfileModal) {
+        val totalCreatorRemixes = maxOf(work.remixCount, 1)
+        val profileInfo = CreatorProfileInfo(
+            id = work.creatorId,
+            name = resolvedDisplayName,
+            username = work.authorUsername,
+            verified = resolvedVerified,
+            avatarUrl = resolvedAvatarUrl.takeIf { it.isNotBlank() },
+            initials = (if (resolvedDisplayName.isNotBlank()) resolvedDisplayName else work.authorUsername).take(2).uppercase(),
+            roleTitle = if (work.postType.equals("video", ignoreCase = true) || work.aspectRatio == "9:16") "Motion & Shader Director" else "Multidisciplinary Visual Creator",
+            bio = "Building open-source creative artifacts, zero-radius visual studies, and remixable node graphs on ChromaStudio.",
+            followers = "${(work.likesCount * 3 + 1200) / 1000}.${((work.likesCount * 3) % 1000) / 100}K",
+            following = "342",
+            totalRemixes = totalCreatorRemixes,
+            isFollowing = isFollowingCreator
+        )
+        CreatorProfileModal(
+            profile = profileInfo,
+            creatorPosts = listOf(work),
+            onToggleFollow = {
+                onToggleFollowCreator?.invoke()
+            },
+            onViewFullProfile = {
+                onAuthorClick(work.creatorId)
+            },
+            onDismiss = { modalState.showCreatorProfileModal = false }
+        )
+    }
+
+    // Block User Confirmation Dialog
+    if (modalState.showBlockConfirm) {
+        AppleDialog(
+            title = "Block @${work.authorUsername}?",
+            message = "They won't be able to message you or interact with your creations. You can unblock them at any time in Settings.",
+            primaryButtonText = "Block User",
+            primaryIsDestructive = true,
+            onPrimaryClick = { modalState.showBlockConfirm = false },
+            secondaryButtonText = "Cancel",
+            onSecondaryClick = { modalState.showBlockConfirm = false },
+            onDismiss = { modalState.showBlockConfirm = false }
+        )
+    }
+
+    // Delete Confirmation Dialog
+    if (modalState.showDeleteConfirm) {
+        AppleDialog(
+            title = "Delete Post?",
+            message = "Are you sure you want to delete this post? This action cannot be undone.",
+            primaryButtonText = "Delete",
+            primaryIsDestructive = true,
+            onPrimaryClick = {
+                modalState.showDeleteConfirm = false
+                if (isOwner) {
+                    onDeleteWork(work.id)
+                }
+            },
+            secondaryButtonText = "Cancel",
+            onSecondaryClick = { modalState.showDeleteConfirm = false },
+            onDismiss = { modalState.showDeleteConfirm = false }
+        )
+    }
+}
+
+@Composable
+fun FeedPostCard(
+    work: DiscoverPost,
+    isLiked: Boolean,
+    isSaved: Boolean = false,
+    isFollowingCreator: Boolean = false,
+    onToggleFollowCreator: (() -> Unit)? = null,
+    onShowGuidelines: (() -> Unit)? = null,
+    onShowToast: ((String) -> Unit)? = null,
+    repository: WorkRepository,
+    onRequireLogin: () -> Unit = {},
+    onLikeClick: () -> Unit = {},
+    onAuthorClick: (String) -> Unit = {},
+    onDownloadClick: () -> Unit = {},
+    onRemixClick: () -> Unit = {},
+    onRemixWork: ((DiscoverPost) -> Unit)? = null,
+    onDeleteWork: (String) -> Unit,
+    onArchiveWork: ((String) -> Unit)? = null,
+    onEditWork: (String, String, String) -> Unit,
+    onNavigateToOriginal: (String, String) -> Unit,
+    onShareClick: (() -> Unit)? = null,
+    onSaveClick: (() -> Unit)? = null,
+    onReportClick: ((String) -> Unit)? = null,
+    onMentionClick: ((String) -> Unit)? = null,
+    onTagClick: ((String) -> Unit)? = null,
+    onUpdateVisibility: ((hideLikes: Boolean, hideShares: Boolean, hideRemixes: Boolean, hideDownloads: Boolean, hideSaves: Boolean) -> Unit)? = null
+) {
+    val colors = LocalOscellionColors.current
+    val currentUserId = FirebaseAuth.getInstance().currentUser?.uid
+    val isOwner = !currentUserId.isNullOrBlank() && currentUserId == work.creatorId
+
+    val modalState = remember(work.id, isOwner) { FeedPostModalState(isOwner) }
+
+    val doubleTapLikeState = rememberDoubleTapLikeState()
     val mediaSlides = remember(work.id, work.imageUrls, work.workUrls, work.imageUrl, work.jsonUrl) {
         resolvePostMediaSlides(work)
     }
@@ -2324,152 +3115,28 @@ fun FeedPostCard(
             .background(if (colors.isDark) Color(0xFF16161A) else Color.White)
             .padding(top = 4.dp)
     ) {
-        // 1. POST HEADER: Small Profile Avatar, Name + Scalloped Verified Badge, @username • TimeAgo • RemixTag, and 3-Dot Menu
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Avatar (Clickable to open creator profile)
-            IosAvatarView(
-                name = resolvedDisplayName,
-                avatarUrl = resolvedAvatarUrl,
-                size = 38.dp,
-                modifier = Modifier.clickable { showCreatorProfileModal = true }
-            )
+        // 1. POST HEADER
+        FeedPostHeader(
+            displayName = resolvedDisplayName,
+            avatarUrl = resolvedAvatarUrl,
+            username = work.authorUsername,
+            timestamp = work.timestamp,
+            verified = resolvedVerified,
+            isRemixPost = isRemixPost,
+            remixedFromAuthorUsername = work.remixedFromAuthorUsername,
+            isOwner = isOwner,
+            isFollowingCreator = isFollowingCreator,
+            onAvatarClick = { modalState.showCreatorProfileModal = true },
+            onRemixTagClick = { modalState.showOriginalPostModal = true },
+            onToggleFollowCreator = onToggleFollowCreator,
+            onOptionsClick = { modalState.showMenu = true }
+        )
 
-            Spacer(Modifier.width(10.dp))
-
-            // Author metadata column
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .clickable { showCreatorProfileModal = true },
-                verticalArrangement = Arrangement.Center
-            ) {
-                // Row 1: Name + Scalloped Verified Seal Badge
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        text = resolvedDisplayName,
-                        color = colors.textMain,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    if (resolvedVerified) {
-                        ScallopedVerifiedBadge()
-                    }
-                }
-
-                Spacer(Modifier.height(1.5.dp))
-
-                // Row 2: @username • time ago • [Remix of @author] • [Follow]
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        text = "@${work.authorUsername}",
-                        color = Color(0xFF8E8E93),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = "•",
-                        color = Color(0xFF8E8E93),
-                        fontSize = 10.sp
-                    )
-                    Text(
-                        text = getTimeAgo(work.timestamp),
-                        color = Color(0xFF8E8E93),
-                        fontSize = 11.5.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-
-                    if (isRemixPost) {
-                        Text(
-                            text = "•",
-                            color = Color(0xFF8E8E93),
-                            fontSize = 10.sp
-                        )
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(3.dp),
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(Color(0xFF007AFF).copy(alpha = 0.12f))
-                                .clickable { showOriginalPostModal = true }
-                                .padding(horizontal = 5.dp, vertical = 1.5.dp)
-                        ) {
-                            Icon(
-                                imageVector = Lucide.Sparkles,
-                                contentDescription = "Remix",
-                                tint = Color(0xFF007AFF),
-                                modifier = Modifier.size(11.dp)
-                            )
-                            Text(
-                                text = "Remix of @${work.remixedFromAuthorUsername}",
-                                color = Color(0xFF007AFF),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-
-                    if (!isOwner && !currentUserId.isNullOrBlank() && work.creatorId.isNotBlank()) {
-                        Text(
-                            text = "•",
-                            color = Color(0xFF8E8E93),
-                            fontSize = 10.sp
-                        )
-                        Text(
-                            text = if (isFollowingCreator) "Following" else "Follow",
-                            color = if (isFollowingCreator) Color(0xFF8E8E93) else Color(0xFF007AFF),
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.clickable {
-                                onToggleFollowCreator?.invoke()
-                            }
-                        )
-                    }
-                }
-            }
-
-            Spacer(Modifier.width(8.dp))
-
-            // 3-Dot Options Button
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .clickable { showMenu = true },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = LucideComposeIcons.MoreHorizontal,
-                    contentDescription = "Options",
-                    tint = Color(0xFF8E8E93),
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-        }
-
-        // 2. MEDIA VIEWPORT: Strictly WITHOUT corner radius (RectangleShape), 1:1, 4:3, 5:4, 16:9, 9:16
+        // 2. MEDIA VIEWPORT: Strictly WITHOUT corner radius (RectangleShape)
         val parsedRatio = parseAspectRatio(work.aspectRatio, work.postType)
         val isVertical = parsedRatio <= 9f / 16f || work.aspectRatio.trim() == "9:16" || (isVideoPost(work) && parsedRatio < 0.75f)
 
         if (isVertical) {
-            // For vertical posts we produce a deterministic pixel height so the Column
-            // places the action-buttons row correctly below the media.
             BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
                 val cardWidthDp = maxWidth
                 val clampedHeightDp = minOf(cardWidthDp * (1f / parsedRatio.coerceAtLeast(0.5f)), 540.dp)
@@ -2483,12 +3150,10 @@ fun FeedPostCard(
                     onDoubleTap = { offset ->
                         val uid = FirebaseAuth.getInstance().currentUser?.uid
                         if (uid.isNullOrBlank()) {
-                            currentOnRequireLogin()
+                            onRequireLogin()
                         } else {
-                            if (!currentIsLiked && !locallyLiked) {
-                                locallyLiked = true
-                                localLikesCountDelta = 1
-                                currentOnLikeClick()
+                            if (!isLiked) {
+                                onLikeClick()
                             }
                         }
                         doubleTapLikeState.trigger(offset)
@@ -2509,13 +3174,10 @@ fun FeedPostCard(
                 onDoubleTap = { offset ->
                     val uid = FirebaseAuth.getInstance().currentUser?.uid
                     if (uid.isNullOrBlank()) {
-                        currentOnRequireLogin()
+                        onRequireLogin()
                     } else {
-                        // Double tap ONLY likes. It never unlikes on subsequent double-taps!
-                        if (!currentIsLiked && !locallyLiked) {
-                            locallyLiked = true
-                            localLikesCountDelta = 1
-                            currentOnLikeClick()
+                        if (!isLiked) {
+                            onLikeClick()
                         }
                     }
                     doubleTapLikeState.trigger(offset)
@@ -2526,608 +3188,57 @@ fun FeedPostCard(
             )
         }
 
-        // 3. ACTION BUTTONS ROW:
-        // Left: Heart (Like), Lucide HeartHandshake (Remix), Download
-        // Right: Save (Bookmark), Share
-        // Note: Carousel page dots indicator is positioned cleanly at the bottom center of PostMediaCarousel overlay.
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Left Action Group: Like, Remix, Download
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // 1. Like Button
-                val effectiveLiked = locallyLiked
-                val displayLikesCount = (work.likesCount + localLikesCountDelta).coerceAtLeast(0)
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .height(36.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable {
-                            val uid = FirebaseAuth.getInstance().currentUser?.uid
-                            if (uid.isNullOrBlank()) {
-                                onRequireLogin()
-                            } else {
-                                val nextLiked = !locallyLiked
-                                locallyLiked = nextLiked
-                                localLikesCountDelta = if (nextLiked) {
-                                    if (!isLiked) 1 else 0
-                                } else {
-                                    if (isLiked) -1 else 0
-                                }
-                                onLikeClick()
-                            }
-                        }
-                        .padding(horizontal = 4.dp, vertical = 6.dp)
-                ) {
-                    Icon(
-                        imageVector = if (effectiveLiked) ChromaIcons.HeartFilled else Lucide.Heart,
-                        contentDescription = if (effectiveLiked) "Liked" else "Like",
-                        tint = if (effectiveLiked) Color(0xFFFF2D55) else colors.textMain,
-                        modifier = Modifier.size(22.dp)
-                    )
-                    if (!work.hideLikesCount && displayLikesCount > 0) {
-                        Spacer(Modifier.width(5.dp))
-                        Text(
-                            text = "$displayLikesCount",
-                            color = if (effectiveLiked) Color(0xFFFF2D55) else colors.textMain,
-                            fontSize = 12.5.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-
-                // 2. Remix Button (HeartShape Handshake)
-                if (!work.turnOffRemix) {
-                    val alreadyRemixed = currentUserId != null && work.remixedBy.contains(currentUserId)
-                    val effectiveRemixed = locallyRemixed || alreadyRemixed
-                    val displayRemixCount = (work.remixCount + localRemixCountDelta).coerceAtLeast(0)
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .height(36.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable {
-                                val uid = FirebaseAuth.getInstance().currentUser?.uid
-                                if (uid.isNullOrBlank()) {
-                                    onRequireLogin()
-                                } else {
-                                    if (!locallyRemixed && (currentUserId == null || !work.remixedBy.contains(currentUserId))) {
-                                        locallyRemixed = true
-                                        localRemixCountDelta = 1
-                                    }
-                                    if (onRemixWork != null) onRemixWork(work)
-                                    else onRemixClick()
-                                }
-                            }
-                            .padding(horizontal = 4.dp, vertical = 6.dp)
-                    ) {
-                        Icon(
-                            imageVector = rememberLucideHeartHandshakeIcon(
-                                isRemixed = effectiveRemixed || displayRemixCount > 0,
-                                strokeColor = if (effectiveRemixed) Color(0xFF007AFF) else colors.textMain,
-                                heartFillColor = if (effectiveRemixed) Color(0xFF007AFF).copy(alpha = 0.15f) else null
-                            ),
-                            contentDescription = "Remix",
-                            tint = Color.Unspecified,
-                            modifier = Modifier.size(22.dp)
-                        )
-                        if (!work.hideRemixesCount && displayRemixCount > 0) {
-                            Spacer(Modifier.width(5.dp))
-                            Text(
-                                text = "$displayRemixCount",
-                                color = if (effectiveRemixed) Color(0xFF007AFF) else colors.textMain.copy(alpha = 0.85f),
-                                fontSize = 12.5.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                    }
-                }
-
-                // 3. Download Button
-                val alreadyDownloaded = currentUserId != null && work.downloadedBy.contains(currentUserId)
-                val effectiveDownloaded = locallyDownloaded || alreadyDownloaded
-                val displayDownloadCount = (work.downloadCount + localDownloadCountDelta).coerceAtLeast(0)
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .height(36.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable {
-                            val uid = FirebaseAuth.getInstance().currentUser?.uid
-                            if (uid.isNullOrBlank()) {
-                                onRequireLogin()
-                            } else {
-                                if (!locallyDownloaded && (currentUserId == null || !work.downloadedBy.contains(currentUserId))) {
-                                    locallyDownloaded = true
-                                    localDownloadCountDelta = 1
-                                }
-                                onDownloadClick()
-                            }
-                        }
-                        .padding(horizontal = 4.dp, vertical = 6.dp)
-                ) {
-                    Icon(
-                        imageVector = LucideComposeIcons.Download,
-                        contentDescription = "Save to Studio",
-                        tint = if (effectiveDownloaded) Color(0xFF007AFF) else colors.textMain,
-                        modifier = Modifier.size(22.dp)
-                    )
-                    if (!work.hideDownloadsCount && displayDownloadCount > 0) {
-                        Spacer(Modifier.width(5.dp))
-                        Text(
-                            text = "$displayDownloadCount",
-                            color = if (effectiveDownloaded) Color(0xFF007AFF) else colors.textMain.copy(alpha = 0.85f),
-                            fontSize = 12.5.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-            }
-
-            // Right Action Group: Save & Share
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // 4. Save / Bookmark Button
-                val effectiveSaved = locallySaved
-                val displaySaveCount = (work.saveCount + localSaveCountDelta).coerceAtLeast(0)
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .height(36.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable {
-                            val uid = FirebaseAuth.getInstance().currentUser?.uid
-                            if (uid.isNullOrBlank()) {
-                                onRequireLogin()
-                            } else {
-                                val nextSaved = !locallySaved
-                                locallySaved = nextSaved
-                                localSaveCountDelta = if (nextSaved) {
-                                    if (!isSaved) 1 else 0
-                                } else {
-                                    if (isSaved) -1 else 0
-                                }
-                                onSaveClick?.invoke()
-                            }
-                        }
-                        .padding(horizontal = 4.dp, vertical = 6.dp)
-                ) {
-                    Icon(
-                        imageVector = LucideComposeIcons.bookmark(
-                            isSaved = effectiveSaved,
-                            savedColor = Color(0xFF007AFF),
-                            outlineColor = colors.textMain
-                        ),
-                        contentDescription = "Bookmark",
-                        tint = Color.Unspecified,
-                        modifier = Modifier.size(22.dp)
-                    )
-                    if (!work.hideSavesCount && displaySaveCount > 0) {
-                        Spacer(Modifier.width(5.dp))
-                        Text(
-                            text = "$displaySaveCount",
-                            color = if (effectiveSaved) Color(0xFF007AFF) else colors.textMain.copy(alpha = 0.85f),
-                            fontSize = 12.5.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-
-                // 5. Share Button
-                val alreadyShared = currentUserId != null && work.sharedBy.contains(currentUserId)
-                val effectiveShared = locallyShared || alreadyShared
-                val displayShareCount = (work.shareCount + localShareCountDelta).coerceAtLeast(0)
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .height(36.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable {
-                            val uid = FirebaseAuth.getInstance().currentUser?.uid
-                            if (uid.isNullOrBlank()) {
-                                onRequireLogin()
-                            } else {
-                                if (!locallyShared && (currentUserId == null || !work.sharedBy.contains(currentUserId))) {
-                                    locallyShared = true
-                                    localShareCountDelta = 1
-                                }
-                                onShareClick?.invoke()
-                            }
-                        }
-                        .padding(horizontal = 4.dp, vertical = 6.dp)
-                ) {
-                    Icon(
-                        imageVector = Lucide.Share2,
-                        contentDescription = "Share",
-                        tint = if (effectiveShared) Color(0xFF007AFF) else colors.textMain,
-                        modifier = Modifier.size(22.dp)
-                    )
-                    if (!work.hideSharesCount && displayShareCount > 0) {
-                        Spacer(Modifier.width(5.dp))
-                        Text(
-                            text = "$displayShareCount",
-                            color = if (effectiveShared) Color(0xFF007AFF) else colors.textMain.copy(alpha = 0.85f),
-                            fontSize = 12.5.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-            }
-        }
-
-        // 4. METADATA: Expandable Title (Max 2 lines + ....), Expandable Description (Max 1 line + ...read more), #Hashtags, @Mentions
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            // Main Title (Max 2 lines then ... with smooth expand animation)
-            if (work.title.isNotBlank()) {
-                val needsTitleExpand = work.title.length > 85
-                val shortTitle = if (needsTitleExpand) work.title.take(85).trim() else work.title
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .animateContentSize(animationSpec = tween(380, easing = FluidCubicBezier))
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) {
-                            if (needsTitleExpand) isTitleExpanded = !isTitleExpanded
-                        }
-                ) {
-                    Text(
-                        text = buildAnnotatedString {
-                            if (!needsTitleExpand || isTitleExpanded) {
-                                append(work.title)
-                            } else {
-                                append(shortTitle)
-                                withStyle(
-                                    SpanStyle(
-                                        color = Color(0xFF007AFF),
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 0.5.sp
-                                    )
-                                ) {
-                                    append(" ...")
-                                }
-                            }
-                        },
-                        fontSize = 13.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = colors.textMain,
-                        lineHeight = 18.5.sp,
-                        maxLines = if (isTitleExpanded) Int.MAX_VALUE else 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
-            // Description (Max 2 lines then ...more with smooth expand animation)
-            if (work.description.isNotBlank()) {
-                val needsDescExpand = work.description.length > 80
-                val shortDesc = if (needsDescExpand) work.description.take(80).trim() else work.description
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .animateContentSize(animationSpec = tween(380, easing = FluidCubicBezier))
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) {
-                            if (needsDescExpand) isDescriptionExpanded = !isDescriptionExpanded
-                        }
-                ) {
-                    Text(
-                        text = buildAnnotatedString {
-                            if (!needsDescExpand || isDescriptionExpanded) {
-                                append(work.description)
-                                if (needsDescExpand) {
-                                    withStyle(
-                                        SpanStyle(
-                                            color = Color(0xFF007AFF),
-                                            fontSize = 11.5.sp,
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                    ) {
-                                        append(" (less)")
-                                    }
-                                }
-                            } else {
-                                append(shortDesc)
-                                withStyle(
-                                    SpanStyle(
-                                        color = Color(0xFF007AFF),
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 11.5.sp
-                                    )
-                                ) {
-                                    append(" ...more")
-                                }
-                            }
-                        },
-                        fontSize = 12.sp,
-                        color = colors.textMain.copy(alpha = 0.85f),
-                        lineHeight = 16.5.sp,
-                        maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
-            // Tags, Mentions, Trending (Clean reference inline text style without capsules or pill borders)
-            val trendingLabel = work.trendingTag ?: if (work.tags.any { it.contains("trend", ignoreCase = true) }) "Trending" else null
-            val hasTagsOrMentions = work.tags.isNotEmpty() || work.mentions.isNotEmpty() || trendingLabel != null
-            if (hasTagsOrMentions) {
-                Spacer(Modifier.height(4.dp))
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    if (trendingLabel != null) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null
-                            ) {
-                                val target = work.tags.firstOrNull() ?: trendingLabel
-                                onTagClick?.invoke(target)
-                            }
-                        ) {
-                            Icon(
-                                imageVector = LucideComposeIcons.TrendingUp,
-                                contentDescription = null,
-                                tint = if (colors.isDark) Color(0xFFF59E0B) else Color(0xFFB45309),
-                                modifier = Modifier.size(13.5.dp)
-                            )
-                            Spacer(Modifier.width(3.5.dp))
-                            Text(
-                                text = trendingLabel,
-                                color = if (colors.isDark) Color(0xFFF59E0B) else Color(0xFFB45309),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-
-                    work.tags.forEach { rawTag ->
-                        val cleanTag = if (rawTag.startsWith("#")) rawTag else "#$rawTag"
-                        Text(
-                            text = cleanTag,
-                            color = Color(0xFF007AFF),
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null
-                            ) {
-                                onTagClick?.invoke(cleanTag)
-                            }
-                        )
-                    }
-
-                    work.mentions.forEach { rawMention ->
-                        val handle = if (rawMention.startsWith("@")) rawMention else "@$rawMention"
-                        Text(
-                            text = handle,
-                            color = if (colors.isDark) Color(0xFFA1A1AA) else Color(0xFF334155),
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null
-                            ) {
-                                onMentionClick?.invoke(handle)
-                            }
-                        )
-                    }
-                }
-            }
-        }
-
-            Spacer(Modifier.height(8.dp))
-            HorizontalDivider(
-                thickness = 0.5.dp,
-                color = if (colors.isDark) Color(0xFF24242A) else Color(0xFFE5E5EA)
-            )
-            Spacer(Modifier.height(4.dp))
-        }
-
-    // 3-Dot Options Bottom Sheet (Opens from bottom like bottom drawer, with Normal User & Admin modes)
-    if (showMenu) {
-        PostOptionsDrawerSheet(
+        // 3. ACTION BUTTONS ROW
+        FeedPostActionRow(
             work = work,
-            isOwner = isOwner,
-            activeRole = if (isOwner) activeRole else DrawerRole.USER,
-            onRoleChange = { newRole -> if (isOwner) activeRole = newRole },
-            onDismiss = { showMenu = false },
-            onInterested = { showMenu = false },
-            onNotInterested = { showMenu = false },
-            onViewProfile = {
-                showMenu = false
-                showCreatorProfileModal = true
-            },
-            onAboutPost = {
-                showMenu = false
-                showAboutDialog = true
-            },
-            onReport = {
-                showMenu = false
-                onReportClick?.invoke(work.id)
-            },
-            onBlockUser = {
-                showMenu = false
-                showBlockConfirm = true
-            },
-            onCounterPrivacy = {
-                showMenu = false
-                if (isOwner) showVisibilitySettings = true
-            },
-            onEditPost = {
-                showMenu = false
-                if (isOwner) showEditModal = true
-            },
-            onViewAnalytics = {
-                showMenu = false
-                if (isOwner) showAnalyticsModal = true
-            },
-            onArchive = {
-                showMenu = false
-                if (isOwner) onArchiveWork?.invoke(work.id)
-            },
-            onDeletePost = {
-                showMenu = false
-                if (isOwner) showDeleteConfirm = true
-            },
-            onOpenGuidelines = {
-                showMenu = false
-                onShowGuidelines?.invoke()
-            },
-            onShowToast = onShowToast
+            isLiked = isLiked,
+            isSaved = isSaved,
+            currentUserId = currentUserId,
+            onRequireLogin = onRequireLogin,
+            onLikeClick = onLikeClick,
+            onRemixClick = onRemixClick,
+            onRemixWork = onRemixWork,
+            onDownloadClick = onDownloadClick,
+            onSaveClick = onSaveClick,
+            onShareClick = onShareClick
         )
-    }
 
-    // Original Post Inspector Modal/Drawer (Opens when Remixed tag or attribution is clicked)
-    if (showOriginalPostModal) {
-        OriginalPostInspectorSheet(
+        // 4. METADATA: Title, Description, Tags, Mentions
+        FeedPostMetadata(
             work = work,
-            onDismiss = { showOriginalPostModal = false },
-            onNavigateToOriginal = onNavigateToOriginal,
-            onRemixWork = onRemixWork
+            onTagClick = onTagClick,
+            onMentionClick = onMentionClick
         )
+
+        Spacer(Modifier.height(8.dp))
+        HorizontalDivider(
+            thickness = 0.5.dp,
+            color = if (colors.isDark) Color(0xFF24242A) else Color(0xFFE5E5EA)
+        )
+        Spacer(Modifier.height(4.dp))
     }
 
-    // Counter Privacy Settings Bottom Sheet
-    if (showVisibilitySettings) {
-        PostCountersSettingsSheet(
-            work = work,
-            onDismiss = { showVisibilitySettings = false },
-            onSave = { hideLikes, hideShares, hideRemixes, hideDownloads, hideSaves ->
-                onUpdateVisibility?.invoke(hideLikes, hideShares, hideRemixes, hideDownloads, hideSaves)
-            }
-        )
-    }
-
-    // About This Post Dialog
-    if (showAboutDialog) {
-        AppleDialog(
-            title = "About this Post",
-            message = "Author: $resolvedDisplayName (@${work.authorUsername})\n" +
-                      "Status: ${if (resolvedVerified) "Verified Creator ✓" else "Standard Account"}\n" +
-                      "Format: ${work.postType.replaceFirstChar { it.uppercase() }} (${work.aspectRatio})\n" +
-                      "Published: ${getTimeAgo(work.timestamp)}\n" +
-                      "Post ID: ${work.id}",
-            primaryButtonText = "Done",
-            onPrimaryClick = { showAboutDialog = false },
-            onDismiss = { showAboutDialog = false }
-        )
-    }
-
-    // Owner Analytics & Telemetry Modal (2x2 Telemetry Grid)
-    if (showAnalyticsModal) {
-        OwnerAnalyticsModal(
-            work = work,
-            onDismiss = { showAnalyticsModal = false }
-        )
-    }
-
-    // Live Edit Post Modal (Admin Role)
-    if (showEditModal) {
-        EditPostModal(
-            work = work,
-            onDismiss = { showEditModal = false },
-            onSaveEdits = { ratio, title, desc ->
-                showEditModal = false
-                if (isOwner) {
-                    onEditWork(work.id, title, desc)
-                }
-            }
-        )
-    }
-
-    // Creator Studio Profile Modal
-    if (showCreatorProfileModal) {
-        val totalCreatorRemixes = maxOf(work.remixCount, 1)
-        val profileInfo = CreatorProfileInfo(
-            id = work.creatorId,
-            name = resolvedDisplayName,
-            username = work.authorUsername,
-            verified = resolvedVerified,
-            avatarUrl = resolvedAvatarUrl.takeIf { it.isNotBlank() },
-            initials = (if (resolvedDisplayName.isNotBlank()) resolvedDisplayName else work.authorUsername).take(2).uppercase(),
-            roleTitle = if (work.postType.equals("video", ignoreCase = true) || work.aspectRatio == "9:16") "Motion & Shader Director" else "Multidisciplinary Visual Creator",
-            bio = "Building open-source creative artifacts, zero-radius visual studies, and remixable node graphs on ChromaStudio.",
-            followers = "${(work.likesCount * 3 + 1200) / 1000}.${((work.likesCount * 3) % 1000) / 100}K",
-            following = "342",
-            totalRemixes = totalCreatorRemixes,
-            isFollowing = isFollowingCreator
-        )
-        CreatorProfileModal(
-            profile = profileInfo,
-            creatorPosts = listOf(work),
-            onToggleFollow = {
-                onToggleFollowCreator?.invoke()
-            },
-            onViewFullProfile = {
-                onAuthorClick(work.creatorId)
-            },
-            onDismiss = { showCreatorProfileModal = false }
-        )
-    }
-
-    // Block User Confirmation Dialog
-    if (showBlockConfirm) {
-        AppleDialog(
-            title = "Block @${work.authorUsername}?",
-            message = "They won't be able to message you or interact with your creations. You can unblock them at any time in Settings.",
-            primaryButtonText = "Block User",
-            primaryIsDestructive = true,
-            onPrimaryClick = { showBlockConfirm = false },
-            secondaryButtonText = "Cancel",
-            onSecondaryClick = { showBlockConfirm = false },
-            onDismiss = { showBlockConfirm = false }
-        )
-    }
-
-    // Delete Confirmation Dialog
-    if (showDeleteConfirm) {
-        AppleDialog(
-            title = "Delete Post?",
-            message = "Are you sure you want to delete this post? This action cannot be undone.",
-            primaryButtonText = "Delete",
-            primaryIsDestructive = true,
-            onPrimaryClick = {
-                showDeleteConfirm = false
-                if (isOwner) {
-                    onDeleteWork(work.id)
-                }
-            },
-            secondaryButtonText = "Cancel",
-            onSecondaryClick = { showDeleteConfirm = false },
-            onDismiss = { showDeleteConfirm = false }
-        )
-    }
+    // MODALS & DIALOGS
+    FeedPostModals(
+        work = work,
+        isOwner = isOwner,
+        modalState = modalState,
+        resolvedDisplayName = resolvedDisplayName,
+        resolvedAvatarUrl = resolvedAvatarUrl,
+        resolvedVerified = resolvedVerified,
+        isFollowingCreator = isFollowingCreator,
+        onToggleFollowCreator = onToggleFollowCreator,
+        onAuthorClick = onAuthorClick,
+        onReportClick = onReportClick,
+        onArchiveWork = onArchiveWork,
+        onDeleteWork = onDeleteWork,
+        onEditWork = onEditWork,
+        onShowGuidelines = onShowGuidelines,
+        onShowToast = onShowToast,
+        onNavigateToOriginal = onNavigateToOriginal,
+        onRemixWork = onRemixWork,
+        onUpdateVisibility = onUpdateVisibility
+    )
 }
 
 /**
