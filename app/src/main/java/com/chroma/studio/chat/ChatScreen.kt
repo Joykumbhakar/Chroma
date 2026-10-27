@@ -1497,7 +1497,10 @@ private fun ChatScreenContent(
         isContactDrawerOpen ||
 
         isFullCallModalOpen ||
-
+        showStoryCreationSheet ||
+        showStoryGalleryPicker ||
+        showStoryViewer ||
+        isGalleryPickerOpen ||
         previewLightboxImage != null
 
 
@@ -1707,7 +1710,10 @@ private fun ChatScreenContent(
         isContactDrawerOpen ||
 
         isFullCallModalOpen ||
-
+        showStoryCreationSheet ||
+        showStoryGalleryPicker ||
+        showStoryViewer ||
+        isGalleryPickerOpen ||
         isInsideChat ||
 
         effectiveRoomId != null
@@ -1715,9 +1721,11 @@ private fun ChatScreenContent(
 
 
     BackHandler(enabled = isAnyModalOrSubscreenOpen) {
-
         when {
-
+            showStoryGalleryPicker -> showStoryGalleryPicker = false
+            showStoryCreationSheet -> showStoryCreationSheet = false
+            showStoryViewer -> showStoryViewer = false
+            isGalleryPickerOpen -> isGalleryPickerOpen = false
             isNewMessageModalOpen -> isNewMessageModalOpen = false
 
             previewLightboxImage != null -> previewLightboxImage = null

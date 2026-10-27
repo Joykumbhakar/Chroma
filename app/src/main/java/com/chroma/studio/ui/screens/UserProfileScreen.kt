@@ -158,6 +158,7 @@ fun UserProfileScreen(
     onNavigateToSettings: () -> Unit = {},
     onNavigateToEditProfile: () -> Unit = {},
     onNavigateToCreateStory: (() -> Unit)? = null,
+    onStoryViewerChange: ((Boolean) -> Unit)? = null,
     onBack: () -> Unit
 ) {
     val colors = LocalOscellionColors.current
@@ -169,7 +170,13 @@ fun UserProfileScreen(
     val isUploadingStory by storyVm.isUploading.collectAsState()
     var showStoryViewer by remember { mutableStateOf(false) }
     var showStoryCreationSheet by remember { mutableStateOf(false) }
+    var showStoryGalleryPicker by remember { mutableStateOf(false) }
     var storyViewerInitialIndex by remember { mutableIntStateOf(0) }
+
+    val shouldHideBottomNav = showStoryViewer || showStoryCreationSheet || showStoryGalleryPicker
+    LaunchedEffect(shouldHideBottomNav) {
+        onStoryViewerChange?.invoke(shouldHideBottomNav)
+    }
 
     var works by remember { mutableStateOf<List<DiscoverPost>>(emptyList()) }
     var profile by remember { mutableStateOf<UserProfile?>(null) }
@@ -894,15 +901,38 @@ fun UserProfileScreen(
             onDismissRequest = { showStoryCreationSheet = false },
             onChooseFromGallery = {
                 showStoryCreationSheet = false
-                storyMediaPicker.launch(
-                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                )
+                showStoryGalleryPicker = true
             },
             onTextStory = {
                 showStoryCreationSheet = false
                 onNavigateToCreateStory?.invoke()
             }
         )
+    }
+
+    // Unified In-App Oscellion Gallery for Stories
+    if (showStoryGalleryPicker) {
+        com.chroma.studio.chat.ui.components.CustomGalleryPickerModal(
+            onDismiss = { showStoryGalleryPicker = false },
+            onLaunchCamera = { showStoryGalleryPicker = false },
+            onRequestMediaPermission = {},
+            onSendMedia = { uris, _ ->
+                showStoryGalleryPicker = false
+                uris.firstOrNull()?.let { uri ->
+                    storyVm.uploadStory(context, uri)
+                }
+            }
+        )
+    }
+
+    androidx.activity.compose.BackHandler(enabled = showStoryGalleryPicker) {
+        showStoryGalleryPicker = false
+    }
+    androidx.activity.compose.BackHandler(enabled = showStoryCreationSheet) {
+        showStoryCreationSheet = false
+    }
+    androidx.activity.compose.BackHandler(enabled = showStoryViewer) {
+        showStoryViewer = false
     }
 
     // Apple ID / NameDrop Share Card Bottom Sheet

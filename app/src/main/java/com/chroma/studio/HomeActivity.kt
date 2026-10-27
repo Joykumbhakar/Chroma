@@ -255,6 +255,7 @@ class HomeActivity : ComponentActivity() {
                 }
                 var isInsideChatTab by remember { mutableStateOf(false) }
                 var isDiscoverStoryViewerActive by remember { mutableStateOf(false) }
+                var isProfileStoryViewerActive by remember { mutableStateOf(false) }
                 val hideBottomNavRoutes = setOf(
                     "chat", "group_info", "create_group",
                     "story_editor", "create_text_status", "story_viewer", "story",
@@ -313,8 +314,8 @@ class HomeActivity : ComponentActivity() {
                     fullRoute.startsWith("terms")
 
                 val showBottomNav = (
-                    (isMain && !shouldHideOnChatTab && !isDiscoverStoryViewerActive) ||
-                    (currentRoute == "userProfile" && !isRouteHidingBottomNav) ||
+                    (isMain && !shouldHideOnChatTab && !isDiscoverStoryViewerActive && !isProfileStoryViewerActive) ||
+                    (currentRoute == "userProfile" && !isRouteHidingBottomNav && !isProfileStoryViewerActive) ||
                     (currentRoute == "user_list" && !isRouteHidingBottomNav)
                 ) && !isRouteHidingBottomNav
                 val chatVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.ChatViewModel>()
@@ -1177,6 +1178,7 @@ class HomeActivity : ComponentActivity() {
                                     }
                                 },
                                 onNavigateToCreateStory = { navController.navigate("story_editor") },
+                                onStoryViewerChange = { isProfileStoryViewerActive = it },
                                 onBack = { navController.popBackStack() }
                             )
                         }
@@ -1814,6 +1816,7 @@ class HomeActivity : ComponentActivity() {
                                     navController.navigate("userProfile/$authorId")
                                 }
                             },
+                            onStoryViewerChange = { isProfileStoryViewerActive = it },
                             onBack = { navController.popBackStack() }
                         )
                     }

@@ -223,8 +223,11 @@ fun DiscoverScreen(
 
     var showStoryViewer by remember { mutableStateOf(false) }
     var showStoryCreationSheet by remember { mutableStateOf(false) }
-    LaunchedEffect(showStoryViewer) {
-        onStoryViewerChange?.invoke(showStoryViewer)
+    var showStoryGalleryPicker by remember { mutableStateOf(false) }
+
+    val shouldHideBottomNav = showStoryViewer || showStoryCreationSheet || showStoryGalleryPicker
+    LaunchedEffect(shouldHideBottomNav) {
+        onStoryViewerChange?.invoke(shouldHideBottomNav)
     }
     var storyViewerInitialIndex by remember { mutableIntStateOf(0) }
     val currentUserId = remember { FirebaseAuth.getInstance().currentUser?.uid ?: "" }
@@ -250,7 +253,6 @@ fun DiscoverScreen(
     var isSearchExpanded by remember { mutableStateOf(false) }
     var showCreateMenu by remember { mutableStateOf(false) }
     var hasUnreadNotifications by remember { mutableStateOf(true) }
-    var showStoryGalleryPicker by remember { mutableStateOf(false) }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
 
     fun showToast(msg: String) {
@@ -335,6 +337,15 @@ fun DiscoverScreen(
         }
         BackHandler(enabled = showCreateMenu) {
             showCreateMenu = false
+        }
+        BackHandler(enabled = showStoryGalleryPicker) {
+            showStoryGalleryPicker = false
+        }
+        BackHandler(enabled = showStoryCreationSheet) {
+            showStoryCreationSheet = false
+        }
+        BackHandler(enabled = showStoryViewer) {
+            showStoryViewer = false
         }
 
         Column(modifier = Modifier.fillMaxSize()) {
