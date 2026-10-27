@@ -59,8 +59,8 @@ object AudioPlayerManager {
                 if (file.exists()) {
                     player.setDataSource(file.absolutePath)
                 } else {
-                    // Fallback simulated playback for mock voice notes
-                    startSimulatedPlayback(id)
+                    Log.w(TAG, "Audio file does not exist: $filePathOrUri")
+                    stop()
                     return
                 }
             }
@@ -83,35 +83,11 @@ object AudioPlayerManager {
             startProgressTracker()
         } catch (e: Exception) {
             Log.e(TAG, "Failed to play audio: ${e.message}", e)
-            startSimulatedPlayback(id)
+            stop()
         }
     }
 
-    private fun startSimulatedPlayback(id: String) {
-        stop()
-        _currentPlayingId.value = id
-        _isPlaying.value = true
-        _totalDurationMs.value = 6000
-        _currentPositionMs.value = 0
-        _playbackProgress.value = 0f
 
-        playerScope?.cancel()
-        playerScope = CoroutineScope(Dispatchers.Default + Job())
-        playerScope?.launch {
-            val total = 6000L
-            var current = 0L
-            val step = 50L
-            while (_isPlaying.value && current < total) {
-                delay((step / _playbackSpeed.value).toLong())
-                current += step
-                _currentPositionMs.value = current.toInt()
-                _playbackProgress.value = (current.toFloat() / total).coerceIn(0f, 1f)
-            }
-            withContext(Dispatchers.Main) {
-                stop()
-            }
-        }
-    }
 
     fun pause() {
         try {

@@ -498,19 +498,7 @@ enum class VoiceGlobeStyleType(
     )
 }
 
-object MockData {
-    val currentUser = User(
-        id = "",
-        name = "User",
-        username = "@user",
-        avatar = "",
-        status = "Active"
-    )
 
-    fun initialStories(): List<Story> = emptyList()
-
-    fun initialChats(): List<ChatConversation> = emptyList()
-}
 
 
 

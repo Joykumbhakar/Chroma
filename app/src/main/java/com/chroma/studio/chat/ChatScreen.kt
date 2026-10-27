@@ -464,41 +464,7 @@ private fun ChatScreenContent(
 
 
 
-    // Active Chat with Safe Guaranteed Fallback (Zero crash possibility)
 
-    val fallbackChat = remember {
-
-        ChatConversation(
-
-            id = "chat_fallback",
-
-            name = "Chroma Support",
-
-            type = "direct",
-
-            avatar = "",
-
-            online = true,
-
-            statusText = "Online",
-
-            phone = "",
-
-            bio = "Official Chroma Studio Support",
-
-            unreadCount = 0,
-
-            pinnedMessage = null,
-
-            isMuted = false,
-
-            isBlocked = false,
-
-            messages = emptyList()
-
-        )
-
-    }
 
 
 
@@ -524,7 +490,23 @@ private fun ChatScreenContent(
 
         } else {
 
-            fallbackChat.copy(id = activeChatId)
+            val otherProfile = userProfiles[activeChatId]
+            val resolvedName = otherProfile?.displayName?.ifBlank { otherProfile.username } ?: ""
+            ChatConversation(
+                id = activeChatId,
+                name = resolvedName,
+                type = "direct",
+                avatar = otherProfile?.avatarUrl ?: "",
+                online = isActiveOnline,
+                statusText = if (isActiveOnline) "Online" else if (activeLastSeen != null) "Last seen $activeLastSeen" else "",
+                phone = "",
+                bio = otherProfile?.bio ?: "",
+                unreadCount = 0,
+                pinnedMessage = null,
+                isMuted = false,
+                isBlocked = false,
+                messages = emptyList()
+            )
 
         }
 
@@ -1110,7 +1092,7 @@ private fun ChatScreenContent(
 
         )
 
-        if (chatViewModel == null || activeChatId.startsWith("mock_") || activeChatId.startsWith("chat_fallback")) {
+        if (chatViewModel == null || activeChatId.startsWith("mock_")) {
 
             chats = chats.map { if (it.id == activeChatId) it.copy(messages = it.messages + photoMsg) else it }
 
@@ -1126,7 +1108,7 @@ private fun ChatScreenContent(
 
                     ?: context.contentResolver.openInputStream(uri)?.readBytes()
 
-                if (bytes != null && chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
+                if (bytes != null && chatViewModel != null && !activeChatId.startsWith("mock_")) {
 
                     chatViewModel.sendMediaMessage(bytes, "jpg", caption ?: "", replyToMessageId = replyQuoteSnapshot?.messageId, localPreviewUri = uri.toString())
 
@@ -1162,7 +1144,7 @@ private fun ChatScreenContent(
 
                 isVoiceRecording = true
 
-                if (chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
+                if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
 
                     chatViewModel.setRecordingStatus(true)
 
@@ -1270,7 +1252,7 @@ private fun ChatScreenContent(
 
                 isVoiceRecording = true
 
-                if (chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
+                if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
 
                     chatViewModel.setRecordingStatus(true)
 
@@ -1294,7 +1276,7 @@ private fun ChatScreenContent(
 
         val recResult = AudioRecorderManager.stopRecording()
 
-        if (chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
+        if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
 
             chatViewModel.setRecordingStatus(false)
 
@@ -1330,7 +1312,7 @@ private fun ChatScreenContent(
 
         )
 
-        if (chatViewModel == null || activeChatId.startsWith("mock_") || activeChatId.startsWith("chat_fallback")) {
+        if (chatViewModel == null || activeChatId.startsWith("mock_")) {
 
             chats = chats.map { if (it.id == activeChatId) it.copy(messages = it.messages + newVoiceMsg) else it }
 
@@ -1346,7 +1328,7 @@ private fun ChatScreenContent(
 
 
 
-        if (recResult?.file != null && recResult.file.exists() && chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
+        if (recResult?.file != null && recResult.file.exists() && chatViewModel != null && !activeChatId.startsWith("mock_")) {
 
             try {
 
@@ -1366,7 +1348,7 @@ private fun ChatScreenContent(
 
         AudioRecorderManager.cancelRecording()
 
-        if (chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
+        if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
 
             chatViewModel.setRecordingStatus(false)
 
@@ -1584,7 +1566,7 @@ private fun ChatScreenContent(
 
             val eId = editingMessageId!!
 
-            if (chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
+            if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
 
                 chatViewModel.editMessage(eId, trimmed)
 
@@ -1644,7 +1626,7 @@ private fun ChatScreenContent(
 
 
 
-        if (chatViewModel == null || activeChatId.startsWith("mock_") || activeChatId.startsWith("chat_fallback")) {
+        if (chatViewModel == null || activeChatId.startsWith("mock_")) {
 
             chats = chats.map { c ->
 
@@ -1656,7 +1638,7 @@ private fun ChatScreenContent(
 
 
 
-        if (chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
+        if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
 
             chatViewModel.setTypingStatus(false)
 
@@ -1672,7 +1654,7 @@ private fun ChatScreenContent(
 
         val replyMessageId = activeReplyQuote?.messageId
 
-        if (chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
+        if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
 
             chatViewModel.sendMessage(trimmed, replyToMessageId = replyMessageId)
 
@@ -2685,7 +2667,7 @@ private fun ChatScreenContent(
 
                                 onUnpinMessage = {
                                     chats = chats.map { if (it.id == activeChatId) it.copy(pinnedMessage = null, pinnedMessageId = null) else it }
-                                    if (chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
+                                    if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
                                         chatViewModel.unpinMessage(activeChatId)
                                     }
                                     showToast("Message unpinned")
@@ -2783,7 +2765,7 @@ private fun ChatScreenContent(
                         onPinMessage = { msg ->
                             val pinText = msg.text ?: msg.fileName ?: "Attachment"
                             chats = chats.map { if (it.id == activeChatId) it.copy(pinnedMessage = pinText, pinnedMessageId = msg.id) else it }
-                            if (chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
+                            if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
                                 chatViewModel.pinMessage(activeChatId, msg.id, pinText)
                             }
                             showToast("Message pinned")
@@ -3072,7 +3054,7 @@ private fun ChatScreenContent(
 
                                     inputText = it
 
-                                    if (chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
+                                    if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
 
                                         chatViewModel.setTypingStatus(it.isNotBlank())
 
@@ -3803,7 +3785,7 @@ private fun ChatScreenContent(
 
                     chats = chats.map { if (it.id == activeChatId) it.copy(messages = it.messages + pollMsg) else it }
 
-                    if (chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
+                    if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
 
                         val metaFlags = "anon=$isAnon;mult=$allowMult;closed=false"
                         val pollPayload = "[POLL]:$question|||${options.joinToString(";;;")}|||$metaFlags"
@@ -4085,7 +4067,7 @@ private fun ChatScreenContent(
 
                         )
 
-                        if (chatViewModel == null || activeChatId.startsWith("mock_") || activeChatId.startsWith("chat_fallback")) {
+                        if (chatViewModel == null || activeChatId.startsWith("mock_")) {
 
                             chats = chats.map { if (it.id == activeChatId) it.copy(messages = it.messages + newMediaMsg) else it }
 
@@ -4105,7 +4087,7 @@ private fun ChatScreenContent(
                                     }
                                     val ext = if (isVideo) "mp4" else (MediaStoreHelper.getFileExtension(context, uri) ?: "jpg")
 
-                                    if (bytes != null && chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
+                                    if (bytes != null && chatViewModel != null && !activeChatId.startsWith("mock_")) {
 
                                         chatViewModel.sendMediaMessage(bytes, ext, caption ?: "", replyToMessageId = replyQuoteSnapshot?.messageId, localPreviewUri = uri.toString())
 
@@ -4151,7 +4133,7 @@ private fun ChatScreenContent(
 
                         )
 
-                        if (chatViewModel == null || activeChatId.startsWith("mock_") || activeChatId.startsWith("chat_fallback")) {
+                        if (chatViewModel == null || activeChatId.startsWith("mock_")) {
 
                             chats = chats.map { if (it.id == activeChatId) it.copy(messages = it.messages + newMediaMsg) else it }
 
@@ -4169,7 +4151,7 @@ private fun ChatScreenContent(
                                 }
                                 val ext = if (isVideo) "mp4" else (MediaStoreHelper.getFileExtension(context, uri) ?: "jpg")
 
-                                if (bytes != null && chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
+                                if (bytes != null && chatViewModel != null && !activeChatId.startsWith("mock_")) {
 
                                     chatViewModel.sendMediaMessage(bytes, ext, caption ?: "", replyToMessageId = replyQuoteSnapshot?.messageId, localPreviewUri = uri.toString())
 
@@ -4257,7 +4239,7 @@ private fun ChatScreenContent(
 
                         chats = chats.map { if (it.id == activeChatId) it.copy(messages = it.messages + newFileMsg) else it }
 
-                        if (chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
+                        if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
 
                             files.forEach { f ->
 
@@ -4325,7 +4307,7 @@ private fun ChatScreenContent(
 
                         chats = chats.map { if (it.id == activeChatId) it.copy(messages = it.messages + newFileMsg) else it }
 
-                        if (chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
+                        if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
 
                             coroutineScope.launch(Dispatchers.IO) {
 
@@ -4933,7 +4915,7 @@ private fun ChatScreenContent(
 
                     }
 
-                    if (chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
+                    if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
 
                         chatViewModel.toggleReaction(msg.id, emoji)
 
@@ -5004,7 +4986,7 @@ private fun ChatScreenContent(
                 onPin = {
                     val newPinText = if (isPinned) null else (msg.text ?: msg.fileName ?: "Attachment")
                     chats = chats.map { if (it.id == activeChatId) it.copy(pinnedMessage = newPinText, pinnedMessageId = if (isPinned) null else msg.id) else it }
-                    if (chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
+                    if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
                         if (isPinned) {
                             chatViewModel.unpinMessage(activeChatId)
                         } else {
@@ -5127,7 +5109,7 @@ private fun ChatScreenContent(
 
                         }
 
-                        if (chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
+                        if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
 
                             chatViewModel.toggleReaction(targetMsg.id, emoji)
 
@@ -5248,7 +5230,7 @@ private fun ChatScreenContent(
                 onClosePoll = if (!poll.isClosed) {
                     {
                         activePollForDetails = poll.copy(isClosed = true)
-                        if (chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
+                        if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
                             chatViewModel.closePoll(poll.id)
                         }
                         chats = chats.map { c ->
