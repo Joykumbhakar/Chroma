@@ -28,9 +28,24 @@ object ContentSafetyScanner {
     private var means: FloatArray? = null           // Shape: [128]
     private var stds: FloatArray? = null            // Shape: [128]
 
-    private fun sigmoid(x: Float): Float {
-        val clipped = x.coerceIn(-15.0f, 15.0f)
-        return 1.0f / (1.0f + exp(-clipped))
+    private fun softmax(logits: FloatArray): FloatArray {
+        var maxLogit = Float.NEGATIVE_INFINITY
+        for (x in logits) {
+            if (x > maxLogit) maxLogit = x
+        }
+        var sum = 0f
+        val expArray = FloatArray(logits.size)
+        for (i in logits.indices) {
+            val e = exp(logits[i] - maxLogit)
+            expArray[i] = e
+            sum += e
+        }
+        val probs = FloatArray(logits.size)
+        val denom = if (sum > 0f) sum else 1f
+        for (i in logits.indices) {
+            probs[i] = expArray[i] / denom
+        }
+        return probs
     }
 
     @Synchronized
@@ -104,31 +119,30 @@ object ContentSafetyScanner {
             sum
         }
 
-        // 3. Sigmoid probabilities
-        val rawNudity = sigmoid(logits[0])
-        val rawSuggestive = sigmoid(logits[1])
-        val rawViolence = sigmoid(logits[2])
-        val rawIllicit = sigmoid(logits[3])
-        val rawSafe = sigmoid(logits[4])
+        // 3. Calibrated Softmax probabilities
+        val probs = softmax(logits)
+        val rawNudity = probs[0]
+        val rawSuggestive = probs[1]
+        val rawViolence = probs[2]
+        val rawIllicit = probs[3]
+        val rawSafe = probs[4]
 
         // 4. Microscopic Anatomical Corroboration
         // Extreme skin area + pelvic focus directly boosts nudity detection
-        val calibratedNudity = if (anatomy.skinPixelRatio > 0.42f && anatomy.pelvicSkinRatio > 0.40f) {
+        val calibratedNudity = if (anatomy.pelvicSkinRatio > 0.35f && anatomy.skinPixelRatio > 0.45f) {
             max(rawNudity, 0.95f)
-        } else if (anatomy.skinPixelRatio > 0.32f && (anatomy.upperTorsoSkinRatio > 0.45f || anatomy.pelvicSkinRatio > 0.35f)) {
-            max(rawNudity, 0.78f)
         } else {
             rawNudity
         }
 
-        val calibratedSuggestive = if (anatomy.skinPixelRatio in 0.22f..0.42f && anatomy.upperTorsoSkinRatio > 0.35f) {
-            max(rawSuggestive, 0.82f)
+        val calibratedSuggestive = if (rawSafe < 0.40f && anatomy.skinPixelRatio in 0.25f..0.45f && anatomy.upperTorsoSkinRatio > 0.40f) {
+            max(rawSuggestive, 0.75f)
         } else {
             rawSuggestive
         }
 
-        val calibratedViolence = if (anatomy.bloodColorRatio > 0.06f && anatomy.highEdgeMetallicRatio > 0.04f) {
-            max(rawViolence, 0.91f)
+        val calibratedViolence = if (anatomy.bloodColorRatio > 0.05f && anatomy.highEdgeMetallicRatio > 0.05f && rawSafe < 0.40f) {
+            max(rawViolence, 0.90f)
         } else {
             rawViolence
         }

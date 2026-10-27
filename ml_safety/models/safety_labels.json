@@ -10,7 +10,7 @@
       "name": "NUDITY_EXPLICIT",
       "display_name": "Explicit Nudity / Adult Acts",
       "severity": "PROHIBITED",
-      "threshold": 0.65,
+      "threshold": 0.55,
       "description": "Full nudity, exposed genitalia, or explicit sexual interactions"
     },
     {
@@ -18,7 +18,7 @@
       "name": "ADULT_SUGGESTIVE",
       "display_name": "Suggestive / Adult Content",
       "severity": "PROHIBITED",
-      "threshold": 0.70,
+      "threshold": 0.65,
       "description": "Exposed intimate body areas, erotic underwear, or sexually suggestive poses"
     },
     {
@@ -26,7 +26,7 @@
       "name": "VIOLENCE_WEAPONS",
       "display_name": "Graphic Violence / Weapons",
       "severity": "PROHIBITED",
-      "threshold": 0.60,
+      "threshold": 0.55,
       "description": "Visible blood, traumatic gore, or brandished weapons"
     },
     {
@@ -34,7 +34,7 @@
       "name": "ILLICIT_SUBSTANCES",
       "display_name": "Illegal Contraband / Drugs",
       "severity": "PROHIBITED",
-      "threshold": 0.65,
+      "threshold": 0.60,
       "description": "Illegal narcotics, drug paraphernalia, or prohibited contraband"
     },
     {

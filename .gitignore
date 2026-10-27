@@ -17,8 +17,13 @@ serviceAccountKey.json
 firebase_backup*.json
 
 # Scratch files and temporary test scripts
+__pycache__/
+*.pyc
 *.py
+!ml_safety/*.py
+!ml_safety/**/*.py
 *.txt
+!ml_safety/*.txt
 temp_*/
 temp_*.kt
 test.kt
