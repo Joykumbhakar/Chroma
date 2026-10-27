@@ -209,13 +209,14 @@ fun DynamicNotchIsland(
                ),
         modifier = modifier
             .fillMaxWidth()
-            .padding(start = 12.dp, end = 12.dp)
+            .statusBarsPadding()
+            .padding(top = 8.dp, start = 12.dp, end = 12.dp)
     ) {
         Box(
             modifier = Modifier.fillMaxWidth(),
             contentAlignment = Alignment.TopCenter
         ) {
-            val islandShape = RoundedCornerShape(bottomStart = cornerRadius, bottomEnd = cornerRadius, topStart = 0.dp, topEnd = 0.dp)
+            val islandShape = RoundedCornerShape(cornerRadius)
 
             Box(
                 modifier = Modifier

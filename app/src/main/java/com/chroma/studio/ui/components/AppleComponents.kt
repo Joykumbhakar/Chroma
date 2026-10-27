@@ -1088,7 +1088,7 @@ fun AppleDynamicWaveform(tint: Color = Color(0xFF34C759)) {
 @Composable
 fun IosDynamicIslandHost(
     modifier: Modifier = Modifier,
-    isNotchMode: Boolean = true
+    isNotchMode: Boolean = false
 ) {
     if (DynamicIslandManager.isSuppressed) return
 
@@ -1096,6 +1096,7 @@ fun IosDynamicIslandHost(
     var isExpanded by remember { mutableStateOf(false) }
     var replyText by remember { mutableStateOf("") }
     var offsetY by remember { mutableFloatStateOf(0f) }
+    var offsetX by remember { mutableFloatStateOf(0f) }
     val animatedOffsetY by animateFloatAsState(
         targetValue = offsetY,
         animationSpec = spring(dampingRatio = 0.65f, stiffness = Spring.StiffnessMediumLow),
@@ -1122,6 +1123,7 @@ fun IosDynamicIslandHost(
         currentEvent = null
         isExpanded = false
         offsetY = 0f
+        offsetX = 0f
         jumpOffsetY.snapTo(0f)
         jellyScaleX.snapTo(1f)
         jellyScaleY.snapTo(1f)
@@ -1139,6 +1141,7 @@ fun IosDynamicIslandHost(
             isExpanded = false // Never aggressively auto-expand by default
             replyText = ""
             offsetY = 0f
+            offsetX = 0f
 
             // Play Dynamic Island notification sound effect
             try {
@@ -1218,19 +1221,22 @@ fun IosDynamicIslandHost(
             if (replyText.isNotEmpty()) {
                 return@LaunchedEffect
             }
-            // Gentle timeout for expanded card if untouched
-            delay(7500L)
+            // Polite timeout for expanded card if untouched (avoids blocking screen)
+            delay(4500L)
             isExpanded = false
-            delay(280L)
+            delay(240L)
             if (currentEvent == event && !isExpanded) {
                 performDismiss()
             }
         } else {
-            // Compact pill mode: polite, non-annoying glance timer
+            // Compact pill mode: perfectly tuned glance timer (snappy & non-intrusive)
             val duration = when (event) {
-                is DynamicIslandEvent.Status -> (event.durationMs).coerceIn(2000L, 2600L)
-                is DynamicIslandEvent.ChatMessage -> 3600L
-                else -> 3200L
+                is DynamicIslandEvent.Status -> (event.durationMs).coerceIn(1800L, 2400L)
+                is DynamicIslandEvent.ChatMessage -> 3200L
+                is DynamicIslandEvent.Like -> 2000L
+                is DynamicIslandEvent.Follow -> 2200L
+                is DynamicIslandEvent.RemixOrDownload -> 2000L
+                else -> 2200L
             }
             delay(duration)
             if (currentEvent == event && !isExpanded) {
@@ -1288,17 +1294,14 @@ fun IosDynamicIslandHost(
             label = "islandCorner"
         )
 
-        val shape = if (isNotchMode) {
-            RoundedCornerShape(bottomStart = islandCorner, bottomEnd = islandCorner, topStart = 0.dp, topEnd = 0.dp)
-        } else {
-            RoundedCornerShape(islandCorner)
-        }
+        val shape = RoundedCornerShape(islandCorner)
 
         Box(
             modifier = modifier
                 .fillMaxWidth()
-                .then(if (!isNotchMode) Modifier.statusBarsPadding().padding(top = 6.dp) else Modifier)
-                .offset { IntOffset(0, animatedOffsetY.roundToInt()) }
+                .statusBarsPadding()
+                .padding(top = 8.dp)
+                .offset { IntOffset(offsetX.roundToInt(), animatedOffsetY.roundToInt()) }
                 .zIndex(999f),
             contentAlignment = Alignment.TopCenter
         ) {
@@ -1342,22 +1345,25 @@ fun IosDynamicIslandHost(
                         shape = shape
                     )
                     .pointerInput(Unit) {
-                        detectVerticalDragGestures(
-                            onVerticalDrag = { change, dragAmount ->
-                                if (dragAmount < 0 || offsetY < 0) {
-                                    change.consume()
-                                    offsetY = (offsetY + dragAmount).coerceAtLeast(-100f)
+                        detectDragGestures(
+                            onDrag = { change, dragAmount ->
+                                change.consume()
+                                if (dragAmount.y < 0) {
+                                    offsetY = (offsetY + dragAmount.y).coerceAtLeast(-120f)
                                 }
+                                offsetX = (offsetX + dragAmount.x).coerceIn(-180f, 180f)
                             },
                             onDragEnd = {
-                                if (offsetY < -12f) {
+                                if (offsetY < -10f || kotlin.math.abs(offsetX) > 35f) {
                                     dismissIsland()
                                 } else {
                                     offsetY = 0f
+                                    offsetX = 0f
                                 }
                             },
                             onDragCancel = {
                                 offsetY = 0f
+                                offsetX = 0f
                             }
                         )
                     }

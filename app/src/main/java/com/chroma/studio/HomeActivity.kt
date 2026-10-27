@@ -1916,7 +1916,7 @@ class HomeActivity : ComponentActivity() {
                 }
             }
             com.chroma.studio.ui.components.ChromaToastHost()
-            com.chroma.studio.ui.components.IosDynamicIslandHost(isNotchMode = true)
+            com.chroma.studio.ui.components.IosDynamicIslandHost(isNotchMode = false)
         }
         } // End OscellionBackground
     }
