@@ -67,6 +67,13 @@ import com.chroma.studio.ui.components.GlassPanel
 import com.chroma.studio.ui.components.PrimaryGradientButton
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.composables.icons.lucide.*
+import com.chroma.studio.sticker.StickerItem
+import com.chroma.studio.sticker.StickerOverlayItem
+import com.chroma.studio.sticker.StickerPickerSheet
+import com.chroma.studio.sticker.StickerStudioModal
+import com.chroma.studio.sticker.StickerRepository
+import android.graphics.BitmapFactory
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -96,7 +103,8 @@ enum class StudioEditorCategory(val title: String, val icon: androidx.compose.ui
     LOOKS("Filters", Lucide.Sparkles),
     ADJUST("Adjust", Lucide.SlidersHorizontal),
     CROP("Crop", Lucide.Crop),
-    TYPE("Text", Lucide.Type)
+    TYPE("Text", Lucide.Type),
+    STICKERS("Stickers", Lucide.Sticker)
 }
 
 enum class StudioBackdropType {
@@ -399,6 +407,12 @@ fun FlashPhotoEditorScreen(
     var textColor by remember { mutableStateOf(Color.White) }
     var textBgStyle by remember { mutableStateOf("solid") } // "none", "pill", "glass", "outline"
 
+    // Interactive Stickers Layer State
+    val activeStickers = remember { mutableStateListOf<StickerOverlayItem>() }
+    var isStickerPickerOpen by remember { mutableStateOf(false) }
+    var isStickerStudioOpen by remember { mutableStateOf(false) }
+    var selectedStickerId by remember { mutableStateOf<String?>(null) }
+
     // Frames & Studio Backdrop State
     var frameWidthPx by remember { mutableFloatStateOf(0f) }
     var frameColor by remember { mutableStateOf(Color.White) }
@@ -534,6 +548,8 @@ fun FlashPhotoEditorScreen(
         frameWidthPx = 0f
         backdropType = StudioBackdropType.TRANSPARENT
         overlayText = ""
+        activeStickers.clear()
+        selectedStickerId = null
         Toast.makeText(context, "Workspace reset to original", Toast.LENGTH_SHORT).show()
     }
 
@@ -599,7 +615,8 @@ fun FlashPhotoEditorScreen(
                 textBgStyle = textBgStyle,
                 zoomScale = zoomScale,
                 panOffsetX = panOffsetX,
-                panOffsetY = panOffsetY
+                panOffsetY = panOffsetY,
+                stickers = activeStickers.toList()
             )
 
             // Render all photos for multi-photo / slideshow export so all settings apply before cloud upload
@@ -637,7 +654,8 @@ fun FlashPhotoEditorScreen(
                             stampPosition = "bottom",
                             quality = exportQuality,
                             textColor = textColor,
-                            textBgStyle = textBgStyle
+                            textBgStyle = textBgStyle,
+                            stickers = activeStickers.toList()
                         )
                         if (slideBmp != null) {
                             try {
@@ -1001,6 +1019,72 @@ fun FlashPhotoEditorScreen(
                             )
                         }
                     }
+
+                    // Interactive Custom Stickers Layer (with 5px white die-cut border)
+                    for (sticker in activeStickers) {
+                        val isSelected = selectedStickerId == sticker.id
+                        var sOffset by remember(sticker.id) { mutableStateOf(sticker.offset) }
+                        var sScale by remember(sticker.id) { mutableFloatStateOf(sticker.scale) }
+                        var sRot by remember(sticker.id) { mutableFloatStateOf(sticker.rotation) }
+
+                        Box(
+                            modifier = Modifier
+                                .offset { androidx.compose.ui.unit.IntOffset(sOffset.x.roundToInt(), sOffset.y.roundToInt()) }
+                                .graphicsLayer {
+                                    scaleX = sScale
+                                    scaleY = sScale
+                                    rotationZ = sRot
+                                }
+                                .pointerInput(sticker.id) {
+                                    detectTransformGestures { _, pan, zoom, rotation ->
+                                        sOffset += pan
+                                        sticker.offset = sOffset
+                                        sScale = (sScale * zoom).coerceIn(0.25f, 4f)
+                                        sticker.scale = sScale
+                                        sRot += rotation
+                                        sticker.rotation = sRot
+                                        selectedStickerId = sticker.id
+                                    }
+                                }
+                                .clickable {
+                                    selectedStickerId = if (isSelected) null else sticker.id
+                                }
+                                .then(
+                                    if (isSelected) {
+                                        Modifier
+                                            .border(1.5.dp, colors.primary, RoundedCornerShape(10.dp))
+                                            .padding(4.dp)
+                                    } else Modifier.padding(4.dp)
+                                )
+                        ) {
+                            Image(
+                                bitmap = sticker.bitmap.asImageBitmap(),
+                                contentDescription = "Sticker Overlay",
+                                modifier = Modifier.size(110.dp)
+                            )
+                            if (isSelected) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .size(24.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFFEF4444))
+                                        .clickable {
+                                            activeStickers.remove(sticker)
+                                            selectedStickerId = null
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        Lucide.X,
+                                        contentDescription = "Remove",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
 
                 // Top-Left Comparison Indicator
@@ -1261,10 +1345,59 @@ fun FlashPhotoEditorScreen(
                                         onBgStyleChange = { pushSnapshot(); textBgStyle = it }
                                     )
                                 }
+                                StudioEditorCategory.STICKERS -> {
+                                    StudioStickerToolPanel(
+                                        activeStickersCount = activeStickers.size,
+                                        onAddStickerClick = { isStickerPickerOpen = true },
+                                        onCreateCustomClick = { isStickerStudioOpen = true },
+                                        onClearAll = {
+                                            activeStickers.clear()
+                                            selectedStickerId = null
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
                 }
+            }
+            val addStickerFromItem: (StickerItem) -> Unit = { item ->
+                scope.launch {
+                    val u = Uri.parse(item.uri)
+                    val bmp = withContext(Dispatchers.IO) {
+                        try {
+                            context.contentResolver.openInputStream(u)?.use {
+                                BitmapFactory.decodeStream(it)
+                            }
+                        } catch (_: Exception) { null }
+                    }
+                    if (bmp != null) {
+                        activeStickers.add(StickerOverlayItem(bitmap = bmp))
+                    }
+                }
+            }
+
+            if (isStickerPickerOpen) {
+                StickerPickerSheet(
+                    isOpen = isStickerPickerOpen,
+                    onDismiss = { isStickerPickerOpen = false },
+                    onStickerSelected = { sticker ->
+                        addStickerFromItem(sticker)
+                    },
+                    onCreateCustomSticker = {
+                        isStickerStudioOpen = true
+                    }
+                )
+            }
+
+            if (isStickerStudioOpen) {
+                StickerStudioModal(
+                    isOpen = isStickerStudioOpen,
+                    onDismiss = { isStickerStudioOpen = false },
+                    onStickerCreated = { sticker ->
+                        addStickerFromItem(sticker)
+                    }
+                )
             }
         }
     }
@@ -1273,6 +1406,69 @@ fun FlashPhotoEditorScreen(
 // ─────────────────────────────────────────────────────────────────────────────
 // TOOL PANEL IMPLEMENTATIONS
 // ─────────────────────────────────────────────────────────────────────────────
+
+
+@Composable
+private fun StudioStickerToolPanel(
+    activeStickersCount: Int,
+    onAddStickerClick: () -> Unit,
+    onCreateCustomClick: () -> Unit,
+    onClearAll: () -> Unit
+) {
+    val colors = LocalOscellionColors.current
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Button(
+                onClick = onAddStickerClick,
+                colors = ButtonDefaults.buttonColors(containerColor = colors.primary),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(Lucide.Sticker, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Choose Sticker", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            }
+
+            OutlinedButton(
+                onClick = onCreateCustomClick,
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, colors.primary),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.primary),
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(Lucide.Sparkles, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Create 5px Cutout", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
+
+        if (activeStickersCount > 0) {
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "$activeStickersCount sticker(s) placed - drag & pinch to position",
+                    color = colors.textMuted,
+                    fontSize = 12.sp
+                )
+                TextButton(onClick = onClearAll) {
+                    Text("Clear All", color = Color(0xFFEF4444), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                }
+            }
+        }
+    }
+}
 
 @Composable
 private fun StudioCropToolPanel(
@@ -2013,7 +2209,8 @@ private suspend fun renderStudioPhotoBitmap(
     textBgStyle: String = "solid",
     zoomScale: Float = 1f,
     panOffsetX: Float = 0f,
-    panOffsetY: Float = 0f
+    panOffsetY: Float = 0f,
+    stickers: List<StickerOverlayItem> = emptyList()
 ): Bitmap? = withContext(Dispatchers.IO) {
     var original: Bitmap? = null
     var finalOutput: Bitmap? = null
@@ -2223,6 +2420,22 @@ private suspend fun renderStudioPhotoBitmap(
 
             val baseline = centerY - (fontMetrics.ascent + fontMetrics.descent) / 2f
             outCanvas.drawText(stampName, centerX, baseline, textPaint)
+        }
+
+        // Draw Placed Stickers (preserving 5px white die-cut border, scale, and rotation)
+        for (stk in stickers) {
+            val stkMatrix = android.graphics.Matrix()
+            val stkOrigW = stk.bitmap.width.toFloat()
+            val stkOrigH = stk.bitmap.height.toFloat()
+            stkMatrix.postTranslate(-stkOrigW / 2f, -stkOrigH / 2f)
+            stkMatrix.postScale(stk.scale, stk.scale)
+            stkMatrix.postRotate(stk.rotation)
+            val pScale = (finalW.toFloat() / 360f).coerceIn(0.5f, 4f)
+            val relX = finalW / 2f + stk.offset.x * pScale
+            val relY = finalH / 2f + stk.offset.y * pScale
+            stkMatrix.postTranslate(relX, relY)
+            val stkPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+            outCanvas.drawBitmap(stk.bitmap, stkMatrix, stkPaint)
         }
 
         finalOutput

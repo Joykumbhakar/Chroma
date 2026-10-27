@@ -93,6 +93,9 @@ import com.chroma.studio.ui.components.OnlyFriendsManagementSheet
 
 import com.chroma.studio.ui.screens.StoryViewerScreen
 import com.chroma.studio.ui.screens.FlashPhotoEditorScreen
+import com.chroma.studio.sticker.StickerItem
+import com.chroma.studio.sticker.StickerPickerSheet
+import com.chroma.studio.sticker.StickerStudioModal
 import com.chroma.studio.ui.screens.PhotoAspectRatio
 
 import com.chroma.studio.viewmodel.StoryViewModel
@@ -355,6 +358,8 @@ private fun ChatScreenContent(
     var pendingUploadStoryUri by remember { mutableStateOf<Uri?>(null) }
     var showShareStoryAudienceSheet by remember { mutableStateOf(false) }
     var showOnlyFriendsManagementSheet by remember { mutableStateOf(false) }
+    var isStickerPickerOpen by remember { mutableStateOf(false) }
+    var isStickerStudioOpen by remember { mutableStateOf(false) }
 
     var storyViewerInitialIndex by remember { mutableIntStateOf(0) }
 
@@ -1074,67 +1079,69 @@ private fun ChatScreenContent(
 
 
     fun sendCapturedPhoto(uri: Uri, caption: String?) {
-
         val replyQuoteSnapshot = activeReplyQuote
-
         val photoMsg = ChatMessage(
-
             id = "m_${System.currentTimeMillis()}",
-
             senderId = currentUser.id,
-
             senderName = currentUser.name,
-
             mediaType = "image",
-
             localUri = uri.toString(),
-
             mediaUrl = uri.toString(),
-
             text = caption?.takeIf { it.isNotBlank() },
-
             time = getCurrentTimeFormatted(),
-
             status = "sent",
-
             replyTo = replyQuoteSnapshot
-
         )
-
         if (chatViewModel == null || activeChatId.startsWith("mock_")) {
-
             chats = chats.map { if (it.id == activeChatId) it.copy(messages = it.messages + photoMsg) else it }
-
         }
-
         activeReplyQuote = null
-
         coroutineScope.launch {
-
             try {
-
                 val bytes = com.chroma.studio.utils.ImageUtils.compressChatImage(context, uri)
-
-                    ?: context.contentResolver.openInputStream(uri)?.readBytes()
-
+                    ?: context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                 if (bytes != null && chatViewModel != null && !activeChatId.startsWith("mock_")) {
-
                     chatViewModel.sendMediaMessage(bytes, "jpg", caption ?: "", replyToMessageId = replyQuoteSnapshot?.messageId, localPreviewUri = uri.toString())
-
                 }
-
             } catch (e: Exception) {
-
                 android.util.Log.e("ChatScreen", "Failed to upload camera photo", e)
-
             }
-
         }
-
         SoundManager.playSend()
-
         showToast("Photo sent ✨")
+    }
 
+    fun sendStickerMessage(sticker: StickerItem) {
+        val replyQuoteSnapshot = activeReplyQuote
+        val sMsg = ChatMessage(
+            id = "m_${System.currentTimeMillis()}",
+            senderId = currentUser.id,
+            senderName = currentUser.name,
+            mediaType = "sticker",
+            localUri = sticker.uri,
+            mediaUrl = sticker.uri,
+            text = null,
+            time = getCurrentTimeFormatted(),
+            status = "sent",
+            replyTo = replyQuoteSnapshot
+        )
+        if (chatViewModel == null || activeChatId.startsWith("mock_")) {
+            chats = chats.map { if (it.id == activeChatId) it.copy(messages = it.messages + sMsg) else it }
+        }
+        activeReplyQuote = null
+        coroutineScope.launch {
+            try {
+                val u = Uri.parse(sticker.uri)
+                val bytes = context.contentResolver.openInputStream(u)?.use { it.readBytes() }
+                if (bytes != null && chatViewModel != null && !activeChatId.startsWith("mock_")) {
+                    chatViewModel.sendMediaMessage(bytes, "png", "", replyToMessageId = replyQuoteSnapshot?.messageId, localPreviewUri = sticker.uri)
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("ChatScreen", "Failed to upload sticker", e)
+            }
+        }
+        SoundManager.playSend()
+        showToast("Sticker sent ✨")
     }
 
     fun sendCapturedVideo(uri: Uri, caption: String?) {
@@ -1543,6 +1550,8 @@ private fun ChatScreenContent(
         editingStoryImageUri != null ||
         showShareStoryAudienceSheet ||
         showOnlyFriendsManagementSheet ||
+        isStickerPickerOpen ||
+        isStickerStudioOpen ||
         showStoryViewer ||
         isGalleryPickerOpen ||
         previewLightboxImage != null
@@ -1770,6 +1779,8 @@ private fun ChatScreenContent(
     BackHandler(enabled = isAnyModalOrSubscreenOpen) {
         when {
             showOnlyFriendsManagementSheet -> showOnlyFriendsManagementSheet = false
+            isStickerStudioOpen -> isStickerStudioOpen = false
+            isStickerPickerOpen -> isStickerPickerOpen = false
             showShareStoryAudienceSheet -> showShareStoryAudienceSheet = false
             editingStoryImageUri != null -> editingStoryImageUri = null
             showStoryGalleryPicker -> showStoryGalleryPicker = false
@@ -3135,6 +3146,7 @@ private fun ChatScreenContent(
                                 },
 
                                 onPollClick = { isPollCreatorOpen = true },
+                                onStickerClick = { isStickerPickerOpen = true },
 
                                 onVoiceClick = { startVoiceRecording() },
 
@@ -4102,6 +4114,29 @@ private fun ChatScreenContent(
                 },
                 onEditOnlyFriends = { showOnlyFriendsManagementSheet = true },
                 onlyFriendsCount = onlyFriends.size
+            )
+        }
+
+        if (isStickerPickerOpen) {
+            StickerPickerSheet(
+                isOpen = isStickerPickerOpen,
+                onDismiss = { isStickerPickerOpen = false },
+                onStickerSelected = { sticker ->
+                    sendStickerMessage(sticker)
+                },
+                onCreateCustomSticker = {
+                    isStickerStudioOpen = true
+                }
+            )
+        }
+
+        if (isStickerStudioOpen) {
+            StickerStudioModal(
+                isOpen = isStickerStudioOpen,
+                onDismiss = { isStickerStudioOpen = false },
+                onStickerCreated = { sticker ->
+                    sendStickerMessage(sticker)
+                }
             )
         }
 

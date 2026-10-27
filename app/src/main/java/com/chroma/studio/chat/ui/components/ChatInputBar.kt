@@ -47,6 +47,7 @@ fun ChatInputBar(
     onPhotoClick: () -> Unit,
     onFileClick: () -> Unit,
     onPollClick: () -> Unit,
+    onStickerClick: () -> Unit = {},
     onVoiceClick: () -> Unit,
     onSendClick: () -> Unit,
     onDictateClick: () -> Unit = {},
@@ -99,6 +100,7 @@ fun ChatInputBar(
                             ActionMenuOption.PHOTOS -> onPhotoClick()
                             ActionMenuOption.FILES -> onFileClick()
                             ActionMenuOption.POLL -> onPollClick()
+                            ActionMenuOption.STICKER -> onStickerClick()
                         }
                     }
                 )

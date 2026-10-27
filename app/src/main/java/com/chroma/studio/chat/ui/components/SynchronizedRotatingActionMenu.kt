@@ -113,6 +113,20 @@ enum class ActionMenuOption(
             Color(0x578B5CF6)
         ),
         shadowColor = Color(0x297C3AED)
+    ),
+    STICKER(
+        label = "Sticker",
+        bgStops = listOf(
+            Color(0xFAFFFFFF),
+            Color(0xFFFFF7ED),
+            Color(0xFFFFEDD5)
+        ),
+        borderStops = listOf(
+            Color(0xFFFFFFFF),
+            Color(0x99FDBA74),
+            Color(0x57F97316)
+        ),
+        shadowColor = Color(0x29EA580C)
     )
 }
 
@@ -320,6 +334,7 @@ private fun StaggeredActionNodeItem(
                 ActionMenuOption.PHOTOS -> drawPhotos3DGraphic()
                 ActionMenuOption.FILES -> drawFiles3DGraphic()
                 ActionMenuOption.POLL -> drawPoll3DGraphic()
+                ActionMenuOption.STICKER -> drawSticker3DGraphic()
             }
         }
     }
@@ -820,4 +835,45 @@ private fun DrawScope.drawPoll3DGraphic() {
         topLeft = Offset((17.45f - 1.25f) * s, (8.75f - 0.45f) * s),
         size = Size(2.5f * s, 0.9f * s)
     )
+}
+
+/**
+ * 5. Sticker: 3D Die-Cut Peeling Sticker Graphic (24x24 coordinate space).
+ */
+private fun DrawScope.drawSticker3DGraphic() {
+    val s = size.width / 24f
+    drawOval(
+        color = Color(0x3D7C2D12),
+        topLeft = Offset((12f - 7.5f) * s, (20.5f - 1.2f) * s),
+        size = Size(15.0f * s, 2.4f * s)
+    )
+    drawRoundRect(
+        brush = Brush.linearGradient(
+            colors = listOf(Color(0xFFFED7AA), Color(0xFFFB923C), Color(0xFFEA580C)),
+            start = Offset(4.0f * s, 4.0f * s),
+            end = Offset(20.0f * s, 20.0f * s)
+        ),
+        topLeft = Offset(4.0f * s, 4.0f * s),
+        size = Size(16.0f * s, 16.0f * s),
+        cornerRadius = CornerRadius(4.5f * s, 4.5f * s)
+    )
+    drawRoundRect(
+        color = Color.White,
+        topLeft = Offset(5.5f * s, 5.5f * s),
+        size = Size(13.0f * s, 13.0f * s),
+        cornerRadius = CornerRadius(3.5f * s, 3.5f * s),
+        style = Stroke(width = 1.6f * s)
+    )
+    drawCircle(
+        color = Color.White,
+        radius = 2.5f * s,
+        center = Offset(12.0f * s, 12.0f * s)
+    )
+    val foldPath = Path().apply {
+        moveTo(16.0f * s, 20.0f * s)
+        lineTo(20.0f * s, 16.0f * s)
+        lineTo(16.0f * s, 16.0f * s)
+        close()
+    }
+    drawPath(foldPath, Color(0xFFFDBA74))
 }

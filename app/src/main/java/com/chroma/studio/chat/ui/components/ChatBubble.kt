@@ -849,7 +849,7 @@ private fun MessageBubbleCard(
     val animationStyle = config.animationStyle
 
     val isVoiceOnly = message.mediaType == "voice" && message.text.isNullOrEmpty()
-    val isMediaOnly = (message.mediaType in listOf("image", "image_stack")) && message.text.isNullOrEmpty() && message.replyTo == null
+    val isMediaOnly = (message.mediaType in listOf("image", "image_stack", "sticker")) && message.text.isNullOrEmpty() && message.replyTo == null
 
     val highlightAnim = remember { Animatable(0f) }
     LaunchedEffect(isHighlighted) {
@@ -1285,6 +1285,26 @@ private fun MessageBubbleInnerContent(
 
         // 2. Media Content
         when (message.mediaType) {
+            "sticker" -> {
+                val stickerUrl = message.localUri ?: message.mediaUrl
+                if (!stickerUrl.isNullOrEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .padding(vertical = 4.dp)
+                            .size(160.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AsyncImage(
+                            model = stickerUrl,
+                            contentDescription = "Sticker",
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clickable { onImageClick(stickerUrl) },
+                            contentScale = ContentScale.Fit
+                        )
+                    }
+                }
+            }
             "image", "image_stack" -> {
                 val urls = if (message.mediaUrls.isNotEmpty()) message.mediaUrls else listOfNotNull(message.mediaUrl)
                 if (urls.size > 1) {

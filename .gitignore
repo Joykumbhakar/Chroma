@@ -20,6 +20,7 @@ firebase_backup*.json
 __pycache__/
 *.pyc
 *.py
+!create_sticker.py
 !ml_safety/*.py
 !ml_safety/**/*.py
 *.txt
