@@ -85,17 +85,7 @@ object SoundManager {
     }
 
     fun playTap(context: Context? = null) {
-        if (!isSoundsEnabled) return
-        if (soundPool == null && context != null) {
-            init(context)
-        }
-
-        val pool = soundPool
-        if (pool != null && tapSoundId != 0 && isPoolLoaded) {
-            pool.play(tapSoundId, 0.65f, 0.65f, 1, 0, 1.0f)
-        } else {
-            playPop()
-        }
+        // Disabled: Keep UI taps silent
     }
 
     fun playDynamicIsland(context: Context? = null) {
@@ -145,13 +135,11 @@ object SoundManager {
     }
 
     fun playReaction() {
-        if (!isSoundsEnabled) return
-        playTone(frequency = 880.0, durationMs = 50, amplitude = 0.3f) // A5
+        // Disabled: Keep UI taps and reactions silent
     }
 
     fun playPop() {
-        if (!isSoundsEnabled) return
-        playTone(frequency = 1046.5, durationMs = 35, amplitude = 0.25f) // C6 quick pop
+        // Disabled: Keep UI pops silent
     }
 
     fun playRing() {

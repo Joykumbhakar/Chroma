@@ -3167,7 +3167,7 @@ fun FeedPostCard(
                         }
                         doubleTapLikeState.trigger(offset)
                         haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                        com.chroma.studio.chat.sound.SoundManager.playReaction()
+                        // silent
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -3196,8 +3196,8 @@ fun FeedPostCard(
                     }
                     doubleTapLikeState.trigger(offset)
                     haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                    com.chroma.studio.chat.sound.SoundManager.playReaction()
-                    com.chroma.studio.chat.sound.SoundManager.playReaction()
+                    // silent
+                    // silent
                 },
                 modifier = Modifier
                     .fillMaxWidth()

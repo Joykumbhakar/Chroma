@@ -486,7 +486,7 @@ private fun FlashVideoItem(
                             flashVm.toggleLike(video.id, forceLike = true)
                         }
                         haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                        com.chroma.studio.chat.sound.SoundManager.playReaction()
+                        // silent
                     },
                     onTap = {
                         if (isPlaying) player.pause() else player.play()

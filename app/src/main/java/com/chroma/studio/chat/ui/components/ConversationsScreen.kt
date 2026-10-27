@@ -668,7 +668,6 @@ fun ConversationsScreen(
                                 }
                             },
                             onClick = {
-                                SoundManager.playReaction()
                                 onChatSelected(chat.id)
                             },
                             onLongClick = {
