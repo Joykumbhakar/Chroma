@@ -80,6 +80,7 @@ import com.chroma.studio.chat.ui.theme.LocalChatColors
 
 import com.chroma.studio.ui.components.AppleSwitch
 import com.chroma.studio.ui.components.LiquidGlassProgressBar
+import com.chroma.studio.ui.components.LiquidGlassCheckbox
 import com.chroma.studio.ui.components.LiquidGlassPrimaryButton
 import com.chroma.studio.ui.components.LiquidGlassSecondaryButton
 
@@ -2734,37 +2735,13 @@ fun IosAddGroupMemberModal(
 
                                 // Checkmark circle
 
-                                Box(
-
-                                    modifier = Modifier
-
-                                        .size(22.dp)
-
-                                        .clip(CircleShape)
-
-                                        .background(if (isSelected) colors.iosBlue else Color.Transparent)
-
-                                        .border(
-
-                                            width = if (isSelected) 0.dp else 1.5.dp,
-
-                                            color = if (isSelected) Color.Transparent else colors.textMuted.copy(alpha = 0.4f),
-
-                                            shape = CircleShape
-
-                                        ),
-
-                                    contentAlignment = Alignment.Center
-
-                                ) {
-
-                                    if (isSelected) {
-
-                                        LucideCheck(tint = Color.White, size = 13.dp)
-
-                                    }
-
-                                }
+                                LiquidGlassCheckbox(
+                                    checked = isSelected,
+                                    onCheckedChange = null,
+                                    size = 22.dp,
+                                    checkedColor = colors.iosBlue,
+                                    uncheckedColor = colors.textMuted.copy(alpha = 0.4f)
+                                )
 
                             }
 

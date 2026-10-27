@@ -47,6 +47,7 @@ import com.chroma.studio.chat.data.ChatMessage
 import com.chroma.studio.chat.data.Story
 import com.chroma.studio.chat.data.User
 import com.chroma.studio.chat.sound.SoundManager
+import com.chroma.studio.ui.components.LiquidGlassCheckbox
 import com.chroma.studio.chat.ui.theme.LocalChatColors
 import com.chroma.studio.chat.ui.theme.StoryGradient
 import com.chroma.studio.ui.components.getAvatarPresetDrawableRes
@@ -1078,25 +1079,15 @@ private fun IosConversationListRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Selection Checkbox Circle
+            // Selection Checkbox (Thin Box & Extended Tick)
             if (isSelectionMode) {
-                Box(
-                    modifier = Modifier
-                        .size(22.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(if (isSelected) colors.iosBlue else Color.Transparent)
-                        .border(
-                            width = if (isSelected) 0.dp else 1.5.dp,
-                            color = if (isSelected) Color.Transparent else colors.textMuted.copy(alpha = 0.5f),
-                            shape = RoundedCornerShape(6.dp)
-                        )
-                        .clickable { onToggleSelect() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (isSelected) {
-                        LucideCheck(tint = Color.White, size = 13.dp)
-                    }
-                }
+                LiquidGlassCheckbox(
+                    checked = isSelected,
+                    onCheckedChange = { onToggleSelect() },
+                    size = 22.dp,
+                    checkedColor = colors.iosBlue,
+                    uncheckedColor = colors.textMuted.copy(alpha = 0.5f)
+                )
             }
 
             // Contact Avatar with Online Indicator (Actual Avatar or Vector Preset, Zero Letters)

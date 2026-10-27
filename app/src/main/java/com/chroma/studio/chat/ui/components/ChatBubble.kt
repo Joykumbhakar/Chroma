@@ -27,6 +27,7 @@ import com.composables.icons.lucide.ChartColumn
 import com.chroma.studio.ui.components.LiquidGlassCheckbox
 import com.chroma.studio.ui.components.LiquidGlassRadio
 import com.chroma.studio.ui.components.LiquidGlassProgressBar
+import com.chroma.studio.ui.components.LiquidGlassPollOptionMeter
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -2201,16 +2202,15 @@ fun PollCard(
                         }
                     }
 
-                    // Liquid Glass Recessed Progress Bar with spring animation
+                    // Liquid Glass Recessed Progress Bar (Vote Poll Shaders from Design System)
                     if (hasVoted || poll.isClosed) {
-                        LiquidGlassProgressBar(
+                        LiquidGlassPollOptionMeter(
                             progress = percentage,
-                            height = 6.dp,
-                            fillBrush = when {
-                                isWinner -> Brush.horizontalGradient(listOf(Color(0xFF34C759), Color(0xFF30D158)))
-                                isOutgoing -> Brush.horizontalGradient(listOf(Color.White.copy(alpha = 0.95f), Color.White.copy(alpha = 0.65f)))
-                                else -> null
-                            }
+                            optionIndex = index,
+                            isWinner = isWinner,
+                            isLeading = isLeading,
+                            isOutgoing = isOutgoing,
+                            height = 6.dp
                         )
                     }
                 }

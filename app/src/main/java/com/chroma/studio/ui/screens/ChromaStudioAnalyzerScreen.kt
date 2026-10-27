@@ -1,5 +1,7 @@
 package com.chroma.studio.ui.screens
 
+import com.chroma.studio.ui.components.LiquidGlassProgressBar
+
 import android.content.Context
 import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
@@ -922,22 +924,10 @@ private fun AnalyzerProgressBar(
         Spacer(Modifier.height(4.dp))
         val fraction = if (total == 0) 0f else progress.toFloat() / total
         val animFraction by animateFloatAsState(targetValue = fraction, label = "progress")
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(4.dp)
-                .background(colors.glassBorder, RoundedCornerShape(2.dp))
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(animFraction)
-                    .fillMaxHeight()
-                    .background(
-                        Brush.horizontalGradient(listOf(colors.primary, Color(0xFF38BDF8))),
-                        RoundedCornerShape(2.dp)
-                    )
-            )
-        }
+        LiquidGlassProgressBar(
+            progress = fraction,
+            height = 6.dp
+        )
     }
 }
 

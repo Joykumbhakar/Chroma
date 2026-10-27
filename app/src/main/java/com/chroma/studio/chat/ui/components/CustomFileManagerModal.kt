@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chroma.studio.chat.data.ChatFileItem
 import com.chroma.studio.chat.sound.SoundManager
+import com.chroma.studio.ui.components.LiquidGlassCheckbox
 import com.chroma.studio.chat.ui.theme.LocalChatColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -435,23 +436,14 @@ fun CustomFileManagerModal(
                                 )
                             }
 
-                            // Selection Checkbox
-                            Box(
-                                modifier = Modifier
-                                    .size(22.dp)
-                                    .clip(CircleShape)
-                                    .background(if (isSelected) colors.iosBlue else Color.Transparent)
-                                    .border(
-                                        width = if (isSelected) 0.dp else 1.5.dp,
-                                        color = if (isSelected) Color.Transparent else colors.textMuted.copy(alpha = 0.45f),
-                                        shape = RoundedCornerShape(6.dp)
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (isSelected) {
-                                    LucideCheck(tint = Color.White, size = 13.dp)
-                                }
-                            }
+                            // Selection Checkbox (Thin Box & Extended Tick)
+                            LiquidGlassCheckbox(
+                                checked = isSelected,
+                                onCheckedChange = null,
+                                size = 22.dp,
+                                checkedColor = colors.iosBlue,
+                                uncheckedColor = colors.textMuted.copy(alpha = 0.45f)
+                            )
                         }
                     }
                 }

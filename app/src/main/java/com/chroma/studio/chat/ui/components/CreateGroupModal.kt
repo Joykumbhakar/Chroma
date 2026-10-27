@@ -34,6 +34,7 @@ import com.chroma.studio.chat.data.GroupMember
 import com.chroma.studio.chat.data.User
 import com.chroma.studio.chat.data.drawableUri
 import com.chroma.studio.chat.sound.SoundManager
+import com.chroma.studio.ui.components.LiquidGlassCheckbox
 import com.chroma.studio.chat.ui.theme.LocalChatColors
 import com.chroma.studio.ui.components.AppleSwitch
 import com.chroma.studio.ui.components.VerifiedBadge
@@ -472,23 +473,14 @@ private fun StepSelectParticipants(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Circular Selection Checkbox (iOS Style)
-                Box(
-                    modifier = Modifier
-                        .size(22.dp)
-                        .clip(CircleShape)
-                        .background(if (isSelected) colors.iosBlue else Color.Transparent)
-                        .border(
-                            width = if (isSelected) 0.dp else 1.5.dp,
-                            color = if (isSelected) Color.Transparent else colors.separatorOpaque,
-                            shape = RoundedCornerShape(6.dp)
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (isSelected) {
-                        LucideCheck(tint = Color.White, size = 14.dp)
-                    }
-                }
+                // Selection Checkbox (Thin Box & Extended Tick)
+                LiquidGlassCheckbox(
+                    checked = isSelected,
+                    onCheckedChange = null,
+                    size = 22.dp,
+                    checkedColor = colors.iosBlue,
+                    uncheckedColor = colors.separatorOpaque
+                )
 
                 // Avatar
                 Box(modifier = Modifier.size(44.dp)) {

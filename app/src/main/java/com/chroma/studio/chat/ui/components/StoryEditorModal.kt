@@ -42,6 +42,7 @@ import com.chroma.studio.chat.data.PollOption
 import com.chroma.studio.chat.data.Story
 import com.chroma.studio.chat.data.User
 import com.chroma.studio.chat.sound.SoundManager
+import com.chroma.studio.ui.components.LiquidGlassPollOptionMeter
 import com.chroma.studio.chat.ui.theme.LocalChatColors
 import com.chroma.studio.viewmodel.StoryViewModel
 
@@ -270,19 +271,25 @@ fun StoryEditorModal(
                             PhosphorCloseX(tint = Color(0xFF8E8E93), size = 12.dp)
                         }
 
-                        storyPoll?.options?.forEach { opt ->
-                            Box(
+                        storyPoll?.options?.forEachIndexed { optIdx, opt ->
+                            Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
+                                    .clip(RoundedCornerShape(10.dp))
                                     .background(Color(0xFFF2F2F7))
-                                    .padding(vertical = 8.dp, horizontal = 10.dp)
+                                    .padding(vertical = 8.dp, horizontal = 10.dp),
+                                verticalArrangement = Arrangement.spacedBy(5.dp)
                             ) {
                                 Text(
                                     text = opt.text,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = Color(0xFF007AFF)
+                                )
+                                LiquidGlassPollOptionMeter(
+                                    progress = if (optIdx == 0) 0.65f else 0.35f,
+                                    optionIndex = optIdx,
+                                    height = 5.dp
                                 )
                             }
                         }

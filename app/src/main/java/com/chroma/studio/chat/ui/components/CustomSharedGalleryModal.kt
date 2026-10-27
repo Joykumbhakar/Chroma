@@ -52,6 +52,7 @@ import coil.size.Size
 import com.chroma.studio.chat.data.ChatConversation
 import com.chroma.studio.chat.data.GroupMember
 import com.chroma.studio.chat.sound.SoundManager
+import com.chroma.studio.ui.components.LiquidGlassCheckbox
 import com.chroma.studio.chat.ui.theme.LocalChatColors
 import com.chroma.studio.ui.components.LiquidGlassPrimaryButton
 import com.chroma.studio.ui.components.LiquidGlassSecondaryButton
@@ -770,18 +771,15 @@ fun CustomSharedGalleryModal(
                                             )
                                         }
 
-                                        // Selection indicator or quick action
+                                        // Selection indicator (Thin Box & Extended Tick)
                                         if (isSelectionMode) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(24.dp)
-                                                    .clip(RoundedCornerShape(6.dp))
-                                                    .background(if (isSelected) colors.iosBlue else Color.Transparent)
-                                                    .border(1.5.dp, if (isSelected) colors.iosBlue else colors.borderSubtle, RoundedCornerShape(6.dp)),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                if (isSelected) LucideCheck(tint = Color.White, size = 14.dp)
-                                            }
+                                            LiquidGlassCheckbox(
+                                                checked = isSelected,
+                                                onCheckedChange = null,
+                                                size = 22.dp,
+                                                checkedColor = colors.iosBlue,
+                                                uncheckedColor = colors.borderSubtle
+                                            )
                                         } else {
                                             LucideChevronRight(tint = colors.textMuted.copy(alpha = 0.6f), size = 18.dp)
                                         }

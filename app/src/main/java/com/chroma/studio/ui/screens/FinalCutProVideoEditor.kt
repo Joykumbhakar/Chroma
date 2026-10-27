@@ -2,6 +2,8 @@
 
 package com.chroma.studio.ui.screens
 
+import com.chroma.studio.ui.components.LiquidGlassProgressBar
+
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.ColorMatrixColorFilter
@@ -12361,14 +12363,12 @@ fun FcpExportSheet(
                                     color = colors.primary
                                 )
                             }
-                            LinearProgressIndicator(
-                                progress = { exportProgress },
+                            LiquidGlassProgressBar(
+                                progress = exportProgress,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(8.dp)
-                                    .clip(RoundedCornerShape(50)),
-                                color = colors.primary,
-                                trackColor = if (colors.isDark) Color(0xFF2E3444) else Color(0xFFE2E8F0)
+                                    .height(8.dp),
+                                height = 8.dp
                             )
                             Text(
                                 text = "Encoding video stream with color matrix and audio mix",

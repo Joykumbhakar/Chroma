@@ -22,6 +22,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -344,73 +346,188 @@ fun LiquidGlassPillItem(
 }
 
 /**
- * Liquid Glass Checkbox (Thin box with overhanging tick mark)
- * Strict Spec: Thin 1.75dp stroke box, animated 1.85dp tick mark in Accent Blue.
+ * Liquid Glass Progress Shaders & Palette Tokens
+ * Direct 1:1 match to e:\Design Assets\liquid_glass_design_system.html (Spec 4 & 11)
+ */
+object LiquidGlassProgressGradients {
+    // Primary Cupertino Blue Fill (Component 09 & 11)
+    val PrimaryBlue = Brush.horizontalGradient(
+        listOf(
+            Color(0xFF4DA6FF),
+            Color(0xFF0A84FF),
+            Color(0xFF0051D5)
+        )
+    )
+    // Poll 3D Shader 1 (Violet)
+    val PollViolet = Brush.horizontalGradient(
+        0.00f to Color(0xFFC4B5FD),
+        0.45f to Color(0xFF8B5CF6),
+        1.00f to Color(0xFF5B21B6)
+    )
+    // Poll 3D Shader 2 (Indigo)
+    val PollIndigo = Brush.horizontalGradient(
+        0.00f to Color(0xFFA78BFA),
+        0.45f to Color(0xFF7C3AED),
+        1.00f to Color(0xFF4C1D95)
+    )
+    // Poll 3D Shader 3 (Pink / Rose)
+    val PollPink = Brush.horizontalGradient(
+        0.00f to Color(0xFFF472B6),
+        0.48f to Color(0xFFEC4899),
+        1.00f to Color(0xFF9D174D)
+    )
+    // Success Winner Green
+    val WinnerGreen = Brush.horizontalGradient(
+        0.00f to Color(0xFF34C759),
+        0.55f to Color(0xFF30D158),
+        1.00f to Color(0xFF248A3D)
+    )
+    // Outgoing Message Translucent Glass Fill
+    val OutgoingGlass = Brush.horizontalGradient(
+        listOf(Color.White.copy(alpha = 0.95f), Color.White.copy(alpha = 0.65f))
+    )
+}
+
+/**
+ * Thin Box & Extended Tick Checkbox (.ds-checkbox)
+ * Exact mathematical match to e:\Design Assets\liquid_glass_design_system.html (Component 06A & Spec 8)
+ *
+ * SVG Geometry:
+ * - ViewBox: 24 x 24
+ * - Thin Box: d="M 19 8.5 V 17 A 4 4 0 0 1 15 21 H 7 A 4 4 0 0 1 3 17 V 9 A 4 4 0 0 1 7 5 H 15.5"
+ *   Stroke 1.75dp, stroke-linecap: round, stroke-linejoin: round.
+ *   Unchecked: #94A3B8 (or dark mode theme equivalent), full continuous box contour.
+ *   Checked: #0A84FF (or custom checkedColor), smoothly animated dash opening at top-right corner.
+ * - Sweeping Overhanging / Extended Tick: d="M 7.2 12.6 L 11.0 16.8 L 21.4 4.2"
+ *   Stroke 1.85dp, stroke-linecap: round, stroke-linejoin: round, checkedColor (#0A84FF).
+ *   Shoots through the open corner and extends beyond the boundary to (21.4, 4.2).
  */
 @Composable
 fun LiquidGlassCheckbox(
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
+    onCheckedChange: ((Boolean) -> Unit)? = null,
     modifier: Modifier = Modifier,
-    size: Dp = 22.dp
+    enabled: Boolean = true,
+    size: Dp = 22.dp,
+    checkedColor: Color = Color(0xFF0A84FF),
+    uncheckedColor: Color? = null
 ) {
-    val checkProgress by animateFloatAsState(
+    val isDark = isSystemInDarkTheme()
+    val resolvedUncheckedColor = uncheckedColor ?: (if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8))
+
+    val tickProgress by animateFloatAsState(
         targetValue = if (checked) 1f else 0f,
-        animationSpec = spring(dampingRatio = 0.6f, stiffness = 500f),
-        label = "checkboxTick"
+        animationSpec = spring(
+            dampingRatio = 0.65f,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "extendedTickProgress"
     )
 
-    Box(
+    val boxColor by animateColorAsState(
+        targetValue = if (checked) checkedColor else resolvedUncheckedColor,
+        animationSpec = tween(250),
+        label = "boxColor"
+    )
+
+    val clickableModifier = if (onCheckedChange != null && enabled) {
+        Modifier.clickable(
+            interactionSource = remember { MutableInteractionSource() },
+            indication = null,
+            onClick = { onCheckedChange(!checked) }
+        )
+    } else Modifier
+
+    Canvas(
         modifier = modifier
             .size(size)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = { onCheckedChange(!checked) }
-            ),
-        contentAlignment = Alignment.Center
+            .then(clickableModifier)
     ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val s = this.size.width
-            val strokeW = 1.75.dp.toPx()
-            val cornerR = 5.dp.toPx()
+        val s = this.size.minDimension
+        val scale = s / 24f
 
-            // Box outline
-            drawRoundRect(
-                color = if (checked) Color(0xFF0A84FF) else Color(0xFF94A3B8),
-                topLeft = Offset(strokeW / 2, strokeW / 2),
-                size = Size(s - strokeW, s - strokeW),
-                cornerRadius = CornerRadius(cornerR, cornerR),
-                style = Stroke(width = strokeW)
+        val strokeBoxW = 1.75f * scale
+        val strokeTickW = 1.85f * scale
+
+        // 1. Box Contour: M 19 8.5 V 17 A 4 4 0 0 1 15 21 H 7 A 4 4 0 0 1 3 17 V 9 A 4 4 0 0 1 7 5 H 15.5
+        val boxPath = Path().apply {
+            moveTo(19f * scale, 8.5f * scale)
+            lineTo(19f * scale, 17f * scale)
+            arcTo(
+                rect = Rect(11f * scale, 13f * scale, 19f * scale, 21f * scale),
+                startAngleDegrees = 0f,
+                sweepAngleDegrees = 90f,
+                forceMoveTo = false
             )
+            lineTo(7f * scale, 21f * scale)
+            arcTo(
+                rect = Rect(3f * scale, 13f * scale, 11f * scale, 21f * scale),
+                startAngleDegrees = 90f,
+                sweepAngleDegrees = 90f,
+                forceMoveTo = false
+            )
+            lineTo(3f * scale, 9f * scale)
+            arcTo(
+                rect = Rect(3f * scale, 5f * scale, 11f * scale, 13f * scale),
+                startAngleDegrees = 180f,
+                sweepAngleDegrees = 90f,
+                forceMoveTo = false
+            )
+            lineTo(15.5f * scale, 5f * scale)
+        }
 
-            // Overhanging Tick Mark
-            if (checkProgress > 0.05f) {
-                val tickPath = Path().apply {
-                    val p1 = Offset(s * 0.25f, s * 0.52f)
-                    val p2 = Offset(s * 0.44f, s * 0.72f)
-                    val p3 = Offset(s * 0.82f, s * 0.30f)
-
-                    moveTo(p1.x, p1.y)
-                    if (checkProgress < 0.45f) {
-                        val seg1 = checkProgress / 0.45f
-                        lineTo(p1.x + (p2.x - p1.x) * seg1, p1.y + (p2.y - p1.y) * seg1)
-                    } else {
-                        lineTo(p2.x, p2.y)
-                        val seg2 = ((checkProgress - 0.45f) / 0.55f).coerceIn(0f, 1f)
-                        lineTo(p2.x + (p3.x - p2.x) * seg2, p2.y + (p3.y - p2.y) * seg2)
-                    }
-                }
-                drawPath(
-                    path = tickPath,
-                    color = Color(0xFF0A84FF),
-                    style = Stroke(
-                        width = 2.0.dp.toPx(),
-                        cap = StrokeCap.Round,
-                        join = StrokeJoin.Round
-                    )
+        if (tickProgress > 0.01f) {
+            val boxMeasure = PathMeasure()
+            boxMeasure.setPath(boxPath, false)
+            val boxLen = boxMeasure.length
+            val openBoxPath = Path()
+            // Trim ends smoothly when checked to allow the extended tick to shoot through
+            val startDist = 2.8f * scale * tickProgress
+            val stopDist = (boxLen - (1.2f * scale * tickProgress)).coerceAtLeast(startDist)
+            boxMeasure.getSegment(startDist, stopDist, openBoxPath, true)
+            drawPath(
+                path = openBoxPath,
+                color = boxColor,
+                style = Stroke(
+                    width = strokeBoxW,
+                    cap = StrokeCap.Round,
+                    join = StrokeJoin.Round
                 )
+            )
+        } else {
+            drawPath(
+                path = boxPath,
+                color = boxColor,
+                style = Stroke(
+                    width = strokeBoxW,
+                    cap = StrokeCap.Round,
+                    join = StrokeJoin.Round
+                )
+            )
+        }
+
+        // 2. Sweeping Overhanging Tick: M 7.2 12.6 L 11.0 16.8 L 21.4 4.2
+        if (tickProgress > 0.01f) {
+            val tickPath = Path().apply {
+                moveTo(7.2f * scale, 12.6f * scale)
+                lineTo(11.0f * scale, 16.8f * scale)
+                lineTo(21.4f * scale, 4.2f * scale)
             }
+            val tickMeasure = PathMeasure()
+            tickMeasure.setPath(tickPath, false)
+            val animatedTick = Path()
+            tickMeasure.getSegment(0f, tickMeasure.length * tickProgress, animatedTick, true)
+
+            drawPath(
+                path = animatedTick,
+                color = checkedColor,
+                alpha = tickProgress.coerceIn(0f, 1f),
+                style = Stroke(
+                    width = strokeTickW,
+                    cap = StrokeCap.Round,
+                    join = StrokeJoin.Round
+                )
+            )
         }
     }
 }
@@ -561,11 +678,11 @@ fun LiquidGlassThreeDotsMenu(
 
 /**
  * Liquid Glass Recessed Progress Meter (.ds-progress-track & .ds-progress-fill)
- * Strict Spec from e:\liquid_glass_design_system.html (Component 09 & 11):
- * - Track: Recessed pill, height 6dp-8dp, RoundedCornerShape(9999.dp), #E5E5EA (light) / #2C2C2E (dark),
- *   with subtle inset border / shadow.
+ * Strict Spec from e:\Design Assets\liquid_glass_design_system.html (Component 09 & 11):
+ * - Track: Recessed pill, height 6dp, RoundedCornerShape(9999.dp), #E5E5EA (light) / #2C2C2E (dark),
+ *   with subtle inner inset shadow (box-shadow: inset 0 1.5px 3px rgba(0, 0, 0, 0.12)).
  * - Fill: RoundedCornerShape(9999.dp), horizontal gradient [#4DA6FF -> #0A84FF -> #0051D5],
- *   smooth animated fraction.
+ *   smooth animated fraction (transition: width 0.35s cubic-bezier(0.25, 1, 0.5, 1)).
  * - Supports determinate (0f..1f) and indeterminate (null or < 0f) animated shimmer.
  */
 @Composable
@@ -579,13 +696,9 @@ fun LiquidGlassProgressBar(
 ) {
     val isDark = isSystemInDarkTheme()
     val resolvedTrack = trackColor ?: (if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA))
-    val resolvedFill = fillBrush ?: Brush.horizontalGradient(
-        listOf(
-            Color(0xFF4DA6FF),
-            Color(0xFF0A84FF),
-            Color(0xFF0051D5)
-        )
-    )
+    val resolvedFill = fillBrush ?: LiquidGlassProgressGradients.PrimaryBlue
+
+    val shape = RoundedCornerShape(9999.dp)
 
     if (progress == null || progress < 0f) {
         // Indeterminate liquid shimmer pulse
@@ -604,12 +717,23 @@ fun LiquidGlassProgressBar(
             modifier = modifier
                 .fillMaxWidth()
                 .height(height)
-                .clip(RoundedCornerShape(9999.dp))
+                .clip(shape)
                 .background(resolvedTrack)
+                .drawWithContent {
+                    drawContent()
+                    // Exact recessed inner shadow
+                    drawRect(
+                        brush = Brush.verticalGradient(
+                            0.0f to (if (isDark) Color.Black.copy(alpha = 0.28f) else Color.Black.copy(alpha = 0.12f)),
+                            0.45f to Color.Transparent,
+                            1.0f to Color.Transparent
+                        )
+                    )
+                }
                 .border(
                     0.5.dp,
                     if (isDark) Color.Black.copy(alpha = 0.35f) else Color.Black.copy(alpha = 0.08f),
-                    RoundedCornerShape(9999.dp)
+                    shape
                 )
         ) {
             Box(
@@ -619,7 +743,7 @@ fun LiquidGlassProgressBar(
                     .graphicsLayer {
                         translationX = size.width * offsetFraction
                     }
-                    .clip(RoundedCornerShape(9999.dp))
+                    .clip(shape)
                     .background(resolvedFill)
             )
         }
@@ -627,7 +751,7 @@ fun LiquidGlassProgressBar(
         val target = progress.coerceIn(0f, 1f)
         val animatedValue by animateFloatAsState(
             targetValue = target,
-            animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow),
+            animationSpec = spring(dampingRatio = 0.82f, stiffness = 350f),
             label = "liquidProgressFill"
         )
         val currentFill = if (animated) animatedValue else target
@@ -636,12 +760,23 @@ fun LiquidGlassProgressBar(
             modifier = modifier
                 .fillMaxWidth()
                 .height(height)
-                .clip(RoundedCornerShape(9999.dp))
+                .clip(shape)
                 .background(resolvedTrack)
+                .drawWithContent {
+                    drawContent()
+                    // Exact recessed inner shadow
+                    drawRect(
+                        brush = Brush.verticalGradient(
+                            0.0f to (if (isDark) Color.Black.copy(alpha = 0.28f) else Color.Black.copy(alpha = 0.12f)),
+                            0.45f to Color.Transparent,
+                            1.0f to Color.Transparent
+                        )
+                    )
+                }
                 .border(
                     0.5.dp,
                     if (isDark) Color.Black.copy(alpha = 0.35f) else Color.Black.copy(alpha = 0.08f),
-                    RoundedCornerShape(9999.dp)
+                    shape
                 )
         ) {
             if (currentFill > 0f) {
@@ -649,12 +784,53 @@ fun LiquidGlassProgressBar(
                     modifier = Modifier
                         .fillMaxHeight()
                         .fillMaxWidth(currentFill)
-                        .clip(RoundedCornerShape(9999.dp))
+                        .clip(shape)
                         .background(resolvedFill)
                 )
             }
         }
     }
+}
+
+/**
+ * Liquid Glass Vote Poll Option Meter
+ * Dedicated poll progress meter implementing the exact poll 3D shaders and recessed styling
+ * from e:\Design Assets\liquid_glass_design_system.html (Linear 3D Media/Poll & Spec 11).
+ */
+@Composable
+fun LiquidGlassPollOptionMeter(
+    progress: Float,
+    modifier: Modifier = Modifier,
+    optionIndex: Int = 0,
+    isWinner: Boolean = false,
+    isLeading: Boolean = false,
+    isOutgoing: Boolean = false,
+    height: Dp = 6.dp
+) {
+    val fillBrush = when {
+        isWinner -> LiquidGlassProgressGradients.WinnerGreen
+        isOutgoing -> LiquidGlassProgressGradients.OutgoingGlass
+        isLeading -> LiquidGlassProgressGradients.PrimaryBlue
+        else -> when (optionIndex % 4) {
+            0 -> LiquidGlassProgressGradients.PrimaryBlue
+            1 -> LiquidGlassProgressGradients.PollViolet
+            2 -> LiquidGlassProgressGradients.PollIndigo
+            else -> LiquidGlassProgressGradients.PollPink
+        }
+    }
+
+    val trackColor = if (isOutgoing) {
+        Color.White.copy(alpha = 0.22f)
+    } else null
+
+    LiquidGlassProgressBar(
+        progress = progress,
+        modifier = modifier,
+        height = height,
+        trackColor = trackColor,
+        fillBrush = fillBrush,
+        animated = true
+    )
 }
 
 /**
