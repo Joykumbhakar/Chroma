@@ -4,11 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsDraggedAsState
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -18,46 +14,33 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chroma.studio.chat.data.*
 import com.chroma.studio.chat.sound.SoundManager
 import com.chroma.studio.chat.ui.theme.ChatColors
 import com.chroma.studio.chat.ui.theme.LocalChatColors
+import com.chroma.studio.ui.components.*
 import com.chroma.studio.ui.theme.InterFontFamily
-import com.chroma.studio.ui.components.LiquidGlassPrimaryButton
-import com.chroma.studio.ui.components.LiquidGlassSecondaryButton
-import com.chroma.studio.ui.components.AiWaveSphereIcon
 import com.composables.icons.lucide.*
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Size
-import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
-import androidx.compose.ui.graphics.TransformOrigin
 
 /**
- * Apple iOS 18 Design System — Inset Grouped Appearance Settings.
- * Uses Lucide icons with Apple-minimalist squircle icon backgrounds.
- * Authentic AppleSlider (LiquidGlassKnob) and AppleSwitch with jelly spring physics.
+ * Apple iOS / macOS Unified Appearance Settings Screen.
+ * Uses AppleSettingsHeader, AppleSettingsGroup, AppleSettingNavRow,
+ * AppleSettingToggleRow, AppleSettingSliderRow, and AppleSettingDivider
+ * to provide 100% parity with AccountCenterScreen (Main Settings).
  */
 enum class AppearanceSubScreen {
     MAIN,
@@ -69,11 +52,10 @@ enum class AppearanceSubScreen {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 🍏  APPLE SYSTEM GRADIENTS (Authentic iOS 18 clean & professional color ramps)
+// 🍏  APPLE SYSTEM GRADIENTS
 // ─────────────────────────────────────────────────────────────────────────────
 
 object AppleGradients {
-    // 🌌 Universal Signature Programmatic Gradient: Layered #f8fafc base with TL_BR linear gradient (#FF006FFF to #FF111C42)
     val Universal = Brush.linearGradient(
         colors = listOf(Color(0xFF006FFF), Color(0xFF111C42)),
         start = Offset.Zero,
@@ -82,342 +64,14 @@ object AppleGradients {
     val UniversalHorizontal = Brush.horizontalGradient(
         colors = listOf(Color(0xFF006FFF), Color(0xFF111C42))
     )
-
-    // 🍏 Apple System Blue (iMessage / App Store / Safari)
     val Blue = Brush.verticalGradient(listOf(Color(0xFF2997FF), Color(0xFF0071E3)))
     val BlueHorizontal = Brush.horizontalGradient(listOf(Color(0xFF2997FF), Color(0xFF0071E3)))
-
-    // 🍏 Apple System Orange (Clock / Sliders / Reminders)
     val Orange = Brush.verticalGradient(listOf(Color(0xFFFF9F0A), Color(0xFFFF6900)))
-    val OrangeHorizontal = Brush.horizontalGradient(listOf(Color(0xFFFF9F0A), Color(0xFFFF6900)))
-
-    // 🍏 Apple System Purple / Indigo (Shortcuts / Podcasts)
     val Purple = Brush.verticalGradient(listOf(Color(0xFF5E5CE6), Color(0xFF4845D2)))
-    val PurpleHorizontal = Brush.horizontalGradient(listOf(Color(0xFF5E5CE6), Color(0xFF4845D2)))
-
-    // 🍏 Apple System Green (Messages / Phone / Fitness)
     val Green = Brush.verticalGradient(listOf(Color(0xFF30D158), Color(0xFF248A3D)))
-    val GreenHorizontal = Brush.horizontalGradient(listOf(Color(0xFF30D158), Color(0xFF248A3D)))
-
-    // 🍏 Apple System Teal / Cyan (AirDrop / Weather)
     val Teal = Brush.verticalGradient(listOf(Color(0xFF64D2FF), Color(0xFF0091D2)))
-    val TealHorizontal = Brush.horizontalGradient(listOf(Color(0xFF64D2FF), Color(0xFF0091D2)))
-
-    // 🍏 Apple System Pink (Music / Health)
     val Pink = Brush.verticalGradient(listOf(Color(0xFFFF375F), Color(0xFFD70035)))
-
-    // 🍏 Apple System Red (Destructive / Reset)
     val Red = Brush.verticalGradient(listOf(Color(0xFFFF453A), Color(0xFFD70015)))
-
-    // 🍏 Apple System Slate / Dark Charcoal (Display / Dark Appearance)
-    val Slate = Brush.verticalGradient(listOf(Color(0xFF3A3A3C), Color(0xFF1C1C1E)))
-
-    // 🍏 Apple System Silver / Titanium (Milled Metal / Premium)
-    val Titanium = Brush.verticalGradient(listOf(Color(0xFFE5E5EA), Color(0xFF8E8E93)))
-
-    // 🍏 Apple Ultra-Gloss Top Rim (Specular glass bevel)
-    val SpecularRim = Brush.verticalGradient(
-        listOf(
-            Color.White.copy(alpha = 0.45f),
-            Color.White.copy(alpha = 0.08f),
-            Color.Transparent
-        )
-    )
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 🍏  LIQUID GLASS KNOB  (Authentic tactile thumb for AppleSlider & AppleSwitch)
-// ─────────────────────────────────────────────────────────────────────────────
-
-@Composable
-fun LiquidGlassKnob(
-    width: Dp,
-    height: Dp,
-    scale: Float = 1f,
-    baseAlpha: Float = 1.0f,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .size(width, height)
-            .scale(scale)
-            .shadow(
-                elevation = 3.dp,
-                shape = CircleShape,
-                spotColor = Color.Black.copy(alpha = 0.22f),
-                ambientColor = Color.Black.copy(alpha = 0.12f)
-            )
-            .clip(CircleShape)
-            .background(Color.White.copy(alpha = baseAlpha.coerceAtLeast(0.96f)))
-            .border(0.5.dp, Color.Black.copy(alpha = 0.08f), CircleShape)
-    ) {
-        // Specular top gloss highlight
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth()
-                .fillMaxHeight(0.52f)
-                .clip(CircleShape)
-                .background(
-                    Brush.verticalGradient(
-                        0f to Color.White.copy(alpha = 0.95f),
-                        1f to Color.White.copy(alpha = 0.0f)
-                    )
-                )
-        )
-        // Micro-fine specular inner ring
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(1.dp)
-                .clip(CircleShape)
-                .border(
-                    0.5.dp,
-                    Brush.verticalGradient(
-                        listOf(
-                            Color.White.copy(alpha = 0.90f),
-                            Color.White.copy(alpha = 0.15f)
-                        )
-                    ),
-                    CircleShape
-                )
-        )
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 🍏  APPLE SWITCH  (iOS-authentic proportions, smooth toggle & haptic feedback)
-// ─────────────────────────────────────────────────────────────────────────────
-
-@Composable
-fun AppleSwitch(
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier,
-    activeTrackColor: Color = Color(0xFF0A84FF),
-    inactiveTrackColor: Color = if (isSystemInDarkTheme()) Color(0xFF39393D) else Color(0xFFE5E5EA)
-) {
-    val haptic = LocalHapticFeedback.current
-    var isPressed by remember { mutableStateOf(false) }
-
-    val trackColor by animateColorAsState(
-        targetValue = if (checked) activeTrackColor else inactiveTrackColor,
-        animationSpec = tween(240),
-        label = "trackColor"
-    )
-    val targetTranslation = when {
-        checked && isPressed -> 18f
-        checked             -> 20f
-        isPressed           -> -2f
-        else                -> 0f
-    }
-    val jellySpring   = spring<Float>(dampingRatio = 0.45f, stiffness = 600f)
-    val jellySpringDp = spring<Dp>(dampingRatio = 0.45f, stiffness = 600f)
-
-    val thumbTranslationX by animateFloatAsState(targetTranslation, animationSpec = jellySpring, label = "tx")
-    val thumbWidth        by animateDpAsState(if (isPressed) 28.dp else 24.dp, animationSpec = jellySpringDp, label = "tw")
-
-    Box(
-        modifier = modifier
-            .width(51.dp)
-            .height(31.dp)
-            .pointerInput(checked) {
-                detectTapGestures(
-                    onPress = {
-                        isPressed = true
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        tryAwaitRelease()
-                        isPressed = false
-                    },
-                    onTap = { onCheckedChange(!checked) }
-                )
-            }
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clip(CircleShape)
-                .background(trackColor)
-                .border(0.5.dp, Color.Black.copy(alpha = 0.08f), CircleShape)
-        )
-        Box(
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .padding(start = 3.dp)
-                .offset(x = thumbTranslationX.dp)
-        ) {
-            LiquidGlassKnob(
-                width = thumbWidth,
-                height = 25.dp,
-                baseAlpha = 1.0f
-            )
-        }
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 🍏  APPLE SLIDER  (Rock-solid Material 3 engine, custom Apple track & thumb)
-// ─────────────────────────────────────────────────────────────────────────────
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun AppleSlider(
-    value: Float,
-    onValueChange: (Float) -> Unit,
-    valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
-    modifier: Modifier = Modifier,
-    steps: Int = 0,
-    activeBrush: Brush? = null,
-    isLight: Boolean = true
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val isDragged by interactionSource.collectIsDraggedAsState()
-    val isInteracting = isPressed || isDragged
-
-    val haptic = LocalHapticFeedback.current
-
-    LaunchedEffect(isInteracting) {
-        if (isInteracting) {
-            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-        }
-    }
-
-    val thumbWidth by animateDpAsState(
-        targetValue = if (isInteracting) 28.dp else 24.dp,
-        animationSpec = spring(dampingRatio = 0.5f, stiffness = 600f),
-        label = "thumbWidth"
-    )
-    val thumbScale by animateFloatAsState(
-        targetValue = if (isInteracting) 1.15f else 1.0f,
-        animationSpec = spring(dampingRatio = 0.5f, stiffness = 600f),
-        label = "thumbScale"
-    )
-
-    val inactiveTrackColor = if (isLight) Color(0xFFE5E5EA) else Color(0xFF38383A)
-    val defaultActiveBrush = AppleGradients.BlueHorizontal
-
-    Slider(
-        value = value.coerceIn(valueRange.start, valueRange.endInclusive),
-        onValueChange = onValueChange,
-        valueRange = valueRange,
-        steps = steps,
-        interactionSource = interactionSource,
-        modifier = modifier
-            .fillMaxWidth()
-            .height(28.dp),
-        colors = SliderDefaults.colors(
-            activeTrackColor = Color.Transparent,
-            inactiveTrackColor = Color.Transparent,
-            thumbColor = Color.Transparent
-        ),
-        track = { sliderState ->
-            val range = sliderState.valueRange.endInclusive - sliderState.valueRange.start
-            val fraction = if (range > 0f) {
-                ((sliderState.value - sliderState.valueRange.start) / range).coerceIn(0f, 1f)
-            } else 0f
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(6.dp)
-                    .clip(CircleShape)
-                    .background(inactiveTrackColor)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .fillMaxWidth(fraction)
-                        .clip(CircleShape)
-                        .background(activeBrush ?: defaultActiveBrush)
-                )
-            }
-        },
-        thumb = {
-            LiquidGlassKnob(
-                width = thumbWidth,
-                height = 18.dp,
-                scale = thumbScale,
-                baseAlpha = 1.0f
-            )
-        }
-    )
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 🍏  iOS BACK HEADER  (< Settings / < Back  +  centered title  +  Done)
-// ─────────────────────────────────────────────────────────────────────────────
-
-@Composable
-fun IosSubScreenHeader(
-    title: String,
-    backLabel: String = "Settings",
-    onBack: () -> Unit,
-    onDone: (() -> Unit)? = null,
-    isLight: Boolean = true
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Row(
-            modifier = Modifier
-                .clip(RoundedCornerShape(8.dp))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) { SoundManager.playReaction(); onBack() }
-                .padding(horizontal = 8.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(3.dp)
-        ) {
-            Icon(
-                imageVector = Lucide.ChevronLeft,
-                contentDescription = "Back",
-                tint = Color(0xFF007AFF),
-                modifier = Modifier.size(18.dp)
-            )
-            Text(
-                text = backLabel,
-                fontSize = 17.sp,
-                fontFamily = InterFontFamily,
-                fontWeight = FontWeight.Normal,
-                color = Color(0xFF007AFF)
-            )
-        }
-
-        Text(
-            text = title,
-            fontSize = 17.sp,
-            fontWeight = FontWeight.SemiBold,
-            fontFamily = InterFontFamily,
-            color = if (isLight) Color.Black else Color.White,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-
-        if (onDone != null) {
-            Text(
-                text = "Done",
-                fontSize = 17.sp,
-                fontWeight = FontWeight.SemiBold,
-                fontFamily = InterFontFamily,
-                color = Color(0xFF007AFF),
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) { SoundManager.playReaction(); onDone() }
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-            )
-        } else {
-            Spacer(Modifier.width(56.dp))
-        }
-    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -435,16 +89,20 @@ fun LiveBubblePreviewCard(
     testButtonText: String? = null,
     onTestClick: (() -> Unit)? = null
 ) {
-    val outVisual = resolveBubbleVisual(bubbleStyle, isOutgoing = true,  isConsecutive = false, colors = colors, customCorners = customCorners)
-    val inVisual  = resolveBubbleVisual(bubbleStyle, isOutgoing = false, isConsecutive = false, colors = colors, customCorners = customCorners)
+    val isDark = !colors.isLight
+    val outVisual = resolveBubbleVisual(bubbleStyle, isOutgoing = true, isConsecutive = false, colors = colors, customCorners = customCorners)
+    val inVisual = resolveBubbleVisual(bubbleStyle, isOutgoing = false, isConsecutive = false, colors = colors, customCorners = customCorners)
 
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .background(if (colors.isLight) Color(0xFFE5E5EA).copy(alpha = 0.5f) else Color(0xFF1C1C1E).copy(alpha = 0.7f))
-            .border(0.5.dp, if (colors.isLight) Color(0xFFD1D1D6) else Color(0xFF2C2C2E), RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(18.dp))
+            .background(if (isDark) Color(0xFF1C1C1E) else Color.White)
+            .border(
+                width = 1.dp,
+                color = if (isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFDFE8F3),
+                shape = RoundedCornerShape(18.dp)
+            )
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
@@ -453,11 +111,24 @@ fun LiveBubblePreviewCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("LIVE PREVIEW", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, fontFamily = InterFontFamily, color = Color(0xFF8E8E93), letterSpacing = 0.5.sp)
-            Text(bubbleStyle.title, fontSize = 12.sp, fontWeight = FontWeight.Medium, fontFamily = InterFontFamily, color = Color(0xFF007AFF))
+            Text(
+                text = "LIVE PREVIEW",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                fontFamily = InterFontFamily,
+                color = Color(0xFF8E8E93),
+                letterSpacing = 0.5.sp
+            )
+            Text(
+                text = bubbleStyle.title,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                fontFamily = InterFontFamily,
+                color = Color(0xFF0A84FF)
+            )
         }
 
-        // Incoming
+        // Incoming message bubble
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
             Box(
                 modifier = Modifier
@@ -469,14 +140,25 @@ fun LiveBubblePreviewCard(
                     .padding(horizontal = 14.dp, vertical = 9.dp)
             ) {
                 Column {
-                    Text("Hey! How does this style look? ✨", fontSize = 14.5.sp, fontFamily = InterFontFamily, color = inVisual.textColor)
+                    Text(
+                        text = "Hey! How does this style look? ✨",
+                        fontSize = 14.5.sp,
+                        fontFamily = InterFontFamily,
+                        color = inVisual.textColor
+                    )
                     Spacer(Modifier.height(3.dp))
-                    Text("10:41 AM", fontSize = 10.5.sp, fontFamily = InterFontFamily, color = inVisual.timeColor, modifier = Modifier.align(Alignment.End))
+                    Text(
+                        text = "10:41 AM",
+                        fontSize = 10.5.sp,
+                        fontFamily = InterFontFamily,
+                        color = inVisual.timeColor,
+                        modifier = Modifier.align(Alignment.End)
+                    )
                 }
             }
         }
 
-        // Outgoing with Interactive Live Animation Replay
+        // Outgoing message bubble with interactive animation replay
         val previewScaleX = remember { Animatable(1f) }
         val previewScaleY = remember { Animatable(1f) }
         val previewAlpha = remember { Animatable(1f) }
@@ -578,11 +260,30 @@ fun LiveBubblePreviewCard(
                     .padding(horizontal = 14.dp, vertical = 9.dp)
             ) {
                 Column {
-                    Text("Clean, responsive & ultra fast! 🚀", fontSize = 14.5.sp, fontFamily = InterFontFamily, color = outVisual.textColor)
+                    Text(
+                        text = "Clean, responsive & ultra fast! 🚀",
+                        fontSize = 14.5.sp,
+                        fontFamily = InterFontFamily,
+                        color = outVisual.textColor
+                    )
                     Spacer(Modifier.height(3.dp))
-                    Row(modifier = Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text("10:42 AM", fontSize = 10.5.sp, fontFamily = InterFontFamily, color = outVisual.timeColor)
-                        Icon(Lucide.ChevronsRight, contentDescription = null, tint = Color(0xFF34C759), modifier = Modifier.size(12.dp))
+                    Row(
+                        modifier = Modifier.align(Alignment.End),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Text(
+                            text = "10:42 AM",
+                            fontSize = 10.5.sp,
+                            fontFamily = InterFontFamily,
+                            color = outVisual.timeColor
+                        )
+                        Icon(
+                            imageVector = Lucide.ChevronsRight,
+                            contentDescription = null,
+                            tint = Color(0xFF34C759),
+                            modifier = Modifier.size(12.dp)
+                        )
                     }
                 }
             }
@@ -594,7 +295,13 @@ fun LiveBubblePreviewCard(
                 isSmall = true,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             ) {
-                Text(testButtonText, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, fontFamily = InterFontFamily, color = Color.Black)
+                Text(
+                    text = testButtonText,
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    fontFamily = InterFontFamily,
+                    color = if (isDark) Color.White else Color.Black
+                )
             }
         }
     }
@@ -617,123 +324,117 @@ fun MainAppearanceSections(
     onAccentCycle: () -> Unit,
     onResetDefaults: () -> Unit
 ) {
-    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 36.dp)) {
-
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp)
+    ) {
+        // Live Preview Top Card
         item {
-            LiveBubblePreviewCard(bubbleStyle = currentBubbleStyle, customCorners = currentCustomCorners, colors = colors)
+            LiveBubblePreviewCard(
+                bubbleStyle = currentBubbleStyle,
+                customCorners = currentCustomCorners,
+                colors = colors
+            )
         }
 
-        // ── CHAT STYLING ──────────────────────────────────────────────────────
+        // Section 1: Chat Styling
         item {
-            IosSectionHeader("CHAT STYLING")
-            IosGroupedCard(isLight = colors.isLight) {
-
-                IosSettingsRow(
-                    isLight = colors.isLight,
-                    iconColor = Color(0xFF007AFF),
-                    icon = { Icon(Lucide.MessageCircle, null, tint = Color(0xFF007AFF), modifier = Modifier.size(17.dp)) },
+            AppleSettingsGroup(header = "Chat Styling") {
+                AppleSettingNavRow(
                     title = "Bubble Styles",
                     subtitle = "${currentBubbleStyle.title} • ${currentBubbleStyle.category}",
-                    onClick = { SoundManager.playReaction(); onNavigateToSubScreen(AppearanceSubScreen.BUBBLE_STYLES) },
-                    trailing = { Icon(Lucide.ChevronRight, null, tint = Color(0xFFC7C7CC), modifier = Modifier.size(18.dp)) }
+                    icon = Lucide.MessageCircle,
+                    iconColor = Color(0xFF0A84FF),
+                    onClick = {
+                        SoundManager.playReaction()
+                        onNavigateToSubScreen(AppearanceSubScreen.BUBBLE_STYLES)
+                    }
                 )
-                IosRowDivider(isLight = colors.isLight)
-
-                IosSettingsRow(
-                    isLight = colors.isLight,
-                    iconColor = Color(0xFFFF9500),
-                    icon = { Icon(Lucide.SlidersHorizontal, null, tint = Color(0xFFFF9500), modifier = Modifier.size(17.dp)) },
+                AppleSettingDivider()
+                AppleSettingNavRow(
                     title = "Corners & Geometry",
                     subtitle = if (currentCustomCorners.customEnabled) "Custom (${currentCustomCorners.topStart.toInt()}dp)" else "Preset defaults",
-                    onClick = { SoundManager.playReaction(); onNavigateToSubScreen(AppearanceSubScreen.CORNER_GEOMETRY) },
-                    trailing = { Icon(Lucide.ChevronRight, null, tint = Color(0xFFC7C7CC), modifier = Modifier.size(18.dp)) }
+                    icon = Lucide.SlidersHorizontal,
+                    iconColor = Color(0xFFFF9500),
+                    onClick = {
+                        SoundManager.playReaction()
+                        onNavigateToSubScreen(AppearanceSubScreen.CORNER_GEOMETRY)
+                    }
                 )
-                IosRowDivider(isLight = colors.isLight)
-
-                IosSettingsRow(
-                    isLight = colors.isLight,
-                    iconColor = Color(0xFFAF52DE),
-                    icon = { AiWaveSphereIcon(modifier = Modifier.size(18.dp)) },
+                AppleSettingDivider()
+                AppleSettingNavRow(
                     title = "Animations & Physics",
                     subtitle = currentAnimationStyle.title,
-                    onClick = { SoundManager.playReaction(); onNavigateToSubScreen(AppearanceSubScreen.ANIMATIONS) },
-                    trailing = { Icon(Lucide.ChevronRight, null, tint = Color(0xFFC7C7CC), modifier = Modifier.size(18.dp)) }
+                    icon = Lucide.Sparkles,
+                    iconColor = Color(0xFFAF52DE),
+                    onClick = {
+                        SoundManager.playReaction()
+                        onNavigateToSubScreen(AppearanceSubScreen.ANIMATIONS)
+                    }
                 )
-                IosRowDivider(isLight = colors.isLight)
-
-                IosSettingsRow(
-                    isLight = colors.isLight,
-                    iconColor = Color(0xFF00C7BE),
-                    icon = { Icon(Lucide.Mic, null, tint = Color(0xFF00C7BE), modifier = Modifier.size(17.dp)) },
+                AppleSettingDivider()
+                AppleSettingNavRow(
                     title = "Voice Globe Style",
                     subtitle = currentGlobeStyle.title,
-                    onClick = { SoundManager.playReaction(); onNavigateToSubScreen(AppearanceSubScreen.VOICE_GLOBE) },
-                    trailing = { Icon(Lucide.ChevronRight, null, tint = Color(0xFFC7C7CC), modifier = Modifier.size(18.dp)) }
-                )
-            }
-        }
-
-        // ── THEME & DISPLAY ───────────────────────────────────────────────────
-        item {
-            IosSectionHeader("THEME & DISPLAY")
-            IosGroupedCard(isLight = colors.isLight) {
-
-                IosSettingsRow(
-                    isLight = colors.isLight,
-                    iconColor = Color(0xFF34C759),
-                    icon = { Icon(Lucide.Image, null, tint = Color(0xFF34C759), modifier = Modifier.size(17.dp)) },
-                    title = "Wallpapers & Themes",
-                    subtitle = "Backgrounds, accents & dark mode",
-                    onClick = { SoundManager.playReaction(); onNavigateToSubScreen(AppearanceSubScreen.THEME_WALLPAPERS) },
-                    trailing = { Icon(Lucide.ChevronRight, null, tint = Color(0xFFC7C7CC), modifier = Modifier.size(18.dp)) }
-                )
-                IosRowDivider(isLight = colors.isLight)
-
-                IosSettingsRow(
-                    isLight = colors.isLight,
-                    iconColor = Color(0xFF8E8E93),
-                    icon = { Icon(Lucide.Moon, null, tint = Color(0xFF8E8E93), modifier = Modifier.size(17.dp)) },
-                    title = "Dark Appearance",
-                    subtitle = if (colors.isLight) "Light Mode active" else "Dark Mode active",
-                    trailing = { AppleSwitch(checked = !colors.isLight, onCheckedChange = { onToggleAppearance() }) }
-                )
-                IosRowDivider(isLight = colors.isLight)
-
-                IosSettingsRow(
-                    isLight = colors.isLight,
-                    iconColor = Color(0xFFFF2D55),
-                    icon = { Icon(Lucide.Palette, null, tint = Color(0xFFFF2D55), modifier = Modifier.size(17.dp)) },
-                    title = "Accent Color",
-                    subtitle = accentColor.title,
-                    onClick = { SoundManager.playReaction(); onAccentCycle() },
-                    trailing = {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Box(
-                                modifier = Modifier
-                                    .size(20.dp)
-                                    .clip(CircleShape)
-                                    .background(accentColor.color)
-                                    .border(1.dp, Color.White.copy(alpha = 0.5f), CircleShape)
-                            )
-                            Icon(Lucide.ChevronRight, null, tint = Color(0xFFC7C7CC), modifier = Modifier.size(18.dp))
-                        }
+                    icon = Lucide.Mic,
+                    iconColor = Color(0xFF00C7BE),
+                    onClick = {
+                        SoundManager.playReaction()
+                        onNavigateToSubScreen(AppearanceSubScreen.VOICE_GLOBE)
                     }
                 )
             }
         }
 
-        // ── RESET ─────────────────────────────────────────────────────────────
+        // Section 2: Theme & Display
         item {
-            IosSectionHeader("RESET & MAINTENANCE")
-            IosGroupedCard(isLight = colors.isLight) {
-                IosSettingsRow(
-                    isLight = colors.isLight,
-                    iconColor = Color(0xFFFF3B30),
-                    icon = { Icon(Lucide.RotateCcw, null, tint = Color(0xFFFF3B30), modifier = Modifier.size(17.dp)) },
+            AppleSettingsGroup(header = "Theme & Display") {
+                AppleSettingNavRow(
+                    title = "Wallpapers & Themes",
+                    subtitle = "Backgrounds, accents & dark mode",
+                    icon = Lucide.Image,
+                    iconColor = Color(0xFF34C759),
+                    onClick = {
+                        SoundManager.playReaction()
+                        onNavigateToSubScreen(AppearanceSubScreen.THEME_WALLPAPERS)
+                    }
+                )
+                AppleSettingDivider()
+                AppleSettingToggleRow(
+                    title = "Dark Appearance",
+                    subtitle = if (colors.isLight) "Light Mode active" else "Dark Mode active",
+                    icon = Lucide.Moon,
+                    iconColor = Color(0xFF8E8E93),
+                    checked = !colors.isLight,
+                    onCheckedChange = { onToggleAppearance() }
+                )
+                AppleSettingDivider()
+                AppleSettingNavRow(
+                    title = "Accent Color",
+                    subtitle = accentColor.title,
+                    valueText = accentColor.title,
+                    valueTextColor = accentColor.color,
+                    icon = Lucide.Palette,
+                    iconColor = accentColor.color,
+                    onClick = {
+                        SoundManager.playReaction()
+                        onAccentCycle()
+                    }
+                )
+            }
+        }
+
+        // Section 3: Reset & Maintenance
+        item {
+            AppleSettingsGroup(header = "Reset & Maintenance") {
+                AppleSettingNavRow(
                     title = "Reset Appearance Defaults",
                     subtitle = "Restore system theme and classic bubbles",
-                    onClick = onResetDefaults,
-                    trailing = { Icon(Lucide.ChevronRight, null, tint = Color(0xFFC7C7CC), modifier = Modifier.size(18.dp)) }
+                    icon = Lucide.RotateCcw,
+                    iconColor = Color(0xFFFF3B30),
+                    isDestructive = true,
+                    onClick = onResetDefaults
                 )
             }
         }
@@ -754,20 +455,27 @@ fun BubbleStylesSubScreen(
     val haptic = LocalHapticFeedback.current
     var bubbleCategoryFilter by remember { mutableStateOf("All") }
     val categories = listOf("All", "Modern UI", "Retro & Geek", "Playful & Art", "Bold & 3D")
-    val filtered   = remember(bubbleCategoryFilter) {
+    val filtered = remember(bubbleCategoryFilter) {
         if (bubbleCategoryFilter == "All") BubbleStyleType.values().toList()
         else BubbleStyleType.values().filter { it.category.equals(bubbleCategoryFilter, ignoreCase = true) }
     }
 
-    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 36.dp)) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp)
+    ) {
         item {
-            LiveBubblePreviewCard(bubbleStyle = currentBubbleStyle, customCorners = customCorners, colors = colors)
+            LiveBubblePreviewCard(
+                bubbleStyle = currentBubbleStyle,
+                customCorners = customCorners,
+                colors = colors
+            )
         }
 
-        // Category chips
+        // Category Filter Chips
         item {
-            IosSectionHeader("CATEGORY FILTER")
-            IosGroupedCard(isLight = colors.isLight) {
+            AppleSettingsGroup(header = "Category Filter") {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -780,8 +488,15 @@ fun BubbleStylesSubScreen(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(14.dp))
-                                .background(if (selected) Color(0xFF007AFF) else (if (colors.isLight) Color(0xFFE5E5EA) else Color(0xFF2C2C2E)))
-                                .clickable { SoundManager.playReaction(); bubbleCategoryFilter = cat }
+                                .background(
+                                    if (selected) Color(0xFF0A84FF)
+                                    else if (colors.isLight) Color(0xFFE5E5EA)
+                                    else Color(0xFF2C2C2E)
+                                )
+                                .clickable {
+                                    SoundManager.playReaction()
+                                    bubbleCategoryFilter = cat
+                                }
                                 .padding(horizontal = 12.dp, vertical = 6.dp)
                         ) {
                             Text(
@@ -797,14 +512,13 @@ fun BubbleStylesSubScreen(
             }
         }
 
-        // Style list
+        // Available Styles List
         item {
-            IosSectionHeader("AVAILABLE STYLES (${filtered.size})")
-            IosGroupedCard(isLight = colors.isLight) {
+            AppleSettingsGroup(header = "Available Styles (${filtered.size})") {
                 filtered.forEachIndexed { idx, style ->
                     val isSelected = style == currentBubbleStyle
-                    val outV = resolveBubbleVisual(style, isOutgoing = true,  isConsecutive = false, colors = colors, customCorners = customCorners)
-                    val inV  = resolveBubbleVisual(style, isOutgoing = false, isConsecutive = false, colors = colors, customCorners = customCorners)
+                    val outV = resolveBubbleVisual(style, isOutgoing = true, isConsecutive = false, colors = colors, customCorners = customCorners)
+                    val inV = resolveBubbleVisual(style, isOutgoing = false, isConsecutive = false, colors = colors, customCorners = customCorners)
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -815,26 +529,45 @@ fun BubbleStylesSubScreen(
                             }
                             .padding(horizontal = 16.dp, vertical = 12.dp)
                     ) {
-                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            IosSquircleIcon(color = Color(0xFF007AFF)) {
-                                Icon(Lucide.MessageCircle, null, tint = Color(0xFF007AFF), modifier = Modifier.size(17.dp))
-                            }
-                            Spacer(Modifier.width(16.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            AppleIconBadge(icon = Lucide.MessageCircle, iconColor = Color(0xFF0A84FF))
+                            Spacer(Modifier.width(13.dp))
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(style.title, fontSize = 16.sp, fontWeight = FontWeight.Medium, fontFamily = InterFontFamily, color = if (colors.isLight) Color.Black else Color.White)
-                                Spacer(Modifier.height(1.dp))
-                                Text(style.description, fontSize = 12.5.sp, fontFamily = InterFontFamily, color = Color(0xFF8E8E93), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(
+                                    text = style.title,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Normal,
+                                    color = if (colors.isLight) Color.Black else Color.White
+                                )
+                                Text(
+                                    text = style.description,
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF8E8E93),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
-                            if (isSelected) Icon(Lucide.Check, null, tint = Color(0xFF007AFF), modifier = Modifier.size(20.dp))
+                            if (isSelected) {
+                                Icon(
+                                    imageVector = Lucide.Check,
+                                    contentDescription = null,
+                                    tint = Color(0xFF0A84FF),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         }
                         Spacer(Modifier.height(10.dp))
                         // Mini preview
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(start = 48.dp)
+                                .padding(start = 35.dp)
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(if (colors.isLight) Color(0xFFF2F2F7) else Color(0xFF141416))
+                                .background(if (colors.isLight) Color(0xFFF4F7FB) else Color(0xFF141416))
+                                .border(0.5.dp, if (colors.isLight) Color(0xFFDFE8F3) else Color.White.copy(alpha = 0.05f), RoundedCornerShape(12.dp))
                                 .padding(10.dp),
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
@@ -843,17 +576,23 @@ fun BubbleStylesSubScreen(
                                     .clip(inV.shape)
                                     .background(brush = inV.background)
                                     .padding(horizontal = 10.dp, vertical = 6.dp)
-                            ) { Text(style.incomingPreview, fontSize = 11.5.sp, fontFamily = InterFontFamily, color = inV.textColor) }
+                            ) {
+                                Text(style.incomingPreview, fontSize = 11.5.sp, color = inV.textColor)
+                            }
                             Box(
                                 modifier = Modifier
                                     .align(Alignment.End)
                                     .clip(outV.shape)
                                     .background(brush = outV.background)
                                     .padding(horizontal = 10.dp, vertical = 6.dp)
-                            ) { Text(style.outgoingPreview, fontSize = 11.5.sp, fontFamily = InterFontFamily, color = outV.textColor) }
+                            ) {
+                                Text(style.outgoingPreview, fontSize = 11.5.sp, color = outV.textColor)
+                            }
                         }
                     }
-                    if (idx < filtered.size - 1) IosRowDivider(isLight = colors.isLight)
+                    if (idx < filtered.size - 1) {
+                        AppleSettingDivider(paddingStart = 50.dp)
+                    }
                 }
             }
         }
@@ -871,25 +610,30 @@ fun CornerGeometrySubScreen(
     onUpdateCustomCorners: (CustomCornerConfig) -> Unit,
     colors: ChatColors
 ) {
-    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 36.dp)) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp)
+    ) {
         item {
-            LiveBubblePreviewCard(bubbleStyle = currentBubbleStyle, customCorners = currentCustomCorners, colors = colors)
+            LiveBubblePreviewCard(
+                bubbleStyle = currentBubbleStyle,
+                customCorners = currentCustomCorners,
+                colors = colors
+            )
         }
 
         item {
-            IosSectionHeader("GENERAL GEOMETRY")
-            IosGroupedCard(isLight = colors.isLight) {
-                IosSettingsRow(
-                    isLight = colors.isLight,
-                    iconColor = Color(0xFF007AFF),
-                    icon = { Icon(Lucide.Square, null, tint = Color(0xFF007AFF), modifier = Modifier.size(17.dp)) },
+            AppleSettingsGroup(header = "General Geometry") {
+                AppleSettingToggleRow(
                     title = "Enable Custom Corners",
                     subtitle = if (currentCustomCorners.customEnabled) "Custom parameters active" else "Using preset style geometry",
-                    trailing = {
-                        AppleSwitch(
-                            checked = currentCustomCorners.customEnabled,
-                            onCheckedChange = { SoundManager.playReaction(); onUpdateCustomCorners(currentCustomCorners.copy(customEnabled = it)) }
-                        )
+                    icon = Lucide.Square,
+                    iconColor = Color(0xFF0A84FF),
+                    checked = currentCustomCorners.customEnabled,
+                    onCheckedChange = {
+                        SoundManager.playReaction()
+                        onUpdateCustomCorners(currentCustomCorners.copy(customEnabled = it))
                     }
                 )
             }
@@ -897,87 +641,83 @@ fun CornerGeometrySubScreen(
 
         if (currentCustomCorners.customEnabled) {
             item {
-                IosSectionHeader("RADII & TAPER")
-                IosGroupedCard(isLight = colors.isLight) {
-
-                    IosSliderRow(
-                        isLight = colors.isLight,
-                        iconColor = Color(0xFF007AFF),
-                        icon = { Icon(Lucide.CornerLeftUp, null, tint = Color(0xFF007AFF), modifier = Modifier.size(17.dp)) },
+                AppleSettingsGroup(header = "Radii & Taper") {
+                    AppleSettingSliderRow(
                         title = "Top Radius",
-                        valueDisplay = "${currentCustomCorners.topStart.toInt()} dp",
+                        valueText = "${currentCustomCorners.topStart.toInt()} dp",
+                        icon = Lucide.CornerLeftUp,
+                        iconColor = Color(0xFF0A84FF),
                         value = currentCustomCorners.topStart,
                         onValueChange = { onUpdateCustomCorners(currentCustomCorners.copy(topStart = it, topEnd = it)) },
                         valueRange = 0f..40f
                     )
-                    IosRowDivider(isLight = colors.isLight)
-
-                    IosSliderRow(
-                        isLight = colors.isLight,
-                        iconColor = Color(0xFF007AFF),
-                        icon = { Icon(Lucide.CornerLeftDown, null, tint = Color(0xFF007AFF), modifier = Modifier.size(17.dp)) },
+                    AppleSettingDivider()
+                    AppleSettingSliderRow(
                         title = "Bottom Radius",
-                        valueDisplay = "${currentCustomCorners.bottomStart.toInt()} dp",
+                        valueText = "${currentCustomCorners.bottomStart.toInt()} dp",
+                        icon = Lucide.CornerLeftDown,
+                        iconColor = Color(0xFF0A84FF),
                         value = currentCustomCorners.bottomStart,
                         onValueChange = { onUpdateCustomCorners(currentCustomCorners.copy(bottomStart = it)) },
                         valueRange = 0f..40f
                     )
-                    IosRowDivider(isLight = colors.isLight)
-
-                    IosSliderRow(
-                        isLight = colors.isLight,
-                        iconColor = Color(0xFFFF9500),
-                        icon = { Icon(Lucide.Play, null, tint = Color(0xFFFF9500), modifier = Modifier.size(17.dp)) },
+                    AppleSettingDivider()
+                    AppleSettingSliderRow(
                         title = "Pointy Corner Depth",
-                        valueDisplay = "${currentCustomCorners.bottomEnd.toInt()} dp",
+                        valueText = "${currentCustomCorners.bottomEnd.toInt()} dp",
+                        icon = Lucide.Play,
+                        iconColor = Color(0xFFFF9500),
                         value = currentCustomCorners.bottomEnd,
                         onValueChange = { onUpdateCustomCorners(currentCustomCorners.copy(bottomEnd = it)) },
                         valueRange = 0f..20f
                     )
-                    IosRowDivider(isLight = colors.isLight)
-
-                    IosSettingsRow(
-                        isLight = colors.isLight,
-                        iconColor = Color(0xFF34C759),
-                        icon = { Icon(Lucide.ArrowLeftRight, null, tint = Color(0xFF34C759), modifier = Modifier.size(17.dp)) },
+                    AppleSettingDivider()
+                    AppleSettingToggleRow(
                         title = "Apply To Both Sides",
                         subtitle = if (currentCustomCorners.applyToBoth) "Both incoming & outgoing" else "Outgoing only",
-                        trailing = {
-                            AppleSwitch(
-                                checked = currentCustomCorners.applyToBoth,
-                                onCheckedChange = { SoundManager.playReaction(); onUpdateCustomCorners(currentCustomCorners.copy(applyToBoth = it)) }
-                            )
+                        icon = Lucide.ArrowLeftRight,
+                        iconColor = Color(0xFF34C759),
+                        checked = currentCustomCorners.applyToBoth,
+                        onCheckedChange = {
+                            SoundManager.playReaction()
+                            onUpdateCustomCorners(currentCustomCorners.copy(applyToBoth = it))
                         }
                     )
-                    IosRowDivider(isLight = colors.isLight)
-
-                    IosSettingsRow(
-                        isLight = colors.isLight,
-                        iconColor = Color(0xFFFF3B30),
-                        icon = { Icon(Lucide.RotateCcw, null, tint = Color(0xFFFF3B30), modifier = Modifier.size(17.dp)) },
+                    AppleSettingDivider()
+                    AppleSettingNavRow(
                         title = "Reset Corner Defaults",
                         subtitle = "Restore 10dp radius, 3dp pointy notch",
-                        onClick = { SoundManager.playReaction(); onUpdateCustomCorners(CustomCornerConfig(customEnabled = true)) },
-                        trailing = { Icon(Lucide.ChevronRight, null, tint = Color(0xFFC7C7CC), modifier = Modifier.size(18.dp)) }
+                        icon = Lucide.RotateCcw,
+                        iconColor = Color(0xFFFF3B30),
+                        isDestructive = true,
+                        onClick = {
+                            SoundManager.playReaction()
+                            onUpdateCustomCorners(CustomCornerConfig(customEnabled = true))
+                        }
                     )
                 }
             }
 
             item {
-                IosSectionHeader("POINTY CORNER SHAPE")
-                IosGroupedCard(isLight = colors.isLight) {
+                AppleSettingsGroup(header = "Pointy Corner Shape") {
                     PointyCornerStyle.values().forEachIndexed { idx, style ->
                         val isSelected = style == currentCustomCorners.pointyCornerStyle
-                        IosSettingsRow(
-                            isLight = colors.isLight,
-                            iconColor = Color(0xFF007AFF),
-                            icon = { Icon(Lucide.Share2, null, tint = Color(0xFF007AFF), modifier = Modifier.size(17.dp)) },
+                        AppleSettingNavRow(
                             title = style.title,
                             subtitle = style.description,
-                            onClick = { SoundManager.playReaction(); onUpdateCustomCorners(currentCustomCorners.copy(pointyCornerStyle = style)) },
-                            trailing = { if (isSelected) Icon(Lucide.Check, null, tint = Color(0xFF007AFF), modifier = Modifier.size(20.dp)) }
+                            icon = Lucide.Share2,
+                            iconColor = Color(0xFF0A84FF),
+                            showChevron = false,
+                            valueText = if (isSelected) "✓" else null,
+                            valueTextColor = Color(0xFF0A84FF),
+                            onClick = {
+                                SoundManager.playReaction()
+                                onUpdateCustomCorners(currentCustomCorners.copy(pointyCornerStyle = style))
+                            }
                         )
-                        if (idx < PointyCornerStyle.values().size - 1) IosRowDivider(isLight = colors.isLight)
+                        if (idx < PointyCornerStyle.values().size - 1) {
+                            AppleSettingDivider()
+                        }
                     }
                 }
             }
@@ -1000,7 +740,11 @@ fun AnimationsSubScreen(
     val haptic = LocalHapticFeedback.current
     var animTestKey by remember { mutableIntStateOf(0) }
 
-    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 36.dp)) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp)
+    ) {
         item {
             LiveBubblePreviewCard(
                 bubbleStyle = currentBubbleStyle,
@@ -1018,25 +762,27 @@ fun AnimationsSubScreen(
         }
 
         item {
-            IosSectionHeader("BUBBLE ENTRANCE ANIMATIONS")
-            IosGroupedCard(isLight = colors.isLight) {
+            AppleSettingsGroup(header = "Bubble Entrance Animations") {
                 BubbleAnimationStyle.values().forEachIndexed { idx, anim ->
                     val isSelected = anim == currentAnimationStyle
-                    IosSettingsRow(
-                        isLight = colors.isLight,
-                        iconColor = Color(0xFFAF52DE),
-                        icon = { Icon(Lucide.Zap, null, tint = Color(0xFFAF52DE), modifier = Modifier.size(17.dp)) },
+                    AppleSettingNavRow(
                         title = anim.title,
                         subtitle = anim.description,
+                        icon = Lucide.Zap,
+                        iconColor = Color(0xFFAF52DE),
+                        showChevron = false,
+                        valueText = if (isSelected) "✓" else null,
+                        valueTextColor = Color(0xFF0A84FF),
                         onClick = {
                             SoundManager.playReaction()
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             onSelectAnimationStyle(anim)
                             animTestKey++
-                        },
-                        trailing = { if (isSelected) Icon(Lucide.Check, null, tint = Color(0xFF007AFF), modifier = Modifier.size(20.dp)) }
+                        }
                     )
-                    if (idx < BubbleAnimationStyle.values().size - 1) IosRowDivider(isLight = colors.isLight)
+                    if (idx < BubbleAnimationStyle.values().size - 1) {
+                        AppleSettingDivider()
+                    }
                 }
             }
         }
@@ -1055,47 +801,62 @@ fun VoiceGlobeSubScreen(
 ) {
     val haptic = LocalHapticFeedback.current
 
-    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 36.dp)) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp)
+    ) {
         item {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 10.dp)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(if (colors.isLight) Color(0xFFE5E5EA).copy(alpha = 0.5f) else Color(0xFF1C1C1E).copy(alpha = 0.7f))
-                    .border(0.5.dp, if (colors.isLight) Color(0xFFD1D1D6) else Color(0xFF2C2C2E), RoundedCornerShape(20.dp))
-                    .padding(24.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    DynamicIslandVoiceOrb(style = currentGlobeStyle, size = 96.dp)
-                    Spacer(Modifier.height(14.dp))
-                    Text(currentGlobeStyle.title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, fontFamily = InterFontFamily, color = if (colors.isLight) Color.Black else Color.White)
-                    Spacer(Modifier.height(2.dp))
-                    Text(currentGlobeStyle.description, fontSize = 13.sp, fontFamily = InterFontFamily, color = Color(0xFF8E8E93))
+            AppleSettingsGroup(header = "Voice Globe Preview") {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        DynamicIslandVoiceOrb(style = currentGlobeStyle, size = 96.dp)
+                        Spacer(Modifier.height(14.dp))
+                        Text(
+                            text = currentGlobeStyle.title,
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            fontFamily = InterFontFamily,
+                            color = if (colors.isLight) Color.Black else Color.White
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = currentGlobeStyle.description,
+                            fontSize = 13.sp,
+                            fontFamily = InterFontFamily,
+                            color = Color(0xFF8E8E93)
+                        )
+                    }
                 }
             }
         }
 
         item {
-            IosSectionHeader("VOICE GLOBE STYLES (${VoiceGlobeStyleType.values().size})")
-            IosGroupedCard(isLight = colors.isLight) {
+            AppleSettingsGroup(header = "Voice Globe Styles (${VoiceGlobeStyleType.values().size})") {
                 VoiceGlobeStyleType.values().forEachIndexed { idx, globe ->
                     val isSelected = globe == currentGlobeStyle
-                    IosSettingsRow(
-                        isLight = colors.isLight,
-                        iconColor = Color(0xFF00C7BE),
-                        icon = { Icon(Lucide.Activity, null, tint = Color(0xFF00C7BE), modifier = Modifier.size(17.dp)) },
+                    AppleSettingNavRow(
                         title = globe.title,
                         subtitle = globe.description,
+                        icon = Lucide.Activity,
+                        iconColor = Color(0xFF00C7BE),
+                        showChevron = false,
+                        valueText = if (isSelected) "✓" else null,
+                        valueTextColor = Color(0xFF0A84FF),
                         onClick = {
                             SoundManager.playReaction()
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             onSelectGlobeStyle(globe)
-                        },
-                        trailing = { if (isSelected) Icon(Lucide.Check, null, tint = Color(0xFF007AFF), modifier = Modifier.size(20.dp)) }
+                        }
                     )
-                    if (idx < VoiceGlobeStyleType.values().size - 1) IosRowDivider(isLight = colors.isLight)
+                    if (idx < VoiceGlobeStyleType.values().size - 1) {
+                        AppleSettingDivider()
+                    }
                 }
             }
         }
@@ -1114,51 +875,51 @@ fun ThemeWallpapersSubScreen(
     onAccentCycle: () -> Unit,
     onOpenWallpaperPicker: () -> Unit
 ) {
-    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 36.dp)) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp)
+    ) {
         item {
-            IosSectionHeader("CHAT WALLPAPERS")
-            IosGroupedCard(isLight = colors.isLight) {
-                IosSettingsRow(
-                    isLight = colors.isLight,
-                    iconColor = Color(0xFF34C759),
-                    icon = { Icon(Lucide.FolderPlus, null, tint = Color(0xFF34C759), modifier = Modifier.size(17.dp)) },
+            AppleSettingsGroup(header = "Chat Wallpapers") {
+                AppleSettingNavRow(
                     title = "Choose Chat Wallpaper",
                     subtitle = "Gallery images or gradient presets",
-                    onClick = { SoundManager.playReaction(); onOpenWallpaperPicker() },
-                    trailing = { Icon(Lucide.ChevronRight, null, tint = Color(0xFFC7C7CC), modifier = Modifier.size(18.dp)) }
+                    icon = Lucide.FolderPlus,
+                    iconColor = Color(0xFF34C759),
+                    onClick = {
+                        SoundManager.playReaction()
+                        onOpenWallpaperPicker()
+                    }
                 )
             }
         }
 
         item {
-            IosSectionHeader("APPEARANCE MODE")
-            IosGroupedCard(isLight = colors.isLight) {
-                IosSettingsRow(
-                    isLight = colors.isLight,
-                    iconColor = Color(0xFF8E8E93),
-                    icon = { Icon(Lucide.Moon, null, tint = Color(0xFF8E8E93), modifier = Modifier.size(17.dp)) },
+            AppleSettingsGroup(header = "Appearance Mode") {
+                AppleSettingToggleRow(
                     title = "Dark Appearance",
                     subtitle = if (colors.isLight) "Light Mode active" else "Dark Mode active",
-                    trailing = { AppleSwitch(checked = !colors.isLight, onCheckedChange = { onToggleAppearance() }) }
+                    icon = Lucide.Moon,
+                    iconColor = Color(0xFF8E8E93),
+                    checked = !colors.isLight,
+                    onCheckedChange = { onToggleAppearance() }
                 )
             }
         }
 
         item {
-            IosSectionHeader("ACCENT COLOR PRESETS")
-            IosGroupedCard(isLight = colors.isLight) {
-                IosSettingsRow(
-                    isLight = colors.isLight,
-                    iconColor = accentColor.color,
-                    icon = { Icon(Lucide.Palette, null, tint = accentColor.color, modifier = Modifier.size(17.dp)) },
+            AppleSettingsGroup(header = "Accent Color Presets") {
+                AppleSettingNavRow(
                     title = "Current Accent",
                     subtitle = "${accentColor.title} — tap to cycle",
-                    onClick = { SoundManager.playReaction(); onAccentCycle() },
-                    trailing = {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Box(modifier = Modifier.size(22.dp).clip(CircleShape).background(accentColor.color).border(1.5.dp, Color.White, CircleShape))
-                            Icon(Lucide.ChevronRight, null, tint = Color(0xFFC7C7CC), modifier = Modifier.size(18.dp))
-                        }
+                    icon = Lucide.Palette,
+                    iconColor = accentColor.color,
+                    valueText = accentColor.title,
+                    valueTextColor = accentColor.color,
+                    onClick = {
+                        SoundManager.playReaction()
+                        onAccentCycle()
                     }
                 )
             }
@@ -1167,7 +928,7 @@ fun ThemeWallpapersSubScreen(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 🍏  ROOT APPEARANCE SETTINGS SCREEN  (Scaffold + AnimatedContent)
+// 🍏  ROOT APPEARANCE SETTINGS SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
@@ -1188,100 +949,43 @@ fun AppearanceSettingsScreen(
     modifier: Modifier = Modifier
 ) {
     val colors = LocalChatColors.current
+    val isDark = !colors.isLight
     var currentSubScreen by remember { mutableStateOf(AppearanceSubScreen.MAIN) }
 
     BackHandler(enabled = currentSubScreen != AppearanceSubScreen.MAIN) {
         currentSubScreen = AppearanceSubScreen.MAIN
     }
 
-    val screenBg = if (colors.isLight) Color(0xFFF2F2F7) else Color(0xFF000000)
+    val screenBg = if (isDark) Color(0xFF000000) else Color(0xFFF4F7FB)
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = screenBg,
         topBar = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(screenBg)
-                    .windowInsetsPadding(WindowInsets.statusBars)
-            ) {
-                if (currentSubScreen == AppearanceSubScreen.MAIN) {
-                    // ── Apple-style large title bar ──
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            // Apple Settings gear squircle
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .shadow(
-                                        elevation = 1.dp,
-                                        shape = RoundedCornerShape(9.dp),
-                                        spotColor = Color.Black.copy(alpha = 0.12f),
-                                        ambientColor = Color.Black.copy(alpha = 0.06f)
-                                    )
-                                    .clip(RoundedCornerShape(9.dp))
-                                    .background(if (colors.isLight) Color(0xFFE5E5EA) else Color(0xFF2C2C2E)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Lucide.Settings,
-                                    contentDescription = "Settings",
-                                    tint = if (colors.isLight) Color(0xFF1C1C1E) else Color.White,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                            Text(
-                                text = "Settings",
-                                fontSize = 32.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = InterFontFamily,
-                                color = if (colors.isLight) Color.Black else Color.White,
-                                letterSpacing = (-0.6).sp
-                            )
-                        }
-                        Text(
-                            text = "Done",
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            fontFamily = InterFontFamily,
-                            color = Color(0xFF007AFF),
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null
-                                ) { SoundManager.playReaction(); onClose() }
-                                .padding(horizontal = 6.dp, vertical = 4.dp)
-                        )
-                    }
-                } else {
-                    val subTitle = when (currentSubScreen) {
-                        AppearanceSubScreen.BUBBLE_STYLES    -> "Bubble Styles"
-                        AppearanceSubScreen.CORNER_GEOMETRY  -> "Corners & Geometry"
-                        AppearanceSubScreen.ANIMATIONS       -> "Animations"
-                        AppearanceSubScreen.VOICE_GLOBE      -> "Voice Globe"
-                        AppearanceSubScreen.THEME_WALLPAPERS -> "Wallpapers & Theme"
-                        else                                 -> "Settings"
-                    }
-                    IosSubScreenHeader(
-                        title = subTitle,
-                        backLabel = "Settings",
-                        onBack = { currentSubScreen = AppearanceSubScreen.MAIN },
-                        onDone = onClose,
-                        isLight = colors.isLight
-                    )
-                }
-            }
+            AppleSettingsHeader(
+                title = when (currentSubScreen) {
+                    AppearanceSubScreen.MAIN -> "Appearance"
+                    AppearanceSubScreen.BUBBLE_STYLES -> "Bubble Styles"
+                    AppearanceSubScreen.CORNER_GEOMETRY -> "Corners & Geometry"
+                    AppearanceSubScreen.ANIMATIONS -> "Animations"
+                    AppearanceSubScreen.VOICE_GLOBE -> "Voice Globe"
+                    AppearanceSubScreen.THEME_WALLPAPERS -> "Wallpapers & Theme"
+                },
+                useMacSettingsIcon = currentSubScreen == AppearanceSubScreen.MAIN,
+                icon = if (currentSubScreen != AppearanceSubScreen.MAIN) Lucide.ChevronLeft else null,
+                onBackClick = if (currentSubScreen != AppearanceSubScreen.MAIN) {
+                    { currentSubScreen = AppearanceSubScreen.MAIN }
+                } else null,
+                doneText = "Done",
+                onDoneClick = onClose
+            )
         }
     ) { innerPadding ->
-        Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) {
             AnimatedContent(
                 targetState = currentSubScreen,
                 transitionSpec = {
@@ -1296,16 +1000,16 @@ fun AppearanceSettingsScreen(
             ) { subScreen ->
                 when (subScreen) {
                     AppearanceSubScreen.MAIN -> MainAppearanceSections(
-                        currentBubbleStyle    = currentBubbleStyle,
-                        currentGlobeStyle     = currentGlobeStyle,
-                        accentColor           = accentColor,
-                        currentCustomCorners  = currentCustomCorners,
+                        currentBubbleStyle = currentBubbleStyle,
+                        currentGlobeStyle = currentGlobeStyle,
+                        accentColor = accentColor,
+                        currentCustomCorners = currentCustomCorners,
                         currentAnimationStyle = currentAnimationStyle,
-                        colors                = colors,
+                        colors = colors,
                         onNavigateToSubScreen = { currentSubScreen = it },
-                        onToggleAppearance    = onToggleAppearance,
-                        onAccentCycle         = onAccentCycle,
-                        onResetDefaults       = {
+                        onToggleAppearance = onToggleAppearance,
+                        onAccentCycle = onAccentCycle,
+                        onResetDefaults = {
                             SoundManager.playReaction()
                             onSelectBubbleStyle(BubbleStyleType.ROUNDED)
                             onSelectGlobeStyle(VoiceGlobeStyleType.ORIGINAL_BLUE)
@@ -1314,186 +1018,38 @@ fun AppearanceSettingsScreen(
                         }
                     )
                     AppearanceSubScreen.BUBBLE_STYLES -> BubbleStylesSubScreen(
-                        currentBubbleStyle  = currentBubbleStyle,
+                        currentBubbleStyle = currentBubbleStyle,
                         onSelectBubbleStyle = onSelectBubbleStyle,
-                        colors              = colors,
-                        customCorners       = currentCustomCorners
+                        colors = colors,
+                        customCorners = currentCustomCorners
                     )
                     AppearanceSubScreen.CORNER_GEOMETRY -> CornerGeometrySubScreen(
-                        currentBubbleStyle   = currentBubbleStyle,
+                        currentBubbleStyle = currentBubbleStyle,
                         currentCustomCorners = currentCustomCorners,
                         onUpdateCustomCorners = onUpdateCustomCorners,
-                        colors               = colors
+                        colors = colors
                     )
                     AppearanceSubScreen.ANIMATIONS -> AnimationsSubScreen(
-                        currentBubbleStyle    = currentBubbleStyle,
+                        currentBubbleStyle = currentBubbleStyle,
                         currentAnimationStyle = currentAnimationStyle,
                         onSelectAnimationStyle = onSelectAnimationStyle,
-                        colors                = colors,
-                        customCorners         = currentCustomCorners
+                        colors = colors,
+                        customCorners = currentCustomCorners
                     )
                     AppearanceSubScreen.VOICE_GLOBE -> VoiceGlobeSubScreen(
                         currentGlobeStyle = currentGlobeStyle,
                         onSelectGlobeStyle = onSelectGlobeStyle,
-                        colors            = colors
+                        colors = colors
                     )
                     AppearanceSubScreen.THEME_WALLPAPERS -> ThemeWallpapersSubScreen(
-                        accentColor          = accentColor,
-                        colors               = colors,
-                        onToggleAppearance   = onToggleAppearance,
-                        onAccentCycle        = onAccentCycle,
+                        accentColor = accentColor,
+                        colors = colors,
+                        onToggleAppearance = onToggleAppearance,
+                        onAccentCycle = onAccentCycle,
                         onOpenWallpaperPicker = onOpenWallpaperPicker
                     )
                 }
             }
-        }
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 🍏  REUSABLE INSET GROUPED COMPONENTS
-// ─────────────────────────────────────────────────────────────────────────────
-
-@Composable
-fun IosSectionHeader(title: String, modifier: Modifier = Modifier) {
-    Text(
-        text = title.uppercase(),
-        fontSize = 12.5.sp,
-        fontWeight = FontWeight.SemiBold,
-        fontFamily = InterFontFamily,
-        color = Color(0xFF8E8E93),
-        letterSpacing = 0.4.sp,
-        modifier = modifier.padding(start = 28.dp, top = 20.dp, bottom = 7.dp)
-    )
-}
-
-@Composable
-fun IosGroupedCard(
-    isLight: Boolean,
-    modifier: Modifier = Modifier,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    val cardBg      = if (isLight) Color.White else Color(0xFF1C1C1E)
-    val borderColor = if (isLight) Color(0xFFE5E5EA).copy(alpha = 0.8f) else Color(0xFF2C2C2E)
-
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .background(cardBg)
-            .border(0.5.dp, borderColor, RoundedCornerShape(20.dp))
-    ) {
-        Column(modifier = Modifier.fillMaxWidth()) { content() }
-    }
-}
-
-@Composable
-fun IosRowDivider(isLight: Boolean, modifier: Modifier = Modifier) {
-    HorizontalDivider(
-        modifier = modifier.padding(start = 64.dp),
-        thickness = 0.5.dp,
-        color = if (isLight) Color(0xFFE5E5EA) else Color(0xFF2C2C2E)
-    )
-}
-
-/**
- * Apple-style 30dp squircle icon background with thin-outlined Lucide icon.
- * Uses soft translucent tinted squircle background (color.copy(alpha = 0.14f))
- * paired with a vibrant vector Lucide icon in matching color.
- */
-@Composable
-fun IosSquircleIcon(
-    color: Color = Color(0xFF007AFF),
-    gradient: Brush? = null,
-    modifier: Modifier = Modifier,
-    icon: @Composable () -> Unit
-) {
-    // No background container to adhere to clean icon style without pill/squircle backgrounds
-    Box(
-        modifier = modifier.size(24.dp),
-        contentAlignment = Alignment.Center
-    ) { icon() }
-}
-
-/**
- * Standard Apple Inset Grouped row:  [squircle icon] [title + subtitle]  [trailing]
- */
-@Composable
-fun IosSettingsRow(
-    isLight: Boolean,
-    iconColor: Color = Color(0xFF007AFF),
-    iconBg: Brush? = null,
-    icon: @Composable () -> Unit,
-    title: String,
-    subtitle: String? = null,
-    onClick: (() -> Unit)? = null,
-    trailing: @Composable () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(
-                enabled = onClick != null,
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) { onClick?.invoke() }
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        IosSquircleIcon(color = iconColor, gradient = iconBg) { icon() }
-        Spacer(Modifier.width(16.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, fontSize = 16.sp, fontWeight = FontWeight.Normal, fontFamily = InterFontFamily, color = if (isLight) Color.Black else Color.White)
-            if (subtitle != null) {
-                Spacer(Modifier.height(1.5.dp))
-                Text(subtitle, fontSize = 13.sp, fontFamily = InterFontFamily, color = Color(0xFF8E8E93), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-        }
-        trailing()
-    }
-}
-
-/**
- * Apple Slider row:  [icon + title + value]  +  [AppleSlider with LiquidGlassKnob]
- */
-@Composable
-fun IosSliderRow(
-    isLight: Boolean,
-    iconColor: Color = Color(0xFF007AFF),
-    iconBg: Brush? = null,
-    activeBrush: Brush? = null,
-    icon: @Composable () -> Unit,
-    title: String,
-    valueDisplay: String,
-    value: Float,
-    onValueChange: (Float) -> Unit,
-    valueRange: ClosedFloatingPointRange<Float>,
-    modifier: Modifier = Modifier,
-    steps: Int = 0
-) {
-    Column(modifier = modifier.fillMaxWidth().padding(top = 10.dp, bottom = 12.dp)) {
-        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-            IosSquircleIcon(color = iconColor, gradient = iconBg) { icon() }
-            Spacer(Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(title, fontSize = 16.sp, fontWeight = FontWeight.Normal, fontFamily = InterFontFamily, color = if (isLight) Color.Black else Color.White)
-                Spacer(Modifier.height(1.5.dp))
-                Text("Current: $valueDisplay", fontSize = 13.sp, fontFamily = InterFontFamily, color = Color(0xFF8E8E93))
-            }
-        }
-        Spacer(Modifier.height(6.dp))
-        Box(modifier = Modifier.fillMaxWidth().padding(start = 64.dp, end = 20.dp)) {
-            AppleSlider(
-                value = value,
-                onValueChange = onValueChange,
-                valueRange = valueRange,
-                steps = steps,
-                activeBrush = activeBrush ?: iconBg,
-                isLight = isLight,
-                modifier = Modifier.fillMaxWidth()
-            )
         }
     }
 }
@@ -1509,7 +1065,7 @@ fun DynamicIslandVoiceOrb(
     modifier: Modifier = Modifier
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "voiceOrb")
-    val rotation   by infiniteTransition.animateFloat(0f, 360f, infiniteRepeatable(tween(6000, easing = LinearEasing)), label = "rot")
+    val rotation by infiniteTransition.animateFloat(0f, 360f, infiniteRepeatable(tween(6000, easing = LinearEasing)), label = "rot")
     val pulseScale by infiniteTransition.animateFloat(0.94f, 1.06f, infiniteRepeatable(tween(1400, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "pulse")
 
     Box(
@@ -1526,12 +1082,16 @@ fun DynamicIslandVoiceOrb(
                 .fillMaxSize(0.78f)
                 .graphicsLayer { rotationZ = rotation }
                 .clip(CircleShape)
-                .background(Brush.sweepGradient(listOf(
-                    style.previewGradient.getOrElse(0) { Color.Cyan }.copy(alpha = 0.9f),
-                    style.previewGradient.getOrElse(1) { Color.Blue }.copy(alpha = 0.4f),
-                    style.previewGradient.getOrElse(2) { Color.Magenta }.copy(alpha = 0.9f),
-                    style.previewGradient.getOrElse(0) { Color.Cyan }.copy(alpha = 0.9f)
-                )))
+                .background(
+                    Brush.sweepGradient(
+                        listOf(
+                            style.previewGradient.getOrElse(0) { Color.Cyan }.copy(alpha = 0.9f),
+                            style.previewGradient.getOrElse(1) { Color.Blue }.copy(alpha = 0.4f),
+                            style.previewGradient.getOrElse(2) { Color.Magenta }.copy(alpha = 0.9f),
+                            style.previewGradient.getOrElse(0) { Color.Cyan }.copy(alpha = 0.9f)
+                        )
+                    )
+                )
         )
         Box(
             modifier = Modifier
@@ -1539,19 +1099,11 @@ fun DynamicIslandVoiceOrb(
                 .clip(CircleShape)
                 .background(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.85f), Color.Transparent)))
         )
-        Icon(Lucide.Activity, null, tint = Color.White, modifier = Modifier.size((size.value * 0.32f).dp))
+        Icon(
+            imageVector = Lucide.Activity,
+            contentDescription = null,
+            tint = Color.White,
+            modifier = Modifier.size((size.value * 0.32f).dp)
+        )
     }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 🍏  HELPERS
-// ─────────────────────────────────────────────────────────────────────────────
-
-private fun getBubbleStyleGradient(style: BubbleStyleType): Brush = when (style.category.lowercase()) {
-    "modern", "modern ui"      -> AppleGradients.Blue
-    "retro", "retro & geek"    -> AppleGradients.Green
-    "playful", "playful & art" -> AppleGradients.Pink
-    "bold", "bold & 3d", "3d"  -> AppleGradients.Orange
-    "gradients"                -> AppleGradients.Teal
-    else                       -> AppleGradients.Purple
 }

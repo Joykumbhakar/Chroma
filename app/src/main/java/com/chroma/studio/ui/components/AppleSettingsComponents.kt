@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.chroma.studio.ui.theme.LocalOscellionColors
+import com.composables.icons.lucide.ChevronLeft
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Search
@@ -260,7 +261,22 @@ fun AppleSettingsHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            if (useMacSettingsIcon) {
+            if (onBackClick != null) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { onBackClick() }
+                        .padding(4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = icon ?: Lucide.ChevronLeft,
+                        contentDescription = "Back",
+                        tint = Color(0xFF0A84FF),
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            } else if (useMacSettingsIcon) {
                 MacOSSettingsGearIcon(size = 32.dp)
             } else if (icon != null) {
                 Icon(
