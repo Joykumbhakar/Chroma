@@ -980,6 +980,7 @@ class ChatViewModel : ViewModel() {
         }
 
         // Add listeners for new rooms
+        if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser == null) return
         for (roomId in currentRoomIds) {
             if (typingListeners.containsKey(roomId)) continue
 
@@ -1002,7 +1003,7 @@ class ChatViewModel : ViewModel() {
                 }
 
                 override fun onCancelled(error: com.google.firebase.database.DatabaseError) {
-                    android.util.Log.e("ChatViewModel", "Error observing typing for $roomId", error.toException())
+                    android.util.Log.d("ChatViewModel", "Typing status cancelled for $roomId: ${error.message}")
                 }
             }
             roomRef.addValueEventListener(listener)

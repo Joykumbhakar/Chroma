@@ -2292,222 +2292,50 @@ fun FinalCutProVideoEditorScreen(
                 .navigationBarsPadding()
         ) {
 
-            // ══════════════════════════════════════════════════════════════════
-            // 1. CHROMA APP BAR (Streamlined Header - Clean, No Collisions)
-            // ══════════════════════════════════════════════════════════════════
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp)
-                    .background(if (colors.isDark) Color(0xFF1E212B) else colors.glassBg)
-                    .border(width = 0.5.dp, color = if (colors.isDark) Color(0xFF2A2F3A) else colors.glassBorder)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    // Left: Back button + Branding & Clip count
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        IconGhostButton(
-                            icon = Lucide.ArrowLeft,
-                            contentDesc = "Back",
-                            onClick = {
-                                SoundManager.playTap(context)
-                                if (clips.isNotEmpty()) {
-                                    showExitConfirmationDialog = true
-                                } else {
-                                    onBack()
-                                }
-                            }
-                        )
-
-                        Column(verticalArrangement = Arrangement.Center) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = "Flash",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 15.sp,
-                                    letterSpacing = (-0.3).sp
-                                )
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Text(
-                                    text = "Studio",
-                                    color = Color(0xFF007AFF),
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 15.sp,
-                                    letterSpacing = (-0.3).sp
-                                )
-                            }
-                            if (clips.isNotEmpty()) {
-                                Text(
-                                    text = "${clips.size} ${if (clips.size == 1) "clip" else "clips"}",
-                                    color = Color(0xFF8E98A8),
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                        }
+            FcpTopHeaderBar(
+                context = context,
+                clipsCount = clips.size,
+                undoEmpty = undoStack.isEmpty(),
+                redoEmpty = redoStack.isEmpty(),
+                isOverOneMinute = isOverOneMinute,
+                totalDurationSec = totalDurationSec,
+                remixedFromAuthorUsername = remixedFromAuthorUsername,
+                onBackClick = {
+                    SoundManager.playTap(context)
+                    if (clips.isNotEmpty()) {
+                        showExitConfirmationDialog = true
+                    } else {
+                        onBack()
                     }
-
-                    // Right: Undo, Redo (No circles), Divider, Export Button
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        IconGhostButton(
-                            icon = Lucide.Undo,
-                            contentDesc = "Undo",
-                            disabled = undoStack.isEmpty(),
-                            onClick = {
-                                SoundManager.playTap(context)
-                                undo()
-                            }
-                        )
-                        IconGhostButton(
-                            icon = Lucide.Redo,
-                            contentDesc = "Redo",
-                            disabled = redoStack.isEmpty(),
-                            onClick = {
-                                SoundManager.playTap(context)
-                                redo()
-                            }
-                        )
-
-                        // Divider
-                        Box(
-                            modifier = Modifier
-                                .padding(horizontal = 4.dp)
-                                .width(1.dp)
-                                .height(18.dp)
-                                .background(colors.glassBorder)
-                        )
-
-                        if (isOverOneMinute) {
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(Color(0xFFFF9500).copy(alpha = 0.18f))
-                                    .border(0.5.dp, Color(0xFFFF9500).copy(alpha = 0.4f), RoundedCornerShape(6.dp))
-                                    .clickable { showDurationWarningDialog = true }
-                                    .padding(horizontal = 7.dp, vertical = 4.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Lucide.TriangleAlert,
-                                        contentDescription = null,
-                                        tint = Color(0xFFFF9500),
-                                        modifier = Modifier.size(12.dp)
-                                    )
-                                    Text(
-                                        text = ">1m",
-                                        color = Color(0xFFFF9500),
-                                        fontSize = 11.5.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                        }
-
-                        // Export Primary Button
-                        PrimaryGradientButton(
-                            onClick = {
-                                SoundManager.playTap(context)
-                                if (totalDurationSec > 60f) {
-                                    showDurationWarningDialog = true
-                                } else {
-                                    showExportSheet = true
-                                }
-                            },
-                            height = 34.dp,
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
-                        ) {
-                            Text(
-                                text = "Export",
-                                color = Color.White,
-                                fontSize = 12.5.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Icon(
-                                imageVector = Lucide.ChevronRight,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(13.dp)
-                            )
-                        }
+                },
+                onUndoClick = {
+                    SoundManager.playTap(context)
+                    undo()
+                },
+                onRedoClick = {
+                    SoundManager.playTap(context)
+                    redo()
+                },
+                onDurationWarningClick = {
+                    showDurationWarningDialog = true
+                },
+                onExportClick = {
+                    SoundManager.playTap(context)
+                    if (totalDurationSec > 60f) {
+                        showDurationWarningDialog = true
+                    } else {
+                        showExportSheet = true
                     }
                 }
-            }
+            )
 
-            if (remixedFromAuthorUsername != null) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 6.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Color(0xFF007AFF).copy(alpha = 0.15f))
-                        .border(0.5.dp, Color(0xFF007AFF).copy(alpha = 0.35f), RoundedCornerShape(10.dp))
-                        .padding(horizontal = 12.dp, vertical = 7.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Lucide.Sparkles,
-                        contentDescription = "Remix",
-                        tint = Color(0xFF007AFF),
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Text(
-                        text = "Remixing Flash from @$remixedFromAuthorUsername",
-                        color = Color.White,
-                        fontSize = 12.5.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
+            FcpAspectRatioSelector(
+                aspectRatio = aspectRatio,
+                onSelectAspect = { mode ->
+                    aspectRatio = mode
+                    ToastManager.showToast(mode.label)
                 }
-            }
-
-            // ══════════════════════════════════════════════════════════════════
-            // 2. ASPECT RATIO SHAPE PILLS & CANVAS FILL PILL
-            // ══════════════════════════════════════════════════════════════════
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    val allAspects = listOf(
-                        FcpAspectRatio.VERTICAL_9_16,
-                        FcpAspectRatio.SQUARE_1_1,
-                        FcpAspectRatio.WIDESCREEN_16_9,
-                        FcpAspectRatio.CINEMATIC_21_9
-                    )
-                    allAspects.forEach { mode ->
-                        AspectRatioPill(
-                            aspect = mode,
-                            active = aspectRatio == mode,
-                            onClick = {
-                                aspectRatio = mode
-                                ToastManager.showToast(mode.label)
-                            }
-                        )
-                    }
-                }
-            }
+            )
 
             // ══════════════════════════════════════════════════════════════════
             // 3. CANVAS / VIDEO PREVIEW CARD (Matching CanvasPreview)
@@ -3649,135 +3477,96 @@ fun FinalCutProVideoEditorScreen(
             }
         }
 
-        // Clip Animation Quick Sheet (Double-tap clip in timeline)
-        if (showAnimationQuickSheet) {
-            val targetClip = clips.firstOrNull { it.id == animationEditingClipId } ?: selectedClip
-            if (targetClip != null) {
-                FcpClipAnimationDialog(
-                    clip = targetClip,
-                    onDismiss = {
-                        showAnimationQuickSheet = false
-                        animationEditingClipId = null
-                    },
-                    onApplyAnimation = { newAnim, newInt ->
-                        saveStateForUndo()
-                        clips = clips.map {
-                            if (it.id == targetClip.id) it.copy(animationEffect = newAnim, animationIntensity = newInt) else it
-                        }
-                    }
-                )
-            } else {
-                showAnimationQuickSheet = false
-            }
-        }
-
-        // Clip Transition Selection Dialog
-        if (editingTransitionClipId != null) {
-            val clipIndex = clips.indexOfFirst { it.id == editingTransitionClipId }
-            val clip = clips.getOrNull(clipIndex)
-            val nextClip = if (clipIndex != -1 && clipIndex < clips.size - 1) clips[clipIndex + 1] else null
-            if (clip != null) {
-                FcpTransitionDialog(
-                    clip = clip,
-                    nextClip = nextClip,
-                    onDismiss = { editingTransitionClipId = null },
-                    onApplyTransition = { newType, newDur, newEasing ->
-                        saveStateForUndo()
-                        val updatedClips = clips.map {
-                            if (it.id == clip.id) it.copy(
-                                transitionToNext = newType,
-                                transitionDurationSec = newDur,
-                                transitionEasing = newEasing
-                            ) else it
-                        }
-                        clips = updatedClips
-                        editingTransitionClipId = null
-                        ToastManager.showToast("Transition set: ${newType.label}")
-
-                        if (newType != FcpTransitionType.NONE) {
-                            val updatedSpans = buildTimelineSpans(updatedClips)
-                            val spanA = updatedSpans.find { it.clip.id == clip.id }
-                            if (spanA != null) {
-                                val cutSec = spanA.timelineEndSec
-                                val previewStartSec = (cutSec - (newDur * 0.65f)).coerceAtLeast(spanA.timelineStartSec)
-                                seekToGlobalTime(previewStartSec, autoPlay = true)
-                            }
-                        }
-                    }
-                )
-            }
-        }
-
-        // Export & Render Sheet
-        if (showExportSheet) {
-            FcpExportSheet(
+        FcpEditorDialogs(
+            state = FcpDialogState(
+                showAnimationQuickSheet = showAnimationQuickSheet,
+                animationEditingClipId = animationEditingClipId,
+                selectedClip = selectedClip,
+                clips = clips,
+                editingTransitionClipId = editingTransitionClipId,
+                showExportSheet = showExportSheet,
                 totalDurationSec = totalDurationSec,
-                clipCount = clips.size,
-                textLayerCount = textLayers.size,
                 aspectRatio = aspectRatio,
                 customAudio = customAudio,
                 isExporting = isExporting,
                 exportProgress = exportProgress,
                 exportStageText = exportStageText,
-                onSaveToGallery = { res: String, fps: String ->
-                    performExport(res, fps, saveToGallery = true)
-                },
-                onExportToStudio = { res: String, fps: String ->
-                    performExport(res, fps, saveToGallery = false)
-                },
-                onSaveDraftOnly = {
-                    saveProjectDraft()
-                    showExportSheet = false
-                },
-                onCancelExport = {
-                    cancelExport()
-                },
-                onDismiss = {
-                    if (isExporting) {
-                        cancelExport()
-                    } else {
-                        showExportSheet = false
+                showDurationWarningDialog = showDurationWarningDialog,
+                showExitConfirmationDialog = showExitConfirmationDialog,
+                textLayerCount = textLayers.size
+            ),
+            onDismissAnimation = {
+                showAnimationQuickSheet = false
+                animationEditingClipId = null
+            },
+            onApplyAnimation = { newAnim, newInt ->
+                val targetClip = clips.firstOrNull { it.id == animationEditingClipId } ?: selectedClip
+                if (targetClip != null) {
+                    saveStateForUndo()
+                    clips = clips.map {
+                        if (it.id == targetClip.id) it.copy(animationEffect = newAnim, animationIntensity = newInt) else it
                     }
                 }
-            )
-        }
+            },
+            onDismissTransition = { editingTransitionClipId = null },
+            onApplyTransition = { newType, newDur, newEasing ->
+                val clipIndex = clips.indexOfFirst { it.id == editingTransitionClipId }
+                val clip = clips.getOrNull(clipIndex)
+                if (clip != null) {
+                    saveStateForUndo()
+                    val updatedClips = clips.map {
+                        if (it.id == clip.id) it.copy(
+                            transitionToNext = newType,
+                            transitionDurationSec = newDur,
+                            transitionEasing = newEasing
+                        ) else it
+                    }
+                    clips = updatedClips
+                    editingTransitionClipId = null
+                    ToastManager.showToast("Transition set: ${newType.label}")
 
-        // Over 1-Minute Duration Warning Dialog
-        if (showDurationWarningDialog) {
-            FcpDurationWarningDialog(
-                totalDurationSec = totalDurationSec,
-                onAutoTrimTo1Min = {
-                    trimTimelineToOneMinute()
-                    showDurationWarningDialog = false
-                    ToastManager.showToast("Timeline trimmed to 1 minute ✂️")
-                },
-                onExportFullToGallery = {
-                    showDurationWarningDialog = false
-                    showExportSheet = true
-                },
-                onDismiss = {
-                    showDurationWarningDialog = false
+                    if (newType != FcpTransitionType.NONE) {
+                        val updatedSpans = buildTimelineSpans(updatedClips)
+                        val spanA = updatedSpans.find { it.clip.id == clip.id }
+                        if (spanA != null) {
+                            val cutSec = spanA.timelineEndSec
+                            val previewStartSec = (cutSec - (newDur * 0.65f)).coerceAtLeast(spanA.timelineStartSec)
+                            seekToGlobalTime(previewStartSec, autoPlay = true)
+                        }
+                    }
                 }
-            )
-        }
-
-        // Exit Confirmation Dialog (Matching Trash Screen Dialog Style)
-        if (showExitConfirmationDialog) {
-            FcpExitConfirmationDialog(
-                onSaveDraftAndExit = {
-                    saveProjectDraft()
-                    showExitConfirmationDialog = false
-                    onBack()
-                },
-                onDiscardAndExit = {
-                    showExitConfirmationDialog = false
-                    onBack()
-                },
-                onDismiss = {
-                    showExitConfirmationDialog = false
-                }
-            )
-        }
+            },
+            onSaveToGallery = { res, fps -> performExport(res, fps, saveToGallery = true) },
+            onExportToStudio = { res, fps -> performExport(res, fps, saveToGallery = false) },
+            onSaveDraftOnly = {
+                saveProjectDraft()
+                showExportSheet = false
+            },
+            onCancelExport = { cancelExport() },
+            onDismissExport = {
+                if (isExporting) cancelExport() else showExportSheet = false
+            },
+            onAutoTrimTo1Min = {
+                trimTimelineToOneMinute()
+                showDurationWarningDialog = false
+                ToastManager.showToast("Timeline trimmed to 1 minute ✂️")
+            },
+            onExportFullToGalleryFromWarning = {
+                showDurationWarningDialog = false
+                showExportSheet = true
+            },
+            onDismissDurationWarning = { showDurationWarningDialog = false },
+            onSaveDraftAndExit = {
+                saveProjectDraft()
+                showExitConfirmationDialog = false
+                onBack()
+            },
+            onDiscardAndExit = {
+                showExitConfirmationDialog = false
+                onBack()
+            },
+            onDismissExitConfirmation = { showExitConfirmationDialog = false }
+        )
     }
 }
 
@@ -13559,5 +13348,321 @@ fun FcpClipAnimationDialog(
                 }
             }
         }
+    }
+}
+
+
+// ============================================================================
+// EXTRACTED MODULAR SUB-COMPOSABLES FOR JIT COMPILER OPTIMIZATION
+// ============================================================================
+
+data class FcpDialogState(
+    val showAnimationQuickSheet: Boolean = false,
+    val animationEditingClipId: String? = null,
+    val selectedClip: FcpClip? = null,
+    val clips: List<FcpClip> = emptyList(),
+    val editingTransitionClipId: String? = null,
+    val showExportSheet: Boolean = false,
+    val totalDurationSec: Float = 0f,
+    val aspectRatio: FcpAspectRatio = FcpAspectRatio.VERTICAL_9_16,
+    val customAudio: FcpCustomAudio? = null,
+    val isExporting: Boolean = false,
+    val exportProgress: Float = 0f,
+    val exportStageText: String = "",
+    val showDurationWarningDialog: Boolean = false,
+    val showExitConfirmationDialog: Boolean = false,
+    val textLayerCount: Int = 0
+)
+
+@Composable
+private fun FcpTopHeaderBar(
+    context: Context,
+    clipsCount: Int,
+    undoEmpty: Boolean,
+    redoEmpty: Boolean,
+    isOverOneMinute: Boolean,
+    totalDurationSec: Float,
+    remixedFromAuthorUsername: String?,
+    onBackClick: () -> Unit,
+    onUndoClick: () -> Unit,
+    onRedoClick: () -> Unit,
+    onDurationWarningClick: () -> Unit,
+    onExportClick: () -> Unit
+) {
+    val colors = LocalOscellionColors.current
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(52.dp)
+            .background(if (colors.isDark) Color(0xFF1E212B) else colors.glassBg)
+            .border(width = 0.5.dp, color = if (colors.isDark) Color(0xFF2A2F3A) else colors.glassBorder)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            // Left: Back button + Branding & Clip count
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                IconGhostButton(
+                    icon = Lucide.ArrowLeft,
+                    contentDesc = "Back",
+                    onClick = onBackClick
+                )
+
+                Column(verticalArrangement = Arrangement.Center) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "Flash",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            letterSpacing = (-0.3).sp
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(
+                            text = "Studio",
+                            color = Color(0xFF007AFF),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            letterSpacing = (-0.3).sp
+                        )
+                    }
+                    if (clipsCount > 0) {
+                        Text(
+                            text = "$clipsCount ${if (clipsCount == 1) "clip" else "clips"}",
+                            color = Color(0xFF8E98A8),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+
+            // Right: Undo, Redo, Divider, Export Button
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                IconGhostButton(
+                    icon = Lucide.Undo,
+                    contentDesc = "Undo",
+                    disabled = undoEmpty,
+                    onClick = onUndoClick
+                )
+                IconGhostButton(
+                    icon = Lucide.Redo,
+                    contentDesc = "Redo",
+                    disabled = redoEmpty,
+                    onClick = onRedoClick
+                )
+
+                // Divider
+                Box(
+                    modifier = Modifier
+                        .padding(horizontal = 4.dp)
+                        .width(1.dp)
+                        .height(18.dp)
+                        .background(colors.glassBorder)
+                )
+
+                if (isOverOneMinute) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color(0xFFFF9500).copy(alpha = 0.18f))
+                            .border(0.5.dp, Color(0xFFFF9500).copy(alpha = 0.4f), RoundedCornerShape(6.dp))
+                            .clickable(onClick = onDurationWarningClick)
+                            .padding(horizontal = 7.dp, vertical = 4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Lucide.TriangleAlert,
+                                contentDescription = null,
+                                tint = Color(0xFFFF9500),
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Text(
+                                text = ">1m",
+                                color = Color(0xFFFF9500),
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
+                // Export Primary Button
+                PrimaryGradientButton(
+                    onClick = onExportClick,
+                    height = 34.dp,
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        text = "Export",
+                        color = Color.White,
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Icon(
+                        imageVector = Lucide.ChevronRight,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(13.dp)
+                    )
+                }
+            }
+        }
+    }
+
+    if (remixedFromAuthorUsername != null) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 6.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color(0xFF007AFF).copy(alpha = 0.15f))
+                .border(0.5.dp, Color(0xFF007AFF).copy(alpha = 0.35f), RoundedCornerShape(10.dp))
+                .padding(horizontal = 12.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                imageVector = Lucide.Sparkles,
+                contentDescription = "Remix",
+                tint = Color(0xFF007AFF),
+                modifier = Modifier.size(16.dp)
+            )
+            Text(
+                text = "Remixing Flash from @$remixedFromAuthorUsername",
+                color = Color.White,
+                fontSize = 12.5.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+    }
+}
+
+@Composable
+private fun FcpAspectRatioSelector(
+    aspectRatio: FcpAspectRatio,
+    onSelectAspect: (FcpAspectRatio) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            val allAspects = listOf(
+                FcpAspectRatio.VERTICAL_9_16,
+                FcpAspectRatio.SQUARE_1_1,
+                FcpAspectRatio.WIDESCREEN_16_9,
+                FcpAspectRatio.CINEMATIC_21_9
+            )
+            allAspects.forEach { mode ->
+                AspectRatioPill(
+                    aspect = mode,
+                    active = aspectRatio == mode,
+                    onClick = { onSelectAspect(mode) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FcpEditorDialogs(
+    state: FcpDialogState,
+    onDismissAnimation: () -> Unit,
+    onApplyAnimation: (FcpClipAnimation, Float) -> Unit,
+    onDismissTransition: () -> Unit,
+    onApplyTransition: (FcpTransitionType, Float, TransitionEasing) -> Unit,
+    onSaveToGallery: (String, String) -> Unit,
+    onExportToStudio: (String, String) -> Unit,
+    onSaveDraftOnly: () -> Unit,
+    onCancelExport: () -> Unit,
+    onDismissExport: () -> Unit,
+    onAutoTrimTo1Min: () -> Unit,
+    onExportFullToGalleryFromWarning: () -> Unit,
+    onDismissDurationWarning: () -> Unit,
+    onSaveDraftAndExit: () -> Unit,
+    onDiscardAndExit: () -> Unit,
+    onDismissExitConfirmation: () -> Unit
+) {
+    if (state.showAnimationQuickSheet) {
+        val targetClip = state.clips.firstOrNull { it.id == state.animationEditingClipId } ?: state.selectedClip
+        if (targetClip != null) {
+            FcpClipAnimationDialog(
+                clip = targetClip,
+                onDismiss = onDismissAnimation,
+                onApplyAnimation = onApplyAnimation
+            )
+        } else {
+            onDismissAnimation()
+        }
+    }
+
+    if (state.editingTransitionClipId != null) {
+        val clipIndex = state.clips.indexOfFirst { it.id == state.editingTransitionClipId }
+        val clip = state.clips.getOrNull(clipIndex)
+        val nextClip = if (clipIndex != -1 && clipIndex < state.clips.size - 1) state.clips.getOrNull(clipIndex + 1) else null
+        if (clip != null) {
+            FcpTransitionDialog(
+                clip = clip,
+                nextClip = nextClip,
+                onDismiss = onDismissTransition,
+                onApplyTransition = onApplyTransition
+            )
+        }
+    }
+
+    if (state.showExportSheet) {
+        FcpExportSheet(
+            totalDurationSec = state.totalDurationSec,
+            clipCount = state.clips.size,
+            textLayerCount = state.textLayerCount,
+            aspectRatio = state.aspectRatio,
+            customAudio = state.customAudio,
+            isExporting = state.isExporting,
+            exportProgress = state.exportProgress,
+            exportStageText = state.exportStageText,
+            onSaveToGallery = onSaveToGallery,
+            onExportToStudio = onExportToStudio,
+            onSaveDraftOnly = onSaveDraftOnly,
+            onCancelExport = onCancelExport,
+            onDismiss = onDismissExport
+        )
+    }
+
+    if (state.showDurationWarningDialog) {
+        FcpDurationWarningDialog(
+            totalDurationSec = state.totalDurationSec,
+            onAutoTrimTo1Min = onAutoTrimTo1Min,
+            onExportFullToGallery = onExportFullToGalleryFromWarning,
+            onDismiss = onDismissDurationWarning
+        )
+    }
+
+    if (state.showExitConfirmationDialog) {
+        FcpExitConfirmationDialog(
+            onSaveDraftAndExit = onSaveDraftAndExit,
+            onDiscardAndExit = onDiscardAndExit,
+            onDismiss = onDismissExitConfirmation
+        )
     }
 }

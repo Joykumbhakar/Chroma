@@ -29,14 +29,16 @@ class ChromaApp : Application() {
             Log.e("ChromaApp", "Failed to initialize Firebase", e)
         }
         
-        try {
-            // Initialize Firebase App Check for secure Gemini/Vertex AI access
-            val appCheck = FirebaseAppCheck.getInstance()
-            appCheck.installAppCheckProviderFactory(
-                PlayIntegrityAppCheckProviderFactory.getInstance()
-            )
-        } catch (e: Exception) {
-            Log.w("ChromaApp", "App Check initialization bypassed: ${e.message}")
+        if (!BuildConfig.DEBUG) {
+            try {
+                // Initialize Firebase App Check for secure Gemini/Vertex AI access in production releases
+                val appCheck = FirebaseAppCheck.getInstance()
+                appCheck.installAppCheckProviderFactory(
+                    PlayIntegrityAppCheckProviderFactory.getInstance()
+                )
+            } catch (e: Exception) {
+                Log.w("ChromaApp", "App Check initialization bypassed: ${e.message}")
+            }
         }
         
         try {

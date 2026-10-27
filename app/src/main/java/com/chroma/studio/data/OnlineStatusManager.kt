@@ -81,6 +81,9 @@ object OnlineStatusManager {
      * Returns a lambda to unsubscribe.
      */
     fun observeUserPresence(uid: String, onUpdate: (UserPresence) -> Unit): () -> Unit {
+        if (FirebaseAuth.getInstance().currentUser == null) {
+            return {}
+        }
         val ref = getDatabase().getReference("users/$uid")
         val listener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
@@ -90,7 +93,7 @@ object OnlineStatusManager {
             }
 
             override fun onCancelled(error: DatabaseError) {
-                Log.w(TAG, "observeUserPresence cancelled for $uid: ${error.message}")
+                Log.d(TAG, "observeUserPresence cancelled for $uid: ${error.message}")
             }
         }
         ref.addValueEventListener(listener)

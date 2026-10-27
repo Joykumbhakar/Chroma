@@ -1,7 +1,7 @@
 <resources>
     <!-- Main editor theme -->
     <style name="Theme.Oscellion" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:windowBackground">#f8fafc</item>
+        <item name="android:windowBackground">@color/oscellion_window_background</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">true</item>
     </style>

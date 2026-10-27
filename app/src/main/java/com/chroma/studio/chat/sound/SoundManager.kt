@@ -40,11 +40,18 @@ object SoundManager {
                 .build()
 
             val appContext = context.applicationContext
-            scrubSoundId = pool.load(appContext, R.raw.scrub_frame_sound, 1)
-            tapSoundId = pool.load(appContext, R.raw.tap_sound, 1)
-            dynamicIslandSoundId = pool.load(appContext, R.raw.dynamic_island_notification, 1)
-            messageSentSoundId = pool.load(appContext, R.raw.message_sent_default_audio_sound_effect, 1)
-            messageSent2ndSoundId = pool.load(appContext, R.raw.message_sent_default_audio_sound_effect_2nd, 1)
+            fun safeLoad(resId: Int): Int {
+                return try {
+                    pool.load(appContext, resId, 1)
+                } catch (_: Throwable) {
+                    0
+                }
+            }
+            scrubSoundId = safeLoad(R.raw.scrub_frame_sound)
+            tapSoundId = safeLoad(R.raw.tap_sound)
+            dynamicIslandSoundId = safeLoad(R.raw.dynamic_island_notification)
+            messageSentSoundId = safeLoad(R.raw.message_sent_default_audio_sound_effect)
+            messageSent2ndSoundId = safeLoad(R.raw.message_sent_default_audio_sound_effect_2nd)
 
             pool.setOnLoadCompleteListener { _, sampleId, status ->
                 if (status == 0) {
