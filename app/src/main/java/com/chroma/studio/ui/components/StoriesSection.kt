@@ -122,6 +122,7 @@ fun StoriesSection(
                                 }
                             }
                     ) {
+                        val hasOnlyFriendStory = myStoriesList.any { it.audienceType == "only_friends" }
                         AppleStatusAvatar(
                             name = "You",
                             avatarUrl = myStoryAvatarUrl,
@@ -130,6 +131,7 @@ fun StoriesSection(
                             hasStatus = hasMyStory,
                             storyCount = myStoriesList.size.coerceAtLeast(1),
                             isSeen = false,
+                            isOnlyFriend = hasOnlyFriendStory,
                             isUploading = isUploading,
                             showAddBadge = true,
                             gender = myStoryGender,
@@ -208,6 +210,7 @@ fun StoriesSection(
                             indication = null
                         ) { onStoryClick?.invoke(index) }
                 ) {
+                    val hasOnlyFriendStory = storyGroup.stories.any { it.audienceType == "only_friends" }
                     AppleStatusAvatar(
                         name = displayName,
                         avatarUrl = avatarUrl,
@@ -216,6 +219,7 @@ fun StoriesSection(
                         hasStatus = hasStories,
                         storyCount = storyGroup.stories.size,
                         isSeen = isSeen,
+                        isOnlyFriend = hasOnlyFriendStory,
                         isOnline = isOnline,
                         showAddBadge = false,
                         gender = profile.gender,

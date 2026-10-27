@@ -44,8 +44,47 @@ class StoryViewModel : ViewModel() {
     private val _viewedStoryIds = MutableStateFlow<Set<String>>(emptySet())
     val viewedStoryIds: StateFlow<Set<String>> = _viewedStoryIds.asStateFlow()
 
+    // Only Friends close friends list
+    private val _onlyFriendsIds = MutableStateFlow<List<String>>(emptyList())
+    val onlyFriendsIds: StateFlow<List<String>> = _onlyFriendsIds.asStateFlow()
+
     init {
         loadStories()
+        loadOnlyFriends()
+    }
+
+    fun loadOnlyFriends() {
+        val uid = auth.currentUser?.uid ?: return
+        viewModelScope.launch {
+            try {
+                val list = repository.getOnlyFriends(uid)
+                _onlyFriendsIds.value = list
+            } catch (e: Exception) {
+                Log.e("StoryViewModel", "loadOnlyFriends error", e)
+            }
+        }
+    }
+
+    fun toggleOnlyFriend(targetUid: String) {
+        val uid = auth.currentUser?.uid ?: return
+        val current = _onlyFriendsIds.value.toMutableList()
+        if (current.contains(targetUid)) {
+            current.remove(targetUid)
+        } else {
+            current.add(targetUid)
+        }
+        _onlyFriendsIds.value = current
+        viewModelScope.launch {
+            repository.saveOnlyFriends(uid, current)
+        }
+    }
+
+    fun saveOnlyFriendsList(newList: List<String>) {
+        val uid = auth.currentUser?.uid ?: return
+        _onlyFriendsIds.value = newList
+        viewModelScope.launch {
+            repository.saveOnlyFriends(uid, newList)
+        }
     }
 
     fun loadStories() {
@@ -121,13 +160,25 @@ class StoryViewModel : ViewModel() {
         }
     }
 
-    fun uploadStory(context: Context, uri: Uri) {
+    fun uploadStory(
+        context: Context,
+        uri: Uri,
+        audienceType: String = "public",
+        customAudienceIds: List<String> = emptyList()
+    ) {
         val currentUid = auth.currentUser?.uid ?: ""
         val tempId = "temp_story_${System.currentTimeMillis()}"
+        val targetAudienceIds = if (audienceType == "only_friends" && customAudienceIds.isEmpty()) {
+            _onlyFriendsIds.value
+        } else {
+            customAudienceIds
+        }
         val optimisticStory = Story(
             id = tempId,
             userId = currentUid,
             mediaUrl = uri.toString(),
+            audienceType = audienceType,
+            customAudienceIds = targetAudienceIds,
             timestamp = System.currentTimeMillis()
         )
         _myStories.value = listOf(optimisticStory) + _myStories.value.filter { it.id != tempId }
@@ -149,7 +200,7 @@ class StoryViewModel : ViewModel() {
                     _uploadError.value = "Upload failed. Please try again."
                     return@launch
                 }
-                repository.publishStory(url)
+                repository.publishStory(url, audienceType, targetAudienceIds)
                 _myStories.value = _myStories.value.filter { it.id != tempId }
                 loadMyStories()
                 loadStories()

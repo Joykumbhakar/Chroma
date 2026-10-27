@@ -51,6 +51,7 @@ import com.chroma.studio.model.UserProfile
 import com.chroma.studio.model.UserStoryGroup
 import com.chroma.studio.ui.components.IosAvatarView
 import com.chroma.studio.ui.components.MarkdownText
+import com.chroma.studio.ui.components.OnlyFriendsManagementSheet
 import com.chroma.studio.ui.components.ToastManager
 import com.chroma.studio.ui.theme.ChromaIcons
 import com.chroma.studio.viewmodel.StoryViewModel
@@ -96,6 +97,8 @@ fun StoryViewerScreen(
     var isPaused by remember { mutableStateOf(false) }
     var showViewers by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showOnlyFriendsSheet by remember { mutableStateOf(false) }
+    var showOnlyFriendsInfoDialog by remember { mutableStateOf(false) }
     var quickReplyText by remember { mutableStateOf("") }
     var showQuickReactions by remember { mutableStateOf(false) }
 
@@ -109,7 +112,7 @@ fun StoryViewerScreen(
     val isLiked = currentStory != null && likedStoryIds.contains(currentStory.id)
 
     val progress = remember(currentStoryIndex, currentGroupIndex) { Animatable(0f) }
-    val effectivePaused = isPaused || showViewers || showDeleteConfirm
+    val effectivePaused = isPaused || showViewers || showDeleteConfirm || showOnlyFriendsSheet || showOnlyFriendsInfoDialog
 
     LaunchedEffect(currentStoryIndex, currentGroupIndex, effectivePaused, storiesForCurrentGroup.size) {
         if (!effectivePaused && storiesForCurrentGroup.isNotEmpty()) {
@@ -503,12 +506,48 @@ fun StoryViewerScreen(
                                     VerifiedBadge(size = 12.dp)
                                 }
                             }
-                            currentStory?.let {
-                                Text(
-                                    text = storyFormatTimeAgo(it.timestamp),
-                                    color = Color.White.copy(alpha = 0.75f),
-                                    fontSize = 11.5.sp
-                                )
+                            currentStory?.let { story ->
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = storyFormatTimeAgo(story.timestamp),
+                                        color = Color.White.copy(alpha = 0.75f),
+                                        fontSize = 11.5.sp
+                                    )
+                                    if (story.audienceType == "only_friends") {
+                                        Spacer(Modifier.width(6.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(99.dp))
+                                                .background(Color(0xFF00C853))
+                                                .clickable {
+                                                    if (isOwner) {
+                                                        showOnlyFriendsSheet = true
+                                                    } else {
+                                                        showOnlyFriendsInfoDialog = true
+                                                    }
+                                                }
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Lucide.Star,
+                                                    contentDescription = null,
+                                                    tint = Color.White,
+                                                    modifier = Modifier.size(9.5.dp)
+                                                )
+                                                Text(
+                                                    text = "Only Friend",
+                                                    fontSize = 10.5.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color.White
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
 
@@ -747,6 +786,60 @@ fun StoryViewerScreen(
                         )
                     },
                     shape = RoundedCornerShape(18.dp)
+                )
+            }
+
+            // ── Only Friend Management Sheet (Owner) ──────────────────────────────────
+            if (showOnlyFriendsSheet) {
+                OnlyFriendsManagementSheet(
+                    storyViewModel = storyViewModel,
+                    onDismissRequest = { showOnlyFriendsSheet = false }
+                )
+            }
+
+            // ── Only Friend Info Dialog (Viewer) ──────────────────────────────────────
+            if (showOnlyFriendsInfoDialog) {
+                val authorName = currentGroup?.userProfile?.displayName?.ifBlank { "this user" } ?: "this user"
+                AlertDialog(
+                    onDismissRequest = { showOnlyFriendsInfoDialog = false },
+                    icon = {
+                        Box(
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF00C853)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Lucide.Star,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    },
+                    title = {
+                        Text(
+                            text = "Only Friend",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp,
+                            textAlign = TextAlign.Center
+                        )
+                    },
+                    text = {
+                        Text(
+                            text = "Only people on $authorName's Only Friend list can see this story. They won't know you saw this.",
+                            fontSize = 13.5.sp,
+                            lineHeight = 18.sp,
+                            textAlign = TextAlign.Center
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showOnlyFriendsInfoDialog = false }) {
+                            Text("Got it", fontWeight = FontWeight.Bold, color = Color(0xFF007AFF))
+                        }
+                    },
+                    shape = RoundedCornerShape(22.dp)
                 )
             }
         }

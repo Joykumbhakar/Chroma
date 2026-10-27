@@ -44,6 +44,7 @@ import com.chroma.studio.ui.components.LiquidGlassPrimaryButton
 import com.chroma.studio.ui.components.LiquidGlassSecondaryButton
 import com.chroma.studio.ui.components.AiWaveSphereIcon
 import com.chroma.studio.ui.components.AiWaveSphereVector
+import com.chroma.studio.ui.components.OnlyFriendsManagementSheet
 import com.chroma.studio.ui.theme.InterFontFamily
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.chroma.studio.ui.theme.MonoFontFamily
@@ -209,7 +210,8 @@ fun StoryEditorScreen(
     var bodyContent by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("") }
     var selectedMood by remember { mutableStateOf("") }
-    var audienceType by remember { mutableStateOf("public") } // "public", "followers", "custom"
+    var audienceType by remember { mutableStateOf("public") } // "public", "followers", "only_friends"
+    var showOnlyFriendsSheet by remember { mutableStateOf(false) }
 
     // Formatting State
     var isBold by remember { mutableStateOf(false) }
@@ -362,7 +364,7 @@ fun StoryEditorScreen(
                 textFormat = jsonFormat,
                 backgroundColor = formatState.backgroundColorHex,
                 audienceType = audienceType,
-                customAudienceIds = emptyList()
+                customAudienceIds = if (audienceType == "only_friends") storyViewModel.onlyFriendsIds.value else emptyList()
             )
 
             isPublishing = false
@@ -1034,10 +1036,10 @@ fun StoryEditorScreen(
                             ) { audienceType = "followers" }
 
                             AudienceCleanOptionChip(
-                                icon = Lucide.Lock,
-                                label = "Close Friends",
-                                isSelected = audienceType == "custom"
-                            ) { audienceType = "custom" }
+                                icon = Lucide.Star,
+                                label = "Only Friend",
+                                isSelected = audienceType == "only_friends"
+                            ) { audienceType = "only_friends" }
                         }
                     }
                 }
@@ -1338,6 +1340,13 @@ fun StoryEditorScreen(
                     isSmall = true
                 )
             }
+        )
+    }
+
+    if (showOnlyFriendsSheet) {
+        OnlyFriendsManagementSheet(
+            storyViewModel = storyViewModel,
+            onDismissRequest = { showOnlyFriendsSheet = false }
         )
     }
 }

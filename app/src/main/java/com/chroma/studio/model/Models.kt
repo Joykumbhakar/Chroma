@@ -46,7 +46,8 @@ data class UserProfile(
     val quietModeEnabled: Boolean = false,
     val unrecognizedLoginsEnabled: Boolean = false,
     val contentTags: List<String> = emptyList(),
-    val dataVisibility: Map<String, String> = emptyMap()
+    val dataVisibility: Map<String, String> = emptyMap(),
+    val onlyFriends: List<String> = emptyList()
 ) {
     @get:com.google.firebase.firestore.Exclude
     val createdAtAsLong: Long?

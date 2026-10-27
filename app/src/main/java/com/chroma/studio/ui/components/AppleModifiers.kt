@@ -320,6 +320,14 @@ fun IosAvatarView(
  * - Active / Unseen: Apple Blue Gradient Circle
  * - Seen / Viewed: Neutral Apple System Gray Circle
  */
+val AppleStatusOnlyFriendGradient = listOf(
+    Color(0xFF00E676), // Bright Spring Neon Green
+    Color(0xFF10B981), // Emerald
+    Color(0xFF059669), // Deep Mint Green
+    Color(0xFF34C759), // Apple Green
+    Color(0xFF00E676)  // Loop to Neon Green
+)
+
 val AppleStatusVibrantGradient = listOf(
     Color(0xFFFF2D55), // Hot Rose / Coral
     Color(0xFFAF52DE), // Royal Violet
@@ -340,13 +348,15 @@ val AppleStatusSeenGrayLight = listOf(Color(0xFFD1D1D6), Color(0xFFC7C7CC))
 fun getAppleStatusRingBrush(
     hasStatus: Boolean,
     isSeen: Boolean,
-    isDark: Boolean
+    isDark: Boolean,
+    isOnlyFriend: Boolean = false
 ): Brush {
     return when {
         !hasStatus -> Brush.linearGradient(
             if (isDark) listOf(Color(0xFF2C2C2E), Color(0xFF1C1C1E))
             else listOf(Color(0xFFE5E5EA), Color(0xFFF2F2F7))
         )
+        !isSeen && isOnlyFriend -> Brush.sweepGradient(AppleStatusOnlyFriendGradient)
         !isSeen -> Brush.sweepGradient(AppleStatusVibrantGradient)
         else -> Brush.linearGradient(
             if (isDark) AppleStatusSeenGrayDark
@@ -357,7 +367,7 @@ fun getAppleStatusRingBrush(
 
 /**
  * Standard reusable Apple Status / Story Avatar with Segmented Arcs,
- * Vibrant Apple Aurora Multi-Gradient (Unseen), Gray (Seen), and tactile press effects.
+ * Vibrant Apple Aurora Multi-Gradient (Unseen), Only Friend Neon Green, Gray (Seen), and tactile press effects.
  */
 @Composable
 fun AppleStatusAvatar(
@@ -369,6 +379,7 @@ fun AppleStatusAvatar(
     hasStatus: Boolean = false,
     storyCount: Int = 1,
     isSeen: Boolean = false,
+    isOnlyFriend: Boolean = false,
     isOnline: Boolean = false,
     isUploading: Boolean = false,
     showAddBadge: Boolean = false,
@@ -378,9 +389,9 @@ fun AppleStatusAvatar(
     gapColor: Color = if (isDark) Color(0xFF121212) else Color.White,
     onAddBadgeClick: (() -> Unit)? = null
 ) {
-    val ringBrush = remember(hasStatus, isSeen, isDark) {
+    val ringBrush = remember(hasStatus, isSeen, isDark, isOnlyFriend) {
         if (hasStatus) {
-            getAppleStatusRingBrush(hasStatus = true, isSeen = isSeen, isDark = isDark)
+            getAppleStatusRingBrush(hasStatus = true, isSeen = isSeen, isDark = isDark, isOnlyFriend = isOnlyFriend)
         } else {
             null
         }

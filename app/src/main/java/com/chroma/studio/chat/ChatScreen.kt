@@ -88,6 +88,8 @@ import com.chroma.studio.chat.sound.SoundManager
 import com.chroma.studio.chat.ui.components.*
 
 import com.chroma.studio.ui.components.StoryCreationBottomSheet
+import com.chroma.studio.ui.components.ShareStoryAudienceSheet
+import com.chroma.studio.ui.components.OnlyFriendsManagementSheet
 
 import com.chroma.studio.ui.screens.StoryViewerScreen
 import com.chroma.studio.ui.screens.FlashPhotoEditorScreen
@@ -350,6 +352,9 @@ private fun ChatScreenContent(
     var showStoryGalleryPicker by remember { mutableStateOf(false) }
 
     var editingStoryImageUri by remember { mutableStateOf<Uri?>(null) }
+    var pendingUploadStoryUri by remember { mutableStateOf<Uri?>(null) }
+    var showShareStoryAudienceSheet by remember { mutableStateOf(false) }
+    var showOnlyFriendsManagementSheet by remember { mutableStateOf(false) }
 
     var storyViewerInitialIndex by remember { mutableIntStateOf(0) }
 
@@ -1504,6 +1509,8 @@ private fun ChatScreenContent(
         showStoryCreationSheet ||
         showStoryGalleryPicker ||
         editingStoryImageUri != null ||
+        showShareStoryAudienceSheet ||
+        showOnlyFriendsManagementSheet ||
         showStoryViewer ||
         isGalleryPickerOpen ||
         previewLightboxImage != null
@@ -1718,6 +1725,8 @@ private fun ChatScreenContent(
         showStoryCreationSheet ||
         showStoryGalleryPicker ||
         editingStoryImageUri != null ||
+        showShareStoryAudienceSheet ||
+        showOnlyFriendsManagementSheet ||
         showStoryViewer ||
         isGalleryPickerOpen ||
         isInsideChat ||
@@ -1728,6 +1737,8 @@ private fun ChatScreenContent(
 
     BackHandler(enabled = isAnyModalOrSubscreenOpen) {
         when {
+            showOnlyFriendsManagementSheet -> showOnlyFriendsManagementSheet = false
+            showShareStoryAudienceSheet -> showShareStoryAudienceSheet = false
             editingStoryImageUri != null -> editingStoryImageUri = null
             showStoryGalleryPicker -> showStoryGalleryPicker = false
             showStoryCreationSheet -> showStoryCreationSheet = false
@@ -4028,13 +4039,44 @@ private fun ChatScreenContent(
                 nextButtonLabel = "Share Story",
                 onExportUris = { editedUris ->
                     val finalUri = editedUris.firstOrNull() ?: editingStoryImageUri!!
-                    editingStoryImageUri = null
-                    effectiveStoryVm.uploadStory(context, finalUri)
-                    com.chroma.studio.ui.components.ToastManager.showToast("Sharing your story... 🌟")
+                    pendingUploadStoryUri = finalUri
+                    showShareStoryAudienceSheet = true
                 },
                 onBack = {
                     editingStoryImageUri = null
                 }
+            )
+        }
+
+        if (showShareStoryAudienceSheet && pendingUploadStoryUri != null) {
+            val onlyFriends by effectiveStoryVm.onlyFriendsIds.collectAsState()
+            ShareStoryAudienceSheet(
+                onDismissRequest = { showShareStoryAudienceSheet = false },
+                onSharePublic = {
+                    showShareStoryAudienceSheet = false
+                    val uri = pendingUploadStoryUri ?: return@ShareStoryAudienceSheet
+                    pendingUploadStoryUri = null
+                    editingStoryImageUri = null
+                    effectiveStoryVm.uploadStory(context, uri, audienceType = "public")
+                    com.chroma.studio.ui.components.ToastManager.showToast("Sharing your story... 🌟")
+                },
+                onShareOnlyFriends = {
+                    showShareStoryAudienceSheet = false
+                    val uri = pendingUploadStoryUri ?: return@ShareStoryAudienceSheet
+                    pendingUploadStoryUri = null
+                    editingStoryImageUri = null
+                    effectiveStoryVm.uploadStory(context, uri, audienceType = "only_friends", customAudienceIds = onlyFriends)
+                    com.chroma.studio.ui.components.ToastManager.showToast("Shared with Only Friend! ⭐")
+                },
+                onEditOnlyFriends = { showOnlyFriendsManagementSheet = true },
+                onlyFriendsCount = onlyFriends.size
+            )
+        }
+
+        if (showOnlyFriendsManagementSheet) {
+            OnlyFriendsManagementSheet(
+                storyViewModel = effectiveStoryVm,
+                onDismissRequest = { showOnlyFriendsManagementSheet = false }
             )
         }
 

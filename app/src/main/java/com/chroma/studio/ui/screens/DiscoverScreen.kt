@@ -18,6 +18,8 @@ import com.chroma.studio.ui.components.resolvePostMediaSlides
 import com.chroma.studio.ui.components.isVideoPost
 import com.chroma.studio.ui.components.extractVideoUrlFromPost
 import com.chroma.studio.ui.components.VerifiedBadge
+import com.chroma.studio.ui.components.ShareStoryAudienceSheet
+import com.chroma.studio.ui.components.OnlyFriendsManagementSheet
 import androidx.compose.foundation.pager.rememberPagerState
 import android.content.Context
 import android.content.Intent
@@ -225,8 +227,11 @@ fun DiscoverScreen(
     var showStoryCreationSheet by remember { mutableStateOf(false) }
     var showStoryGalleryPicker by remember { mutableStateOf(false) }
     var editingStoryImageUri by remember { mutableStateOf<Uri?>(null) }
+    var pendingUploadStoryUri by remember { mutableStateOf<Uri?>(null) }
+    var showShareStoryAudienceSheet by remember { mutableStateOf(false) }
+    var showOnlyFriendsManagementSheet by remember { mutableStateOf(false) }
 
-    val shouldHideBottomNav = showStoryViewer || showStoryCreationSheet || showStoryGalleryPicker || (editingStoryImageUri != null)
+    val shouldHideBottomNav = showStoryViewer || showStoryCreationSheet || showStoryGalleryPicker || (editingStoryImageUri != null) || showShareStoryAudienceSheet || showOnlyFriendsManagementSheet
     LaunchedEffect(shouldHideBottomNav) {
         onStoryViewerChange?.invoke(shouldHideBottomNav)
     }
@@ -777,13 +782,50 @@ fun DiscoverScreen(
                 nextButtonLabel = "Share Story",
                 onExportUris = { editedUris ->
                     val finalUri = editedUris.firstOrNull() ?: editingStoryImageUri!!
-                    editingStoryImageUri = null
-                    storyViewModel?.uploadStory(context, finalUri)
-                    com.chroma.studio.ui.components.ToastManager.showToast("Sharing your story... 🌟")
+                    pendingUploadStoryUri = finalUri
+                    showShareStoryAudienceSheet = true
                 },
                 onBack = {
                     editingStoryImageUri = null
                 }
+            )
+        }
+
+        // Instagram-style Audience Selector for Story
+        if (showShareStoryAudienceSheet && pendingUploadStoryUri != null) {
+            val onlyFriends by (storyViewModel?.onlyFriendsIds ?: kotlinx.coroutines.flow.MutableStateFlow(emptyList())).collectAsState()
+            ShareStoryAudienceSheet(
+                onDismissRequest = {
+                    showShareStoryAudienceSheet = false
+                },
+                onSharePublic = {
+                    showShareStoryAudienceSheet = false
+                    val uri = pendingUploadStoryUri ?: return@ShareStoryAudienceSheet
+                    pendingUploadStoryUri = null
+                    editingStoryImageUri = null
+                    storyViewModel?.uploadStory(context, uri, audienceType = "public")
+                    com.chroma.studio.ui.components.ToastManager.showToast("Sharing your story... 🌟")
+                },
+                onShareOnlyFriends = {
+                    showShareStoryAudienceSheet = false
+                    val uri = pendingUploadStoryUri ?: return@ShareStoryAudienceSheet
+                    pendingUploadStoryUri = null
+                    editingStoryImageUri = null
+                    storyViewModel?.uploadStory(context, uri, audienceType = "only_friends", customAudienceIds = onlyFriends)
+                    com.chroma.studio.ui.components.ToastManager.showToast("Shared with Only Friend! ⭐")
+                },
+                onEditOnlyFriends = {
+                    showOnlyFriendsManagementSheet = true
+                },
+                onlyFriendsCount = onlyFriends.size
+            )
+        }
+
+        // Only Friend List Management Sheet
+        if (showOnlyFriendsManagementSheet && storyViewModel != null) {
+            OnlyFriendsManagementSheet(
+                storyViewModel = storyViewModel,
+                onDismissRequest = { showOnlyFriendsManagementSheet = false }
             )
         }
 

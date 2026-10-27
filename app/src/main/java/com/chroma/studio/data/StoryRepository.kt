@@ -17,7 +17,11 @@ class StoryRepository {
     private val usersCol = db.collection("users")
 
     /** Publish a new story for the current user. Returns the story ID. */
-    suspend fun publishStory(mediaUrl: String): String {
+    suspend fun publishStory(
+        mediaUrl: String,
+        audienceType: String = "public",
+        customAudienceIds: List<String> = emptyList()
+    ): String {
         val user = auth.currentUser ?: throw Exception("Not authenticated")
         val docRef = storiesCol.document()
         val now = System.currentTimeMillis()
@@ -25,6 +29,8 @@ class StoryRepository {
             id = docRef.id,
             userId = user.uid,
             mediaUrl = mediaUrl,
+            audienceType = audienceType,
+            customAudienceIds = customAudienceIds,
             timestamp = now,
             expiresAt = now + 86_400_000L
         )
@@ -72,6 +78,11 @@ class StoryRepository {
                     .get().await()
                 snap.documents.mapNotNull { it.toObject(Story::class.java) }
                     .filter { it.expiresAt > now }
+                    .filter { story ->
+                        story.userId == currentUid ||
+                        story.audienceType == "public" ||
+                        (story.audienceType == "only_friends" && story.customAudienceIds.contains(currentUid))
+                    }
                     .let { allStories.addAll(it) }
             }
             val userIdsWithStories = allStories.map { it.userId }.distinct()
@@ -103,6 +114,11 @@ class StoryRepository {
                 .get().await()
             val allStories = snap.documents.mapNotNull { it.toObject(Story::class.java) }
                 .filter { it.expiresAt > now }
+                .filter { story ->
+                    story.userId == currentUid ||
+                    story.audienceType == "public" ||
+                    (story.audienceType == "only_friends" && story.customAudienceIds.contains(currentUid))
+                }
             val userIdsWithStories = allStories.map { it.userId }.distinct()
             val profiles = mutableMapOf<String, UserProfile>()
             for (uid in userIdsWithStories) {
@@ -201,6 +217,27 @@ class StoryRepository {
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             emptyList()
+        }
+    }
+
+    /** Get user IDs on the current user's Only Friend close friends list. */
+    suspend fun getOnlyFriends(userId: String): List<String> {
+        return try {
+            val doc = usersCol.document(userId).get().await()
+            (doc.get("onlyFriends") as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            emptyList()
+        }
+    }
+
+    /** Save updated Only Friend list for the given user. */
+    suspend fun saveOnlyFriends(userId: String, onlyFriends: List<String>) {
+        try {
+            usersCol.document(userId).update("onlyFriends", onlyFriends).await()
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("StoryRepository", "saveOnlyFriends error", e)
         }
     }
 }
