@@ -375,6 +375,35 @@ class AppleGraphicAnimationState {
         isArticulated = !isArticulated
     }
 
+    suspend fun triggerBellRing() {
+        if (isAnimating) return
+        isAnimating = true
+        coroutineScope {
+            launch {
+                // Bell swing sequence matching Apple HIG spring physics
+                tiltAngle.animateTo(22f, tween(160, easing = FastOutSlowInEasing))
+                tiltAngle.animateTo(-19f, tween(200, easing = FastOutSlowInEasing))
+                tiltAngle.animateTo(12f, tween(200, easing = FastOutSlowInEasing))
+                tiltAngle.animateTo(-7f, tween(180, easing = FastOutSlowInEasing))
+                tiltAngle.animateTo(3f, tween(140, easing = FastOutSlowInEasing))
+                tiltAngle.animateTo(0f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
+            }
+            launch {
+                articulationProgress.animateTo(1f, tween(180))
+                articulationProgress.animateTo(0f, tween(800))
+            }
+            launch {
+                squashX.animateTo(1.05f, tween(100))
+                squashX.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
+            }
+            launch {
+                squashY.animateTo(0.95f, tween(100))
+                squashY.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
+            }
+        }
+        isAnimating = false
+    }
+
     suspend fun triggerArticulateAnimation() {
         if (isAnimating) return
         isAnimating = true
@@ -3900,6 +3929,435 @@ fun AppleVideosIcon(
                 brush = AppleHigBluePalette.specularStrokeBrush(s),
                 style = Stroke(width = 3.4f * s)
             )
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 12. APPLE HIG 3D NOTIFICATION GRAPHIC (Cupertino Blue Dome + Acoustic Sonic Rings + Checkmark Jewel)
+// Exact match to e:\Design Assets\apple_hig_3d_notification_empty_state_studio.html
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+fun AppleNotificationGraphic(
+    modifier: Modifier = Modifier.size(165.dp),
+    state: AppleGraphicAnimationState = rememberAppleGraphicAnimationState(),
+    enableClickToAnimate: Boolean = true,
+    showSonicWaves: Boolean = true,
+    showCheckBadge: Boolean = true,
+    onClick: (() -> Unit)? = null
+) {
+    val scope = rememberCoroutineScope()
+
+    val clickModifier = if (enableClickToAnimate) {
+        Modifier.clickable(
+            interactionSource = remember { MutableInteractionSource() },
+            indication = null
+        ) {
+            scope.launch {
+                state.triggerBellRing()
+                onClick?.invoke()
+            }
+        }
+    } else Modifier
+
+    Canvas(modifier = modifier.then(clickModifier)) {
+        val scale = size.minDimension / 1000f
+        val progress = state.articulationProgress.value
+        val bellAngle = state.tiltAngle.value
+
+        withTransform({
+            scale(state.squashX.value, state.squashY.value, pivot = Offset(500f * scale, 876f * scale))
+        }) {
+            // 1. Ambient Floor Glow
+            drawOval(
+                brush = Brush.radialGradient(
+                    0.00f to Color(0x520055E0),
+                    0.55f to Color(0x1A007AFF),
+                    1.00f to Color(0x00007AFF),
+                    center = Offset(500f * scale, 876f * scale),
+                    radius = 225f * scale
+                ),
+                topLeft = Offset((500f - 225f) * scale, (876f - 18f) * scale),
+                size = Size(450f * scale, 36f * scale)
+            )
+
+            // 2. Concentric Acoustic Sonic Rings (Left & Right Empty State Aura)
+            if (showSonicWaves) {
+                val waveAlpha = 0.55f + 0.45f * progress
+                val waveScale = 1f + 0.06f * progress
+                val waveBrush = Brush.verticalGradient(
+                    0.00f to Color(0x3370D6FF),
+                    0.50f to Color(0xC01A96FF),
+                    1.00f to Color(0x330051D5),
+                    startY = 300f * scale,
+                    endY = 620f * scale
+                )
+
+                // Left Acoustic Waves
+                withTransform({
+                    scale(waveScale, waveScale, pivot = Offset(240f * scale, 460f * scale))
+                }) {
+                    val leftWave1 = Path().apply {
+                        moveTo(192f * scale, 365f * scale)
+                        cubicTo(148f * scale, 415f * scale, 148f * scale, 505f * scale, 192f * scale, 555f * scale)
+                    }
+                    drawPath(leftWave1, waveBrush, alpha = waveAlpha, style = Stroke(width = 14f * scale, cap = StrokeCap.Round))
+
+                    val leftWave2 = Path().apply {
+                        moveTo(138f * scale, 320f * scale)
+                        cubicTo(78f * scale, 395f * scale, 78f * scale, 525f * scale, 138f * scale, 600f * scale)
+                    }
+                    drawPath(leftWave2, waveBrush, alpha = waveAlpha * 0.65f, style = Stroke(width = 10f * scale, cap = StrokeCap.Round))
+                }
+
+                // Right Acoustic Waves
+                withTransform({
+                    scale(waveScale, waveScale, pivot = Offset(760f * scale, 460f * scale))
+                }) {
+                    val rightWave1 = Path().apply {
+                        moveTo(808f * scale, 365f * scale)
+                        cubicTo(852f * scale, 415f * scale, 852f * scale, 505f * scale, 808f * scale, 555f * scale)
+                    }
+                    drawPath(rightWave1, waveBrush, alpha = waveAlpha, style = Stroke(width = 14f * scale, cap = StrokeCap.Round))
+
+                    val rightWave2 = Path().apply {
+                        moveTo(862f * scale, 320f * scale)
+                        cubicTo(922f * scale, 395f * scale, 922f * scale, 525f * scale, 862f * scale, 600f * scale)
+                    }
+                    drawPath(rightWave2, waveBrush, alpha = waveAlpha * 0.65f, style = Stroke(width = 10f * scale, cap = StrokeCap.Round))
+                }
+            }
+
+            // 3. Swinging Bell Assembly (Pivots from top hinge at 500, 180)
+            withTransform({
+                rotate(degrees = bellAngle, pivot = Offset(500f * scale, 180f * scale))
+            }) {
+                // A. Sculpted Top Suspension Crown Loop
+                val crownLoopPath = Path().apply {
+                    moveTo(424f * scale, 242f * scale)
+                    lineTo(429f * scale, 162f * scale)
+                    cubicTo(432f * scale, 132f * scale, 454f * scale, 114f * scale, 486f * scale, 114f * scale)
+                    lineTo(514f * scale, 114f * scale)
+                    cubicTo(546f * scale, 114f * scale, 568f * scale, 132f * scale, 571f * scale, 162f * scale)
+                    lineTo(576f * scale, 242f * scale)
+                    lineTo(534f * scale, 242f * scale)
+                    lineTo(530f * scale, 174f * scale)
+                    cubicTo(529f * scale, 160f * scale, 520f * scale, 152f * scale, 506f * scale, 152f * scale)
+                    lineTo(494f * scale, 152f * scale)
+                    cubicTo(480f * scale, 152f * scale, 471f * scale, 160f * scale, 470f * scale, 174f * scale)
+                    lineTo(466f * scale, 242f * scale)
+                    close()
+                }
+
+                val crownBrush = Brush.linearGradient(
+                    0.00f to Color(0xFF94E5FF),
+                    0.28f to Color(0xFF3DB8FF),
+                    0.65f to Color(0xFF007AFF),
+                    1.00f to Color(0xFF0047BF),
+                    start = Offset(415f * scale, 108f * scale),
+                    end = Offset(585f * scale, 248f * scale)
+                )
+                drawPath(crownLoopPath, crownBrush)
+
+                // Inner arch shaded underside
+                val innerArchShade = Path().apply {
+                    moveTo(464f * scale, 242f * scale)
+                    lineTo(468f * scale, 172f * scale)
+                    cubicTo(470f * scale, 156f * scale, 480f * scale, 148f * scale, 494f * scale, 148f * scale)
+                    lineTo(506f * scale, 148f * scale)
+                    cubicTo(520f * scale, 148f * scale, 530f * scale, 156f * scale, 532f * scale, 172f * scale)
+                    lineTo(536f * scale, 242f * scale)
+                    lineTo(522f * scale, 242f * scale)
+                    lineTo(519f * scale, 176f * scale)
+                    cubicTo(518f * scale, 166f * scale, 512f * scale, 160f * scale, 502f * scale, 160f * scale)
+                    lineTo(498f * scale, 160f * scale)
+                    cubicTo(488f * scale, 160f * scale, 482f * scale, 166f * scale, 481f * scale, 176f * scale)
+                    lineTo(478f * scale, 242f * scale)
+                    close()
+                }
+                drawPath(innerArchShade, Color(0xFF002670))
+
+                // Top crown specular ridge
+                val crownRidge = Path().apply {
+                    moveTo(454f * scale, 128f * scale)
+                    cubicTo(478f * scale, 120f * scale, 522f * scale, 120f * scale, 546f * scale, 128f * scale)
+                }
+                drawPath(crownRidge, Color.White.copy(alpha = 0.85f), style = Stroke(width = 6.5f * scale, cap = StrokeCap.Round))
+
+                // B. Continuous-Curvature Bell Dome Body
+                val bellDomePath = Path().apply {
+                    moveTo(500f * scale, 222f * scale)
+                    cubicTo(608f * scale, 222f * scale, 682f * scale, 288f * scale, 698f * scale, 398f * scale)
+                    cubicTo(710f * scale, 482f * scale, 722f * scale, 566f * scale, 766f * scale, 648f * scale)
+                    lineTo(234f * scale, 648f * scale)
+                    cubicTo(278f * scale, 566f * scale, 290f * scale, 482f * scale, 302f * scale, 398f * scale)
+                    cubicTo(318f * scale, 288f * scale, 392f * scale, 222f * scale, 500f * scale, 222f * scale)
+                    close()
+                }
+
+                val domeBrush = Brush.linearGradient(
+                    0.00f to Color(0xFF4CC9FF),
+                    0.22f to Color(0xFF1A96FF),
+                    0.52f to Color(0xFF007AFF),
+                    0.78f to Color(0xFF0051D5),
+                    1.00f to Color(0xFF002E8A),
+                    start = Offset(234f * scale, 222f * scale),
+                    end = Offset(766f * scale, 648f * scale)
+                )
+
+                val sheenBrush = Brush.horizontalGradient(
+                    0.00f to Color(0x8C80DCFF),
+                    0.14f to Color(0x52FFFFFF),
+                    0.30f to Color(0x1438B6FF),
+                    0.55f to Color(0x2E0040B8),
+                    0.82f to Color(0x5C002270),
+                    0.93f to Color(0x6147B8FF),
+                    1.00f to Color(0xA699E5FF),
+                    startX = 234f * scale,
+                    endX = 766f * scale
+                )
+
+                drawPath(bellDomePath, domeBrush)
+                drawPath(bellDomePath, sheenBrush)
+
+                // Diagonal softbox gloss highlight on left dome curve
+                val glossStripe = Path().apply {
+                    moveTo(332f * scale, 245f * scale)
+                    cubicTo(365f * scale, 232f * scale, 405f * scale, 228f * scale, 430f * scale, 228f * scale)
+                    cubicTo(392f * scale, 340f * scale, 368f * scale, 485f * scale, 326f * scale, 642f * scale)
+                    lineTo(254f * scale, 642f * scale)
+                    cubicTo(294f * scale, 505f * scale, 306f * scale, 355f * scale, 332f * scale, 245f * scale)
+                    close()
+                }
+                drawPath(glossStripe, Color.White.copy(alpha = 0.24f))
+
+                // Dome Outer Specular Contour
+                val specularBrush = Brush.linearGradient(
+                    0.00f to Color(0xE6FFFFFF),
+                    0.35f to Color(0x8C80DCFF),
+                    0.70f to Color(0x1A0051D5),
+                    1.00f to Color(0xB366D4FF),
+                    start = Offset(234f * scale, 222f * scale),
+                    end = Offset(766f * scale, 648f * scale)
+                )
+                drawPath(bellDomePath, specularBrush, style = Stroke(width = 3f * scale))
+
+                // C. Three Precision-Milled Acoustic Sapphire Channels
+                val capsuleRecess = Brush.linearGradient(
+                    0.00f to Color(0xFF001B52),
+                    0.45f to Color(0xFF002D80),
+                    1.00f to Color(0xFF003DA6),
+                    start = Offset(350f * scale, 330f * scale),
+                    end = Offset(650f * scale, 590f * scale)
+                )
+                val capsuleBevel = Brush.linearGradient(
+                    0.00f to Color(0xCC001238),
+                    0.45f to Color(0x331A8CFF),
+                    0.85f to Color(0xD970D6FF),
+                    1.00f to Color(0xF2B8F0FF),
+                    start = Offset(350f * scale, 330f * scale),
+                    end = Offset(650f * scale, 590f * scale)
+                )
+
+                // Left Capsule (Tilted 7.5 deg)
+                withTransform({
+                    rotate(7.5f, pivot = Offset(384f * scale, 468f * scale))
+                }) {
+                    drawRoundRect(
+                        brush = capsuleRecess,
+                        topLeft = Offset(354f * scale, 348f * scale),
+                        size = Size(60f * scale, 240f * scale),
+                        cornerRadius = CornerRadius(30f * scale, 30f * scale)
+                    )
+                    drawRoundRect(
+                        brush = capsuleBevel,
+                        topLeft = Offset(354f * scale, 348f * scale),
+                        size = Size(60f * scale, 240f * scale),
+                        cornerRadius = CornerRadius(30f * scale, 30f * scale),
+                        style = Stroke(width = 3.5f * scale)
+                    )
+                }
+
+                // Center Capsule (Vertical)
+                drawRoundRect(
+                    brush = capsuleRecess,
+                    topLeft = Offset(470f * scale, 334f * scale),
+                    size = Size(60f * scale, 256f * scale),
+                    cornerRadius = CornerRadius(30f * scale, 30f * scale)
+                )
+                drawRoundRect(
+                    brush = capsuleBevel,
+                    topLeft = Offset(470f * scale, 334f * scale),
+                    size = Size(60f * scale, 256f * scale),
+                    cornerRadius = CornerRadius(30f * scale, 30f * scale),
+                    style = Stroke(width = 3.5f * scale)
+                )
+
+                // Right Capsule (Tilted -7.5 deg)
+                withTransform({
+                    rotate(-7.5f, pivot = Offset(616f * scale, 468f * scale))
+                }) {
+                    drawRoundRect(
+                        brush = capsuleRecess,
+                        topLeft = Offset(586f * scale, 348f * scale),
+                        size = Size(60f * scale, 240f * scale),
+                        cornerRadius = CornerRadius(30f * scale, 30f * scale)
+                    )
+                    drawRoundRect(
+                        brush = capsuleBevel,
+                        topLeft = Offset(586f * scale, 348f * scale),
+                        size = Size(60f * scale, 240f * scale),
+                        cornerRadius = CornerRadius(30f * scale, 30f * scale),
+                        style = Stroke(width = 3.5f * scale)
+                    )
+                }
+
+                // D. Underside Acoustic Cavity
+                drawOval(
+                    color = Color(0xFF001238),
+                    topLeft = Offset((500f - 284f) * scale, (722f - 30f) * scale),
+                    size = Size(568f * scale, 60f * scale)
+                )
+                drawOval(
+                    color = Color(0xFF0051D5),
+                    topLeft = Offset((500f - 284f) * scale, (722f - 30f) * scale),
+                    size = Size(568f * scale, 60f * scale),
+                    style = Stroke(width = 3.5f * scale)
+                )
+
+                // E. Swinging 3D Clapper Pendulum (Opposite phase swing)
+                val clapperAngle = -1.25f * bellAngle
+                withTransform({
+                    rotate(clapperAngle, pivot = Offset(500f * scale, 680f * scale))
+                }) {
+                    // Clapper Stem
+                    drawRoundRect(
+                        color = Color(0xFF002D80),
+                        topLeft = Offset(486f * scale, 680f * scale),
+                        size = Size(28f * scale, 48f * scale),
+                        cornerRadius = CornerRadius(14f * scale, 14f * scale)
+                    )
+                    // Clapper 3D Sphere Core
+                    val clapperSphereBrush = Brush.radialGradient(
+                        0.00f to Color(0xFFB8F0FF),
+                        0.22f to Color(0xFF4CC9FF),
+                        0.55f to Color(0xFF007AFF),
+                        0.84f to Color(0xFF003DA6),
+                        1.00f to Color(0xFF001B52),
+                        center = Offset((500f - 56f * 0.32f) * scale, (764f - 56f * 0.32f) * scale),
+                        radius = 56f * 1.4f * scale
+                    )
+                    drawCircle(clapperSphereBrush, radius = 56f * scale, center = Offset(500f * scale, 764f * scale))
+                    drawCircle(specularBrush, radius = 54.5f * scale, center = Offset(500f * scale, 764f * scale), style = Stroke(width = 2.5f * scale))
+
+                    // Specular hotspot
+                    drawOval(
+                        color = Color.White.copy(alpha = 0.88f),
+                        topLeft = Offset((480f - 20f) * scale, (744f - 11f) * scale),
+                        size = Size(40f * scale, 22f * scale)
+                    )
+                }
+
+                // F. Cantilevered Flared Bell Rim Lip
+                val bellRimPath = Path().apply {
+                    moveTo(222f * scale, 632f * scale)
+                    cubicTo(340f * scale, 624f * scale, 660f * scale, 624f * scale, 778f * scale, 632f * scale)
+                    cubicTo(812f * scale, 635f * scale, 832f * scale, 654f * scale, 834f * scale, 678f * scale)
+                    cubicTo(836f * scale, 704f * scale, 814f * scale, 724f * scale, 768f * scale, 728f * scale)
+                    cubicTo(640f * scale, 738f * scale, 360f * scale, 738f * scale, 232f * scale, 728f * scale)
+                    cubicTo(186f * scale, 724f * scale, 164f * scale, 704f * scale, 166f * scale, 678f * scale)
+                    cubicTo(168f * scale, 654f * scale, 188f * scale, 635f * scale, 222f * scale, 632f * scale)
+                    close()
+                }
+
+                val rimFrontBrush = Brush.horizontalGradient(
+                    0.00f to Color(0xFF66D4FF),
+                    0.14f to Color(0xFFB8EEFF),
+                    0.30f to Color(0xFF29A3FF),
+                    0.55f to Color(0xFF0073F0),
+                    0.82f to Color(0xFF004BC7),
+                    0.93f to Color(0xFF38B2FF),
+                    1.00f to Color(0xFF75DAFF),
+                    startX = 160f * scale,
+                    endX = 840f * scale
+                )
+
+                drawPath(bellRimPath, rimFrontBrush)
+
+                // Top rim crown surface
+                val rimTopSurface = Path().apply {
+                    moveTo(168f * scale, 666f * scale)
+                    cubicTo(180f * scale, 642f * scale, 202f * scale, 632f * scale, 240f * scale, 629f * scale)
+                    cubicTo(355f * scale, 621f * scale, 645f * scale, 621f * scale, 760f * scale, 629f * scale)
+                    cubicTo(798f * scale, 632f * scale, 820f * scale, 642f * scale, 832f * scale, 666f * scale)
+                    cubicTo(740f * scale, 678f * scale, 620f * scale, 682f * scale, 500f * scale, 682f * scale)
+                    cubicTo(380f * scale, 682f * scale, 260f * scale, 678f * scale, 168f * scale, 666f * scale)
+                    close()
+                }
+                val rimTopBrush = Brush.linearGradient(
+                    0.00f to Color(0xFF8AE2FF),
+                    0.35f to Color(0xFF38B2FF),
+                    0.72f to Color(0xFF007AFF),
+                    1.00f to Color(0xFF0051D5),
+                    start = Offset(150f * scale, 620f * scale),
+                    end = Offset(850f * scale, 682f * scale)
+                )
+                drawPath(rimTopSurface, rimTopBrush)
+
+                // Specular ridge along rim bevel
+                val rimRidge = Path().apply {
+                    moveTo(186f * scale, 664f * scale)
+                    cubicTo(310f * scale, 678f * scale, 690f * scale, 678f * scale, 814f * scale, 664f * scale)
+                }
+                drawPath(rimRidge, Color.White.copy(alpha = 0.85f), style = Stroke(width = 6f * scale, cap = StrokeCap.Round))
+                drawPath(bellRimPath, specularBrush, style = Stroke(width = 2.8f * scale))
+
+                // G. Floating 3D "All Caught Up" Checkmark Jewel Badge
+                if (showCheckBadge) {
+                    val badgeScale = 1f + 0.15f * progress
+                    withTransform({
+                        scale(badgeScale, badgeScale, pivot = Offset(710f * scale, 638f * scale))
+                    }) {
+                        // Outer jewel ring
+                        val checkBadgeBrush = Brush.linearGradient(
+                            0.00f to Color(0xFF70E1FF),
+                            0.35f to Color(0xFF1AA3FF),
+                            0.75f to Color(0xFF0066E6),
+                            1.00f to Color(0xFF00378F),
+                            start = Offset(632f * scale, 560f * scale),
+                            end = Offset(788f * scale, 716f * scale)
+                        )
+                        drawCircle(checkBadgeBrush, radius = 78f * scale, center = Offset(710f * scale, 638f * scale))
+
+                        // Recessed sapphire well
+                        drawCircle(capsuleRecess, radius = 62f * scale, center = Offset(710f * scale, 638f * scale))
+                        drawCircle(capsuleBevel, radius = 62f * scale, center = Offset(710f * scale, 638f * scale), style = Stroke(width = 3f * scale))
+
+                        // Specular highlight on lens
+                        drawOval(
+                            color = Color.White.copy(alpha = 0.38f),
+                            topLeft = Offset((688f - 36f) * scale, (602f - 16f) * scale),
+                            size = Size(72f * scale, 32f * scale)
+                        )
+
+                        // 3D White Specular Checkmark
+                        val checkPath = Path().apply {
+                            moveTo(682f * scale, 640f * scale)
+                            lineTo(702f * scale, 660f * scale)
+                            lineTo(742f * scale, 616f * scale)
+                        }
+                        drawPath(
+                            checkPath,
+                            Color.White,
+                            style = Stroke(width = 14f * scale, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                        )
+
+                        // Outer specular rim
+                        drawCircle(specularBrush, radius = 78f * scale, center = Offset(710f * scale, 638f * scale), style = Stroke(width = 3f * scale))
+                    }
+                }
+            }
         }
     }
 }

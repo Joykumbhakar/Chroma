@@ -51,6 +51,8 @@ import com.chroma.studio.ui.components.ChromaScreenHeader
 import com.chroma.studio.ui.components.DefaultGenderAvatar
 import com.chroma.studio.ui.components.GlassIconButton
 import com.chroma.studio.ui.components.IosAlertDialog
+import com.chroma.studio.ui.components.AppleNotificationGraphic
+import com.chroma.studio.ui.components.rememberAppleGraphicAnimationState
 import com.chroma.studio.ui.components.VerifiedBadge
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.composables.icons.lucide.*
@@ -658,7 +660,8 @@ private fun FeedSkeletonList(rowCount: Int = 6) {
 }
 
 // ============================================================================
-// CLEAN EMPTY STATE
+// CLEAN EMPTY STATE (Exact Apple HIG 3D Notification Empty State Studio Design)
+// Matches e:\Design Assets\apple_hig_3d_notification_empty_state_studio.html
 // ============================================================================
 
 @Composable
@@ -667,25 +670,71 @@ private fun NotificationEmptyState(
     onRefresh: () -> Unit
 ) {
     val colors = LocalOscellionColors.current
+    val graphicState = rememberAppleGraphicAnimationState()
+    val coroutineScope = rememberCoroutineScope()
+
+    // Smooth pulsing effect for "INBOX ZERO" status dot
+    val infiniteTransition = rememberInfiniteTransition(label = "inboxZeroPulse")
+    val dotAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "dotAlpha"
+    )
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 32.dp, vertical = 60.dp),
+            .padding(horizontal = 32.dp, vertical = 40.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Icon(
-            imageVector = Lucide.BellOff,
-            contentDescription = null,
-            tint = colors.textMuted.copy(alpha = 0.6f),
-            modifier = Modifier.size(52.dp)
+        // 1. Interactive 3D Cupertino Blue Dome Bell with Acoustic Rings, Clapper & Checkmark Jewel
+        AppleNotificationGraphic(
+            modifier = Modifier.size(175.dp),
+            state = graphicState,
+            enableClickToAnimate = true,
+            showSonicWaves = true,
+            showCheckBadge = true,
+            onClick = null
         )
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(8.dp))
 
+        // 2. Apple HIG "INBOX ZERO" Pill Status Badge
+        Row(
+            modifier = Modifier
+                .clip(CircleShape)
+                .background(Color(0xFF007AFF).copy(alpha = 0.10f))
+                .border(1.dp, Color(0xFF007AFF).copy(alpha = 0.22f), CircleShape)
+                .padding(horizontal = 12.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF007AFF).copy(alpha = dotAlpha))
+            )
+            Text(
+                text = "INBOX ZERO",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.8.sp,
+                color = Color(0xFF007AFF)
+            )
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        // 3. Apple Typography Headline
         Text(
-            text = if (filterLabel == "All") "All Caught Up" else "No $filterLabel Yet",
-            fontSize = 17.sp,
+            text = if (filterLabel == "All") "No Notifications Yet" else "No $filterLabel Yet",
+            fontSize = 21.sp,
             fontWeight = FontWeight.Bold,
             color = colors.textMain,
             textAlign = TextAlign.Center
@@ -693,9 +742,10 @@ private fun NotificationEmptyState(
 
         Spacer(Modifier.height(6.dp))
 
+        // 4. Apple Subtitle Copy
         Text(
             text = if (filterLabel == "All") {
-                "When people like, comment, follow, or message you, your notifications will appear right here."
+                "You’re all caught up. When people like, comment, mention, or message you, your notifications will appear right here."
             } else {
                 "No notifications matching the \"$filterLabel\" category at the moment."
             },
@@ -703,18 +753,31 @@ private fun NotificationEmptyState(
             fontWeight = FontWeight.Normal,
             color = colors.textMuted,
             textAlign = TextAlign.Center,
-            lineHeight = 19.sp
+            lineHeight = 19.sp,
+            modifier = Modifier.fillMaxWidth(0.86f)
         )
 
         Spacer(Modifier.height(20.dp))
 
+        // 5. Clean Action Button with Rounded Corners (RoundedCornerShape(12.dp))
         Box(
             modifier = Modifier
-                .clip(RoundedCornerShape(10.dp))
-                .background(colors.glassBg)
-                .border(1.dp, colors.glassBorder, RoundedCornerShape(10.dp))
-                .clickable { onRefresh() }
-                .padding(horizontal = 16.dp, vertical = 9.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            Color(0xFF1A8CFF),
+                            Color(0xFF0062CC)
+                        )
+                    )
+                )
+                .clickable {
+                    coroutineScope.launch {
+                        graphicState.triggerBellRing()
+                    }
+                    onRefresh()
+                }
+                .padding(horizontal = 18.dp, vertical = 10.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -723,14 +786,14 @@ private fun NotificationEmptyState(
                 Icon(
                     imageVector = Lucide.RefreshCw,
                     contentDescription = null,
-                    tint = colors.primary,
+                    tint = Color.White,
                     modifier = Modifier.size(14.dp)
                 )
                 Text(
                     text = "Refresh Activity",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = colors.primary
+                    color = Color.White
                 )
             }
         }
