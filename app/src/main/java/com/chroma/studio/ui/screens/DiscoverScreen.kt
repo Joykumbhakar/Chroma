@@ -57,6 +57,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Modifier
@@ -260,6 +261,55 @@ fun DiscoverScreen(
     var showCreateMenu by remember { mutableStateOf(false) }
     var hasUnreadNotifications by remember { mutableStateOf(true) }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+
+    // Global feed audio mute state (synced across all feed videos)
+    var isFeedMuted by rememberSaveable { mutableStateOf(true) }
+
+    // Instagram-style active viewport video detection:
+    // Only ONE video closest to the center with >40% visibility is granted the playback token.
+    val activePlayingPostId by remember {
+        derivedStateOf {
+            val layoutInfo = listState.layoutInfo
+            val visibleItems = layoutInfo.visibleItemsInfo
+            if (visibleItems.isEmpty()) return@derivedStateOf null
+
+            val viewportStart = layoutInfo.viewportStartOffset
+            val viewportEnd = layoutInfo.viewportEndOffset
+            val viewportHeight = viewportEnd - viewportStart
+            val viewportCenter = viewportStart + viewportHeight / 2
+
+            var bestPostId: String? = null
+            var minCenterDistance = Int.MAX_VALUE
+
+            for (item in visibleItems) {
+                val key = item.key as? String ?: continue
+                if (key == "stories" || key == "community_upload_progress_banner" || key == "active_feed_filter_badge" || key.startsWith("category_")) {
+                    continue
+                }
+
+                val itemTop = item.offset
+                val itemBottom = item.offset + item.size
+                val visibleTop = maxOf(itemTop, viewportStart)
+                val visibleBottom = minOf(itemBottom, viewportEnd)
+                val visibleHeight = (visibleBottom - visibleTop).coerceAtLeast(0)
+
+                val visibleFraction = if (item.size > 0) visibleHeight.toFloat() / item.size.toFloat() else 0f
+                if (visibleFraction < 0.35f && visibleHeight < 300) {
+                    continue
+                }
+
+                val itemCenter = itemTop + item.size / 2
+                val distance = kotlin.math.abs(itemCenter - viewportCenter)
+
+                if (distance < minCenterDistance) {
+                    minCenterDistance = distance
+                    bestPostId = key
+                }
+            }
+
+            bestPostId
+        }
+    }
 
     fun showToast(msg: String) {
         coroutineScope.launch {
@@ -613,6 +663,9 @@ fun DiscoverScreen(
                                 isLiked = likedWorkIds.contains(work.id),
                                 isSaved = savedWorkIds.contains(work.id),
                                 isFollowingCreator = isFollowing,
+                                isInViewport = (activePlayingPostId == work.id),
+                                isFeedMuted = isFeedMuted,
+                                onToggleFeedMute = { isFeedMuted = !isFeedMuted },
                                 onToggleFollowCreator = {
                                     val uid = FirebaseAuth.getInstance().currentUser?.uid
                                     if (uid.isNullOrBlank()) {
@@ -3142,6 +3195,9 @@ fun FeedPostCard(
     isLiked: Boolean,
     isSaved: Boolean = false,
     isFollowingCreator: Boolean = false,
+    isInViewport: Boolean = false,
+    isFeedMuted: Boolean = true,
+    onToggleFeedMute: (() -> Unit)? = null,
     onToggleFollowCreator: (() -> Unit)? = null,
     onShowGuidelines: (() -> Unit)? = null,
     onShowToast: ((String) -> Unit)? = null,
@@ -3234,6 +3290,9 @@ fun FeedPostCard(
                     repository = repository,
                     colors = colors,
                     doubleTapLikeState = doubleTapLikeState,
+                    isInViewport = isInViewport,
+                    isFeedMuted = isFeedMuted,
+                    onToggleFeedMute = onToggleFeedMute,
                     onDoubleTap = { offset ->
                         val uid = FirebaseAuth.getInstance().currentUser?.uid
                         if (uid.isNullOrBlank()) {
@@ -3263,6 +3322,9 @@ fun FeedPostCard(
                 repository = repository,
                 colors = colors,
                 doubleTapLikeState = doubleTapLikeState,
+                isInViewport = isInViewport,
+                isFeedMuted = isFeedMuted,
+                onToggleFeedMute = onToggleFeedMute,
                 onDoubleTap = { offset ->
                     val uid = FirebaseAuth.getInstance().currentUser?.uid
                     if (uid.isNullOrBlank()) {

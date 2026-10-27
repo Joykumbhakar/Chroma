@@ -336,7 +336,10 @@ fun PostVideoSlideView(
     thumbnailUrl: String?,
     modifier: Modifier = Modifier,
     onDoubleTap: ((Offset) -> Unit)? = null,
-    isActivePage: Boolean = true
+    isActivePage: Boolean = true,
+    isInViewport: Boolean = false,
+    isMuted: Boolean = true,
+    onToggleMute: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -345,7 +348,9 @@ fun PostVideoSlideView(
     var isPlaying by remember { mutableStateOf(false) }
     var isPlayerReady by remember { mutableStateOf(false) }
     var isBuffering by remember { mutableStateOf(false) }
-    var isMuted by remember { mutableStateOf(true) } // Feed videos default to muted
+    var localMuted by remember { mutableStateOf(isMuted) }
+    val effectiveMuted = if (onToggleMute != null) isMuted else localMuted
+    var userPaused by remember(videoUrl) { mutableStateOf(false) }
     var currentProgress by remember { mutableFloatStateOf(0f) }
 
     val player = remember(videoUrl) {
@@ -375,16 +380,35 @@ fun PostVideoSlideView(
         }
     }
 
-    // Pause playback when swiped away in pager
-    LaunchedEffect(isActivePage) {
-        if (!isActivePage && isPlaying) {
+    // Reset manual user pause when post leaves viewport
+    LaunchedEffect(isInViewport) {
+        if (!isInViewport) {
+            userPaused = false
+        }
+    }
+
+    // Viewport auto-play / pause controller
+    LaunchedEffect(isInViewport, isActivePage, userPaused) {
+        if (isInViewport && isActivePage && !userPaused) {
+            // Settling debounce: 150ms delay avoids hardware decoder thrashing during rapid fling
+            kotlinx.coroutines.delay(150L)
+            if (isInViewport && isActivePage && !userPaused) {
+                if (player.playbackState == androidx.media3.common.Player.STATE_ENDED) {
+                    player.seekTo(0L)
+                }
+                player.playWhenReady = true
+                player.play()
+            }
+        } else {
+            // Immediate halt when leaving viewport, changing page, or user-paused
             player.pause()
+            player.playWhenReady = false
         }
     }
 
     // Sync volume with mute state
-    LaunchedEffect(isMuted) {
-        player.volume = if (isMuted) 0f else 1f
+    LaunchedEffect(effectiveMuted) {
+        player.volume = if (effectiveMuted) 0f else 1f
     }
 
     // Smooth progress updates while playing
@@ -403,11 +427,13 @@ fun PostVideoSlideView(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_PAUSE || event == Lifecycle.Event.ON_STOP) {
                 player.pause()
+                player.playWhenReady = false
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
+            player.stop()
             player.release()
         }
     }
@@ -422,11 +448,15 @@ fun PostVideoSlideView(
                     },
                     onTap = {
                         if (isPlaying) {
+                            userPaused = true
                             player.pause()
+                            player.playWhenReady = false
                         } else {
+                            userPaused = false
                             if (player.playbackState == androidx.media3.common.Player.STATE_ENDED) {
                                 player.seekTo(0L)
                             }
+                            player.playWhenReady = true
                             player.play()
                         }
                     }
@@ -495,13 +525,17 @@ fun PostVideoSlideView(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null
                 ) {
-                    isMuted = !isMuted
+                    if (onToggleMute != null) {
+                        onToggleMute()
+                    } else {
+                        localMuted = !localMuted
+                    }
                 },
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = if (isMuted) Lucide.VolumeX else Lucide.Volume2,
-                contentDescription = if (isMuted) "Unmute" else "Mute",
+                imageVector = if (effectiveMuted) Lucide.VolumeX else Lucide.Volume2,
+                contentDescription = if (effectiveMuted) "Unmute" else "Mute",
                 tint = Color.White,
                 modifier = Modifier.size(16.dp)
             )
@@ -540,6 +574,9 @@ fun PostMediaCarousel(
     colors: OscellionPalette = LocalOscellionColors.current,
     doubleTapLikeState: DoubleTapLikeState,
     onDoubleTap: (Offset) -> Unit,
+    isInViewport: Boolean = false,
+    isFeedMuted: Boolean = true,
+    onToggleFeedMute: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -597,6 +634,9 @@ fun PostMediaCarousel(
                                 thumbnailUrl = slide.thumbnailUrl,
                                 onDoubleTap = onDoubleTap,
                                 isActivePage = isActive,
+                                isInViewport = isInViewport && isActive,
+                                isMuted = isFeedMuted,
+                                onToggleMute = onToggleFeedMute,
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
@@ -656,6 +696,9 @@ fun PostMediaCarousel(
                             thumbnailUrl = singleSlide.thumbnailUrl,
                             onDoubleTap = onDoubleTap,
                             isActivePage = true,
+                            isInViewport = isInViewport,
+                            isMuted = isFeedMuted,
+                            onToggleMute = onToggleFeedMute,
                             modifier = Modifier.fillMaxSize()
                         )
                     }
