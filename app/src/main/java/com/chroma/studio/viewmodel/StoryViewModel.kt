@@ -112,7 +112,9 @@ class StoryViewModel : ViewModel() {
     fun loadMyStories() {
         viewModelScope.launch {
             try {
-                _myStories.value = repository.fetchMyStories()
+                val serverStories = repository.fetchMyStories()
+                val pendingStories = _myStories.value.filter { it.id.startsWith("temp_") }
+                _myStories.value = (pendingStories + serverStories).distinctBy { it.id }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
             }
@@ -120,26 +122,40 @@ class StoryViewModel : ViewModel() {
     }
 
     fun uploadStory(context: Context, uri: Uri) {
+        val currentUid = auth.currentUser?.uid ?: ""
+        val tempId = "temp_story_${System.currentTimeMillis()}"
+        val optimisticStory = Story(
+            id = tempId,
+            userId = currentUid,
+            mediaUrl = uri.toString(),
+            timestamp = System.currentTimeMillis()
+        )
+        _myStories.value = listOf(optimisticStory) + _myStories.value.filter { it.id != tempId }
+
         viewModelScope.launch {
             _isUploading.value = true
             _uploadError.value = null
             try {
                 val bytes = com.chroma.studio.utils.ImageUtils.compressChatImage(context, uri)
                 if (bytes == null || bytes.isEmpty()) {
+                    _myStories.value = _myStories.value.filter { it.id != tempId }
                     _uploadError.value = "Failed to process image"
                     return@launch
                 }
 
                 val url = CloudinaryClient.uploadImage(bytes, folder = "stories")
                 if (url == null) {
+                    _myStories.value = _myStories.value.filter { it.id != tempId }
                     _uploadError.value = "Upload failed. Please try again."
                     return@launch
                 }
                 repository.publishStory(url)
+                _myStories.value = _myStories.value.filter { it.id != tempId }
                 loadMyStories()
                 loadStories()
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
+                _myStories.value = _myStories.value.filter { it.id != tempId }
                 _uploadError.value = "Error: ${e.message}"
                 Log.e("StoryViewModel", "uploadStory error", e)
             } finally {
@@ -155,15 +171,32 @@ class StoryViewModel : ViewModel() {
         audienceType: String,
         customAudienceIds: List<String>
     ) {
+        val currentUid = auth.currentUser?.uid ?: ""
+        val tempId = "temp_story_${System.currentTimeMillis()}"
+        val optimisticStory = Story(
+            id = tempId,
+            userId = currentUid,
+            mediaUrl = "",
+            textContent = textContent,
+            textFormat = textFormat,
+            backgroundColor = backgroundColor,
+            audienceType = audienceType,
+            customAudienceIds = customAudienceIds,
+            timestamp = System.currentTimeMillis()
+        )
+        _myStories.value = listOf(optimisticStory) + _myStories.value.filter { it.id != tempId }
+
         viewModelScope.launch {
             _isUploading.value = true
             _uploadError.value = null
             try {
                 repository.publishTextStory(textContent, textFormat, backgroundColor, audienceType, customAudienceIds)
+                _myStories.value = _myStories.value.filter { it.id != tempId }
                 loadMyStories()
                 loadStories()
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
+                _myStories.value = _myStories.value.filter { it.id != tempId }
                 _uploadError.value = "Error: ${e.message}"
                 Log.e("StoryViewModel", "publishTextStory error", e)
             } finally {

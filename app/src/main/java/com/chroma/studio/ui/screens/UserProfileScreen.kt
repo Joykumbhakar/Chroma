@@ -791,7 +791,6 @@ fun UserProfileScreen(
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .padding(top = statusBarTop + 8.dp, start = 8.dp)
-                        .background(Color.Black.copy(alpha = 0.5f), CircleShape)
                 ) {
                     Icon(Lucide.ArrowLeft, contentDescription = "Close", tint = Color.White)
                 }
@@ -853,7 +852,6 @@ fun UserProfileScreen(
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(top = statusBarTop + 8.dp, start = 8.dp)
-                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
             ) {
                 Icon(Lucide.ArrowLeft, contentDescription = "Close", tint = Color.White)
             }
@@ -1181,17 +1179,15 @@ fun UserProfileScreen(
                                             contentScale = ContentScale.Crop
                                         )
                                         if (isSelected) {
-                                            Box(
+                                            Icon(
+                                                Lucide.Check,
+                                                contentDescription = null,
+                                                tint = Color(0xFF007AFF),
                                                 modifier = Modifier
+                                                    .align(Alignment.TopEnd)
                                                     .padding(6.dp)
-                                                    .size(20.dp)
-                                                    .clip(CircleShape)
-                                                    .background(Color(0xFF007AFF))
-                                                    .align(Alignment.TopEnd),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Icon(Lucide.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
-                                            }
+                                                    .size(18.dp)
+                                            )
                                         }
                                     }
                                     Box(
@@ -1270,17 +1266,15 @@ fun UserProfileScreen(
                                                 contentScale = ContentScale.Crop
                                             )
                                             if (isSelected) {
-                                                Box(
+                                                Icon(
+                                                    Lucide.Check,
+                                                    contentDescription = null,
+                                                    tint = Color(0xFF007AFF),
                                                     modifier = Modifier
+                                                        .align(Alignment.TopEnd)
                                                         .padding(6.dp)
-                                                        .size(20.dp)
-                                                        .clip(CircleShape)
-                                                        .background(Color(0xFF007AFF))
-                                                        .align(Alignment.TopEnd),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Icon(Lucide.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
-                                                }
+                                                        .size(18.dp)
+                                                )
                                             }
                                         }
                                         Box(

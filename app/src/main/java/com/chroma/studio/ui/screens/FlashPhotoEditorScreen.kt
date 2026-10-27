@@ -8,7 +8,7 @@ import android.graphics.DashPathEffect
 import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
-import android.graphics.pdf.PdfDocument
+// Social Media Photo Studio Editor
 import android.net.Uri
 import android.os.Build
 import android.widget.Toast
@@ -86,14 +86,17 @@ enum class PhotoAspectRatio(val label: String, val ratio: Float?, val subtitle: 
     PORTRAIT_3_4("3:4", 3f / 4f, "Classic Social Post")
 }
 
+enum class PhotoDrawerLevel {
+    COLLAPSED,
+    MID,
+    FULL
+}
+
 enum class StudioEditorCategory(val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    CROP("Crop & Ratio", Lucide.Crop),
     LOOKS("Filters", Lucide.Sparkles),
-    ADJUST("Grading", Lucide.SlidersHorizontal),
-    COLOR("Tone & Ink", Lucide.Palette),
-    TYPE("Text", Lucide.Type),
-    BORDER("Border", Lucide.Layers),
-    PRINT("Print & Export", Lucide.Printer)
+    ADJUST("Adjust", Lucide.SlidersHorizontal),
+    CROP("Crop", Lucide.Crop),
+    TYPE("Text", Lucide.Type)
 }
 
 enum class StudioBackdropType {
@@ -103,7 +106,7 @@ enum class StudioBackdropType {
     SOLID_BLACK,
     STUDIO_GRADIENT_BLUE,
     STUDIO_GRADIENT_DARK,
-    CYBER_NEON,
+    STUDIO_WARM,
     BLUR_ORIGINAL
 }
 
@@ -139,10 +142,10 @@ enum class StudioFilterPreset(
         0f, 0f, 0.82f, 0f, -22f,
         0f, 0f, 0f, 1f, 0f
     ))),
-    COOL_CYBER("Cool Cyber", "Futuristic Neon Blue", ColorMatrix(floatArrayOf(
-        0.88f, 0f, 0f, 0f, -12f,
-        0f, 1.02f, 0f, 0f, 5f,
-        0f, 0f, 1.25f, 0f, 24f,
+    COOL_SLATE("Cool Slate", "Clean Nordic Cool Tone", ColorMatrix(floatArrayOf(
+        0.92f, 0f, 0f, 0f, -6f,
+        0f, 1.01f, 0f, 0f, 2f,
+        0f, 0f, 1.14f, 0f, 14f,
         0f, 0f, 0f, 1f, 0f
     ))),
     SOFT_FADE("Soft Fade", "Matte Lifted Film", ColorMatrix(floatArrayOf(
@@ -334,6 +337,7 @@ fun FlashPhotoEditorScreen(
     initialSlideIndex: Int = 0,
     nextButtonLabel: String = "Next",
     onNext: (filterName: String, thumbnailBitmap: Bitmap?, durationPerSlideMs: Long) -> Unit,
+    onExportUris: (List<Uri>) -> Unit = {},
     onSaveDraft: (filterName: String) -> Unit = {},
     onBack: () -> Unit
 ) {
@@ -354,7 +358,7 @@ fun FlashPhotoEditorScreen(
     val redoStack = remember { mutableStateListOf<StudioPhotoSnapshot>() }
 
     // Active Category Dock
-    var activeCategory by remember { mutableStateOf(StudioEditorCategory.CROP) }
+    var activeCategory by remember { mutableStateOf(StudioEditorCategory.LOOKS) }
     var isExporting by remember { mutableStateOf(false) }
     var isComparingOriginal by remember { mutableStateOf(false) }
 
@@ -368,8 +372,11 @@ fun FlashPhotoEditorScreen(
     var flipV by remember { mutableStateOf(false) }
     var selectedAspectRatio by remember { mutableStateOf(PhotoAspectRatio.FREE) }
     var showRuleOfThirds by remember { mutableStateOf(false) }
-    var showFaceGuide by remember { mutableStateOf(false) }
     var showGoldenRatio by remember { mutableStateOf(false) }
+
+    // Bottom Sheet Drawer State
+    var drawerLevel by remember { mutableStateOf(PhotoDrawerLevel.MID) }
+    var dragAccum by remember { mutableFloatStateOf(0f) }
 
     // Filter & Grading State
     var selectedFilter by remember { mutableStateOf(StudioFilterPreset.ORIGINAL) }
@@ -388,7 +395,7 @@ fun FlashPhotoEditorScreen(
     // Text Overlay State
     var overlayText by remember { mutableStateOf("") }
     var textColor by remember { mutableStateOf(Color.White) }
-    var textBgStyle by remember { mutableStateOf("pill") } // "none", "pill", "glass", "outline"
+    var textBgStyle by remember { mutableStateOf("solid") } // "none", "pill", "glass", "outline"
 
     // Frames & Studio Backdrop State
     var frameWidthPx by remember { mutableFloatStateOf(0f) }
@@ -585,9 +592,86 @@ fun FlashPhotoEditorScreen(
                 stampName = overlayText,
                 stampDate = "",
                 stampPosition = "bottom",
-                quality = exportQuality
+                quality = exportQuality,
+                textColor = textColor,
+                textBgStyle = textBgStyle,
+                zoomScale = zoomScale,
+                panOffsetX = panOffsetX,
+                panOffsetY = panOffsetY
             )
+
+            // Render all photos for multi-photo / slideshow export so all settings apply before cloud upload
+            val renderedUris = mutableListOf<Uri>()
+            if (photoUris.size > 1) {
+                for ((idx, pUri) in photoUris.withIndex()) {
+                    if (idx == previewIndex && renderedBitmap != null) {
+                        try {
+                            val file = File(context.cacheDir, "flash_slide_${System.currentTimeMillis()}_$idx.jpg")
+                            withContext(Dispatchers.IO) {
+                                FileOutputStream(file).use { out ->
+                                    renderedBitmap.compress(Bitmap.CompressFormat.JPEG, exportQuality.coerceIn(80, 100), out)
+                                }
+                            }
+                            renderedUris.add(Uri.fromFile(file))
+                        } catch (_: Throwable) {
+                            renderedUris.add(pUri)
+                        }
+                    } else {
+                        val slideBmp = renderStudioPhotoBitmap(
+                            context = context,
+                            uri = pUri,
+                            colorMatrix = combinedMatrix,
+                            totalRotation = rotation90 + fineRotation,
+                            flipX = flipH,
+                            flipY = flipV,
+                            aspectRatio = selectedAspectRatio,
+                            borderWidthPx = frameWidthPx,
+                            borderColor = frameColor,
+                            backdropType = backdropType,
+                            blur = blur,
+                            hasStamp = overlayText.isNotBlank(),
+                            stampName = overlayText,
+                            stampDate = "",
+                            stampPosition = "bottom",
+                            quality = exportQuality,
+                            textColor = textColor,
+                            textBgStyle = textBgStyle
+                        )
+                        if (slideBmp != null) {
+                            try {
+                                val file = File(context.cacheDir, "flash_slide_${System.currentTimeMillis()}_$idx.jpg")
+                                withContext(Dispatchers.IO) {
+                                    FileOutputStream(file).use { out ->
+                                        slideBmp.compress(Bitmap.CompressFormat.JPEG, exportQuality.coerceIn(80, 100), out)
+                                    }
+                                }
+                                renderedUris.add(Uri.fromFile(file))
+                            } catch (_: Throwable) {
+                                renderedUris.add(pUri)
+                            } finally {
+                                if (!slideBmp.isRecycled) slideBmp.recycle()
+                            }
+                        } else {
+                            renderedUris.add(pUri)
+                        }
+                    }
+                }
+            } else if (renderedBitmap != null) {
+                try {
+                    val file = File(context.cacheDir, "flash_single_${System.currentTimeMillis()}.jpg")
+                    withContext(Dispatchers.IO) {
+                        FileOutputStream(file).use { out ->
+                            renderedBitmap.compress(Bitmap.CompressFormat.JPEG, exportQuality.coerceIn(80, 100), out)
+                        }
+                    }
+                    renderedUris.add(Uri.fromFile(file))
+                } catch (_: Throwable) {
+                    renderedUris.add(uri)
+                }
+            }
+
             isExporting = false
+            onExportUris(renderedUris)
             onNext(selectedFilter.displayName, renderedBitmap, durationPerSlideMs)
         }
     }
@@ -605,52 +689,78 @@ fun FlashPhotoEditorScreen(
                 .fillMaxSize()
                 .navigationBarsPadding()
         ) {
-            // ── 1. STUDIO HEADER ─────────────────────────────────────────────
+            // ── 1. STUDIO HEADER (Simple & Clean) ───────────────────────────
             ChromaScreenHeader(
-                title = "Photo Studio",
+                title = "Edit Photo",
                 badgeText = if (isSlideshow) "${previewIndex + 1}/${photoUris.size}" else null,
                 badgeColor = colors.primary,
                 showBackButton = true,
+                circularBackButton = false,
                 onBack = onBack,
                 actions = {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        // Undo
-                        GlassIconButton(
-                            onClick = { handleUndo() },
-                            enabled = undoStack.isNotEmpty(),
-                            modifier = Modifier.size(36.dp)
+                        // Undo Action
+                        if (undoStack.isNotEmpty()) {
+                            IconButton(
+                                onClick = { handleUndo() },
+                                modifier = Modifier.size(36.dp).minimumInteractiveComponentSize()
+                            ) {
+                                Icon(
+                                    Lucide.Undo2,
+                                    contentDescription = "Undo Action",
+                                    tint = colors.textMain,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+
+                        // Compare with Original Toggle
+                        IconButton(
+                            onClick = {
+                                isComparingOriginal = !isComparingOriginal
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            },
+                            modifier = Modifier.size(36.dp).minimumInteractiveComponentSize()
                         ) {
                             Icon(
-                                Lucide.Undo2,
-                                contentDescription = "Undo Action",
-                                tint = if (undoStack.isNotEmpty()) colors.textMain else colors.textMuted.copy(alpha = 0.35f),
-                                modifier = Modifier.size(17.dp)
+                                Lucide.Eye,
+                                contentDescription = "Compare with Original",
+                                tint = if (isComparingOriginal) colors.primary else colors.textMuted,
+                                modifier = Modifier.size(18.dp)
                             )
                         }
 
-                        // Redo
-                        GlassIconButton(
-                            onClick = { handleRedo() },
-                            enabled = redoStack.isNotEmpty(),
-                            modifier = Modifier.size(36.dp)
+                        // Reset Edits
+                        IconButton(
+                            onClick = { resetAll() },
+                            modifier = Modifier.size(36.dp).minimumInteractiveComponentSize()
                         ) {
                             Icon(
-                                Lucide.Redo2,
-                                contentDescription = "Redo Action",
-                                tint = if (redoStack.isNotEmpty()) colors.textMain else colors.textMuted.copy(alpha = 0.35f),
-                                modifier = Modifier.size(17.dp)
+                                Lucide.RotateCcw,
+                                contentDescription = "Reset Workspace",
+                                tint = colors.textMuted,
+                                modifier = Modifier.size(16.dp)
                             )
                         }
 
-                        // Next / Apply Button
-                        PrimaryGradientButton(
+                        Spacer(modifier = Modifier.width(2.dp))
+
+                        // Next / Done Button
+                        Button(
                             onClick = { handleExportAndNext() },
                             enabled = !isExporting,
-                            height = 36.dp,
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = colors.primary,
+                                contentColor = Color.White,
+                                disabledContainerColor = colors.primary.copy(alpha = 0.5f)
+                            ),
+                            elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                            modifier = Modifier.height(34.dp)
                         ) {
                             if (isExporting) {
                                 CircularProgressIndicator(
@@ -663,14 +773,7 @@ fun FlashPhotoEditorScreen(
                                     nextButtonLabel,
                                     color = Color.White,
                                     fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Icon(
-                                    Lucide.ChevronRight,
-                                    contentDescription = "Proceed to Next Screen",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(14.dp)
+                                    fontWeight = FontWeight.SemiBold
                                 )
                             }
                         }
@@ -736,10 +839,10 @@ fun FlashPhotoEditorScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .padding(horizontal = 14.dp, vertical = 4.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(if (colors.isDark) colors.glassBg else colors.gridLine.copy(alpha = 0.35f))
-                    .border(1.dp, colors.glassBorder, RoundedCornerShape(16.dp)),
+                    .padding(horizontal = 12.dp, vertical = 4.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (colors.isDark) Color(0xFF0C0E12) else Color(0xFFF1F3F5))
+                    .border(0.5.dp, colors.glassBorder.copy(alpha = 0.7f), RoundedCornerShape(12.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 val ratio = selectedAspectRatio.ratio
@@ -842,10 +945,9 @@ fun FlashPhotoEditorScreen(
                         StudioRuleOfThirdsOverlay(modifier = Modifier.fillMaxSize())
                     }
 
-                    // Face Alignment Guide Overlay (Inside Photo Canvas Context)
-                    if (showFaceGuide) {
-                        StudioFaceGuideOverlay(modifier = Modifier.fillMaxSize())
-                    }
+                    // StudioFaceGuideOverlay (Passport face guide removed for clean social post editor)
+
+
 
                     // Golden Ratio Overlay (Inside Photo Canvas Context)
                     if (showGoldenRatio) {
@@ -872,10 +974,10 @@ fun FlashPhotoEditorScreen(
                                 .align(Alignment.Center)
                                 .then(
                                     when (textBgStyle) {
-                                        "pill" -> Modifier
-                                            .clip(RoundedCornerShape(14.dp))
-                                            .background(Color.Black.copy(alpha = 0.70f))
-                                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                                        "solid" -> Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(Color.Black.copy(alpha = 0.75f))
+                                            .padding(horizontal = 12.dp, vertical = 6.dp)
                                         "glass" -> Modifier
                                             .clip(RoundedCornerShape(14.dp))
                                             .background(colors.glassBg.copy(alpha = 0.88f))
@@ -899,15 +1001,14 @@ fun FlashPhotoEditorScreen(
                     }
                 }
 
-                // Top-Left Comparison Pill
+                // Top-Left Comparison Indicator
                 if (isComparingOriginal) {
                     Box(
                         modifier = Modifier
                             .align(Alignment.TopStart)
                             .padding(12.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(colors.primary)
-                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                            .background(colors.primary.copy(alpha = 0.92f), RoundedCornerShape(6.dp))
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
                     ) {
                         Text(
                             text = "ORIGINAL",
@@ -917,323 +1018,247 @@ fun FlashPhotoEditorScreen(
                         )
                     }
                 }
-
-                // Top-End Workspace HUD (Compare + Reset + Draft)
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(10.dp)
-                        .clip(CircleShape)
-                        .background(colors.glassBg.copy(alpha = 0.92f))
-                        .border(1.dp, colors.glassBorder, CircleShape)
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        // Compare Toggle
-                        IconButton(
-                            onClick = {
-                                isComparingOriginal = !isComparingOriginal
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            },
-                            modifier = Modifier.size(36.dp).minimumInteractiveComponentSize()
-                        ) {
-                            Icon(
-                                Lucide.Eye,
-                                contentDescription = "Compare with Original",
-                                tint = if (isComparingOriginal) colors.primary else colors.textMain,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-
-                        // Reset Workspace
-                        IconButton(
-                            onClick = { resetAll() },
-                            modifier = Modifier.size(36.dp).minimumInteractiveComponentSize()
-                        ) {
-                            Icon(
-                                Lucide.RotateCcw,
-                                contentDescription = "Reset Workspace",
-                                tint = colors.textMuted,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-
-                        // Save Draft
-                        IconButton(
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                onSaveDraft(selectedFilter.displayName)
-                            },
-                            modifier = Modifier.size(36.dp).minimumInteractiveComponentSize()
-                        ) {
-                            Icon(
-                                Lucide.Bookmark,
-                                contentDescription = "Save Draft",
-                                tint = colors.textMuted,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-                }
-
-                // Bottom-Center Floating Zoom HUD
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 10.dp)
-                        .clip(CircleShape)
-                        .background(colors.glassBg.copy(alpha = 0.94f))
-                        .border(1.dp, colors.glassBorder, CircleShape)
-                        .padding(horizontal = 10.dp, vertical = 3.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        IconButton(
-                            onClick = {
-                                pushSnapshot()
-                                zoomScale = (zoomScale - 0.2f).coerceAtLeast(0.85f)
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            },
-                            modifier = Modifier.size(48.dp).minimumInteractiveComponentSize()
-                        ) {
-                            Icon(Lucide.ZoomOut, contentDescription = "Zoom Out Workspace", tint = colors.textMain, modifier = Modifier.size(16.dp))
-                        }
-
-                        AppleSlider(
-                            value = zoomScale,
-                            onValueChange = { zoomScale = it },
-                            valueRange = 0.85f..3.5f,
-                            modifier = Modifier.width(96.dp)
-                        )
-
-                        IconButton(
-                            onClick = {
-                                pushSnapshot()
-                                zoomScale = (zoomScale + 0.2f).coerceAtMost(3.5f)
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            },
-                            modifier = Modifier.size(48.dp).minimumInteractiveComponentSize()
-                        ) {
-                            Icon(Lucide.ZoomIn, contentDescription = "Zoom In Workspace", tint = colors.textMain, modifier = Modifier.size(16.dp))
-                        }
-
-                        Text(
-                            text = "${(zoomScale * 100).toInt()}%",
-                            color = colors.textMuted,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.width(38.dp),
-                            textAlign = TextAlign.End
-                        )
-                    }
-                }
             }
 
-            // ── 4. CHROMASTUDIO WORKSPACE TOOL CATEGORIES DOCK ──────────────
-            LazyRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                items(StudioEditorCategory.values()) { category ->
-                    val isActive = activeCategory == category
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(if (isActive) colors.primary else colors.glassBg)
-                            .border(
-                                width = if (isActive) 1.dp else 0.5.dp,
-                                color = if (isActive) colors.primary else colors.glassBorder,
-                                shape = RoundedCornerShape(12.dp)
-                            )
-                            .clickable {
-                                activeCategory = category
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            }
-                            .padding(horizontal = 14.dp, vertical = 8.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Icon(
-                                imageVector = category.icon,
-                                contentDescription = category.title,
-                                tint = if (isActive) Color.White else colors.textMuted,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Text(
-                                text = category.title,
-                                color = if (isActive) Color.White else colors.textMain,
-                                fontSize = 12.sp,
-                                fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium
-                            )
-                        }
-                    }
-                }
+            // ── 4. CHROMA BOTTOM SHEET DRAWER (Tools & Controls) ─────────────
+            val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+            val screenHeightDp = configuration.screenHeightDp.dp
+            val targetDrawerHeight = when (drawerLevel) {
+                PhotoDrawerLevel.COLLAPSED -> 68.dp
+                PhotoDrawerLevel.MID -> minOf(330.dp, screenHeightDp * 0.44f)
+                PhotoDrawerLevel.FULL -> minOf(520.dp, screenHeightDp * 0.70f)
             }
 
-            // ── 5. STUDIO TOOL CONFIGURATION DECK (GlassPanel) ───────────────
+            val animatedDrawerHeight by animateDpAsState(
+                targetValue = targetDrawerHeight,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMedium
+                ),
+                label = "photoDrawerHeight"
+            )
+
+            val drawerShadowColor = if (colors.isDark) Color.Black.copy(alpha = 0.22f) else Color.Black.copy(alpha = 0.04f)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 170.dp, max = 270.dp)
-                    .padding(horizontal = 14.dp, vertical = 4.dp)
+                    .height(animatedDrawerHeight)
+                    .shadow(
+                        elevation = 4.dp,
+                        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+                        ambientColor = drawerShadowColor,
+                        spotColor = drawerShadowColor
+                    )
+                    .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
+                    .background(colors.glassBg)
+                    .border(0.5.dp, colors.glassBorder, RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
             ) {
-                GlassPanel(
-                    modifier = Modifier.fillMaxSize(),
-                    cornerRadius = 20
-                ) {
-                    Column(
+                Column(Modifier.fillMaxSize()) {
+                    // Draggable Grab Bar Handle (Expand / Collapse Bottom Drawer)
+                    Box(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(rememberScrollState())
-                            .padding(horizontal = 14.dp, vertical = 10.dp)
+                            .fillMaxWidth()
+                            .height(26.dp)
+                            .pointerInput(Unit) {
+                                detectVerticalDragGestures(
+                                    onDragEnd = {
+                                        if (dragAccum < -35f) {
+                                            drawerLevel = when (drawerLevel) {
+                                                PhotoDrawerLevel.COLLAPSED -> PhotoDrawerLevel.MID
+                                                PhotoDrawerLevel.MID -> PhotoDrawerLevel.FULL
+                                                PhotoDrawerLevel.FULL -> PhotoDrawerLevel.FULL
+                                            }
+                                        } else if (dragAccum > 35f) {
+                                            drawerLevel = when (drawerLevel) {
+                                                PhotoDrawerLevel.FULL -> PhotoDrawerLevel.MID
+                                                PhotoDrawerLevel.MID -> PhotoDrawerLevel.COLLAPSED
+                                                PhotoDrawerLevel.COLLAPSED -> PhotoDrawerLevel.COLLAPSED
+                                            }
+                                        }
+                                        dragAccum = 0f
+                                    },
+                                    onVerticalDrag = { _, dragAmount ->
+                                        dragAccum += dragAmount
+                                    }
+                                )
+                            }
+                            .clickable {
+                                drawerLevel = if (drawerLevel == PhotoDrawerLevel.COLLAPSED) PhotoDrawerLevel.MID else PhotoDrawerLevel.COLLAPSED
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            },
+                        contentAlignment = Alignment.Center
                     ) {
-                        // Drag Handle
                         Box(
                             modifier = Modifier
-                                .align(Alignment.CenterHorizontally)
-                                .width(36.dp)
-                                .height(4.dp)
-                                .clip(CircleShape)
-                                .background(colors.textMuted.copy(alpha = 0.3f))
+                                .width(38.dp)
+                                .height(4.5.dp)
+                                .clip(RoundedCornerShape(2.5.dp))
+                                .background(colors.textMuted.copy(alpha = 0.35f))
+                        )
+                    }
+
+                    // Tool Categories Row (4 Essential Tools, perfectly balanced, zero scrolling)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 2.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        StudioEditorCategory.values().forEach { category ->
+                            val isActive = activeCategory == category
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(
+                                        if (isActive && drawerLevel != PhotoDrawerLevel.COLLAPSED)
+                                            colors.primary.copy(alpha = 0.08f)
+                                        else Color.Transparent
+                                    )
+                                    .clickable {
+                                        activeCategory = category
+                                        if (drawerLevel == PhotoDrawerLevel.COLLAPSED) {
+                                            drawerLevel = PhotoDrawerLevel.MID
+                                        }
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    }
+                                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = category.icon,
+                                        contentDescription = category.title,
+                                        tint = if (isActive && drawerLevel != PhotoDrawerLevel.COLLAPSED) colors.primary else colors.textMuted,
+                                        modifier = Modifier.size(17.dp)
+                                    )
+                                    Text(
+                                        text = category.title,
+                                        color = if (isActive && drawerLevel != PhotoDrawerLevel.COLLAPSED) colors.primary else colors.textMain,
+                                        fontSize = 12.sp,
+                                        fontWeight = if (isActive && drawerLevel != PhotoDrawerLevel.COLLAPSED) FontWeight.SemiBold else FontWeight.Normal
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Expanded Drawer Content Deck
+                    if (drawerLevel != PhotoDrawerLevel.COLLAPSED) {
+                        HorizontalDivider(
+                            color = colors.glassBorder.copy(alpha = 0.5f),
+                            thickness = 0.5.dp,
+                            modifier = Modifier.padding(top = 2.dp)
                         )
 
-                        Spacer(modifier = Modifier.height(8.dp))
+                        // Sub-header with Tool Title and Action Controls
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = activeCategory.icon,
+                                    contentDescription = activeCategory.title,
+                                    tint = colors.primary,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Text(
+                                    text = activeCategory.title,
+                                    color = colors.textMain,
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
 
-                        when (activeCategory) {
-                            StudioEditorCategory.CROP -> {
-                                StudioCropToolPanel(
-                                    selectedAspectRatio = selectedAspectRatio,
-                                    onSelectAspectRatio = { pushSnapshot(); selectedAspectRatio = it },
-                                    showRuleOfThirds = showRuleOfThirds,
-                                    onToggleRuleOfThirds = { showRuleOfThirds = it },
-                                    showFaceGuide = showFaceGuide,
-                                    onToggleFaceGuide = { showFaceGuide = it },
-                                    showGoldenRatio = showGoldenRatio,
-                                    onToggleGoldenRatio = { showGoldenRatio = it },
-                                    fineRotation = fineRotation,
-                                    onFineRotationChange = { fineRotation = it },
-                                    onRotate90Ccw = { pushSnapshot(); rotation90 = (rotation90 - 90f) % 360f },
-                                    onRotate90Cw = { pushSnapshot(); rotation90 = (rotation90 + 90f) % 360f },
-                                    onFlipH = { pushSnapshot(); flipH = !flipH },
-                                    onFlipV = { pushSnapshot(); flipV = !flipV }
-                                )
-                            }
-                            StudioEditorCategory.LOOKS -> {
-                                StudioLooksToolPanel(
-                                    selectedFilter = selectedFilter,
-                                    onSelectFilter = { pushSnapshot(); selectedFilter = it },
-                                    intensity = filterIntensity,
-                                    onIntensityChange = { filterIntensity = it }
-                                )
-                            }
-                            StudioEditorCategory.ADJUST -> {
-                                StudioGradingToolPanel(
-                                    brightness = brightness,
-                                    onBrightnessChange = { brightness = it },
-                                    contrast = contrast,
-                                    onContrastChange = { contrast = it },
-                                    saturation = saturation,
-                                    onSaturationChange = { saturation = it },
-                                    warmth = warmth,
-                                    onWarmthChange = { warmth = it },
-                                    sepia = sepia,
-                                    onSepiaChange = { sepia = it },
-                                    blur = blur,
-                                    onBlurChange = { blur = it },
-                                    isBw = isBw,
-                                    onToggleBw = { pushSnapshot(); isBw = it },
-                                    onAutoEnhance = {
-                                        pushSnapshot()
-                                        brightness = 6f
-                                        contrast = 1.18f
-                                        saturation = 1.20f
-                                        warmth = 10f
-                                        Toast.makeText(context, "Magic Auto-Enhance applied!", Toast.LENGTH_SHORT).show()
-                                    }
-                                )
-                            }
-                            StudioEditorCategory.COLOR -> {
-                                StudioToneAndInkPanel(
-                                    hue = hue,
-                                    onHueChange = { hue = it },
-                                    inkClean = inkClean,
-                                    onToggleInkClean = { pushSnapshot(); inkClean = it },
-                                    inkThreshold = inkThreshold,
-                                    onInkThresholdChange = { inkThreshold = it }
-                                )
-                            }
-                            StudioEditorCategory.TYPE -> {
-                                StudioTypographyToolPanel(
-                                    overlayText = overlayText,
-                                    onTextChange = { overlayText = it },
-                                    textColor = textColor,
-                                    onColorChange = { pushSnapshot(); textColor = it },
-                                    bgStyle = textBgStyle,
-                                    onBgStyleChange = { pushSnapshot(); textBgStyle = it }
-                                )
-                            }
-                            StudioEditorCategory.BORDER -> {
-                                StudioBorderToolPanel(
-                                    frameWidthPx = frameWidthPx,
-                                    onFrameWidthChange = { pushSnapshot(); frameWidthPx = it },
-                                    frameColor = frameColor,
-                                    onFrameColorChange = { pushSnapshot(); frameColor = it },
-                                    backdropType = backdropType,
-                                    onSelectBackdrop = { pushSnapshot(); backdropType = it },
-                                    isSlideshow = isSlideshow,
-                                    durationPerSlideMs = durationPerSlideMs,
-                                    onDurationChange = { durationPerSlideMs = it },
-                                    maxDuration = maxDurationPerSlide
-                                )
-                            }
-                            StudioEditorCategory.PRINT -> {
-                                StudioPrintAndExportPanel(
-                                    context = context,
-                                    quality = exportQuality,
-                                    onQualityChange = { exportQuality = it },
-                                    format = exportFormat,
-                                    onFormatChange = { exportFormat = it },
-                                    onRemoveBackground = {
-                                        scope.launch {
-                                            // ML Kit SubjectSegmentation & Background Removal integration
-                                            Toast.makeText(context, "SubjectSegmentation: Background removed", Toast.LENGTH_SHORT).show()
-                                            backdropType = StudioBackdropType.SOLID_WHITE
-                                        }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                IconButton(
+                                    onClick = {
+                                        drawerLevel = PhotoDrawerLevel.COLLAPSED
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     },
-                                    onAiStyleGenerate = {
-                                        scope.launch {
-                                            // Gemini AI Studio Generative Style (gemini generateContent)
-                                            try {
-                                                AIGenerator.generateGradientLayers("Enhance lighting and studio contrast")
-                                                Toast.makeText(context, "Gemini AI Studio Look applied!", Toast.LENGTH_SHORT).show()
-                                            } catch (_: Exception) {
-                                                Toast.makeText(context, "AI Studio Style applied!", Toast.LENGTH_SHORT).show()
-                                            }
+                                    modifier = Modifier.size(32.dp).minimumInteractiveComponentSize()
+                                ) {
+                                    Icon(
+                                        imageVector = Lucide.ChevronDown,
+                                        contentDescription = "Collapse Drawer to Full View",
+                                        tint = colors.textMuted,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        // Active Tool Panel Content
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                                .verticalScroll(rememberScrollState())
+                                .padding(start = 16.dp, end = 16.dp, bottom = 10.dp)
+                        ) {
+                            when (activeCategory) {
+                                StudioEditorCategory.LOOKS -> {
+                                    StudioLooksToolPanel(
+                                        selectedFilter = selectedFilter,
+                                        onSelectFilter = { pushSnapshot(); selectedFilter = it },
+                                        intensity = filterIntensity,
+                                        onIntensityChange = { filterIntensity = it }
+                                    )
+                                }
+                                StudioEditorCategory.ADJUST -> {
+                                    StudioGradingToolPanel(
+                                        brightness = brightness,
+                                        onBrightnessChange = { brightness = it },
+                                        contrast = contrast,
+                                        onContrastChange = { contrast = it },
+                                        saturation = saturation,
+                                        onSaturationChange = { saturation = it },
+                                        warmth = warmth,
+                                        onWarmthChange = { warmth = it },
+                                        onAutoEnhance = {
+                                            pushSnapshot()
+                                            brightness = 6f
+                                            contrast = 1.15f
+                                            saturation = 1.18f
+                                            warmth = 8f
+                                            Toast.makeText(context, "Auto enhanced", Toast.LENGTH_SHORT).show()
                                         }
-                                    },
-                                    onComplianceCheck = {
-                                        scope.launch {
-                                            // Gemini Vision compliance analysis (AIGenerator compliance)
-                                            try {
-                                                val layers = AIGenerator.generateGradientLayers("Analyze portrait compliance and lighting")
-                                                Toast.makeText(context, "Gemini Vision: Photo composition complies with guidelines", Toast.LENGTH_LONG).show()
-                                            } catch (_: Exception) {
-                                                Toast.makeText(context, "Compliance Verified: 100% Pass", Toast.LENGTH_SHORT).show()
-                                            }
-                                        }
-                                    }
-                                )
+                                    )
+                                }
+                                StudioEditorCategory.CROP -> {
+                                    StudioCropToolPanel(
+                                        selectedAspectRatio = selectedAspectRatio,
+                                        onSelectAspectRatio = { pushSnapshot(); selectedAspectRatio = it },
+                                        showRuleOfThirds = showRuleOfThirds,
+                                        onToggleRuleOfThirds = { showRuleOfThirds = it },
+                                        onRotate90Cw = { pushSnapshot(); rotation90 = (rotation90 + 90f) % 360f },
+                                        onFlipH = { pushSnapshot(); flipH = !flipH },
+                                        onFlipV = { pushSnapshot(); flipV = !flipV }
+                                    )
+                                }
+                                StudioEditorCategory.TYPE -> {
+                                    StudioTypographyToolPanel(
+                                        overlayText = overlayText,
+                                        onTextChange = { overlayText = it },
+                                        textColor = textColor,
+                                        onColorChange = { pushSnapshot(); textColor = it },
+                                        bgStyle = textBgStyle,
+                                        onBgStyleChange = { pushSnapshot(); textBgStyle = it }
+                                    )
+                                }
                             }
                         }
                     }
@@ -1253,13 +1278,6 @@ private fun StudioCropToolPanel(
     onSelectAspectRatio: (PhotoAspectRatio) -> Unit,
     showRuleOfThirds: Boolean,
     onToggleRuleOfThirds: (Boolean) -> Unit,
-    showFaceGuide: Boolean,
-    onToggleFaceGuide: (Boolean) -> Unit,
-    showGoldenRatio: Boolean,
-    onToggleGoldenRatio: (Boolean) -> Unit,
-    fineRotation: Float,
-    onFineRotationChange: (Float) -> Unit,
-    onRotate90Ccw: () -> Unit,
     onRotate90Cw: () -> Unit,
     onFlipH: () -> Unit,
     onFlipV: () -> Unit
@@ -1267,47 +1285,42 @@ private fun StudioCropToolPanel(
     val colors = LocalOscellionColors.current
     val haptic = LocalHapticFeedback.current
 
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        // Aspect Ratios
-        Text(
-            text = "ASPECT RATIO",
-            color = colors.textMuted,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp
-        )
-
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // Aspect Ratios Row
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
             items(PhotoAspectRatio.values()) { ratioItem ->
                 val isSelected = selectedAspectRatio == ratioItem
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(8.dp))
                         .background(if (isSelected) colors.primary else colors.glassBg)
                         .border(
                             width = if (isSelected) 1.dp else 0.5.dp,
                             color = if (isSelected) colors.primary else colors.glassBorder,
-                            shape = RoundedCornerShape(10.dp)
+                            shape = RoundedCornerShape(8.dp)
                         )
                         .clickable {
                             onSelectAspectRatio(ratioItem)
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         }
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                        .padding(horizontal = 14.dp, vertical = 7.dp)
                 ) {
                     Text(
                         text = ratioItem.label,
                         color = if (isSelected) Color.White else colors.textMain,
-                        fontSize = 11.5.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                        fontSize = 12.sp,
+                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
                     )
                 }
             }
         }
 
-        HorizontalDivider(color = colors.glassBorder.copy(alpha = 0.5f), thickness = 0.5.dp)
+        HorizontalDivider(color = colors.glassBorder.copy(alpha = 0.4f), thickness = 0.5.dp)
 
-        // Rotation & Transforms
+        // Rotate & Flip Actions
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly,
@@ -1315,22 +1328,17 @@ private fun StudioCropToolPanel(
         ) {
             IconButton(
                 onClick = {
-                    onRotate90Ccw()
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                },
-                modifier = Modifier.size(48.dp).minimumInteractiveComponentSize()
-            ) {
-                Icon(Lucide.RotateCcw, contentDescription = "Rotate 90 Degrees Counter Clockwise", tint = colors.textMain, modifier = Modifier.size(18.dp))
-            }
-
-            IconButton(
-                onClick = {
                     onRotate90Cw()
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 },
                 modifier = Modifier.size(48.dp).minimumInteractiveComponentSize()
             ) {
-                Icon(Lucide.RotateCw, contentDescription = "Rotate 90 Degrees Clockwise", tint = colors.textMain, modifier = Modifier.size(18.dp))
+                Icon(
+                    Lucide.RotateCw,
+                    contentDescription = "Rotate 90 Degrees Clockwise",
+                    tint = colors.textMain,
+                    modifier = Modifier.size(19.dp)
+                )
             }
 
             IconButton(
@@ -1340,7 +1348,12 @@ private fun StudioCropToolPanel(
                 },
                 modifier = Modifier.size(48.dp).minimumInteractiveComponentSize()
             ) {
-                Icon(Lucide.FlipHorizontal, contentDescription = "Flip Photo Horizontally", tint = colors.textMain, modifier = Modifier.size(18.dp))
+                Icon(
+                    Lucide.FlipHorizontal,
+                    contentDescription = "Flip Photo Horizontally",
+                    tint = colors.textMain,
+                    modifier = Modifier.size(19.dp)
+                )
             }
 
             IconButton(
@@ -1350,103 +1363,31 @@ private fun StudioCropToolPanel(
                 },
                 modifier = Modifier.size(48.dp).minimumInteractiveComponentSize()
             ) {
-                Icon(Lucide.FlipVertical, contentDescription = "Flip Photo Vertically", tint = colors.textMain, modifier = Modifier.size(18.dp))
+                Icon(
+                    Lucide.FlipVertical,
+                    contentDescription = "Flip Photo Vertically",
+                    tint = colors.textMain,
+                    modifier = Modifier.size(19.dp)
+                )
             }
         }
 
-        // Straighten Angle Slider
+        HorizontalDivider(color = colors.glassBorder.copy(alpha = 0.4f), thickness = 0.5.dp)
+
+        // Composition Grid Toggle
         Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(
-                text = "Straighten",
-                color = colors.textMain,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.width(68.dp)
-            )
-
-            AppleSlider(
-                value = fineRotation,
-                onValueChange = onFineRotationChange,
-                valueRange = -45f..45f,
-                modifier = Modifier.weight(1f)
-            )
-
-            Text(
-                text = "${fineRotation.toInt()}°",
-                color = colors.textMuted,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.width(32.dp),
-                textAlign = TextAlign.End
-            )
-
-            IconButton(
-                onClick = {
-                    onFineRotationChange(0f)
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                },
-                modifier = Modifier.size(48.dp).minimumInteractiveComponentSize()
-            ) {
-                Icon(Lucide.RefreshCcw, contentDescription = "Reset Straighten Angle to Zero", tint = colors.textMuted, modifier = Modifier.size(14.dp))
-            }
-        }
-
-        HorizontalDivider(color = colors.glassBorder.copy(alpha = 0.5f), thickness = 0.5.dp)
-
-        // Composition Guides
-        Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(Lucide.Grid3x3, contentDescription = "Rule of Thirds Grid Guide", tint = colors.primary, modifier = Modifier.size(18.dp))
-                Text("Rule of Thirds (3x3)", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                Text("Grid Overlay", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.Medium)
             }
             AppleSwitch(
                 checked = showRuleOfThirds,
                 onCheckedChange = {
                     onToggleRuleOfThirds(it)
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                }
-            )
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Icon(Lucide.UserCheck, contentDescription = "Face Alignment Guide", tint = colors.primary, modifier = Modifier.size(18.dp))
-                Text("Face Alignment Guide", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-            }
-            AppleSwitch(
-                checked = showFaceGuide,
-                onCheckedChange = {
-                    onToggleFaceGuide(it)
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                }
-            )
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Icon(Lucide.Compass, contentDescription = "Golden Ratio Spiral Guide", tint = colors.primary, modifier = Modifier.size(18.dp))
-                Text("Golden Ratio", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-            }
-            AppleSwitch(
-                checked = showGoldenRatio,
-                onCheckedChange = {
-                    onToggleGoldenRatio(it)
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 }
             )
@@ -1522,22 +1463,22 @@ private fun StudioLooksToolPanel(
                     Box(
                         modifier = Modifier
                             .size(36.dp)
-                            .clip(CircleShape)
+                            .clip(RoundedCornerShape(8.dp))
                             .background(
                                 when (preset) {
-                                    StudioFilterPreset.ORIGINAL -> Brush.linearGradient(listOf(Color.LightGray, Color.DarkGray))
-                                    StudioFilterPreset.CINEMATIC -> Brush.linearGradient(listOf(Color(0xFF00E5FF), Color(0xFFFF9100)))
-                                    StudioFilterPreset.NORDIC_GLOW -> Brush.linearGradient(listOf(Color(0xFF81D4FA), Color(0xFFE1F5FE)))
-                                    StudioFilterPreset.VIVID -> Brush.linearGradient(listOf(Color(0xFFFF1744), Color(0xFFFFEA00)))
-                                    StudioFilterPreset.NOIR -> Brush.linearGradient(listOf(Color(0xFF212121), Color(0xFF9E9E9E)))
-                                    StudioFilterPreset.BW_CLASSIC -> Brush.linearGradient(listOf(Color(0xFF616161), Color(0xFFEEEEEE)))
-                                    StudioFilterPreset.WARM_SUNSET -> Brush.linearGradient(listOf(Color(0xFFFF6D00), Color(0xFFFFD600)))
-                                    StudioFilterPreset.COOL_CYBER -> Brush.linearGradient(listOf(Color(0xFF7C4DFF), Color(0xFF00E5FF)))
-                                    StudioFilterPreset.SOFT_FADE -> Brush.linearGradient(listOf(Color(0xFFB0BEC5), Color(0xFFECEFF1)))
-                                    StudioFilterPreset.SEPIA_VINTAGE -> Brush.linearGradient(listOf(Color(0xFF8D6E63), Color(0xFFD7CCC8)))
-                                    StudioFilterPreset.MOODY_EMERALD -> Brush.linearGradient(listOf(Color(0xFF004D40), Color(0xFF00BFA5)))
-                                    StudioFilterPreset.PASTEL_MIST -> Brush.linearGradient(listOf(Color(0xFFF8BBD0), Color(0xFFE1BEE7)))
-                                    StudioFilterPreset.CHROME_MONO -> Brush.linearGradient(listOf(Color(0xFFCFD8DC), Color(0xFF37474F)))
+                                    StudioFilterPreset.ORIGINAL -> Brush.linearGradient(listOf(Color(0xFFBDBDBD), Color(0xFF757575)))
+                                    StudioFilterPreset.CINEMATIC -> Brush.linearGradient(listOf(Color(0xFF455A64), Color(0xFF8D6E63)))
+                                    StudioFilterPreset.NORDIC_GLOW -> Brush.linearGradient(listOf(Color(0xFF90A4AE), Color(0xFFCFD8DC)))
+                                    StudioFilterPreset.VIVID -> Brush.linearGradient(listOf(Color(0xFFBF360C), Color(0xFFD84315)))
+                                    StudioFilterPreset.NOIR -> Brush.linearGradient(listOf(Color(0xFF212121), Color(0xFF616161)))
+                                    StudioFilterPreset.BW_CLASSIC -> Brush.linearGradient(listOf(Color(0xFF424242), Color(0xFF9E9E9E)))
+                                    StudioFilterPreset.WARM_SUNSET -> Brush.linearGradient(listOf(Color(0xFFBF360C), Color(0xFFFFA000)))
+                                    StudioFilterPreset.COOL_SLATE -> Brush.linearGradient(listOf(Color(0xFF37474F), Color(0xFF607D8B)))
+                                    StudioFilterPreset.SOFT_FADE -> Brush.linearGradient(listOf(Color(0xFF9E9E9E), Color(0xFFE0E0E0)))
+                                    StudioFilterPreset.SEPIA_VINTAGE -> Brush.linearGradient(listOf(Color(0xFF6D4C41), Color(0xFFA1887F)))
+                                    StudioFilterPreset.MOODY_EMERALD -> Brush.linearGradient(listOf(Color(0xFF1B5E20), Color(0xFF388E3C)))
+                                    StudioFilterPreset.PASTEL_MIST -> Brush.linearGradient(listOf(Color(0xFFB0BEC5), Color(0xFFCFD8DC)))
+                                    StudioFilterPreset.CHROME_MONO -> Brush.linearGradient(listOf(Color(0xFF78909C), Color(0xFFB0BEC5)))
                                 }
                             )
                     )
@@ -1564,35 +1505,29 @@ private fun StudioGradingToolPanel(
     onSaturationChange: (Float) -> Unit,
     warmth: Float,
     onWarmthChange: (Float) -> Unit,
-    sepia: Float,
-    onSepiaChange: (Float) -> Unit,
-    blur: Float,
-    onBlurChange: (Float) -> Unit,
-    isBw: Boolean,
-    onToggleBw: (Boolean) -> Unit,
     onAutoEnhance: () -> Unit
 ) {
     val colors = LocalOscellionColors.current
     val haptic = LocalHapticFeedback.current
 
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        // One-Tap Magic Auto-Enhance
-        PrimaryGradientButton(
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        // One-Tap Auto Enhance
+        GlassButton(
             onClick = {
                 onAutoEnhance()
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
             },
-            height = 36.dp,
-            modifier = Modifier.fillMaxWidth()
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.fillMaxWidth().height(36.dp)
         ) {
-            Icon(Lucide.Sparkles, contentDescription = "One-Tap Magic Auto-Enhance Image", tint = Color.White, modifier = Modifier.size(16.dp))
+            Icon(Lucide.Sparkles, contentDescription = "Auto Enhance Image", tint = colors.primary, modifier = Modifier.size(15.dp))
             Spacer(modifier = Modifier.width(6.dp))
-            Text("Magic Auto-Enhance", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Text("Auto Enhance", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
         }
 
-        HorizontalDivider(color = colors.glassBorder.copy(alpha = 0.5f), thickness = 0.5.dp)
+        HorizontalDivider(color = colors.glassBorder.copy(alpha = 0.4f), thickness = 0.5.dp)
 
-        // Exposure / Brightness (-100..100)
+        // 4 Core Photo Tuning Sliders
         GradingSliderRow(
             label = "Brightness",
             value = brightness,
@@ -1602,7 +1537,6 @@ private fun StudioGradingToolPanel(
             onReset = { onBrightnessChange(0f) }
         )
 
-        // Contrast (0.5..2.0)
         GradingSliderRow(
             label = "Contrast",
             value = contrast,
@@ -1612,7 +1546,6 @@ private fun StudioGradingToolPanel(
             onReset = { onContrastChange(1.0f) }
         )
 
-        // Saturation (0..3.0)
         GradingSliderRow(
             label = "Saturation",
             value = saturation,
@@ -1622,7 +1555,6 @@ private fun StudioGradingToolPanel(
             onReset = { onSaturationChange(1.0f) }
         )
 
-        // Warmth (-100..100)
         GradingSliderRow(
             label = "Warmth",
             value = warmth,
@@ -1631,44 +1563,6 @@ private fun StudioGradingToolPanel(
             formatValue = { "${it.toInt()}" },
             onReset = { onWarmthChange(0f) }
         )
-
-        // Sepia (0..100)
-        GradingSliderRow(
-            label = "Sepia",
-            value = sepia,
-            onValueChange = onSepiaChange,
-            range = 0f..100f,
-            formatValue = { "${it.toInt()}%" },
-            onReset = { onSepiaChange(0f) }
-        )
-
-        // Blur / Depth-of-Field (0..50)
-        GradingSliderRow(
-            label = "Blur",
-            value = blur,
-            onValueChange = onBlurChange,
-            range = 0f..50f,
-            formatValue = { "${it.toInt()}" },
-            onReset = { onBlurChange(0f) }
-        )
-
-        HorizontalDivider(color = colors.glassBorder.copy(alpha = 0.5f), thickness = 0.5.dp)
-
-        // B&W Toggle
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("Black & White Mode", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-            AppleSwitch(
-                checked = isBw,
-                onCheckedChange = {
-                    onToggleBw(it)
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                }
-            )
-        }
     }
 }
 
@@ -1831,22 +1725,22 @@ private fun StudioTypographyToolPanel(
             )
         }
 
-        // Style Pills
+        // Style Options (Clean, professional tags)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            listOf("none" to "Plain", "pill" to "Pill", "glass" to "Glass", "outline" to "Outline").forEach { (styleKey, label) ->
+            listOf("none" to "Plain", "solid" to "Solid", "glass" to "Glass", "outline" to "Outline").forEach { (styleKey, label) ->
                 val isSelected = bgStyle == styleKey
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(if (isSelected) colors.primary else colors.glassBg)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (isSelected) colors.primary.copy(alpha = 0.12f) else colors.glassBg)
                         .border(
                             width = if (isSelected) 1.dp else 0.5.dp,
                             color = if (isSelected) colors.primary else colors.glassBorder,
-                            shape = RoundedCornerShape(10.dp)
+                            shape = RoundedCornerShape(8.dp)
                         )
                         .clickable {
                             onBgStyleChange(styleKey)
@@ -1857,9 +1751,9 @@ private fun StudioTypographyToolPanel(
                 ) {
                     Text(
                         text = label,
-                        color = if (isSelected) Color.White else colors.textMain,
+                        color = if (isSelected) colors.primary else colors.textMain,
                         fontSize = 11.5.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
                     )
                 }
             }
@@ -1868,20 +1762,27 @@ private fun StudioTypographyToolPanel(
         // Color Palette
         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             val palette = listOf(
-                Color.White, Color.Black, Color(0xFFFFD600), Color(0xFF00E5FF),
-                Color(0xFFFF5252), Color(0xFFE040FB), Color(0xFF69F0AE), Color(0xFFFFAB40)
+                Color(0xFFFFFFFF), // Pure White
+                Color(0xFFF5F5F0), // Soft Ivory
+                Color(0xFFD8D8D8), // Light Gray
+                Color(0xFF757575), // Charcoal Slate
+                Color(0xFF1E2124), // Deep Black
+                Color(0xFFC48B71), // Warm Terracotta
+                Color(0xFF8F9E8B), // Muted Sage
+                Color(0xFF6B8299), // Slate Denim
+                Color(0xFFB59D77)  // Warm Sand
             )
             items(palette) { colorOption ->
                 val isSelected = textColor == colorOption
                 Box(
                     modifier = Modifier
                         .size(32.dp)
-                        .clip(CircleShape)
+                        .clip(RoundedCornerShape(6.dp))
                         .background(colorOption)
                         .border(
                             width = if (isSelected) 2.5.dp else 1.dp,
                             color = if (isSelected) colors.primary else Color.White.copy(alpha = 0.5f),
-                            shape = CircleShape
+                            shape = RoundedCornerShape(6.dp)
                         )
                         .clickable {
                             onColorChange(colorOption)
@@ -1923,20 +1824,25 @@ private fun StudioBorderToolPanel(
         // Border Color Palette
         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             val palette = listOf(
-                Color.White, Color.Black, Color(0xFFFFD700), Color(0xFF00E5FF),
-                Color(0xFFFF5252), Color(0xFFF5F5F0), Color(0xFF263238)
+                Color(0xFFFFFFFF), // White
+                Color(0xFFF5F5F0), // Off-White
+                Color(0xFF9E9E9E), // Neutral Gray
+                Color(0xFF455A64), // Slate
+                Color(0xFF1E2124), // Dark
+                Color(0xFFC48B71), // Terracotta
+                Color(0xFFB59D77)  // Sand
             )
             items(palette) { colorOption ->
                 val isSelected = frameColor == colorOption
                 Box(
                     modifier = Modifier
                         .size(32.dp)
-                        .clip(CircleShape)
+                        .clip(RoundedCornerShape(6.dp))
                         .background(colorOption)
                         .border(
                             width = if (isSelected) 2.5.dp else 1.dp,
                             color = if (isSelected) colors.primary else Color.White.copy(alpha = 0.5f),
-                            shape = CircleShape
+                            shape = RoundedCornerShape(6.dp)
                         )
                         .clickable {
                             onFrameColorChange(colorOption)
@@ -1967,7 +1873,7 @@ private fun StudioBorderToolPanel(
                     StudioBackdropType.SOLID_BLACK -> "Black"
                     StudioBackdropType.STUDIO_GRADIENT_BLUE -> "Studio Blue"
                     StudioBackdropType.STUDIO_GRADIENT_DARK -> "Studio Dark"
-                    StudioBackdropType.CYBER_NEON -> "Cyber Neon"
+                    StudioBackdropType.STUDIO_WARM -> "Warm Sand"
                     StudioBackdropType.BLUR_ORIGINAL -> "Blur Original"
                 }
                 Box(
@@ -2010,113 +1916,8 @@ private fun StudioBorderToolPanel(
     }
 }
 
-@Composable
-private fun StudioPrintAndExportPanel(
-    context: Context,
-    quality: Int,
-    onQualityChange: (Int) -> Unit,
-    format: String,
-    onFormatChange: (String) -> Unit,
-    onRemoveBackground: () -> Unit,
-    onAiStyleGenerate: () -> Unit,
-    onComplianceCheck: () -> Unit
-) {
-    val colors = LocalOscellionColors.current
-    val haptic = LocalHapticFeedback.current
-
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        // AI Magic Tools
-        Text(
-            text = "AI STUDIO FEATURES",
-            color = colors.textMuted,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp
-        )
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            GlassButton(
-                onClick = onRemoveBackground,
-                modifier = Modifier.weight(1f).height(36.dp),
-                shape = RoundedCornerShape(10.dp)
-            ) {
-                Icon(Lucide.UserX, contentDescription = "Remove Background using ML Kit SubjectSegmentation", tint = colors.primary, modifier = Modifier.size(14.dp))
-                Spacer(Modifier.width(4.dp))
-                Text("Cutout", color = colors.textMain, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-            }
-
-            GlassButton(
-                onClick = onAiStyleGenerate,
-                modifier = Modifier.weight(1f).height(36.dp),
-                shape = RoundedCornerShape(10.dp)
-            ) {
-                Icon(Lucide.Sparkles, contentDescription = "AI Generative Style Transfer with Gemini", tint = colors.primary, modifier = Modifier.size(14.dp))
-                Spacer(Modifier.width(4.dp))
-                Text("AI Style", color = colors.textMain, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-            }
-
-            GlassButton(
-                onClick = onComplianceCheck,
-                modifier = Modifier.weight(1f).height(36.dp),
-                shape = RoundedCornerShape(10.dp)
-            ) {
-                Icon(Lucide.Check, contentDescription = "Analyze Compliance with Gemini Vision", tint = colors.primary, modifier = Modifier.size(14.dp))
-                Spacer(Modifier.width(4.dp))
-                Text("Verify", color = colors.textMain, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-            }
-        }
-
-        HorizontalDivider(color = colors.glassBorder.copy(alpha = 0.5f), thickness = 0.5.dp)
-
-        // Quality Slider
-        GradingSliderRow(
-            label = "Quality",
-            value = quality.toFloat(),
-            onValueChange = { onQualityChange(it.toInt()) },
-            range = 50f..100f,
-            formatValue = { "${it.toInt()}%" },
-            onReset = { onQualityChange(90) }
-        )
-
-        // Print Layout Engine & PDF Export
-        GlassButton(
-            onClick = {
-                // PDF Document Engine with cut marks and 2x2 grid
-                try {
-                    val pdfDoc = PdfDocument()
-                    val pageInfo = PdfDocument.PageInfo.Builder(595, 842, 1).create()
-                    val page = pdfDoc.startPage(pageInfo)
-                    val canvas = page.canvas
-                    val cutPaint = Paint().apply {
-                        style = Paint.Style.STROKE
-                        strokeWidth = 1f
-                        color = android.graphics.Color.GRAY
-                        pathEffect = DashPathEffect(floatArrayOf(6f, 6f), 0f)
-                    }
-                    canvas.drawLine(0f, 421f, 595f, 421f, cutPaint)
-                    canvas.drawLine(297f, 0f, 297f, 842f, cutPaint)
-                    pdfDoc.finishPage(page)
-                    val file = File(context.cacheDir, "studio_print_layout_${System.currentTimeMillis()}.pdf")
-                    FileOutputStream(file).use { pdfDoc.writeTo(it) }
-                    pdfDoc.close()
-                    Toast.makeText(context, "Print layout PDF generated!", Toast.LENGTH_SHORT).show()
-                } catch (e: Exception) {
-                    Toast.makeText(context, "Failed to export PDF: ${e.message}", Toast.LENGTH_SHORT).show()
-                }
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-            },
-            modifier = Modifier.fillMaxWidth().height(38.dp),
-            shape = RoundedCornerShape(10.dp)
-        ) {
-            Icon(Lucide.Printer, contentDescription = "Export Print Layout PDF with Cut Marks", tint = colors.textMain, modifier = Modifier.size(16.dp))
-            Spacer(Modifier.width(6.dp))
-            Text("Export Passport / 2x2 Print PDF", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-        }
-    }
-}
+// Note: Social Media Post Editor — Print Layout Engine with cut marks and PdfDocument export
+// (including SubjectSegmentation and AIGenerator compliance checks) removed per user requirements.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // COMPOSITION GUIDES OVERLAYS
@@ -2127,8 +1928,8 @@ private fun StudioRuleOfThirdsOverlay(modifier: Modifier = Modifier) {
     Canvas(modifier = modifier) {
         val w = size.width
         val h = size.height
-        val gridColor = Color.White.copy(alpha = 0.45f)
-        val strokeWidth = 1.dp.toPx()
+        val gridColor = Color.White.copy(alpha = 0.28f)
+        val strokeWidth = 0.75.dp.toPx()
 
         drawLine(gridColor, Offset(w / 3f, 0f), Offset(w / 3f, h), strokeWidth)
         drawLine(gridColor, Offset(w * 2f / 3f, 0f), Offset(w * 2f / 3f, h), strokeWidth)
@@ -2175,8 +1976,8 @@ private fun StudioGoldenRatioOverlay(modifier: Modifier = Modifier) {
         val w = size.width
         val h = size.height
         val phi = 0.618f
-        val guideColor = Color(0xFFFFD600).copy(alpha = 0.45f)
-        val strokeWidth = 1.dp.toPx()
+        val guideColor = Color.White.copy(alpha = 0.28f)
+        val strokeWidth = 0.75.dp.toPx()
 
         drawLine(guideColor, Offset(w * (1f - phi), 0f), Offset(w * (1f - phi), h), strokeWidth)
         drawLine(guideColor, Offset(w * phi, 0f), Offset(w * phi, h), strokeWidth)
@@ -2205,7 +2006,12 @@ private suspend fun renderStudioPhotoBitmap(
     stampName: String,
     stampDate: String,
     stampPosition: String,
-    quality: Int
+    quality: Int,
+    textColor: Color = Color.White,
+    textBgStyle: String = "solid",
+    zoomScale: Float = 1f,
+    panOffsetX: Float = 0f,
+    panOffsetY: Float = 0f
 ): Bitmap? = withContext(Dispatchers.IO) {
     var original: Bitmap? = null
     var finalOutput: Bitmap? = null
@@ -2302,12 +2108,12 @@ private suspend fun renderStudioPhotoBitmap(
                 }
                 outCanvas.drawRect(0f, 0f, finalW.toFloat(), finalH.toFloat(), gradPaint)
             }
-            StudioBackdropType.CYBER_NEON -> {
+            StudioBackdropType.STUDIO_WARM -> {
                 val gradPaint = Paint().apply {
                     shader = android.graphics.LinearGradient(
                         0f, 0f, finalW.toFloat(), finalH.toFloat(),
-                        android.graphics.Color.parseColor("#3A0CA3"),
-                        android.graphics.Color.parseColor("#4CC9F0"),
+                        android.graphics.Color.parseColor("#1C1917"),
+                        android.graphics.Color.parseColor("#0C0A09"),
                         android.graphics.Shader.TileMode.CLAMP
                     )
                 }
@@ -2322,7 +2128,11 @@ private suspend fun renderStudioPhotoBitmap(
         if (flipX) matrix.postScale(-1f, 1f)
         if (flipY) matrix.postScale(1f, -1f)
         if (totalRotation != 0f) matrix.postRotate(totalRotation)
-        matrix.postTranslate(finalW / 2f, finalH / 2f)
+        if (zoomScale != 1f) {
+            matrix.postScale(zoomScale, zoomScale)
+        }
+        val panScale = (finalW.toFloat() / 360f).coerceIn(0.5f, 4f)
+        matrix.postTranslate(finalW / 2f + panOffsetX * panScale, finalH / 2f + panOffsetY * panScale)
 
         val imagePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
             colorFilter = android.graphics.ColorMatrixColorFilter(android.graphics.ColorMatrix(colorMatrix.values))
@@ -2347,16 +2157,70 @@ private suspend fun renderStudioPhotoBitmap(
             outCanvas.drawRect(0f, 0f, finalW.toFloat(), finalH.toFloat(), strokePaint)
         }
 
-        // Draw Text Overlay
+        // Draw Text Overlay (Styled with exact textColor and container style)
         if (hasStamp && stampName.isNotBlank()) {
+            val textSizePx = (finalH * 0.045f).coerceIn(28f, 84f)
             val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = android.graphics.Color.WHITE
-                textSize = (finalH * 0.045f).coerceIn(24f, 72f)
+                color = android.graphics.Color.argb(
+                    (textColor.alpha * 255).toInt(),
+                    (textColor.red * 255).toInt(),
+                    (textColor.green * 255).toInt(),
+                    (textColor.blue * 255).toInt()
+                )
+                textSize = textSizePx
                 typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
                 textAlign = Paint.Align.CENTER
                 setShadowLayer(8f, 0f, 2f, android.graphics.Color.BLACK)
             }
-            outCanvas.drawText(stampName, finalW / 2f, finalH * 0.5f, textPaint)
+
+            val textWidth = textPaint.measureText(stampName)
+            val fontMetrics = textPaint.fontMetrics
+            val centerX = finalW / 2f
+            val centerY = finalH * 0.5f
+            val padH = textSizePx * 0.65f
+            val padV = textSizePx * 0.35f
+            val bgRect = RectF(
+                centerX - textWidth / 2f - padH,
+                centerY + fontMetrics.top - padV,
+                centerX + textWidth / 2f + padH,
+                centerY + fontMetrics.bottom + padV
+            )
+            val cornerRadius = textSizePx * 0.3f
+
+            when (textBgStyle) {
+                "solid" -> {
+                    val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = android.graphics.Color.argb(192, 0, 0, 0)
+                        style = Paint.Style.FILL
+                    }
+                    outCanvas.drawRoundRect(bgRect, cornerRadius, cornerRadius, bgPaint)
+                }
+                "glass" -> {
+                    val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = android.graphics.Color.argb(220, 30, 35, 45)
+                        style = Paint.Style.FILL
+                    }
+                    val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = android.graphics.Color.argb(120, 255, 255, 255)
+                        style = Paint.Style.STROKE
+                        strokeWidth = (textSizePx * 0.06f).coerceAtLeast(1.5f)
+                    }
+                    outCanvas.drawRoundRect(bgRect, cornerRadius * 1.5f, cornerRadius * 1.5f, bgPaint)
+                    outCanvas.drawRoundRect(bgRect, cornerRadius * 1.5f, cornerRadius * 1.5f, borderPaint)
+                }
+                "outline" -> {
+                    val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = textPaint.color
+                        style = Paint.Style.STROKE
+                        strokeWidth = (textSizePx * 0.08f).coerceAtLeast(2f)
+                    }
+                    outCanvas.drawRoundRect(bgRect, cornerRadius, cornerRadius, borderPaint)
+                }
+                else -> {}
+            }
+
+            val baseline = centerY - (fontMetrics.ascent + fontMetrics.descent) / 2f
+            outCanvas.drawText(stampName, centerX, baseline, textPaint)
         }
 
         finalOutput

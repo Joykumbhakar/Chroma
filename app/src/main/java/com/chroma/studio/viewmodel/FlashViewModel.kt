@@ -76,6 +76,15 @@ class FlashViewModel(application: Application) : AndroidViewModel(application) {
 
     // ── Feed ─────────────────────────────────────────────────────────────────
 
+    fun addOptimisticFlash(flash: FlashVideo) {
+        val current = _flashFeed.value
+        _flashFeed.value = listOf(flash) + current.filter { it.id != flash.id }
+    }
+
+    fun removeOptimisticFlash(flashId: String) {
+        _flashFeed.value = _flashFeed.value.filter { it.id != flashId }
+    }
+
     fun loadFeed(isRefresh: Boolean = false) {
         if (_isLoading.value || _isRefreshing.value) return
         viewModelScope.launch {
@@ -87,10 +96,11 @@ class FlashViewModel(application: Application) : AndroidViewModel(application) {
             }
             try {
                 val items = repository.getFlashFeed(limit = 12, lastTimestamp = if (isRefresh) null else lastTimestamp)
+                val pendingOptimistic = _flashFeed.value.filter { it.id.startsWith("temp_") }
                 if (isRefresh || lastTimestamp == null) {
-                    _flashFeed.value = items
+                    _flashFeed.value = (pendingOptimistic + items).distinctBy { it.id }
                 } else {
-                    _flashFeed.value = _flashFeed.value + items
+                    _flashFeed.value = (_flashFeed.value + items).distinctBy { it.id }
                 }
                 lastTimestamp = items.lastOrNull()?.timestamp
                 syncLikedIds()

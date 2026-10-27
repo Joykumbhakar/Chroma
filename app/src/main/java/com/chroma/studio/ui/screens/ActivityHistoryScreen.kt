@@ -20,6 +20,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -35,6 +36,7 @@ import com.chroma.studio.model.DiscoverPost
 import com.chroma.studio.model.GradientLayer
 import com.chroma.studio.ui.components.CanvasPreview
 import com.chroma.studio.ui.components.ChromaScreenHeader
+import com.chroma.studio.ui.components.GlassIconButton
 import com.chroma.studio.ui.components.OscellionLoadingSpinner
 import com.chroma.studio.ui.components.AiWaveSphereIcon
 import com.chroma.studio.ui.theme.LocalOscellionColors
@@ -42,6 +44,7 @@ import com.chroma.studio.viewmodel.DiscoverViewModel
 import com.composables.icons.lucide.*
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 enum class ActivityTab(val title: String) {
@@ -58,14 +61,17 @@ fun ActivityHistoryScreen(
     repository: WorkRepository,
     onBack: () -> Unit,
     onRequireLogin: () -> Unit,
-    onNavigateToUser: (String) -> Unit = {}
+    onNavigateToUser: (String) -> Unit = {},
+    onNavigateToPost: ((postId: String, authorId: String?) -> Unit)? = null
 ) {
     val colors = LocalOscellionColors.current
     val context = LocalContext.current
     val isDark = isSystemInDarkTheme()
+    val scope = rememberCoroutineScope()
 
     var selectedTab by remember { mutableStateOf(ActivityTab.LIKED) }
     var isGridView by remember { mutableStateOf(false) }
+    var showMenu by remember { mutableStateOf(false) }
 
     val likedWorks by discoverVm.likedWorks.collectAsState()
     val savedWorks by discoverVm.savedWorks.collectAsState()
@@ -95,25 +101,98 @@ fun ActivityHistoryScreen(
     Scaffold(
         topBar = {
             ChromaScreenHeader(
-                title = "Oscellion",
-                badgeText = "Activity",
+                title = "Your Activity",
+                badgeText = selectedTab.title,
                 showBackButton = true,
+                circularBackButton = false,
                 onBack = onBack,
                 actions = {
-                    // Grid / Feed toggle
-                    IconButton(
+                    // View mode toggle
+                    GlassIconButton(
                         onClick = { isGridView = !isGridView },
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(colors.glassBgHover)
+                        modifier = Modifier.size(34.dp)
                     ) {
                         Icon(
                             imageVector = if (isGridView) Lucide.List else Lucide.LayoutGrid,
                             contentDescription = if (isGridView) "Feed View" else "Grid View",
                             tint = colors.textMain,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(16.dp)
                         )
+                    }
+
+                    // Native Dropdown Menu ("use menus")
+                    Box {
+                        GlassIconButton(
+                            onClick = { showMenu = true },
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Icon(
+                                imageVector = Lucide.EllipsisVertical,
+                                contentDescription = "Menu",
+                                tint = colors.textMain,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+
+                        DropdownMenu(
+                            expanded = showMenu,
+                            onDismissRequest = { showMenu = false },
+                            modifier = Modifier
+                                .shadow(16.dp, RoundedCornerShape(20.dp), ambientColor = Color.Black.copy(alpha = 0.25f))
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(colors.glassBg, RoundedCornerShape(20.dp))
+                                .border(0.5.dp, colors.glassBorder, RoundedCornerShape(20.dp))
+                        ) {
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = if (isGridView) "Switch to Feed View" else "Switch to Grid View",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = colors.textMain
+                                    )
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = if (isGridView) Lucide.List else Lucide.LayoutGrid,
+                                        contentDescription = null,
+                                        tint = colors.textMain,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                },
+                                onClick = {
+                                    showMenu = false
+                                    isGridView = !isGridView
+                                }
+                            )
+
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = "Refresh Activity",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = colors.textMain
+                                    )
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Lucide.RefreshCw,
+                                        contentDescription = null,
+                                        tint = colors.textMain,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                },
+                                onClick = {
+                                    showMenu = false
+                                    when (selectedTab) {
+                                        ActivityTab.LIKED -> discoverVm.loadLikedWorks(userId)
+                                        ActivityTab.SAVED -> discoverVm.loadSavedWorks(userId)
+                                        ActivityTab.SHARED -> discoverVm.loadSharedWorks(userId)
+                                    }
+                                }
+                            )
+                        }
                     }
                 }
             )
@@ -125,7 +204,7 @@ fun ActivityHistoryScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // ── Segment Tab Row (Instagram Style) ──
+            // Segment Tab Row (Sleek rounded rectangles with text labels)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -176,7 +255,7 @@ fun ActivityHistoryScreen(
                             if (count > 0) {
                                 Box(
                                     modifier = Modifier
-                                        .clip(CircleShape)
+                                        .clip(RoundedCornerShape(6.dp))
                                         .background(if (isSelected) Color(0xFF007AFF).copy(alpha = 0.15f) else colors.glassBorder.copy(alpha = 0.3f))
                                         .padding(horizontal = 5.dp, vertical = 1.dp),
                                     contentAlignment = Alignment.Center
@@ -194,7 +273,7 @@ fun ActivityHistoryScreen(
                 }
             }
 
-            // ── Content Area ──
+            // Content Area
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -258,7 +337,7 @@ fun ActivityHistoryScreen(
                     }
                 } else {
                     if (isGridView) {
-                        // ── 3-Column Visual Grid ──
+                        // 3-Column Visual Grid
                         LazyVerticalGrid(
                             columns = GridCells.Fixed(3),
                             modifier = Modifier.fillMaxSize(),
@@ -271,14 +350,17 @@ fun ActivityHistoryScreen(
                                     work = work,
                                     repository = repository,
                                     onClick = {
-                                        // Toggle into feed view centered on or open post
-                                        isGridView = false
+                                        if (onNavigateToPost != null) {
+                                            onNavigateToPost(work.id, work.creatorId)
+                                        } else {
+                                            isGridView = false
+                                        }
                                     }
                                 )
                             }
                         }
                     } else {
-                        // ── Feed Post List View ──
+                        // Feed Post List View
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(bottom = 24.dp)
@@ -403,10 +485,10 @@ fun ActivityGridItem(
                     modifier = Modifier.size(10.dp)
                 )
                 Text(
-                    text = "${work.likesCount}",
+                    text = work.likesCount.toString(),
                     color = Color.White,
-                    fontSize = 9.5.sp,
-                    fontWeight = FontWeight.Bold
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
         }

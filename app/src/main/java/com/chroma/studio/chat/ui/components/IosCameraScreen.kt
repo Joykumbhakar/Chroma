@@ -725,19 +725,16 @@ fun IosCameraReviewScreen(
                 )
 
                 // Send Button
-                Box(
+                PhosphorSendArrowIcon(
+                    tint = Color(0xFF007AFF),
+                    size = 28.dp,
                     modifier = Modifier
-                        .size(38.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF007AFF))
                         .clickable {
                             SoundManager.playSend()
                             onSend()
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    PhosphorSendArrowIcon(tint = Color.White, size = 18.dp)
-                }
+                        }
+                        .padding(4.dp)
+                )
             }
         }
     }

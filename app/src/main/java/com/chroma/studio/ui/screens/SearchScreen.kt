@@ -328,24 +328,18 @@ fun SearchScreen(
                                 )
                             }
                             if (searchQuery.isNotEmpty()) {
-                                Box(
+                                Icon(
+                                    imageVector = Lucide.X,
+                                    contentDescription = "Clear",
+                                    tint = Color.White.copy(alpha = 0.7f),
                                     modifier = Modifier
-                                        .size(20.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(0xFF8E8E93).copy(alpha = 0.5f))
+                                        .size(18.dp)
                                         .clickable {
                                             searchQuery = ""
                                             focusManager.clearFocus()
-                                        },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Lucide.X,
-                                        contentDescription = "Clear",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(12.dp)
-                                    )
-                                }
+                                        }
+                                        .padding(2.dp)
+                                )
                             }
                         }
                     }
@@ -1106,24 +1100,14 @@ private fun ExploreQuickLookSheet(
                 }
 
                 // Apple Circular Close Button
-                Box(
+                Icon(
+                    Lucide.X,
+                    contentDescription = "Close",
+                    tint = colors.textMain.copy(alpha = 0.7f),
                     modifier = Modifier
-                        .size(30.dp)
-                        .background(
-                            if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA).copy(alpha = 0.85f),
-                            CircleShape
-                        )
-                        .clip(CircleShape)
-                        .clickable(onClick = onDismiss),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Lucide.X,
-                        contentDescription = "Close",
-                        tint = colors.textMain.copy(alpha = 0.7f),
-                        modifier = Modifier.size(14.dp)
-                    )
-                }
+                        .size(22.dp)
+                        .clickable(onClick = onDismiss)
+                )
             }
 
             Spacer(Modifier.height(14.dp))

@@ -224,20 +224,14 @@ fun IosAvatarView(
                 contentScale = ContentScale.Crop
             )
         } else if (isGroup) {
-            Box(
+            Icon(
+                imageVector = Lucide.Users,
+                contentDescription = "Group",
+                tint = Color.White.copy(alpha = 0.85f),
                 modifier = Modifier
                     .fillMaxSize()
-                    .clip(CircleShape)
-                    .background(Brush.linearGradient(gradient)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Lucide.Users,
-                    contentDescription = "Group",
-                    tint = Color.White,
-                    modifier = Modifier.size(size * 0.48f)
-                )
-            }
+                    .padding(size * 0.20f)
+            )
         } else {
             androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize().clip(CircleShape)) {
                 val canvasSize = this.size

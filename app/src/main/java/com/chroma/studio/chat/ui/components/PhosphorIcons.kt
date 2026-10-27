@@ -328,12 +328,39 @@ fun PhosphorPendingClock(tint: Color = Color(0xFF8E8E93), size: Dp = 12.dp, modi
  *  - "read" / "seen": double tick with readTint (sky blue / cyan #38BDF8)
  */
 @Composable
+fun PhosphorErrorExclamation(tint: Color = Color(0xFFFF453A), size: Dp = 13.dp, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.size(size)) {
+        val scale = size.toPx() / 24f
+        val stroke = Stroke(width = 1.35f * density, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        drawCircle(
+            color = tint,
+            radius = 8.5f * scale,
+            center = Offset(12f * scale, 12f * scale),
+            style = stroke
+        )
+        drawLine(
+            color = tint,
+            start = Offset(12f * scale, 8f * scale),
+            end = Offset(12f * scale, 12.5f * scale),
+            strokeWidth = stroke.width,
+            cap = stroke.cap
+        )
+        drawCircle(
+            color = tint,
+            radius = 1f * scale,
+            center = Offset(12f * scale, 15.5f * scale)
+        )
+    }
+}
+
+@Composable
 fun MessageStatusTick(
     status: String,
     isOutgoing: Boolean = true,
     normalTint: Color = Color(0xD8FFFFFF),
     readTint: Color = Color(0xFF38BDF8),
     pendingTint: Color = Color(0xB3FFFFFF),
+    errorTint: Color = Color(0xFFFF453A),
     size: Dp = 13.dp,
     modifier: Modifier = Modifier
 ) {
@@ -364,6 +391,13 @@ fun MessageStatusTick(
             PhosphorDoubleCheck(
                 tint = readTint,
                 size = (size.value + 1.5f).dp,
+                modifier = modifier
+            )
+        }
+        "error", "failed" -> {
+            PhosphorErrorExclamation(
+                tint = errorTint,
+                size = (size.value + 1f).dp,
                 modifier = modifier
             )
         }

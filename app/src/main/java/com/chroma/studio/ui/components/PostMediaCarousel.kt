@@ -726,21 +726,12 @@ fun PostMediaCarousel(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.95f))
-                        .border(1.dp, Color(0xFFE2E8F0), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Lucide.Play,
-                        contentDescription = "Play Flash Video",
-                        tint = Color(0xFF0F172A),
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
+                Icon(
+                    Lucide.Play,
+                    contentDescription = "Play Flash Video",
+                    tint = Color.White,
+                    modifier = Modifier.size(36.dp)
+                )
 
                 Box(
                     modifier = Modifier

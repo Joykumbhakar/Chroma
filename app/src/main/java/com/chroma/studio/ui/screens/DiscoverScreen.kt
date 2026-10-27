@@ -250,6 +250,7 @@ fun DiscoverScreen(
     var isSearchExpanded by remember { mutableStateOf(false) }
     var showCreateMenu by remember { mutableStateOf(false) }
     var hasUnreadNotifications by remember { mutableStateOf(true) }
+    var showStoryGalleryPicker by remember { mutableStateOf(false) }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
 
     fun showToast(msg: String) {
@@ -377,9 +378,7 @@ fun DiscoverScreen(
                                 "Post", "Create new Post" -> onCreatePost()
                                 "Flash", "Create new Flash(Video)" -> onCreateFlash()
                                 "Story", "Add New Story" -> {
-                                    mediaPicker.launch(
-                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                    )
+                                    showStoryGalleryPicker = true
                                 }
                                 "Work", "Create or post work" -> onPublishWork()
                             }
@@ -724,13 +723,24 @@ fun DiscoverScreen(
                 onDismissRequest = { showStoryCreationSheet = false },
                 onChooseFromGallery = {
                     showStoryCreationSheet = false
-                    mediaPicker.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                    )
+                    showStoryGalleryPicker = true
                 },
                 onTextStory = {
                     showStoryCreationSheet = false
                     onNavigateToCreateStory?.invoke()
+                }
+            )
+        }
+
+        // Unified In-App Oscellion Gallery for Stories
+        if (showStoryGalleryPicker) {
+            com.chroma.studio.chat.ui.components.CustomGalleryPickerModal(
+                onDismiss = { showStoryGalleryPicker = false },
+                onLaunchCamera = { showStoryGalleryPicker = false },
+                onRequestMediaPermission = {},
+                onSendMedia = { uris, _ ->
+                    showStoryGalleryPicker = false
+                    uris.firstOrNull()?.let { storyViewModel?.uploadStory(context, it) }
                 }
             )
         }
@@ -3581,12 +3591,9 @@ fun CreatorProfileModal(
                     }
                     IconButton(
                         onClick = onDismiss,
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(CircleShape)
-                            .background(if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFF1F5F9))
+                        modifier = Modifier.size(28.dp)
                     ) {
-                        Icon(Lucide.X, contentDescription = "Close Profile", tint = colors.textMain, modifier = Modifier.size(15.dp))
+                        Icon(Lucide.X, contentDescription = "Close Profile", tint = colors.textMain, modifier = Modifier.size(18.dp))
                     }
                 }
 

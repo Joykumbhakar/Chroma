@@ -108,32 +108,69 @@ fun DynamicNotchIsland(
 
     val isVisible = activeState != "IDLE"
 
-    // Rubber / Jumps dynamic squash-and-stretch physics
+    // Hardware Notch Jelly & Spring & Jump physics
     val rubberScaleX = remember { Animatable(1f) }
     val rubberScaleY = remember { Animatable(1f) }
+    val jumpOffsetY = remember { Animatable(0f) }
+    var prevExpanded by remember { mutableStateOf(false) }
+
+    // Play dynamic island sound when notification appears
+    LaunchedEffect(notification) {
+        if (notification != null) {
+            SoundManager.playDynamicIsland()
+        }
+    }
 
     LaunchedEffect(notification, isExpanded, activeState) {
         if (isVisible) {
-            // Tactile rubber impulse: starts slightly compressed horizontally, stretched vertically downwards
-            rubberScaleX.snapTo(0.78f)
-            rubberScaleY.snapTo(1.24f)
-            launch {
-                rubberScaleX.animateTo(
-                    targetValue = 1f,
-                    animationSpec = spring(
-                        dampingRatio = 0.52f, // Rubber bounce overshoot
-                        stiffness = Spring.StiffnessMediumLow
-                    )
-                )
-            }
-            launch {
-                rubberScaleY.animateTo(
-                    targetValue = 1f,
-                    animationSpec = spring(
-                        dampingRatio = 0.55f, // Rubber bounce settling
-                        stiffness = Spring.StiffnessMediumLow
-                    )
-                )
+            if (isExpanded != prevExpanded) {
+                // Expand / Compress Jump & Jelly animation
+                if (isExpanded) {
+                    launch {
+                        jumpOffsetY.animateTo(10f, spring(dampingRatio = 0.52f, stiffness = Spring.StiffnessMediumLow))
+                        jumpOffsetY.animateTo(0f, spring(dampingRatio = 0.65f, stiffness = Spring.StiffnessLow))
+                    }
+                    launch {
+                        rubberScaleX.animateTo(0.93f, spring(dampingRatio = 0.48f, stiffness = Spring.StiffnessMediumLow))
+                        rubberScaleX.animateTo(1.0f, spring(dampingRatio = 0.60f, stiffness = Spring.StiffnessLow))
+                    }
+                    launch {
+                        rubberScaleY.animateTo(1.12f, spring(dampingRatio = 0.48f, stiffness = Spring.StiffnessMediumLow))
+                        rubberScaleY.animateTo(1.0f, spring(dampingRatio = 0.60f, stiffness = Spring.StiffnessLow))
+                    }
+                } else {
+                    launch {
+                        jumpOffsetY.animateTo(-6f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow))
+                        jumpOffsetY.animateTo(0f, spring(dampingRatio = 0.68f, stiffness = Spring.StiffnessLow))
+                    }
+                    launch {
+                        rubberScaleX.animateTo(1.07f, spring(dampingRatio = 0.50f, stiffness = Spring.StiffnessMediumLow))
+                        rubberScaleX.animateTo(1.0f, spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessLow))
+                    }
+                    launch {
+                        rubberScaleY.animateTo(0.89f, spring(dampingRatio = 0.50f, stiffness = Spring.StiffnessMediumLow))
+                        rubberScaleY.animateTo(1.0f, spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessLow))
+                    }
+                }
+                prevExpanded = isExpanded
+            } else {
+                // Entrance Drop Jump + Jelly Wobble from top notch edge
+                jumpOffsetY.snapTo(-35f)
+                rubberScaleX.snapTo(0.86f)
+                rubberScaleY.snapTo(1.24f)
+                launch {
+                    jumpOffsetY.animateTo(0f, spring(dampingRatio = 0.52f, stiffness = Spring.StiffnessMediumLow))
+                }
+                launch {
+                    rubberScaleX.animateTo(1.09f, spring(dampingRatio = 0.50f, stiffness = Spring.StiffnessMediumLow))
+                    rubberScaleX.animateTo(0.97f, spring(dampingRatio = 0.58f, stiffness = Spring.StiffnessLow))
+                    rubberScaleX.animateTo(1.0f, spring(dampingRatio = 0.70f, stiffness = Spring.StiffnessLow))
+                }
+                launch {
+                    rubberScaleY.animateTo(0.92f, spring(dampingRatio = 0.50f, stiffness = Spring.StiffnessMediumLow))
+                    rubberScaleY.animateTo(1.03f, spring(dampingRatio = 0.58f, stiffness = Spring.StiffnessLow))
+                    rubberScaleY.animateTo(1.0f, spring(dampingRatio = 0.70f, stiffness = Spring.StiffnessLow))
+                }
             }
         }
     }
@@ -172,18 +209,18 @@ fun DynamicNotchIsland(
                ),
         modifier = modifier
             .fillMaxWidth()
-            .windowInsetsPadding(WindowInsets.statusBars)
-            .padding(top = 4.dp, start = 12.dp, end = 12.dp)
+            .padding(start = 12.dp, end = 12.dp)
     ) {
         Box(
             modifier = Modifier.fillMaxWidth(),
             contentAlignment = Alignment.TopCenter
         ) {
-            val islandShape = RoundedCornerShape(cornerRadius)
+            val islandShape = RoundedCornerShape(bottomStart = cornerRadius, bottomEnd = cornerRadius, topStart = 0.dp, topEnd = 0.dp)
 
             Box(
                 modifier = Modifier
                     .graphicsLayer {
+                        translationY = jumpOffsetY.value
                         scaleX = rubberScaleX.value
                         scaleY = rubberScaleY.value
                         transformOrigin = TransformOrigin(0.5f, 0f)
@@ -362,22 +399,13 @@ private fun CompactNotificationView(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             modifier = Modifier.weight(1f)
         ) {
-            Box(
-                modifier = Modifier
-                    .size(28.dp)
-                    .clip(CircleShape)
-                    .background(badgeColor.copy(alpha = 0.20f))
-                    .border(0.5.dp, badgeColor.copy(alpha = 0.40f), CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                when (notification.type) {
-                    IslandType.SUCCESS -> PhosphorGreenCheck(size = 14.dp)
-                    IslandType.CALL -> PhosphorPhone(tint = badgeColor, size = 14.dp)
-                    IslandType.VOICE_RECORDING -> PhosphorVoiceMicIcon(tint = badgeColor, size = 14.dp)
-                    IslandType.WARNING -> Text("!", color = badgeColor, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                    IslandType.ERROR -> LucideBan(tint = badgeColor, size = 14.dp)
-                    else -> LucideInfo(tint = badgeColor, size = 14.dp)
-                }
+            when (notification.type) {
+                IslandType.SUCCESS -> PhosphorGreenCheck(size = 18.dp)
+                IslandType.CALL -> PhosphorPhone(tint = badgeColor, size = 18.dp)
+                IslandType.VOICE_RECORDING -> PhosphorVoiceMicIcon(tint = badgeColor, size = 18.dp)
+                IslandType.WARNING -> Text("!", color = badgeColor, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                IslandType.ERROR -> LucideBan(tint = badgeColor, size = 18.dp)
+                else -> LucideInfo(tint = badgeColor, size = 18.dp)
             }
 
             // Text
@@ -440,14 +468,7 @@ private fun CompactCallView(
                         contentScale = ContentScale.Crop
                     )
                 } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color(0xFF34C759).copy(alpha = 0.25f), CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        PhosphorPhone(tint = Color(0xFF34C759), size = 13.dp)
-                    }
+                    PhosphorPhone(tint = Color(0xFF34C759), size = 18.dp)
                 }
             }
 
@@ -570,14 +591,7 @@ private fun ExpandedCallView(
                             contentScale = ContentScale.Crop
                         )
                     } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color(0xFF34C759).copy(alpha = 0.25f), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            PhosphorPhone(tint = Color(0xFF34C759), size = 20.dp)
-                        }
+                        PhosphorPhone(tint = Color(0xFF34C759), size = 24.dp)
                     }
                 }
 
@@ -1064,7 +1078,7 @@ private fun IslandActionButton(
         Box(
             modifier = Modifier
                 .size(44.dp)
-                .clip(CircleShape)
+                .clip(RoundedCornerShape(12.dp))
                 .background(bgColor)
                 .clickable { onClick() },
             contentAlignment = Alignment.Center

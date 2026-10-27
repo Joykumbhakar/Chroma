@@ -527,13 +527,11 @@ fun ChatHeader(
                         }
                         Box(
                             modifier = Modifier
-                                .size(20.dp)
-                                .clip(CircleShape)
-                                .background(colors.surfaceTertiary)
+                                .size(24.dp)
                                 .clickable { onUnpinMessage() },
                             contentAlignment = Alignment.Center
                         ) {
-                            PhosphorCloseX(tint = colors.textMuted, size = 10.dp)
+                            PhosphorCloseX(tint = colors.textMuted, size = 12.dp)
                         }
                     }
                 }
@@ -590,13 +588,11 @@ fun ChatHeader(
                     }
                     Box(
                         modifier = Modifier
-                            .size(20.dp)
-                            .clip(CircleShape)
-                            .background(colors.textMuted.copy(alpha = 0.15f))
+                            .size(24.dp)
                             .clickable { onSearchToggle() },
                         contentAlignment = Alignment.Center
                     ) {
-                        PhosphorCloseX(tint = colors.textMuted, size = 10.dp)
+                        PhosphorCloseX(tint = colors.textMuted, size = 12.dp)
                     }
                 }
             }

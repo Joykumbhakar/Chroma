@@ -404,13 +404,11 @@ private fun StepSelectParticipants(
                     if (searchQuery.isNotEmpty()) {
                         Box(
                             modifier = Modifier
-                                .size(18.dp)
-                                .clip(CircleShape)
-                                .background(colors.surfaceTertiary)
+                                .size(24.dp)
                                 .clickable { onSearchQueryChanged("") },
                             contentAlignment = Alignment.Center
                         ) {
-                            PhosphorCloseX(tint = colors.textMuted, size = 10.dp)
+                            PhosphorCloseX(tint = colors.textMuted, size = 12.dp)
                         }
                     }
                 }
@@ -483,7 +481,7 @@ private fun StepSelectParticipants(
                         .border(
                             width = if (isSelected) 0.dp else 1.5.dp,
                             color = if (isSelected) Color.Transparent else colors.separatorOpaque,
-                            shape = CircleShape
+                            shape = RoundedCornerShape(6.dp)
                         ),
                     contentAlignment = Alignment.Center
                 ) {
@@ -628,16 +626,11 @@ private fun StepGroupDetails(
                         contentScale = ContentScale.Crop
                     )
 
-                    Box(
-                        modifier = Modifier
-                            .size(24.dp)
-                            .align(Alignment.BottomEnd)
-                            .background(colors.iosBlue, CircleShape)
-                            .border(2.dp, colors.cardBg, CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        PhosphorCameraIcon(tint = Color.White, size = 13.dp)
-                    }
+                    PhosphorCameraIcon(
+                        tint = colors.iosBlue,
+                        size = 18.dp,
+                        modifier = Modifier.align(Alignment.BottomEnd)
+                    )
                 }
 
                 Row(
@@ -927,12 +920,10 @@ private fun StepGroupDetails(
                 Box(
                     modifier = Modifier
                         .size(24.dp)
-                        .clip(CircleShape)
-                        .background(colors.surfaceSecondary)
                         .clickable { onRemoveContact(contact) },
                     contentAlignment = Alignment.Center
                 ) {
-                    PhosphorCloseX(tint = colors.textMuted, size = 12.dp)
+                    PhosphorCloseX(tint = colors.textMuted, size = 14.dp)
                 }
             }
         }
@@ -979,17 +970,15 @@ private fun SelectedContactPill(
             // Remove 'X' Badge
             Box(
                 modifier = Modifier
-                    .size(17.dp)
+                    .size(20.dp)
                     .align(Alignment.TopEnd)
-                    .background(colors.textMuted, CircleShape)
-                    .border(1.5.dp, colors.appBg, CircleShape)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
                     ) { onRemove() },
                 contentAlignment = Alignment.Center
             ) {
-                PhosphorCloseX(tint = Color.White, size = 9.dp)
+                PhosphorCloseX(tint = colors.textMuted, size = 12.dp)
             }
         }
 

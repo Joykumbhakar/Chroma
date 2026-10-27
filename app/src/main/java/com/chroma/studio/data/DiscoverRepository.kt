@@ -536,6 +536,24 @@ class DiscoverRepository {
                     if (e is kotlinx.coroutines.CancellationException) throw e
                     Log.w("DiscoverRepository", "userLikeRef set warning", e)
                 }
+
+                // 3. Dispatch real notification to post author
+                try {
+                    val postDoc = workRef.get().await()
+                    val creatorId = postDoc.getString("creatorId")
+                    val title = postDoc.getString("title") ?: "post"
+                    val thumb = postDoc.getString("thumbnailUrl") ?: postDoc.getString("imageUrl")
+                    if (!creatorId.isNullOrBlank() && creatorId != userId) {
+                        NotificationDispatcher.sendNotification(
+                            targetUserId = creatorId,
+                            type = com.chroma.studio.model.NotificationActionType.LIKE,
+                            actionText = "liked your post",
+                            detailText = title,
+                            targetPreviewUrl = thumb,
+                            targetId = workId
+                        )
+                    }
+                } catch (_: Exception) {}
             } else {
                 // 1. Atomically update community_works post: remove from likedBy array and decrement likesCount
                 val updates = mapOf(
@@ -643,6 +661,7 @@ class DiscoverRepository {
                 }
                 true
             }.await()
+            true
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("DiscoverRepository", "Error setting follow", e)
@@ -1059,6 +1078,7 @@ class DiscoverRepository {
                 }
                 true
             }.await()
+            true
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("DiscoverRepository", "Error setting save", e)

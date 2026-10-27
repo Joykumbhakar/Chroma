@@ -31,7 +31,7 @@ class ChatViewModel : ViewModel() {
 
     private val _serverMessages = MutableStateFlow<List<ChatMessage>>(emptyList())
     private val _localMessages = MutableStateFlow<List<ChatMessage>>(emptyList())
-    
+
     val currentMessages: StateFlow<List<ChatMessage>> = combine(_serverMessages, _localMessages) { server, local ->
         val serverIds = server.map { it.id }.toSet()
         val remainingLocal = local.filter { it.id !in serverIds }
@@ -40,7 +40,7 @@ class ChatViewModel : ViewModel() {
 
     private val _activeRoomId = MutableStateFlow<String?>(null)
     val activeRoomId: StateFlow<String?> = _activeRoomId.asStateFlow()
-    
+
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
@@ -89,7 +89,7 @@ class ChatViewModel : ViewModel() {
     private var messagesJob: Job? = null
     private var onlineStatusListener: ValueEventListener? = null
     private var currentOtherUserId: String? = null
-    
+
     private var messageLimit = 50L
 
     private val _isLoadingChats = MutableStateFlow(true)
@@ -103,7 +103,7 @@ class ChatViewModel : ViewModel() {
         loadStories()
         loadMutedChats()
     }
-    
+
     private fun loadStories() {
         viewModelScope.launch {
             _recentChats.collect { chats ->
@@ -172,16 +172,16 @@ class ChatViewModel : ViewModel() {
 
     fun observeUserOnlineStatus(uid: String) {
         if (currentOtherUserId == uid && onlineStatusListener != null) return
-        
+
         currentOtherUserId?.let {
             onlineStatusListener?.let { listener ->
                 com.chroma.studio.data.OnlineStatusManager.getDatabase().getReference("users/$it").removeEventListener(listener)
             }
         }
-        
+
         currentOtherUserId = uid
         val ref = com.chroma.studio.data.OnlineStatusManager.getDatabase().getReference("users/$uid")
-        
+
         onlineStatusListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val isOnline = snapshot.child("online").getValue(Boolean::class.java) ?: false
@@ -202,7 +202,7 @@ class ChatViewModel : ViewModel() {
             repository.observeRecentChats().collect { chats ->
                 _recentChats.value = chats
                 _isLoadingChats.value = false
-                
+
                 // Pre-load top recent chat messages into memory cache in background (0ms open)
                 try {
                     com.chroma.studio.chat.data.ChatLocalCacheManager.preloadRooms(
@@ -221,7 +221,7 @@ class ChatViewModel : ViewModel() {
                 val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
                 val otherUids = if (currentUid != null) allUids.filter { it != currentUid } else allUids
                 observeUsersPresence(otherUids)
-                
+
                 observeTypingStatuses(chats)
             }
         }
@@ -230,7 +230,7 @@ class ChatViewModel : ViewModel() {
     fun startChat(otherUserId: String, onRoomReady: (String) -> Unit) {
         val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser ?: return
         val roomId = if (currentUser.uid < otherUserId) "${currentUser.uid}_$otherUserId" else "${otherUserId}_${currentUser.uid}"
-        
+
         // Optimistically add to recent chats to avoid waiting
         val currentChats = _recentChats.value.toMutableList()
         if (currentChats.none { it.id == roomId }) {
@@ -242,11 +242,11 @@ class ChatViewModel : ViewModel() {
             currentChats.add(0, optimisticRoom)
             _recentChats.value = currentChats
         }
-        
+
         openChat(roomId)
         onRoomReady(roomId)
         fetchProfilesForUsers(listOf(currentUser.uid, otherUserId))
-        
+
         // Fetch profiles immediately & do real creation in background
         viewModelScope.launch {
             val realRoom = repository.getOrCreateChatRoom(otherUserId)
@@ -289,7 +289,7 @@ class ChatViewModel : ViewModel() {
         if (otherUid != null) {
             observeUserOnlineStatus(otherUid)
         }
-        
+
         // 1. INSTANT OFFLINE PRE-LOAD (Telegram / WhatsApp technique):
         // First check in-memory L1 cache (0ms synchronous)
         val inMemoryCached = com.chroma.studio.chat.data.ChatLocalCacheManager.getMemoryCachedMessages(roomId)
@@ -315,7 +315,7 @@ class ChatViewModel : ViewModel() {
         // 2. Initial viewport limit: 30 messages (prevents overload crashes on open)
         messageLimit = 30L
         observeMessages(roomId)
-        
+
         // Optimistically mark as read in local state
         val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
         if (currentUser != null) {
@@ -329,7 +329,7 @@ class ChatViewModel : ViewModel() {
                 _recentChats.value = currentChats
             }
         }
-        
+
         viewModelScope.launch {
             repository.markAsRead(roomId)
             try {
@@ -347,7 +347,7 @@ class ChatViewModel : ViewModel() {
             }
         }
     }
-    
+
     fun loadMoreMessages() {
         val roomId = _activeRoomId.value ?: return
         messageLimit += 30L
@@ -357,11 +357,11 @@ class ChatViewModel : ViewModel() {
     fun createGroup(groupName: String, groupDescription: String? = null, participantIds: List<String>, imageUrl: String? = null, onRoomReady: (String) -> Unit) {
         val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser ?: return
         val roomId = "group_${java.util.UUID.randomUUID()}"
-        
+
         // Optimistic UI update
         val allUsers = participantIds.toMutableList()
         if (!allUsers.contains(currentUser.uid)) allUsers.add(currentUser.uid)
-        
+
         val optimisticRoom = ChatRoom(
             id = roomId,
             name = groupName,
@@ -377,11 +377,11 @@ class ChatViewModel : ViewModel() {
         val currentChats = _recentChats.value.toMutableList()
         currentChats.add(0, optimisticRoom)
         _recentChats.value = currentChats
-        
+
         openChat(roomId)
         onRoomReady(roomId)
         fetchProfilesForUsers(allUsers)
-        
+
         viewModelScope.launch {
             repository.createGroup(groupName, groupDescription, participantIds, imageUrl, roomId)
         }
@@ -390,7 +390,7 @@ class ChatViewModel : ViewModel() {
 
     fun toggleFavorite(roomId: String, isFavorite: Boolean) {
         val currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
-        
+
         // Optimistic UI update
         val currentChats = _recentChats.value.toMutableList()
         val index = currentChats.indexOfFirst { it.id == roomId }
@@ -400,7 +400,7 @@ class ChatViewModel : ViewModel() {
             currentChats[index] = chat.copy(favoritedBy = newFavorites)
             _recentChats.value = currentChats
         }
-        
+
         viewModelScope.launch {
             repository.toggleFavorite(roomId, currentUserId, isFavorite)
         }
@@ -429,12 +429,19 @@ class ChatViewModel : ViewModel() {
 
     fun sendMessage(text: String, workId: String? = null, replyToMessageId: String? = null) {
         val roomId = _activeRoomId.value ?: return
+        sendMessageToRoom(roomId, text, workId, replyToMessageId)
+    }
+
+    fun sendMessageToRoom(roomId: String, text: String, workId: String? = null, replyToMessageId: String? = null) {
         val currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
         if (text.isBlank() && workId == null) return
-        
-        setTypingStatus(false)
+
+        if (_activeRoomId.value == roomId) {
+            setTypingStatus(false)
+        }
         val msgId = java.util.UUID.randomUUID().toString()
         val timestamp = System.currentTimeMillis()
+        val resolvedMessageType = if (text.startsWith("[POLL]:")) "poll" else "text"
         val pendingMsg = ChatMessage(
             id = msgId,
             senderId = currentUserId,
@@ -442,11 +449,14 @@ class ChatViewModel : ViewModel() {
             timestamp = timestamp,
             isPending = true,
             workId = workId,
-            replyToMessageId = replyToMessageId
+            replyToMessageId = replyToMessageId,
+            messageType = resolvedMessageType
         )
-        // Add to local immediately
-        _localMessages.value = listOf(pendingMsg) + _localMessages.value
-        
+        // Add to local immediately if this room is actively open
+        if (_activeRoomId.value == roomId) {
+            _localMessages.value = listOf(pendingMsg) + _localMessages.value
+        }
+
         // Immediately persist to offline cache so outgoing message is preserved even if offline
         try {
             com.chroma.studio.chat.data.ChatLocalCacheManager.appendOrUpdateMessage(
@@ -457,7 +467,7 @@ class ChatViewModel : ViewModel() {
         } catch (e: Exception) {
             // ignore
         }
-        
+
         // Optimistically update recent chats list
         val currentChats = _recentChats.value.toMutableList()
         val index = currentChats.indexOfFirst { it.id == roomId }
@@ -467,13 +477,13 @@ class ChatViewModel : ViewModel() {
             currentChats.add(0, chat.copy(lastMessage = previewText, lastMessageTime = timestamp))
             _recentChats.value = currentChats
         }
-        
+
         viewModelScope.launch {
-            val success = repository.sendMessage(roomId, text, workId = workId, preGeneratedId = msgId, replyToMessageId = replyToMessageId)
-            if (!success) {
+            val success = repository.sendMessage(roomId, text, workId = workId, preGeneratedId = msgId, replyToMessageId = replyToMessageId, messageType = resolvedMessageType)
+            if (!success && _activeRoomId.value == roomId) {
                 // Mark as failed
-                _localMessages.value = _localMessages.value.map { 
-                    if (it.id == msgId) it.copy(isPending = false, isError = true) else it 
+                _localMessages.value = _localMessages.value.map {
+                    if (it.id == msgId) it.copy(isPending = false, isError = true) else it
                 }
             }
         }
@@ -505,7 +515,7 @@ class ChatViewModel : ViewModel() {
             }
         }
     }
-    
+
     private var typingDebounceJob: kotlinx.coroutines.Job? = null
 
     fun setTypingStatus(isTyping: Boolean) {
@@ -538,7 +548,7 @@ class ChatViewModel : ViewModel() {
         }
     }
 
-    fun sendAudioMessage(audioBytes: ByteArray, durationSeconds: Int, replyToMessageId: String? = null) {
+    fun sendAudioMessage(audioBytes: ByteArray, durationSeconds: Int, replyToMessageId: String? = null, localAudioPath: String? = null) {
         val roomId = _activeRoomId.value ?: return
         val currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
 
@@ -552,6 +562,8 @@ class ChatViewModel : ViewModel() {
             timestamp = timestamp,
             isPending = true,
             messageType = "audio",
+            imageUrl = localAudioPath,
+            mediaUrl = localAudioPath,
             durationSeconds = durationSeconds,
             replyToMessageId = replyToMessageId
         )
@@ -622,21 +634,61 @@ class ChatViewModel : ViewModel() {
             }
         }
 
+        val prevServer = _serverMessages.value
+        val prevLocal = _localMessages.value
+
+        // 1. Optimistic instant local apply
         _serverMessages.value = updateList(_serverMessages.value)
         _localMessages.value = updateList(_localMessages.value)
 
         viewModelScope.launch {
-            repository.toggleReaction(messageId, roomId, emoji)
+            val success = repository.toggleReaction(messageId, roomId, emoji)
+            if (!success) {
+                // Graceful rollback on network failure
+                _serverMessages.value = prevServer
+                _localMessages.value = prevLocal
+                com.chroma.studio.ui.components.ToastManager.showToast("Could not update reaction.")
+            }
         }
     }
 
     fun deleteMessage(messageId: String) {
         val roomId = _activeRoomId.value ?: return
+        val prevServer = _serverMessages.value
+        val prevLocal = _localMessages.value
+
+        // 1. Optimistic instant local removal
         _serverMessages.value = _serverMessages.value.filter { it.id != messageId }
         _localMessages.value = _localMessages.value.filter { it.id != messageId }
 
         viewModelScope.launch {
-            repository.deleteMessage(messageId, roomId)
+            val success = repository.deleteMessage(messageId, roomId)
+            if (!success) {
+                // Graceful rollback on network failure
+                _serverMessages.value = prevServer
+                _localMessages.value = prevLocal
+                com.chroma.studio.ui.components.ToastManager.showToast("Could not delete message.")
+            }
+        }
+    }
+
+    fun deleteMessageForMe(messageId: String) {
+        val roomId = _activeRoomId.value ?: return
+        val prevServer = _serverMessages.value
+        val prevLocal = _localMessages.value
+
+        // 1. Optimistic instant local removal
+        _serverMessages.value = _serverMessages.value.filter { it.id != messageId }
+        _localMessages.value = _localMessages.value.filter { it.id != messageId }
+
+        viewModelScope.launch {
+            val success = repository.deleteMessageForMe(messageId, roomId)
+            if (!success) {
+                // Graceful rollback on network failure
+                _serverMessages.value = prevServer
+                _localMessages.value = prevLocal
+                com.chroma.studio.ui.components.ToastManager.showToast("Could not delete message.")
+            }
         }
     }
 
@@ -650,23 +702,33 @@ class ChatViewModel : ViewModel() {
             }
         }
 
+        val prevServer = _serverMessages.value
+        val prevLocal = _localMessages.value
+
+        // 1. Optimistic instant local edit
         _serverMessages.value = updateList(_serverMessages.value)
         _localMessages.value = updateList(_localMessages.value)
 
         viewModelScope.launch {
-            repository.editMessage(messageId, roomId, newText)
+            val success = repository.editMessage(messageId, roomId, newText)
+            if (!success) {
+                // Graceful rollback on network failure
+                _serverMessages.value = prevServer
+                _localMessages.value = prevLocal
+                com.chroma.studio.ui.components.ToastManager.showToast("Could not edit message.")
+            }
         }
     }
 
-    fun sendMediaMessage(imageBytes: ByteArray, extension: String, text: String = "", replyToMessageId: String? = null) {
+    fun sendMediaMessage(imageBytes: ByteArray, extension: String, text: String = "", replyToMessageId: String? = null, localPreviewUri: String? = null) {
         val roomId = _activeRoomId.value ?: return
         val currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
-        
+
         setTypingStatus(false)
         val msgId = java.util.UUID.randomUUID().toString()
         val timestamp = System.currentTimeMillis()
         val messageType = if (extension.lowercase() in listOf("mp4", "mov", "avi", "mkv")) "video" else "image"
-        
+
         val pendingMsg = ChatMessage(
             id = msgId,
             senderId = currentUserId,
@@ -674,11 +736,13 @@ class ChatViewModel : ViewModel() {
             timestamp = timestamp,
             isPending = true,
             messageType = messageType,
+            imageUrl = localPreviewUri,
+            mediaUrl = localPreviewUri,
             replyToMessageId = replyToMessageId
         )
         // Add to local immediately
         _localMessages.value = listOf(pendingMsg) + _localMessages.value
-        
+
         // Immediately persist to offline cache
         try {
             com.chroma.studio.chat.data.ChatLocalCacheManager.appendOrUpdateMessage(
@@ -689,7 +753,7 @@ class ChatViewModel : ViewModel() {
         } catch (e: Exception) {
             // ignore
         }
-        
+
         // Optimistically update recent chats list
         val currentChats = _recentChats.value.toMutableList()
         val index = currentChats.indexOfFirst { it.id == roomId }
@@ -699,7 +763,7 @@ class ChatViewModel : ViewModel() {
             currentChats.add(0, chat.copy(lastMessage = previewText, lastMessageTime = timestamp))
             _recentChats.value = currentChats
         }
-        
+
         viewModelScope.launch {
             // Compress image bytes before uploading to save storage & bandwidth
             val compressedBytes = if (messageType == "image") {
@@ -711,13 +775,13 @@ class ChatViewModel : ViewModel() {
             if (mediaUrl != null) {
                 val success = repository.sendMessage(roomId, text, imageUrl = mediaUrl, preGeneratedId = msgId, messageType = messageType, replyToMessageId = replyToMessageId)
                 if (!success) {
-                    _localMessages.value = _localMessages.value.map { 
-                        if (it.id == msgId) it.copy(isPending = false, isError = true) else it 
+                    _localMessages.value = _localMessages.value.map {
+                        if (it.id == msgId) it.copy(isPending = false, isError = true) else it
                     }
                 }
             } else {
-                _localMessages.value = _localMessages.value.map { 
-                    if (it.id == msgId) it.copy(isPending = false, isError = true) else it 
+                _localMessages.value = _localMessages.value.map {
+                    if (it.id == msgId) it.copy(isPending = false, isError = true) else it
                 }
             }
         }
@@ -1008,6 +1072,52 @@ class ChatViewModel : ViewModel() {
             }
             roomRef.addValueEventListener(listener)
             typingListeners[roomId] = listener
+        }
+    }
+
+
+    fun votePoll(messageId: String, optionIndex: Int, allowMultiple: Boolean = false) {
+        val roomId = _activeRoomId.value ?: return
+        val currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
+
+        fun updateList(list: List<ChatMessage>): List<ChatMessage> {
+            return list.map { msg ->
+                if (msg.id == messageId) {
+                    val currentVotes = msg.pollVotes.toMutableMap()
+                    val userCurrentVote = currentVotes[currentUserId] ?: ""
+                    val userIndices = if (userCurrentVote.isEmpty()) mutableListOf() else userCurrentVote.split(",").filter { it.isNotBlank() }.toMutableList()
+                    val optStr = optionIndex.toString()
+                    if (userIndices.contains(optStr)) {
+                        userIndices.remove(optStr)
+                    } else {
+                        if (!allowMultiple) userIndices.clear()
+                        userIndices.add(optStr)
+                    }
+                    if (userIndices.isEmpty()) {
+                        currentVotes.remove(currentUserId)
+                    } else {
+                        currentVotes[currentUserId] = userIndices.joinToString(",")
+                    }
+                    msg.copy(pollVotes = currentVotes)
+                } else msg
+            }
+        }
+
+        val prevServer = _serverMessages.value
+        val prevLocal = _localMessages.value
+
+        // 1. Optimistic instant local apply (0ms perceived latency)
+        _serverMessages.value = updateList(_serverMessages.value)
+        _localMessages.value = updateList(_localMessages.value)
+
+        viewModelScope.launch {
+            val success = repository.votePoll(roomId, messageId, optionIndex, allowMultiple)
+            if (!success) {
+                // Graceful rollback
+                _serverMessages.value = prevServer
+                _localMessages.value = prevLocal
+                com.chroma.studio.ui.components.ToastManager.showToast("Could not record vote.")
+            }
         }
     }
 

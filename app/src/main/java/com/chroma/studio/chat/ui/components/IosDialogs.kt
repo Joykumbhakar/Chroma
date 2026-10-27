@@ -1388,19 +1388,16 @@ fun IosMessageContextMenuModal(
                     }
 
                     // More Emojis (+) Button
-                    Box(
+                    PhosphorPlusIcon(
+                        tint = colors.textDark,
+                        size = 20.dp,
                         modifier = Modifier
-                            .size(34.dp)
-                            .clip(CircleShape)
-                            .background(if (colors.isLight) Color(0x14000000) else Color(0x28FFFFFF))
                             .clickable {
                                 onDismiss()
                                 onOpenEmojiPicker?.invoke()
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        PhosphorPlusIcon(tint = colors.textDark, size = 16.dp)
-                    }
+                            }
+                            .padding(6.dp)
+                    )
                 }
 
                 // 2. Message Preview Box
@@ -2409,12 +2406,10 @@ fun IosForwardMessageModal(
                 Box(
                     modifier = Modifier
                         .size(28.dp)
-                        .clip(CircleShape)
-                        .background(colors.surfaceSecondary)
                         .clickable { onDismiss() },
                     contentAlignment = Alignment.Center
                 ) {
-                    PhosphorCloseX(tint = colors.textMuted, size = 12.dp)
+                    PhosphorCloseX(tint = colors.textMuted, size = 16.dp)
                 }
             }
 

@@ -134,19 +134,15 @@ fun GroupInfoScreen(
                         )
 
                         if (isAdmin && !isLeft && !isClosed) {
-                            Box(
+                            Icon(
+                                Lucide.Camera,
+                                contentDescription = "Change Photo",
+                                tint = Color(0xFF007AFF),
                                 modifier = Modifier
-                                    .size(30.dp)
                                     .align(Alignment.BottomEnd)
-                                    .shadow(4.dp, CircleShape, spotColor = Color.Black.copy(alpha = 0.2f))
-                                    .clip(CircleShape)
-                                    .background(Color(0xFF007AFF))
-                                    .border(2.dp, Color.White, CircleShape)
-                                    .clickable { imagePickerLauncher.launch("image/*") },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(Lucide.Camera, "Change Photo", tint = Color.White, modifier = Modifier.size(15.dp))
-                            }
+                                    .size(22.dp)
+                                    .clickable { imagePickerLauncher.launch("image/*") }
+                            )
                         }
                     }
 

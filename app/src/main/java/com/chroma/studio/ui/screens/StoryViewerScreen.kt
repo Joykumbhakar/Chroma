@@ -514,40 +514,26 @@ fun StoryViewerScreen(
 
                         // Owner Delete Action
                         if (isOwner && currentStory != null) {
-                            Box(
+                            Icon(
+                                Lucide.Trash2,
+                                contentDescription = "Delete Story",
+                                tint = Color(0xFFFF453A),
                                 modifier = Modifier
-                                    .size(32.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.Black.copy(alpha = 0.35f))
-                                    .clickable { showDeleteConfirm = true },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    Lucide.Trash2,
-                                    contentDescription = "Delete Story",
-                                    tint = Color(0xFFFF453A),
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                            Spacer(Modifier.width(8.dp))
+                                    .size(24.dp)
+                                    .clickable { showDeleteConfirm = true }
+                            )
+                            Spacer(Modifier.width(12.dp))
                         }
 
                         // Close Button
-                        Box(
+                        Icon(
+                            Lucide.X,
+                            contentDescription = "Close",
+                            tint = Color.White,
                             modifier = Modifier
-                                .size(32.dp)
-                                .clip(CircleShape)
-                                .background(Color.Black.copy(alpha = 0.35f))
-                                .clickable { onClose() },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Lucide.X,
-                                contentDescription = "Close",
-                                tint = Color.White,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
+                                .size(24.dp)
+                                .clickable { onClose() }
+                        )
                     }
                 }
             }

@@ -24,7 +24,22 @@ class ChromaMessagingService : FirebaseMessagingService() {
     }
 
     private fun sendRegistrationToServer(token: String?) {
-        // TODO: Implement this method to send token to your app server if needed
+        if (token.isNullOrBlank()) return
+        val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
+        try {
+            com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                .collection("users")
+                .document(uid)
+                .set(mapOf("fcmToken" to token, "lastTokenUpdate" to System.currentTimeMillis()), com.google.firebase.firestore.SetOptions.merge())
+                .addOnSuccessListener {
+                    Log.d("ChromaMessagingService", "FCM registration token synced to users/$uid")
+                }
+                .addOnFailureListener { e ->
+                    Log.w("ChromaMessagingService", "Could not sync FCM token to users/$uid", e)
+                }
+        } catch (e: Exception) {
+            Log.e("ChromaMessagingService", "Failed to save FCM token to Firestore", e)
+        }
     }
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {

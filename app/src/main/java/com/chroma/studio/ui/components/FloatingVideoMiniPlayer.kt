@@ -202,44 +202,33 @@ fun FloatingVideoMiniPlayer(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         // Maximize Button
-                        Box(
+                        // Maximize Button
+                        Icon(
+                            imageVector = Lucide.Maximize2,
+                            contentDescription = "Maximize",
+                            tint = Color.White,
                             modifier = Modifier
-                                .size(22.dp)
-                                .clip(CircleShape)
-                                .background(Color.Black.copy(alpha = 0.55f))
+                                .size(18.dp)
                                 .clickable {
                                     SoundManager.playTap(context)
                                     onMaximize()
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Lucide.Maximize2,
-                                contentDescription = "Maximize",
-                                tint = Color.White,
-                                modifier = Modifier.size(11.dp)
-                            )
-                        }
+                                }
+                                .padding(2.dp)
+                        )
 
                         // Close Button
-                        Box(
+                        Icon(
+                            imageVector = Lucide.X,
+                            contentDescription = "Close",
+                            tint = Color.White,
                             modifier = Modifier
-                                .size(22.dp)
-                                .clip(CircleShape)
-                                .background(Color.Black.copy(alpha = 0.55f))
+                                .size(18.dp)
                                 .clickable {
                                     SoundManager.playTap(context)
                                     onClose()
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Lucide.X,
-                                contentDescription = "Close",
-                                tint = Color.White,
-                                modifier = Modifier.size(12.dp)
-                            )
-                        }
+                                }
+                                .padding(2.dp)
+                        )
                     }
                 }
 

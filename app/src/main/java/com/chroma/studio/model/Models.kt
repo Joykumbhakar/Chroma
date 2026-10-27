@@ -192,7 +192,10 @@ data class ChatMessage(
     val encryptedAesKeys: Map<String, String> = emptyMap(), // participantId -> RSA Encrypted AES Key
     val reactions: Map<String, String> = emptyMap(), // Maps userId -> emoji (e.g. "❤️", "👍")
     val durationSeconds: Int? = null, // For audio voice notes
-    val replyToMessageId: String? = null
+    val replyToMessageId: String? = null,
+    val pollVotes: Map<String, String> = emptyMap(), // userId -> comma-separated option indexes e.g. "0" or "0,2"
+    val isEdited: Boolean = false,
+    val deletedFor: List<String> = emptyList() // User IDs who have deleted this message for themselves
 )
 
 @kotlinx.serialization.Serializable
@@ -227,6 +230,60 @@ data class UserStoryGroup(
     val stories: List<Story> = emptyList(),
     val allSeen: Boolean = false
 )
+
+// ────────────────────────────────────────────────────────────────────────────
+// Notifications & Activity Models
+// ────────────────────────────────────────────────────────────────────────────
+
+enum class NotificationActionType {
+    LIKE,
+    COMMENT,
+    FOLLOW,
+    MESSAGE,
+    REMIX,
+    MENTION,
+    SYSTEM_DROP,
+    PROJECT_EXPORT,
+    PROJECT_COLLAB
+}
+
+data class ChromaNotification(
+    val id: String = UUID.randomUUID().toString(),
+    val type: NotificationActionType = NotificationActionType.LIKE,
+    val actorUid: String = "",
+    val actorName: String = "",
+    val actorHandle: String = "",
+    val actorAvatarUrl: String? = null,
+    val actorGender: String? = null,
+    val isVerified: Boolean = false,
+    val actionText: String = "",
+    val detailText: String? = null,
+    val targetPreviewUrl: String? = null,
+    val timestamp: Long = System.currentTimeMillis(),
+    val isRead: Boolean = false,
+    val targetId: String? = null,
+    val following: Boolean = false,
+    val likedComment: Boolean = false,
+    val likedBack: Boolean = false
+) {
+    val isUnread: Boolean get() = !isRead
+
+    fun toMap(): Map<String, Any?> = mapOf(
+        "type" to type.name,
+        "actorUid" to actorUid,
+        "actorName" to actorName,
+        "actorHandle" to actorHandle,
+        "actorAvatarUrl" to actorAvatarUrl,
+        "actorGender" to actorGender,
+        "isVerified" to isVerified,
+        "actionText" to actionText,
+        "detailText" to detailText,
+        "targetPreviewUrl" to targetPreviewUrl,
+        "timestamp" to timestamp,
+        "isRead" to isRead,
+        "targetId" to targetId
+    )
+}
 
 // ──────────────────────────────────────────────────────
 // Flash Feed — Short video / photo posts (≤30 s)

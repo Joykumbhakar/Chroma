@@ -274,13 +274,13 @@ fun CreateGroupScreen(
                             Box(
                                 modifier = Modifier
                                     .size(110.dp)
-                                    .clip(CircleShape)
+                                    .clip(RoundedCornerShape(24.dp))
                                     .background(
                                         Brush.linearGradient(
                                             listOf(Color(0xFF0A84FF).copy(alpha = 0.4f), Color(0xFF30D158).copy(alpha = 0.4f))
                                         )
                                     )
-                                    .border(2.dp, Color.White.copy(alpha = 0.3f), CircleShape)
+                                    .border(1.5.dp, Color.White.copy(alpha = 0.3f), RoundedCornerShape(24.dp))
                                     .clickable { imagePicker.launch("image/*") },
                                 contentAlignment = Alignment.Center
                             ) {
@@ -288,7 +288,7 @@ fun CreateGroupScreen(
                                     AsyncImage(
                                         model = ImageRequest.Builder(context).data(groupImageUri).crossfade(true).build(),
                                         contentDescription = null,
-                                        modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                        modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(24.dp)),
                                         contentScale = ContentScale.Crop
                                     )
                                     // Dark overlay + edit icon on top
@@ -447,21 +447,15 @@ private fun UserSelectRow(user: UserProfile, isSelected: Boolean, onClick: () ->
     ) {
         val context = LocalContext.current
         // Avatar
-        Box(
-            modifier = Modifier.size(46.dp).clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.1f)),
-            contentAlignment = Alignment.Center
-        ) {
-            if (user.avatarUrl.isNotBlank()) {
-                AsyncImage(
-                    model = ImageRequest.Builder(context).data(user.avatarUrl).crossfade(true).build(),
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize().clip(CircleShape),
-                    contentScale = ContentScale.Crop
-                )
-            } else {
-                Icon(Lucide.User, null, tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(22.dp))
-            }
+        if (user.avatarUrl.isNotBlank()) {
+            AsyncImage(
+                model = ImageRequest.Builder(context).data(user.avatarUrl).crossfade(true).build(),
+                contentDescription = null,
+                modifier = Modifier.size(46.dp).clip(CircleShape),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            Icon(Lucide.User, null, tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(36.dp).padding(4.dp))
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
@@ -488,15 +482,13 @@ private fun SelectedUserChip(user: UserProfile, onRemove: () -> Unit) {
             .padding(start = 6.dp, end = 10.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
-            if (user.avatarUrl.isNotBlank()) {
-                AsyncImage(
-                    model = ImageRequest.Builder(context).data(user.avatarUrl).crossfade(true).build(),
-                    contentDescription = null, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop
-                )
-            } else {
-                Icon(Lucide.User, null, tint = Color.White, modifier = Modifier.size(12.dp))
-            }
+        if (user.avatarUrl.isNotBlank()) {
+            AsyncImage(
+                model = ImageRequest.Builder(context).data(user.avatarUrl).crossfade(true).build(),
+                contentDescription = null, modifier = Modifier.size(24.dp).clip(CircleShape), contentScale = ContentScale.Crop
+            )
+        } else {
+            Icon(Lucide.User, null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
         }
         Spacer(Modifier.width(6.dp))
         Text(user.displayName.take(12), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)

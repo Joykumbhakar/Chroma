@@ -163,6 +163,15 @@ class DiscoverViewModel : ViewModel() {
         }
     }
 
+    fun addOptimisticPost(post: DiscoverPost) {
+        val current = _works.value
+        _works.value = listOf(post) + current.filter { it.id != post.id }
+    }
+
+    fun removeOptimisticPost(postId: String) {
+        _works.value = _works.value.filter { it.id != postId }
+    }
+
     fun loadWorks(isRefresh: Boolean = false) {
         viewModelScope.launch {
             if (isRefresh) {
@@ -174,7 +183,8 @@ class DiscoverViewModel : ViewModel() {
             try {
                 val recentWorks = repository.getRecentWorks()
                 if (recentWorks.size < 10) hasMoreWorks = false
-                val combined = (SAMPLE_PLACEHOLDER_POSTS + recentWorks).distinctBy { it.id }
+                val pendingOptimistic = _works.value.filter { it.id.startsWith("temp_") }
+                val combined = (pendingOptimistic + recentWorks + SAMPLE_PLACEHOLDER_POSTS).distinctBy { it.id }
                 _works.value = combined
 
                 val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
@@ -212,7 +222,8 @@ class DiscoverViewModel : ViewModel() {
             _isTrendingLoading.value = true
             try {
                 val remoteTrending = repository.getTrendingWorks(5)
-                val combined = (SAMPLE_PLACEHOLDER_POSTS + remoteTrending).distinctBy { it.id }
+                val pendingOptimistic = _works.value.filter { it.id.startsWith("temp_") }
+                val combined = (pendingOptimistic + remoteTrending + SAMPLE_PLACEHOLDER_POSTS).distinctBy { it.id }
                     .sortedByDescending { it.likesCount }
                 _trendingWorks.value = combined
             } catch (e: Exception) {
@@ -268,7 +279,7 @@ class DiscoverViewModel : ViewModel() {
         if (uid.isNullOrBlank()) return
 
         val isLikedNow = _likedWorkIds.value.contains(workId)
-        
+
         if (forceLike && isLikedNow) {
             return // Already liked, skip toggle
         }
@@ -429,7 +440,7 @@ class DiscoverViewModel : ViewModel() {
 
     fun trackShare(workId: String) {
         val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
-        
+
         _works.value = _works.value.map {
             if (it.id == workId && !it.sharedBy.contains(uid)) {
                 it.copy(shareCount = it.shareCount + 1, sharedBy = it.sharedBy + uid)
@@ -449,7 +460,7 @@ class DiscoverViewModel : ViewModel() {
 
     fun trackDownload(workId: String) {
         val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
-        
+
         _works.value = _works.value.map {
             if (it.id == workId && !it.downloadedBy.contains(uid)) {
                 it.copy(downloadCount = it.downloadCount + 1, downloadedBy = it.downloadedBy + uid)
@@ -517,23 +528,43 @@ class DiscoverViewModel : ViewModel() {
     }
 
     fun archiveWork(workId: String) {
+        val prevWorks = _works.value
+        val targetWork = prevWorks.firstOrNull { it.id == workId } ?: return
+        val prevArchived = _archivedWorks.value
+
+        // 1. Optimistic instant local apply
+        _works.value = prevWorks.filter { it.id != workId }
+        _archivedWorks.value = listOf(targetWork) + prevArchived.filter { it.id != workId }
+
         viewModelScope.launch {
             try {
                 repository.archivePost(workId, true)
-                _works.value = _works.value.filter { it.id != workId }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
+                _works.value = prevWorks
+                _archivedWorks.value = prevArchived
+                com.chroma.studio.ui.components.ToastManager.showToast("Could not archive post. Please try again.")
             }
         }
     }
 
     fun unarchiveWork(workId: String, creatorId: String) {
+        val prevArchived = _archivedWorks.value
+        val targetWork = prevArchived.firstOrNull { it.id == workId } ?: return
+        val prevWorks = _works.value
+
+        // 1. Optimistic instant local apply
+        _archivedWorks.value = prevArchived.filter { it.id != workId }
+        _works.value = listOf(targetWork) + prevWorks.filter { it.id != workId }
+
         viewModelScope.launch {
             try {
                 repository.archivePost(workId, false)
-                _archivedWorks.value = _archivedWorks.value.filter { it.id != workId }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
+                _archivedWorks.value = prevArchived
+                _works.value = prevWorks
+                com.chroma.studio.ui.components.ToastManager.showToast("Could not unarchive post. Please try again.")
             }
         }
     }

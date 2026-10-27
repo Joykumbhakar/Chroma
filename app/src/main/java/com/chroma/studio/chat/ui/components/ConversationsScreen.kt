@@ -205,8 +205,6 @@ fun ConversationsScreen(
                             Box(
                                 modifier = Modifier
                                     .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(if (isSearchExpanded || searchQuery.isNotEmpty()) colors.iosBlueSubtle else colors.surfaceSecondary)
                                     .clickable(
                                         interactionSource = remember { MutableInteractionSource() },
                                         indication = null
@@ -216,15 +214,13 @@ fun ConversationsScreen(
                                     },
                                 contentAlignment = Alignment.Center
                             ) {
-                                LucideSearch(tint = if (isSearchExpanded || searchQuery.isNotEmpty()) colors.iosBlue else colors.textDark, size = 18.dp)
+                                LucideSearch(tint = if (isSearchExpanded || searchQuery.isNotEmpty()) colors.iosBlue else colors.textDark, size = 20.dp)
                             }
 
                             // Appearance Theme Button (Palette)
                             Box(
                                 modifier = Modifier
                                     .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(colors.surfaceSecondary)
                                     .clickable(
                                         interactionSource = remember { MutableInteractionSource() },
                                         indication = null
@@ -234,15 +230,13 @@ fun ConversationsScreen(
                                     },
                                 contentAlignment = Alignment.Center
                             ) {
-                                LucidePalette(tint = colors.iosBlue, size = 18.dp)
+                                LucidePalette(tint = colors.iosBlue, size = 20.dp)
                             }
 
                             // Compose New Message Button
                             Box(
                                 modifier = Modifier
                                     .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(colors.surfaceSecondary)
                                     .clickable(
                                         interactionSource = remember { MutableInteractionSource() },
                                         indication = null
@@ -252,7 +246,7 @@ fun ConversationsScreen(
                                     },
                                 contentAlignment = Alignment.Center
                             ) {
-                                LucideEdit(tint = colors.iosBlue, size = 18.dp)
+                                LucideEdit(tint = colors.iosBlue, size = 20.dp)
                             }
 
                             // Current User Profile Avatar (Actual Avatar, Zero Letters)
@@ -330,21 +324,18 @@ fun ConversationsScreen(
                             )
 
                             if (searchQuery.isNotEmpty()) {
-                                Box(
+                                Text(
+                                    text = "✕",
+                                    color = colors.textMuted,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
                                     modifier = Modifier
-                                        .size(18.dp)
-                                        .clip(CircleShape)
-                                        .background(colors.textMuted.copy(alpha = 0.6f))
-                                        .clickable { onSearchQueryChanged("") },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = "✕",
-                                        color = Color.White,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null
+                                        ) { onSearchQueryChanged("") }
+                                        .padding(horizontal = 6.dp, vertical = 4.dp)
+                                )
                             }
                         }
                     }
@@ -548,29 +539,31 @@ fun ConversationsScreen(
                             Box(
                                 modifier = Modifier
                                     .size(34.dp)
-                                    .clip(CircleShape)
-                                    .background(colors.surfaceSecondary)
-                                    .clickable {
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null
+                                    ) {
                                         SoundManager.playReaction()
                                         onStartCall(chat, "Audio Call")
                                     },
                                 contentAlignment = Alignment.Center
                             ) {
-                                LucidePhone(tint = colors.iosBlue, size = 16.dp)
+                                LucidePhone(tint = colors.iosBlue, size = 18.dp)
                             }
 
                             Box(
                                 modifier = Modifier
                                     .size(34.dp)
-                                    .clip(CircleShape)
-                                    .background(colors.surfaceSecondary)
-                                    .clickable {
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null
+                                    ) {
                                         SoundManager.playReaction()
                                         onStartCall(chat, "Video Call")
                                     },
                                 contentAlignment = Alignment.Center
                             ) {
-                                LucideVideo(tint = colors.iosBlue, size = 16.dp)
+                                LucideVideo(tint = colors.iosBlue, size = 18.dp)
                             }
                         }
                     }
@@ -601,13 +594,10 @@ fun ConversationsScreen(
                         horizontalArrangement = Arrangement.spacedBy(13.dp)
                     ) {
                         Box(
-                            modifier = Modifier
-                                .size(54.dp)
-                                .clip(CircleShape)
-                                .background(colors.iosBlueSubtle),
+                            modifier = Modifier.size(44.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            LucideEdit(tint = colors.iosBlue, size = 22.dp)
+                            LucideEdit(tint = colors.iosBlue, size = 24.dp)
                         }
 
                         Column(
@@ -730,6 +720,10 @@ fun ConversationsScreen(
  * Strips raw markdown tags and slash command tags for clean preview display.
  */
 private fun sanitizeMessagePreview(rawText: String): String {
+    if (rawText.startsWith("[POLL]:")) {
+        val q = rawText.removePrefix("[POLL]:").substringBefore("|||").trim()
+        return "Poll: $q"
+    }
     return rawText
         .replace(Regex("\\[([^]]+)\\]\\([^)]+\\)"), "$1") // [label](url) -> label
         .replace(Regex("[#*_~`]"), "")
@@ -901,21 +895,14 @@ private fun IosStoryAvatarItem(
 
             // Plus badge for My Story
             if (isMyStory && !hasNewStory) {
-                Box(
+                Icon(
+                    imageVector = Lucide.Plus,
+                    contentDescription = "Add Story",
+                    tint = colors.iosBlue,
                     modifier = Modifier
-                        .size(20.dp)
+                        .size(18.dp)
                         .align(Alignment.BottomEnd)
-                        .background(colors.iosBlue, CircleShape)
-                        .border(2.dp, colors.appBg, CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Lucide.Plus,
-                        contentDescription = "Add Story",
-                        tint = Color.White,
-                        modifier = Modifier.size(11.dp)
-                    )
-                }
+                )
             }
         }
 
@@ -1043,10 +1030,13 @@ private fun IosConversationListRow(
     val isOutgoing = lastMsg != null && lastMsg.senderId == currentUserId
 
     val lastMsgPreview = when {
+        lastMsg?.mediaType == "poll" || lastMsg?.text?.startsWith("[POLL]:") == true -> {
+            val q = lastMsg?.pollData?.question ?: lastMsg?.text?.removePrefix("[POLL]:")?.substringBefore("|||")?.trim() ?: "Poll"
+            "Poll: $q"
+        }
         lastMsg?.text?.isNotBlank() == true -> sanitizeMessagePreview(lastMsg.text)
         lastMsg?.mediaType == "voice" -> "Voice Message (${lastMsg.voiceDuration}s)"
         lastMsg?.mediaType == "image" -> "Photo"
-        lastMsg?.mediaType == "poll" -> "Poll: ${lastMsg.pollData?.question ?: "Vote"}"
         lastMsg?.mediaType == "location" -> "Location shared"
         else -> "No messages yet"
     }
@@ -1081,12 +1071,12 @@ private fun IosConversationListRow(
                 Box(
                     modifier = Modifier
                         .size(22.dp)
-                        .clip(CircleShape)
+                        .clip(RoundedCornerShape(6.dp))
                         .background(if (isSelected) colors.iosBlue else Color.Transparent)
                         .border(
                             width = if (isSelected) 0.dp else 1.5.dp,
                             color = if (isSelected) Color.Transparent else colors.textMuted.copy(alpha = 0.5f),
-                            shape = CircleShape
+                            shape = RoundedCornerShape(6.dp)
                         )
                         .clickable { onToggleSelect() },
                     contentAlignment = Alignment.Center

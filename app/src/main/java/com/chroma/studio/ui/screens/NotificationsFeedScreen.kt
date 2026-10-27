@@ -21,7 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -43,10 +43,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.chroma.studio.chat.sound.SoundManager
-import com.chroma.studio.data.DiscoverRepository
+import com.chroma.studio.data.NotificationDispatcher
+import com.chroma.studio.data.mutation.OptimisticFollowManager
+import com.chroma.studio.model.ChromaNotification
+import com.chroma.studio.model.NotificationActionType
 import com.chroma.studio.ui.components.ChromaScreenHeader
 import com.chroma.studio.ui.components.DefaultGenderAvatar
 import com.chroma.studio.ui.components.GlassIconButton
+import com.chroma.studio.ui.components.IosAlertDialog
 import com.chroma.studio.ui.components.VerifiedBadge
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.composables.icons.lucide.*
@@ -61,7 +65,7 @@ import kotlinx.coroutines.tasks.await
 import kotlin.math.roundToInt
 
 // ============================================================================
-// DATA MODELS & ENUMS
+// FILTER CATEGORIES
 // ============================================================================
 
 enum class NotificationFilter(val label: String, val icon: ImageVector) {
@@ -73,70 +77,18 @@ enum class NotificationFilter(val label: String, val icon: ImageVector) {
     PROJECTS("Projects", Lucide.Layers)
 }
 
-typealias NotificationCategory = NotificationFilter
-
-enum class NotificationActionType {
-    LIKE,
-    COMMENT,
-    FOLLOW,
-    MESSAGE,
-    REMIX,
-    MENTION,
-    SYSTEM_DROP,
-    PROJECT_EXPORT,
-    PROJECT_COLLAB
-}
-
-data class ChromaNotification(
-    val id: String,
-    val type: NotificationActionType,
-    val actorUid: String,
-    val actorName: String,
-    val actorHandle: String,
-    val actorAvatarUrl: String? = null,
-    val actorGender: String? = null,
-    val isVerified: Boolean = false,
-    val actionText: String = "",
-    val detailText: String? = null,
-    val targetPreviewUrl: String? = null,
-    val timestamp: Long = System.currentTimeMillis(),
-    val isRead: Boolean = false,
-    val targetId: String? = null,
-    val following: Boolean = false,
-    val likedComment: Boolean = false,
-    val likedBack: Boolean = false
-) {
-    val effectiveCategory: NotificationFilter
-        get() = when (type) {
-            NotificationActionType.LIKE -> NotificationFilter.LIKES
-            NotificationActionType.COMMENT -> NotificationFilter.COMMENTS
-            NotificationActionType.FOLLOW -> NotificationFilter.FOLLOWS
-            NotificationActionType.MESSAGE -> NotificationFilter.MESSAGES
-            NotificationActionType.REMIX,
-            NotificationActionType.PROJECT_EXPORT,
-            NotificationActionType.PROJECT_COLLAB -> NotificationFilter.PROJECTS
-            NotificationActionType.MENTION -> NotificationFilter.COMMENTS
-            NotificationActionType.SYSTEM_DROP -> NotificationFilter.ALL
-        }
-
-    val isUnread: Boolean get() = !isRead
-
-    fun toMap(): Map<String, Any?> = mapOf(
-        "type" to type.name,
-        "actorUid" to actorUid,
-        "actorName" to actorName,
-        "actorHandle" to actorHandle,
-        "actorAvatarUrl" to actorAvatarUrl,
-        "actorGender" to actorGender,
-        "isVerified" to isVerified,
-        "actionText" to actionText,
-        "detailText" to detailText,
-        "targetPreviewUrl" to targetPreviewUrl,
-        "timestamp" to timestamp,
-        "isRead" to isRead,
-        "targetId" to targetId
-    )
-}
+val ChromaNotification.effectiveCategory: NotificationFilter
+    get() = when (type) {
+        NotificationActionType.LIKE -> NotificationFilter.LIKES
+        NotificationActionType.COMMENT -> NotificationFilter.COMMENTS
+        NotificationActionType.FOLLOW -> NotificationFilter.FOLLOWS
+        NotificationActionType.MESSAGE -> NotificationFilter.MESSAGES
+        NotificationActionType.REMIX,
+        NotificationActionType.PROJECT_EXPORT,
+        NotificationActionType.PROJECT_COLLAB -> NotificationFilter.PROJECTS
+        NotificationActionType.MENTION -> NotificationFilter.COMMENTS
+        NotificationActionType.SYSTEM_DROP -> NotificationFilter.ALL
+    }
 
 // ============================================================================
 // GLASS HR LINE DIVIDER
@@ -180,7 +132,7 @@ private fun NotifAvatarWithBadge(
 
     Box(
         modifier = Modifier
-            .size(38.dp)
+            .size(42.dp)
             .then(
                 if (onAvatarClick != null) Modifier.clickable { onAvatarClick() }
                 else Modifier
@@ -191,12 +143,12 @@ private fun NotifAvatarWithBadge(
             gender = notification.actorGender,
             avatarUrlOrPreset = notification.actorAvatarUrl,
             name = notification.actorName,
-            size = 38.dp
+            size = 40.dp
         )
 
         Box(
             modifier = Modifier
-                .size(15.dp)
+                .size(16.dp)
                 .offset(x = 2.dp, y = 2.dp)
                 .clip(CircleShape)
                 .background(badgeBgColor)
@@ -207,14 +159,14 @@ private fun NotifAvatarWithBadge(
                 imageVector = badgeIcon,
                 contentDescription = null,
                 tint = badgeIconColor,
-                modifier = Modifier.size(8.dp)
+                modifier = Modifier.size(9.dp)
             )
         }
     }
 }
 
 // ============================================================================
-// SECTION HEADER ROW (Clean flat row architecture)
+// SECTION HEADER ROW
 // ============================================================================
 
 @Composable
@@ -227,8 +179,8 @@ private fun SectionHeaderRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(colors.bg.copy(alpha = 0.85f))
-            .padding(horizontal = 16.dp, vertical = 6.dp),
+            .background(colors.bg.copy(alpha = 0.88f))
+            .padding(horizontal = 16.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
@@ -265,12 +217,13 @@ private fun SectionHeaderRow(
 }
 
 // ============================================================================
-// SWIPEABLE NOTIFICATION ROW (Flat HR Line Architecture — Icon-Only Actions)
+// SWIPEABLE NOTIFICATION ROW (Refined Apple/Instagram Card Architecture)
 // ============================================================================
 
 @Composable
 private fun SwipeableNotificationCard(
     notification: ChromaNotification,
+    isFollowingUser: Boolean,
     isOpenLeftTray: Boolean,
     onOpenSwipeChanged: (String?) -> Unit,
     onCardClick: (ChromaNotification) -> Unit,
@@ -281,7 +234,7 @@ private fun SwipeableNotificationCard(
 ) {
     val colors = LocalOscellionColors.current
     val density = LocalDensity.current
-    val snapLeftPx = with(density) { (-100).dp.toPx() }
+    val snapLeftPx = with(density) { (-96).dp.toPx() }
     val removeThresholdPx = with(density) { 90.dp.toPx() }
     val fullLeftThresholdPx = with(density) { (-120).dp.toPx() }
     val partialLeftThresholdPx = with(density) { (-40).dp.toPx() }
@@ -308,7 +261,7 @@ private fun SwipeableNotificationCard(
                 modifier = Modifier
                     .matchParentSize()
                     .graphicsLayer { alpha = rightAlpha }
-                    .background(colors.error)
+                    .background(Color(0xFFFF3B30))
                     .padding(horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Start
@@ -322,7 +275,7 @@ private fun SwipeableNotificationCard(
             }
         }
 
-        // SWIPE LEFT tray — Contextual Actions (ONLY ICONS)
+        // SWIPE LEFT tray — Contextual Actions (Sleek rounded rectangular glass buttons)
         if (offsetX.value < -4f || isOpenLeftTray) {
             Row(
                 modifier = Modifier
@@ -332,38 +285,15 @@ private fun SwipeableNotificationCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.End
             ) {
-                val primaryIcon = when (notification.type) {
-                    NotificationActionType.MESSAGE -> Lucide.Send
-                    NotificationActionType.FOLLOW  -> if (notification.following) Lucide.UserCheck else Lucide.UserPlus
-                    NotificationActionType.COMMENT -> Lucide.Heart
-                    else -> Lucide.Heart
-                }
-
+                // Read toggle button
                 Box(
                     modifier = Modifier
-                        .size(34.dp)
-                        .clip(CircleShape)
-                        .background(colors.primary)
-                        .clickable { onPrimaryAction(notification) },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = primaryIcon,
-                        contentDescription = "Action",
-                        tint = Color.White,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-
-                Spacer(Modifier.width(8.dp))
-
-                Box(
-                    modifier = Modifier
-                        .size(34.dp)
-                        .clip(CircleShape)
+                        .height(32.dp)
+                        .clip(RoundedCornerShape(8.dp))
                         .background(colors.glassBg)
-                        .border(1.dp, colors.glassBorder, CircleShape)
-                        .clickable { onToggleRead(notification) },
+                        .border(1.dp, colors.glassBorder, RoundedCornerShape(8.dp))
+                        .clickable { onToggleRead(notification) }
+                        .padding(horizontal = 10.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -373,16 +303,37 @@ private fun SwipeableNotificationCard(
                         modifier = Modifier.size(16.dp)
                     )
                 }
+
+                Spacer(Modifier.width(8.dp))
+
+                // Delete action button
+                Box(
+                    modifier = Modifier
+                        .height(32.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFFFF3B30).copy(alpha = 0.15f))
+                        .border(1.dp, Color(0xFFFF3B30).copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                        .clickable { onSwipeRightRemove(notification) }
+                        .padding(horizontal = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Lucide.Trash2,
+                        contentDescription = "Delete",
+                        tint = Color(0xFFFF3B30),
+                        modifier = Modifier.size(15.dp)
+                    )
+                }
             }
         }
 
-        // FOREGROUND ROW (Flat continuous row separated by HR lines — no card box)
+        // FOREGROUND ROW
         Row(
             modifier = Modifier
                 .offset { IntOffset(offsetX.value.roundToInt(), 0) }
                 .fillMaxWidth()
                 .background(
-                    if (notification.isUnread) colors.glassBgHover.copy(alpha = 0.5f)
+                    if (notification.isUnread) colors.glassBgHover.copy(alpha = 0.45f)
                     else Color.Transparent
                 )
                 .pointerInput(notification.id, isOpenLeftTray) {
@@ -438,7 +389,7 @@ private fun SwipeableNotificationCard(
                     if (isOpenLeftTray) onOpenSwipeChanged(null)
                     else onCardClick(notification)
                 }
-                .padding(horizontal = 16.dp, vertical = 10.dp),
+                .padding(horizontal = 16.dp, vertical = 11.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -446,7 +397,7 @@ private fun SwipeableNotificationCard(
             Row(
                 modifier = Modifier.weight(1f),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 NotifAvatarWithBadge(
                     notification = notification,
@@ -457,15 +408,15 @@ private fun SwipeableNotificationCard(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    // Line 1: User name, Verification, Dot, Time
+                    // Line 1: User name, Verification, Unread dot, Time
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
                         Text(
                             text = notification.actorName,
-                            fontSize = 13.sp,
+                            fontSize = 13.5.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = colors.textMain,
                             maxLines = 1,
@@ -485,7 +436,7 @@ private fun SwipeableNotificationCard(
                         }
                         Text(
                             text = "• ${formatRelativeTime(notification.timestamp)}",
-                            fontSize = 11.sp,
+                            fontSize = 11.5.sp,
                             fontWeight = FontWeight.Normal,
                             color = colors.textMuted,
                             maxLines = 1,
@@ -493,7 +444,7 @@ private fun SwipeableNotificationCard(
                         )
                     }
 
-                    // Line 2: Action text + Snippet with ellipsis (...)
+                    // Line 2: Action text + Snippet
                     val combinedText = remember(notification.actionText, notification.detailText) {
                         if (!notification.detailText.isNullOrBlank()) {
                             "${notification.actionText}: ${notification.detailText}"
@@ -504,7 +455,7 @@ private fun SwipeableNotificationCard(
 
                     Text(
                         text = combinedText,
-                        fontSize = 11.5.sp,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.Normal,
                         color = colors.textMuted,
                         maxLines = 1,
@@ -513,71 +464,105 @@ private fun SwipeableNotificationCard(
                 }
             }
 
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(10.dp))
 
-            // Right: Contextual Action (ONLY ICONS)
+            // Right: Authentic Contextual Action Buttons (NO circle backgrounds)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 when (notification.type) {
                     NotificationActionType.FOLLOW -> {
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    if (notification.following) colors.glassBgHover else colors.primary
+                        // High-grade social follow button (Follow / Following)
+                        if (!isFollowingUser) {
+                            Box(
+                                modifier = Modifier
+                                    .height(30.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(colors.primary)
+                                    .clickable { onPrimaryAction(notification) }
+                                    .padding(horizontal = 14.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Follow",
+                                    color = Color.White,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold
                                 )
-                                .border(
-                                    1.dp,
-                                    if (notification.following) colors.glassBorder else colors.primary,
-                                    CircleShape
+                            }
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .height(30.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(colors.glassBg)
+                                    .border(1.dp, colors.glassBorder, RoundedCornerShape(8.dp))
+                                    .clickable { onPrimaryAction(notification) }
+                                    .padding(horizontal = 12.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Following",
+                                    color = colors.textMain,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium
                                 )
-                                .clickable { onPrimaryAction(notification) },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = if (notification.following) Lucide.UserCheck else Lucide.UserPlus,
-                                contentDescription = if (notification.following) "Following" else "Follow",
-                                tint = if (notification.following) colors.textMain else Color.White,
-                                modifier = Modifier.size(15.dp)
-                            )
+                            }
                         }
                     }
                     NotificationActionType.MESSAGE -> {
+                        // Clean Reply button
                         Box(
                             modifier = Modifier
-                                .size(32.dp)
-                                .clip(CircleShape)
+                                .height(30.dp)
+                                .clip(RoundedCornerShape(8.dp))
                                 .background(colors.glassBg)
-                                .border(1.dp, colors.glassBorder, CircleShape)
-                                .clickable { onPrimaryAction(notification) },
+                                .border(1.dp, colors.glassBorder, RoundedCornerShape(8.dp))
+                                .clickable { onPrimaryAction(notification) }
+                                .padding(horizontal = 12.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                imageVector = Lucide.Send,
-                                contentDescription = "Reply",
-                                tint = colors.primary,
-                                modifier = Modifier.size(14.dp)
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.Send,
+                                    contentDescription = "Reply",
+                                    tint = colors.primary,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Text(
+                                    text = "Reply",
+                                    color = colors.primary,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
                         }
                     }
                     NotificationActionType.COMMENT -> {
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clip(CircleShape)
-                                .background(colors.glassBg)
-                                .border(1.dp, colors.glassBorder, CircleShape)
-                                .clickable { onPrimaryAction(notification) },
-                            contentAlignment = Alignment.Center
-                        ) {
+                        if (!notification.targetPreviewUrl.isNullOrBlank()) {
+                            AsyncImage(
+                                model = notification.targetPreviewUrl,
+                                contentDescription = "Post Preview",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .border(0.5.dp, colors.glassBorder, RoundedCornerShape(8.dp))
+                                    .clickable { onCardClick(notification) }
+                            )
+                        } else {
                             Icon(
                                 imageVector = Lucide.Heart,
-                                contentDescription = "Like",
+                                contentDescription = "Like Comment",
                                 tint = if (notification.likedComment) colors.primary else colors.textMuted,
-                                modifier = Modifier.size(15.dp)
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .clickable { onPrimaryAction(notification) }
+                                    .padding(2.dp)
                             )
                         }
                     }
@@ -588,9 +573,10 @@ private fun SwipeableNotificationCard(
                                 contentDescription = "Preview",
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier
-                                    .size(32.dp)
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .border(0.5.dp, colors.glassBorder, RoundedCornerShape(6.dp))
+                                    .size(38.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .border(0.5.dp, colors.glassBorder, RoundedCornerShape(8.dp))
+                                    .clickable { onCardClick(notification) }
                             )
                         }
                     }
@@ -605,7 +591,7 @@ private fun SwipeableNotificationCard(
 // ============================================================================
 
 @Composable
-private fun FeedSkeletonList(rowCount: Int = 5) {
+private fun FeedSkeletonList(rowCount: Int = 6) {
     val colors = LocalOscellionColors.current
     val transition = rememberInfiniteTransition(label = "shimmer")
     val shimmerX = transition.animateFloat(
@@ -631,11 +617,11 @@ private fun FeedSkeletonList(rowCount: Int = 5) {
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Box(
                     modifier = Modifier
-                        .size(38.dp)
+                        .size(40.dp)
                         .clip(CircleShape)
                         .background(shimmer)
                 )
@@ -646,22 +632,22 @@ private fun FeedSkeletonList(rowCount: Int = 5) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth(if (idx % 2 == 0) 0.55f else 0.4f)
-                            .height(11.dp)
-                            .clip(CircleShape)
+                            .height(12.dp)
+                            .clip(RoundedCornerShape(4.dp))
                             .background(shimmer)
                     )
                     Box(
                         modifier = Modifier
                             .fillMaxWidth(0.75f)
-                            .height(9.dp)
-                            .clip(CircleShape)
+                            .height(10.dp)
+                            .clip(RoundedCornerShape(4.dp))
                             .background(shimmer)
                     )
                 }
                 Box(
                     modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(8.dp))
                         .background(shimmer)
                 )
             }
@@ -671,7 +657,7 @@ private fun FeedSkeletonList(rowCount: Int = 5) {
 }
 
 // ============================================================================
-// CLEAN COMPACT EMPTY STATE
+// CLEAN EMPTY STATE
 // ============================================================================
 
 @Composable
@@ -683,58 +669,51 @@ private fun NotificationEmptyState(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 24.dp, vertical = 40.dp),
+            .padding(horizontal = 32.dp, vertical = 60.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Box(
-            modifier = Modifier
-                .size(64.dp)
-                .clip(CircleShape)
-                .background(colors.glassBg)
-                .border(1.dp, colors.glassBorder, CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Lucide.BellOff,
-                contentDescription = null,
-                tint = colors.textMuted,
-                modifier = Modifier.size(28.dp)
-            )
-        }
+        Icon(
+            imageVector = Lucide.BellOff,
+            contentDescription = null,
+            tint = colors.textMuted.copy(alpha = 0.6f),
+            modifier = Modifier.size(52.dp)
+        )
 
         Spacer(Modifier.height(16.dp))
 
         Text(
-            text = "All Caught Up",
-            fontSize = 16.sp,
+            text = if (filterLabel == "All") "All Caught Up" else "No $filterLabel Yet",
+            fontSize = 17.sp,
             fontWeight = FontWeight.Bold,
             color = colors.textMain,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            textAlign = TextAlign.Center
         )
 
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(6.dp))
 
         Text(
-            text = "No $filterLabel notifications right now",
-            fontSize = 12.5.sp,
+            text = if (filterLabel == "All") {
+                "When people like, comment, follow, or message you, your notifications will appear right here."
+            } else {
+                "No notifications matching the \"$filterLabel\" category at the moment."
+            },
+            fontSize = 13.5.sp,
+            fontWeight = FontWeight.Normal,
             color = colors.textMuted,
             textAlign = TextAlign.Center,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            lineHeight = 19.sp
         )
 
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(20.dp))
 
         Box(
             modifier = Modifier
-                .clip(CircleShape)
+                .clip(RoundedCornerShape(10.dp))
                 .background(colors.glassBg)
-                .border(1.dp, colors.glassBorder, CircleShape)
+                .border(1.dp, colors.glassBorder, RoundedCornerShape(10.dp))
                 .clickable { onRefresh() }
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            contentAlignment = Alignment.Center
+                .padding(horizontal = 16.dp, vertical = 9.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -742,13 +721,13 @@ private fun NotificationEmptyState(
             ) {
                 Icon(
                     imageVector = Lucide.RefreshCw,
-                    contentDescription = "Refresh",
+                    contentDescription = null,
                     tint = colors.primary,
-                    modifier = Modifier.size(13.dp)
+                    modifier = Modifier.size(14.dp)
                 )
                 Text(
-                    text = "Refresh",
-                    fontSize = 12.sp,
+                    text = "Refresh Activity",
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = colors.primary
                 )
@@ -777,8 +756,10 @@ fun NotificationsFeedScreen(
 
     // Firebase Data
     val currentUid = remember { FirebaseAuth.getInstance().currentUser?.uid }
-    var notificationsList by remember { mutableStateOf(defaultCommunityNotifications) }
-    val discoverRepo = remember { DiscoverRepository() }
+    var notificationsList by remember { mutableStateOf<List<ChromaNotification>>(emptyList()) }
+
+    // Real-time follow states from single source of truth
+    val followingUserIds by OptimisticFollowManager.followingUserIds.collectAsState()
 
     // UI States
     var selectedFilter by remember { mutableStateOf(NotificationFilter.ALL) }
@@ -789,8 +770,10 @@ fun NotificationsFeedScreen(
     var isManualRefreshing by remember { mutableStateOf(false) }
     var openSwipeCardId by remember { mutableStateOf<String?>(null) }
     var lastRemovedBackup by remember { mutableStateOf<Pair<ChromaNotification, Int>?>(null) }
+    var isMoreMenuOpen by remember { mutableStateOf(false) }
+    var showClearConfirmDialog by remember { mutableStateOf(false) }
 
-    // Toast
+    // Toast Banner
     var toastMessage by remember { mutableStateOf<String?>(null) }
     var toastShowUndo by remember { mutableStateOf(false) }
     var toastJob by remember { mutableStateOf<Job?>(null) }
@@ -809,7 +792,7 @@ fun NotificationsFeedScreen(
     // Realtime Firestore Snapshot Listener
     DisposableEffect(currentUid) {
         if (currentUid == null) {
-            notificationsList = defaultCommunityNotifications
+            notificationsList = emptyList()
             isFeedLoading = false
             return@DisposableEffect onDispose {}
         }
@@ -819,19 +802,16 @@ fun NotificationsFeedScreen(
             .document(currentUid)
             .collection("notifications")
             .orderBy("timestamp", Query.Direction.DESCENDING)
-            .limit(80)
+            .limit(100)
             .addSnapshotListener { snapshot, error ->
                 isFeedLoading = false
                 isManualRefreshing = false
 
                 if (error != null) {
-                    if (notificationsList.isEmpty()) {
-                        notificationsList = defaultCommunityNotifications
-                    }
                     return@addSnapshotListener
                 }
 
-                if (snapshot != null && !snapshot.isEmpty) {
+                if (snapshot != null) {
                     val fetched = snapshot.documents.mapNotNull { doc ->
                         try {
                             ChromaNotification(
@@ -840,8 +820,8 @@ fun NotificationsFeedScreen(
                                     NotificationActionType.valueOf(doc.getString("type") ?: "LIKE")
                                 }.getOrDefault(NotificationActionType.LIKE),
                                 actorUid = doc.getString("actorUid") ?: "",
-                                actorName = doc.getString("actorName") ?: "Unknown",
-                                actorHandle = doc.getString("actorHandle") ?: "",
+                                actorName = doc.getString("actorName") ?: "Chroma Creator",
+                                actorHandle = doc.getString("actorHandle") ?: "@user",
                                 actorAvatarUrl = doc.getString("actorAvatarUrl"),
                                 actorGender = doc.getString("actorGender"),
                                 isVerified = doc.getBoolean("isVerified") ?: false,
@@ -854,13 +834,7 @@ fun NotificationsFeedScreen(
                             )
                         } catch (_: Exception) { null }
                     }
-                    if (fetched.isNotEmpty()) {
-                        notificationsList = fetched
-                    }
-                } else if (snapshot != null && snapshot.isEmpty) {
-                    if (notificationsList.isEmpty()) {
-                        notificationsList = defaultCommunityNotifications
-                    }
+                    notificationsList = fetched
                 }
             }
 
@@ -884,6 +858,8 @@ fun NotificationsFeedScreen(
         }
     }
 
+    val unreadCount = remember(notificationsList) { notificationsList.count { it.isUnread } }
+
     // Mutation Operations
     fun markAsRead(notifId: String) {
         val target = notificationsList.find { it.id == notifId }
@@ -891,19 +867,14 @@ fun NotificationsFeedScreen(
 
         notificationsList = notificationsList.map { if (it.id == notifId) it.copy(isRead = true) else it }
         if (currentUid != null) {
-            scope.launch(Dispatchers.IO) {
-                try {
-                    FirebaseFirestore.getInstance()
-                        .collection("users").document(currentUid)
-                        .collection("notifications").document(notifId)
-                        .update("isRead", true)
-                } catch (_: Exception) {}
+            scope.launch {
+                NotificationDispatcher.updateNotificationRead(currentUid, notifId, true)
             }
         }
     }
 
     fun markAllAsRead() {
-        val unread = notificationsList.filter { !it.isRead }
+        val unread = notificationsList.filter { it.isUnread }
         if (unread.isEmpty()) return
 
         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -912,16 +883,8 @@ fun NotificationsFeedScreen(
         showToast("All marked as read")
 
         if (currentUid != null) {
-            scope.launch(Dispatchers.IO) {
-                try {
-                    val db = FirebaseFirestore.getInstance()
-                    val col = db.collection("users").document(currentUid).collection("notifications")
-                    unread.chunked(500).forEach { chunk ->
-                        val batch = db.batch()
-                        chunk.forEach { n -> batch.update(col.document(n.id), "isRead", true) }
-                        batch.commit().await()
-                    }
-                } catch (_: Exception) {}
+            scope.launch {
+                NotificationDispatcher.markAllAsRead(currentUid)
             }
         }
     }
@@ -937,13 +900,8 @@ fun NotificationsFeedScreen(
         showToast(if (!nextRead) "Marked as unread" else "Marked as read")
 
         if (currentUid != null) {
-            scope.launch(Dispatchers.IO) {
-                try {
-                    FirebaseFirestore.getInstance()
-                        .collection("users").document(currentUid)
-                        .collection("notifications").document(notification.id)
-                        .update("isRead", nextRead)
-                } catch (_: Exception) {}
+            scope.launch {
+                NotificationDispatcher.updateNotificationRead(currentUid, notification.id, nextRead)
             }
         }
     }
@@ -958,13 +916,8 @@ fun NotificationsFeedScreen(
             showToast("Notification removed", showUndo = true)
 
             if (currentUid != null) {
-                scope.launch(Dispatchers.IO) {
-                    try {
-                        FirebaseFirestore.getInstance()
-                            .collection("users").document(currentUid)
-                            .collection("notifications").document(removed.id)
-                            .delete()
-                    } catch (_: Exception) {}
+                scope.launch {
+                    NotificationDispatcher.deleteNotification(currentUid, removed.id)
                 }
             }
         }
@@ -991,6 +944,20 @@ fun NotificationsFeedScreen(
         }
     }
 
+    fun clearAllNotifications() {
+        if (notificationsList.isEmpty()) return
+        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        notificationsList = emptyList()
+        openSwipeCardId = null
+        showToast("All notifications cleared")
+
+        if (currentUid != null) {
+            scope.launch {
+                NotificationDispatcher.clearAllNotifications(currentUid)
+            }
+        }
+    }
+
     fun handlePrimaryAction(item: ChromaNotification) {
         openSwipeCardId = null
         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -1013,12 +980,20 @@ fun NotificationsFeedScreen(
                 }
             }
             NotificationActionType.FOLLOW -> {
-                val next = !item.following
-                notificationsList = notificationsList.map { if (it.id == item.id) it.copy(following = next, isRead = true) else it }
-                SoundManager.playTap(context)
-                showToast(if (next) "Following ${item.actorHandle}" else "Unfollowed ${item.actorHandle}")
                 if (currentUid != null && item.actorUid.isNotBlank()) {
-                    scope.launch { try { discoverRepo.toggleFollow(currentUid, item.actorUid) } catch (_: Exception) {} }
+                    val currentlyFollowing = followingUserIds.contains(item.actorUid) || item.following
+                    val next = !currentlyFollowing
+                    SoundManager.playTap(context)
+                    showToast(if (next) "Following ${item.actorHandle}" else "Unfollowed ${item.actorHandle}")
+
+                    OptimisticFollowManager.toggleFollow(
+                        currentUserId = currentUid,
+                        targetUserId = item.actorUid,
+                        baseFollowing = currentlyFollowing,
+                        onError = {
+                            showToast("Could not update follow status.")
+                        }
+                    )
                 }
             }
             NotificationActionType.COMMENT -> {
@@ -1031,7 +1006,7 @@ fun NotificationsFeedScreen(
                 val next = !item.likedBack
                 notificationsList = notificationsList.map { if (it.id == item.id) it.copy(likedBack = next, isRead = true) else it }
                 SoundManager.playPop()
-                showToast(if (next) "Sent thanks to ${item.actorHandle}" else "Removed reaction")
+                showToast(if (next) "Sent reaction to ${item.actorHandle}" else "Removed reaction")
             }
         }
     }
@@ -1068,7 +1043,7 @@ fun NotificationsFeedScreen(
                     if (onNavigateToPost != null) {
                         onNavigateToPost(clicked.targetId ?: "", clicked.actorUid.ifBlank { null })
                     } else {
-                        showToast("Viewed post by ${clicked.actorName}")
+                        showToast("Opening post...")
                     }
                 } else {
                     showToast("Viewed ${clicked.actorName}")
@@ -1079,6 +1054,8 @@ fun NotificationsFeedScreen(
             NotificationActionType.REMIX -> {
                 if (onNavigateToProject != null) {
                     onNavigateToProject(clicked.targetId)
+                } else if (!clicked.targetId.isNullOrBlank() && onNavigateToPost != null) {
+                    onNavigateToPost(clicked.targetId, clicked.actorUid.ifBlank { null })
                 } else {
                     showToast("Opening project ${clicked.detailText ?: ""}")
                 }
@@ -1096,7 +1073,6 @@ fun NotificationsFeedScreen(
         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
 
         if (currentUid == null) {
-            notificationsList = defaultCommunityNotifications
             scope.launch {
                 delay(300L)
                 isFeedLoading = false
@@ -1113,7 +1089,7 @@ fun NotificationsFeedScreen(
                     .document(currentUid)
                     .collection("notifications")
                     .orderBy("timestamp", Query.Direction.DESCENDING)
-                    .limit(80)
+                    .limit(100)
                     .get()
                     .await()
                     .let { snap ->
@@ -1125,8 +1101,8 @@ fun NotificationsFeedScreen(
                                         NotificationActionType.valueOf(doc.getString("type") ?: "LIKE")
                                     }.getOrDefault(NotificationActionType.LIKE),
                                     actorUid = doc.getString("actorUid") ?: "",
-                                    actorName = doc.getString("actorName") ?: "Unknown",
-                                    actorHandle = doc.getString("actorHandle") ?: "",
+                                    actorName = doc.getString("actorName") ?: "Chroma Creator",
+                                    actorHandle = doc.getString("actorHandle") ?: "@user",
                                     actorAvatarUrl = doc.getString("actorAvatarUrl"),
                                     actorGender = doc.getString("actorGender"),
                                     isVerified = doc.getBoolean("isVerified") ?: false,
@@ -1139,7 +1115,7 @@ fun NotificationsFeedScreen(
                                 )
                             } catch (_: Exception) { null }
                         }
-                        if (fetched.isNotEmpty()) notificationsList = fetched
+                        notificationsList = fetched
                     }
             } catch (_: Exception) {
             } finally {
@@ -1148,20 +1124,6 @@ fun NotificationsFeedScreen(
                 isManualRefreshing = false
                 showToast("Notifications refreshed")
             }
-        }
-    }
-
-    val unreadCount = notificationsList.count { !it.isRead }
-
-    val refreshRotation = remember { Animatable(0f) }
-    LaunchedEffect(isManualRefreshing) {
-        if (isManualRefreshing) {
-            refreshRotation.animateTo(
-                targetValue = refreshRotation.value + 360f,
-                animationSpec = infiniteRepeatable(tween(750, easing = LinearEasing))
-            )
-        } else {
-            refreshRotation.snapTo(0f)
         }
     }
 
@@ -1176,22 +1138,22 @@ fun NotificationsFeedScreen(
                 .statusBarsPadding()
                 .navigationBarsPadding()
         ) {
-            // Header with design system ChromaScreenHeader
+            // Header with design system ChromaScreenHeader and Overflow Menu
             ChromaScreenHeader(
                 title = "Activity",
                 badgeText = if (unreadCount > 0) "$unreadCount" else null,
                 showBackButton = true,
-                circularBackButton = true,
+                circularBackButton = false,
                 onBack = onBack,
                 isSearchExpanded = searchOpen,
                 searchContent = {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(38.dp)
-                            .clip(CircleShape)
+                            .height(40.dp)
+                            .clip(RoundedCornerShape(12.dp))
                             .background(colors.glassBg)
-                            .border(1.dp, colors.glassBorder, CircleShape)
+                            .border(1.dp, colors.glassBorder, RoundedCornerShape(12.dp))
                             .padding(horizontal = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -1207,7 +1169,7 @@ fun NotificationsFeedScreen(
                             onValueChange = { searchQuery = it },
                             singleLine = true,
                             textStyle = TextStyle(
-                                fontSize = 13.sp,
+                                fontSize = 13.5.sp,
                                 color = colors.textMain,
                                 fontWeight = FontWeight.Normal
                             ),
@@ -1216,7 +1178,7 @@ fun NotificationsFeedScreen(
                                 if (searchQuery.isEmpty()) {
                                     Text(
                                         text = "Search notifications...",
-                                        fontSize = 13.sp,
+                                        fontSize = 13.5.sp,
                                         color = colors.textMuted,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
@@ -1232,7 +1194,6 @@ fun NotificationsFeedScreen(
                                 tint = colors.textMuted,
                                 modifier = Modifier
                                     .size(16.dp)
-                                    .clip(CircleShape)
                                     .clickable { searchQuery = "" }
                             )
                         }
@@ -1242,7 +1203,6 @@ fun NotificationsFeedScreen(
                             tint = colors.primary,
                             modifier = Modifier
                                 .size(18.dp)
-                                .clip(CircleShape)
                                 .clickable { searchOpen = false }
                         )
                     }
@@ -1261,64 +1221,159 @@ fun NotificationsFeedScreen(
                         )
                     }
 
-                    // Mark all read
-                    GlassIconButton(
-                        onClick = { markAllAsRead() },
-                        modifier = Modifier.size(34.dp),
-                        enabled = unreadCount > 0
-                    ) {
-                        Box(contentAlignment = Alignment.TopEnd) {
-                            Icon(
-                                imageVector = Lucide.CheckCheck,
-                                contentDescription = "Mark all read",
-                                tint = if (unreadCount > 0) colors.primary else colors.textMuted,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            if (unreadCount > 0) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(6.dp)
-                                        .offset(x = 2.dp, y = (-2).dp)
-                                        .clip(CircleShape)
-                                        .background(colors.primary)
-                                )
-                            }
-                        }
-                    }
-
-                    // Refresh
-                    GlassIconButton(
-                        onClick = { triggerManualRefresh() },
-                        modifier = Modifier.size(34.dp)
-                    ) {
-                        Icon(
-                            imageVector = Lucide.RefreshCw,
-                            contentDescription = "Refresh",
-                            tint = colors.textMain,
-                            modifier = Modifier
-                                .size(16.dp)
-                                .rotate(refreshRotation.value)
-                        )
-                    }
-
-                    // Settings
-                    if (onNavigateToSettings != null) {
+                    // Native Dropdown Menu ("use menus")
+                    Box {
                         GlassIconButton(
-                            onClick = { onNavigateToSettings() },
+                            onClick = { isMoreMenuOpen = true },
                             modifier = Modifier.size(34.dp)
                         ) {
                             Icon(
-                                imageVector = Lucide.SlidersHorizontal,
-                                contentDescription = "Settings",
+                                imageVector = Lucide.EllipsisVertical,
+                                contentDescription = "More Options",
                                 tint = colors.textMain,
                                 modifier = Modifier.size(16.dp)
+                            )
+                        }
+
+                        DropdownMenu(
+                            expanded = isMoreMenuOpen,
+                            onDismissRequest = { isMoreMenuOpen = false },
+                            modifier = Modifier
+                                .shadow(16.dp, RoundedCornerShape(20.dp), ambientColor = Color.Black.copy(alpha = 0.25f))
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(colors.glassBg, RoundedCornerShape(20.dp))
+                                .border(0.5.dp, colors.glassBorder, RoundedCornerShape(20.dp))
+                        ) {
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = if (unreadCount > 0) "Mark all as read ($unreadCount)" else "Mark all as read",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = if (unreadCount > 0) colors.textMain else colors.textMuted
+                                    )
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Lucide.CheckCheck,
+                                        contentDescription = null,
+                                        tint = if (unreadCount > 0) colors.primary else colors.textMuted,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                },
+                                enabled = unreadCount > 0,
+                                onClick = {
+                                    isMoreMenuOpen = false
+                                    markAllAsRead()
+                                }
+                            )
+
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = if (unreadOnly) "Show all notifications" else "Only unread notifications",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = colors.textMain
+                                    )
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = if (unreadOnly) Lucide.LayoutGrid else Lucide.Filter,
+                                        contentDescription = null,
+                                        tint = colors.textMain,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                },
+                                onClick = {
+                                    isMoreMenuOpen = false
+                                    unreadOnly = !unreadOnly
+                                }
+                            )
+
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = "Refresh Activity",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = colors.textMain
+                                    )
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Lucide.RefreshCw,
+                                        contentDescription = null,
+                                        tint = colors.textMain,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                },
+                                onClick = {
+                                    isMoreMenuOpen = false
+                                    triggerManualRefresh()
+                                }
+                            )
+
+                            if (onNavigateToSettings != null) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = "Notification Settings",
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = colors.textMain
+                                        )
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Lucide.SlidersHorizontal,
+                                            contentDescription = null,
+                                            tint = colors.textMain,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    },
+                                    onClick = {
+                                        isMoreMenuOpen = false
+                                        onNavigateToSettings()
+                                    }
+                                )
+                            }
+
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 8.dp),
+                                thickness = 0.5.dp,
+                                color = colors.glassBorder
+                            )
+
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = "Clear all notifications",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = Color(0xFFFF3B30)
+                                    )
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Lucide.Trash2,
+                                        contentDescription = null,
+                                        tint = Color(0xFFFF3B30),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                },
+                                enabled = notificationsList.isNotEmpty(),
+                                onClick = {
+                                    isMoreMenuOpen = false
+                                    showClearConfirmDialog = true
+                                }
                             )
                         }
                     }
                 }
             )
 
-            // Category Filter Icon Pills (ONLY LUCIDE ICONS INSTEAD OF TEXT)
+            // Segmented Category Filter Tabs (Proper text labels + clean rounded rectangles)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1328,31 +1383,31 @@ fun NotificationsFeedScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 val filters = listOf(
-                    NotificationFilter.ALL to Lucide.LayoutGrid,
-                    NotificationFilter.LIKES to Lucide.Heart,
-                    NotificationFilter.COMMENTS to Lucide.MessageCircle,
-                    NotificationFilter.FOLLOWS to Lucide.UserPlus,
-                    NotificationFilter.MESSAGES to Lucide.Send,
-                    NotificationFilter.PROJECTS to Lucide.Layers
+                    NotificationFilter.ALL to "All",
+                    NotificationFilter.LIKES to "Likes",
+                    NotificationFilter.COMMENTS to "Comments",
+                    NotificationFilter.FOLLOWS to "Follows",
+                    NotificationFilter.MESSAGES to "Messages",
+                    NotificationFilter.PROJECTS to "Projects"
                 )
 
-                filters.forEach { (filter, icon) ->
+                filters.forEach { (filter, label) ->
                     val isSelected = selectedFilter == filter
-                    val unreadForFilter = notificationsList.count {
+                    val unreadCountForTab = notificationsList.count {
                         (filter == NotificationFilter.ALL || it.effectiveCategory == filter) && it.isUnread
                     }
 
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
+                            .clip(RoundedCornerShape(10.dp))
                             .background(
-                                if (isSelected) colors.primary else colors.glassBg
+                                if (isSelected) colors.primary.copy(alpha = 0.15f)
+                                else colors.glassBg
                             )
                             .border(
-                                width = if (isSelected) 1.5.dp else 1.dp,
-                                color = if (isSelected) colors.primary else colors.glassBorder,
-                                shape = CircleShape
+                                width = 1.dp,
+                                color = if (isSelected) colors.primary.copy(alpha = 0.6f) else colors.glassBorder,
+                                shape = RoundedCornerShape(10.dp)
                             )
                             .clickable {
                                 if (selectedFilter != filter) {
@@ -1360,67 +1415,49 @@ fun NotificationsFeedScreen(
                                     selectedFilter = filter
                                     openSwipeCardId = null
                                 }
-                            },
+                            }
+                            .padding(horizontal = 14.dp, vertical = 7.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = filter.label,
-                            tint = if (isSelected) Color.White else colors.textMuted,
-                            modifier = Modifier.size(16.dp)
-                        )
-
-                        if (unreadForFilter > 0 && !isSelected) {
-                            Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .align(Alignment.TopEnd)
-                                    .offset(x = (-4).dp, y = 4.dp)
-                                    .clip(CircleShape)
-                                    .background(colors.primary)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = label,
+                                fontSize = 12.5.sp,
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                                color = if (isSelected) colors.primary else colors.textMuted
                             )
+                            if (unreadCountForTab > 0) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(if (isSelected) colors.primary else colors.primary.copy(alpha = 0.2f))
+                                        .padding(horizontal = 5.dp, vertical = 1.dp)
+                                ) {
+                                    Text(
+                                        text = if (unreadCountForTab > 99) "99+" else "$unreadCountForTab",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isSelected) Color.White else colors.primary
+                                    )
+                                }
+                            }
                         }
                     }
                 }
-
-                // Unread filter toggle as an icon button
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(if (unreadOnly) colors.primary else colors.glassBg)
-                        .border(
-                            width = if (unreadOnly) 1.5.dp else 1.dp,
-                            color = if (unreadOnly) colors.primary else colors.glassBorder,
-                            shape = CircleShape
-                        )
-                        .clickable {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            unreadOnly = !unreadOnly
-                            openSwipeCardId = null
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Lucide.Mail,
-                        contentDescription = "Unread only",
-                        tint = if (unreadOnly) Color.White else colors.textMuted,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
             }
 
-            GlassHrLine()
-
-            // Feed Content
+            // Main Content Area
             Box(
                 modifier = Modifier
+                    .fillMaxSize()
                     .weight(1f)
-                    .fillMaxWidth()
             ) {
                 when {
-                    isFeedLoading -> {
-                        FeedSkeletonList(rowCount = 5)
+                    isFeedLoading && notificationsList.isEmpty() -> {
+                        FeedSkeletonList(rowCount = 6)
                     }
                     filteredNotifications.isEmpty() -> {
                         NotificationEmptyState(
@@ -1447,8 +1484,10 @@ fun NotificationsFeedScreen(
                                 }
 
                                 items(newItems, key = { it.id }) { item ->
+                                    val isFollowing = followingUserIds.contains(item.actorUid) || item.following
                                     SwipeableNotificationCard(
                                         notification = item,
+                                        isFollowingUser = isFollowing,
                                         isOpenLeftTray = openSwipeCardId == item.id,
                                         onOpenSwipeChanged = { openSwipeCardId = it },
                                         onCardClick = { handleCardClick(it) },
@@ -1476,8 +1515,10 @@ fun NotificationsFeedScreen(
                                 }
 
                                 items(earlierItems, key = { it.id }) { item ->
+                                    val isFollowing = followingUserIds.contains(item.actorUid) || item.following
                                     SwipeableNotificationCard(
                                         notification = item,
+                                        isFollowingUser = isFollowing,
                                         isOpenLeftTray = openSwipeCardId == item.id,
                                         onOpenSwipeChanged = { openSwipeCardId = it },
                                         onCardClick = { handleCardClick(it) },
@@ -1499,6 +1540,22 @@ fun NotificationsFeedScreen(
             }
         }
 
+        // Confirmation Dialog for Clear All
+        if (showClearConfirmDialog) {
+            IosAlertDialog(
+                title = "Clear All Notifications?",
+                message = "This will permanently remove all activity notifications from your feed.",
+                confirmText = "Clear All",
+                isDestructive = true,
+                onConfirm = {
+                    showClearConfirmDialog = false
+                    clearAllNotifications()
+                },
+                dismissText = "Cancel",
+                onDismiss = { showClearConfirmDialog = false }
+            )
+        }
+
         // Toast Banner with Undo
         AnimatedVisibility(
             visible = toastMessage != null,
@@ -1510,10 +1567,10 @@ fun NotificationsFeedScreen(
         ) {
             Row(
                 modifier = Modifier
-                    .clip(CircleShape)
+                    .clip(RoundedCornerShape(12.dp))
                     .background(colors.textMain.copy(alpha = 0.92f))
-                    .border(1.dp, colors.glassBorder, CircleShape)
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .border(1.dp, colors.glassBorder, RoundedCornerShape(12.dp))
+                    .padding(horizontal = 16.dp, vertical = 9.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
@@ -1532,7 +1589,7 @@ fun NotificationsFeedScreen(
                 if (toastShowUndo && lastRemovedBackup != null) {
                     Box(
                         modifier = Modifier
-                            .clip(CircleShape)
+                            .clip(RoundedCornerShape(6.dp))
                             .background(colors.primary)
                             .clickable { undoRemove() }
                             .padding(horizontal = 10.dp, vertical = 3.dp)
@@ -1568,123 +1625,3 @@ private fun formatRelativeTime(timestamp: Long): String {
         else         -> "${days / 7}w"
     }
 }
-
-// ============================================================================
-// DEFAULT SEED NOTIFICATIONS (Firestore fallback)
-// ============================================================================
-
-private val _now = System.currentTimeMillis()
-
-private val defaultCommunityNotifications = listOf(
-    ChromaNotification(
-        id = "notif_dm_sora",
-        type = NotificationActionType.MESSAGE,
-        actorUid = "creator_sora",
-        actorName = "Sora Takahashi",
-        actorHandle = "@sora_motion",
-        actorAvatarUrl = null,
-        actorGender = "female",
-        isVerified = true,
-        actionText = "Sent messages in Studio Chat",
-        detailText = "Checked the stems and remix layers for the live set",
-        timestamp = _now - (2 * 60 * 1000),
-        isRead = false
-    ),
-    ChromaNotification(
-        id = "notif_dm_marcus",
-        type = NotificationActionType.MESSAGE,
-        actorUid = "creator_marcus",
-        actorName = "Marcus Vance",
-        actorHandle = "@mvance_vfx",
-        actorAvatarUrl = null,
-        actorGender = "male",
-        isVerified = true,
-        actionText = "Shared render preview",
-        detailText = "Render pass preview 4K_Pass_Final.png",
-        timestamp = _now - (9 * 60 * 1000),
-        isRead = false
-    ),
-    ChromaNotification(
-        id = "notif_like_elena",
-        type = NotificationActionType.LIKE,
-        actorUid = "creator_elena",
-        actorName = "Elena Rostova",
-        actorHandle = "@elena_arch",
-        actorAvatarUrl = null,
-        actorGender = "female",
-        isVerified = true,
-        actionText = "Liked your post",
-        detailText = "Neo-Brutalist Monolith Study #04",
-        timestamp = _now - (18 * 60 * 1000),
-        isRead = false
-    ),
-    ChromaNotification(
-        id = "notif_remix_devon",
-        type = NotificationActionType.REMIX,
-        actorUid = "creator_devon",
-        actorName = "Devon Brooks",
-        actorHandle = "@devon_3d",
-        actorAvatarUrl = null,
-        actorGender = "male",
-        isVerified = true,
-        actionText = "Forked your remix",
-        detailText = "Kinetic Typography Reel derivative composition",
-        timestamp = _now - (32 * 60 * 1000),
-        isRead = false
-    ),
-    ChromaNotification(
-        id = "notif_comment_aria",
-        type = NotificationActionType.COMMENT,
-        actorUid = "creator_aria",
-        actorName = "Aria Chen",
-        actorHandle = "@ariachen_ui",
-        actorAvatarUrl = null,
-        actorGender = "female",
-        isVerified = true,
-        actionText = "Commented on video",
-        detailText = "The camera transition at 0:08 is pure perfection!",
-        timestamp = _now - (60 * 60 * 1000),
-        isRead = false
-    ),
-    ChromaNotification(
-        id = "notif_follow_kaito",
-        type = NotificationActionType.FOLLOW,
-        actorUid = "creator_kaito",
-        actorName = "Kaito Nakamura",
-        actorHandle = "@kaito_type",
-        actorAvatarUrl = null,
-        actorGender = "male",
-        isVerified = true,
-        actionText = "Started following you",
-        detailText = "You both follow @sora_motion",
-        timestamp = _now - (3 * 3600 * 1000),
-        isRead = true
-    ),
-    ChromaNotification(
-        id = "notif_mention_joy",
-        type = NotificationActionType.MENTION,
-        actorUid = "thejoykumbhakar",
-        actorName = "Joy Kumbhakar",
-        actorHandle = "@joykumbhakar101",
-        actorAvatarUrl = null,
-        actorGender = "male",
-        isVerified = true,
-        actionText = "Mentioned you in showcase",
-        detailText = "Check out the latest shader pipeline in ChromaStudio.",
-        timestamp = _now - (24 * 3600 * 1000),
-        isRead = true
-    ),
-    ChromaNotification(
-        id = "notif_system_drop",
-        type = NotificationActionType.SYSTEM_DROP,
-        actorUid = "chroma_studio",
-        actorName = "Chroma Studio",
-        actorHandle = "@chromastudio",
-        actorAvatarUrl = null,
-        isVerified = true,
-        actionText = "Released 12 new LUT Presets",
-        detailText = "Available now in Video Editor and Image Studio",
-        timestamp = _now - (36 * 3600 * 1000),
-        isRead = true
-    )
-)

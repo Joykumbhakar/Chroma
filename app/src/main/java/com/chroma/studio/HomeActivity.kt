@@ -109,7 +109,7 @@ class HomeActivity : ComponentActivity() {
                                 val channel = android.app.NotificationChannel(channelId, "Chats", android.app.NotificationManager.IMPORTANCE_HIGH)
                                 notificationManager.createNotificationChannel(channel)
                             }
-                            
+
                             val notificationId = room.id.hashCode()
                                 val intent = android.content.Intent(this, HomeActivity::class.java).apply {
                                     flags = android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -179,7 +179,7 @@ class HomeActivity : ComponentActivity() {
             val alphaAnim = android.animation.ObjectAnimator.ofFloat(splashView, android.view.View.ALPHA, 1f, 0f)
             val scaleXAnim = android.animation.ObjectAnimator.ofFloat(splashView, android.view.View.SCALE_X, 1f, 1.04f)
             val scaleYAnim = android.animation.ObjectAnimator.ofFloat(splashView, android.view.View.SCALE_Y, 1f, 1.04f)
-            
+
             val animatorSet = android.animation.AnimatorSet().apply {
                 playTogether(alphaAnim, scaleXAnim, scaleYAnim)
                 duration = 320L
@@ -228,12 +228,12 @@ class HomeActivity : ComponentActivity() {
 
                 // Refresh works list every time this screen is shown
                 LaunchedEffect(Unit) { vm.refresh() }
-                
+
                 val navController = rememberNavController()
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route?.substringBefore("/")
                 val fullRoute = navBackStackEntry?.destination?.route ?: ""
-                
+
                 val isMain = currentRoute == "main"
                 val pagerState = androidx.compose.foundation.pager.rememberPagerState(initialPage = 0, pageCount = { 5 })
                 var isInsideChatTab by remember { mutableStateOf(false) }
@@ -452,16 +452,33 @@ class HomeActivity : ComponentActivity() {
 
                 LaunchedEffect(currentAuthUid) {
                     if (currentAuthUid != null) {
-                        com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("chats")
+                        var isInitialSnapshot = true
+                        val registration = com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("chats")
                             .whereArrayContains("participants", currentAuthUid)
                             .addSnapshotListener { snapshot, _ ->
+                                if (isInitialSnapshot) {
+                                    isInitialSnapshot = false
+                                    return@addSnapshotListener
+                                }
                                 snapshot?.documentChanges?.forEach { change ->
-                                    if (change.type == com.google.firebase.firestore.DocumentChange.Type.MODIFIED) {
+                                    if (change.type == com.google.firebase.firestore.DocumentChange.Type.MODIFIED ||
+                                        change.type == com.google.firebase.firestore.DocumentChange.Type.ADDED
+                                    ) {
                                         val room = change.document.toObject(com.chroma.studio.model.ChatRoom::class.java)
                                         val unread = room.unreadCount[currentAuthUid] ?: 0
                                         if (unread > 0 && room.lastMessage.isNotBlank()) {
-                                            val currentChatRoute = navController.currentBackStackEntry?.destination?.route
-                                            if (currentChatRoute != "chat/${room.id}" && room.lastSender != currentAuthUid) {
+                                            val currentBackStack = navController.currentBackStackEntry
+                                            val currentRoute = currentBackStack?.destination?.route
+                                            val routeRoomId = currentBackStack?.arguments?.getString("roomId")
+                                            val isViewingInChatRoute = (currentRoute == "chat/{roomId}" || currentRoute?.startsWith("chat/") == true) &&
+                                                (routeRoomId == room.id || chatVm.activeRoomId.value == room.id)
+                                            val isViewingInChatTab = (currentRoute == "main" || currentRoute == null) &&
+                                                pagerState.currentPage == 3 &&
+                                                isInsideChatTab &&
+                                                chatVm.activeRoomId.value == room.id
+                                            val isUserViewingThisRoom = isViewingInChatRoute || isViewingInChatTab
+
+                                            if (!isUserViewingThisRoom && room.lastSender != currentAuthUid) {
                                                 val senderId: String? = room.lastSender
                                                 val senderProfile: com.chroma.studio.model.UserProfile? = if (senderId != null) chatVm.getUserProfile(senderId) else null
                                                 val senderName = senderProfile?.displayName?.ifBlank { null } ?: if (room.isGroup) (room.name ?: "Group") else "New Message"
@@ -470,14 +487,24 @@ class HomeActivity : ComponentActivity() {
                                                     senderName = senderName,
                                                     messageText = room.lastMessage,
                                                     avatarUrl = senderProfile?.avatarUrl ?: "",
-                                                    onReply = { reply -> chatVm.sendMessage(room.id, reply) },
-                                                    onClick = { navController.navigate("chat/${room.id}") }
+                                                    onReply = { reply -> chatVm.sendMessageToRoom(room.id, reply) },
+                                                    onClick = {
+                                                        if (currentRoute == "chat/{roomId}" || currentRoute?.startsWith("chat/") == true) {
+                                                            navController.popBackStack()
+                                                        }
+                                                        navController.navigate("chat/${room.id}")
+                                                    }
                                                 )
                                             }
                                         }
                                     }
                                 }
                             }
+                        try {
+                            kotlinx.coroutines.awaitCancellation()
+                        } finally {
+                            registration.remove()
+                        }
                     }
                 }
 
@@ -503,7 +530,7 @@ class HomeActivity : ComponentActivity() {
                                     val iconTint = if (vm.isDarkMode) androidx.compose.ui.graphics.Color.White else androidx.compose.ui.graphics.Color.Black
                                     val mutedTint = iconTint.copy(alpha = 0.4f)
                                     val primaryTint = if (vm.isDarkMode) androidx.compose.ui.graphics.Color.White else androidx.compose.ui.graphics.Color.Black
-                                    
+
                                     val items = listOf(
                                         Lucide.House to "Home",
                                         Lucide.Search to "Explore",
@@ -511,10 +538,10 @@ class HomeActivity : ComponentActivity() {
                                         Lucide.MessageCircle to "Messages",
                                         Lucide.User to "Profile"
                                     )
-                                    
+
                                     val tabPositions = remember { Array(5) { androidx.compose.runtime.mutableStateOf(0f to 0f) } } // Array of (xOffset, width) states
                                     val density = androidx.compose.ui.platform.LocalDensity.current
-                                    
+
                                     val activeTabX by animateFloatAsState(
                                         targetValue = tabPositions.getOrNull(pagerState.currentPage)?.value?.first ?: 0f,
                                         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
@@ -1022,11 +1049,11 @@ class HomeActivity : ComponentActivity() {
                         val likedWorkIds by discoverVm.likedWorkIds.collectAsState()
                         val savedWorkIds by discoverVm.savedWorkIds.collectAsState()
                         val isLoadingMore by discoverVm.isLoadingMore.collectAsState()
-                        
+
                         LaunchedEffect(Unit) {
                             discoverVm.loadWorks()
                         }
-                        
+
                         com.chroma.studio.ui.screens.DiscoverScreen(
                             works = works,
                             isLoading = isLoading,
@@ -1042,7 +1069,7 @@ class HomeActivity : ComponentActivity() {
                             onLoadMore = { discoverVm.loadMoreWorks() },
                             onRequireLogin = { navController.navigate("login") },
                             onToggleLike = { workId, userId -> discoverVm.toggleLike(workId, userId) },
-                            onAuthorClick = { creatorId, postId -> 
+                            onAuthorClick = { creatorId, postId ->
                                 if (postId != null) {
                                     navController.navigate("userProfile/$creatorId?postId=$postId")
                                 } else {
@@ -1101,12 +1128,12 @@ class HomeActivity : ComponentActivity() {
                                 storyViewModel = storyVm,
                                 showBackButton = false,
                                 onRequireLogin = { navController.navigate("login") },
-                                onNavigateToChat = { otherUserId -> 
-                                    chatVm.startChat(otherUserId) { roomId -> 
+                                onNavigateToChat = { otherUserId ->
+                                    chatVm.startChat(otherUserId) { roomId ->
                                         navController.navigate("chat/$roomId") {
                                             launchSingleTop = true
-                                        } 
-                                    } 
+                                        }
+                                    }
                                 },
                                 onNavigateToEditProfile = { navController.navigate("profile_identity") },
                                 onNavigateToSettings = { navController.navigate("settings") },
@@ -1130,7 +1157,7 @@ class HomeActivity : ComponentActivity() {
                             }
                         }
                     }
-                    
+
                     composable("create_post") {
                         com.chroma.studio.ui.screens.CreatorPostOnboardingStudioScreen(
                             initialMode = com.chroma.studio.ui.screens.CreatorStudioMode.POST,
@@ -1336,7 +1363,7 @@ class HomeActivity : ComponentActivity() {
                             }
                         )
                     }
-                    
+
                     composable("appearance_settings") {
                         val settingsManager = remember { com.chroma.studio.chat.data.SettingsManager.getInstance(this@HomeActivity) }
                         var currentBubbleStyle by remember { mutableStateOf<com.chroma.studio.chat.data.BubbleStyleType>(settingsManager.bubbleStyle) }
@@ -1389,7 +1416,7 @@ class HomeActivity : ComponentActivity() {
                                 navController.navigate("login") {
                                     popUpTo(navController.graph.id) { inclusive = true } // Clear the entire backstack properly
                                 }
-                                
+
                                 // Perform network/IO work in background
                                 kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
                                     try {
@@ -1401,7 +1428,7 @@ class HomeActivity : ComponentActivity() {
                             }
                         )
                     }
-                    
+
                     composable("profile_identity") {
                         val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
                         val currentUser = auth.currentUser
@@ -1409,12 +1436,12 @@ class HomeActivity : ComponentActivity() {
                             var profile by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<com.chroma.studio.model.UserProfile?>(null) }
                             var works by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<List<com.chroma.studio.model.DiscoverPost>>(emptyList()) }
                             val discoverVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.DiscoverViewModel>()
-                            
+
                             androidx.compose.runtime.LaunchedEffect(currentUser.uid) {
                                 profile = discoverVm.repository.getUserProfile(currentUser.uid)
                                 works = discoverVm.repository.getWorksByUser(currentUser.uid)
                             }
-                            
+
                             if (profile != null) {
                                 com.chroma.studio.ui.screens.ProfileIdentityScreen(
                                     profile = profile!!,
@@ -1441,14 +1468,14 @@ class HomeActivity : ComponentActivity() {
                             }
                         }
                     }
-                    
+
                     composable("security") {
                         val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
                         val currentUser = auth.currentUser
                         if (currentUser != null) {
                             var profile by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<com.chroma.studio.model.UserProfile?>(null) }
                             val discoverVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.DiscoverViewModel>()
-                            
+
                             androidx.compose.runtime.LaunchedEffect(currentUser.uid) {
                                 profile = discoverVm.repository.getUserProfile(currentUser.uid)
                             }
@@ -1466,14 +1493,14 @@ class HomeActivity : ComponentActivity() {
                             }
                         }
                     }
-                    
+
                     composable("privacy") {
                         val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
                         val currentUser = auth.currentUser
                         if (currentUser != null) {
                             var profile by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<com.chroma.studio.model.UserProfile?>(null) }
                             val discoverVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.DiscoverViewModel>()
-                            
+
                             androidx.compose.runtime.LaunchedEffect(currentUser.uid) {
                                 profile = discoverVm.repository.getUserProfile(currentUser.uid)
                             }
@@ -1508,14 +1535,14 @@ class HomeActivity : ComponentActivity() {
                             }
                         )
                     }
-                    
+
                     composable("notifications") {
                         val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
                         val currentUser = auth.currentUser
                         if (currentUser != null) {
                             var profile by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<com.chroma.studio.model.UserProfile?>(null) }
                             val discoverVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.DiscoverViewModel>()
-                            
+
                             androidx.compose.runtime.LaunchedEffect(currentUser.uid) {
                                 profile = discoverVm.repository.getUserProfile(currentUser.uid)
                             }
@@ -1559,7 +1586,14 @@ class HomeActivity : ComponentActivity() {
                                 repository = vm.repository,
                                 onBack = { navController.popBackStack() },
                                 onRequireLogin = { navController.navigate("login") },
-                                onNavigateToUser = { targetUserId -> navController.navigate("profile/$targetUserId") }
+                                onNavigateToUser = { targetUserId -> navController.navigate("userProfile/$targetUserId") },
+                                onNavigateToPost = { postId, authorId ->
+                                    if (!authorId.isNullOrBlank()) {
+                                        navController.navigate("userProfile/$authorId?postId=$postId")
+                                    } else {
+                                        navController.navigate("flash_feed")
+                                    }
+                                }
                             )
                         }
                     }
@@ -1741,7 +1775,7 @@ class HomeActivity : ComponentActivity() {
                         val userId = backStackEntry.arguments?.getString("userId") ?: return@composable
                         val postId = backStackEntry.arguments?.getString("postId")
                         val storyVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.StoryViewModel>()
-                        
+
                         com.chroma.studio.ui.screens.UserProfileScreen(
                             userId = userId,
                             initialPostId = postId,
@@ -1749,12 +1783,12 @@ class HomeActivity : ComponentActivity() {
                             chatViewModel = chatVm,
                             storyViewModel = storyVm,
                             onRequireLogin = { navController.navigate("login") },
-                            onNavigateToChat = { otherUserId -> 
-                                chatVm.startChat(otherUserId) { roomId -> 
+                            onNavigateToChat = { otherUserId ->
+                                chatVm.startChat(otherUserId) { roomId ->
                                     navController.navigate("chat/$roomId") {
                                         launchSingleTop = true
-                                    } 
-                                } 
+                                    }
+                                }
                             },
                             onNavigateToEditProfile = { navController.navigate("profile_identity") },
                             onNavigateToSettings = { navController.navigate("settings") },
@@ -1799,7 +1833,7 @@ class HomeActivity : ComponentActivity() {
                             onInsideChatChange = { isInsideChatTab = it }
                         )
                     }
-                    
+
                     composable(
                         route = "group_info/{roomId}",
                         arguments = listOf(androidx.navigation.navArgument("roomId") { type = androidx.navigation.NavType.StringType })
@@ -1823,7 +1857,7 @@ class HomeActivity : ComponentActivity() {
                             }
                         )
                     }
-                    
+
                     composable(
                         route = "user_list/{userId}/{type}",
                         arguments = listOf(
@@ -1869,7 +1903,7 @@ class HomeActivity : ComponentActivity() {
                 }
             }
             com.chroma.studio.ui.components.ChromaToastHost()
-            com.chroma.studio.ui.components.IosDynamicIslandHost()
+            com.chroma.studio.ui.components.IosDynamicIslandHost(isNotchMode = true)
         }
         } // End OscellionBackground
     }

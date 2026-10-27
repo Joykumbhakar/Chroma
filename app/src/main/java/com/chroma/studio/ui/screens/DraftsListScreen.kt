@@ -117,7 +117,7 @@ fun DraftsListScreen(
                         Box(
                             modifier = Modifier
                                 .size(72.dp)
-                                .clip(CircleShape)
+                                .clip(RoundedCornerShape(20.dp))
                                 .background(Color(0xFF2563EB).copy(alpha = 0.1f)),
                             contentAlignment = Alignment.Center
                         ) {

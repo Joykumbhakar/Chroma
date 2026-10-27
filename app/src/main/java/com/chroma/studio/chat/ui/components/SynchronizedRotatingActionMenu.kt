@@ -44,6 +44,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import com.chroma.studio.chat.ui.theme.LocalChatColors
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -239,6 +240,7 @@ private fun StaggeredActionNodeItem(
     val currentProgress = transformAnim.value
     val baseScale = 0.18f + (0.82f * currentProgress)
     val combinedScale = baseScale * pressScale * selectPulseAnim.value
+    val optionShape = RoundedCornerShape(13.dp)
 
     Box(
         modifier = Modifier
@@ -249,12 +251,12 @@ private fun StaggeredActionNodeItem(
                 alpha = alphaAnim.value
             }
             .shadow(
-                elevation = 8.dp,
-                shape = CircleShape,
-                ambientColor = option.shadowColor,
-                spotColor = option.shadowColor
+                elevation = 6.dp,
+                shape = optionShape,
+                ambientColor = option.shadowColor.copy(alpha = 0.35f),
+                spotColor = option.shadowColor.copy(alpha = 0.35f)
             )
-            .clip(CircleShape)
+            .clip(optionShape)
             .background(
                 brush = Brush.radialGradient(
                     colors = option.bgStops,
@@ -269,7 +271,7 @@ private fun StaggeredActionNodeItem(
                     start = Offset(0f, 0f),
                     end = Offset(120f, 120f)
                 ),
-                shape = CircleShape
+                shape = optionShape
             )
             .clickable(
                 enabled = isOpen,
@@ -285,10 +287,11 @@ private fun StaggeredActionNodeItem(
             },
         contentAlignment = Alignment.Center
     ) {
-        // Inner Specular Sheen & Glass Rim Overlay
+        // Inner Specular Sheen & Glass Rim Overlay (Squircle)
         Canvas(modifier = Modifier.fillMaxSize()) {
+            val cr = CornerRadius(13.dp.toPx(), 13.dp.toPx())
             // Top specular sheen
-            drawCircle(
+            drawRoundRect(
                 brush = Brush.linearGradient(
                     colors = listOf(
                         Color(0xC7FFFFFF),
@@ -297,12 +300,15 @@ private fun StaggeredActionNodeItem(
                     ),
                     start = Offset(0f, 0f),
                     end = Offset(size.width * 0.7f, size.height * 0.7f)
-                )
+                ),
+                cornerRadius = cr
             )
             // 1dp inner white glass rim
-            drawCircle(
-                color = Color(0xD9FFFFFF),
-                radius = (size.minDimension / 2f) - 1.5.dp.toPx(),
+            drawRoundRect(
+                color = Color(0x59FFFFFF),
+                size = Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()),
+                topLeft = Offset(1.dp.toPx(), 1.dp.toPx()),
+                cornerRadius = CornerRadius(12.dp.toPx(), 12.dp.toPx()),
                 style = Stroke(width = 1.dp.toPx())
             )
         }
@@ -325,63 +331,56 @@ fun SynchronizedActionMenuTriggerButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val colors = LocalChatColors.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
     val rotation by animateFloatAsState(
-        targetValue = if (isOpen) ACTION_MENU_SPIN_ANGLE else 0f,
-        animationSpec = tween(
-            durationMillis = ACTION_MENU_ANIM_DURATION_MS,
-            easing = ActionMenuPopEasing
+        targetValue = if (isOpen) 45f else 0f,
+        animationSpec = androidx.compose.animation.core.spring(
+            dampingRatio = 0.58f,
+            stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
         ),
         label = "MainTriggerRotation"
     )
 
     val pressScale by animateFloatAsState(
-        targetValue = if (isPressed) 0.92f else 1f,
-        animationSpec = tween(durationMillis = 140),
+        targetValue = if (isPressed) 0.88f else 1f,
+        animationSpec = tween(durationMillis = 120),
         label = "MainTriggerScale"
     )
 
-    val bgColors = if (isOpen) {
-        listOf(Color(0xFF3B82F6), Color(0xFF2563EB), Color(0xFF1D4ED8))
+    val circleGradient = if (colors.isLight) {
+        Brush.linearGradient(
+            colors = listOf(
+                Color(0xFFF2F4F7),
+                Color(0xFFE4E7EC)
+            ),
+            start = Offset(0f, 0f),
+            end = Offset(80f, 80f)
+        )
     } else {
-        listOf(Color(0xFF60A5FA), Color(0xFF3B82F6), Color(0xFF2563EB), Color(0xFF1D4ED8))
+        Brush.linearGradient(
+            colors = listOf(
+                Color(0xFF2C2C2E),
+                Color(0xFF1C1C1E)
+            ),
+            start = Offset(0f, 0f),
+            end = Offset(80f, 80f)
+        )
     }
+    val glassBorderColor = if (colors.isLight) Color(0x33007AFF) else Color(0x40FFFFFF)
 
     Box(
         modifier = modifier
-            .size(38.dp)
+            .size(36.dp)
             .graphicsLayer {
-                rotationZ = rotation
                 scaleX = pressScale
                 scaleY = pressScale
             }
-            .shadow(
-                elevation = if (isOpen) 8.dp else 10.dp,
-                shape = CircleShape,
-                ambientColor = Color(0xFF2563EB),
-                spotColor = Color(0xFF2563EB)
-            )
             .clip(CircleShape)
-            .background(
-                brush = Brush.radialGradient(
-                    colors = bgColors,
-                    center = Offset(34f, 24f),
-                    radius = 115f
-                )
-            )
-            .border(
-                width = 1.dp,
-                brush = Brush.linearGradient(
-                    colors = listOf(
-                        Color(0x99FFFFFF),
-                        Color(0x4093C5FD),
-                        Color(0x59FFFFFF)
-                    )
-                ),
-                shape = CircleShape
-            )
+            .background(circleGradient)
+            .border(0.75.dp, glassBorderColor, CircleShape)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -393,45 +392,15 @@ fun SynchronizedActionMenuTriggerButton(
             },
         contentAlignment = Alignment.Center
     ) {
-        // Inner Specular Glass Rim + Plus Icon
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val inset = 1.5.dp.toPx()
-            // Top-left inner specular highlight
-            drawCircle(
-                brush = Brush.linearGradient(
-                    colors = listOf(Color(0x59FFFFFF), Color.Transparent),
-                    start = Offset(0f, 0f),
-                    end = Offset(size.width * 0.6f, size.height * 0.6f)
-                ),
-                radius = (size.minDimension / 2f) - inset
-            )
-            // Inner glass border ring
-            drawCircle(
-                color = Color(0x40FFFFFF),
-                radius = (size.minDimension / 2f) - inset,
-                style = Stroke(width = 1.dp.toPx())
-            )
-
-            // Crisp Plus ('+') Icon (20dp equivalent inside 42dp button)
-            val iconScale = 20.dp.toPx() / 24f
-            val centerOffset = (size.width - 20.dp.toPx()) / 2f
-            val strokeWidth = 2.25f * iconScale
-
-            // Horizontal bar (M5 12h14)
-            drawLine(
-                color = Color.White,
-                start = Offset(centerOffset + 5f * iconScale, centerOffset + 12f * iconScale),
-                end = Offset(centerOffset + 19f * iconScale, centerOffset + 12f * iconScale),
-                strokeWidth = strokeWidth,
-                cap = StrokeCap.Round
-            )
-            // Vertical bar (M12 5v14)
-            drawLine(
-                color = Color.White,
-                start = Offset(centerOffset + 12f * iconScale, centerOffset + 5f * iconScale),
-                end = Offset(centerOffset + 12f * iconScale, centerOffset + 19f * iconScale),
-                strokeWidth = strokeWidth,
-                cap = StrokeCap.Round
+        Box(
+            modifier = Modifier.graphicsLayer {
+                rotationZ = rotation
+            },
+            contentAlignment = Alignment.Center
+        ) {
+            PhosphorPlusIcon(
+                tint = colors.iosBlue,
+                size = 20.dp
             )
         }
     }

@@ -1088,7 +1088,7 @@ fun AppleDynamicWaveform(tint: Color = Color(0xFF34C759)) {
 @Composable
 fun IosDynamicIslandHost(
     modifier: Modifier = Modifier,
-    isNotchMode: Boolean = false
+    isNotchMode: Boolean = true
 ) {
     if (DynamicIslandManager.isSuppressed) return
 
@@ -1098,12 +1098,40 @@ fun IosDynamicIslandHost(
     var offsetY by remember { mutableFloatStateOf(0f) }
     val animatedOffsetY by animateFloatAsState(
         targetValue = offsetY,
-        animationSpec = spring(dampingRatio = 0.76f, stiffness = Spring.StiffnessMediumLow),
+        animationSpec = spring(dampingRatio = 0.65f, stiffness = Spring.StiffnessMediumLow),
         label = "islandOffsetY"
     )
+
+    // Spring, Jump and Jelly Animatable physics states anchored to top edge (0.5f, 0f)
+    val jumpOffsetY = remember { Animatable(0f) }
+    val jellyScaleX = remember { Animatable(1f) }
+    val jellyScaleY = remember { Animatable(1f) }
+
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val coroutineScope = rememberCoroutineScope()
+
+    suspend fun performDismiss() {
+        try { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Throwable) {}
+        coroutineScope.launch {
+            launch { jumpOffsetY.animateTo(-35f, tween(160, easing = FastOutLinearInEasing)) }
+            launch { jellyScaleX.animateTo(0.68f, tween(160, easing = FastOutLinearInEasing)) }
+            launch { jellyScaleY.animateTo(0.18f, tween(160, easing = FastOutLinearInEasing)) }
+        }
+        delay(170L)
+        currentEvent = null
+        isExpanded = false
+        offsetY = 0f
+        jumpOffsetY.snapTo(0f)
+        jellyScaleX.snapTo(1f)
+        jellyScaleY.snapTo(1f)
+    }
+
+    fun dismissIsland() {
+        coroutineScope.launch {
+            performDismiss()
+        }
+    }
 
     LaunchedEffect(Unit) {
         DynamicIslandManager.events.collect { event ->
@@ -1111,7 +1139,75 @@ fun IosDynamicIslandHost(
             isExpanded = false // Never aggressively auto-expand by default
             replyText = ""
             offsetY = 0f
-            try { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
+
+            // Play Dynamic Island notification sound effect
+            try {
+                com.chroma.studio.chat.sound.SoundManager.playDynamicIsland(context)
+            } catch (_: Throwable) {}
+
+            try { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Throwable) {}
+
+            // Spring, Jump and Jelly elastic entrance physics anchored to top notch
+            coroutineScope.launch {
+                jumpOffsetY.snapTo(-35f)
+                jellyScaleX.snapTo(0.86f)
+                jellyScaleY.snapTo(1.24f)
+
+                launch {
+                    jumpOffsetY.animateTo(0f, spring(dampingRatio = 0.52f, stiffness = Spring.StiffnessMediumLow))
+                }
+                launch {
+                    jellyScaleX.animateTo(1.09f, spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMedium))
+                    jellyScaleX.animateTo(0.97f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow))
+                    jellyScaleX.animateTo(1f, spring(dampingRatio = 0.68f, stiffness = Spring.StiffnessMediumLow))
+                }
+                launch {
+                    jellyScaleY.animateTo(0.92f, spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMedium))
+                    jellyScaleY.animateTo(1.03f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow))
+                    jellyScaleY.animateTo(1f, spring(dampingRatio = 0.68f, stiffness = Spring.StiffnessMediumLow))
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(isExpanded) {
+        if (currentEvent == null) return@LaunchedEffect
+        if (isExpanded) {
+            // EXPAND: Spring, Jump & Jelly stretch downwards from top edge
+            coroutineScope.launch {
+                launch {
+                    jumpOffsetY.animateTo(10f, tween(60, easing = FastOutSlowInEasing))
+                    jumpOffsetY.animateTo(0f, spring(dampingRatio = 0.50f, stiffness = Spring.StiffnessMediumLow))
+                }
+                launch {
+                    jellyScaleX.animateTo(0.93f, tween(60, easing = FastOutSlowInEasing))
+                    jellyScaleX.animateTo(1.05f, spring(dampingRatio = 0.48f, stiffness = Spring.StiffnessMediumLow))
+                    jellyScaleX.animateTo(1f, spring(dampingRatio = 0.65f, stiffness = Spring.StiffnessMediumLow))
+                }
+                launch {
+                    jellyScaleY.animateTo(1.12f, tween(60, easing = FastOutSlowInEasing))
+                    jellyScaleY.animateTo(0.96f, spring(dampingRatio = 0.48f, stiffness = Spring.StiffnessMediumLow))
+                    jellyScaleY.animateTo(1f, spring(dampingRatio = 0.65f, stiffness = Spring.StiffnessMediumLow))
+                }
+            }
+        } else {
+            // COMPRESS: Recoil up into notch with jelly squash
+            coroutineScope.launch {
+                launch {
+                    jumpOffsetY.animateTo(-6f, tween(50, easing = FastOutSlowInEasing))
+                    jumpOffsetY.animateTo(0f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow))
+                }
+                launch {
+                    jellyScaleX.animateTo(1.07f, tween(50, easing = FastOutSlowInEasing))
+                    jellyScaleX.animateTo(0.97f, spring(dampingRatio = 0.50f, stiffness = Spring.StiffnessMediumLow))
+                    jellyScaleX.animateTo(1f, spring(dampingRatio = 0.65f, stiffness = Spring.StiffnessMediumLow))
+                }
+                launch {
+                    jellyScaleY.animateTo(0.89f, tween(50, easing = FastOutSlowInEasing))
+                    jellyScaleY.animateTo(1.03f, spring(dampingRatio = 0.50f, stiffness = Spring.StiffnessMediumLow))
+                    jellyScaleY.animateTo(1f, spring(dampingRatio = 0.65f, stiffness = Spring.StiffnessMediumLow))
+                }
+            }
         }
     }
 
@@ -1127,7 +1223,7 @@ fun IosDynamicIslandHost(
             isExpanded = false
             delay(280L)
             if (currentEvent == event && !isExpanded) {
-                currentEvent = null
+                performDismiss()
             }
         } else {
             // Compact pill mode: polite, non-annoying glance timer
@@ -1138,7 +1234,7 @@ fun IosDynamicIslandHost(
             }
             delay(duration)
             if (currentEvent == event && !isExpanded) {
-                currentEvent = null
+                performDismiss()
             }
         }
     }
@@ -1147,35 +1243,35 @@ fun IosDynamicIslandHost(
         val islandWidth by animateDpAsState(
             targetValue = if (isExpanded) {
                 when (event) {
-                    is DynamicIslandEvent.ChatMessage -> 356.dp
-                    is DynamicIslandEvent.Follow -> 340.dp
-                    is DynamicIslandEvent.Like -> 330.dp
-                    is DynamicIslandEvent.RemixOrDownload -> 330.dp
-                    is DynamicIslandEvent.Status -> if (event.actionLabel != null || event.message.isNotBlank()) 340.dp else 296.dp
+                    is DynamicIslandEvent.ChatMessage -> 360.dp
+                    is DynamicIslandEvent.Follow -> 348.dp
+                    is DynamicIslandEvent.Like -> 340.dp
+                    is DynamicIslandEvent.RemixOrDownload -> 340.dp
+                    is DynamicIslandEvent.Status -> if (event.actionLabel != null || event.message.isNotBlank()) 348.dp else 300.dp
                 }
             } else {
                 when (event) {
-                    is DynamicIslandEvent.ChatMessage -> 260.dp
-                    is DynamicIslandEvent.Follow -> 240.dp
-                    is DynamicIslandEvent.Like -> 230.dp
-                    is DynamicIslandEvent.RemixOrDownload -> 240.dp
-                    is DynamicIslandEvent.Status -> if (event.actionLabel != null) 240.dp else if (event.title.length > 20) 250.dp else 210.dp
+                    is DynamicIslandEvent.ChatMessage -> 270.dp
+                    is DynamicIslandEvent.Follow -> 250.dp
+                    is DynamicIslandEvent.Like -> 240.dp
+                    is DynamicIslandEvent.RemixOrDownload -> 250.dp
+                    is DynamicIslandEvent.Status -> if (event.actionLabel != null) 250.dp else if (event.title.length > 20) 260.dp else 220.dp
                 }
             },
-            animationSpec = spring(dampingRatio = 0.74f, stiffness = Spring.StiffnessMediumLow),
+            animationSpec = spring(dampingRatio = 0.58f, stiffness = Spring.StiffnessMediumLow),
             label = "islandWidth"
         )
         val islandHeight by animateDpAsState(
             targetValue = if (isExpanded) {
                 when (event) {
-                    is DynamicIslandEvent.ChatMessage -> 122.dp
-                    is DynamicIslandEvent.Follow -> 64.dp
-                    is DynamicIslandEvent.Like -> 60.dp
-                    is DynamicIslandEvent.RemixOrDownload -> 60.dp
-                    is DynamicIslandEvent.Status -> if (event.message.isNotBlank()) 64.dp else 52.dp
+                    is DynamicIslandEvent.ChatMessage -> 138.dp
+                    is DynamicIslandEvent.Follow -> 72.dp
+                    is DynamicIslandEvent.Like -> 68.dp
+                    is DynamicIslandEvent.RemixOrDownload -> 68.dp
+                    is DynamicIslandEvent.Status -> if (event.message.isNotBlank()) 72.dp else 56.dp
                 }
-            } else 38.dp,
-            animationSpec = spring(dampingRatio = 0.74f, stiffness = Spring.StiffnessMediumLow),
+            } else 44.dp,
+            animationSpec = spring(dampingRatio = 0.58f, stiffness = Spring.StiffnessMediumLow),
             label = "islandHeight"
         )
         val islandCorner by animateDpAsState(
@@ -1187,8 +1283,8 @@ fun IosDynamicIslandHost(
                     is DynamicIslandEvent.RemixOrDownload -> 28.dp
                     is DynamicIslandEvent.Status -> 26.dp
                 }
-            } else 19.dp,
-            animationSpec = spring(dampingRatio = 0.74f, stiffness = Spring.StiffnessMediumLow),
+            } else 22.dp,
+            animationSpec = spring(dampingRatio = 0.58f, stiffness = Spring.StiffnessMediumLow),
             label = "islandCorner"
         )
 
@@ -1208,6 +1304,12 @@ fun IosDynamicIslandHost(
         ) {
             Box(
                 modifier = Modifier
+                    .graphicsLayer {
+                        scaleX = jellyScaleX.value
+                        scaleY = jellyScaleY.value
+                        translationY = jumpOffsetY.value
+                        transformOrigin = TransformOrigin(0.5f, 0f)
+                    }
                     .size(width = islandWidth, height = islandHeight)
                     .shadow(
                         elevation = if (isExpanded) 14.dp else 8.dp,
@@ -1249,12 +1351,7 @@ fun IosDynamicIslandHost(
                             },
                             onDragEnd = {
                                 if (offsetY < -12f) {
-                                    try { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
-                                    coroutineScope.launch {
-                                        currentEvent = null
-                                        isExpanded = false
-                                        offsetY = 0f
-                                    }
+                                    dismissIsland()
                                 } else {
                                     offsetY = 0f
                                 }
@@ -1265,13 +1362,13 @@ fun IosDynamicIslandHost(
                         )
                     }
                     .clickable(enabled = !isExpanded) {
-                        try { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Exception) {}
+                        try { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Throwable) {}
                         isExpanded = true
                     }
                     .padding(if (isExpanded) 12.dp else 6.dp)
             ) {
                 if (!isExpanded) {
-                    // COMPACT PILL PRESENTATION
+                    // COMPACT NOTCH PRESENTATION (Clean icons without pill/capsule/circle backgrounds)
                     when (event) {
                         is DynamicIslandEvent.ChatMessage -> {
                             Row(
@@ -1291,12 +1388,7 @@ fun IosDynamicIslandHost(
                                             modifier = Modifier.size(24.dp).clip(CircleShape)
                                         )
                                     } else {
-                                        Box(
-                                            modifier = Modifier.size(24.dp).clip(CircleShape).background(Color(0xFF34C759)),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(Lucide.MessageSquare, null, tint = Color.White, modifier = Modifier.size(13.dp))
-                                        }
+                                        Icon(Lucide.MessageSquare, null, tint = Color(0xFF34C759), modifier = Modifier.size(18.dp))
                                     }
                                     Spacer(Modifier.width(8.dp))
                                     Text(
@@ -1324,19 +1416,14 @@ fun IosDynamicIslandHost(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.weight(1f, fill = false)
                                 ) {
-                                    val iconBg = when {
+                                    val iconTint = when {
                                         event.title.contains("copied", ignoreCase = true) || event.title.contains("saved", ignoreCase = true) || event.title.contains("success", ignoreCase = true) || event.title.contains("updated", ignoreCase = true) -> Color(0xFF34C759)
                                         event.title.contains("delete", ignoreCase = true) || event.title.contains("remove", ignoreCase = true) || event.title.contains("error", ignoreCase = true) || event.title.contains("failed", ignoreCase = true) -> Color(0xFFFF3B30)
                                         event.title.contains("like", ignoreCase = true) -> Color(0xFFFF2D55)
                                         event.title.contains("follow", ignoreCase = true) -> Color(0xFF007AFF)
                                         else -> Color(0xFF5856D6)
                                     }
-                                    Box(
-                                        modifier = Modifier.size(24.dp).clip(CircleShape).background(iconBg),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(event.icon ?: Lucide.Check, null, tint = Color.White, modifier = Modifier.size(13.dp))
-                                    }
+                                    Icon(event.icon ?: Lucide.Check, null, tint = iconTint, modifier = Modifier.size(18.dp))
                                     Spacer(Modifier.width(8.dp))
                                     Text(
                                         text = event.title,
@@ -1353,11 +1440,11 @@ fun IosDynamicIslandHost(
                                     Box(
                                         modifier = Modifier
                                             .height(24.dp)
-                                            .clip(RoundedCornerShape(12.dp))
+                                            .clip(RoundedCornerShape(6.dp))
                                             .background(Color(0xFF007AFF))
                                             .clickable {
                                                 event.onAction?.invoke()
-                                                currentEvent = null
+                                                dismissIsland()
                                             }
                                             .padding(horizontal = 8.dp),
                                         contentAlignment = Alignment.Center
@@ -1367,7 +1454,7 @@ fun IosDynamicIslandHost(
                                 } else {
                                     Box(
                                         modifier = Modifier
-                                            .size(9.dp)
+                                            .size(8.dp)
                                             .clip(CircleShape)
                                             .background(Color(0xFF2C2C2E))
                                             .border(0.5.dp, Color.White.copy(alpha = 0.15f), CircleShape)
@@ -1386,12 +1473,7 @@ fun IosDynamicIslandHost(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.weight(1f, fill = false)
                                 ) {
-                                    Box(
-                                        modifier = Modifier.size(24.dp).clip(CircleShape).background(Color(0xFFFF2D55)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(Lucide.Heart, null, tint = Color.White, modifier = Modifier.size(13.dp))
-                                    }
+                                    Icon(Lucide.Heart, null, tint = Color(0xFFFF2D55), modifier = Modifier.size(18.dp))
                                     Spacer(Modifier.width(8.dp))
                                     Text(
                                         text = "${event.userName} liked your post",
@@ -1404,7 +1486,7 @@ fun IosDynamicIslandHost(
                                     )
                                 }
                                 Spacer(Modifier.width(6.dp))
-                                Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(Color(0xFFFF2D55)))
+                                Icon(Lucide.Heart, null, tint = Color(0xFFFF2D55), modifier = Modifier.size(13.dp))
                             }
                         }
 
@@ -1418,12 +1500,7 @@ fun IosDynamicIslandHost(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.weight(1f, fill = false)
                                 ) {
-                                    Box(
-                                        modifier = Modifier.size(24.dp).clip(CircleShape).background(Color(0xFF007AFF)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(Lucide.UserPlus, null, tint = Color.White, modifier = Modifier.size(13.dp))
-                                    }
+                                    Icon(Lucide.UserPlus, null, tint = Color(0xFF007AFF), modifier = Modifier.size(18.dp))
                                     Spacer(Modifier.width(8.dp))
                                     Text(
                                         text = "${event.userName} followed you",
@@ -1436,7 +1513,7 @@ fun IosDynamicIslandHost(
                                     )
                                 }
                                 Spacer(Modifier.width(6.dp))
-                                Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(Color(0xFF007AFF)))
+                                Icon(Lucide.UserPlus, null, tint = Color(0xFF007AFF), modifier = Modifier.size(13.dp))
                             }
                         }
 
@@ -1450,15 +1527,10 @@ fun IosDynamicIslandHost(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.weight(1f, fill = false)
                                 ) {
-                                    Box(
-                                        modifier = Modifier.size(24.dp).clip(CircleShape).background(Color(0xFFFF9500)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        if (event.isRemix) {
-                                            AiWaveSphereIcon(modifier = Modifier.size(15.dp))
-                                        } else {
-                                            Icon(Lucide.Download, null, tint = Color.White, modifier = Modifier.size(13.dp))
-                                        }
+                                    if (event.isRemix) {
+                                        AiWaveSphereIcon(modifier = Modifier.size(18.dp))
+                                    } else {
+                                        Icon(Lucide.Download, null, tint = Color(0xFFFF9500), modifier = Modifier.size(18.dp))
                                     }
                                     Spacer(Modifier.width(8.dp))
                                     Text(
@@ -1472,12 +1544,12 @@ fun IosDynamicIslandHost(
                                     )
                                 }
                                 Spacer(Modifier.width(6.dp))
-                                Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(Color(0xFFFF9500)))
+                                Icon(Lucide.Download, null, tint = Color(0xFFFF9500), modifier = Modifier.size(13.dp))
                             }
                         }
                     }
                 } else {
-                    // EXPANDED INTERACTIVE VIEW
+                    // EXPANDED INTERACTIVE NOTCH VIEW (Zero pill/capsule/circle backgrounds on icons)
                     when (event) {
                         is DynamicIslandEvent.ChatMessage -> {
                             Column(
@@ -1496,12 +1568,7 @@ fun IosDynamicIslandHost(
                                             modifier = Modifier.size(38.dp).clip(CircleShape)
                                         )
                                     } else {
-                                        Box(
-                                            modifier = Modifier.size(38.dp).clip(CircleShape).background(Color(0xFF34C759)),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(Lucide.MessageSquare, null, tint = Color.White, modifier = Modifier.size(18.dp))
-                                        }
+                                        Icon(Lucide.MessageSquare, null, tint = Color(0xFF34C759), modifier = Modifier.size(28.dp))
                                     }
 
                                     Spacer(Modifier.width(10.dp))
@@ -1540,20 +1607,15 @@ fun IosDynamicIslandHost(
 
                                     Spacer(Modifier.width(8.dp))
 
-                                    // Close button
-                                    Box(
+                                    // Direct close icon without circular container
+                                    Icon(
+                                        Lucide.X,
+                                        contentDescription = "Close",
+                                        tint = Color.White.copy(alpha = 0.70f),
                                         modifier = Modifier
-                                            .size(24.dp)
-                                            .clip(CircleShape)
-                                            .background(Color.White.copy(alpha = 0.12f))
-                                            .clickable {
-                                                isExpanded = false
-                                                currentEvent = null
-                                            },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(Lucide.X, contentDescription = "Close", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(13.dp))
-                                    }
+                                            .size(20.dp)
+                                            .clickable { dismissIsland() }
+                                    )
                                 }
 
                                 Row(
@@ -1565,7 +1627,7 @@ fun IosDynamicIslandHost(
                                         modifier = Modifier
                                             .weight(1f)
                                             .height(36.dp)
-                                            .clip(RoundedCornerShape(18.dp))
+                                            .clip(RoundedCornerShape(8.dp))
                                             .background(Color(0xFF2C2C2E))
                                             .padding(horizontal = 14.dp),
                                         contentAlignment = Alignment.CenterStart
@@ -1583,7 +1645,7 @@ fun IosDynamicIslandHost(
                                             decorationBox = { innerTextField ->
                                                 if (replyText.isEmpty()) {
                                                     Text(
-                                                        text = "iMessage reply...",
+                                                        text = "Reply...",
                                                         color = Color(0xFF8E8E93),
                                                         fontSize = 13.5.sp,
                                                         fontFamily = InterFontFamily
@@ -1597,7 +1659,7 @@ fun IosDynamicIslandHost(
                                     Box(
                                         modifier = Modifier
                                             .height(36.dp)
-                                            .clip(RoundedCornerShape(18.dp))
+                                            .clip(RoundedCornerShape(8.dp))
                                             .background(Color(0xFF007AFF))
                                             .clickable {
                                                 if (replyText.isNotBlank()) {
@@ -1606,8 +1668,7 @@ fun IosDynamicIslandHost(
                                                 } else {
                                                     event.onClick?.invoke()
                                                 }
-                                                isExpanded = false
-                                                currentEvent = null
+                                                dismissIsland()
                                             }
                                             .padding(horizontal = 14.dp),
                                         contentAlignment = Alignment.Center
@@ -1634,15 +1695,7 @@ fun IosDynamicIslandHost(
                                     modifier = Modifier.weight(1f),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(34.dp)
-                                            .clip(CircleShape)
-                                            .background(Color(0xFFFF2D55)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(Lucide.Heart, null, tint = Color.White, modifier = Modifier.size(17.dp))
-                                    }
+                                    Icon(Lucide.Heart, null, tint = Color(0xFFFF2D55), modifier = Modifier.size(26.dp))
 
                                     Spacer(Modifier.width(10.dp))
 
@@ -1674,12 +1727,12 @@ fun IosDynamicIslandHost(
                                     Box(
                                         modifier = Modifier
                                             .height(30.dp)
-                                            .clip(RoundedCornerShape(15.dp))
+                                            .clip(RoundedCornerShape(8.dp))
                                             .background(Color(0x33FF2D55))
-                                            .border(1.dp, Color(0xFFFF2D55).copy(alpha = 0.5f), RoundedCornerShape(15.dp))
+                                            .border(1.dp, Color(0xFFFF2D55).copy(alpha = 0.5f), RoundedCornerShape(8.dp))
                                             .clickable {
                                                 event.onClick?.invoke()
-                                                currentEvent = null
+                                                dismissIsland()
                                             }
                                             .padding(horizontal = 12.dp),
                                         contentAlignment = Alignment.Center
@@ -1692,19 +1745,14 @@ fun IosDynamicIslandHost(
                                             fontFamily = InterFontFamily
                                         )
                                     }
-                                    Box(
+                                    Icon(
+                                        Lucide.X,
+                                        contentDescription = "Close",
+                                        tint = Color.White.copy(alpha = 0.70f),
                                         modifier = Modifier
-                                            .size(24.dp)
-                                            .clip(CircleShape)
-                                            .background(Color.White.copy(alpha = 0.12f))
-                                            .clickable {
-                                                isExpanded = false
-                                                currentEvent = null
-                                            },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(Lucide.X, contentDescription = "Close", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(13.dp))
-                                    }
+                                            .size(20.dp)
+                                            .clickable { dismissIsland() }
+                                    )
                                 }
                             }
                         }
@@ -1727,12 +1775,7 @@ fun IosDynamicIslandHost(
                                             modifier = Modifier.size(34.dp).clip(CircleShape)
                                         )
                                     } else {
-                                        Box(
-                                            modifier = Modifier.size(34.dp).clip(CircleShape).background(Color(0xFF007AFF)),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(Lucide.UserPlus, null, tint = Color.White, modifier = Modifier.size(17.dp))
-                                        }
+                                        Icon(Lucide.UserPlus, null, tint = Color(0xFF007AFF), modifier = Modifier.size(26.dp))
                                     }
 
                                     Spacer(Modifier.width(10.dp))
@@ -1766,11 +1809,11 @@ fun IosDynamicIslandHost(
                                         Box(
                                             modifier = Modifier
                                                 .height(30.dp)
-                                                .clip(RoundedCornerShape(15.dp))
+                                                .clip(RoundedCornerShape(8.dp))
                                                 .background(Color(0xFF007AFF))
                                                 .clickable {
                                                     event.onFollowBack.invoke()
-                                                    currentEvent = null
+                                                    dismissIsland()
                                                 }
                                                 .padding(horizontal = 12.dp),
                                             contentAlignment = Alignment.Center
@@ -1781,30 +1824,25 @@ fun IosDynamicIslandHost(
                                     Box(
                                         modifier = Modifier
                                             .height(30.dp)
-                                            .clip(RoundedCornerShape(15.dp))
+                                            .clip(RoundedCornerShape(8.dp))
                                             .background(Color(0xFF2C2C2E))
                                             .clickable {
                                                 event.onClick?.invoke()
-                                                currentEvent = null
+                                                dismissIsland()
                                             }
                                             .padding(horizontal = 10.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text("View", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, fontFamily = InterFontFamily)
                                     }
-                                    Box(
+                                    Icon(
+                                        Lucide.X,
+                                        contentDescription = "Close",
+                                        tint = Color.White.copy(alpha = 0.70f),
                                         modifier = Modifier
-                                            .size(24.dp)
-                                            .clip(CircleShape)
-                                            .background(Color.White.copy(alpha = 0.12f))
-                                            .clickable {
-                                                isExpanded = false
-                                                currentEvent = null
-                                            },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(Lucide.X, contentDescription = "Close", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(13.dp))
-                                    }
+                                            .size(20.dp)
+                                            .clickable { dismissIsland() }
+                                    )
                                 }
                             }
                         }
@@ -1819,15 +1857,10 @@ fun IosDynamicIslandHost(
                                     modifier = Modifier.weight(1f),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Box(
-                                        modifier = Modifier.size(34.dp).clip(CircleShape).background(Color(0xFFFF9500)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        if (event.isRemix) {
-                                            AiWaveSphereIcon(modifier = Modifier.size(20.dp))
-                                        } else {
-                                            Icon(Lucide.Download, null, tint = Color.White, modifier = Modifier.size(17.dp))
-                                        }
+                                    if (event.isRemix) {
+                                        AiWaveSphereIcon(modifier = Modifier.size(26.dp))
+                                    } else {
+                                        Icon(Lucide.Download, null, tint = Color(0xFFFF9500), modifier = Modifier.size(26.dp))
                                     }
 
                                     Spacer(Modifier.width(10.dp))
@@ -1860,31 +1893,26 @@ fun IosDynamicIslandHost(
                                     Box(
                                         modifier = Modifier
                                             .height(30.dp)
-                                            .clip(RoundedCornerShape(15.dp))
+                                            .clip(RoundedCornerShape(8.dp))
                                             .background(Color(0x33FF9500))
-                                            .border(1.dp, Color(0xFFFF9500).copy(alpha = 0.5f), RoundedCornerShape(15.dp))
+                                            .border(1.dp, Color(0xFFFF9500).copy(alpha = 0.5f), RoundedCornerShape(8.dp))
                                             .clickable {
                                                 event.onClick?.invoke()
-                                                currentEvent = null
+                                                dismissIsland()
                                             }
                                             .padding(horizontal = 12.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text("View", color = Color(0xFFFF9F0A), fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = InterFontFamily)
                                     }
-                                    Box(
+                                    Icon(
+                                        Lucide.X,
+                                        contentDescription = "Close",
+                                        tint = Color.White.copy(alpha = 0.70f),
                                         modifier = Modifier
-                                            .size(24.dp)
-                                            .clip(CircleShape)
-                                            .background(Color.White.copy(alpha = 0.12f))
-                                            .clickable {
-                                                isExpanded = false
-                                                currentEvent = null
-                                            },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(Lucide.X, contentDescription = "Close", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(13.dp))
-                                    }
+                                            .size(20.dp)
+                                            .clickable { dismissIsland() }
+                                    )
                                 }
                             }
                         }
@@ -1907,12 +1935,7 @@ fun IosDynamicIslandHost(
                                         else -> Color(0xFF5856D6)
                                     }
 
-                                    Box(
-                                        modifier = Modifier.size(30.dp).clip(CircleShape).background(iconBg),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(event.icon ?: Lucide.Check, null, tint = Color.White, modifier = Modifier.size(16.dp))
-                                    }
+                                    Icon(event.icon ?: Lucide.Check, null, tint = iconBg, modifier = Modifier.size(26.dp))
 
                                     Spacer(Modifier.width(10.dp))
 
@@ -1947,11 +1970,11 @@ fun IosDynamicIslandHost(
                                         Box(
                                             modifier = Modifier
                                                 .height(28.dp)
-                                                .clip(RoundedCornerShape(14.dp))
+                                                .clip(RoundedCornerShape(8.dp))
                                                 .background(Color(0xFF007AFF))
                                                 .clickable {
                                                     event.onAction?.invoke()
-                                                    currentEvent = null
+                                                    dismissIsland()
                                                 }
                                                 .padding(horizontal = 10.dp),
                                             contentAlignment = Alignment.Center
@@ -1959,19 +1982,14 @@ fun IosDynamicIslandHost(
                                             Text(event.actionLabel, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = InterFontFamily)
                                         }
                                     }
-                                    Box(
+                                    Icon(
+                                        Lucide.X,
+                                        contentDescription = "Close",
+                                        tint = Color.White.copy(alpha = 0.70f),
                                         modifier = Modifier
-                                            .size(24.dp)
-                                            .clip(CircleShape)
-                                            .background(Color.White.copy(alpha = 0.12f))
-                                            .clickable {
-                                                isExpanded = false
-                                                currentEvent = null
-                                            },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(Lucide.X, contentDescription = "Close", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(13.dp))
-                                    }
+                                            .size(20.dp)
+                                            .clickable { dismissIsland() }
+                                    )
                                 }
                             }
                         }

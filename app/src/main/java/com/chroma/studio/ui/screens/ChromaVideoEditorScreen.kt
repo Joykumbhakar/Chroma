@@ -975,22 +975,15 @@ fun ChromaVideoEditorScreen(
                         }
 
                         // Layer Button
-                        Box(
+                        Icon(
+                            imageVector = Lucide.Layers,
+                            contentDescription = "Layers",
+                            tint = colors.textMain,
                             modifier = Modifier
-                                .size(34.dp)
-                                .clip(CircleShape)
-                                .background(colors.glassBgHover)
-                                .border(0.5.dp, colors.glassBorder, CircleShape)
-                                .clickable { showLayersSheet = true },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Lucide.Layers,
-                                contentDescription = "Layers",
-                                tint = colors.textMain,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
+                                .size(24.dp)
+                                .clickable { showLayersSheet = true }
+                                .padding(2.dp)
+                        )
 
                         // Export Button
                         Box(
@@ -1522,18 +1515,15 @@ private fun VideoPreviewArea(
 
         // Center Big Play Button (Visible when paused)
         if (!isPlaying) {
-            Box(
+            Icon(
+                Lucide.Play,
+                contentDescription = "Play",
+                tint = Color.White,
                 modifier = Modifier
-                    .size(56.dp)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.4f))
-                    .border(0.5.dp, Color.White.copy(alpha = 0.1f), CircleShape)
+                    .size(48.dp)
                     .clickable(onClick = onTogglePlay)
-                    .zIndex(25f),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Lucide.Play, contentDescription = "Play", tint = Color.White, modifier = Modifier.size(24.dp).offset(x = 2.dp))
-            }
+                    .zIndex(25f)
+            )
         }
 
         // Floating Zoom & Crop Smooth Slider Bar (Revealed by 2-finger zoom, auto-fades after 2s of inactivity)
@@ -2102,23 +2092,15 @@ private fun TimelineTrackRow(
             val nextClip = clips.find { kotlin.math.abs(it.startTime - clip.endTime) < 0.1f }
             if (nextClip != null) {
                 val hasTransition = clip.transitionOut != TransitionType.NONE
-                Box(
+                Icon(
+                    imageVector = if (hasTransition) Lucide.Sparkles else Lucide.Plus,
+                    contentDescription = "Transition",
+                    tint = if (hasTransition) Color(0xFF2563EB) else Color.White,
                     modifier = Modifier
                         .offset(x = (clip.endTime * pps).dp - 9.dp)
                         .size(18.dp)
-                        .clip(CircleShape)
-                        .background(if (hasTransition) Color(0xFF2563EB) else Color.White)
-                        .border(1.dp, if (hasTransition) Color(0xFF3B82F6) else Color(0xFFE5E7EB), CircleShape)
-                        .clickable { onTransitionClick(clip) },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = if (hasTransition) Lucide.Sparkles else Lucide.Plus,
-                        contentDescription = "Transition",
-                        tint = if (hasTransition) Color.White else Color(0xFF374151),
-                        modifier = Modifier.size(11.dp)
-                    )
-                }
+                        .clickable { onTransitionClick(clip) }
+                )
             }
         }
     }
@@ -2533,17 +2515,15 @@ private fun FilterPanel(clip: Clip, viewModel: ChromaEditorViewModel) {
                             )
                     ) {
                         if (selected) {
-                            Box(
+                            Icon(
+                                Lucide.Check,
+                                contentDescription = null,
+                                tint = colors.primary,
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
                                     .padding(4.dp)
                                     .size(16.dp)
-                                    .clip(CircleShape)
-                                    .background(colors.primary),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(Lucide.Check, contentDescription = null, tint = colors.textMain, modifier = Modifier.size(10.dp))
-                            }
+                            )
                         }
                     }
                     Spacer(Modifier.height(5.dp))
@@ -3023,6 +3003,7 @@ private fun AddMediaSheet(
     onAddMedia: (MediaType, String, Int, Color, String?) -> Unit
 ) {
     val colors = LocalOscellionColors.current
+    var activeGalleryPickerType by remember { mutableStateOf<MediaType?>(null) }
     val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) onAddMedia(MediaType.VIDEO, "Video", 1, Color(0xFF1E3A8A), uri.toString())
         onDismiss()
@@ -3079,11 +3060,11 @@ private fun AddMediaSheet(
                         .clip(RoundedCornerShape(12.dp))
                         .clickable {
                             when (i) {
-                                0 -> videoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
-                                1 -> imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                0 -> activeGalleryPickerType = MediaType.VIDEO
+                                1 -> activeGalleryPickerType = MediaType.IMAGE
                                 2 -> { onAddMedia(MediaType.TEXT, "Text", 3, Color(0xFF701A75), null); onDismiss() }
                                 3 -> audioPicker.launch("audio/*")
-                                4 -> stickerPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                4 -> activeGalleryPickerType = MediaType.STICKER
                             }
                         }
                         .padding(horizontal = 8.dp, vertical = 12.dp),
@@ -3103,6 +3084,37 @@ private fun AddMediaSheet(
 
             Spacer(Modifier.height(12.dp))
         }
+    }
+
+    if (activeGalleryPickerType != null) {
+        val pickerType = activeGalleryPickerType!!
+        val isVideo = pickerType == MediaType.VIDEO
+        com.chroma.studio.ui.components.OscellionGalleryLayout(
+            layoutMode = com.chroma.studio.ui.components.GalleryLayoutMode.BOTTOM_SHEET,
+            title = if (isVideo) "Video Clip" else "Image Overlay",
+            badgeText = "Editor",
+            allowedMediaFilter = if (isVideo) com.chroma.studio.ui.components.GalleryMediaTypeFilter.VIDEOS else com.chroma.studio.ui.components.GalleryMediaTypeFilter.PHOTOS,
+            showCameraTile = true,
+            showCaptionInput = false,
+            onVideoSelected = { uri ->
+                activeGalleryPickerType = null
+                onAddMedia(MediaType.VIDEO, "Video", 1, Color(0xFF1E3A8A), uri.toString())
+                onDismiss()
+            },
+            onPhotosSelected = { uris ->
+                val currentType = activeGalleryPickerType
+                activeGalleryPickerType = null
+                uris.firstOrNull()?.let { uri ->
+                    when (currentType) {
+                        MediaType.VIDEO -> onAddMedia(MediaType.VIDEO, "Video", 1, Color(0xFF1E3A8A), uri.toString())
+                        MediaType.STICKER -> onAddMedia(MediaType.STICKER, "Sticker", 5, Color(0xFFB45309), uri.toString())
+                        else -> onAddMedia(MediaType.IMAGE, "Image", 2, Color(0xFF064E3B), uri.toString())
+                    }
+                }
+                onDismiss()
+            },
+            onClose = { activeGalleryPickerType = null }
+        )
     }
 }
 
@@ -3486,15 +3498,7 @@ private fun ToolGridItem(
             .clickable(onClick = onClick)
             .padding(16.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(Color(0xFFEFF6FF)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(icon, contentDescription = title, tint = Color(0xFF3B82F6), modifier = Modifier.size(20.dp))
-        }
+        Icon(icon, contentDescription = title, tint = Color(0xFF3B82F6), modifier = Modifier.size(28.dp))
         Spacer(modifier = Modifier.height(8.dp))
         Text(title, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1F2937))
         Spacer(modifier = Modifier.height(2.dp))

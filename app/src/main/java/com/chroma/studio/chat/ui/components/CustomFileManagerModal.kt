@@ -264,13 +264,11 @@ fun CustomFileManagerModal(
                 if (searchQuery.isNotEmpty()) {
                     Box(
                         modifier = Modifier
-                            .size(18.dp)
-                            .clip(CircleShape)
-                            .background(colors.textMuted.copy(alpha = 0.3f))
+                            .size(20.dp)
                             .clickable { searchQuery = "" },
                         contentAlignment = Alignment.Center
                     ) {
-                        PhosphorCloseX(tint = colors.textDark, size = 9.dp)
+                        PhosphorCloseX(tint = colors.textMuted, size = 12.dp)
                     }
                 }
             }
@@ -330,15 +328,7 @@ fun CustomFileManagerModal(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(56.dp)
-                                .clip(CircleShape)
-                                .background(colors.surfaceSecondary),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            PhosphorFileIcon(tint = colors.textMuted, size = 26.dp)
-                        }
+                        PhosphorFileIcon(tint = colors.textMuted, size = 42.dp)
                         Text(
                             text = "No files found",
                             fontSize = 15.sp,
@@ -454,7 +444,7 @@ fun CustomFileManagerModal(
                                     .border(
                                         width = if (isSelected) 0.dp else 1.5.dp,
                                         color = if (isSelected) Color.Transparent else colors.textMuted.copy(alpha = 0.45f),
-                                        shape = CircleShape
+                                        shape = RoundedCornerShape(6.dp)
                                     ),
                                 contentAlignment = Alignment.Center
                             ) {

@@ -340,6 +340,23 @@ class FlashRepository {
         } catch (e: Exception) {
             Log.e("FlashRepository", "Error incrementing comment count", e)
         }
+
+        // Dispatch real notification to video creator
+        try {
+            val videoDoc = collection.document(videoId).get().await()
+            val creatorId = videoDoc.getString("creatorId")
+            val thumb = videoDoc.getString("thumbnailUrl")
+            if (!creatorId.isNullOrBlank() && creatorId != user.uid) {
+                NotificationDispatcher.sendNotification(
+                    targetUserId = creatorId,
+                    type = com.chroma.studio.model.NotificationActionType.COMMENT,
+                    actionText = "commented on your video",
+                    detailText = text,
+                    targetPreviewUrl = thumb,
+                    targetId = videoId
+                )
+            }
+        } catch (_: Exception) {}
         
         return comment
     }

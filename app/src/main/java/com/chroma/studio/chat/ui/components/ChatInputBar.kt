@@ -186,13 +186,11 @@ fun ChatInputBar(
                             }
                             Box(
                                 modifier = Modifier
-                                    .size(22.dp)
-                                    .clip(CircleShape)
-                                    .background(colors.surfaceTertiary)
+                                    .size(24.dp)
                                     .clickable { onCancelReply() },
                                 contentAlignment = Alignment.Center
                             ) {
-                                PhosphorCloseX(tint = colors.textMuted, size = 11.dp)
+                                PhosphorCloseX(tint = colors.textMuted, size = 13.dp)
                             }
                         }
                     }
@@ -376,7 +374,6 @@ fun ChatInputBar(
                     Box(
                         modifier = Modifier
                             .size(38.dp)
-                            .clip(CircleShape)
                             .clickable {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 if (hasSendContent) {
@@ -439,40 +436,5 @@ fun ChatInputBar(
 }
 }
 
-// ── Attachment Grid Item ──────────────────────────────────
 
-@Composable
-private fun AttachmentItem(
-    icon: @Composable () -> Unit,
-    title: String,
-    bgColor: Color,
-    onClick: () -> Unit
-) {
-    val colors = LocalChatColors.current
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-        modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
-            .clickable { onClick() }
-            .padding(8.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(bgColor),
-            contentAlignment = Alignment.Center
-        ) {
-            icon()
-        }
-        Text(
-            text = title,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Medium,
-            color = colors.textDark,
-            lineHeight = 13.sp
-        )
-    }
-}
 

@@ -383,12 +383,12 @@ private fun MessageReactionDock(
                 Box(
                     modifier = Modifier
                         .size(34.dp)
-                        .clip(CircleShape)
+                        .clip(RoundedCornerShape(8.dp))
                         .background(if (isSelected) colors.iosBlueSubtle else Color.Transparent)
                         .border(
                             width = if (isSelected) 1.dp else 0.dp,
                             color = if (isSelected) colors.iosBlue else Color.Transparent,
-                            shape = CircleShape
+                            shape = RoundedCornerShape(8.dp)
                         )
                         .clickable {
                             coroutineScope.launch {
@@ -417,8 +417,6 @@ private fun MessageReactionDock(
             Box(
                 modifier = Modifier
                     .size(32.dp)
-                    .clip(CircleShape)
-                    .background(if (colors.isLight) Color(0x14000000) else Color(0x28FFFFFF))
                     .clickable {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         SoundManager.playReaction()
@@ -427,7 +425,7 @@ private fun MessageReactionDock(
                     },
                 contentAlignment = Alignment.Center
             ) {
-                PhosphorPlusIcon(tint = colors.textDark, size = 16.dp)
+                PhosphorPlusIcon(tint = colors.textDark, size = 18.dp)
             }
 
             Box(
@@ -464,7 +462,9 @@ data class MessageRowCallbacks(
     val onImageStackClick: ((List<String>, Int) -> Unit)? = null,
     val onPollVote: (Int) -> Unit = {},
     val onViewPollVotes: ((PollData) -> Unit)? = null,
-    val onToggleSelect: () -> Unit = {}
+    val onToggleSelect: () -> Unit = {},
+    val onQuoteClick: ((String) -> Unit)? = null,
+    val onRetry: (() -> Unit)? = null
 )
 
 @Immutable
@@ -649,6 +649,7 @@ fun MessageRow(
     callbacks: MessageRowCallbacks = MessageRowCallbacks(),
     isSelectionMode: Boolean = false,
     isSelected: Boolean = false,
+    isHighlighted: Boolean = false,
     config: MessageBubbleConfig = MessageBubbleConfig(),
     modifier: Modifier = Modifier
 ) {
@@ -665,6 +666,8 @@ fun MessageRow(
     val onPollVote = callbacks.onPollVote
     val onViewPollVotes = callbacks.onViewPollVotes
     val onToggleSelect = callbacks.onToggleSelect
+    val onQuoteClick = callbacks.onQuoteClick
+    val onRetry = callbacks.onRetry
 
     val bubbleStyle = config.bubbleStyle
     val customCornerConfig = config.customCornerConfig
@@ -675,6 +678,16 @@ fun MessageRow(
     var showReactionDock by remember { mutableStateOf(false) }
     var isHeartBurstActive by remember { mutableStateOf(false) }
     var heartJob by remember { mutableStateOf<Job?>(null) }
+    val highlightAnim = remember { Animatable(0f) }
+    LaunchedEffect(isHighlighted) {
+        if (isHighlighted) {
+            highlightAnim.snapTo(0.40f)
+            highlightAnim.animateTo(
+                0f,
+                animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing)
+            )
+        }
+    }
     var lastTapTimestamp by remember { mutableLongStateOf(0L) }
     val coroutineScope = rememberCoroutineScope()
     val dragOffset = remember { Animatable(0f) }
@@ -721,10 +734,10 @@ fun MessageRow(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier
-                    .clip(CircleShape)
+                    .clip(RoundedCornerShape(8.dp))
                     .background(colors.cardBg)
-                    .border(0.5.dp, colors.borderSubtle, CircleShape)
-                    .padding(horizontal = 14.dp, vertical = 6.dp)
+                    .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(8.dp))
+                    .padding(horizontal = 12.dp, vertical = 5.dp)
             ) {
                 LucidePhone(tint = colors.iosBlue, size = 13.dp)
                 Text(
@@ -776,13 +789,13 @@ fun MessageRow(
             Box(
                 modifier = Modifier
                     .padding(end = 10.dp)
-                    .size(24.dp)
-                    .clip(CircleShape)
+                    .size(22.dp)
+                    .clip(RoundedCornerShape(6.dp))
                     .background(if (isSelected) colors.iosBlue else Color.Transparent)
                     .border(
                         width = if (isSelected) 0.dp else 1.5.dp,
                         color = if (isSelected) Color.Transparent else colors.textMuted.copy(alpha = 0.5f),
-                        shape = CircleShape
+                        shape = RoundedCornerShape(6.dp)
                     )
                     .clickable {
                         onToggleSelect()
@@ -827,13 +840,13 @@ fun MessageRow(
                     contentAlignment = if (isSwipingLeft) Alignment.CenterEnd else Alignment.CenterStart
                 ) {
                     Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .background(colors.iosBlue.copy(alpha = (kotlin.math.abs(dragOffset.value) / 120f).coerceIn(0.2f, 1f))),
+                        modifier = Modifier.size(32.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        LucideReply(tint = Color.White, size = 15.dp)
+                        LucideReply(
+                            tint = colors.iosBlue.copy(alpha = (kotlin.math.abs(dragOffset.value) / 120f).coerceIn(0.2f, 1f)),
+                            size = 20.dp
+                        )
                     }
                 }
             }
@@ -959,7 +972,9 @@ fun MessageRow(
                                                 showReactionDock = true
                                             },
                                             onTap = {
-                                                if (showReactionDock) {
+                                                if (message.status == "error") {
+                                                    onRetry?.invoke()
+                                                } else if (showReactionDock) {
                                                     showReactionDock = false
                                                 }
                                             }
@@ -967,6 +982,16 @@ fun MessageRow(
                                     }
                                 }
                         ) {
+                        // Flash highlight overlay on quote click
+                        if (highlightAnim.value > 0.01f) {
+                            Box(
+                                modifier = Modifier
+                                    .matchParentSize()
+                                    .clip(effectiveShape)
+                                    .background(colors.iosBlue.copy(alpha = highlightAnim.value))
+                            )
+                        }
+
                         // Glossy top specular light gradient highlight
                         if (visual.hasTopSpecular && !isMediaOnly) {
                             Box(
@@ -1005,7 +1030,9 @@ fun MessageRow(
                             onImageClick = onImageClick,
                             onImageStackClick = onImageStackClick,
                             onPollVote = onPollVote,
-                            onViewPollVotes = onViewPollVotes
+                            onViewPollVotes = onViewPollVotes,
+                            onQuoteClick = onQuoteClick,
+                            onRetry = onRetry
                         )
                     }
 
@@ -1052,10 +1079,10 @@ fun MessageRow(
 
                                 Row(
                                     modifier = Modifier
-                                        .shadow(3.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.18f), spotColor = Color.Black.copy(alpha = 0.14f))
-                                        .clip(CircleShape)
+                                        .shadow(2.dp, RoundedCornerShape(8.dp), ambientColor = Color.Black.copy(alpha = 0.18f), spotColor = Color.Black.copy(alpha = 0.14f))
+                                        .clip(RoundedCornerShape(8.dp))
                                         .background(badgeBg)
-                                        .border(badgeBorderWidth, badgeBorderColor, CircleShape)
+                                        .border(badgeBorderWidth, badgeBorderColor, RoundedCornerShape(8.dp))
                                         .clickable {
                                             onReactionClick(emoji)
                                         }
@@ -1113,7 +1140,9 @@ private fun MessageBubbleInnerContent(
     onImageClick: (String) -> Unit,
     onImageStackClick: ((List<String>, Int) -> Unit)?,
     onPollVote: (Int) -> Unit,
-    onViewPollVotes: ((PollData) -> Unit)?
+    onViewPollVotes: ((PollData) -> Unit)?,
+    onQuoteClick: ((String) -> Unit)? = null,
+    onRetry: (() -> Unit)? = null
 ) {
     val haptic = LocalHapticFeedback.current
 
@@ -1125,13 +1154,17 @@ private fun MessageBubbleInnerContent(
             bottom = if (isMediaOnly) 0.dp else if (isVoiceOnly) 5.dp else 7.dp
         )
     ) {
-        // 1. Reply Quote Header (Apple frosted card with vertical accent indicator)
+        // 1. Reply Quote Header (Apple frosted card with vertical accent indicator, interactive tap-to-scroll)
         if (message.replyTo != null) {
+            val quotedMsgId = message.replyTo.messageId
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 6.dp)
                     .clip(RoundedCornerShape(8.dp))
+                    .clickable(enabled = onQuoteClick != null && !quotedMsgId.isNullOrBlank()) {
+                        quotedMsgId?.let { onQuoteClick?.invoke(it) }
+                    }
                     .background(
                         if (isOutgoing) Color.White.copy(alpha = 0.18f)
                         else if (colors.isLight) Color(0x0C000000)
@@ -1303,8 +1336,8 @@ private fun MessageBubbleInnerContent(
                     Box(
                         modifier = Modifier
                             .size(38.dp)
-                            .background(Color(0xFFF43F5E).copy(alpha = 0.18f), CircleShape)
-                            .border(0.5.dp, Color(0xFFF43F5E).copy(alpha = 0.3f), CircleShape),
+                            .background(Color(0xFFF43F5E).copy(alpha = 0.18f), RoundedCornerShape(10.dp))
+                            .border(0.5.dp, Color(0xFFF43F5E).copy(alpha = 0.3f), RoundedCornerShape(10.dp)),
                         contentAlignment = Alignment.Center
                     ) {
                         LucideMapPin(tint = Color(0xFFF43F5E), size = 18.dp)
@@ -1350,8 +1383,8 @@ private fun MessageBubbleInnerContent(
                         Box(
                             modifier = Modifier
                                 .size(38.dp)
-                                .background(colors.iosBlueSubtle, CircleShape)
-                                .border(0.5.dp, colors.iosBlue.copy(alpha = 0.25f), CircleShape),
+                                .background(colors.iosBlueSubtle, RoundedCornerShape(10.dp))
+                                .border(0.5.dp, colors.iosBlue.copy(alpha = 0.25f), RoundedCornerShape(10.dp)),
                             contentAlignment = Alignment.Center
                         ) {
                             LucideFileText(tint = colors.iosBlue, size = 18.dp)
@@ -1643,27 +1676,60 @@ fun VoiceNotePlayer(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // Play/Pause Button (Enhanced Circular Button)
+        // Play/Pause Button (Apple style glass border Clean Gradient Circle)
+        val playBtnBg = if (isOutgoing) {
+            Brush.linearGradient(
+                listOf(
+                    Color.White.copy(alpha = 0.28f),
+                    Color.White.copy(alpha = 0.16f)
+                )
+            )
+        } else {
+            if (colors.isLight) {
+                Brush.linearGradient(
+                    listOf(
+                        colors.iosBlue.copy(alpha = 0.18f),
+                        colors.iosBlue.copy(alpha = 0.08f)
+                    )
+                )
+            } else {
+                Brush.linearGradient(
+                    listOf(
+                        Color(0xFF3A3A3C),
+                        Color(0xFF2C2C2E)
+                    )
+                )
+            }
+        }
+        val playBtnBorder = if (isOutgoing) {
+            Color.White.copy(alpha = 0.38f)
+        } else {
+            if (colors.isLight) colors.iosBlue.copy(alpha = 0.30f) else Color.White.copy(alpha = 0.20f)
+        }
+
         Box(
             modifier = Modifier
-                .size(38.dp)
-                .shadow(2.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.2f))
+                .size(34.dp)
                 .clip(CircleShape)
-                .background(if (isOutgoing) Color.White else colors.iosBlue)
-                .clickable {
+                .background(playBtnBg)
+                .border(0.75.dp, playBtnBorder, CircleShape)
+                .clickable(
+                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                    indication = null
+                ) {
                     AudioPlayerManager.play(messageId, audioPath, context)
                 },
             contentAlignment = Alignment.Center
         ) {
             if (isThisPlaying) {
                 LucidePause(
-                    tint = if (isOutgoing) colors.iosBlue else Color.White,
-                    size = 17.dp
+                    tint = if (isOutgoing) Color.White else colors.iosBlue,
+                    size = 18.dp
                 )
             } else {
                 LucidePlay(
-                    tint = if (isOutgoing) colors.iosBlue else Color.White,
-                    size = 17.dp,
+                    tint = if (isOutgoing) Color.White else colors.iosBlue,
+                    size = 18.dp,
                     modifier = Modifier.offset(x = 1.dp) // Optical center correction
                 )
             }
@@ -1877,20 +1943,12 @@ fun PollCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(22.dp)
-                        .clip(CircleShape)
-                        .background(if (isOutgoing) Color.White.copy(alpha = 0.2f) else colors.iosBlue.copy(alpha = 0.12f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Lucide.ChartColumn,
-                        contentDescription = null,
-                        tint = if (isOutgoing) Color.White else colors.iosBlue,
-                        modifier = Modifier.size(13.dp)
-                    )
-                }
+                Icon(
+                    imageVector = Lucide.ChartColumn,
+                    contentDescription = null,
+                    tint = if (isOutgoing) Color.White else colors.iosBlue,
+                    modifier = Modifier.size(16.dp)
+                )
                 Text(
                     text = if (poll.isAnonymous) "Anonymous Poll" else "Public Poll",
                     fontSize = 12.sp,

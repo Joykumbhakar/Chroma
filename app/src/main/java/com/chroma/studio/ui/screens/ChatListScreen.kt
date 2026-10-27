@@ -160,9 +160,7 @@ fun ChatListScreen(
             }
             IconButton(
                 onClick = { onNavigateToCreateGroup() },
-                modifier = Modifier
-                    .size(36.dp)
-                    .background(iosBlue.copy(alpha = 0.1f), CircleShape)
+                modifier = Modifier.size(36.dp)
             ) {
                 Icon(Lucide.Pencil, contentDescription = "New Chat", tint = iosBlue, modifier = Modifier.size(20.dp))
             }
@@ -233,16 +231,14 @@ fun ChatListScreen(
                                 size = 44.dp
                             )
                             if (myStory == null) {
-                                Box(
+                                Icon(
+                                    Lucide.Plus,
+                                    contentDescription = null,
+                                    tint = iosBlue,
                                     modifier = Modifier
                                         .align(Alignment.BottomEnd)
                                         .size(14.dp)
-                                        .background(iosBlue, CircleShape)
-                                        .border(2.dp, sidebarBg, CircleShape),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(Lucide.Plus, contentDescription = null, tint = Color.White, modifier = Modifier.size(8.dp))
-                                }
+                                )
                             }
                         }
                         Spacer(modifier = Modifier.height(4.dp))

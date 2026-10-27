@@ -66,16 +66,6 @@ fun ChromaScreenHeader(
                         Box(
                             modifier = Modifier
                                 .size(36.dp)
-                                .clip(CircleShape)
-                                .then(
-                                    if (circularBackButton) {
-                                        Modifier
-                                            .background(colors.glassBgHover)
-                                            .border(1.dp, colors.glassBorder, CircleShape)
-                                    } else {
-                                        Modifier
-                                    }
-                                )
                                 .clickable { onBack() },
                             contentAlignment = Alignment.Center
                         ) {
@@ -83,7 +73,7 @@ fun ChromaScreenHeader(
                                 imageVector = Lucide.ChevronLeft,
                                 contentDescription = "Back",
                                 tint = colors.textMain,
-                                modifier = Modifier.size(if (circularBackButton) 20.dp else 22.dp)
+                                modifier = Modifier.size(22.dp)
                             )
                         }
                     }
@@ -154,9 +144,6 @@ fun ChromaHeaderActionButton(
     Box(
         modifier = Modifier
             .size(36.dp)
-            .clip(CircleShape)
-            .background(colors.glassBgHover)
-            .border(1.dp, colors.glassBorder, CircleShape)
             .clickable { onClick() },
         contentAlignment = Alignment.Center
     ) {
@@ -164,7 +151,7 @@ fun ChromaHeaderActionButton(
             imageVector = icon,
             contentDescription = contentDescription,
             tint = tint ?: colors.textMain,
-            modifier = Modifier.size(18.dp)
+            modifier = Modifier.size(20.dp)
         )
         if (badgeCount > 0) {
             Box(

@@ -78,7 +78,7 @@ fun FlashFeedScreen(
 
     var selectedTab by remember { mutableStateOf("Reels") }
     val pagerState = rememberPagerState(pageCount = { flashFeed.size.coerceAtLeast(1) })
-    
+
     // ExoPlayer Pool of 3 recycled players using CacheDataSource
     val exoPlayers = remember {
         val cache = com.chroma.studio.utils.MediaCacheManager.getInstance(context)
@@ -87,7 +87,7 @@ fun FlashFeedScreen(
             .setCache(cache)
             .setUpstreamDataSourceFactory(httpDataSourceFactory)
             .setFlags(androidx.media3.datasource.cache.CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
-            
+
         List(3) {
             androidx.media3.exoplayer.ExoPlayer.Builder(context)
                 .setMediaSourceFactory(androidx.media3.exoplayer.source.DefaultMediaSourceFactory(cacheDataSourceFactory))
@@ -103,7 +103,7 @@ fun FlashFeedScreen(
 
     // Drafts bottom sheet
     var showDraftSheet by remember { mutableStateOf(false) }
-    
+
     // Global mute state
     var isMuted by remember { mutableStateOf(false) }
 
@@ -112,7 +112,7 @@ fun FlashFeedScreen(
         if (pagerState.currentPage >= flashFeed.size - 3) {
             flashVm.loadMoreFeed()
         }
-        
+
         // AOT Prefetching for the next 2-3 videos
         for (i in 1..3) {
             val idx = pagerState.currentPage + i
@@ -338,18 +338,23 @@ private fun FlashVideoItem(
     val coroutineScope = rememberCoroutineScope()
     val auth = remember { FirebaseAuth.getInstance() }
     val discoverRepo = remember { com.chroma.studio.data.DiscoverRepository() }
-    
-    var isFollowing by remember(video.creatorId) { mutableStateOf(false) }
+
+    val followingUserIds by com.chroma.studio.data.mutation.OptimisticFollowManager.followingUserIds.collectAsState()
+    val isFollowing = followingUserIds.contains(video.creatorId)
     val isSaved = auth.currentUser?.uid?.let { video.savedBy.contains(it) } ?: false
     var showComments by remember { mutableStateOf(false) }
     var isCaptionExpanded by remember { mutableStateOf(false) }
-    
+
     LaunchedEffect(video.creatorId) {
-        if (auth.currentUser != null && auth.currentUser!!.uid != video.creatorId) {
-            isFollowing = discoverRepo.checkIsFollowing(auth.currentUser!!.uid, video.creatorId)
+        val currentUid = auth.currentUser?.uid
+        if (!currentUid.isNullOrBlank() && currentUid != video.creatorId && !com.chroma.studio.data.mutation.OptimisticFollowManager.isFollowing(video.creatorId)) {
+            val serverFollowing = discoverRepo.checkIsFollowing(currentUid, video.creatorId)
+            if (serverFollowing) {
+                com.chroma.studio.data.mutation.OptimisticFollowManager.seedFollowing(setOf(video.creatorId))
+            }
         }
     }
-    
+
     // Prepare the pooled player for this specific video
     LaunchedEffect(video.videoUrl) {
         player.setMediaItem(androidx.media3.common.MediaItem.fromUri(video.videoUrl))
@@ -359,7 +364,7 @@ private fun FlashVideoItem(
     // Track app lifecycle to pause video when app goes to background
     val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
     var lifecycleEvent by remember { mutableStateOf(androidx.lifecycle.Lifecycle.Event.ON_ANY) }
-    
+
     DisposableEffect(lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             lifecycleEvent = event
@@ -441,7 +446,7 @@ private fun FlashVideoItem(
             showPlayPauseOverlay = false
         }
     }
-    
+
     val likeScale by animateFloatAsState(
         targetValue = if (isLiked) 1.25f else 1f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy),
@@ -495,7 +500,7 @@ private fun FlashVideoItem(
             update = { view ->
                 val frameLayout = view as androidx.media3.ui.AspectRatioFrameLayout
                 val textureView = frameLayout.tag as android.view.TextureView
-                
+
                 if (textureView.tag != player) {
                     textureView.tag = player
                     player.setVideoTextureView(textureView)
@@ -504,7 +509,7 @@ private fun FlashVideoItem(
             },
             modifier = Modifier.fillMaxSize()
         )
-        
+
         // Thumbnail image
         androidx.compose.animation.AnimatedVisibility(
             visible = !isPlayerReady,
@@ -604,7 +609,7 @@ private fun FlashVideoItem(
                 scale = likeScale,
                 onClick = onLike
             )
-            
+
             // Comments (only if comments are not turned off)
             if (!video.turnOffComments) {
                 ReelsActionButton(
@@ -773,13 +778,13 @@ private fun FlashVideoItem(
                             .border(1.dp, Color.White.copy(alpha = 0.85f), RoundedCornerShape(8.dp))
                             .background(if (isFollowing) Color.White.copy(alpha = 0.2f) else Color.Transparent)
                             .clickable {
-                                coroutineScope.launch {
-                                    if (auth.currentUser != null) {
-                                        val success = discoverRepo.toggleFollow(auth.currentUser!!.uid, video.creatorId)
-                                        if (success) isFollowing = !isFollowing
-                                    } else {
-                                        isFollowing = !isFollowing
-                                    }
+                                val currentUid = auth.currentUser?.uid
+                                if (!currentUid.isNullOrBlank()) {
+                                    com.chroma.studio.data.mutation.OptimisticFollowManager.toggleFollow(
+                                        currentUserId = currentUid,
+                                        targetUserId = video.creatorId,
+                                        baseFollowing = isFollowing
+                                    )
                                 }
                             }
                             .padding(horizontal = 12.dp),
@@ -906,7 +911,7 @@ private fun FlashVideoItem(
                     .background(Color.White)
             )
         }
-        
+
         // Comments Bottom Sheet (Plain pure white)
         if (showComments) {
             FlashCommentsSheet(
@@ -1346,7 +1351,7 @@ fun FlashCommentsSheet(
     val comments by commentVm.comments.collectAsState()
     val isLoading by commentVm.isLoading.collectAsState()
     var commentText by remember { mutableStateOf("") }
-    
+
     LaunchedEffect(video.id) {
         commentVm.loadComments(video.id)
     }
@@ -1603,7 +1608,7 @@ private fun FlashFeedSkeleton() {
                 }
             }
         }
-        
+
         // Mock Progress Bar
         Box(
             modifier = Modifier

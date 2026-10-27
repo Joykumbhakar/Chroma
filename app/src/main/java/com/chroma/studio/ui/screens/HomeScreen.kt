@@ -520,9 +520,6 @@ fun HomeScreen(
                                 Box(
                                     modifier = Modifier
                                         .size(36.dp)
-                                        .border(1.dp, heroIconBorder, CircleShape)
-                                        .clip(CircleShape)
-                                        .background(Color.Transparent)
                                         .clickable { 
                                             importWorkLauncher.launch(arrayOf("application/json", "*/*"))
                                         },
@@ -535,9 +532,6 @@ fun HomeScreen(
                                 Box(
                                     modifier = Modifier
                                         .size(36.dp)
-                                        .border(1.dp, heroIconBorder, CircleShape)
-                                        .clip(CircleShape)
-                                        .background(Color.Transparent)
                                         .clickable { 
                                             val clipboardText = clipboardManager.getText()?.text
                                             if (clipboardText.isNullOrBlank()) {
@@ -570,9 +564,6 @@ fun HomeScreen(
                                 Box(
                                     modifier = Modifier
                                         .size(36.dp)
-                                        .border(1.dp, heroIconBorder, CircleShape)
-                                        .clip(CircleShape)
-                                        .background(Color.Transparent)
                                         .combinedClickable(
                                             onClick = { 
                                                 viewMode = viewMode.next()

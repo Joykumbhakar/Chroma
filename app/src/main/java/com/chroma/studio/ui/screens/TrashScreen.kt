@@ -138,7 +138,6 @@ fun TrashScreen(
                         Box(
                             modifier = Modifier
                                 .size(36.dp)
-                                .clip(CircleShape)
                                 .clickable {
                                     if (allSelected) onClearSelection() else onSelectAll?.invoke()
                                 },

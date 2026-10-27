@@ -754,17 +754,7 @@ fun VoiceActionPillButton(
 ) {
     Row(
         modifier = Modifier
-            .then(
-                if (hasShadow) {
-                    Modifier.shadow(
-                        elevation = 8.dp,
-                        shape = CircleShape,
-                        ambientColor = shadowColor,
-                        spotColor = shadowColor
-                    )
-                } else Modifier
-            )
-            .clip(CircleShape)
+            .clip(RoundedCornerShape(10.dp))
             .background(backgroundColor)
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 7.dp),

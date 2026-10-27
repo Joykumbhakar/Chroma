@@ -136,12 +136,12 @@ fun PostOnboardingScreen(
         SoundManager.playReaction()
         val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
         if (currentUid != null && followedCreatorIds.isNotEmpty()) {
-            scope.launch {
-                for (cId in followedCreatorIds) {
-                    try {
-                        discoverRepo.toggleFollow(currentUid, cId)
-                    } catch (_: Exception) {}
-                }
+            for (cId in followedCreatorIds) {
+                com.chroma.studio.data.mutation.OptimisticFollowManager.toggleFollow(
+                    currentUserId = currentUid,
+                    targetUserId = cId,
+                    baseFollowing = false
+                )
             }
         }
         prefs.edit().apply {

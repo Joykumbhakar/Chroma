@@ -205,29 +205,25 @@ fun StoryAnalyticsModal(
                             Box(
                                 modifier = Modifier
                                     .size(32.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFFFF3B30).copy(alpha = 0.10f))
                                     .clickable {
                                         SoundManager.playReaction()
                                         showDeleteConfirmDialog = true
                                     },
                                 contentAlignment = Alignment.Center
                             ) {
-                                LucideTrash(tint = Color(0xFFFF3B30), size = 15.dp)
+                                LucideTrash(tint = Color(0xFFFF3B30), size = 17.dp)
                             }
 
                             Box(
                                 modifier = Modifier
                                     .size(32.dp)
-                                    .clip(CircleShape)
-                                    .background(colors.surfaceSecondary)
                                     .clickable {
                                         SoundManager.playReaction()
                                         onClose()
                                     },
                                 contentAlignment = Alignment.Center
                             ) {
-                                PhosphorCloseX(tint = colors.textMuted, size = 13.dp)
+                                PhosphorCloseX(tint = colors.textMuted, size = 14.dp)
                             }
                         }
                     }

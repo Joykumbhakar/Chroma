@@ -8,6 +8,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -40,6 +45,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import coil.request.videoFrameMillis
+import coil.size.Scale
+import coil.size.Size
 import com.chroma.studio.chat.data.ChatConversation
 import com.chroma.studio.chat.data.GroupMember
 import com.chroma.studio.chat.sound.SoundManager
@@ -394,13 +403,11 @@ fun CustomSharedGalleryModal(
                     if (searchQuery.isNotEmpty()) {
                         Box(
                             modifier = Modifier
-                                .size(18.dp)
-                                .clip(CircleShape)
-                                .background(colors.textMuted.copy(alpha = 0.4f))
+                                .size(20.dp)
                                 .clickable { searchQuery = "" },
                             contentAlignment = Alignment.Center
                         ) {
-                            LucideX(tint = Color.White, size = 11.dp)
+                            LucideX(tint = colors.textMuted, size = 14.dp)
                         }
                     }
                 }
@@ -468,7 +475,7 @@ fun CustomSharedGalleryModal(
                         Box(
                             modifier = Modifier
                                 .size(64.dp)
-                                .clip(CircleShape)
+                                .clip(RoundedCornerShape(18.dp))
                                 .background(colors.surfaceSecondary),
                             contentAlignment = Alignment.Center
                         ) {
@@ -492,43 +499,138 @@ fun CustomSharedGalleryModal(
                 } else {
                     when (selectedTab) {
                         0 -> {
-                            // ── Media 3-Column Grid ──
+                            // ── Media 3-Column Grid (with Long Press & Drag-To-Select) ──
+                            val mediaGridState = rememberLazyGridState()
+                            var dragAnchorIndex by remember { mutableStateOf<Int?>(null) }
+                            var dragInitialSelectedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+                            var dragIsSelecting by remember { mutableStateOf(true) }
+                            val haptic = LocalHapticFeedback.current
+
                             LazyVerticalGrid(
                                 columns = GridCells.Fixed(3),
-                                modifier = Modifier.fillMaxSize(),
+                                state = mediaGridState,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .pointerInput(filteredItems) {
+                                        detectDragGesturesAfterLongPress(
+                                            onDragStart = { offset ->
+                                                val hitItem = mediaGridState.layoutInfo.visibleItemsInfo.find { info ->
+                                                    offset.x >= info.offset.x && offset.x <= info.offset.x + info.size.width &&
+                                                    offset.y >= info.offset.y && offset.y <= info.offset.y + info.size.height
+                                                }
+                                                if (hitItem != null) {
+                                                    val item = filteredItems.getOrNull(hitItem.index)
+                                                    if (item != null) {
+                                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                        SoundManager.playPop()
+                                                        dragAnchorIndex = hitItem.index
+                                                        dragInitialSelectedIds = selectedItemIds.toSet()
+                                                        dragIsSelecting = !selectedItemIds.contains(item.id)
+
+                                                        if (dragIsSelecting) {
+                                                            if (!selectedItemIds.contains(item.id)) selectedItemIds.add(item.id)
+                                                        } else {
+                                                            selectedItemIds.remove(item.id)
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            onDragEnd = {
+                                                dragAnchorIndex = null
+                                            },
+                                            onDragCancel = {
+                                                dragAnchorIndex = null
+                                            },
+                                            onDrag = { change, _ ->
+                                                change.consume()
+                                                val anchor = dragAnchorIndex ?: return@detectDragGesturesAfterLongPress
+                                                val offset = change.position
+
+                                                val viewportHeight = mediaGridState.layoutInfo.viewportSize.height.toFloat()
+                                                if (viewportHeight > 0f) {
+                                                    if (offset.y < 80f && mediaGridState.canScrollBackward) {
+                                                        coroutineScope.launch {
+                                                            mediaGridState.scrollBy(-30f)
+                                                        }
+                                                    } else if (offset.y > viewportHeight - 80f && mediaGridState.canScrollForward) {
+                                                        coroutineScope.launch {
+                                                            mediaGridState.scrollBy(30f)
+                                                        }
+                                                    }
+                                                }
+
+                                                val hitItem = mediaGridState.layoutInfo.visibleItemsInfo.find { info ->
+                                                    offset.x >= info.offset.x && offset.x <= info.offset.x + info.size.width &&
+                                                    offset.y >= info.offset.y && offset.y <= info.offset.y + info.size.height
+                                                }
+                                                if (hitItem != null) {
+                                                    val currentIndex = hitItem.index
+                                                    if (currentIndex in filteredItems.indices) {
+                                                        val minIdx = minOf(anchor, currentIndex).coerceAtLeast(0)
+                                                        val maxIdx = maxOf(anchor, currentIndex).coerceAtMost(filteredItems.size - 1)
+                                                        val draggedIds = (minIdx..maxIdx).mapNotNull { filteredItems.getOrNull(it)?.id }
+
+                                                        val newSet = LinkedHashSet(dragInitialSelectedIds)
+                                                        if (dragIsSelecting) {
+                                                            newSet.addAll(draggedIds)
+                                                        } else {
+                                                            newSet.removeAll(draggedIds.toSet())
+                                                        }
+
+                                                        if (newSet.toList() != selectedItemIds.toList()) {
+                                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                            selectedItemIds.clear()
+                                                            selectedItemIds.addAll(newSet)
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        )
+                                    },
                                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                                 verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                items(filteredItems, key = { it.id }) { item ->
+                                items(
+                                    items = filteredItems,
+                                    key = { it.id },
+                                    contentType = { it.type.name }
+                                ) { item ->
                                     val isSelected = selectedItemIds.contains(item.id)
                                     Box(
                                         modifier = Modifier
                                             .aspectRatio(1f)
                                             .clip(RoundedCornerShape(6.dp))
                                             .background(colors.surfaceSecondary)
-                                            .pointerInput(isSelectionMode) {
-                                                detectTapGestures(
-                                                    onLongPress = {
-                                                        SoundManager.playReaction()
-                                                        if (!selectedItemIds.contains(item.id)) {
-                                                            selectedItemIds.add(item.id)
-                                                        }
-                                                    },
-                                                    onTap = {
-                                                        if (isSelectionMode) {
-                                                            SoundManager.playReaction()
-                                                            if (isSelected) selectedItemIds.remove(item.id) else selectedItemIds.add(item.id)
-                                                        } else {
-                                                            SoundManager.playReaction()
-                                                            previewMediaItem = item
-                                                        }
-                                                    }
-                                                )
+                                            .clickable {
+                                                if (isSelectionMode) {
+                                                    SoundManager.playReaction()
+                                                    if (isSelected) selectedItemIds.remove(item.id) else selectedItemIds.add(item.id)
+                                                } else {
+                                                    SoundManager.playReaction()
+                                                    previewMediaItem = item
+                                                }
                                             }
                                     ) {
+                                        val itemContext = LocalContext.current
+                                        val itemImageRequest = remember(item.url, item.type) {
+                                            ImageRequest.Builder(itemContext)
+                                                .data(item.url)
+                                                .size(Size(240, 240))
+                                                .scale(Scale.FILL)
+                                                .apply {
+                                                    if (item.type == SharedMediaType.VIDEO) {
+                                                        videoFrameMillis(1000L)
+                                                    }
+                                                }
+                                                .crossfade(100)
+                                                .allowRgb565(true)
+                                                .allowHardware(true)
+                                                .memoryCacheKey("shared_thumb_${item.id}")
+                                                .build()
+                                        }
                                         AsyncImage(
-                                            model = item.url,
+                                            model = itemImageRequest,
                                             contentDescription = item.title,
                                             modifier = Modifier.fillMaxSize(),
                                             contentScale = ContentScale.Crop
@@ -568,9 +670,9 @@ fun CustomSharedGalleryModal(
                                                     .align(Alignment.TopEnd)
                                                     .padding(6.dp)
                                                     .size(22.dp)
-                                                    .clip(CircleShape)
+                                                    .clip(RoundedCornerShape(6.dp))
                                                     .background(if (isSelected) colors.iosBlue else Color.Black.copy(alpha = 0.45f))
-                                                    .border(1.5.dp, Color.White, CircleShape),
+                                                    .border(1.5.dp, Color.White, RoundedCornerShape(6.dp)),
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 if (isSelected) {
@@ -673,9 +775,9 @@ fun CustomSharedGalleryModal(
                                             Box(
                                                 modifier = Modifier
                                                     .size(24.dp)
-                                                    .clip(CircleShape)
+                                                    .clip(RoundedCornerShape(6.dp))
                                                     .background(if (isSelected) colors.iosBlue else Color.Transparent)
-                                                    .border(1.5.dp, if (isSelected) colors.iosBlue else colors.borderSubtle, CircleShape),
+                                                    .border(1.5.dp, if (isSelected) colors.iosBlue else colors.borderSubtle, RoundedCornerShape(6.dp)),
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 if (isSelected) LucideCheck(tint = Color.White, size = 14.dp)
@@ -766,9 +868,9 @@ fun CustomSharedGalleryModal(
                                             Box(
                                                 modifier = Modifier
                                                     .size(24.dp)
-                                                    .clip(CircleShape)
+                                                    .clip(RoundedCornerShape(6.dp))
                                                     .background(if (isSelected) colors.iosBlue else Color.Transparent)
-                                                    .border(1.5.dp, if (isSelected) colors.iosBlue else colors.borderSubtle, CircleShape),
+                                                    .border(1.5.dp, if (isSelected) colors.iosBlue else colors.borderSubtle, RoundedCornerShape(6.dp)),
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 if (isSelected) LucideCheck(tint = Color.White, size = 14.dp)
@@ -888,9 +990,9 @@ fun CustomSharedGalleryModal(
                                             Box(
                                                 modifier = Modifier
                                                     .size(24.dp)
-                                                    .clip(CircleShape)
+                                                    .clip(RoundedCornerShape(6.dp))
                                                     .background(if (isSelected) colors.iosBlue else Color.Transparent)
-                                                    .border(1.5.dp, if (isSelected) colors.iosBlue else colors.borderSubtle, CircleShape),
+                                                    .border(1.5.dp, if (isSelected) colors.iosBlue else colors.borderSubtle, RoundedCornerShape(6.dp)),
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 if (isSelected) LucideCheck(tint = Color.White, size = 14.dp)

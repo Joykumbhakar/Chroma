@@ -264,13 +264,11 @@ fun SidebarDrawer(
                 if (searchQuery.isNotEmpty()) {
                     Box(
                         modifier = Modifier
-                            .size(18.dp)
-                            .clip(CircleShape)
-                            .background(colors.surfaceTertiary)
+                            .size(24.dp)
                             .clickable { onSearchQueryChanged("") },
                         contentAlignment = Alignment.Center
                     ) {
-                        PhosphorCloseX(tint = colors.textMuted, size = 11.dp)
+                        PhosphorCloseX(tint = colors.textMuted, size = 13.dp)
                     }
                 }
             }
@@ -422,21 +420,14 @@ private fun StoryItem(
 
             // My story: plus badge
             if (isMyStory && !hasNewStory) {
-                Box(
+                Icon(
+                    imageVector = Lucide.Plus,
+                    contentDescription = "Add Story",
+                    tint = colors.iosBlue,
                     modifier = Modifier
-                        .size(18.dp)
                         .align(Alignment.BottomEnd)
-                        .background(colors.iosBlue, CircleShape)
-                        .border(1.5.dp, colors.sidebarBg, CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Lucide.Plus,
-                        contentDescription = "Add Story",
-                        tint = Color.White,
-                        modifier = Modifier.size(11.dp)
-                    )
-                }
+                        .size(16.dp)
+                )
             }
         }
 
@@ -463,7 +454,7 @@ private fun FilterChip(
     val colors = LocalChatColors.current
     Box(
         modifier = Modifier
-            .clip(CircleShape)
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
             .background(
                 if (selected) colors.iosBlue
                 else colors.surfaceSecondary
@@ -471,7 +462,7 @@ private fun FilterChip(
             .border(
                 0.5.dp,
                 if (selected) Color.Transparent else colors.borderSubtle,
-                CircleShape
+                androidx.compose.foundation.shape.RoundedCornerShape(10.dp)
             )
             .clickable { onClick() }
             .padding(horizontal = 12.dp, vertical = 6.dp)

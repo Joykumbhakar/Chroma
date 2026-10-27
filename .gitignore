@@ -34,4 +34,12 @@ wipe_and_init_database.js
 skills-lock.json
 .env
 .env.*
+scratch/
+cursors/
+*.cur
+*.svg
+*.html
+*.js
+*.ps1
+extracted_*.png
 

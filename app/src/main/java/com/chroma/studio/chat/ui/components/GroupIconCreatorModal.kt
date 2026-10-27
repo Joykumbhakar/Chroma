@@ -152,12 +152,10 @@ fun GroupIconCreatorModal(
                     Box(
                         modifier = Modifier
                             .size(28.dp)
-                            .clip(CircleShape)
-                            .background(colors.surfaceSecondary)
                             .clickable { onDismiss() },
                         contentAlignment = Alignment.Center
                     ) {
-                        PhosphorCloseX(tint = colors.textMuted, size = 12.dp)
+                        PhosphorCloseX(tint = colors.textMuted, size = 16.dp)
                     }
                 }
 

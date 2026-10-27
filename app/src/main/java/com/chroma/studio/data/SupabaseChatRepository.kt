@@ -31,7 +31,7 @@ class SupabaseChatRepository {
     private val client = SupabaseClient.client
     private val firestore = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
-    
+
     // We still use Firebase for profiles and room metadata temporarily, or move it all to Supabase.
     // For this hybrid approach:
     // Firebase: ChatRoom metadata (last message, unread count), Users
@@ -53,7 +53,7 @@ class SupabaseChatRepository {
     suspend fun getOrCreateChatRoom(otherUserId: String): ChatRoom? = withContext(Dispatchers.IO) {
         val currentUser = auth.currentUser ?: return@withContext null
         val roomId = getChatRoomId(currentUser.uid, otherUserId)
-        
+
         try {
             val doc = chatsCollection.document(roomId).get().await()
             if (doc.exists()) {
@@ -91,7 +91,7 @@ class SupabaseChatRepository {
             null
         }
     }
-    
+
     suspend fun toggleFavorite(roomId: String, userId: String, isFavorite: Boolean) = withContext(Dispatchers.IO) {
         try {
             val update = if (isFavorite) {
@@ -108,13 +108,13 @@ class SupabaseChatRepository {
     suspend fun createGroup(groupName: String, groupDescription: String? = null, participantIds: List<String>, imageUrl: String? = null, preGeneratedId: String? = null): ChatRoom? = withContext(Dispatchers.IO) {
         val currentUser = auth.currentUser ?: return@withContext null
         val roomId = preGeneratedId ?: "group_${java.util.UUID.randomUUID()}"
-        
+
         try {
             val allUsers = participantIds.toMutableList()
             if (!allUsers.contains(currentUser.uid)) allUsers.add(currentUser.uid)
-            
+
             val unreadMap = allUsers.associateWith { 0 }
-            
+
             val newRoom = ChatRoom(
                 id = roomId,
                 name = groupName,
@@ -166,7 +166,7 @@ class SupabaseChatRepository {
 
                     val encryptedKeysMap = mutableMapOf<String, String>()
                     val myPubKey = com.chroma.studio.utils.CryptoHelper.getPublicKeyBase64()
-                    
+
                     // Always encrypt for current user with their active local public key
                     if (myPubKey.isNotEmpty()) {
                         val myEncKey = com.chroma.studio.utils.CryptoHelper.encryptAESKeyWithRSA(aesBytes, myPubKey)
@@ -192,7 +192,7 @@ class SupabaseChatRepository {
                             room.participants
                         } else emptyList()
                     }
-                    
+
                     if (participants.isNotEmpty()) {
                         for (participantId in participants) {
                             if (participantId == currentUser.uid) continue
@@ -242,10 +242,10 @@ class SupabaseChatRepository {
                 durationSeconds = durationSeconds,
                 replyToMessageId = replyToMessageId
             )
-            
+
             // 1. Save directly to Firestore subcollection for 100% reliable persistence & realtime listeners
             chatsCollection.document(roomId).collection("messages").document(message.id).set(message).await()
-            
+
             // 2. Update chat room last message in Firebase for the ChatList
             val roomRef = chatsCollection.document(roomId)
             firestore.runTransaction { transaction ->
@@ -260,7 +260,14 @@ class SupabaseChatRepository {
                     }
                     val displayMessage = if (imageUrl != null) {
                         if (messageType == "video") "Sent a video" else if (messageType == "audio") "Voice message" else "Sent an image"
-                    } else if (workId != null) "Shared a work" else text
+                    } else if (workId != null) {
+                        "Shared a work"
+                    } else if (text.startsWith("[POLL]:")) {
+                        val q = text.removePrefix("[POLL]:").substringBefore("|||").trim()
+                        "Poll: $q"
+                    } else {
+                        text
+                    }
 
                     transaction.update(roomRef, "lastMessage", displayMessage)
                     transaction.update(roomRef, "lastMessageTime", message.timestamp)
@@ -272,7 +279,32 @@ class SupabaseChatRepository {
                 }
             }.await()
 
-            
+            // 3. Dispatch activity notification to recipient(s)
+            try {
+                val roomSnap = roomRef.get().await()
+                val room = roomSnap.toObject(ChatRoom::class.java)
+                if (room != null && !room.isGroup) {
+                    val recipientId = room.participants.firstOrNull { it != currentUser.uid }
+                    if (!recipientId.isNullOrBlank()) {
+                        val displaySnippet = if (imageUrl != null) {
+                            if (messageType == "video") "Sent a video" else if (messageType == "audio") "Sent a voice message" else "Sent a photo"
+                        } else if (text.startsWith("[POLL]:")) {
+                            "Created a poll"
+                        } else {
+                            text
+                        }
+                        NotificationDispatcher.sendNotification(
+                            targetUserId = recipientId,
+                            type = com.chroma.studio.model.NotificationActionType.MESSAGE,
+                            actionText = "sent you a message",
+                            detailText = displaySnippet,
+                            targetPreviewUrl = imageUrl,
+                            targetId = roomId
+                        )
+                    }
+                }
+            } catch (_: Exception) {}
+
             true
         } catch (e: Exception) {
             Log.e("SupabaseChatRepository", "Error sending message", e)
@@ -312,9 +344,9 @@ class SupabaseChatRepository {
             } catch (e: Exception) {
                 // ignore
             }
-            
-            
-                
+
+
+
         } catch (e: Exception) {
             Log.e("SupabaseChatRepository", "Error marking as read", e)
         }
@@ -327,7 +359,7 @@ class SupabaseChatRepository {
             close()
             return@callbackFlow
         }
-        
+
         val listener = chatsCollection
             .whereArrayContains("participants", currentUser.uid)
             .addSnapshotListener { snapshot, e ->
@@ -336,7 +368,7 @@ class SupabaseChatRepository {
                     trySend(emptyList())
                     return@addSnapshotListener
                 }
-                
+
                 val rawChats = snapshot?.documents?.mapNotNull { it.toObject(ChatRoom::class.java) } ?: emptyList()
                 for (chat in rawChats) {
                     roomParticipantsCache[chat.id] = chat.participants
@@ -346,7 +378,7 @@ class SupabaseChatRepository {
                 val activeChats = rawChats.filter { !it.deletedBy.contains(currentUser.uid) }
                 trySend(activeChats.sortedByDescending { it.lastMessageTime })
             }
-            
+
         awaitClose { listener.remove() }
     }.flowOn(Dispatchers.IO)
 
@@ -363,7 +395,7 @@ class SupabaseChatRepository {
 
         var query = chatsCollection.document(roomId).collection("messages")
             .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
-            
+
         if (deletedAt > 0L) {
             query = query.whereGreaterThan("timestamp", deletedAt)
         }
@@ -375,7 +407,12 @@ class SupabaseChatRepository {
                         val currentUid = auth.currentUser?.uid
                         val messages = snapshot.documents.mapNotNull { doc ->
                             val msg = doc.toObject(ChatMessage::class.java) ?: return@mapNotNull null
-                            
+
+                            // Filter out messages deleted by current user for themselves
+                            if (currentUid != null && msg.deletedFor.contains(currentUid)) {
+                                return@mapNotNull null
+                            }
+
                             if (msg.messageType == "system" || msg.iv.isEmpty() || msg.text.isEmpty()) {
                                 return@mapNotNull msg
                             }
@@ -447,7 +484,7 @@ class SupabaseChatRepository {
                                     msg.text
                                 }
                             }
-                            
+
                             decryptedMessageCache[cacheKey] = decryptedText
                             msg.copy(text = decryptedText)
                         }
@@ -515,7 +552,7 @@ class SupabaseChatRepository {
                     transaction.update(roomRef, "participants", newParticipants)
                 }
             }.await()
-            
+
             // Add system messages
             for (userId in userIds) {
                 val userName = usersCollection.document(userId).get().await().getString("displayName") ?: "Someone"
@@ -532,7 +569,7 @@ class SupabaseChatRepository {
             val roomRef = chatsCollection.document(roomId)
             var removedName = "Someone"
             var wasRemoved = false
-            
+
             firestore.runTransaction { transaction ->
                 val room = transaction.get(roomRef).toObject(ChatRoom::class.java)
                 if (room != null) {
@@ -542,13 +579,13 @@ class SupabaseChatRepository {
                     }
                     val newParticipants = room.participants.filter { it != userId }
                     val newAdmins = room.admins.filter { it != userId }
-                    
+
                     transaction.update(roomRef, "participants", newParticipants)
                     transaction.update(roomRef, "admins", newAdmins)
                     wasRemoved = true
                 }
             }.await()
-            
+
             if (wasRemoved) {
                 removedName = usersCollection.document(userId).get().await().getString("displayName") ?: "Someone"
                 sendMessage(roomId, "$removedName was removed from the group", messageType = "system")
@@ -563,7 +600,7 @@ class SupabaseChatRepository {
         try {
             val roomRef = chatsCollection.document(roomId)
             var adminName = "Someone"
-            
+
             firestore.runTransaction { transaction ->
                 val room = transaction.get(roomRef).toObject(ChatRoom::class.java)
                 if (room != null) {
@@ -574,7 +611,7 @@ class SupabaseChatRepository {
                     transaction.update(roomRef, "admins", newAdmins)
                 }
             }.await()
-            
+
             adminName = usersCollection.document(userId).get().await().getString("displayName") ?: "Someone"
             sendMessage(roomId, "$adminName is now an admin", messageType = "system")
         } catch (e: Exception) {
@@ -587,18 +624,18 @@ class SupabaseChatRepository {
         try {
             val roomRef = chatsCollection.document(roomId)
             var leftName = "Someone"
-            
+
             firestore.runTransaction { transaction ->
                 val room = transaction.get(roomRef).toObject(ChatRoom::class.java)
                 if (room != null) {
                     val newParticipants = room.participants.filter { it != currentUser.uid }
                     val newAdmins = room.admins.filter { it != currentUser.uid }
-                    
+
                     transaction.update(roomRef, "participants", newParticipants)
                     transaction.update(roomRef, "admins", newAdmins)
                 }
             }.await()
-            
+
             leftName = usersCollection.document(currentUser.uid).get().await().getString("displayName") ?: "Someone"
             sendMessage(roomId, "$leftName left the group", messageType = "system")
         } catch (e: Exception) {
@@ -652,8 +689,8 @@ class SupabaseChatRepository {
         }
     }
 
-    suspend fun toggleReaction(messageId: String, roomId: String, emoji: String) = withContext(Dispatchers.IO) {
-        val currentUser = auth.currentUser ?: return@withContext
+    suspend fun toggleReaction(messageId: String, roomId: String, emoji: String): Boolean = withContext(Dispatchers.IO) {
+        val currentUser = auth.currentUser ?: return@withContext false
         try {
             // 1. Update Firestore
             val msgRef = chatsCollection.document(roomId).collection("messages").document(messageId)
@@ -672,35 +709,55 @@ class SupabaseChatRepository {
                     }
                 }
             }.await()
-
-            
+            true
         } catch (e: Exception) {
             Log.e("SupabaseChatRepository", "Error toggling reaction", e)
+            false
         }
     }
 
-    suspend fun deleteMessage(messageId: String, roomId: String) = withContext(Dispatchers.IO) {
+    suspend fun deleteMessage(messageId: String, roomId: String): Boolean = withContext(Dispatchers.IO) {
         try {
             // Delete from Firestore
             chatsCollection.document(roomId).collection("messages").document(messageId).delete().await()
-
-            
+            true
         } catch (e: Exception) {
             Log.e("SupabaseChatRepository", "Error deleting message", e)
+            false
         }
     }
 
-    suspend fun editMessage(messageId: String, roomId: String, newText: String) = withContext(Dispatchers.IO) {
-        val currentUser = auth.currentUser ?: return@withContext
+    suspend fun editMessage(messageId: String, roomId: String, newText: String): Boolean = withContext(Dispatchers.IO) {
+        val currentUser = auth.currentUser ?: return@withContext false
         try {
-            // Update in Firestore
+            // Update in Firestore with clean text, cleared iv, and isEdited = true
             chatsCollection.document(roomId).collection("messages").document(messageId)
-                .update("text", newText)
+                .update(
+                    mapOf(
+                        "text" to newText,
+                        "iv" to "",
+                        "encryptedAesKeys" to emptyMap<String, String>(),
+                        "isEdited" to true
+                    )
+                )
                 .await()
-
-            
+            true
         } catch (e: Exception) {
             Log.e("SupabaseChatRepository", "Error editing message", e)
+            false
+        }
+    }
+
+    suspend fun deleteMessageForMe(messageId: String, roomId: String): Boolean = withContext(Dispatchers.IO) {
+        val currentUser = auth.currentUser ?: return@withContext false
+        try {
+            chatsCollection.document(roomId).collection("messages").document(messageId)
+                .update("deletedFor", FieldValue.arrayUnion(currentUser.uid))
+                .await()
+            true
+        } catch (e: Exception) {
+            Log.e("SupabaseChatRepository", "Error deleting message for me", e)
+            false
         }
     }
 
@@ -849,5 +906,45 @@ class SupabaseChatRepository {
             android.util.Log.e("SupabaseChatRepo", "clearChatHistory error", e)
         }
     }
-}
 
+    suspend fun votePoll(
+        roomId: String,
+        messageId: String,
+        optionIndex: Int,
+        allowMultiple: Boolean = false
+    ): Boolean = withContext(Dispatchers.IO) {
+        val currentUser = auth.currentUser ?: return@withContext false
+        try {
+            val msgRef = chatsCollection.document(roomId).collection("messages").document(messageId)
+            firestore.runTransaction { transaction ->
+                val snapshot = transaction.get(msgRef)
+                val msg = snapshot.toObject(ChatMessage::class.java) ?: return@runTransaction
+                val currentVotes = msg.pollVotes.toMutableMap()
+                val userCurrentVote = currentVotes[currentUser.uid] ?: ""
+                val userIndices = if (userCurrentVote.isEmpty()) mutableListOf() else userCurrentVote.split(",").filter { it.isNotBlank() }.toMutableList()
+
+                val optStr = optionIndex.toString()
+                if (userIndices.contains(optStr)) {
+                    userIndices.remove(optStr)
+                } else {
+                    if (!allowMultiple) {
+                        userIndices.clear()
+                    }
+                    userIndices.add(optStr)
+                }
+
+                if (userIndices.isEmpty()) {
+                    currentVotes.remove(currentUser.uid)
+                } else {
+                    currentVotes[currentUser.uid] = userIndices.joinToString(",")
+                }
+                transaction.update(msgRef, "pollVotes", currentVotes)
+            }.await()
+            true
+        } catch (e: Exception) {
+            Log.e("SupabaseChatRepository", "Error voting on poll", e)
+            false
+        }
+    }
+
+}

@@ -149,12 +149,10 @@ fun IosCoverBannerPickerModal(
                         Box(
                             modifier = Modifier
                                 .size(28.dp)
-                                .clip(CircleShape)
-                                .background(colors.surfaceSecondary)
                                 .clickable { onDismiss() },
                             contentAlignment = Alignment.Center
                         ) {
-                            PhosphorCloseX(tint = colors.textMuted, size = 12.dp)
+                            PhosphorCloseX(tint = colors.textMuted, size = 16.dp)
                         }
                     }
 
@@ -216,7 +214,7 @@ fun IosCoverBannerPickerModal(
                                             .size(20.dp)
                                             .align(Alignment.TopEnd)
                                             .offset(x = (-6).dp, y = 6.dp)
-                                            .clip(CircleShape)
+                                            .clip(RoundedCornerShape(6.dp))
                                             .background(colors.iosBlue),
                                         contentAlignment = Alignment.Center
                                     ) {
@@ -405,21 +403,17 @@ fun ContactInfoDrawer(
                         )
 
                         if (isGroup) {
-                            Box(
+                            PhosphorCameraIcon(
+                                tint = colors.iosBlue,
+                                size = 20.dp,
                                 modifier = Modifier
-                                    .size(30.dp)
                                     .align(Alignment.BottomEnd)
                                     .offset(x = (-2).dp, y = (-2).dp)
-                                    .background(colors.iosBlue, CircleShape)
-                                    .border(2.5.dp, colors.appBg, CircleShape)
                                     .clickable {
                                         SoundManager.playReaction()
                                         isIconStudioOpen = true
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                PhosphorCameraIcon(tint = Color.White, size = 15.dp)
-                            }
+                                    }
+                            )
                         } else if (chat.online) {
                             Box(
                                 modifier = Modifier
@@ -660,12 +654,10 @@ fun ContactInfoDrawer(
                 Box(
                     modifier = Modifier
                         .size(30.dp)
-                        .clip(CircleShape)
-                        .background(colors.surfaceSecondary)
                         .clickable { onClose() },
                     contentAlignment = Alignment.Center
                 ) {
-                    LucideX(tint = colors.textMuted, size = 14.dp)
+                    LucideX(tint = colors.textMuted, size = 18.dp)
                 }
             }
 
@@ -973,12 +965,10 @@ private fun ContactInfoGroupDetailsCard(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(28.dp)
-                        .clip(CircleShape)
-                        .background(colors.iosBlueSubtle),
+                        .size(28.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    LucideLock(tint = colors.iosBlue, size = 15.dp)
+                    LucideLock(tint = colors.iosBlue, size = 18.dp)
                 }
                 Column {
                     Text("Group Permissions", fontSize = 15.sp, color = colors.textDark, fontWeight = FontWeight.Medium)
@@ -1071,12 +1061,10 @@ private fun ContactInfoMembersSection(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .background(colors.iosBlueSubtle, CircleShape),
+                    modifier = Modifier.size(36.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("+", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = colors.iosBlue)
+                    Text("+", fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = colors.iosBlue)
                 }
                 Text(
                     text = "Add Participants...",
@@ -2410,20 +2398,17 @@ private fun UserStoryPageView(
                         }
 
                         if (replyText.isNotBlank()) {
-                            Box(
+                            PhosphorSendArrowIcon(
+                                tint = colors.iosBlue,
+                                size = 28.dp,
                                 modifier = Modifier
-                                    .size(48.dp)
-                                    .clip(CircleShape)
-                                    .background(colors.iosBlue)
+                                    .padding(horizontal = 6.dp)
                                     .clickable {
                                         SoundManager.playSend()
                                         onReplySend(replyText)
                                         replyText = ""
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                PhosphorSendArrowIcon(tint = Color.White, size = 20.dp)
-                            }
+                                    }
+                            )
                         }
                     }
                 }
@@ -2601,7 +2586,7 @@ fun FullCallModal(
                 Box(
                     modifier = Modifier
                         .size(72.dp)
-                        .clip(CircleShape)
+                        .clip(RoundedCornerShape(22.dp))
                         .background(Color(0xFFFF3B30))
                         .clickable { onHangup() },
                     contentAlignment = Alignment.Center
@@ -3126,11 +3111,9 @@ fun LightboxModal(
                     }
                     context.startActivity(Intent.createChooser(sendIntent, "Share Photo"))
                 },
-                modifier = Modifier
-                    .size(44.dp)
-                    .background(Color.White.copy(alpha = 0.15f), CircleShape)
+                modifier = Modifier.size(44.dp)
             ) {
-                LucideShare2(tint = Color.White, size = 20.dp)
+                LucideShare2(tint = Color.White, size = 22.dp)
             }
 
             // Save
@@ -3138,11 +3121,9 @@ fun LightboxModal(
                 onClick = {
                     SoundManager.playReaction()
                 },
-                modifier = Modifier
-                    .size(44.dp)
-                    .background(Color.White.copy(alpha = 0.15f), CircleShape)
+                modifier = Modifier.size(44.dp)
             ) {
-                LucideDownload(tint = Color.White, size = 20.dp)
+                LucideDownload(tint = Color.White, size = 22.dp)
             }
 
             // Link
@@ -3150,11 +3131,9 @@ fun LightboxModal(
                 onClick = {
                     SoundManager.playReaction()
                 },
-                modifier = Modifier
-                    .size(44.dp)
-                    .background(Color.White.copy(alpha = 0.15f), CircleShape)
+                modifier = Modifier.size(44.dp)
             ) {
-                LucideLink(tint = Color.White, size = 20.dp)
+                LucideLink(tint = Color.White, size = 22.dp)
             }
         }
     }
@@ -3176,10 +3155,9 @@ fun ToastNotificationPill(
             Row(
                 modifier = Modifier
                     .padding(top = 16.dp)
-                    .clip(RoundedCornerShape(24.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .background(Color(0xE61C1C1E))
-                    .border(0.5.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(24.dp))
-                    .shadow(12.dp, RoundedCornerShape(24.dp))
+                    .border(0.5.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
                     .padding(horizontal = 16.dp, vertical = 9.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)

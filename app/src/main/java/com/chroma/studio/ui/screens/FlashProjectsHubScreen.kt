@@ -48,6 +48,9 @@ import com.chroma.studio.data.FlashRepository
 import com.chroma.studio.model.CreatorPostDraft
 import com.chroma.studio.model.FlashVideo
 import com.chroma.studio.ui.components.AppleFlashGraphic
+import com.chroma.studio.ui.components.GalleryLayoutMode
+import com.chroma.studio.ui.components.GalleryMediaTypeFilter
+import com.chroma.studio.ui.components.OscellionGalleryLayout
 import com.chroma.studio.ui.components.rememberAppleGraphicAnimationState
 import com.chroma.studio.ui.components.ToastManager
 import com.chroma.studio.ui.theme.LocalOscellionColors
@@ -159,6 +162,7 @@ fun FlashProjectsHubScreen(
     var userFlashes by remember { mutableStateOf<List<FlashVideo>>(emptyList()) }
     var localExportedVideos by remember { mutableStateOf<List<FlashHubItem.LocalExported>>(emptyList()) }
     var isLoadingSaved by remember { mutableStateOf(true) }
+    var showInAppGallery by remember { mutableStateOf(false) }
 
     // Multi-media picker: allows selecting multiple videos and photos
     val mediaPickerLauncher = rememberLauncherForActivityResult(
@@ -335,9 +339,7 @@ fun FlashProjectsHubScreen(
                     Button(
                         onClick = {
                             SoundManager.playTap(context)
-                            mediaPickerLauncher.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
-                            )
+                            showInAppGallery = true
                         },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = colors.primary,
@@ -467,9 +469,7 @@ fun FlashProjectsHubScreen(
                                 Button(
                                     onClick = {
                                         SoundManager.playTap(context)
-                                        mediaPickerLauncher.launch(
-                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
-                                        )
+                                        showInAppGallery = true
                                     },
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = colors.primary,
@@ -792,6 +792,34 @@ fun FlashProjectsHubScreen(
                 }
             }
         }
+
+        // Fixed Unified In-App Oscellion Gallery
+        if (showInAppGallery) {
+            OscellionGalleryLayout(
+                layoutMode = GalleryLayoutMode.FULL_SCREEN,
+                title = "Flash Studio",
+                badgeText = "Clips",
+                maxSelection = 50,
+                allowedMediaFilter = GalleryMediaTypeFilter.ALL,
+                showCameraTile = true,
+                showCaptionInput = false,
+                onPhotosSelected = { uris ->
+                    showInAppGallery = false
+                    if (uris.isNotEmpty()) {
+                        SoundManager.playTap(context)
+                        ToastManager.showToast("${uris.size} media clip(s) selected")
+                        onImportMedia(uris)
+                    }
+                },
+                onVideoSelected = { uri ->
+                    showInAppGallery = false
+                    SoundManager.playTap(context)
+                    ToastManager.showToast("1 media clip selected")
+                    onImportMedia(listOf(uri))
+                },
+                onClose = { showInAppGallery = false }
+            )
+        }
     }
 }
 
@@ -913,25 +941,20 @@ private fun FlashGridCard(
                 }
             }
 
-            // Apple HIG Action Menu Button
+            // Apple HIG Action Menu Button (No circle background)
             Box(contentAlignment = Alignment.Center) {
-                Box(
-                    modifier = Modifier
-                        .size(26.dp)
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.65f))
-                        .border(0.5.dp, Color.White.copy(alpha = 0.25f), CircleShape)
-                        .clickable {
-                            SoundManager.playTap(context)
-                            showMenu = true
-                        },
-                    contentAlignment = Alignment.Center
+                IconButton(
+                    onClick = {
+                        SoundManager.playTap(context)
+                        showMenu = true
+                    },
+                    modifier = Modifier.size(28.dp)
                 ) {
                     Icon(
                         imageVector = Lucide.Ellipsis,
                         contentDescription = "Project Actions",
                         tint = Color.White,
-                        modifier = Modifier.size(14.dp)
+                        modifier = Modifier.size(16.dp)
                     )
                 }
 

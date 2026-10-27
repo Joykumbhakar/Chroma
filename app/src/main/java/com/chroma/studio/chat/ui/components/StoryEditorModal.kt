@@ -630,12 +630,10 @@ fun StoryEditorModal(
                         Box(
                             modifier = Modifier
                                 .size(30.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFFF2F2F7))
                                 .clickable { isAddingSticker = false },
                             contentAlignment = Alignment.Center
                         ) {
-                            PhosphorCloseX(tint = Color(0xFF3C3C43), size = 13.dp)
+                            PhosphorCloseX(tint = Color(0xFF3C3C43), size = 14.dp)
                         }
                     }
 

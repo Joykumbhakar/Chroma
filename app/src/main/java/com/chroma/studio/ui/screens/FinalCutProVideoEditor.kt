@@ -7743,38 +7743,34 @@ private fun FcpTextLayerOverlay(
         // ── Floating Corner Interactive Badges When Selected ──────────────────
         if (isSelected) {
             // Top-Right: Delete [X]
-            Box(
+            Icon(
+                Lucide.X,
+                contentDescription = "Delete Title",
+                tint = Color(0xFFEF4444),
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .offset(x = 8.dp, y = (-8).dp)
-                    .size(20.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFFEF4444))
+                    .size(18.dp)
                     .clickable {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         onDelete()
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Lucide.X, contentDescription = "Delete Title", tint = Color.White, modifier = Modifier.size(12.dp))
-            }
+                    }
+            )
 
             // Top-Left: Duplicate [+]
-            Box(
+            Icon(
+                Lucide.Copy,
+                contentDescription = "Duplicate Title",
+                tint = Color(0xFF3B82F6),
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .offset(x = (-8).dp, y = (-8).dp)
-                    .size(20.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFF3B82F6))
+                    .size(18.dp)
                     .clickable {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         onDuplicate()
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Lucide.Copy, contentDescription = "Duplicate Title", tint = Color.White, modifier = Modifier.size(11.dp))
-            }
+                    }
+            )
 
             // Bottom-Right: Corner Node
             Box(
@@ -13222,16 +13218,14 @@ fun FcpClipAnimationDialog(
                         }
 
                         // Close Button
-                        Box(
+                        Icon(
+                            Lucide.X,
+                            contentDescription = "Close",
+                            tint = colors.textMain,
                             modifier = Modifier
-                                .size(28.dp)
-                                .clip(CircleShape)
-                                .background(if (colors.isDark) Color(0xFF2B2F3A) else Color(0xFFE5E7EB))
-                                .clickable { onDismiss() },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Lucide.X, contentDescription = "Close", tint = colors.textMain, modifier = Modifier.size(15.dp))
-                        }
+                                .size(20.dp)
+                                .clickable { onDismiss() }
+                        )
                     }
 
                     HorizontalDivider(color = colors.glassBorder, thickness = 0.5.dp)

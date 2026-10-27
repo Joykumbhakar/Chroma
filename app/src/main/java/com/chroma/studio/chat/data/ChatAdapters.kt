@@ -74,6 +74,40 @@ object ChatAdapters {
         }
     }
 
+    fun isDifferentDay(t1: Long, t2: Long): Boolean {
+        if (t1 <= 0L || t2 <= 0L) return false
+        val c1 = java.util.Calendar.getInstance().apply { timeInMillis = t1 }
+        val c2 = java.util.Calendar.getInstance().apply { timeInMillis = t2 }
+        return c1.get(java.util.Calendar.YEAR) != c2.get(java.util.Calendar.YEAR) ||
+               c1.get(java.util.Calendar.DAY_OF_YEAR) != c2.get(java.util.Calendar.DAY_OF_YEAR)
+    }
+
+    fun formatMessageDateHeader(timestamp: Long): String {
+        if (timestamp <= 0L) return "Today"
+        return try {
+            val now = java.util.Calendar.getInstance()
+            val msgCal = java.util.Calendar.getInstance().apply { timeInMillis = timestamp }
+
+            val isToday = now.get(java.util.Calendar.YEAR) == msgCal.get(java.util.Calendar.YEAR) &&
+                          now.get(java.util.Calendar.DAY_OF_YEAR) == msgCal.get(java.util.Calendar.DAY_OF_YEAR)
+            if (isToday) return "Today"
+
+            val yesterday = (now.clone() as java.util.Calendar).apply { add(java.util.Calendar.DAY_OF_YEAR, -1) }
+            val isYesterday = yesterday.get(java.util.Calendar.YEAR) == msgCal.get(java.util.Calendar.YEAR) &&
+                              yesterday.get(java.util.Calendar.DAY_OF_YEAR) == msgCal.get(java.util.Calendar.DAY_OF_YEAR)
+            if (isYesterday) return "Yesterday"
+
+            val daysDiff = (now.timeInMillis - timestamp) / (24 * 60 * 60 * 1000)
+            if (daysDiff in 2..6) {
+                return SimpleDateFormat("EEEE, d MMMM", Locale.getDefault()).format(Date(timestamp))
+            }
+
+            SimpleDateFormat("d MMMM yyyy", Locale.getDefault()).format(Date(timestamp))
+        } catch (_: Exception) {
+            "Today"
+        }
+    }
+
     fun toUser(profile: UserProfile?, currentUid: String): User {
         return User(
             id = profile?.uid ?: currentUid,
@@ -126,8 +160,27 @@ object ChatAdapters {
                 val parts = payload.split("|||")
                 val question = parts.getOrNull(0)?.trim() ?: "Poll"
                 val optionsStr = parts.getOrNull(1) ?: ""
-                val optionsList = optionsStr.split(";;;").filter { it.isNotBlank() }.map { optText ->
-                    PollOption(text = optText.trim())
+                val rawOptions = optionsStr.split(";;;").filter { it.isNotBlank() }
+                val optionsList = rawOptions.mapIndexed { optIdx, optText ->
+                    val votersForOpt = msg.pollVotes.entries.filter { entry ->
+                        entry.value.split(",").contains(optIdx.toString())
+                    }.map { entry ->
+                        val prof = userProfiles[entry.key]
+                        PollVoter(
+                            id = entry.key,
+                            name = prof?.displayName?.takeIf { it.isNotBlank() } ?: prof?.username?.takeIf { it.isNotBlank() } ?: (if (entry.key == currentUid) "You" else "User"),
+                            avatar = prof?.avatarUrl ?: "",
+                            isCurrentUser = entry.key == currentUid,
+                            time = ""
+                        )
+                    }
+                    val isUserVoted = votersForOpt.any { it.id == currentUid }
+                    PollOption(
+                        text = optText.trim(),
+                        votes = votersForOpt.size,
+                        isUserVoted = isUserVoted,
+                        voters = votersForOpt
+                    )
                 }
                 PollData(
                     id = msg.id,
@@ -206,7 +259,7 @@ object ChatAdapters {
             reactions = reactionCounts,
             userReaction = myReaction,
             replyTo = replyToQuote,
-            isEdited = false
+            isEdited = msg.isEdited
         )
     }
 
@@ -286,12 +339,17 @@ object ChatAdapters {
                 isOnline -> "delivered"
                 else -> "sent"
             }
+            val previewText = if (room.lastMessage.startsWith("[POLL]:")) {
+                "Poll: " + room.lastMessage.removePrefix("[POLL]:").substringBefore("|||").trim()
+            } else {
+                room.lastMessage.ifBlank { null }
+            }
             listOf(
                 ChatMessage(
                     id = "last_${room.id}",
                     senderId = room.lastSender ?: "",
                     senderName = senderName,
-                    text = room.lastMessage.ifBlank { null },
+                    text = previewText,
                     time = formatSmartTimestamp(room.lastMessageTime),
                     status = computedStatus
                 )

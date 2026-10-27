@@ -59,9 +59,9 @@ fun ContentSafetyViolationDialog(
                 Box(
                     modifier = Modifier
                         .size(64.dp)
-                        .clip(CircleShape)
+                        .clip(RoundedCornerShape(18.dp))
                         .background(Color(0xFFEF4444).copy(alpha = 0.15f))
-                        .border(1.5.dp, Color(0xFFEF4444).copy(alpha = 0.35f), CircleShape),
+                        .border(1.5.dp, Color(0xFFEF4444).copy(alpha = 0.35f), RoundedCornerShape(18.dp)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
