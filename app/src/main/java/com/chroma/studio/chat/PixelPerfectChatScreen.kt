@@ -832,8 +832,7 @@ private fun GlassHeader(
                         onDismissRequest = onDismissDropdown,
                         modifier = Modifier
                             .width(210.dp)
-                            .shadow(16.dp, RoundedCornerShape(24.dp), ambientColor = Color.Black.copy(alpha = 0.2f), spotColor = Color.Black.copy(alpha = 0.15f))
-                            .clip(RoundedCornerShape(24.dp))
+                                                        .clip(RoundedCornerShape(24.dp))
                             .background(colors.appBg)
                             .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(24.dp))
                     ) {
@@ -2083,27 +2082,14 @@ fun WebViewVoiceOrbComponent(
  * ============================================================================
  */
 @Composable
-private fun AvatarCircle(size: Dp, modifier: Modifier = Modifier) {
-    Box(
+private fun AvatarCircle(size: Dp, modifier: Modifier = Modifier, avatarUrl: String = "") {
+    com.chroma.studio.ui.components.IosAvatarView(
+        name = "Chroma User",
+        avatarUrl = avatarUrl,
+        size = size,
+        isGroup = false,
         modifier = modifier
-            .size(size)
-            .shadow(2.dp, CircleShape)
-            .clip(CircleShape)
-            .background(
-                Brush.linearGradient(
-                    colors = listOf(Color(0xFF2563EB), Color(0xFF0078FE), Color(0xFF60A5FA))
-                )
-            )
-            .border(1.dp, Color.Black.copy(alpha = 0.08f), CircleShape),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = "BK",
-            color = Color.White,
-            fontSize = (size.value * 0.36f).sp,
-            fontWeight = FontWeight.Bold
-        )
-    }
+    )
 }
 
 @Composable

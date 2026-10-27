@@ -1,5 +1,8 @@
 package com.chroma.studio.chat.ui.components
 
+import com.chroma.studio.chat.media.ChatMediaLimiter
+import com.chroma.studio.ui.components.ToastManager
+
 import android.content.ContentUris
 import android.content.Context
 import android.net.Uri
@@ -393,7 +396,16 @@ fun CustomFileManagerModal(
                                     if (isSelected) {
                                         selectedFiles.removeAll { it.id == file.id }
                                     } else {
-                                        selectedFiles.add(file)
+                                        if (file.sizeBytes > ChatMediaLimiter.MAX_FILE_SIZE_BYTES) {
+                                            ToastManager.showToast("File '${file.name}' exceeds 100 MB limit")
+                                        } else {
+                                            val currentTotal = selectedFiles.sumOf { it.sizeBytes }
+                                            if (currentTotal + file.sizeBytes > ChatMediaLimiter.MAX_FILE_SIZE_BYTES) {
+                                                ToastManager.showToast("Total selection exceeds 100 MB limit")
+                                            } else {
+                                                selectedFiles.add(file)
+                                            }
+                                        }
                                     }
                                 }
                                 .padding(horizontal = 12.dp, vertical = 10.dp),
@@ -485,6 +497,11 @@ fun CustomFileManagerModal(
 
                         Button(
                             onClick = {
+                                val totalSize = selectedFiles.sumOf { it.sizeBytes }
+                                if (totalSize > ChatMediaLimiter.MAX_FILE_SIZE_BYTES) {
+                                    ToastManager.showToast("Selected files exceed 100 MB limit (${ChatMediaLimiter.formatFileSize(totalSize)})")
+                                    return@Button
+                                }
                                 SoundManager.playSend()
                                 val chatFiles = selectedFiles.map {
                                     ChatFileItem(

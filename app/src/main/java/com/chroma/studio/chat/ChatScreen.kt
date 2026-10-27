@@ -80,6 +80,7 @@ import coil.compose.AsyncImage
 import com.chroma.studio.chat.data.*
 
 import com.chroma.studio.chat.media.*
+import com.chroma.studio.chat.media.ChatMediaLimiter
 
 import com.chroma.studio.chat.sound.SoundManager
 
@@ -3891,9 +3892,24 @@ private fun ChatScreenContent(
 
                 },
 
-                onSendMedia = { uris, caption ->
+                onSendMedia = sendMediaLabel@{ uris, caption ->
 
                     val replyQuoteSnapshot = activeReplyQuote
+
+                    // 1. Enforce 100 MB video size limit
+                    val oversizedVideo = uris.firstOrNull { ChatMediaLimiter.isVideoUri(context, it) && ChatMediaLimiter.getMediaSizeBytes(context, it) > ChatMediaLimiter.MAX_VIDEO_SIZE_BYTES }
+                    if (oversizedVideo != null) {
+                        val size = ChatMediaLimiter.getMediaSizeBytes(context, oversizedVideo)
+                        showToast("Video exceeds 100 MB limit (${ChatMediaLimiter.formatFileSize(size)}). Please choose a smaller video.")
+                        return@sendMediaLabel
+                    }
+
+                    // 2. Enforce 100 MB photos batch size limit
+                    val totalPhotoBytes = uris.filter { !ChatMediaLimiter.isVideoUri(context, it) }.sumOf { ChatMediaLimiter.getMediaSizeBytes(context, it) }
+                    if (totalPhotoBytes > ChatMediaLimiter.MAX_PHOTOS_BATCH_SIZE_BYTES) {
+                        showToast("Photos batch exceeds 100 MB limit (${ChatMediaLimiter.formatFileSize(totalPhotoBytes)}). Please select fewer photos.")
+                        return@sendMediaLabel
+                    }
 
                     if (uris.size > 1) {
 
@@ -3933,9 +3949,13 @@ private fun ChatScreenContent(
 
                                 try {
 
-                                    val bytes = com.chroma.studio.utils.ImageUtils.compressChatImage(context, uri) ?: context.contentResolver.openInputStream(uri)?.readBytes()
-
-                                    val ext = MediaStoreHelper.getFileExtension(context, uri) ?: "jpg"
+                                    val isVideo = ChatMediaLimiter.isVideoUri(context, uri)
+                                    val bytes = if (isVideo) {
+                                        ChatMediaLimiter.processAndCompressVideo(context, uri)
+                                    } else {
+                                        ChatMediaLimiter.processAndCompressPhoto(context, uri)
+                                    }
+                                    val ext = if (isVideo) "mp4" else (MediaStoreHelper.getFileExtension(context, uri) ?: "jpg")
 
                                     if (bytes != null && chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
 
@@ -3993,9 +4013,13 @@ private fun ChatScreenContent(
 
                             try {
 
-                                val bytes = com.chroma.studio.utils.ImageUtils.compressChatImage(context, uri) ?: context.contentResolver.openInputStream(uri)?.readBytes()
-
-                                val ext = MediaStoreHelper.getFileExtension(context, uri) ?: "jpg"
+                                val isVideo = ChatMediaLimiter.isVideoUri(context, uri)
+                                val bytes = if (isVideo) {
+                                    ChatMediaLimiter.processAndCompressVideo(context, uri)
+                                } else {
+                                    ChatMediaLimiter.processAndCompressPhoto(context, uri)
+                                }
+                                val ext = if (isVideo) "mp4" else (MediaStoreHelper.getFileExtension(context, uri) ?: "jpg")
 
                                 if (bytes != null && chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
 

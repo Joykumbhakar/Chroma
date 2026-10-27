@@ -795,8 +795,7 @@ private fun MessageReactionsPills(
 
             Row(
                 modifier = Modifier
-                    .shadow(2.dp, RoundedCornerShape(8.dp), ambientColor = Color.Black.copy(alpha = 0.18f), spotColor = Color.Black.copy(alpha = 0.14f))
-                    .clip(RoundedCornerShape(8.dp))
+                                        .clip(RoundedCornerShape(8.dp))
                     .background(badgeBg)
                     .border(badgeBorderWidth, badgeBorderColor, RoundedCornerShape(8.dp))
                     .clickable { onReactionClick(emoji) }

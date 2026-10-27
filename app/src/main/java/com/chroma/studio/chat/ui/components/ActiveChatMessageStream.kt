@@ -625,8 +625,7 @@ fun ActiveChatMessageStream(
                     },
                     modifier = Modifier
                         .size(38.dp)
-                        .shadow(elevation = 2.dp, shape = RoundedCornerShape(10.dp), spotColor = Color.Black.copy(alpha = 0.12f))
-                        .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(10.dp)),
+                                                .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(10.dp)),
                     shape = RoundedCornerShape(10.dp),
                     containerColor = colors.cardBg,
                     contentColor = colors.iosBlue,

@@ -25,6 +25,7 @@ import kotlinx.coroutines.tasks.await
 
 class ChatViewModel : ViewModel() {
     private val repository = SupabaseChatRepository()
+    private val discoverRepository = DiscoverRepository()
 
     private val _recentChats = MutableStateFlow<List<ChatRoom>>(emptyList())
     val recentChats: StateFlow<List<ChatRoom>> = _recentChats.asStateFlow()
@@ -70,10 +71,9 @@ class ChatViewModel : ViewModel() {
             val currentMap = _userProfiles.value.toMutableMap()
             val missing = userIds.filter { !currentMap.containsKey(it) || currentMap[it]?.displayName.isNullOrBlank() || currentMap[it]?.avatarUrl.isNullOrBlank() }
             if (missing.isEmpty()) return@launch
-            val repo = DiscoverRepository()
             for (uid in missing) {
                 try {
-                    val profile = repo.getUserProfile(uid)
+                    val profile = discoverRepository.getUserProfile(uid)
                     if (profile != null) {
                         currentMap[uid] = profile
                     }
@@ -500,13 +500,76 @@ class ChatViewModel : ViewModel() {
         }
 
         viewModelScope.launch {
-            val success = repository.sendMessage(
-                roomId,
-                targetMsg.text,
-                workId = targetMsg.workId,
-                preGeneratedId = msgId,
-                replyToMessageId = targetMsg.replyToMessageId
-            )
+            val success = when (targetMsg.messageType) {
+                "audio" -> {
+                    val mediaUrl = targetMsg.mediaUrl ?: targetMsg.imageUrl
+                    if (mediaUrl != null && (mediaUrl.startsWith("http://") || mediaUrl.startsWith("https://"))) {
+                        repository.sendMessage(
+                            roomId = roomId,
+                            text = targetMsg.text,
+                            imageUrl = mediaUrl,
+                            preGeneratedId = msgId,
+                            messageType = "audio",
+                            durationSeconds = targetMsg.durationSeconds,
+                            replyToMessageId = targetMsg.replyToMessageId
+                        )
+                    } else if (mediaUrl != null && java.io.File(mediaUrl).exists()) {
+                        val audioBytes = java.io.File(mediaUrl).readBytes()
+                        val uploadedUrl = repository.uploadAudioToSupabase(audioBytes, "m4a")
+                        if (uploadedUrl != null) {
+                            repository.sendMessage(
+                                roomId = roomId,
+                                text = targetMsg.text,
+                                imageUrl = uploadedUrl,
+                                preGeneratedId = msgId,
+                                messageType = "audio",
+                                durationSeconds = targetMsg.durationSeconds,
+                                replyToMessageId = targetMsg.replyToMessageId
+                            )
+                        } else false
+                    } else false
+                }
+                "image", "video" -> {
+                    val mediaUrl = targetMsg.mediaUrl ?: targetMsg.imageUrl
+                    if (mediaUrl != null && (mediaUrl.startsWith("http://") || mediaUrl.startsWith("https://"))) {
+                        repository.sendMessage(
+                            roomId = roomId,
+                            text = targetMsg.text,
+                            imageUrl = mediaUrl,
+                            preGeneratedId = msgId,
+                            messageType = targetMsg.messageType,
+                            replyToMessageId = targetMsg.replyToMessageId
+                        )
+                    } else if (mediaUrl != null && java.io.File(mediaUrl).exists()) {
+                        val bytes = java.io.File(mediaUrl).readBytes()
+                        val ext = if (targetMsg.messageType == "video") "mp4" else "jpg"
+                        val uploadedUrl = if (targetMsg.messageType == "video") {
+                            repository.uploadVideoToSupabase(bytes, ext)
+                        } else {
+                            repository.uploadImageToSupabase(bytes, ext)
+                        }
+                        if (uploadedUrl != null) {
+                            repository.sendMessage(
+                                roomId = roomId,
+                                text = targetMsg.text,
+                                imageUrl = uploadedUrl,
+                                preGeneratedId = msgId,
+                                messageType = targetMsg.messageType,
+                                replyToMessageId = targetMsg.replyToMessageId
+                            )
+                        } else false
+                    } else false
+                }
+                else -> {
+                    repository.sendMessage(
+                        roomId,
+                        targetMsg.text,
+                        workId = targetMsg.workId,
+                        preGeneratedId = msgId,
+                        replyToMessageId = targetMsg.replyToMessageId
+                    )
+                }
+            }
             if (!success) {
                 _localMessages.value = _localMessages.value.map {
                     if (it.id == msgId) it.copy(isPending = false, isError = true) else it
@@ -752,6 +815,16 @@ class ChatViewModel : ViewModel() {
     }
 
     fun sendMediaMessage(imageBytes: ByteArray, extension: String, text: String = "", replyToMessageId: String? = null, localPreviewUri: String? = null) {
+        val maxLimit = if (extension.lowercase() in listOf("mp4", "mov", "avi", "mkv", "3gp", "webm")) {
+            com.chroma.studio.chat.media.ChatMediaLimiter.MAX_VIDEO_SIZE_BYTES
+        } else {
+            com.chroma.studio.chat.media.ChatMediaLimiter.MAX_FILE_SIZE_BYTES
+        }
+        if (imageBytes.size > maxLimit) {
+            val formatted = com.chroma.studio.chat.media.ChatMediaLimiter.formatFileSize(imageBytes.size.toLong())
+            com.chroma.studio.ui.components.ToastManager.showToast("File size exceeds 100 MB limit ($formatted).")
+            return
+        }
         val roomId = _activeRoomId.value ?: return
         val currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
 
@@ -1003,6 +1076,14 @@ class ChatViewModel : ViewModel() {
         if (_activeRoomId.value == roomId) {
             _serverMessages.value = emptyList()
             _localMessages.value = emptyList()
+        }
+        try {
+            com.chroma.studio.chat.data.ChatLocalCacheManager.clearRoom(
+                com.chroma.studio.ChromaApp.instance,
+                roomId
+            )
+        } catch (e: Exception) {
+            // ignore
         }
         viewModelScope.launch {
             try {

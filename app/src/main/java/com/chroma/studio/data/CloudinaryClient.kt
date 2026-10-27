@@ -276,6 +276,71 @@ object CloudinaryClient {
     /**
      * Upload an audio file (e.g. voice note) to Cloudinary.
      */
+    /**
+     * Upload a video file to Cloudinary.
+     */
+    suspend fun uploadVideo(
+        videoBytes: ByteArray,
+        extension: String = "mp4",
+        folder: String = "chat_videos"
+    ): String? {
+        return withContext(Dispatchers.IO) {
+            if (failureCount.get() >= MAX_FAILURES) {
+                if (System.currentTimeMillis() - circuitOpenTime.get() < COOLDOWN_MS) {
+                    Log.e("CloudinaryClient", "Circuit breaker OPEN — video upload fast-failed.")
+                    return@withContext null
+                }
+            }
+            try {
+                if (cloudName.isBlank() || videoUploadPreset.isBlank()) {
+                    Log.e("CloudinaryClient", "Cloudinary credentials not set")
+                    return@withContext null
+                }
+
+                val uploadUrl = "https://api.cloudinary.com/v1_1/$cloudName/video/upload"
+                val fileName = "video_${System.currentTimeMillis()}.$extension"
+                val mediaType = "video/$extension".toMediaTypeOrNull()
+
+                val requestBody = MultipartBody.Builder()
+                    .setType(MultipartBody.FORM)
+                    .addFormDataPart("file", fileName, videoBytes.toRequestBody(mediaType))
+                    .addFormDataPart("upload_preset", videoUploadPreset)
+                    .addFormDataPart("folder", folder)
+                    .addFormDataPart("resource_type", "video")
+                    .build()
+
+                val request = Request.Builder()
+                    .url(uploadUrl)
+                    .post(requestBody)
+                    .build()
+
+                val response = client.newCall(request).execute()
+                val responseBody = response.body?.string()
+
+                if (!response.isSuccessful || responseBody == null) {
+                    Log.e("CloudinaryClient", "Video upload failed: HTTP ${response.code} — $responseBody")
+                    recordFailure()
+                    return@withContext null
+                }
+
+                val json = JSONObject(responseBody)
+                val secureUrl = json.optString("secure_url", "")
+                if (secureUrl.isBlank()) {
+                    recordFailure()
+                    null
+                } else {
+                    recordSuccess()
+                    secureUrl
+                }
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Log.e("CloudinaryClient", "Video upload exception", e)
+                recordFailure()
+                null
+            }
+        }
+    }
+
     suspend fun uploadAudio(
         audioBytes: ByteArray,
         extension: String = "m4a",

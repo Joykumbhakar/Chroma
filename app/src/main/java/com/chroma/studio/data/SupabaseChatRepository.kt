@@ -138,6 +138,74 @@ class SupabaseChatRepository {
         }
     }
 
+    private suspend fun encryptPayload(
+        roomId: String,
+        text: String,
+        currentUserId: String
+    ): Triple<String, String, Map<String, String>> {
+        if (text.isBlank()) return Triple(text, "", emptyMap())
+        return try {
+            val aesKey = com.chroma.studio.utils.CryptoHelper.generateAESKey()
+            val aesBytes = aesKey.encoded
+            val (encryptedMsg, iv) = com.chroma.studio.utils.CryptoHelper.encryptMessageWithAES(text, aesKey)
+
+            val encryptedKeysMap = mutableMapOf<String, String>()
+            val myPubKey = com.chroma.studio.utils.CryptoHelper.getPublicKeyBase64()
+
+            // Always encrypt for current user with their active local public key
+            if (myPubKey.isNotEmpty()) {
+                val myEncKey = com.chroma.studio.utils.CryptoHelper.encryptAESKeyWithRSA(aesBytes, myPubKey)
+                encryptedKeysMap[currentUserId] = myEncKey
+                usersCollection.document(currentUserId).update("publicKey", myPubKey)
+            }
+
+            // Room fallback encryption
+            val roomKey = com.chroma.studio.utils.CryptoHelper.deriveRoomKey(roomId)
+            val (roomEncAes, roomAesIv) = com.chroma.studio.utils.CryptoHelper.encryptMessageWithAES(
+                android.util.Base64.encodeToString(aesBytes, android.util.Base64.NO_WRAP),
+                javax.crypto.spec.SecretKeySpec(roomKey, "AES")
+            )
+            encryptedKeysMap["_room_fallback"] = "$roomEncAes:$roomAesIv"
+
+            // Retrieve room participants using high-speed in-memory cache
+            val participants = roomParticipantsCache[roomId] ?: run {
+                val roomSnapshot = chatsCollection.document(roomId).get().await()
+                val room = roomSnapshot.toObject(ChatRoom::class.java)
+                if (room != null) {
+                    roomParticipantsCache[roomId] = room.participants
+                    room.participants
+                } else emptyList()
+            }
+
+            if (participants.isNotEmpty()) {
+                for (participantId in participants) {
+                    if (participantId == currentUserId) continue
+                    var pubKeyStr = userPublicKeyCache[participantId]
+                    if (pubKeyStr.isNullOrEmpty()) {
+                        try {
+                            val userDoc = usersCollection.document(participantId).get().await()
+                            val fetchedKey = userDoc.getString("publicKey")
+                            if (!fetchedKey.isNullOrEmpty()) {
+                                userPublicKeyCache[participantId] = fetchedKey
+                                pubKeyStr = fetchedKey
+                            }
+                        } catch (_: Exception) {}
+                    }
+                    if (!pubKeyStr.isNullOrEmpty()) {
+                        try {
+                            val encKey = com.chroma.studio.utils.CryptoHelper.encryptAESKeyWithRSA(aesBytes, pubKeyStr)
+                            encryptedKeysMap[participantId] = encKey
+                        } catch (_: Exception) {}
+                    }
+                }
+            }
+            Triple(encryptedMsg, iv, encryptedKeysMap)
+        } catch (e: Exception) {
+            android.util.Log.e("SupabaseChatRepository", "Encryption failed", e)
+            Triple(text, "", emptyMap())
+        }
+    }
+
     suspend fun sendMessage(
         roomId: String,
         text: String,
@@ -152,80 +220,10 @@ class SupabaseChatRepository {
         try {
             val messageId = preGeneratedId ?: java.util.UUID.randomUUID().toString()
             val timestamp = System.currentTimeMillis()
-            var finalMessageText = text
-            var finalIv = ""
-            var finalEncryptedKeys = emptyMap<String, String>()
-
-            if (messageType != "system" && text.isNotBlank()) {
-                try {
-                    val aesKey = com.chroma.studio.utils.CryptoHelper.generateAESKey()
-                    val aesBytes = aesKey.encoded
-                    val (encryptedMsg, iv) = com.chroma.studio.utils.CryptoHelper.encryptMessageWithAES(text, aesKey)
-                    finalMessageText = encryptedMsg
-                    finalIv = iv
-
-                    val encryptedKeysMap = mutableMapOf<String, String>()
-                    val myPubKey = com.chroma.studio.utils.CryptoHelper.getPublicKeyBase64()
-
-                    // Always encrypt for current user with their active local public key
-                    if (myPubKey.isNotEmpty()) {
-                        val myEncKey = com.chroma.studio.utils.CryptoHelper.encryptAESKeyWithRSA(aesBytes, myPubKey)
-                        encryptedKeysMap[currentUser.uid] = myEncKey
-                        // Asynchronously ensure Firestore has our current public key
-                        usersCollection.document(currentUser.uid).update("publicKey", myPubKey)
-                    }
-
-                    // Room fallback encryption
-                    val roomKey = com.chroma.studio.utils.CryptoHelper.deriveRoomKey(roomId)
-                    val (roomEncAes, roomAesIv) = com.chroma.studio.utils.CryptoHelper.encryptMessageWithAES(
-                        android.util.Base64.encodeToString(aesBytes, android.util.Base64.NO_WRAP),
-                        javax.crypto.spec.SecretKeySpec(roomKey, "AES")
-                    )
-                    encryptedKeysMap["_room_fallback"] = "$roomEncAes:$roomAesIv"
-
-                    // Retrieve room participants using high-speed in-memory cache to skip redundant network reads
-                    val participants = roomParticipantsCache[roomId] ?: run {
-                        val roomSnapshot = chatsCollection.document(roomId).get().await()
-                        val room = roomSnapshot.toObject(ChatRoom::class.java)
-                        if (room != null) {
-                            roomParticipantsCache[roomId] = room.participants
-                            room.participants
-                        } else emptyList()
-                    }
-
-                    if (participants.isNotEmpty()) {
-                        for (participantId in participants) {
-                            if (participantId == currentUser.uid) continue
-                            var pubKeyStr = userPublicKeyCache[participantId]
-                            if (pubKeyStr.isNullOrEmpty()) {
-                                try {
-                                    val userDoc = usersCollection.document(participantId).get().await()
-                                    val fetchedKey = userDoc.getString("publicKey")
-                                    if (!fetchedKey.isNullOrEmpty()) {
-                                        userPublicKeyCache[participantId] = fetchedKey
-                                        pubKeyStr = fetchedKey
-                                    }
-                                } catch (e: Exception) {
-                                    // ignore
-                                }
-                            }
-                            if (!pubKeyStr.isNullOrEmpty()) {
-                                try {
-                                    val encKey = com.chroma.studio.utils.CryptoHelper.encryptAESKeyWithRSA(aesBytes, pubKeyStr)
-                                    encryptedKeysMap[participantId] = encKey
-                                } catch (e: Exception) {
-                                    // ignore fallback will handle
-                                }
-                            }
-                        }
-                    }
-                    finalEncryptedKeys = encryptedKeysMap
-                } catch (e: Exception) {
-                    android.util.Log.e("SupabaseChatRepository", "Encryption failed", e)
-                    finalMessageText = text
-                    finalIv = ""
-                    finalEncryptedKeys = emptyMap()
-                }
+            val (finalMessageText, finalIv, finalEncryptedKeys) = if (messageType != "system" && text.isNotBlank()) {
+                encryptPayload(roomId, text, currentUser.uid)
+            } else {
+                Triple(text, "", emptyMap<String, String>())
             }
 
             val message = ChatMessage(
@@ -283,24 +281,38 @@ class SupabaseChatRepository {
             try {
                 val roomSnap = roomRef.get().await()
                 val room = roomSnap.toObject(ChatRoom::class.java)
-                if (room != null && !room.isGroup) {
-                    val recipientId = room.participants.firstOrNull { it != currentUser.uid }
-                    if (!recipientId.isNullOrBlank()) {
-                        val displaySnippet = if (imageUrl != null) {
-                            if (messageType == "video") "Sent a video" else if (messageType == "audio") "Sent a voice message" else "Sent a photo"
-                        } else if (text.startsWith("[POLL]:")) {
-                            "Created a poll"
-                        } else {
-                            text
+                if (room != null) {
+                    val displaySnippet = if (imageUrl != null) {
+                        if (messageType == "video") "Sent a video" else if (messageType == "audio") "Sent a voice message" else "Sent a photo"
+                    } else if (text.startsWith("[POLL]:")) {
+                        "Created a poll"
+                    } else {
+                        text
+                    }
+                    if (room.isGroup) {
+                        val otherParticipants = room.participants.filter { it != currentUser.uid }
+                        for (recipientId in otherParticipants) {
+                            NotificationDispatcher.sendNotification(
+                                targetUserId = recipientId,
+                                type = com.chroma.studio.model.NotificationActionType.MESSAGE,
+                                actionText = "sent a message in ${room.name ?: "Group"}",
+                                detailText = displaySnippet,
+                                targetPreviewUrl = imageUrl,
+                                targetId = roomId
+                            )
                         }
-                        NotificationDispatcher.sendNotification(
-                            targetUserId = recipientId,
-                            type = com.chroma.studio.model.NotificationActionType.MESSAGE,
-                            actionText = "sent you a message",
-                            detailText = displaySnippet,
-                            targetPreviewUrl = imageUrl,
-                            targetId = roomId
-                        )
+                    } else {
+                        val recipientId = room.participants.firstOrNull { it != currentUser.uid }
+                        if (!recipientId.isNullOrBlank()) {
+                            NotificationDispatcher.sendNotification(
+                                targetUserId = recipientId,
+                                type = com.chroma.studio.model.NotificationActionType.MESSAGE,
+                                actionText = "sent you a message",
+                                detailText = displaySnippet,
+                                targetPreviewUrl = imageUrl,
+                                targetId = roomId
+                            )
+                        }
                     }
                 }
             } catch (_: Exception) {}
@@ -333,14 +345,17 @@ class SupabaseChatRepository {
                     .whereEqualTo("isRead", false)
                     .get()
                     .await()
-                val batch = firestore.batch()
-                for (doc in unreadMessages) {
+                val docsToUpdate = unreadMessages.documents.filter { doc ->
                     val msg = doc.toObject(ChatMessage::class.java)
-                    if (msg.senderId != currentUser.uid) {
+                    msg != null && msg.senderId != currentUser.uid
+                }
+                docsToUpdate.chunked(450).forEach { chunk ->
+                    val batch = firestore.batch()
+                    for (doc in chunk) {
                         batch.update(doc.reference, "isRead", true)
                     }
+                    batch.commit().await()
                 }
-                batch.commit().await()
             } catch (e: Exception) {
                 // ignore
             }
@@ -680,7 +695,16 @@ class SupabaseChatRepository {
     }
 
     // Helper for uploading audio voice note to Cloudinary CDN
-    suspend fun uploadAudioToSupabase(audioBytes: ByteArray, extension: String = "m4a"): String? = withContext(Dispatchers.IO) {
+        suspend fun uploadVideoToSupabase(videoBytes: ByteArray, extension: String = "mp4"): String? = withContext(Dispatchers.IO) {
+        try {
+            CloudinaryClient.uploadVideo(videoBytes, folder = "chat_videos")
+        } catch (e: Exception) {
+            Log.e("SupabaseChatRepository", "Error uploading video", e)
+            null
+        }
+    }
+
+suspend fun uploadAudioToSupabase(audioBytes: ByteArray, extension: String = "m4a"): String? = withContext(Dispatchers.IO) {
         try {
             CloudinaryClient.uploadAudio(audioBytes, extension = extension, folder = "chat_audio")
         } catch (e: Exception) {
@@ -755,13 +779,13 @@ class SupabaseChatRepository {
     suspend fun editMessage(messageId: String, roomId: String, newText: String): Boolean = withContext(Dispatchers.IO) {
         val currentUser = auth.currentUser ?: return@withContext false
         try {
-            // Update in Firestore with clean text, cleared iv, and isEdited = true
+            val (finalText, finalIv, finalEncryptedKeys) = encryptPayload(roomId, newText, currentUser.uid)
             chatsCollection.document(roomId).collection("messages").document(messageId)
                 .update(
                     mapOf(
-                        "text" to newText,
-                        "iv" to "",
-                        "encryptedAesKeys" to emptyMap<String, String>(),
+                        "text" to finalText,
+                        "iv" to finalIv,
+                        "encryptedAesKeys" to finalEncryptedKeys,
                         "isEdited" to true
                     )
                 )
@@ -837,24 +861,13 @@ class SupabaseChatRepository {
     private suspend fun purgeMessages(roomId: String) {
         try {
             val messagesRef = chatsCollection.document(roomId).collection("messages")
-            // Delete in batches of 100 to avoid Firestore limits
-            var batch = firestore.batch()
-            var count = 0
             var snapshot = messagesRef.limit(100).get().await()
             while (snapshot.documents.isNotEmpty()) {
+                val batch = firestore.batch()
                 for (doc in snapshot.documents) {
                     batch.delete(doc.reference)
-                    count++
-                    if (count % 100 == 0) {
-                        batch.commit().await()
-                        batch = firestore.batch()
-                    }
                 }
-                if (count % 100 != 0) {
-                    batch.commit().await()
-                    batch = firestore.batch()
-                }
-                count = 0
+                batch.commit().await()
                 snapshot = messagesRef.limit(100).get().await()
             }
             android.util.Log.d("SupabaseChatRepo", "Purged all messages from $roomId")
