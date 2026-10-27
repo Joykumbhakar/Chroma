@@ -5,6 +5,11 @@ import com.chroma.studio.ui.components.VerifiedBadge
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -665,7 +671,10 @@ fun ConversationsScreen(
                             },
                             onLongClick = {
                                 selectedChatForContextMenu = chat
-                            }
+                            },
+                            onPinToggle = { onPinChatToggle(chat) },
+                            onMuteToggle = { onMuteChatToggle(chat) },
+                            onDelete = { onDeleteChat(chat) }
                         )
                     }
                 }
@@ -1036,9 +1045,25 @@ private fun IosConversationListRow(
     isSelected: Boolean = false,
     onToggleSelect: () -> Unit = {},
     onClick: () -> Unit,
-    onLongClick: () -> Unit = {}
+    onLongClick: () -> Unit = {},
+    onPinToggle: () -> Unit = {},
+    onMuteToggle: () -> Unit = {},
+    onDelete: () -> Unit = {}
 ) {
     val colors = LocalChatColors.current
+    val coroutineScope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    val dragOffset = remember { Animatable(0f) }
+
+    val pinActionWidthPx = with(density) { 80.dp.toPx() }
+    val leftActionsWidthPx = with(density) { 150.dp.toPx() }
+
+    LaunchedEffect(isSelectionMode) {
+        if (isSelectionMode && dragOffset.value != 0f) {
+            dragOffset.animateTo(0f, spring(dampingRatio = 0.8f))
+        }
+    }
+
     val lastMsg: ChatMessage? = chat.messages.lastOrNull()
     val isOutgoing = lastMsg != null && lastMsg.senderId == currentUserId
 
@@ -1056,186 +1081,357 @@ private fun IosConversationListRow(
 
     val isUnread = chat.unreadCount > 0
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(enabled = isSelectionMode) { onToggleSelect() }
-            .then(
-                if (!isSelectionMode) {
-                    Modifier.combinedClickable(
-                        onClick = onClick,
-                        onLongClick = {
-                            SoundManager.playReaction()
-                            onLongClick()
-                        }
-                    )
-                } else Modifier
-            )
+            .wrapContentHeight()
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 9.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // Selection Checkbox (Thin Box & Extended Tick)
-            if (isSelectionMode) {
-                LiquidGlassCheckbox(
-                    checked = isSelected,
-                    onCheckedChange = { onToggleSelect() },
-                    size = 22.dp,
-                    checkedColor = colors.iosBlue,
-                    uncheckedColor = colors.textMuted.copy(alpha = 0.5f)
-                )
-            }
-
-            // Contact Avatar with Online Indicator (Actual Avatar or Vector Preset, Zero Letters)
-            ChatAvatar(
-                avatarUrl = chat.avatar,
-                name = chat.name,
-                size = 52.dp,
-                showOnline = true,
-                isOnline = chat.online
-            )
-
-            // Center Column: Message Content & Contact Name
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(3.dp)
+        // ── Background Swipe Action Buttons ─────────────────────────
+        if (dragOffset.value > 0f) {
+            // Pin Action Button (Revealed on Swipe Right)
+            Box(
+                modifier = Modifier.matchParentSize(),
+                contentAlignment = Alignment.CenterStart
             ) {
-                // Contact Name, Verified Badge & Pin Icon
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(80.dp)
+                        .background(Color(0xFF0A84FF))
+                        .clickable {
+                            SoundManager.playReaction()
+                            coroutineScope.launch {
+                                dragOffset.animateTo(0f, spring(dampingRatio = 0.8f))
+                            }
+                            onPinToggle()
+                        },
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = chat.name,
-                        fontSize = 16.5.sp,
-                        fontWeight = if (isUnread) FontWeight.SemiBold else FontWeight.Medium,
-                        color = colors.textDark,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
-                    if (chat.isVerified) {
-                        VerifiedBadge(size = 15.dp)
-                    }
-                    if (isPinned) {
-                        LucidePin(tint = colors.iosBlue, size = 12.dp)
-                    }
-                }
-
-                // Snippet & Outgoing Status Checks / Media Icon or Live Typing/Recording Indicator
-                val isActivity = chat.statusText.contains("typing", ignoreCase = true) || chat.statusText.contains("recording", ignoreCase = true)
-                val isRecording = chat.statusText.contains("recording", ignoreCase = true)
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    if (isActivity) {
-                        if (isRecording) {
-                            LucideMic(tint = colors.iosBlue, size = 14.dp)
-                        } else {
-                            LucideEdit(tint = colors.iosBlue, size = 13.dp)
-                        }
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        LucidePin(tint = Color.White, size = 20.dp)
                         Text(
-                            text = chat.statusText,
-                            fontSize = 14.5.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = colors.iosBlue,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            lineHeight = 19.sp
-                        )
-                    } else {
-                        // Status Checkmark for Outgoing Messages
-                        if (isOutgoing) {
-                            MessageStatusTick(
-                                status = lastMsg.status,
-                                isOutgoing = true,
-                                normalTint = colors.textMuted,
-                                readTint = colors.iosBlue,
-                                pendingTint = colors.textMuted,
-                                size = 13.dp
-                            )
-                            Spacer(Modifier.width(2.dp))
-                        }
-
-                        // Media Type Icon
-                        when (lastMsg?.mediaType) {
-                            "voice" -> PhosphorWaveform(tint = if (isUnread) colors.iosBlue else colors.textMuted, size = 14.dp)
-                            "image" -> PhosphorPhotoIcon(tint = if (isUnread) colors.iosBlue else colors.textMuted, size = 14.dp)
-                            "poll" -> PhosphorPollIcon(tint = if (isUnread) colors.iosBlue else colors.textMuted, size = 14.dp)
-                        }
-
-                        Text(
-                            text = (if (chat.type == "group" && lastMsg != null && lastMsg.senderName.isNotEmpty() && !isOutgoing)
-                                       "${lastMsg.senderName.split(" ").firstOrNull() ?: lastMsg.senderName}: " else "") + lastMsgPreview,
-                            fontSize = 14.5.sp,
-                            fontWeight = if (isUnread) FontWeight.Medium else FontWeight.Normal,
-                            color = if (isUnread) colors.textDark else if (lastMsgPreview == "No messages yet") colors.textMuted.copy(alpha = 0.75f) else colors.textMuted,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            lineHeight = 19.sp
+                            text = if (isPinned) "Unpin" else "Pin",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White
                         )
                     }
                 }
             }
-
-            // Right Meta Column: Timestamp & Number Badge / Mute Indicator
-            Column(
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(5.dp),
-                modifier = Modifier.padding(start = 4.dp)
+        } else if (dragOffset.value < 0f) {
+            // Mute and Delete Action Buttons (Revealed on Swipe Left)
+            Box(
+                modifier = Modifier.matchParentSize(),
+                contentAlignment = Alignment.CenterEnd
             ) {
-                val timeDisplay = lastMsg?.time?.ifBlank { "New" } ?: "New"
-                Text(
-                    text = timeDisplay,
-                    fontSize = 12.5.sp,
-                    fontWeight = if (isUnread) FontWeight.SemiBold else FontWeight.Normal,
-                    color = if (isUnread) colors.iosBlue else colors.textMuted
-                )
-
-                // Unread Count Badge or Muted Bell
-                if (isUnread) {
+                Row(
+                    modifier = Modifier.fillMaxHeight(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Mute
                     Box(
                         modifier = Modifier
-                            .height(20.dp)
-                            .widthIn(min = 20.dp)
-                            .background(
-                                if (chat.isMuted) colors.textMuted else colors.iosBlue,
-                                RoundedCornerShape(10.dp)
-                            )
-                            .padding(horizontal = 6.dp),
+                            .fillMaxHeight()
+                            .width(75.dp)
+                            .background(Color(0xFFFF9500))
+                            .clickable {
+                                SoundManager.playReaction()
+                                coroutineScope.launch {
+                                    dragOffset.animateTo(0f, spring(dampingRatio = 0.8f))
+                                }
+                                onMuteToggle()
+                            },
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = if (chat.unreadCount > 99) "99+" else chat.unreadCount.toString(),
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            style = TextStyle(
-                                platformStyle = PlatformTextStyle(includeFontPadding = false),
-                                textAlign = TextAlign.Center
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            if (chat.isMuted) {
+                                LucideBell(tint = Color.White, size = 20.dp)
+                            } else {
+                                LucideBellOff(tint = Color.White, size = 20.dp)
+                            }
+                            Text(
+                                text = if (chat.isMuted) "Unmute" else "Mute",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White
                             )
-                        )
+                        }
                     }
-                } else if (chat.isMuted) {
-                    LucideBellOff(tint = colors.textMuted, size = 14.dp)
+
+                    // Delete
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .width(75.dp)
+                            .background(Color(0xFFFF3B30))
+                            .clickable {
+                                SoundManager.playReaction()
+                                coroutineScope.launch {
+                                    dragOffset.animateTo(0f, spring(dampingRatio = 0.8f))
+                                }
+                                onDelete()
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            LucideTrash(tint = Color.White, size = 20.dp)
+                            Text(
+                                text = "Delete",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White
+                            )
+                        }
+                    }
                 }
             }
         }
 
-        // Apple Hairline divider indented to align exactly with contact text (78.dp start)
-        HorizontalDivider(
-            color = colors.separator,
-            thickness = 0.5.dp,
-            modifier = Modifier.padding(start = 78.dp)
-        )
+        // ── Foreground Conversation Content Row ──────────────────────
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .offset { IntOffset(dragOffset.value.roundToInt(), 0) }
+                .background(colors.appBg)
+                .then(
+                    if (!isSelectionMode) {
+                        Modifier.pointerInput(Unit) {
+                            detectHorizontalDragGestures(
+                                onDragEnd = {
+                                    coroutineScope.launch {
+                                        val current = dragOffset.value
+                                        val target = when {
+                                            current > pinActionWidthPx / 2f -> pinActionWidthPx
+                                            current < -leftActionsWidthPx / 2f -> -leftActionsWidthPx
+                                            else -> 0f
+                                        }
+                                        dragOffset.animateTo(
+                                            target,
+                                            animationSpec = spring(
+                                                dampingRatio = 0.8f,
+                                                stiffness = Spring.StiffnessMediumLow
+                                            )
+                                        )
+                                    }
+                                },
+                                onDragCancel = {
+                                    coroutineScope.launch {
+                                        dragOffset.animateTo(0f, spring(dampingRatio = 0.8f))
+                                    }
+                                },
+                                onHorizontalDrag = { _, dragAmount ->
+                                    coroutineScope.launch {
+                                        val newOffset = (dragOffset.value + dragAmount).coerceIn(
+                                            -(leftActionsWidthPx + 40f),
+                                            pinActionWidthPx + 40f
+                                        )
+                                        dragOffset.snapTo(newOffset)
+                                    }
+                                }
+                            )
+                        }
+                    } else Modifier
+                )
+                .clickable(enabled = isSelectionMode) { onToggleSelect() }
+                .then(
+                    if (!isSelectionMode) {
+                        Modifier.combinedClickable(
+                            onClick = {
+                                if (dragOffset.value != 0f) {
+                                    coroutineScope.launch {
+                                        dragOffset.animateTo(0f, spring(dampingRatio = 0.8f))
+                                    }
+                                } else {
+                                    onClick()
+                                }
+                            },
+                            onLongClick = {
+                                if (dragOffset.value != 0f) {
+                                    coroutineScope.launch {
+                                        dragOffset.animateTo(0f, spring(dampingRatio = 0.8f))
+                                    }
+                                } else {
+                                    SoundManager.playReaction()
+                                    onLongClick()
+                                }
+                            }
+                        )
+                    } else Modifier
+                )
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Selection Checkbox (Thin Box & Extended Tick)
+                if (isSelectionMode) {
+                    LiquidGlassCheckbox(
+                        checked = isSelected,
+                        onCheckedChange = { onToggleSelect() },
+                        size = 22.dp,
+                        checkedColor = colors.iosBlue,
+                        uncheckedColor = colors.textMuted.copy(alpha = 0.5f)
+                    )
+                }
+
+                // Contact Avatar with Online Indicator (Actual Avatar or Vector Preset, Zero Letters)
+                ChatAvatar(
+                    avatarUrl = chat.avatar,
+                    name = chat.name,
+                    size = 52.dp,
+                    showOnline = true,
+                    isOnline = chat.online
+                )
+
+                // Center Column: Message Content & Contact Name
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    // Contact Name, Verified Badge & Pin Icon
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Text(
+                            text = chat.name,
+                            fontSize = 16.5.sp,
+                            fontWeight = if (isUnread) FontWeight.SemiBold else FontWeight.Medium,
+                            color = colors.textDark,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        if (chat.isVerified) {
+                            VerifiedBadge(size = 15.dp)
+                        }
+                        if (isPinned) {
+                            LucidePin(tint = colors.iosBlue, size = 12.dp)
+                        }
+                    }
+
+                    // Snippet & Outgoing Status Checks / Media Icon or Live Typing/Recording Indicator
+                    val isActivity = chat.statusText.contains("typing", ignoreCase = true) || chat.statusText.contains("recording", ignoreCase = true)
+                    val isRecording = chat.statusText.contains("recording", ignoreCase = true)
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        if (isActivity) {
+                            if (isRecording) {
+                                LucideMic(tint = colors.iosBlue, size = 14.dp)
+                            } else {
+                                LucideEdit(tint = colors.iosBlue, size = 13.dp)
+                            }
+                            Text(
+                                text = chat.statusText,
+                                fontSize = 14.5.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = colors.iosBlue,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                lineHeight = 19.sp
+                            )
+                        } else {
+                            // Status Checkmark for Outgoing Messages
+                            if (isOutgoing) {
+                                MessageStatusTick(
+                                    status = lastMsg.status,
+                                    isOutgoing = true,
+                                    normalTint = colors.textMuted,
+                                    readTint = colors.iosBlue,
+                                    pendingTint = colors.textMuted,
+                                    size = 13.dp
+                                )
+                                Spacer(Modifier.width(2.dp))
+                            }
+
+                            // Media Type Icon
+                            when (lastMsg?.mediaType) {
+                                "voice" -> PhosphorWaveform(tint = if (isUnread) colors.iosBlue else colors.textMuted, size = 14.dp)
+                                "image" -> PhosphorPhotoIcon(tint = if (isUnread) colors.iosBlue else colors.textMuted, size = 14.dp)
+                                "poll" -> PhosphorPollIcon(tint = if (isUnread) colors.iosBlue else colors.textMuted, size = 14.dp)
+                            }
+
+                            Text(
+                                text = (if (chat.type == "group" && lastMsg != null && lastMsg.senderName.isNotEmpty() && !isOutgoing)
+                                           "${lastMsg.senderName.split(" ").firstOrNull() ?: lastMsg.senderName}: " else "") + lastMsgPreview,
+                                fontSize = 14.5.sp,
+                                fontWeight = if (isUnread) FontWeight.Medium else FontWeight.Normal,
+                                color = if (isUnread) colors.textDark else if (lastMsgPreview == "No messages yet") colors.textMuted.copy(alpha = 0.75f) else colors.textMuted,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                lineHeight = 19.sp
+                            )
+                        }
+                    }
+                }
+
+                // Right Meta Column: Timestamp & Number Badge / Mute Indicator
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(5.dp),
+                    modifier = Modifier.padding(start = 4.dp)
+                ) {
+                    val timeDisplay = lastMsg?.time?.ifBlank { "New" } ?: "New"
+                    Text(
+                        text = timeDisplay,
+                        fontSize = 12.5.sp,
+                        fontWeight = if (isUnread) FontWeight.SemiBold else FontWeight.Normal,
+                        color = if (isUnread) colors.iosBlue else colors.textMuted
+                    )
+
+                    // Unread Count Badge or Muted Bell
+                    if (isUnread) {
+                        Box(
+                            modifier = Modifier
+                                .height(20.dp)
+                                .widthIn(min = 20.dp)
+                                .background(
+                                    if (chat.isMuted) colors.textMuted else colors.iosBlue,
+                                    RoundedCornerShape(10.dp)
+                                )
+                                .padding(horizontal = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = if (chat.unreadCount > 99) "99+" else chat.unreadCount.toString(),
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                style = TextStyle(
+                                    platformStyle = PlatformTextStyle(includeFontPadding = false),
+                                    textAlign = TextAlign.Center
+                                )
+                            )
+                        }
+                    } else if (chat.isMuted) {
+                        LucideBellOff(tint = colors.textMuted, size = 14.dp)
+                    }
+                }
+            }
+
+            // Apple Hairline divider indented to align exactly with contact text (78.dp start)
+            HorizontalDivider(
+                color = colors.separator,
+                thickness = 0.5.dp,
+                modifier = Modifier.padding(start = 78.dp)
+            )
+        }
     }
 }
-

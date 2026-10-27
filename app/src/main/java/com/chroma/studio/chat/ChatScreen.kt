@@ -47,6 +47,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 
 import androidx.compose.ui.graphics.TransformOrigin
 
@@ -663,6 +664,8 @@ private fun ChatScreenContent(
         activeChatBase.copy(messages = displayedMessages)
 
     }
+
+    val unreadMessageThreshold = remember(activeChatId) { activeChatBase.unreadCount }
 
 
 
@@ -3185,6 +3188,73 @@ private fun ChatScreenContent(
 
                                 }
 
+                                val unreadThresholdIndex = if (unreadMessageThreshold > 0) {
+                                    (displayedMessages.size - unreadMessageThreshold).coerceAtLeast(0)
+                                } else -1
+
+                                if (index == unreadThresholdIndex && unreadMessageThreshold > 0) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(top = 10.dp, bottom = 8.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 24.dp)
+                                                .height(1.dp)
+                                                .background(
+                                                    Brush.horizontalGradient(
+                                                        colors = listOf(
+                                                            Color.Transparent,
+                                                            colors.iosBlue.copy(alpha = 0.55f),
+                                                            Color.Transparent
+                                                        )
+                                                    )
+                                                )
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .shadow(
+                                                    elevation = 2.dp,
+                                                    shape = RoundedCornerShape(12.dp),
+                                                    ambientColor = Color.Black.copy(alpha = 0.08f),
+                                                    spotColor = Color.Black.copy(alpha = 0.04f)
+                                                )
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .background(
+                                                    if (colors.isLight) Color(0xF4F0F6FF)
+                                                    else Color(0xEE1A2538)
+                                                )
+                                                .border(
+                                                    0.6.dp,
+                                                    colors.iosBlue.copy(alpha = 0.45f),
+                                                    RoundedCornerShape(12.dp)
+                                                )
+                                                .padding(horizontal = 12.dp, vertical = 4.dp)
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(6.dp)
+                                                        .background(colors.iosBlue, CircleShape)
+                                                )
+                                                Text(
+                                                    text = "${unreadMessageThreshold} Unread Message${if (unreadMessageThreshold > 1) "s" else ""}",
+                                                    fontSize = 11.5.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = colors.iosBlue,
+                                                    letterSpacing = 0.2.sp
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
                                 val showDateHeader = index == 0 || (prevMsg != null && ChatAdapters.isDifferentDay(prevMsg.timestamp, msg.timestamp))
                                 if (showDateHeader) {
                                     val dateHeaderStr = ChatAdapters.formatMessageDateHeader(msg.timestamp)
@@ -3199,25 +3269,25 @@ private fun ChatScreenContent(
                                                 .fillMaxWidth()
                                                 .padding(horizontal = 24.dp)
                                                 .height(0.6.dp)
-                                                .background(colors.borderSubtle.copy(alpha = 0.5f))
+                                                .background(colors.borderSubtle.copy(alpha = 0.45f))
                                         )
                                         Box(
                                             modifier = Modifier
                                                 .shadow(
-                                                    elevation = 1.dp,
+                                                    elevation = 1.5.dp,
                                                     shape = RoundedCornerShape(14.dp),
                                                     ambientColor = Color.Black.copy(alpha = 0.06f),
                                                     spotColor = Color.Black.copy(alpha = 0.03f)
                                                 )
                                                 .clip(RoundedCornerShape(14.dp))
-                                                .background(if (colors.isLight) Color.White else Color(0xFF151D2A))
-                                                .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(14.dp))
-                                                .padding(horizontal = 12.dp, vertical = 3.dp)
+                                                .background(if (colors.isLight) Color(0xF6FFFFFF) else Color(0xEE17202D))
+                                                .border(0.5.dp, if (colors.isLight) Color(0x22000000) else Color(0x22FFFFFF), RoundedCornerShape(14.dp))
+                                                .padding(horizontal = 13.dp, vertical = 3.5.dp)
                                         ) {
                                             Text(
                                                 text = dateHeaderStr,
                                                 fontSize = 11.5.sp,
-                                                fontWeight = FontWeight.Medium,
+                                                fontWeight = FontWeight.SemiBold,
                                                 color = colors.textMuted,
                                                 letterSpacing = 0.2.sp
                                             )
@@ -3452,43 +3522,69 @@ private fun ChatScreenContent(
                                 .padding(end = 16.dp, bottom = 14.dp)
 
                         ) {
-
-                            FloatingActionButton(
-
-                                onClick = {
-
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-
-                                    coroutineScope.launch {
-
-                                        val totalItemCount = (if (allMessages.size > visibleMessageCount) 1 else 0) + activeChat.messages.size
-
-                                        val targetIndex = (totalItemCount - 1).coerceAtLeast(0)
-
-                                        listState.animateScrollToItem(targetIndex)
-
-                                    }
-
-                                },
-
-                                modifier = Modifier
-
-                                    .size(36.dp)
-
-                                    .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(10.dp)),
-
-                                shape = RoundedCornerShape(10.dp),
-
-                                containerColor = colors.cardBg,
-
-                                contentColor = colors.iosBlue,
-
-                                elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp)
-
+                            Box(
+                                modifier = Modifier.wrapContentSize(),
+                                contentAlignment = Alignment.TopEnd
                             ) {
+                                FloatingActionButton(
 
-                                LucideArrowDown(tint = colors.iosBlue, size = 16.dp)
+                                    onClick = {
 
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+
+                                        coroutineScope.launch {
+
+                                            val totalItemCount = (if (allMessages.size > visibleMessageCount) 1 else 0) + activeChat.messages.size
+
+                                            val targetIndex = (totalItemCount - 1).coerceAtLeast(0)
+
+                                            listState.animateScrollToItem(targetIndex)
+
+                                        }
+
+                                    },
+
+                                    modifier = Modifier
+
+                                        .size(38.dp)
+
+                                        .shadow(elevation = 2.dp, shape = RoundedCornerShape(10.dp), spotColor = Color.Black.copy(alpha = 0.12f))
+
+                                        .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(10.dp)),
+
+                                    shape = RoundedCornerShape(10.dp),
+
+                                    containerColor = colors.cardBg,
+
+                                    contentColor = colors.iosBlue,
+
+                                    elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp)
+
+                                ) {
+
+                                    LucideArrowDown(tint = colors.iosBlue, size = 16.dp)
+
+                                }
+
+                                if (unreadMessageThreshold > 0) {
+                                    Box(
+                                        modifier = Modifier
+                                            .offset(x = 4.dp, y = (-4).dp)
+                                            .height(18.dp)
+                                            .widthIn(min = 18.dp)
+                                            .background(colors.iosBlue, RoundedCornerShape(9.dp))
+                                            .border(1.5.dp, colors.cardBg, RoundedCornerShape(9.dp))
+                                            .padding(horizontal = 4.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = if (unreadMessageThreshold > 99) "99+" else unreadMessageThreshold.toString(),
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
+                                }
                             }
 
                         }

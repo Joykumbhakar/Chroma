@@ -2159,21 +2159,12 @@ fun PollCard(
                                                 .background(colors.surfaceSecondary),
                                             contentAlignment = Alignment.Center
                                         ) {
-                                            if (voter.avatar.isNotEmpty()) {
-                                                AsyncImage(
-                                                    model = voter.avatar,
-                                                    contentDescription = voter.name,
-                                                    modifier = Modifier.fillMaxSize().clip(CircleShape),
-                                                    contentScale = ContentScale.Crop
-                                                )
-                                            } else {
-                                                Text(
-                                                    text = voter.name.take(1).uppercase(),
-                                                    fontSize = 8.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = colors.iosBlue
-                                                )
-                                            }
+                                            IosAvatarView(
+                                                name = voter.name,
+                                                avatarUrl = voter.avatar,
+                                                size = 18.dp,
+                                                isOnline = false
+                                            )
                                         }
                                     }
                                 }
