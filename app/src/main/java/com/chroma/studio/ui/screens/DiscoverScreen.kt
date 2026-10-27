@@ -454,6 +454,8 @@ fun DiscoverScreen(
                                 hasMyStory = myStories.isNotEmpty(),
                                 myStoryAvatarUrl = myProfile?.avatarUrl ?: "",
                                 myStoryGender = myProfile?.gender,
+                                myStoriesList = myStories,
+                                isUploading = isUploadingStory,
                                 onMyStoryClick = {
                                     if (myStories.isNotEmpty()) {
                                         storyViewerInitialIndex = -1

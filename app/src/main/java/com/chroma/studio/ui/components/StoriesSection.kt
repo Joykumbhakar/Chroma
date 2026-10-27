@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -21,6 +22,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -42,6 +44,7 @@ fun StoriesSection(
     myStoryAvatarUrl: String = "",
     myStoryGender: String? = null,
     myStoriesList: List<Story> = emptyList(),
+    isUploading: Boolean = false,
     contentPadding: PaddingValues = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
     onMyStoryClick: (() -> Unit)? = null,
     onStoryClick: ((groupIndex: Int) -> Unit)? = null
@@ -51,8 +54,8 @@ fun StoriesSection(
 
     val infiniteTransition = rememberInfiniteTransition(label = "story_skeleton")
     val skeletonAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.15f,
-        targetValue = 0.4f,
+        initialValue = 0.12f,
+        targetValue = 0.32f,
         animationSpec = infiniteRepeatable(
             animation = tween(900, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
@@ -62,7 +65,7 @@ fun StoriesSection(
 
     LazyRow(
         contentPadding = contentPadding,
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         // "Your story" / "My Story"
@@ -71,30 +74,45 @@ fun StoriesSection(
                 if (isLoading) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.width(72.dp)
+                        modifier = Modifier.width(74.dp)
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(64.dp)
+                                .size(68.dp)
                                 .clip(CircleShape)
                                 .background(Color.Gray.copy(alpha = skeletonAlpha))
                         )
-                        Spacer(Modifier.height(4.dp))
+                        Spacer(Modifier.height(5.dp))
                         Box(
                             modifier = Modifier
-                                .width(44.dp)
+                                .width(48.dp)
                                 .height(10.dp)
-                                .clip(RoundedCornerShape(4.dp))
+                                .clip(RoundedCornerShape(5.dp))
                                 .background(Color.Gray.copy(alpha = skeletonAlpha))
                         )
                     }
                 } else {
+                    val myStoryInteractionSource = remember { MutableInteractionSource() }
+                    val isMyStoryPressed by myStoryInteractionSource.collectIsPressedAsState()
+                    val myStoryScale by animateFloatAsState(
+                        targetValue = if (isMyStoryPressed) 0.92f else 1f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessMedium
+                        ),
+                        label = "my_story_scale"
+                    )
+
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
-                            .width(76.dp)
+                            .width(74.dp)
+                            .graphicsLayer {
+                                scaleX = myStoryScale
+                                scaleY = myStoryScale
+                            }
                             .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
+                                interactionSource = myStoryInteractionSource,
                                 indication = null
                             ) {
                                 if (hasMyStory && onMyStoryClick != null) {
@@ -107,10 +125,12 @@ fun StoriesSection(
                         AppleStatusAvatar(
                             name = "You",
                             avatarUrl = myStoryAvatarUrl,
-                            size = 64.dp,
-                            avatarSize = 54.dp,
+                            size = 68.dp,
+                            avatarSize = 56.dp,
                             hasStatus = hasMyStory,
+                            storyCount = myStoriesList.size.coerceAtLeast(1),
                             isSeen = false,
+                            isUploading = isUploading,
                             showAddBadge = true,
                             gender = myStoryGender,
                             isDark = isDark,
@@ -118,12 +138,12 @@ fun StoriesSection(
                             onAddBadgeClick = { onAddStoryClick() }
                         )
 
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(5.dp))
                         Text(
-                            text = "Your story",
-                            color = colors.textMain,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium,
+                            text = if (isUploading) "Uploading..." else "Your story",
+                            color = if (isUploading) Color(0xFF007AFF) else if (hasMyStory) colors.textMain else colors.textMain.copy(alpha = 0.82f),
+                            fontSize = 11.5.sp,
+                            fontWeight = if (isUploading || hasMyStory) FontWeight.SemiBold else FontWeight.Medium,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             textAlign = TextAlign.Center
@@ -136,19 +156,19 @@ fun StoriesSection(
         // Friends' / Active Users' Stories
         if (isLoading) {
             items(5) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(72.dp)) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(74.dp)) {
                     Box(
                         modifier = Modifier
-                            .size(64.dp)
+                            .size(68.dp)
                             .clip(CircleShape)
                             .background(Color.Gray.copy(alpha = skeletonAlpha))
                     )
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(5.dp))
                     Box(
                         modifier = Modifier
-                            .width(44.dp)
+                            .width(48.dp)
                             .height(10.dp)
-                            .clip(RoundedCornerShape(4.dp))
+                            .clip(RoundedCornerShape(5.dp))
                             .background(Color.Gray.copy(alpha = skeletonAlpha))
                     )
                 }
@@ -164,21 +184,37 @@ fun StoriesSection(
                 val isOnline = profile.online
                 val hasStories = storyGroup.stories.isNotEmpty()
 
+                val itemInteractionSource = remember { MutableInteractionSource() }
+                val isItemPressed by itemInteractionSource.collectIsPressedAsState()
+                val itemScale by animateFloatAsState(
+                    targetValue = if (isItemPressed) 0.92f else 1f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMedium
+                    ),
+                    label = "story_item_scale"
+                )
+
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
-                        .width(72.dp)
+                        .width(74.dp)
+                        .graphicsLayer {
+                            scaleX = itemScale
+                            scaleY = itemScale
+                        }
                         .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
+                            interactionSource = itemInteractionSource,
                             indication = null
                         ) { onStoryClick?.invoke(index) }
                 ) {
                     AppleStatusAvatar(
                         name = displayName,
                         avatarUrl = avatarUrl,
-                        size = 64.dp,
-                        avatarSize = 54.dp,
+                        size = 68.dp,
+                        avatarSize = 56.dp,
                         hasStatus = hasStories,
+                        storyCount = storyGroup.stories.size,
                         isSeen = isSeen,
                         isOnline = isOnline,
                         showAddBadge = false,
@@ -187,10 +223,10 @@ fun StoriesSection(
                         gapColor = colors.bg
                     )
 
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(5.dp))
                     Text(
                         text = firstName,
-                        color = colors.textMain,
+                        color = if (!isSeen && hasStories) colors.textMain else colors.textMain.copy(alpha = 0.62f),
                         fontSize = 11.5.sp,
                         fontWeight = if (!isSeen && hasStories) FontWeight.SemiBold else FontWeight.Normal,
                         maxLines = 1,

@@ -17,6 +17,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -316,6 +320,15 @@ fun IosAvatarView(
  * - Active / Unseen: Apple Blue Gradient Circle
  * - Seen / Viewed: Neutral Apple System Gray Circle
  */
+val AppleStatusVibrantGradient = listOf(
+    Color(0xFFFF2D55), // Hot Rose / Coral
+    Color(0xFFAF52DE), // Royal Violet
+    Color(0xFF007AFF), // Apple Blue
+    Color(0xFF00C6FF), // Bright Cyan
+    Color(0xFFFF9500), // Amber
+    Color(0xFFFF2D55)  // Loop to Hot Rose
+)
+
 val AppleStatusBlueGradient = listOf(
     Color(0xFF007AFF), // Apple System Blue
     Color(0xFF00C6FF)  // Simple Sky Blue
@@ -334,9 +347,7 @@ fun getAppleStatusRingBrush(
             if (isDark) listOf(Color(0xFF2C2C2E), Color(0xFF1C1C1E))
             else listOf(Color(0xFFE5E5EA), Color(0xFFF2F2F7))
         )
-        !isSeen -> Brush.linearGradient(
-            listOf(Color(0xFF007AFF), Color(0xFF00C6FF))
-        )
+        !isSeen -> Brush.sweepGradient(AppleStatusVibrantGradient)
         else -> Brush.linearGradient(
             if (isDark) AppleStatusSeenGrayDark
             else AppleStatusSeenGrayLight
@@ -345,18 +356,21 @@ fun getAppleStatusRingBrush(
 }
 
 /**
- * Standard reusable Apple Status / Story Avatar with Blue Gradient (Unseen) and Gray (Seen) ring.
+ * Standard reusable Apple Status / Story Avatar with Segmented Arcs,
+ * Vibrant Apple Aurora Multi-Gradient (Unseen), Gray (Seen), and tactile press effects.
  */
 @Composable
 fun AppleStatusAvatar(
     name: String,
     avatarUrl: String,
     modifier: Modifier = Modifier,
-    size: Dp = 64.dp,
-    avatarSize: Dp = 54.dp,
+    size: Dp = 68.dp,
+    avatarSize: Dp = 56.dp,
     hasStatus: Boolean = false,
+    storyCount: Int = 1,
     isSeen: Boolean = false,
     isOnline: Boolean = false,
+    isUploading: Boolean = false,
     showAddBadge: Boolean = false,
     gender: String? = null,
     isGroup: Boolean = false,
@@ -372,20 +386,71 @@ fun AppleStatusAvatar(
         }
     }
 
+    val infiniteTransition = rememberInfiniteTransition(label = "story_ring_anim")
+    val rotationAngle by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1400, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "rotation_angle"
+    )
+
     Box(
         modifier = modifier.size(size),
         contentAlignment = Alignment.Center
     ) {
         if (hasStatus && ringBrush != null) {
+            // Segmented / continuous glowing ring Canvas
+            Canvas(
+                modifier = Modifier
+                    .size(size)
+                    .graphicsLayer {
+                        if (isUploading) rotationZ = rotationAngle
+                    }
+            ) {
+                val strokeWidthPx = 2.5.dp.toPx()
+                val paddingPx = strokeWidthPx / 2f
+                val arcSize = Size(this.size.width - strokeWidthPx, this.size.height - strokeWidthPx)
+                val topLeft = Offset(paddingPx, paddingPx)
+
+                if (storyCount <= 1 || isUploading) {
+                    drawArc(
+                        brush = ringBrush,
+                        startAngle = -90f,
+                        sweepAngle = 360f,
+                        useCenter = false,
+                        topLeft = topLeft,
+                        size = arcSize,
+                        style = Stroke(width = strokeWidthPx, cap = StrokeCap.Round)
+                    )
+                } else {
+                    val safeCount = storyCount.coerceIn(2, 20)
+                    val gapAngle = if (safeCount <= 4) 8f else if (safeCount <= 8) 6f else 4f
+                    val sweepAngle = (360f - (safeCount * gapAngle)) / safeCount
+
+                    for (i in 0 until safeCount) {
+                        val startAngle = -90f + i * (sweepAngle + gapAngle) + (gapAngle / 2f)
+                        drawArc(
+                            brush = ringBrush,
+                            startAngle = startAngle,
+                            sweepAngle = sweepAngle,
+                            useCenter = false,
+                            topLeft = topLeft,
+                            size = arcSize,
+                            style = Stroke(width = strokeWidthPx, cap = StrokeCap.Round)
+                        )
+                    }
+                }
+            }
+
+            // Avatar clipped with gap border
             Box(
                 modifier = Modifier
-                    .size(size - 2.dp)
+                    .size(avatarSize + 4.dp)
                     .clip(CircleShape)
-                    .background(ringBrush)
-                    .padding(1.5.dp)
-                    .clip(CircleShape)
-                    .background(gapColor)
-                    .padding(1.5.dp),
+                    .background(gapColor),
                 contentAlignment = Alignment.Center
             ) {
                 IosAvatarView(
@@ -397,26 +462,49 @@ fun AppleStatusAvatar(
                 )
             }
         } else {
-            IosAvatarView(
-                name = name,
-                avatarUrl = avatarUrl,
-                size = avatarSize,
-                gender = gender,
-                isGroup = isGroup
-            )
+            // No status active
+            Box(
+                modifier = Modifier
+                    .size(avatarSize + 4.dp)
+                    .clip(CircleShape)
+                    .background(gapColor)
+                    .then(
+                        if (showAddBadge) {
+                            Modifier.border(
+                                1.5.dp,
+                                if (isDark) Color.White.copy(alpha = 0.12f) else Color(0xFF007AFF).copy(alpha = 0.22f),
+                                CircleShape
+                            )
+                        } else Modifier
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                IosAvatarView(
+                    name = name,
+                    avatarUrl = avatarUrl,
+                    size = avatarSize,
+                    gender = gender,
+                    isGroup = isGroup
+                )
+            }
         }
 
         // Add (+) badge at bottom-end with clean gap border
         if (showAddBadge) {
             Box(
                 modifier = Modifier
-                    .size(19.dp)
+                    .size(22.dp)
                     .align(Alignment.BottomEnd)
-                    .offset(x = (-1).dp, y = (-1).dp)
+                    .offset(x = 1.dp, y = 1.dp)
+                    .shadow(elevation = 2.dp, shape = CircleShape, spotColor = Color.Black.copy(alpha = 0.28f))
                     .background(gapColor, CircleShape)
-                    .padding(1.5.dp)
+                    .padding(2.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFF007AFF))
+                    .background(
+                        Brush.linearGradient(
+                            listOf(Color(0xFF007AFF), Color(0xFF0051D5))
+                        )
+                    )
                     .then(
                         if (onAddBadgeClick != null) {
                             Modifier.clickable(
@@ -431,22 +519,30 @@ fun AppleStatusAvatar(
                     imageVector = Lucide.Plus,
                     contentDescription = "Add Story",
                     tint = Color.White,
-                    modifier = Modifier.size(11.dp)
+                    modifier = Modifier.size(12.dp)
                 )
             }
         } else if (isOnline) {
             // Online green indicator dot with clean gap border
-            val dotSize = (size.value * 0.20f).coerceIn(10f, 14f).dp
+            val dotSize = (size.value * 0.22f).coerceIn(12f, 15f).dp
             Box(
                 modifier = Modifier
                     .size(dotSize)
                     .align(Alignment.BottomEnd)
-                    .offset(x = (-1).dp, y = (-1).dp)
+                    .offset(x = 0.dp, y = 0.dp)
                     .background(gapColor, CircleShape)
-                    .padding(1.5.dp)
+                    .padding(2.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFF34C759))
-            )
+                    .background(Color(0xFF34C759)),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(4.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.65f))
+                )
+            }
         }
     }
 }
