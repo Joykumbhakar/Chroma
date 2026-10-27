@@ -90,6 +90,7 @@ fun ConversationsScreen(
     onUserProfileClick: () -> Unit = {},
     onStartCall: (ChatConversation, String) -> Unit = { _, _ -> },
     pinnedChatIds: Set<String> = emptySet(),
+    lockedChatIds: Set<String> = emptySet(),
     onPinChatToggle: (ChatConversation) -> Unit = {},
     onMuteChatToggle: (ChatConversation) -> Unit = {},
     onReadChatToggle: (ChatConversation) -> Unit = {},
@@ -656,6 +657,7 @@ fun ConversationsScreen(
                             chat = chat,
                             currentUserId = currentUser.id,
                             isPinned = chat.id in pinnedChatIds,
+                            isLocked = chat.id in lockedChatIds,
                             isSelectionMode = isSelectionMode,
                             isSelected = selectedChatIds.contains(chat.id),
                             onToggleSelect = {
@@ -1041,6 +1043,7 @@ private fun IosConversationListRow(
     chat: ChatConversation,
     currentUserId: String,
     isPinned: Boolean = false,
+    isLocked: Boolean = false,
     isSelectionMode: Boolean = false,
     isSelected: Boolean = false,
     onToggleSelect: () -> Unit = {},
@@ -1068,8 +1071,9 @@ private fun IosConversationListRow(
     val isOutgoing = lastMsg != null && lastMsg.senderId == currentUserId
 
     val lastMsgPreview = when {
+        isLocked -> "Locked conversation"
         lastMsg?.mediaType == "poll" || lastMsg?.text?.startsWith("[POLL]:") == true -> {
-            val q = lastMsg?.pollData?.question ?: lastMsg?.text?.removePrefix("[POLL]:")?.substringBefore("|||")?.trim() ?: "Poll"
+            val q = lastMsg.pollData?.question ?: lastMsg.text?.removePrefix("[POLL]:")?.substringBefore("|||")?.trim() ?: "Poll"
             "Poll: $q"
         }
         lastMsg?.text?.isNotBlank() == true -> sanitizeMessagePreview(lastMsg.text)
@@ -1318,6 +1322,9 @@ private fun IosConversationListRow(
                         if (chat.isVerified) {
                             VerifiedBadge(size = 15.dp)
                         }
+                        if (isLocked) {
+                            LucideLock(tint = colors.textMuted, size = 12.dp)
+                        }
                         if (isPinned) {
                             LucidePin(tint = colors.iosBlue, size = 12.dp)
                         }
@@ -1332,7 +1339,17 @@ private fun IosConversationListRow(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        if (isActivity) {
+                        if (isLocked) {
+                            LucideLock(tint = colors.textMuted.copy(alpha = 0.8f), size = 13.dp)
+                            Text(
+                                text = "Locked conversation",
+                                fontSize = 14.sp,
+                                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                                color = colors.textMuted.copy(alpha = 0.8f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        } else if (isActivity) {
                             if (isRecording) {
                                 LucideMic(tint = colors.iosBlue, size = 14.dp)
                             } else {

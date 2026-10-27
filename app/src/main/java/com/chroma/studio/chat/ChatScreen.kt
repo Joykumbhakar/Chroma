@@ -43,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
 
 import androidx.compose.ui.draw.shadow
 
@@ -889,6 +890,7 @@ private fun ChatScreenContent(
 
     var messageToForward by remember { mutableStateOf<ChatMessage?>(null) }
     var lockedChatIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var unlockedChatSessionIds by remember { mutableStateOf<Set<String>>(emptySet()) }
 
     var activePollForDetails by remember { mutableStateOf<PollData?>(null) }
 
@@ -2542,7 +2544,7 @@ private fun ChatScreenContent(
                                 callDurationSec = callDurationSeconds,
 
                                 onBackClick = {
-
+                                    unlockedChatSessionIds = unlockedChatSessionIds - activeChatId
                                     isInsideChat = false
 
                                     if (chatViewModel != null) {
@@ -2723,12 +2725,16 @@ private fun ChatScreenContent(
 
 
 
-                    // 2. Chat Messages Stream
+                    // 2. Chat Messages Stream with Privacy Blur Shield when Locked
+                    val isCurrentChatLocked = activeChatId in lockedChatIds && activeChatId !in unlockedChatSessionIds
 
-                    ActiveChatMessageStream(
+                    Box(
                         modifier = Modifier
                             .weight(1f)
-                            .fillMaxWidth(),
+                            .fillMaxWidth()
+                    ) {
+                        ActiveChatMessageStream(
+                        modifier = Modifier.fillMaxSize(),
                         listState = listState,
                         activeChat = activeChat,
                         allMessages = allMessages,
@@ -2804,7 +2810,97 @@ private fun ChatScreenContent(
                         }
                     )
 
-                    // 3. Bottom Frosted Input Bar / Batch Selection Actions Bar
+                    // Privacy Blur Shield Overlay: completely masks messages until unlocked
+                    if (isCurrentChatLocked) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(if (colors.isLight) Color(0xF4F2F2F7) else Color(0xF60D0D0E))
+                                .clickable(
+                                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                    indication = null
+                                ) {},
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 32.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(68.dp)
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .background(if (colors.isLight) Color.White else Color(0xFF1C1C1E))
+                                        .border(1.dp, if (colors.isLight) Color(0x18000000) else Color(0x28FFFFFF), RoundedCornerShape(16.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    LucideLock(tint = colors.iosBlue, size = 30.dp)
+                                }
+
+                                Spacer(modifier = Modifier.height(18.dp))
+
+                                Text(
+                                    text = "Chat Locked",
+                                    fontSize = 20.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colors.textDark,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                Text(
+                                    text = "This conversation is secured with Biometrics.\nAuthenticate with Face ID or fingerprint to unveil messages.",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Normal,
+                                    color = colors.textMuted,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                    lineHeight = 20.sp
+                                )
+
+                                Spacer(modifier = Modifier.height(24.dp))
+
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(colors.iosBlue)
+                                        .clickable {
+                                            val activity = context as? android.app.Activity
+                                            if (activity != null) {
+                                                com.chroma.studio.chat.util.BiometricHelper.authenticate(
+                                                    activity = activity,
+                                                    title = "Unlock ${activeChat.name}",
+                                                    subtitle = "Authenticate to unveil conversation",
+                                                    onSuccess = {
+                                                        unlockedChatSessionIds = unlockedChatSessionIds + activeChatId
+                                                        showToast("Chat unlocked")
+                                                    },
+                                                    onError = { err ->
+                                                        showToast("Authentication required")
+                                                    }
+                                                )
+                                            }
+                                        }
+                                        .padding(horizontal = 24.dp, vertical = 12.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "Unlock Chat",
+                                        color = Color.White,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 3. Bottom Frosted Input Bar / Batch Selection Actions Bar
+                if (!isCurrentChatLocked) {
 
                     AnimatedContent(
 
@@ -3017,6 +3113,7 @@ private fun ChatScreenContent(
                     }
 
                 }
+            }
 
 
 
