@@ -156,12 +156,24 @@ fun ChromaHeaderActionButton(
         if (badgeCount > 0) {
             Box(
                 modifier = Modifier
-                    .size(8.dp)
+                    .size(if (badgeCount > 9) 16.dp else 8.5.dp)
                     .align(Alignment.TopEnd)
-                    .offset(x = (-2).dp, y = 2.dp)
+                    .offset(x = (-3.5).dp, y = 3.5.dp)
+                    .background(if (colors.isDark) Color(0xFF16161A) else Color.White, CircleShape)
+                    .padding(1.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFFFF3B30))
-            )
+                    .background(Color(0xFFFF3B30)),
+                contentAlignment = Alignment.Center
+            ) {
+                if (badgeCount > 9) {
+                    Text(
+                        text = if (badgeCount > 99) "99+" else "$badgeCount",
+                        color = Color.White,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
         }
     }
 }

@@ -1825,9 +1825,11 @@ fun CreatorFeedHeader(
                     if (hasUnreadNotifications) {
                         Box(
                             modifier = Modifier
-                                .size(7.5.dp)
+                                .size(8.5.dp)
                                 .align(Alignment.TopEnd)
-                                .offset(x = (-3).dp, y = 3.dp)
+                                .offset(x = (-4.5).dp, y = 4.5.dp)
+                                .background(if (colors.isDark) Color(0xFF16161A) else Color.White, CircleShape)
+                                .padding(1.5.dp)
                                 .clip(CircleShape)
                                 .background(Color(0xFFE11D48))
                         )
@@ -1855,9 +1857,11 @@ fun CreatorFeedHeader(
                     if (hasPendingNewDrops && !isRefreshing) {
                         Box(
                             modifier = Modifier
-                                .size(7.dp)
+                                .size(8.5.dp)
                                 .align(Alignment.TopEnd)
-                                .offset(x = (-3).dp, y = 3.dp)
+                                .offset(x = (-4.5).dp, y = 4.5.dp)
+                                .background(if (colors.isDark) Color(0xFF16161A) else Color.White, CircleShape)
+                                .padding(1.5.dp)
                                 .clip(CircleShape)
                                 .background(colors.primary)
                         )
@@ -2232,7 +2236,7 @@ private fun FeedPostHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // Avatar (Clickable to open creator profile)
@@ -2266,11 +2270,11 @@ private fun FeedPostHeader(
                     overflow = TextOverflow.Ellipsis
                 )
                 if (verified) {
-                    ScallopedVerifiedBadge()
+                    ScallopedVerifiedBadge(size = 14.dp)
                 }
             }
 
-            Spacer(Modifier.height(1.5.dp))
+            Spacer(Modifier.height(2.dp))
 
             // Row 2: @username • time ago • [Remix of @author] • [Follow]
             Row(
@@ -2283,7 +2287,8 @@ private fun FeedPostHeader(
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
                 )
                 Text(
                     text = "•",
@@ -2307,21 +2312,21 @@ private fun FeedPostHeader(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(3.dp),
                         modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
+                            .clip(RoundedCornerShape(6.dp))
                             .background(Color(0xFF007AFF).copy(alpha = 0.12f))
                             .clickable { onRemixTagClick() }
-                            .padding(horizontal = 5.dp, vertical = 1.5.dp)
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
                         Icon(
                             imageVector = Lucide.Sparkles,
                             contentDescription = "Remix",
                             tint = Color(0xFF007AFF),
-                            modifier = Modifier.size(11.dp)
+                            modifier = Modifier.size(10.dp)
                         )
                         Text(
                             text = "Remix of @$remixedFromAuthorUsername",
                             color = Color(0xFF007AFF),
-                            fontSize = 11.sp,
+                            fontSize = 10.5.sp,
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -2354,7 +2359,7 @@ private fun FeedPostHeader(
         Box(
             modifier = Modifier
                 .size(32.dp)
-                .clip(CircleShape)
+                .clip(RoundedCornerShape(8.dp))
                 .clickable { onOptionsClick() },
             contentAlignment = Alignment.Center
         ) {

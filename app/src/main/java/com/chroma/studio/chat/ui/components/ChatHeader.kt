@@ -161,6 +161,7 @@ fun ChatHeader(
                                     modifier = Modifier
                                         .size(12.dp)
                                         .align(Alignment.BottomEnd)
+                                        .offset(x = (-1).dp, y = (-1).dp)
                                 ) {
                                     Box(
                                         modifier = Modifier

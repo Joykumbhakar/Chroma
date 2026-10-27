@@ -132,9 +132,12 @@ fun ChatListScreen(
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
+                            .offset(x = (-1).dp, y = (-1).dp)
                             .size(10.dp)
-                            .background(Color(0xFF22C55E), CircleShape)
-                            .border(2.dp, sidebarBg, CircleShape)
+                            .background(sidebarBg, CircleShape)
+                            .padding(1.5.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF22C55E))
                     )
                 }
                 Spacer(modifier = Modifier.width(10.dp))
@@ -231,14 +234,24 @@ fun ChatListScreen(
                                 size = 44.dp
                             )
                             if (myStory == null) {
-                                Icon(
-                                    Lucide.Plus,
-                                    contentDescription = null,
-                                    tint = iosBlue,
+                                Box(
                                     modifier = Modifier
+                                        .size(16.dp)
                                         .align(Alignment.BottomEnd)
-                                        .size(14.dp)
-                                )
+                                        .offset(x = (-1).dp, y = (-1).dp)
+                                        .background(sidebarBg, CircleShape)
+                                        .padding(1.5.dp)
+                                        .clip(CircleShape)
+                                        .background(iosBlue),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        Lucide.Plus,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(10.dp)
+                                    )
+                                }
                             }
                         }
                         Spacer(modifier = Modifier.height(4.dp))
@@ -392,9 +405,12 @@ fun ChatListScreen(
                             Box(
                                 modifier = Modifier
                                     .align(Alignment.BottomEnd)
+                                    .offset(x = (-1).dp, y = (-1).dp)
                                     .size(12.dp)
-                                    .background(Color(0xFF22C55E), CircleShape)
-                                    .border(2.dp, sidebarBg, CircleShape)
+                                    .background(sidebarBg, CircleShape)
+                                    .padding(1.5.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF22C55E))
                             )
                         }
                     }

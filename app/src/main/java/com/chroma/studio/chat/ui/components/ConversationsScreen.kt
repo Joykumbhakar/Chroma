@@ -253,7 +253,6 @@ fun ConversationsScreen(
                             Box(
                                 modifier = Modifier
                                     .size(36.dp)
-                                    .clip(CircleShape)
                                     .clickable(
                                         interactionSource = remember { MutableInteractionSource() },
                                         indication = null
@@ -801,13 +800,16 @@ fun ChatAvatar(
         }
 
         if (showOnline && isOnline) {
-            val indicatorSize = (size.value * 0.24f).coerceIn(8f, 13f).dp
+            val indicatorSize = (size.value * 0.25f).coerceIn(9f, 13f).dp
             Box(
                 modifier = Modifier
                     .size(indicatorSize)
                     .align(Alignment.BottomEnd)
-                    .background(colors.success, CircleShape)
-                    .border(2.dp, colors.appBg, CircleShape)
+                    .offset(x = (-1).dp, y = (-1).dp)
+                    .background(colors.appBg, CircleShape)
+                    .padding(1.5.dp)
+                    .clip(CircleShape)
+                    .background(colors.success)
             )
         }
     }
@@ -895,14 +897,24 @@ private fun IosStoryAvatarItem(
 
             // Plus badge for My Story
             if (isMyStory && !hasNewStory) {
-                Icon(
-                    imageVector = Lucide.Plus,
-                    contentDescription = "Add Story",
-                    tint = colors.iosBlue,
+                Box(
                     modifier = Modifier
                         .size(18.dp)
                         .align(Alignment.BottomEnd)
-                )
+                        .offset(x = (-1).dp, y = (-1).dp)
+                        .background(colors.appBg, CircleShape)
+                        .padding(1.5.dp)
+                        .clip(CircleShape)
+                        .background(colors.iosBlue),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Lucide.Plus,
+                        contentDescription = "Add Story",
+                        tint = Color.White,
+                        modifier = Modifier.size(11.dp)
+                    )
+                }
             }
         }
 

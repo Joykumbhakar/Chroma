@@ -99,8 +99,11 @@ fun SidebarDrawer(
                         modifier = Modifier
                             .size(11.dp)
                             .align(Alignment.BottomEnd)
-                            .background(colors.success, CircleShape)
-                            .border(2.dp, colors.sidebarBg, CircleShape)
+                            .offset(x = (-1).dp, y = (-1).dp)
+                            .background(colors.sidebarBg, CircleShape)
+                            .padding(1.5.dp)
+                            .clip(CircleShape)
+                            .background(colors.success)
                     )
                 }
                 // Name + status
@@ -420,14 +423,24 @@ private fun StoryItem(
 
             // My story: plus badge
             if (isMyStory && !hasNewStory) {
-                Icon(
-                    imageVector = Lucide.Plus,
-                    contentDescription = "Add Story",
-                    tint = colors.iosBlue,
+                Box(
                     modifier = Modifier
+                        .size(17.dp)
                         .align(Alignment.BottomEnd)
-                        .size(16.dp)
-                )
+                        .offset(x = (-1).dp, y = (-1).dp)
+                        .background(colors.sidebarBg, CircleShape)
+                        .padding(1.5.dp)
+                        .clip(CircleShape)
+                        .background(colors.iosBlue),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Lucide.Plus,
+                        contentDescription = "Add Story",
+                        tint = Color.White,
+                        modifier = Modifier.size(11.dp)
+                    )
+                }
             }
         }
 
@@ -525,8 +538,11 @@ private fun ChatListRow(
                     modifier = Modifier
                         .size(12.dp)
                         .align(Alignment.BottomEnd)
-                        .background(colors.success, CircleShape)
-                        .border(2.dp, colors.sidebarBg, CircleShape)
+                        .offset(x = (-1).dp, y = (-1).dp)
+                        .background(colors.sidebarBg, CircleShape)
+                        .padding(1.5.dp)
+                        .clip(CircleShape)
+                        .background(colors.success)
                 )
             }
         }

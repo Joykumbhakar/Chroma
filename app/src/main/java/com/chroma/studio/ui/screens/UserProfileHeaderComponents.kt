@@ -184,7 +184,7 @@ fun UserProfileHeroSection(
                                 .size(18.dp)
                                 .align(Alignment.BottomEnd)
                                 .offset(x = (-2).dp, y = (-2).dp)
-                                .background(Color.White, CircleShape)
+                                .background(if (colors.isDark) Color(0xFF16161A) else Color.White, CircleShape)
                                 .padding(2.5.dp)
                                 .clip(CircleShape)
                                 .background(Color(0xFF34C759))

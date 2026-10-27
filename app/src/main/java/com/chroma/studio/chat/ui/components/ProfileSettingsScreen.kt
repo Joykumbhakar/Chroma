@@ -233,8 +233,11 @@ fun ProfileSettingsScreen(
                                 modifier = Modifier
                                     .size(15.dp)
                                     .align(Alignment.BottomEnd)
-                                    .background(colors.success, CircleShape)
-                                    .border(2.dp, colors.cardBg, CircleShape)
+                                    .offset(x = (-2).dp, y = (-2).dp)
+                                    .background(colors.cardBg, CircleShape)
+                                    .padding(2.dp)
+                                    .clip(CircleShape)
+                                    .background(colors.success)
                             )
                         }
 

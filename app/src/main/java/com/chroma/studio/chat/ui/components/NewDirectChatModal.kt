@@ -366,8 +366,11 @@ fun NewDirectChatModal(
                                             modifier = Modifier
                                                 .size(11.dp)
                                                 .align(Alignment.BottomEnd)
-                                                .background(colors.success, CircleShape)
-                                                .border(2.dp, colors.appBg, CircleShape)
+                                                .offset(x = (-1).dp, y = (-1).dp)
+                                                .background(colors.appBg, CircleShape)
+                                                .padding(1.5.dp)
+                                                .clip(CircleShape)
+                                                .background(colors.success)
                                         )
                                     }
                                 }

@@ -149,7 +149,8 @@ private fun NotifAvatarWithBadge(
         Box(
             modifier = Modifier
                 .size(16.dp)
-                .offset(x = 2.dp, y = 2.dp)
+                .align(Alignment.BottomEnd)
+                .offset(x = (-1).dp, y = (-1).dp)
                 .clip(CircleShape)
                 .background(badgeBgColor)
                 .border(1.5.dp, colors.bg, CircleShape),

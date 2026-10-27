@@ -295,12 +295,15 @@ fun IosAvatarView(
 
         // Online Status Dot
         if (!isGroup && isOnline) {
+            val dotSize = (size.value * 0.25f).coerceIn(9f, 14f).dp
+            val borderWidth = (size.value * 0.04f).coerceIn(1.2f, 2f).dp
             Box(
                 modifier = Modifier
-                    .size(size * 0.28f)
+                    .size(dotSize)
                     .align(Alignment.BottomEnd)
+                    .offset(x = (-1).dp, y = (-1).dp)
                     .background(Color.White, CircleShape)
-                    .padding(2.dp)
+                    .padding(borderWidth)
                     .clip(CircleShape)
                     .background(Color(0xFF34C759))
             )
@@ -403,12 +406,15 @@ fun AppleStatusAvatar(
             )
         }
 
-        // Add (+) badge at bottom-end (thick circle border removed)
+        // Add (+) badge at bottom-end with clean gap border
         if (showAddBadge) {
             Box(
                 modifier = Modifier
                     .size(19.dp)
                     .align(Alignment.BottomEnd)
+                    .offset(x = (-1).dp, y = (-1).dp)
+                    .background(gapColor, CircleShape)
+                    .padding(1.5.dp)
                     .clip(CircleShape)
                     .background(Color(0xFF007AFF))
                     .then(
@@ -425,16 +431,19 @@ fun AppleStatusAvatar(
                     imageVector = Lucide.Plus,
                     contentDescription = "Add Story",
                     tint = Color.White,
-                    modifier = Modifier.size(12.dp)
+                    modifier = Modifier.size(11.dp)
                 )
             }
         } else if (isOnline) {
-            // Online green indicator dot (thick circle border removed)
+            // Online green indicator dot with clean gap border
+            val dotSize = (size.value * 0.20f).coerceIn(10f, 14f).dp
             Box(
                 modifier = Modifier
-                    .size(12.dp)
+                    .size(dotSize)
                     .align(Alignment.BottomEnd)
                     .offset(x = (-1).dp, y = (-1).dp)
+                    .background(gapColor, CircleShape)
+                    .padding(1.5.dp)
                     .clip(CircleShape)
                     .background(Color(0xFF34C759))
             )

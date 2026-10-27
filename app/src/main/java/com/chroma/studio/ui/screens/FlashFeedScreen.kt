@@ -256,17 +256,22 @@ fun FlashFeedScreen(
                     Box(
                         modifier = Modifier
                             .size(34.dp)
-                            .clip(CircleShape)
+                            .clip(RoundedCornerShape(8.dp))
                             .background(Color.White.copy(alpha = 0.2f))
                             .clickable { showDraftSheet = true },
                         contentAlignment = Alignment.Center
                     ) {
-                        BadgedBox(badge = {
-                            Badge(containerColor = Color(0xFFFF3B30)) {
-                                Text("${drafts.size}", fontSize = 9.sp)
-                            }
-                        }) {
-                            Icon(Lucide.FileVideo, "Drafts", tint = Color.White, modifier = Modifier.size(18.dp))
+                        Icon(Lucide.FileVideo, "Drafts", tint = Color.White, modifier = Modifier.size(18.dp))
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .offset(x = (-2).dp, y = 2.dp)
+                                .size(14.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFFF3B30)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("${drafts.size}", fontSize = 8.5.sp, color = Color.White, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
