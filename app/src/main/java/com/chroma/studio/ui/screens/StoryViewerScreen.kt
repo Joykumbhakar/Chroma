@@ -1,5 +1,7 @@
 package com.chroma.studio.ui.screens
 
+import com.chroma.studio.ui.components.VerifiedBadge
+
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -498,11 +500,7 @@ fun StoryViewerScreen(
                                 )
                                 if (group.userProfile.verified && !isOwner) {
                                     Spacer(Modifier.width(4.dp))
-                                    androidx.compose.foundation.Image(
-                                        painter = painterResource(id = R.drawable.verification_badge),
-                                        contentDescription = "Verified",
-                                        modifier = Modifier.size(12.dp)
-                                    )
+                                    VerifiedBadge(size = 12.dp)
                                 }
                             }
                             currentStory?.let {

@@ -1,5 +1,7 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package com.chroma.studio.chat.ui.components
+
+import com.chroma.studio.ui.components.VerifiedBadge
 import com.chroma.studio.R
 
 import android.content.Intent
@@ -452,12 +454,7 @@ fun ContactInfoDrawer(
                             textAlign = TextAlign.Center
                         )
                         if (chat.isVerified) {
-                            Icon(
-                                imageVector = com.composables.icons.lucide.Lucide.BadgeCheck,
-                                contentDescription = "Verified Account",
-                                tint = colors.iosBlue,
-                                modifier = Modifier.size(20.dp)
-                            )
+                            VerifiedBadge(size = 20.dp)
                         }
                         if (isGroup) {
                             LucideEdit(tint = colors.iosBlue, size = 16.dp)

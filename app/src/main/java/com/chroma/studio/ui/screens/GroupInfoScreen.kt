@@ -1,5 +1,7 @@
 package com.chroma.studio.ui.screens
 
+import com.chroma.studio.ui.components.VerifiedBadge
+
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -344,11 +346,7 @@ fun GroupInfoScreen(
                                         )
                                         if (profile?.verified == true) {
                                             Spacer(Modifier.width(4.dp))
-                                            Image(
-                                                painter = painterResource(R.drawable.verification_badge),
-                                                contentDescription = "Verified",
-                                                modifier = Modifier.size(13.dp)
-                                            )
+                                            VerifiedBadge(size = 13.dp)
                                         }
                                     }
                                     if (profile?.username?.isNotBlank() == true) {

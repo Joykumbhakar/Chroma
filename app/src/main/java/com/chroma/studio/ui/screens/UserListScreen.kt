@@ -1,4 +1,6 @@
 package com.chroma.studio.ui.screens
+
+import com.chroma.studio.ui.components.VerifiedBadge
 import com.chroma.studio.ui.components.GlassIconButton
 import com.chroma.studio.ui.components.GlassButton
 import com.chroma.studio.ui.components.LiquidGlassPrimaryButton
@@ -173,11 +175,7 @@ fun UserListScreen(
                                     )
                                     if (user.verified) {
                                         Spacer(modifier = Modifier.width(4.dp))
-                                        Image(
-                                            painter = painterResource(id = R.drawable.verification_badge),
-                                            contentDescription = "Verified",
-                                            modifier = Modifier.size(16.dp)
-                                        )
+                                        VerifiedBadge(size = 15.dp)
                                     }
                                 }
                                 Text(

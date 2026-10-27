@@ -1,5 +1,7 @@
 package com.chroma.studio
 
+import com.chroma.studio.ui.components.VerifiedBadge
+
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -69,7 +71,6 @@ import com.chroma.studio.ui.components.getAvatarPresetDrawableRes
 import com.chroma.studio.ui.components.getDefaultAvatarDrawableRes
 import com.chroma.studio.ui.components.generateQrBitmap
 import com.composables.icons.lucide.*
-import com.composables.icons.lucide.BadgeCheck
 import com.chroma.studio.ui.components.AiWaveSphereIcon
 import com.composables.icons.lucide.QrCode
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -670,12 +671,7 @@ private fun PassCardLiveOverlay(
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
                     if (profile.verified) {
-                        androidx.compose.material3.Icon(
-                            imageVector = com.composables.icons.lucide.Lucide.BadgeCheck,
-                            contentDescription = "Verified",
-                            tint = androidx.compose.ui.graphics.Color(0xFF007AFF),
-                            modifier = Modifier.size(14.dp)
-                        )
+                        VerifiedBadge(size = 14.dp)
                     }
                 }
 

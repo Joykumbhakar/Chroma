@@ -32,7 +32,6 @@ import com.chroma.studio.ui.components.extractVideoUrlFromPost
 import com.chroma.studio.ui.screens.HomeScreen
 import com.chroma.studio.ui.screens.FlashFeedScreen
 import com.chroma.studio.ui.screens.FlashPickerScreen
-import com.chroma.studio.ui.screens.FlashVideoEditorScreen
 import com.chroma.studio.ui.screens.FlashPhotoEditorScreen
 import com.chroma.studio.ui.screens.FlashPostScreen
 import com.chroma.studio.ui.theme.OscellionTheme
@@ -334,25 +333,40 @@ class HomeActivity : ComponentActivity() {
                     }
 
                     if (!videoUrl.isNullOrBlank()) {
-                        com.chroma.studio.ui.components.ToastManager.showToast("Opening in Video Editor...")
-                        if (videoUrl.startsWith("http://") || videoUrl.startsWith("https://")) {
-                            flashVm.downloadVideoForRemix(
-                                context = this@HomeActivity,
-                                videoUrl = videoUrl,
-                                onProgress = { },
-                                onComplete = { downloadedUri ->
-                                    val finalUri = downloadedUri ?: Uri.parse(videoUrl)
-                                    flashRemixPostId = work.id
-                                    flashRemixAuthorUsername = work.authorUsername
-                                    flashImportedMediaUris = listOf(finalUri)
-                                    navController.navigate("creator_studio/flash")
+                        coroutineScope.launch {
+                            val steps = listOf(15, 35, 60, 85, 100)
+                            for (pct in steps) {
+                                if (pct < 100) {
+                                    com.chroma.studio.ui.components.ToastManager.showToast("Downloading video asset... $pct%")
+                                    kotlinx.coroutines.delay(200)
+                                } else {
+                                    com.chroma.studio.ui.components.ToastManager.showToast("Opening Flash Editor...")
                                 }
-                            )
-                        } else {
-                            flashRemixPostId = work.id
-                            flashRemixAuthorUsername = work.authorUsername
-                            flashImportedMediaUris = listOf(Uri.parse(videoUrl))
-                            navController.navigate("creator_studio/flash")
+                            }
+                            if (videoUrl.startsWith("http://") || videoUrl.startsWith("https://")) {
+                                flashVm.downloadVideoForRemix(
+                                    context = this@HomeActivity,
+                                    videoUrl = videoUrl,
+                                    onProgress = { },
+                                    onComplete = { downloadedUri ->
+                                        val finalUri = downloadedUri ?: Uri.parse(videoUrl)
+                                        flashPickerVideoUri = finalUri
+                                        flashMediaType = FlashMediaType.VIDEO
+                                        flashRemixPostId = work.id
+                                        flashRemixAuthorUsername = work.authorUsername
+                                        flashImportedMediaUris = listOf(finalUri)
+                                        navController.navigate("flash_video_editor")
+                                    }
+                                )
+                            } else {
+                                val finalUri = Uri.parse(videoUrl)
+                                flashPickerVideoUri = finalUri
+                                flashMediaType = FlashMediaType.VIDEO
+                                flashRemixPostId = work.id
+                                flashRemixAuthorUsername = work.authorUsername
+                                flashImportedMediaUris = listOf(finalUri)
+                                navController.navigate("flash_video_editor")
+                            }
                         }
                     } else {
                         coroutineScope.launch {
@@ -826,6 +840,9 @@ class HomeActivity : ComponentActivity() {
                                     navController.navigate("main") {
                                         popUpTo("post_onboarding") { inclusive = true }
                                     }
+                                },
+                                onToggleDarkMode = { isDark ->
+                                    vm.updateDarkMode(isDark)
                                 }
                             )
                         }
@@ -1040,7 +1057,9 @@ class HomeActivity : ComponentActivity() {
                              onCreateFlash = { navController.navigate("flash_projects_hub") },
                              onPublishWork = { navController.navigate("creator_studio/work") },
                              onNavigateToNotifications = { navController.navigate("notifications_feed") },
-                             onStoryViewerChange = { isDiscoverStoryViewerActive = it }
+                             onStoryViewerChange = { isDiscoverStoryViewerActive = it },
+                             onNavigateToCreateStory = { navController.navigate("story_editor") },
+                             onNavigateToDrafts = { navController.navigate("drafts_list") }
                         )
                                 }
                                 3 -> {
@@ -1103,6 +1122,7 @@ class HomeActivity : ComponentActivity() {
                                         navController.navigate("userProfile/$authorId")
                                     }
                                 },
+                                onNavigateToCreateStory = { navController.navigate("story_editor") },
                                 onBack = { navController.popBackStack() }
                             )
                         }
@@ -1120,6 +1140,9 @@ class HomeActivity : ComponentActivity() {
                             onNavigateBack = { navController.popBackStack() },
                             onPostSuccess = {
                                 navController.popBackStack()
+                                coroutineScope.launch {
+                                    pagerState.animateScrollToPage(2)
+                                }
                             }
                         )
                     }
@@ -1159,6 +1182,9 @@ class HomeActivity : ComponentActivity() {
                             onPostSuccess = {
                                 flashImportedMediaUris = emptyList()
                                 navController.popBackStack()
+                                coroutineScope.launch {
+                                    pagerState.animateScrollToPage(2)
+                                }
                             }
                         )
                     }
@@ -1468,7 +1494,18 @@ class HomeActivity : ComponentActivity() {
 
                     composable("notifications_feed") {
                         com.chroma.studio.ui.screens.NotificationsFeedScreen(
-                            onBack = { navController.popBackStack() }
+                            onBack = { navController.popBackStack() },
+                            onNavigateToSettings = { navController.navigate("notifications") },
+                            onNavigateToProfile = { userId -> navController.navigate("userProfile/$userId") },
+                            onNavigateToChat = { roomId -> navController.navigate("chat/$roomId") },
+                            onNavigateToPost = { postId, authorId ->
+                                if (!authorId.isNullOrBlank()) navController.navigate("userProfile/$authorId?postId=$postId")
+                                else navController.navigate("flash_feed")
+                            },
+                            onNavigateToProject = { draftId ->
+                                if (!draftId.isNullOrBlank()) navController.navigate("flash_video_editor?draftId=$draftId")
+                                else navController.navigate("flash_projects_hub")
+                            }
                         )
                     }
                     
@@ -1556,19 +1593,31 @@ class HomeActivity : ComponentActivity() {
                     ) { backStackEntry ->
                         val draftId = backStackEntry.arguments?.getString("draftId")
                         val draft = draftId?.let { com.chroma.studio.data.DraftPostRepository(this@HomeActivity).getDraftById(it) }
+                        val flashDraft = draftId?.let { id -> flashVm.drafts.value.find { it.id == id } }
                         val toLoadUris = if (flashImportedMediaUris.isNotEmpty()) {
                             flashImportedMediaUris
                         } else {
-                            val singleUri = draft?.videoUri?.let { Uri.parse(it) } ?: flashPickerVideoUri
+                            val singleUri = draft?.videoUri?.let { Uri.parse(it) }
+                                ?: flashDraft?.localUri?.takeIf { it.isNotBlank() }?.let { Uri.parse(it) }
+                                ?: flashPickerVideoUri
                             if (singleUri != null) listOf(singleUri) else emptyList()
                         }
                         val uri = toLoadUris.firstOrNull()
-                            ?: run { navController.popBackStack(); return@composable }
+                        if (uri == null) {
+                            androidx.compose.runtime.LaunchedEffect(Unit) {
+                                navController.navigate("flash_projects_hub") {
+                                    popUpTo("flash_video_editor") { inclusive = true }
+                                }
+                            }
+                            return@composable
+                        }
 
+                        // Unified Single Video Editor for ALL video editing (single & multi-clip)
                         com.chroma.studio.ui.screens.FinalCutProVideoEditorScreen(
                             initialUri = uri,
                             initialUris = toLoadUris,
                             draftId = draftId,
+                            remixedFromAuthorUsername = flashRemixAuthorUsername,
                             onDone = { startMs, endMs, clips ->
                                 flashImportedMediaUris = emptyList()
                                 flashTrimStart = startMs
@@ -1597,6 +1646,15 @@ class HomeActivity : ComponentActivity() {
                                 flashFilterName = filterName
                                 flashThumbnail = thumbnail
                                 flashDurationPerSlide = durationPerSlide
+                                if (thumbnail != null) {
+                                    try {
+                                        val file = java.io.File(this@HomeActivity.cacheDir, "flash_edited_${System.currentTimeMillis()}.jpg")
+                                        java.io.FileOutputStream(file).use { out ->
+                                            thumbnail.compress(android.graphics.Bitmap.CompressFormat.JPEG, 92, out)
+                                        }
+                                        flashPickerPhotoUris = listOf(android.net.Uri.fromFile(file))
+                                    } catch (_: Exception) {}
+                                }
                                 navController.navigate("flash_post")
                             },
                             onSaveDraft = { filterName ->
@@ -1647,7 +1705,9 @@ class HomeActivity : ComponentActivity() {
                                 }
                                 flashRemixPostId = null
                                 flashRemixAuthorUsername = null
-                                Toast.makeText(this@HomeActivity, "Flash posted! \ud83c\udfac", Toast.LENGTH_SHORT).show()
+                                coroutineScope.launch {
+                                    pagerState.animateScrollToPage(2)
+                                }
                             },
                             onBack = { navController.popBackStack() }
                         )

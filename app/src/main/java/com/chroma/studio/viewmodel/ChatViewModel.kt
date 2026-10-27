@@ -893,6 +893,48 @@ class ChatViewModel : ViewModel() {
         }
     }
 
+    fun archiveChat(roomId: String, archive: Boolean = true) {
+        _recentChats.value = _recentChats.value.filter { it.id != roomId }
+        viewModelScope.launch {
+            try {
+                repository.archiveChat(roomId, archive)
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+            }
+        }
+    }
+
+    fun clearChatHistory(roomId: String) {
+        if (_activeRoomId.value == roomId) {
+            _serverMessages.value = emptyList()
+            _localMessages.value = emptyList()
+        }
+        viewModelScope.launch {
+            try {
+                repository.clearChatHistory(roomId)
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+            }
+        }
+    }
+
+    fun forwardMessage(message: ChatMessage, targetRoomId: String) {
+        viewModelScope.launch {
+            try {
+                val mediaUrl = message.imageUrl ?: message.mediaUrl
+                val msgType = message.messageType ?: if (mediaUrl != null) "image" else "text"
+                repository.sendMessage(
+                    roomId = targetRoomId,
+                    text = message.text,
+                    imageUrl = mediaUrl,
+                    messageType = msgType
+                )
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+            }
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         currentOtherUserId?.let {

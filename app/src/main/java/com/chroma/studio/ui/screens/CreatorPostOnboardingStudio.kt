@@ -71,6 +71,7 @@ import coil.request.ImageRequest
 import android.widget.Toast
 import com.chroma.studio.data.DiscoverRepository
 import com.chroma.studio.data.DraftPostRepository
+import com.chroma.studio.data.FlashUploadManager
 import com.chroma.studio.data.WorkRepository
 import com.chroma.studio.model.ChromaWork
 import com.chroma.studio.model.CreatorPostDraft
@@ -85,6 +86,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
+import java.io.File
+import java.io.FileOutputStream
+import com.chroma.studio.ui.components.PrimaryGradientButton
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.roundToLong
@@ -238,6 +242,7 @@ fun CreatorPostOnboardingStudioScreen(
 ) {
     val context = LocalContext.current
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val colors = LocalOscellionColors.current
     val scope = rememberCoroutineScope()
     val draftRepo = remember { com.chroma.studio.data.DraftPostRepository(context) }
     var currentDraftId by remember { mutableStateOf(initialDraftId) }
@@ -267,6 +272,7 @@ fun CreatorPostOnboardingStudioScreen(
     var customThumbUri by remember { mutableStateOf<Uri?>(null) }
     var customThumbSlideIndex by remember { mutableIntStateOf(0) }
     var selectedCoverFrameMs by remember { mutableLongStateOf(0L) }
+    var coverThumbnailBmp by remember { mutableStateOf<Bitmap?>(null) }
 
     // Video Post Specific Controls
     var audienceVisibility by remember { mutableStateOf("public") } // "public", "followers", "private"
@@ -310,6 +316,37 @@ fun CreatorPostOnboardingStudioScreen(
                 flashVideoDurationMs = dur
                 if (flashTrimEndMs <= 0L || flashTrimEndMs == 15000L) {
                     flashTrimEndMs = dur
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(customThumbUri, selectedCoverFrameMs, slides.firstOrNull()?.videoUri) {
+        val vUri = slides.firstOrNull()?.videoUri
+        if (customThumbUri != null) {
+            withContext(Dispatchers.IO) {
+                try {
+                    val stream = context.contentResolver.openInputStream(customThumbUri!!)
+                    coverThumbnailBmp = BitmapFactory.decodeStream(stream)
+                } catch (_: Throwable) {
+                    coverThumbnailBmp = null
+                }
+            }
+        } else if (vUri != null) {
+            withContext(Dispatchers.IO) {
+                try {
+                    val retriever = MediaMetadataRetriever()
+                    retriever.setDataSource(context, vUri)
+                    val timeUs = selectedCoverFrameMs * 1000L
+                    val bmp = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                        retriever.getScaledFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 320, 400)
+                    } else {
+                        retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                    }
+                    retriever.release()
+                    coverThumbnailBmp = bmp
+                } catch (_: Throwable) {
+                    coverThumbnailBmp = null
                 }
             }
         }
@@ -457,7 +494,7 @@ fun CreatorPostOnboardingStudioScreen(
 
 
     // Function to save current studio state as Draft
-    fun saveCurrentDraft(showToast: Boolean = true) {
+    fun saveCurrentDraft(showToast: Boolean = true): String {
         val draftId = currentDraftId ?: UUID.randomUUID().toString()
         currentDraftId = draftId
 
@@ -501,58 +538,64 @@ fun CreatorPostOnboardingStudioScreen(
         if (showToast) {
             Toast.makeText(context, "Draft saved successfully", Toast.LENGTH_SHORT).show()
         }
+        return draftId
     }
 
-    // Function to trigger Step 3 Publishing
+    // Instagram-style Background Publishing: immediately redirects to Community tab with progress HUD banner
     fun executePublish() {
-        currentStep = StudioStep.STEP_3_UPLOADING
-        uploadProgress = 0.05f
-        uploadStageText = "Syncing details"
-        isUploadFinished = false
-        uploadErrorMessage = null
+        val savedDraftId = saveCurrentDraft(showToast = false)
+        val initialThumbBmp = coverThumbnailBmp
+        val targetTitle = postTitle.ifBlank {
+            when (studioMode) {
+                CreatorStudioMode.FLASH -> "New Flash Video"
+                CreatorStudioMode.WORK -> "New Work"
+                CreatorStudioMode.POST -> "New Post"
+            }
+        }
 
-        scope.launch {
-            try {
-                when (studioMode) {
-                    CreatorStudioMode.POST -> {
-                        val activeSlides = if (isMultipleMode) slides.toList() else listOfNotNull(slides.getOrNull(currentSlideIndex))
-                        val imageUris = activeSlides.mapNotNull { it.imageUri }
+        fun runUpload() {
+            FlashUploadManager.startUpload(
+                thumbnailBitmap = initialThumbBmp,
+                title = targetTitle,
+                statusText = "Scanning media for community safety…",
+                draftId = savedDraftId,
+                retryAction = { runUpload() }
+            )
 
-                        // On-Device ML Safety Verification
-                        uploadStageText = "Scanning media for community safety…"
-                        uploadProgress = 0.12f
-                        val safetyResult = com.chroma.studio.ml.safety.ContentSafetyScanner.scanMultipleImageUris(context, imageUris)
-                        if (!safetyResult.isSafe) {
-                            currentStep = StudioStep.STEP_2_DETAILS
-                            safetyViolationResult = safetyResult
-                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                            uploadErrorMessage = "Post blocked: prohibited content detected"
-                            android.widget.Toast.makeText(context, "Upload blocked: Community Guidelines violation detected", android.widget.Toast.LENGTH_LONG).show()
-                            return@launch
-                        }
+            kotlinx.coroutines.CoroutineScope(Dispatchers.IO + kotlinx.coroutines.SupervisorJob()).launch {
+                try {
+                    when (studioMode) {
+                        CreatorStudioMode.POST -> {
+                            val activeSlides = if (isMultipleMode) slides.toList() else listOfNotNull(slides.getOrNull(currentSlideIndex))
+                            val imageUris = activeSlides.mapNotNull { it.imageUri }
 
-                        uploadStageText = "Processing images"
-                        uploadProgress = 0.2f
-                        val bytesList = mutableListOf<ByteArray>()
+                            FlashUploadManager.updateProgress(0.12f, "Scanning images for community safety…")
+                            val safetyResult = com.chroma.studio.ml.safety.ContentSafetyScanner.scanMultipleImageUris(context, imageUris)
+                            if (!safetyResult.isSafe) {
+                                FlashUploadManager.setFailed("Community Guidelines violation: prohibited image content detected", retryAction = null)
+                                return@launch
+                            }
 
-                        withContext(Dispatchers.IO) {
+                            FlashUploadManager.updateProgress(0.25f, "Processing images…")
+                            val bytesList = mutableListOf<ByteArray>()
                             for (slide in activeSlides) {
                                 slide.imageUri?.let { uri ->
-                                    val bitmap = BitmapFactory.decodeStream(context.contentResolver.openInputStream(uri))
+                                    val bitmap = try {
+                                        context.contentResolver.openInputStream(uri)?.use { stream ->
+                                            BitmapFactory.decodeStream(stream)
+                                        }
+                                    } catch (_: Throwable) { null }
                                     if (bitmap != null) {
                                         val stream = ByteArrayOutputStream()
                                         bitmap.compress(Bitmap.CompressFormat.JPEG, 85, stream)
                                         bytesList.add(stream.toByteArray())
+                                        if (!bitmap.isRecycled) bitmap.recycle()
                                     }
                                 }
                             }
-                        }
 
-                        uploadStageText = "Uploading to Cloudinary"
-                        uploadProgress = 0.5f
-
-                        val success = withContext(Dispatchers.IO) {
-                            discoverRepository.uploadMultiImagePost(
+                            FlashUploadManager.updateProgress(0.50f, "Uploading images to Cloudinary…")
+                            val success = discoverRepository.uploadMultiImagePost(
                                 imageBytesList = bytesList,
                                 caption = postTitle.trim(),
                                 description = postDescription.trim(),
@@ -564,29 +607,22 @@ fun CreatorPostOnboardingStudioScreen(
                                 turnOffComments = turnOffComments,
                                 turnOffRemix = turnOffRemix
                             )
+
+                            if (success) {
+                                draftRepo.deleteDraft(savedDraftId)
+                                FlashUploadManager.setSuccess("Posted! 🎉")
+                            } else {
+                                FlashUploadManager.setFailed("Failed to upload post. Please try again.") { runUpload() }
+                            }
                         }
 
-                        if (success) {
-                            currentDraftId?.let { draftRepo.deleteDraft(it) }
-                            uploadProgress = 1f
-                            uploadStageText = "Published successfully!"
-                            isUploadFinished = true
-                        } else {
-                            uploadErrorMessage = "Failed to upload post. Please try again."
-                        }
-                    }
+                        CreatorStudioMode.WORK -> {
+                            FlashUploadManager.updateProgress(0.30f, "Compressing work vector layers…")
+                            val activeSlides = if (isMultipleMode) slides.toList() else listOfNotNull(slides.getOrNull(currentSlideIndex))
+                            val works = activeSlides.mapNotNull { it.work }
 
-                    CreatorStudioMode.WORK -> {
-                        uploadStageText = "Compressing work vector layers"
-                        uploadProgress = 0.3f
-                        val activeSlides = if (isMultipleMode) slides.toList() else listOfNotNull(slides.getOrNull(currentSlideIndex))
-                        val works = activeSlides.mapNotNull { it.work }
-
-                        uploadStageText = "Publishing to community"
-                        uploadProgress = 0.7f
-
-                        val success = withContext(Dispatchers.IO) {
-                            discoverRepository.publishMultiWork(
+                            FlashUploadManager.updateProgress(0.70f, "Publishing to Community…")
+                            val success = discoverRepository.publishMultiWork(
                                 works = works,
                                 caption = postTitle.trim(),
                                 description = postDescription.trim(),
@@ -598,171 +634,148 @@ fun CreatorPostOnboardingStudioScreen(
                                 turnOffComments = turnOffComments,
                                 turnOffRemix = turnOffRemix
                             )
+
+                            if (success) {
+                                draftRepo.deleteDraft(savedDraftId)
+                                FlashUploadManager.setSuccess("Posted! 🎉")
+                            } else {
+                                FlashUploadManager.setFailed("Failed to publish work to Community.") { runUpload() }
+                            }
                         }
 
-                        if (success) {
-                            currentDraftId?.let { draftRepo.deleteDraft(it) }
-                            uploadProgress = 1f
-                            uploadStageText = "Published successfully!"
-                            isUploadFinished = true
-                        } else {
-                            uploadErrorMessage = "Failed to publish work."
-                        }
-                    }
+                        CreatorStudioMode.FLASH -> {
+                            val videoSlide = slides.firstOrNull { it.videoUri != null }
+                            val videoUri = videoSlide?.videoUri
+                            if (videoUri == null) {
+                                FlashUploadManager.setFailed("No video available to publish.") { runUpload() }
+                                return@launch
+                            }
 
-                    CreatorStudioMode.FLASH -> {
-                        val videoSlide = slides.firstOrNull { it.videoUri != null }
-                        val videoUri = videoSlide?.videoUri
-                        if (videoUri == null) {
-                            uploadErrorMessage = "No video available to publish."
-                        } else {
-                            // On-Device ML Safety Verification (Multi-Frame Keyframe Sampling)
-                            uploadStageText = "Scanning video frames for community safety…"
-                            uploadProgress = 0.08f
-
+                            // 1. Safety scan
+                            FlashUploadManager.updateProgress(0.08f, "Scanning video frames for community safety…")
                             val videoSafety = com.chroma.studio.ml.safety.ContentSafetyScanner.scanVideoUri(context, videoUri, sampleCount = 6)
                             if (!videoSafety.isSafe) {
-                                currentStep = StudioStep.STEP_2_DETAILS
-                                safetyViolationResult = videoSafety
-                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                uploadErrorMessage = "Post blocked: prohibited video content detected"
-                                android.widget.Toast.makeText(context, "Upload blocked: Community Guidelines violation detected in video", android.widget.Toast.LENGTH_LONG).show()
+                                FlashUploadManager.setFailed("Community Guidelines violation: prohibited video content detected", retryAction = null)
                                 return@launch
                             }
 
                             if (customThumbUri != null) {
                                 val thumbSafety = com.chroma.studio.ml.safety.ContentSafetyScanner.scanImageUri(context, customThumbUri!!)
                                 if (!thumbSafety.isSafe) {
-                                    currentStep = StudioStep.STEP_2_DETAILS
-                                    safetyViolationResult = thumbSafety
-                                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                    uploadErrorMessage = "Post blocked: prohibited cover thumbnail detected"
-                                    android.widget.Toast.makeText(context, "Upload blocked: Community Guidelines violation in cover image", android.widget.Toast.LENGTH_LONG).show()
+                                    FlashUploadManager.setFailed("Community Guidelines violation in cover image", retryAction = null)
                                     return@launch
                                 }
                             }
 
-                            // Step 1: Trim if necessary, otherwise pass through without re-encoding
-                            uploadStageText = "Preparing video…"
-                            uploadProgress = 0.10f
-                            val trimmed = withContext(Dispatchers.IO) {
-                                val shouldTrim = flashTrimStartMs > 100L || (flashTrimEndMs > 0L && flashTrimEndMs < flashVideoDurationMs - 100L)
-                                if (shouldTrim) {
-                                    com.chroma.studio.utils.VideoProcessor.trimVideo(
-                                        context, videoUri, flashTrimStartMs, flashTrimEndMs
-                                    )
+                            // 2. Trim video if needed
+                            FlashUploadManager.updateProgress(0.15f, "Preparing and trimming video…")
+                            val shouldTrim = flashTrimStartMs > 100L || (flashTrimEndMs > 0L && flashTrimEndMs < flashVideoDurationMs - 100L)
+                            val trimmed = if (shouldTrim) {
+                                com.chroma.studio.utils.VideoProcessor.trimVideo(
+                                    context, videoUri, flashTrimStartMs, flashTrimEndMs
+                                )
+                            } else {
+                                if (videoUri.scheme == "file") {
+                                    java.io.File(videoUri.path ?: "")
                                 } else {
-                                    if (videoUri.scheme == "file") {
-                                        java.io.File(videoUri.path ?: "")
-                                    } else {
-                                        val tempFile = java.io.File(context.cacheDir, "ready_post_${System.currentTimeMillis()}.mp4")
-                                        try {
-                                            context.contentResolver.openInputStream(videoUri)?.use { input ->
-                                                java.io.FileOutputStream(tempFile).use { output -> input.copyTo(output) }
-                                            }
-                                            if (tempFile.exists() && tempFile.length() > 0L) tempFile else null
-                                        } catch (_: Throwable) { null }
-                                    }
+                                    val tempFile = java.io.File(context.cacheDir, "ready_post_${System.currentTimeMillis()}.mp4")
+                                    try {
+                                        context.contentResolver.openInputStream(videoUri)?.use { input ->
+                                            java.io.FileOutputStream(tempFile).use { output -> input.copyTo(output) }
+                                        }
+                                        if (tempFile.exists() && tempFile.length() > 0L) tempFile else null
+                                    } catch (_: Throwable) { null }
                                 }
                             } ?: run {
-                                uploadErrorMessage = "Video processing failed."
+                                FlashUploadManager.setFailed("Video preparation and trimming failed.") { runUpload() }
                                 return@launch
                             }
 
-                            // Step 2: Compress
-                            uploadStageText = "Compressing video…"
-                            uploadProgress = 0.30f
-                            val compressed = withContext(Dispatchers.IO) {
-                                com.chroma.studio.utils.VideoProcessor.compressVideo(
-                                    context, android.net.Uri.fromFile(trimmed)
-                                )
-                            } ?: trimmed // fallback to trimmed if compression fails
+                            // 3. Compress video
+                            FlashUploadManager.updateProgress(0.35f, "Compressing video for HD delivery…")
+                            val compressed = com.chroma.studio.utils.VideoProcessor.compressVideo(
+                                context, android.net.Uri.fromFile(trimmed)
+                            ) ?: trimmed
 
-                            // Step 3: Extract or use custom cover thumbnail
-                            uploadStageText = "Generating cover thumbnail…"
-                            uploadProgress = 0.50f
-                            val thumbBitmap = withContext(Dispatchers.IO) {
-                                if (customThumbUri != null) {
-                                    try {
-                                        val stream = context.contentResolver.openInputStream(customThumbUri!!)
-                                        BitmapFactory.decodeStream(stream)
-                                    } catch (_: Throwable) {
-                                        null
-                                    }
-                                } else {
-                                    val pos = if (selectedCoverFrameMs > 0L) {
-                                        (selectedCoverFrameMs - flashTrimStartMs).coerceAtLeast(0L)
-                                    } else 0L
-                                    com.chroma.studio.utils.VideoProcessor.extractThumbnail(
-                                        context, android.net.Uri.fromFile(compressed), pos
-                                    )
-                                }
-                            }
+                            // 4. Thumbnail extraction / upload
+                            FlashUploadManager.updateProgress(0.50f, "Generating cover thumbnail…")
+                            val thumbBitmap = if (customThumbUri != null) {
+                                try {
+                                    val stream = context.contentResolver.openInputStream(customThumbUri!!)
+                                    BitmapFactory.decodeStream(stream)
+                                } catch (_: Throwable) { null }
+                            } else {
+                                val pos = if (selectedCoverFrameMs > 0L) {
+                                    (selectedCoverFrameMs - flashTrimStartMs).coerceAtLeast(0L)
+                                } else 0L
+                                com.chroma.studio.utils.VideoProcessor.extractThumbnail(
+                                    context, android.net.Uri.fromFile(compressed), pos
+                                )
+                            } ?: initialThumbBmp
+
                             val thumbUrl: String = if (thumbBitmap != null) {
                                 val baos = ByteArrayOutputStream()
                                 thumbBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, baos)
-                                withContext(Dispatchers.IO) {
-                                    com.chroma.studio.data.CloudinaryClient.uploadFlashThumbnail(baos.toByteArray()) ?: ""
-                                }
+                                com.chroma.studio.data.CloudinaryClient.uploadFlashThumbnail(baos.toByteArray()) ?: ""
                             } else ""
 
-                            // Step 4: Upload video to Cloudinary
-                            uploadStageText = "Uploading video…"
-                            uploadProgress = 0.60f
-                            val videoUrl = withContext(Dispatchers.IO) {
-                                com.chroma.studio.data.CloudinaryClient.uploadVideoFromUri(
-                                    context = context,
-                                    uri = android.net.Uri.fromFile(compressed),
-                                    folder = "community_videos",
-                                    onProgress = { p -> uploadProgress = 0.60f + p * 0.30f }
-                                )
-                            } ?: run {
-                                uploadErrorMessage = "Video upload failed. Check your connection and try again."
+                            // 5. Cloudinary video upload
+                            FlashUploadManager.updateProgress(0.60f, "Uploading video to Cloudinary…")
+                            val videoUrl = com.chroma.studio.data.CloudinaryClient.uploadVideoFromUri(
+                                context = context,
+                                uri = android.net.Uri.fromFile(compressed),
+                                folder = "community_videos",
+                                onProgress = { p ->
+                                    val prog = 0.60f + p * 0.33f
+                                    FlashUploadManager.updateProgress(prog, "Uploading video… ${(p * 100).toInt()}%")
+                                }
+                            ) ?: run {
+                                FlashUploadManager.setFailed("Video upload failed. Check connection.") { runUpload() }
                                 return@launch
                             }
 
                             // Cleanup temp files
-                            withContext(Dispatchers.IO) {
-                                if (compressed != trimmed) compressed.delete()
-                                trimmed.delete()
-                            }
+                            if (compressed != trimmed) compressed.delete()
+                            trimmed.delete()
 
-                            // Step 5: Write to community_works Firestore
-                            uploadStageText = "Publishing to Community…"
-                            uploadProgress = 0.93f
-                            val success = withContext(Dispatchers.IO) {
-                                discoverRepository.uploadCommunityVideoPost(
-                                    videoUrl = videoUrl,
-                                    thumbnailUrl = thumbUrl,
-                                    caption = if (postTitle.isNotBlank()) postTitle else postDescription,
-                                    description = postDescription.trim(),
-                                    aspectRatio = selectedRatioId,
-                                    tags = hashtags.toList(),
-                                    mentions = mentionedUsers.map { it.username },
-                                    duration = flashTrimEndMs - flashTrimStartMs,
-                                    categoryTag = selectedCategoryTag ?: customCategoryTag.ifBlank { null },
-                                    hideLikesCount = hideLikesCount,
-                                    turnOffComments = turnOffComments,
-                                    turnOffRemix = turnOffRemix,
-                                    hideDownloadsCount = !allowDownloads
-                                )
-                            }
+                            // 6. Firestore document creation
+                            FlashUploadManager.updateProgress(0.95f, "Publishing to Community…")
+                            val success = discoverRepository.uploadCommunityVideoPost(
+                                videoUrl = videoUrl,
+                                thumbnailUrl = thumbUrl,
+                                caption = if (postTitle.isNotBlank()) postTitle else postDescription,
+                                description = postDescription.trim(),
+                                aspectRatio = selectedRatioId,
+                                tags = hashtags.toList(),
+                                mentions = mentionedUsers.map { it.username },
+                                duration = (flashTrimEndMs - flashTrimStartMs).coerceAtLeast(1000L),
+                                categoryTag = selectedCategoryTag ?: customCategoryTag.ifBlank { null },
+                                hideLikesCount = hideLikesCount,
+                                turnOffComments = turnOffComments,
+                                turnOffRemix = turnOffRemix,
+                                hideDownloadsCount = !allowDownloads
+                            )
 
                             if (success) {
-                                currentDraftId?.let { draftRepo.deleteDraft(it) }
-                                uploadProgress = 1f
-                                uploadStageText = "Video post published!"
-                                isUploadFinished = true
+                                draftRepo.deleteDraft(savedDraftId)
+                                FlashUploadManager.setSuccess("Posted! 🎉")
                             } else {
-                                uploadErrorMessage = "Failed to publish video. Please try again."
+                                FlashUploadManager.setFailed("Failed to publish video to Community.") { runUpload() }
                             }
                         }
                     }
+                } catch (e: Exception) {
+                    val cleanMsg = e.message ?: "Upload encountered an error"
+                    FlashUploadManager.setFailed(cleanMsg) { runUpload() }
                 }
-            } catch (e: Exception) {
-                uploadErrorMessage = e.message ?: "Upload encountered an error"
             }
         }
+
+        // Trigger upload
+        runUpload()
+
+        // Immediately redirect user to Community tab (Instagram UX)
+        onPostSuccess()
     }
 
     // Thirds grid briefly on ratio change
@@ -809,15 +822,44 @@ fun CreatorPostOnboardingStudioScreen(
                 when (studioMode) {
                     CreatorStudioMode.POST -> {
                         val currentSlide = slides.getOrNull(currentSlideIndex)
-                        if (currentSlide?.imageUri != null) {
-                            GooglePhotosStyleImageEditor(
-                                slide = currentSlide,
-                                onApply = { updatedSlide ->
-                                    slides[currentSlideIndex] = updatedSlide
-                                    currentStep = StudioStep.STEP_1_PREVIEW
+                        val postPhotoUris = remember(slides.map { it.imageUri }) { slides.mapNotNull { it.imageUri } }
+                        if (postPhotoUris.isNotEmpty()) {
+                            val targetIndex = currentSlideIndex.coerceIn(0, postPhotoUris.lastIndex)
+                            FlashPhotoEditorScreen(
+                                photoUris = postPhotoUris,
+                                initialSlideIndex = targetIndex,
+                                nextButtonLabel = "Apply",
+                                onNext = { filterName, renderedBitmap, _ ->
+                                    scope.launch {
+                                        if (renderedBitmap != null && currentSlide != null) {
+                                            val file = File(context.cacheDir, "community_post_${System.currentTimeMillis()}_${currentSlide.id.take(8)}.jpg")
+                                            withContext(Dispatchers.IO) {
+                                                try {
+                                                    FileOutputStream(file).use { outStream ->
+                                                        renderedBitmap.compress(Bitmap.CompressFormat.JPEG, 92, outStream)
+                                                    }
+                                                } catch (_: Throwable) {}
+                                            }
+                                            val editedUri = Uri.fromFile(file)
+                                            slides[currentSlideIndex] = currentSlide.copy(
+                                                imageUri = editedUri,
+                                                filterName = filterName,
+                                                rotationDegrees = 0f,
+                                                brightness = 0f,
+                                                contrast = 1f,
+                                                saturation = 1f,
+                                                warmth = 0f
+                                            )
+                                            customThumbUri = editedUri
+                                        }
+                                        currentStep = StudioStep.STEP_1_PREVIEW
+                                    }
                                 },
-                                onClose = {
-                                    if (slides.size <= 1) {
+                                onSaveDraft = { _ ->
+                                    saveCurrentDraft(showToast = true)
+                                },
+                                onBack = {
+                                    if (slides.isEmpty()) {
                                         onNavigateBack()
                                     } else {
                                         currentStep = StudioStep.STEP_1_PREVIEW
@@ -829,21 +871,29 @@ fun CreatorPostOnboardingStudioScreen(
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .background(Color.White),
+                                    .background(if (colors.isDark) Color(0xFF14151C) else colors.bg),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("No photo selected", color = Color(0xFF64748B), fontSize = 14.sp)
+                                    Icon(
+                                        Lucide.Image,
+                                        contentDescription = null,
+                                        tint = colors.textMuted,
+                                        modifier = Modifier.size(48.dp)
+                                    )
                                     Spacer(Modifier.height(12.dp))
-                                    Button(
+                                    Text("No photo selected", color = colors.textMuted, fontSize = 14.sp)
+                                    Spacer(Modifier.height(16.dp))
+                                    PrimaryGradientButton(
                                         onClick = {
                                             imagePickerLauncher.launch(
                                                 PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                                             )
                                         },
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
+                                        height = 42.dp,
+                                        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 8.dp)
                                     ) {
-                                        Text("Select Photo")
+                                        Text("Select Photo", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                                     }
                                 }
                             }
@@ -936,6 +986,7 @@ fun CreatorPostOnboardingStudioScreen(
                     onSelectToolTab = { activeToolTab = it },
                     onOpenThumbnailModal = { showThumbModal = true },
                     onEditVideo = { currentStep = StudioStep.STEP_0_PRE_TOOL },
+                    onEditPhoto = { currentStep = StudioStep.STEP_0_PRE_TOOL },
                     onCloseStudio = { onNavigateBack() },
                     onSaveAsDraft = { saveCurrentDraft(showToast = true) },
                     onNext = { currentStep = StudioStep.STEP_2_DETAILS }
@@ -994,8 +1045,10 @@ fun CreatorPostOnboardingStudioScreen(
                     onToggleTurnOffComments = { turnOffComments = it },
                     onToggleTurnOffRemix = { turnOffRemix = it },
                     onSaveAsDraft = { saveCurrentDraft(showToast = true) },
+                    coverThumbnail = coverThumbnailBmp,
                     onEditCover = { showThumbModal = true },
                     onEditVideo = { currentStep = StudioStep.STEP_0_PRE_TOOL },
+                    onEditPhoto = { currentStep = StudioStep.STEP_0_PRE_TOOL },
                     onBack = { currentStep = StudioStep.STEP_1_PREVIEW },
                     onPost = { executePublish() }
                 )
@@ -1126,339 +1179,8 @@ fun CreatorPostOnboardingStudioScreen(
 }
 
 // ============================================================================
-// STEP 0A: GOOGLE PHOTOS STYLE IMAGE EDITOR
+// STEP 0A: PHOTO EDITOR (Powered by ChromaStudio Social Photo Editor)
 // ============================================================================
-
-@Composable
-fun GooglePhotosStyleImageEditor(
-    slide: StudioSlide,
-    onApply: (StudioSlide) -> Unit,
-    onClose: () -> Unit
-) {
-    val context = LocalContext.current
-    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
-    var rotationAngle by remember { mutableFloatStateOf(slide.rotationDegrees) }
-    var brightness by remember { mutableFloatStateOf(slide.brightness) }
-    var contrast by remember { mutableFloatStateOf(slide.contrast) }
-    var saturation by remember { mutableFloatStateOf(slide.saturation) }
-    var warmth by remember { mutableFloatStateOf(slide.warmth) }
-    var activeFilterName by remember { mutableStateOf(slide.filterName) }
-
-    // Google Photos Bottom Tabs: 0: Crop/Rotate, 1: Adjust, 2: Filters
-    var editorTab by remember { mutableIntStateOf(0) }
-    // Adjust sub-tool: "Brightness", "Contrast", "Saturation", "Warmth"
-    var adjustSubTool by remember { mutableStateOf("Brightness") }
-
-    val computedColorMatrix = remember(brightness, contrast, saturation, warmth, activeFilterName) {
-        buildStudioColorMatrix(brightness, contrast, saturation, warmth, activeFilterName)
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFF0F172A))
-    ) {
-        // Top Header
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp)
-                .padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            IconButton(onClick = onClose) {
-                Icon(Lucide.X, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(22.dp))
-            }
-            Text(
-                text = "Edit Photo",
-                color = Color.White,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-            Button(
-                onClick = {
-                    onApply(
-                        slide.copy(
-                            rotationDegrees = rotationAngle,
-                            brightness = brightness,
-                            contrast = contrast,
-                            saturation = saturation,
-                            warmth = warmth,
-                            filterName = activeFilterName
-                        )
-                    )
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
-                shape = RoundedCornerShape(8.dp),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
-            ) {
-                Text("Done", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-            }
-        }
-
-        // Center Preview Canvas
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .padding(16.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            AsyncImage(
-                model = ImageRequest.Builder(context)
-                    .data(slide.imageUri)
-                    .crossfade(true)
-                    .build(),
-                contentDescription = "Editing preview",
-                colorFilter = ColorFilter.colorMatrix(computedColorMatrix),
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer(rotationZ = rotationAngle)
-                    .clip(RoundedCornerShape(8.dp)),
-                contentScale = ContentScale.Fit
-            )
-        }
-
-        // Tool Adjustment Panels (Google Photos style)
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color(0xFF1E293B))
-                .padding(vertical = 12.dp)
-        ) {
-            when (editorTab) {
-                // 1. Crop & Rotate Tab
-                0 -> {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceEvenly
-                    ) {
-                        Button(
-                            onClick = { rotationAngle = (rotationAngle + 90f) % 360f },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF334155)),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Icon(Lucide.RotateCw, contentDescription = "Rotate", tint = Color.White, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text("Rotate 90°", color = Color.White, fontSize = 12.sp)
-                        }
-
-                        Button(
-                            onClick = {
-                                rotationAngle = 0f
-                                brightness = 0f
-                                contrast = 1f
-                                saturation = 1f
-                                warmth = 0f
-                                activeFilterName = "Original"
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF334155)),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("Reset All", color = Color.White, fontSize = 12.sp)
-                        }
-                    }
-                }
-
-                // 2. Adjust Sliders Tab
-                1 -> {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        // Sub-tool chips
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            val adjustTools = listOf("Brightness", "Contrast", "Saturation", "Warmth")
-                            items(adjustTools) { tool ->
-                                val isSelected = adjustSubTool == tool
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(20.dp))
-                                        .background(if (isSelected) Color(0xFF2563EB) else Color(0xFF334155))
-                                        .clickable { adjustSubTool = tool }
-                                        .padding(horizontal = 14.dp, vertical = 6.dp)
-                                ) {
-                                    Text(
-                                        text = tool,
-                                        fontSize = 12.sp,
-                                        color = Color.White,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                                    )
-                                }
-                            }
-                        }
-
-                        // Slider control for active sub-tool
-                        when (adjustSubTool) {
-                            "Brightness" -> {
-                                SliderWithLabel(
-                                    label = "Brightness",
-                                    value = brightness,
-                                    valueRange = -100f..100f,
-                                    onValueChange = { brightness = it },
-                                    displayFormatter = { "%+.0f".format(it) }
-                                )
-                            }
-                            "Contrast" -> {
-                                SliderWithLabel(
-                                    label = "Contrast",
-                                    value = contrast,
-                                    valueRange = 0.5f..2.0f,
-                                    onValueChange = { contrast = it },
-                                    displayFormatter = { "%.2fx".format(it) }
-                                )
-                            }
-                            "Saturation" -> {
-                                SliderWithLabel(
-                                    label = "Saturation",
-                                    value = saturation,
-                                    valueRange = 0f..3f,
-                                    onValueChange = { saturation = it },
-                                    displayFormatter = { "%.2fx".format(it) }
-                                )
-                            }
-                            "Warmth" -> {
-                                SliderWithLabel(
-                                    label = "Warmth",
-                                    value = warmth,
-                                    valueRange = -100f..100f,
-                                    onValueChange = { warmth = it },
-                                    displayFormatter = { "%+.0f".format(it) }
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // 3. Filters Tab
-                2 -> {
-                    val filterPresets = listOf("Original", "Enhance", "Vivid", "Warm", "Cool", "Onyx")
-                    LazyRow(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(filterPresets) { preset ->
-                            val isSelected = activeFilterName == preset
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier
-                                    .clickable { activeFilterName = preset }
-                                    .padding(vertical = 4.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(52.dp)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .border(
-                                            width = if (isSelected) 2.dp else 1.dp,
-                                            color = if (isSelected) Color(0xFF2563EB) else Color(0xFF475569),
-                                            shape = RoundedCornerShape(8.dp)
-                                        )
-                                        .background(Color(0xFF334155)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Lucide.Sparkles,
-                                        contentDescription = preset,
-                                        tint = if (isSelected) Color(0xFF2563EB) else Color.White,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                                Spacer(Modifier.height(4.dp))
-                                Text(
-                                    text = preset,
-                                    fontSize = 11.sp,
-                                    color = if (isSelected) Color(0xFF60A5FA) else Color(0xFFCBD5E1),
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Bottom Navigation Tabs (Crop / Adjust / Filters)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color(0xFF0F172A))
-                .border(BorderStroke(1.dp, Color(0xFF1E293B)))
-                .padding(vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceAround
-        ) {
-            val bottomTabs = listOf(
-                Triple(0, "Crop", Lucide.Crop),
-                Triple(1, "Adjust", Lucide.SlidersHorizontal),
-                Triple(2, "Filters", Lucide.Sparkles)
-            )
-
-            bottomTabs.forEach { (index, title, icon) ->
-                val isSelected = editorTab == index
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier
-                        .clickable { editorTab = index }
-                        .padding(horizontal = 16.dp, vertical = 4.dp)
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = title,
-                        tint = if (isSelected) Color(0xFF2563EB) else Color(0xFF94A3B8),
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = title,
-                        fontSize = 11.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                        color = if (isSelected) Color(0xFF2563EB) else Color(0xFF94A3B8)
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SliderWithLabel(
-    label: String,
-    value: Float,
-    valueRange: ClosedFloatingPointRange<Float>,
-    onValueChange: (Float) -> Unit,
-    displayFormatter: (Float) -> String
-) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(label, color = Color(0xFF94A3B8), fontSize = 12.sp)
-            Text(displayFormatter(value), color = Color(0xFF60A5FA), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-        }
-        Slider(
-            value = value,
-            onValueChange = onValueChange,
-            valueRange = valueRange,
-            colors = SliderDefaults.colors(
-                thumbColor = Color(0xFF2563EB),
-                activeTrackColor = Color(0xFF2563EB),
-                inactiveTrackColor = Color(0xFF475569)
-            )
-        )
-    }
-}
 
 // ============================================================================
 // STEP 0B: FLASH VIDEO TRIMMER STAGE
@@ -1965,6 +1687,8 @@ fun Step1PreviewAndToolsStage(
     onSelectToolTab: (Int) -> Unit,
     onOpenThumbnailModal: () -> Unit,
     onEditVideo: () -> Unit,
+    onEditPhoto: () -> Unit = {},
+    coverThumbnail: Bitmap? = null,
     onCloseStudio: () -> Unit,
     onSaveAsDraft: () -> Unit,
     onNext: () -> Unit
@@ -2269,6 +1993,33 @@ fun Step1PreviewAndToolsStage(
                                     Icon(Lucide.Scissors, contentDescription = null, tint = Color(0xFF60A5FA), modifier = Modifier.size(12.dp))
                                     Text(
                                         text = "Trim & Edit",
+                                        color = Color.White,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                        }
+
+                        // Bottom-Left "Edit Photo" Shortcut for Image Slide
+                        if (!isVideoSlide && currentSlide?.imageUri != null) {
+                            Surface(
+                                modifier = Modifier
+                                    .align(Alignment.BottomStart)
+                                    .padding(10.dp)
+                                    .clickable { onEditPhoto() },
+                                shape = RoundedCornerShape(6.dp),
+                                color = Color.Black.copy(alpha = 0.65f),
+                                border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.25f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(Lucide.SlidersHorizontal, contentDescription = null, tint = Color(0xFF60A5FA), modifier = Modifier.size(12.dp))
+                                    Text(
+                                        text = "Edit Photo",
                                         color = Color.White,
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Medium
@@ -2663,6 +2414,8 @@ fun Step2PostDetailsStage(
     onSaveAsDraft: () -> Unit,
     onEditCover: () -> Unit,
     onEditVideo: () -> Unit,
+    onEditPhoto: () -> Unit = {},
+    coverThumbnail: Bitmap? = null,
     onBack: () -> Unit,
     onPost: () -> Unit
 ) {
@@ -2679,12 +2432,14 @@ fun Step2PostDetailsStage(
         listOf("video", "motion", "art", "creative", "cinematic", "viral", "chroma", "editing", "design")
     }
 
-    var coverThumbnailBmp by remember(customCoverUri, selectedCoverFrameMs, currentSlide?.videoUri) {
-        mutableStateOf<Bitmap?>(null)
+    var coverThumbnailBmp by remember(coverThumbnail, customCoverUri, selectedCoverFrameMs, currentSlide?.videoUri) {
+        mutableStateOf<Bitmap?>(coverThumbnail)
     }
 
-    LaunchedEffect(customCoverUri, selectedCoverFrameMs, currentSlide?.videoUri) {
-        if (customCoverUri != null) {
+    LaunchedEffect(coverThumbnail, customCoverUri, selectedCoverFrameMs, currentSlide?.videoUri) {
+        if (coverThumbnail != null) {
+            coverThumbnailBmp = coverThumbnail
+        } else if (customCoverUri != null) {
             withContext(Dispatchers.IO) {
                 try {
                     val stream = context.contentResolver.openInputStream(customCoverUri)

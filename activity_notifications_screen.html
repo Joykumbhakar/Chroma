@@ -1,0 +1,1347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Activity & Notifications — Studio Glass UI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    * {
+      -webkit-tap-highlight-color: transparent;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background:
+        radial-gradient(circle at 15% 10%, rgba(10, 132, 255, 0.12) 0%, transparent 40%),
+        radial-gradient(circle at 85% 85%, rgba(37, 99, 235, 0.10) 0%, transparent 45%),
+        linear-gradient(180deg, #F0F6FF 0%, #E6EEF8 100%);
+      color: #0F172A;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Hide scrollbars while keeping scroll functionality */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
+    /* Clean White & Blue Glass Border Architecture */
+    .glass-shell {
+      background: rgba(255, 255, 255, 0.84);
+      backdrop-filter: blur(22px);
+      -webkit-backdrop-filter: blur(22px);
+      border: 1.5px solid rgba(255, 255, 255, 0.95);
+      box-shadow:
+        0 20px 50px -15px rgba(15, 23, 42, 0.08),
+        0 0 0 1px rgba(10, 132, 255, 0.16),
+        inset 0 1px 2px rgba(255, 255, 255, 0.95);
+    }
+
+    .glass-card {
+      background: rgba(255, 255, 255, 0.78);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 255, 255, 0.92);
+      box-shadow:
+        0 4px 14px rgba(10, 132, 255, 0.04),
+        0 0 0 1px rgba(10, 132, 255, 0.11),
+        inset 0 1px 1.5px rgba(255, 255, 255, 0.95);
+      transition: all 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .glass-card:hover {
+      background: rgba(255, 255, 255, 0.94);
+      box-shadow:
+        0 6px 18px rgba(10, 132, 255, 0.08),
+        0 0 0 1px rgba(10, 132, 255, 0.24),
+        inset 0 1px 2px rgba(255, 255, 255, 1);
+    }
+
+    .glass-card-unread {
+      background: linear-gradient(135deg, rgba(239, 246, 255, 0.92) 0%, rgba(255, 255, 255, 0.88) 100%);
+      border: 1px solid rgba(255, 255, 255, 0.98);
+      box-shadow:
+        0 4px 14px rgba(10, 132, 255, 0.07),
+        0 0 0 1px rgba(10, 132, 255, 0.25),
+        inset 0 1px 2px rgba(255, 255, 255, 0.98);
+    }
+
+    .glass-pill-btn {
+      position: relative;
+      background:
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.95) 0%, rgba(240, 247, 255, 0.75) 100%);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.95);
+      box-shadow:
+        0 2px 5px rgba(10, 132, 255, 0.06),
+        0 0 0 1px rgba(10, 132, 255, 0.14),
+        inset 0 1px 1.5px rgba(255, 255, 255, 0.95);
+      transition: all 0.22s cubic-bezier(0.25, 1, 0.5, 1);
+    }
+
+    .glass-pill-btn:active {
+      transform: scale(0.96);
+    }
+
+    .glass-pill-active {
+      background: linear-gradient(180deg, #2E90FF 0%, #0A84FF 55%, #0066CC 100%);
+      color: #FFFFFF !important;
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      box-shadow:
+        0 4px 12px rgba(10, 132, 255, 0.28),
+        0 0 0 1px rgba(10, 132, 255, 0.45),
+        inset 0 1px 1.5px rgba(255, 255, 255, 0.65);
+    }
+
+    /* ============================================================
+     * GIVEN COMPONENT 1: Custom Range Slider with Liquid Jelly Knob
+     * ============================================================ */
+    input[type="range"].settings-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      background: transparent;
+      cursor: pointer;
+      height: 22px;
+      caret-color: transparent !important;
+      color: transparent !important;
+      user-select: none;
+      -webkit-user-select: none;
+      width: 100%;
+    }
+
+    input[type="range"].settings-slider:focus,
+    input[type="range"].settings-slider:focus-visible,
+    input[type="range"].settings-slider:focus-within {
+      outline: none !important;
+      box-shadow: none !important;
+      caret-color: transparent !important;
+    }
+
+    input[type="range"].settings-slider::-webkit-slider-runnable-track {
+      border: none;
+      width: 100%;
+      height: 6px;
+      background: linear-gradient(to right, #0a84ff var(--value, 70%), #dbe7f6 var(--value, 70%));
+      border-radius: 100px;
+      box-shadow: inset 0 2px 5px rgba(10, 60, 130, 0.14), inset 0 0 0 0.5px rgba(10, 132, 255, 0.12);
+    }
+
+    input[type="range"].settings-slider::-webkit-slider-thumb {
+      border: none;
+      -webkit-appearance: none;
+      appearance: none;
+      margin-top: -6px;
+      width: 24px;
+      height: 18px;
+      border-radius: 50px;
+      background:
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.1) 45%, transparent 50%),
+        linear-gradient(to top, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0) 40%, transparent 50%),
+        rgba(255, 255, 255, 0.92);
+      box-shadow:
+        0 2px 5px rgba(10, 132, 255, 0.22),
+        0 0 0 0.5px rgba(10, 132, 255, 0.18),
+        inset 0 1px 2px rgba(255, 255, 255, 0.9),
+        inset 0 -1px 2px rgba(10, 132, 255, 0.1);
+      backdrop-filter: blur(5px);
+      -webkit-backdrop-filter: blur(5px);
+      transition: transform 0.2s cubic-bezier(0.4, 1.2, 0.5, 1), width 0.2s cubic-bezier(0.4, 1.2, 0.5, 1);
+    }
+
+    input[type="range"].settings-slider:active::-webkit-slider-thumb {
+      width: 28px;
+      transform: scale(1.15);
+    }
+
+    /* ============================================================
+     * GIVEN COMPONENT 2: Toggle Switch Styles (Liquid Glass Toggle)
+     * Adapted with Clean White & Blue Active Track
+     * ============================================================ */
+    .toggle-wrapper {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 44px;
+      height: 22px;
+      flex-shrink: 0;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .toggle-input {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+      margin: 0;
+      pointer-events: none;
+    }
+
+    .toggle-track {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #dbe7f6;
+      border-radius: 100px;
+      transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+      box-shadow:
+        inset 0 2px 5px rgba(15, 23, 42, 0.12),
+        inset 0 1px 2px rgba(10, 132, 255, 0.08) !important;
+      border: none !important;
+    }
+
+    .toggle-knob {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 24px;
+      height: 18px;
+      border-radius: 50px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.18);
+      backdrop-filter: blur(5px);
+      -webkit-backdrop-filter: blur(5px);
+      transition: transform 0.5s cubic-bezier(0.34, 1.8, 0.64, 1), width 0.5s cubic-bezier(0.34, 1.8, 0.64, 1);
+      transform: translateX(0);
+      box-shadow:
+        inset 0 1px 1.5px rgba(255, 255, 255, 0.98),
+        inset 0 -1px 2px rgba(255, 255, 255, 0.45),
+        inset 0 0 3px rgba(255, 255, 255, 0.85),
+        0 1px 2px rgba(10, 60, 130, 0.16) !important;
+      z-index: 1;
+      border: none !important;
+    }
+
+    .toggle-knob::before {
+      content: '';
+      position: absolute;
+      top: 1px;
+      left: 2px;
+      right: 2px;
+      height: 48%;
+      border-radius: 12px 12px 28px 28px / 10px 10px 6px 6px;
+      background: linear-gradient(to bottom, rgba(255, 255, 255, 0.96) 0%, rgba(255, 255, 255, 0.12) 100%);
+      pointer-events: none;
+    }
+
+    .toggle-knob::after {
+      content: '';
+      position: absolute;
+      bottom: 1px;
+      left: 2px;
+      right: 2px;
+      height: 35%;
+      border-radius: 28px 28px 12px 12px / 6px 6px 10px 10px;
+      background: linear-gradient(to top, rgba(255, 255, 255, 0.88) 0%, rgba(255, 255, 255, 0) 100%);
+      pointer-events: none;
+    }
+
+    /* Checked Track State — Clean Blue Theme */
+    .toggle-input:checked ~ .toggle-track,
+    .toggle-input:checked + .toggle-track {
+      background-color: #0A84FF !important;
+      box-shadow:
+        inset 0 2px 5px rgba(0, 45, 115, 0.25),
+        inset 0 1px 2px rgba(0, 0, 0, 0.15) !important;
+    }
+
+    /* Checked Knob Translation */
+    .toggle-input:checked ~ .toggle-knob,
+    .toggle-input:checked ~ .toggle-track .toggle-knob,
+    .toggle-input:checked + .toggle-track .toggle-knob {
+      transform: translateX(16px) scale(1);
+    }
+
+    /* Liquid Jelly Active Press States */
+    .toggle-wrapper:active .toggle-knob {
+      width: 28px;
+      transform: translateX(-3px) scale(1.26);
+      transition: width 0.25s cubic-bezier(0.4, 1.2, 0.5, 1), transform 0.25s cubic-bezier(0.4, 1.2, 0.5, 1);
+    }
+
+    .toggle-wrapper .toggle-input:checked:active ~ .toggle-knob,
+    .toggle-wrapper .toggle-input:checked:active ~ .toggle-track .toggle-knob,
+    .toggle-wrapper .toggle-input:checked:active + .toggle-track .toggle-knob {
+      width: 28px;
+      transform: translateX(15px) scale(1.26);
+      transition: width 0.25s cubic-bezier(0.4, 1.2, 0.5, 1), transform 0.25s cubic-bezier(0.4, 1.2, 0.5, 1);
+    }
+
+    /* Dynamic Island Morphing */
+    .dynamic-island-pill {
+      transition: width 0.36s cubic-bezier(0.22, 1, 0.36, 1),
+                  height 0.36s cubic-bezier(0.22, 1, 0.36, 1),
+                  border-radius 0.36s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+  </style>
+</head>
+<body class="flex flex-col items-center justify-start md:justify-center md:p-6 lg:p-10 select-none">
+
+  <!-- RESPONSIVE GLASS APP CONTAINER (Full-screen on Mobile, Dual-Column Glass Studio on Desktop) -->
+  <div class="glass-shell relative w-full max-w-[440px] md:max-w-[920px] min-h-screen md:min-h-[760px] md:h-[820px] md:rounded-[32px] flex flex-col md:flex-row overflow-hidden">
+
+    <!-- FLOATING DYNAMIC ISLAND ALERT (Clean White & Blue Glass Pill) -->
+    <div id="dynamicIslandHost" class="pointer-events-none fixed md:absolute top-3 left-0 right-0 z-50 flex justify-center px-4 hidden">
+      <div
+        id="dynamicIslandPill"
+        onclick="expandDynamicIsland(event)"
+        class="dynamic-island-pill pointer-events-auto bg-slate-950/95 text-white border border-blue-400/40 shadow-lg overflow-hidden flex items-center justify-between px-3.5 cursor-pointer"
+        style="width: 220px; height: 34px; border-radius: 9999px;"
+      ></div>
+    </div>
+
+    <!-- ==========================================
+         LEFT / MAIN COLUMN: ACTIVITY & NOTIFICATIONS
+         ========================================== -->
+    <div class="flex-1 flex flex-col h-screen md:h-full overflow-hidden md:border-r md:border-blue-100/80">
+
+      <!-- TOP HEADER -->
+      <header class="px-4 pt-4 pb-3 bg-white/75 backdrop-blur-md border-b border-blue-100/80 sticky top-0 z-20">
+        <div class="flex items-center justify-between gap-2">
+          <!-- Title & Unread Counter -->
+          <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 rounded-2xl glass-pill-active flex items-center justify-center text-white shrink-0">
+              <i data-lucide="bell" class="w-4 h-4"></i>
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <h1 class="text-[15px] font-bold tracking-tight text-slate-900">Activity</h1>
+                <span id="unreadCountBadge" class="px-2 py-0.5 rounded-full bg-blue-50 border border-blue-200/80 text-[11px] font-bold text-[#0A84FF]">
+                  5 new
+                </span>
+              </div>
+              <p class="text-[11px] text-slate-400 font-medium">Live studio updates</p>
+            </div>
+          </div>
+
+          <!-- Header Icon Actions -->
+          <div class="flex items-center gap-1.5">
+            <!-- Test Live Alert -->
+            <button
+              onclick="triggerSampleDynamicIsland()"
+              title="Simulate Live Alert"
+              class="glass-pill-btn h-8 px-2.5 rounded-full flex items-center gap-1 text-[11px] font-semibold text-[#0A84FF]"
+            >
+              <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+              <span class="hidden sm:inline">Live</span>
+            </button>
+
+            <!-- Search Toggle -->
+            <button
+              onclick="toggleSearchBox()"
+              title="Filter by name"
+              class="glass-pill-btn w-8 h-8 rounded-full flex items-center justify-center text-slate-700 hover:text-[#0A84FF]"
+            >
+              <i data-lucide="search" class="w-4 h-4"></i>
+            </button>
+
+            <!-- Mark All Read -->
+            <button
+              onclick="markAllRead()"
+              title="Mark all read"
+              class="glass-pill-btn w-8 h-8 rounded-full flex items-center justify-center text-slate-700 hover:text-[#0A84FF]"
+            >
+              <i data-lucide="check-check" class="w-4 h-4"></i>
+            </button>
+
+            <!-- Mobile Settings Drawer Button -->
+            <button
+              onclick="toggleMobileSettings()"
+              title="Notification Settings"
+              class="md:hidden glass-pill-btn w-8 h-8 rounded-full flex items-center justify-center text-slate-700 hover:text-[#0A84FF]"
+            >
+              <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Collapsible Search Input -->
+        <div id="searchBarContainer" class="hidden mt-2.5">
+          <div class="glass-card rounded-full px-3 py-1.5 flex items-center gap-2">
+            <i data-lucide="search" class="w-3.5 h-3.5 text-[#0A84FF] shrink-0"></i>
+            <input
+              id="notifSearchInput"
+              type="text"
+              oninput="renderNotifications()"
+              placeholder="Filter @creator or keyword..."
+              class="w-full bg-transparent text-xs text-slate-800 placeholder-slate-400 focus:outline-none"
+            />
+            <button onclick="clearSearch()" class="text-slate-400 hover:text-slate-600">
+              <i data-lucide="x" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- ICON FILTER BAR (Minimal, Clean Lucide Icons + Count Pill) -->
+        <div class="mt-3 flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+          <button onclick="setFilter('all')" id="tab-all" class="notif-tab glass-pill-btn glass-pill-active flex-1 min-w-[56px] h-9 rounded-2xl flex items-center justify-center gap-1.5 px-2.5 text-xs font-semibold">
+            <i data-lucide="layers" class="w-3.5 h-3.5"></i>
+            <span>All</span>
+          </button>
+
+          <button onclick="setFilter('like')" id="tab-like" title="Likes" class="notif-tab glass-pill-btn flex-1 min-w-[46px] h-9 rounded-2xl flex items-center justify-center gap-1 px-2 text-slate-600 text-xs font-semibold">
+            <i data-lucide="heart" class="w-3.5 h-3.5"></i>
+            <span id="count-like" class="text-[11px]">2</span>
+          </button>
+
+          <button onclick="setFilter('comment')" id="tab-comment" title="Comments" class="notif-tab glass-pill-btn flex-1 min-w-[46px] h-9 rounded-2xl flex items-center justify-center gap-1 px-2 text-slate-600 text-xs font-semibold">
+            <i data-lucide="message-circle" class="w-3.5 h-3.5"></i>
+            <span id="count-comment" class="text-[11px]">2</span>
+          </button>
+
+          <button onclick="setFilter('follow')" id="tab-follow" title="Follows" class="notif-tab glass-pill-btn flex-1 min-w-[46px] h-9 rounded-2xl flex items-center justify-center gap-1 px-2 text-slate-600 text-xs font-semibold">
+            <i data-lucide="user-plus" class="w-3.5 h-3.5"></i>
+            <span id="count-follow" class="text-[11px]">2</span>
+          </button>
+
+          <button onclick="setFilter('message')" id="tab-message" title="Messages" class="notif-tab glass-pill-btn flex-1 min-w-[46px] h-9 rounded-2xl flex items-center justify-center gap-1 px-2 text-slate-600 text-xs font-semibold">
+            <i data-lucide="send" class="w-3.5 h-3.5"></i>
+            <span id="count-message" class="text-[11px]">3</span>
+          </button>
+        </div>
+
+        <!-- QUICK LIQUID GLASS CONTROLS BAR (Uses Given Toggle & Slider Styles Directly) -->
+        <div class="mt-2.5 px-3 py-2 rounded-2xl glass-card flex items-center justify-between gap-4">
+          <!-- Unread Only Liquid Glass Toggle -->
+          <div class="flex items-center gap-2 shrink-0">
+            <i data-lucide="sparkles" class="w-3.5 h-3.5 text-[#0A84FF]"></i>
+            <span class="text-[11px] font-semibold text-slate-700">Unread</span>
+            <label class="toggle-wrapper" title="Show unread only">
+              <input id="unreadOnlyToggle" type="checkbox" class="toggle-input" onchange="renderNotifications()">
+              <div class="toggle-track"></div>
+              <div class="toggle-knob"></div>
+            </label>
+          </div>
+
+          <div class="h-4 w-[1px] bg-blue-100 shrink-0"></div>
+
+          <!-- Priority Volume / Haptic Intensity Liquid Jelly Slider -->
+          <div class="flex items-center gap-2 flex-1 min-w-0">
+            <i id="QuickToneIcon" data-lucide="volume-2" class="w-3.5 h-3.5 text-[#0A84FF] shrink-0"></i>
+            <input
+              id="quickToneSlider"
+              type="range"
+              class="settings-slider"
+              min="0"
+              max="100"
+              value="75"
+              style="--value: 75%;"
+              oninput="handleQuickSlider(this)"
+              title="Alert Tone Level"
+            />
+            <span id="quickToneValue" class="text-[10.5px] font-bold text-[#0A84FF] w-7 text-right shrink-0">75%</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- SCROLLABLE NOTIFICATION FEED -->
+      <main id="notificationFeed" class="flex-1 overflow-y-auto no-scrollbar p-3.5 space-y-4">
+        <!-- Populated dynamically by JS -->
+      </main>
+
+    </div>
+
+    <!-- ==========================================
+         RIGHT COLUMN / DRAWER: STUDIO PREFERENCES & QUICK DM
+         (Always visible on Desktop/Tablet, Slide-up Glass Sheet on Mobile)
+         ========================================== -->
+    <aside
+      id="sideGlassPanel"
+      class="fixed md:static inset-0 z-40 md:z-auto pointer-events-none md:pointer-events-auto flex flex-col justify-end md:justify-start md:w-[360px] lg:w-[380px] md:bg-white/55 md:backdrop-blur-xl"
+    >
+      <!-- Mobile Backdrop -->
+      <div
+        id="mobilePanelBackdrop"
+        onclick="closeMobilePanel()"
+        class="md:hidden absolute inset-0 bg-slate-900/30 backdrop-blur-xs opacity-0 transition-opacity duration-300"
+      ></div>
+
+      <!-- Panel Content -->
+      <div
+        id="sidePanelSheet"
+        class="relative z-10 w-full max-h-[84vh] md:max-h-none md:h-full bg-white/90 md:bg-transparent backdrop-blur-2xl rounded-t-[28px] md:rounded-none border-t border-white md:border-t-0 flex flex-col translate-y-full md:translate-y-0 transition-transform duration-300 ease-out overflow-hidden"
+      >
+        <!-- Mobile Drag Handle -->
+        <div class="md:hidden w-10 h-1 rounded-full bg-slate-300 mx-auto mt-2.5 mb-1"></div>
+
+        <!-- Mode Switcher Header (Preferences vs Quick Chat) -->
+        <div class="px-4 pt-3 pb-2.5 border-b border-blue-100/80 flex items-center justify-between">
+          <div class="flex items-center gap-1.5 bg-blue-50/80 p-1 rounded-2xl border border-blue-100">
+            <button
+              id="panelTab-prefs"
+              onclick="switchSidePanel('prefs')"
+              class="px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 glass-pill-active"
+            >
+              <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5"></i>
+              <span>Controls</span>
+            </button>
+            <button
+              id="panelTab-chat"
+              onclick="switchSidePanel('chat')"
+              class="px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 text-slate-600"
+            >
+              <i data-lucide="message-square" class="w-3.5 h-3.5"></i>
+              <span>Quick Chat</span>
+            </button>
+          </div>
+
+          <button
+            onclick="closeMobilePanel()"
+            class="md:hidden glass-pill-btn w-7 h-7 rounded-full flex items-center justify-center text-slate-600"
+          >
+            <i data-lucide="x" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+
+        <!-- VIEW 1: NOTIFICATION CONTROLS (Liquid Glass Toggles & Sliders) -->
+        <div id="panelView-prefs" class="flex-1 overflow-y-auto no-scrollbar p-4 space-y-3.5">
+          <!-- Glass Card: Alert Channels -->
+          <div class="glass-card rounded-2xl p-3.5 space-y-3">
+            <div class="flex items-center gap-2 pb-1 border-b border-blue-50">
+              <i data-lucide="bell-ring" class="w-4 h-4 text-[#0A84FF]"></i>
+              <span class="text-xs font-bold text-slate-900">Alert Channels</span>
+            </div>
+
+            <!-- Push Alerts -->
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2.5">
+                <div class="w-7 h-7 rounded-xl bg-blue-50 text-[#0A84FF] flex items-center justify-center">
+                  <i data-lucide="smartphone" class="w-3.5 h-3.5"></i>
+                </div>
+                <div>
+                  <p class="text-xs font-semibold text-slate-800">Push Alerts</p>
+                  <p class="text-[10.5px] text-slate-400">Instant lockscreen banners</p>
+                </div>
+              </div>
+              <label class="toggle-wrapper">
+                <input type="checkbox" class="toggle-input" checked onchange="showToast('Push alerts updated')">
+                <div class="toggle-track"></div>
+                <div class="toggle-knob"></div>
+              </label>
+            </div>
+
+            <!-- Dynamic Island Live Activity -->
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2.5">
+                <div class="w-7 h-7 rounded-xl bg-blue-50 text-[#0A84FF] flex items-center justify-center">
+                  <i data-lucide="radio" class="w-3.5 h-3.5"></i>
+                </div>
+                <div>
+                  <p class="text-xs font-semibold text-slate-800">Dynamic Island</p>
+                  <p class="text-[10.5px] text-slate-400">Compact top pill updates</p>
+                </div>
+              </div>
+              <label class="toggle-wrapper">
+                <input id="islandToggle" type="checkbox" class="toggle-input" checked onchange="showToast('Dynamic Island updated')">
+                <div class="toggle-track"></div>
+                <div class="toggle-knob"></div>
+              </label>
+            </div>
+
+            <!-- Direct Messages -->
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2.5">
+                <div class="w-7 h-7 rounded-xl bg-blue-50 text-[#0A84FF] flex items-center justify-center">
+                  <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                </div>
+                <div>
+                  <p class="text-xs font-semibold text-slate-800">Direct Messages</p>
+                  <p class="text-[10.5px] text-slate-400">Studio chat & media drops</p>
+                </div>
+              </div>
+              <label class="toggle-wrapper">
+                <input type="checkbox" class="toggle-input" checked onchange="showToast('DM alerts updated')">
+                <div class="toggle-track"></div>
+                <div class="toggle-knob"></div>
+              </label>
+            </div>
+
+            <!-- Likes & Remixes -->
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2.5">
+                <div class="w-7 h-7 rounded-xl bg-blue-50 text-[#0A84FF] flex items-center justify-center">
+                  <i data-lucide="heart" class="w-3.5 h-3.5"></i>
+                </div>
+                <div>
+                  <p class="text-xs font-semibold text-slate-800">Likes & Remixes</p>
+                  <p class="text-[10.5px] text-slate-400">Batch high-volume likes</p>
+                </div>
+              </div>
+              <label class="toggle-wrapper">
+                <input type="checkbox" class="toggle-input" checked onchange="showToast('Likes & Remixes updated')">
+                <div class="toggle-track"></div>
+                <div class="toggle-knob"></div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Glass Card: Liquid Jelly Sliders -->
+          <div class="glass-card rounded-2xl p-3.5 space-y-3.5">
+            <div class="flex items-center gap-2 pb-1 border-b border-blue-50">
+              <i data-lucide="gauge" class="w-4 h-4 text-[#0A84FF]"></i>
+              <span class="text-xs font-bold text-slate-900">Haptics & Sound</span>
+            </div>
+
+            <!-- Haptic Intensity Slider -->
+            <div class="space-y-1.5">
+              <div class="flex items-center justify-between text-xs">
+                <span class="font-semibold text-slate-700 flex items-center gap-1.5">
+                  <i data-lucide="vibrate" class="w-3.5 h-3.5 text-[#0A84FF]"></i>
+                  Haptic Feedback
+                </span>
+                <span id="hapticVal" class="text-[11px] font-bold text-[#0A84FF]">80%</span>
+              </div>
+              <input
+                type="range"
+                class="settings-slider"
+                min="0"
+                max="100"
+                value="80"
+                style="--value: 80%;"
+                oninput="this.style.setProperty('--value', this.value + '%'); document.getElementById('hapticVal').textContent = this.value + '%';"
+              />
+            </div>
+
+            <!-- Smart Priority Threshold Slider -->
+            <div class="space-y-1.5">
+              <div class="flex items-center justify-between text-xs">
+                <span class="font-semibold text-slate-700 flex items-center gap-1.5">
+                  <i data-lucide="shield-check" class="w-3.5 h-3.5 text-[#0A84FF]"></i>
+                  Smart Filter
+                </span>
+                <span id="smartFilterVal" class="text-[11px] font-bold text-[#0A84FF]">60%</span>
+              </div>
+              <input
+                type="range"
+                class="settings-slider"
+                min="0"
+                max="100"
+                value="60"
+                style="--value: 60%;"
+                oninput="this.style.setProperty('--value', this.value + '%'); document.getElementById('smartFilterVal').textContent = this.value + '%';"
+              />
+            </div>
+          </div>
+
+          <!-- Summary Stats Card -->
+          <div class="glass-card rounded-2xl p-3.5 flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center">
+                <i data-lucide="zap" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <p class="text-xs font-bold text-slate-900">98.4% Response</p>
+                <p class="text-[10.5px] text-slate-400">Avg reply under 12m</p>
+              </div>
+            </div>
+            <button onclick="markAllRead()" class="glass-pill-btn px-3 py-1.5 rounded-full text-[11px] font-semibold text-[#0A84FF]">
+              Clear Unread
+            </button>
+          </div>
+        </div>
+
+        <!-- VIEW 2: QUICK STUDIO CHAT (Triggered by tapping any DM notification) -->
+        <div id="panelView-chat" class="hidden flex-1 flex flex-col overflow-hidden">
+          <!-- Partner Subheader -->
+          <div class="px-4 py-2.5 bg-blue-50/50 border-b border-blue-100/80 flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+              <div class="relative">
+                <img id="chatPartnerAvatar" src="https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=150&auto=format&fit=crop&q=80" class="w-8 h-8 rounded-full object-cover border border-white shadow-xs" />
+                <span class="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white"></span>
+              </div>
+              <div>
+                <div class="flex items-center gap-1">
+                  <p id="chatPartnerName" class="text-xs font-bold text-slate-900">Sora Takahashi</p>
+                  <i data-lucide="badge-check" class="w-3.5 h-3.5 text-[#0A84FF]"></i>
+                </div>
+                <p id="chatPartnerHandle" class="text-[10px] text-[#0A84FF] font-medium">@sora_motion • Online</p>
+              </div>
+            </div>
+            <button onclick="switchSidePanel('prefs')" class="glass-pill-btn px-2.5 py-1 rounded-full text-[10.5px] font-semibold text-slate-600">
+              Back
+            </button>
+          </div>
+
+          <!-- Messages List -->
+          <div id="chatMessagesContainer" class="flex-1 overflow-y-auto no-scrollbar p-3.5 space-y-2.5"></div>
+
+          <!-- Quick Reply Bar -->
+          <div class="p-3 bg-white/80 border-t border-blue-100 flex items-center gap-2">
+            <input
+              id="chatInputField"
+              type="text"
+              placeholder="Write a quick reply..."
+              onkeydown="if(event.key==='Enter') sendQuickReply()"
+              class="flex-1 glass-card rounded-full px-3.5 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none"
+            />
+            <button
+              onclick="sendQuickReply()"
+              class="w-8 h-8 rounded-full glass-pill-active text-white flex items-center justify-center shrink-0"
+            >
+              <i data-lucide="send" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </aside>
+
+    <!-- TOAST PILL -->
+    <div
+      id="toastBanner"
+      class="pointer-events-none fixed bottom-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full bg-slate-900/95 text-white border border-blue-400/30 shadow-lg flex items-center gap-2 text-xs font-medium opacity-0 translate-y-2 transition-all duration-200"
+    >
+      <i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-[#0A84FF]"></i>
+      <span id="toastLabel">Updated</span>
+    </div>
+
+  </div>
+
+  <script>
+    // Concise, Organized Notification Data (Less text, no overly long words)
+    const notificationsData = [
+      {
+        id: 'n1',
+        group: 'new',
+        type: 'message',
+        user: 'Sora Takahashi',
+        handle: '@sora_motion',
+        verified: true,
+        avatar: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=150&auto=format&fit=crop&q=80',
+        action: 'Sent 3 messages',
+        snippet: '"Stems and shader layers are ready for tonight."',
+        time: '2m',
+        unread: true
+      },
+      {
+        id: 'n2',
+        group: 'new',
+        type: 'like',
+        user: 'Devon Brooks',
+        extraCount: '+42',
+        handle: '@devon_3d',
+        verified: false,
+        avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&auto=format&fit=crop&q=80',
+        action: 'Liked your post',
+        snippet: 'Monolith Study #04',
+        time: '9m',
+        unread: true,
+        thumb: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=120&auto=format&fit=crop&q=80'
+      },
+      {
+        id: 'n3',
+        group: 'new',
+        type: 'comment',
+        user: 'Aria Chen',
+        handle: '@ariachen_ui',
+        verified: true,
+        avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80',
+        action: 'Commented on Flash',
+        snippet: '"Clean camera cut at 0:08!"',
+        time: '18m',
+        unread: true,
+        likedComment: false,
+        thumb: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=120&auto=format&fit=crop&q=80'
+      },
+      {
+        id: 'n4',
+        group: 'new',
+        type: 'message',
+        user: 'Marcus Vance',
+        handle: '@mvance_vfx',
+        verified: true,
+        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+        action: 'Sent a photo',
+        snippet: '4K_Glass_Pass.png',
+        time: '34m',
+        unread: true,
+        thumb: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=120&auto=format&fit=crop&q=80'
+      },
+      {
+        id: 'n5',
+        group: 'new',
+        type: 'follow',
+        user: 'Kaito Nakamura',
+        handle: '@kaito_type',
+        verified: true,
+        avatar: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=150&auto=format&fit=crop&q=80',
+        action: 'Followed you',
+        snippet: 'Motion & Type Artist',
+        time: '1h',
+        unread: true,
+        following: false
+      },
+      {
+        id: 'n6',
+        group: 'earlier',
+        type: 'message',
+        user: 'Elena Rostova',
+        handle: '@elena_arch',
+        verified: true,
+        avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80',
+        action: 'Sent a message',
+        snippet: '"Let’s collab on the 5:4 grid series?"',
+        time: '3h',
+        unread: false
+      },
+      {
+        id: 'n7',
+        group: 'earlier',
+        type: 'like',
+        user: 'Liam O’Connor',
+        extraCount: '+18',
+        handle: '@liam_sound',
+        verified: true,
+        avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
+        action: 'Remixed your work',
+        snippet: 'Solaris Audio Stem v2',
+        time: '5h',
+        unread: false,
+        thumb: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=120&auto=format&fit=crop&q=80'
+      },
+      {
+        id: 'n8',
+        group: 'earlier',
+        type: 'comment',
+        user: 'Nora Lindqvist',
+        handle: '@nora_nordic',
+        verified: false,
+        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+        action: 'Mentioned you',
+        snippet: '"Inspired by @you_creator glass layout"',
+        time: '1d',
+        unread: false,
+        likedComment: true,
+        thumb: 'https://images.unsplash.com/photo-1634017839464-5c339ebe3cb4?w=120&auto=format&fit=crop&q=80'
+      },
+      {
+        id: 'n9',
+        group: 'earlier',
+        type: 'follow',
+        user: 'Mateo Silva',
+        handle: '@mateo_render',
+        verified: false,
+        avatar: 'https://images.unsplash.com/photo-1501196354995-cbb51c65aaea?w=150&auto=format&fit=crop&q=80',
+        action: 'Followed you',
+        snippet: '3D Lighting Artist',
+        time: '2d',
+        unread: false,
+        following: true
+      }
+    ];
+
+    // Quick DM Threads
+    const dmThreads = {
+      '@sora_motion': {
+        name: 'Sora Takahashi',
+        handle: '@sora_motion',
+        avatar: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=150&auto=format&fit=crop&q=80',
+        messages: [
+          { from: 'them', text: 'Hey! Stems and shader layers are ready for tonight.', time: '10:14 AM' },
+          { from: 'me', text: 'Awesome, checking the preview now.', time: '10:16 AM' }
+        ]
+      },
+      '@mvance_vfx': {
+        name: 'Marcus Vance',
+        handle: '@mvance_vfx',
+        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+        messages: [
+          { from: 'them', text: 'Dropped the 4K glass pass!', time: '9:42 AM', img: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500&auto=format&fit=crop&q=80' }
+        ]
+      },
+      '@elena_arch': {
+        name: 'Elena Rostova',
+        handle: '@elena_arch',
+        avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80',
+        messages: [
+          { from: 'them', text: 'Let’s collab on the 5:4 grid series?', time: 'Yesterday' }
+        ]
+      }
+    };
+
+    let currentFilter = 'all';
+    let activeChatHandle = '@sora_motion';
+    let isIslandExpanded = false;
+    let islandTimeout = null;
+
+    function getTypeMeta(type) {
+      switch (type) {
+        case 'like':
+          return { icon: 'heart', bg: 'bg-blue-600 text-white' };
+        case 'comment':
+          return { icon: 'message-circle', bg: 'bg-sky-500 text-white' };
+        case 'follow':
+          return { icon: 'user-plus', bg: 'bg-indigo-600 text-white' };
+        case 'message':
+          return { icon: 'send', bg: 'bg-[#0A84FF] text-white' };
+        default:
+          return { icon: 'bell', bg: 'bg-blue-600 text-white' };
+      }
+    }
+
+    function updateBadges() {
+      const unreadTotal = notificationsData.filter(n => n.unread).length;
+      const badge = document.getElementById('unreadCountBadge');
+      if (badge) {
+        badge.textContent = unreadTotal > 0 ? `${unreadTotal} new` : 'All read';
+        badge.className = unreadTotal > 0
+          ? 'px-2 py-0.5 rounded-full bg-blue-50 border border-blue-200/80 text-[11px] font-bold text-[#0A84FF]'
+          : 'px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-[11px] font-medium text-slate-500';
+      }
+
+      ['like', 'comment', 'follow', 'message'].forEach(type => {
+        const count = notificationsData.filter(n => n.type === type).length;
+        const el = document.getElementById(`count-${type}`);
+        if (el) el.textContent = count;
+      });
+    }
+
+    function setFilter(type) {
+      currentFilter = type;
+      document.querySelectorAll('.notif-tab').forEach(btn => {
+        btn.classList.remove('glass-pill-active');
+        btn.classList.add('text-slate-600');
+      });
+      const activeBtn = document.getElementById(`tab-${type}`);
+      if (activeBtn) {
+        activeBtn.classList.add('glass-pill-active');
+        activeBtn.classList.remove('text-slate-600');
+      }
+      renderNotifications();
+    }
+
+    function renderNotifications() {
+      updateBadges();
+      const container = document.getElementById('notificationFeed');
+      const unreadOnly = document.getElementById('unreadOnlyToggle').checked;
+      const query = (document.getElementById('notifSearchInput')?.value || '').trim().toLowerCase();
+
+      const filtered = notificationsData.filter(item => {
+        if (currentFilter !== 'all' && item.type !== currentFilter) return false;
+        if (unreadOnly && !item.unread) return false;
+        if (query) {
+          return (
+            item.user.toLowerCase().includes(query) ||
+            item.handle.toLowerCase().includes(query) ||
+            item.snippet.toLowerCase().includes(query) ||
+            item.action.toLowerCase().includes(query)
+          );
+        }
+        return true;
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="glass-card rounded-3xl p-8 text-center my-6">
+            <div class="w-11 h-11 rounded-2xl bg-blue-50 border border-blue-100 text-[#0A84FF] flex items-center justify-center mx-auto mb-2.5">
+              <i data-lucide="inbox" class="w-5 h-5"></i>
+            </div>
+            <p class="text-xs font-bold text-slate-800">No activity here</p>
+            <p class="text-[11px] text-slate-400 mt-0.5">Everything is clean and caught up.</p>
+          </div>
+        `;
+        lucide.createIcons();
+        return;
+      }
+
+      const newItems = filtered.filter(i => i.unread);
+      const earlierItems = filtered.filter(i => !i.unread);
+
+      let html = '';
+
+      if (newItems.length > 0) {
+        html += `
+          <div class="space-y-2">
+            <div class="px-1 flex items-center justify-between">
+              <span class="text-[10.5px] font-bold uppercase tracking-wider text-[#0A84FF] flex items-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-[#0A84FF]"></span>
+                New
+              </span>
+              <span class="text-[10.5px] font-medium text-slate-400">${newItems.length}</span>
+            </div>
+            ${newItems.map(renderCardHtml).join('')}
+          </div>
+        `;
+      }
+
+      if (earlierItems.length > 0) {
+        html += `
+          <div class="space-y-2">
+            <div class="px-1 pt-1 flex items-center justify-between">
+              <span class="text-[10.5px] font-bold uppercase tracking-wider text-slate-400">Earlier</span>
+              <span class="text-[10.5px] font-medium text-slate-400">${earlierItems.length}</span>
+            </div>
+            ${earlierItems.map(renderCardHtml).join('')}
+          </div>
+        `;
+      }
+
+      container.innerHTML = html;
+      lucide.createIcons();
+    }
+
+    function renderCardHtml(item) {
+      const meta = getTypeMeta(item.type);
+      const cardClass = item.unread ? 'glass-card glass-card-unread' : 'glass-card';
+
+      return `
+        <div
+          onclick="handleCardClick('${item.id}')"
+          class="${cardClass} rounded-2xl p-3 flex items-center justify-between gap-3 cursor-pointer"
+        >
+          <!-- Left: Avatar + Type Icon Badge + Concise Text -->
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="relative shrink-0">
+              <img
+                src="${item.avatar}"
+                alt="${item.user}"
+                class="w-10 h-10 rounded-full object-cover border border-white shadow-xs"
+              />
+              <span class="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full ${meta.bg} ring-2 ring-white flex items-center justify-center">
+                <i data-lucide="${meta.icon}" class="w-2.5 h-2.5"></i>
+              </span>
+            </div>
+
+            <div class="min-w-0">
+              <div class="flex items-center gap-1">
+                <span class="text-xs font-bold text-slate-900 truncate">${item.user}</span>
+                ${item.verified ? `<i data-lucide="badge-check" class="w-3.5 h-3.5 text-[#0A84FF] shrink-0"></i>` : ''}
+                ${item.extraCount ? `<span class="text-[10.5px] font-bold text-[#0A84FF]">${item.extraCount}</span>` : ''}
+                <span class="text-[10.5px] text-slate-400 font-medium shrink-0">• ${item.time}</span>
+              </div>
+
+              <div class="flex items-center gap-1.5 mt-0.5">
+                <span class="text-[11px] font-semibold text-[#0A84FF] shrink-0">${item.action}</span>
+                <span class="text-[11px] text-slate-500 truncate">${item.snippet}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: Contextual Action or Sharp Media Thumbnail -->
+          <div class="flex items-center gap-1.5 shrink-0">
+            ${item.type === 'follow' ? `
+              <button
+                onclick="event.stopPropagation(); toggleFollow('${item.id}')"
+                class="h-7 px-3 rounded-full text-[11px] font-semibold transition-all ${
+                  item.following
+                    ? 'glass-pill-btn text-slate-700'
+                    : 'glass-pill-active text-white'
+                }"
+              >
+                ${item.following ? 'Following' : 'Follow'}
+              </button>
+            ` : ''}
+
+            ${item.type === 'message' ? `
+              <button
+                onclick="event.stopPropagation(); openQuickChat('${item.handle}', '${item.id}')"
+                class="glass-pill-btn h-7 px-2.5 rounded-full text-[11px] font-semibold text-[#0A84FF] flex items-center gap-1"
+              >
+                <i data-lucide="corner-up-left" class="w-3 h-3"></i>
+                <span>Reply</span>
+              </button>
+            ` : ''}
+
+            ${item.type === 'comment' ? `
+              <button
+                onclick="event.stopPropagation(); toggleCommentHeart('${item.id}')"
+                class="glass-pill-btn w-7 h-7 rounded-full flex items-center justify-center ${
+                  item.likedComment ? 'text-[#0A84FF]' : 'text-slate-400'
+                }"
+                title="Like comment"
+              >
+                <i data-lucide="heart" class="w-3.5 h-3.5 ${item.likedComment ? 'fill-[#0A84FF]' : ''}"></i>
+              </button>
+            ` : ''}
+
+            ${item.thumb ? `
+              <img
+                src="${item.thumb}"
+                alt="Media"
+                class="w-9 h-9 rounded-lg object-cover border border-white shadow-xs shrink-0"
+              />
+            ` : ''}
+          </div>
+        </div>
+      `;
+    }
+
+    function handleCardClick(id) {
+      const item = notificationsData.find(n => n.id === id);
+      if (!item) return;
+      item.unread = false;
+      renderNotifications();
+
+      if (item.type === 'message') {
+        openQuickChat(item.handle, item.id);
+      } else {
+        showToast(`Opened ${item.user}'s activity`);
+      }
+    }
+
+    function toggleFollow(id) {
+      const item = notificationsData.find(n => n.id === id);
+      if (!item) return;
+      item.following = !item.following;
+      item.unread = false;
+      renderNotifications();
+      showToast(item.following ? `Following ${item.handle}` : `Unfollowed ${item.handle}`);
+    }
+
+    function toggleCommentHeart(id) {
+      const item = notificationsData.find(n => n.id === id);
+      if (!item) return;
+      item.likedComment = !item.likedComment;
+      item.unread = false;
+      renderNotifications();
+      showToast(item.likedComment ? 'Liked comment' : 'Removed like');
+    }
+
+    function markAllRead() {
+      notificationsData.forEach(n => { n.unread = false; });
+      renderNotifications();
+      showToast('All notifications marked read');
+    }
+
+    function toggleSearchBox() {
+      const box = document.getElementById('searchBarContainer');
+      box.classList.toggle('hidden');
+      if (!box.classList.contains('hidden')) {
+        document.getElementById('notifSearchInput').focus();
+      }
+    }
+
+    function clearSearch() {
+      const input = document.getElementById('notifSearchInput');
+      input.value = '';
+      document.getElementById('searchBarContainer').classList.add('hidden');
+      renderNotifications();
+    }
+
+    function handleQuickSlider(slider) {
+      const val = slider.value;
+      slider.style.setProperty('--value', val + '%');
+      document.getElementById('quickToneValue').textContent = val + '%';
+    }
+
+    // Side Panel & Mobile Sheet Controls
+    function switchSidePanel(mode) {
+      const prefsView = document.getElementById('panelView-prefs');
+      const chatView = document.getElementById('panelView-chat');
+      const tabPrefs = document.getElementById('panelTab-prefs');
+      const tabChat = document.getElementById('panelTab-chat');
+
+      if (mode === 'chat') {
+        prefsView.classList.add('hidden');
+        chatView.classList.remove('hidden');
+        tabChat.classList.add('glass-pill-active');
+        tabChat.classList.remove('text-slate-600');
+        tabPrefs.classList.remove('glass-pill-active');
+        tabPrefs.classList.add('text-slate-600');
+        renderQuickChat();
+      } else {
+        chatView.classList.add('hidden');
+        prefsView.classList.remove('hidden');
+        tabPrefs.classList.add('glass-pill-active');
+        tabPrefs.classList.remove('text-slate-600');
+        tabChat.classList.remove('glass-pill-active');
+        tabChat.classList.add('text-slate-600');
+      }
+      lucide.createIcons();
+    }
+
+    function toggleMobileSettings() {
+      openMobilePanel('prefs');
+    }
+
+    function openMobilePanel(mode) {
+      switchSidePanel(mode);
+      const panel = document.getElementById('sideGlassPanel');
+      const backdrop = document.getElementById('mobilePanelBackdrop');
+      const sheet = document.getElementById('sidePanelSheet');
+
+      panel.classList.remove('pointer-events-none');
+      backdrop.classList.remove('opacity-0');
+      backdrop.classList.add('opacity-100');
+      sheet.classList.remove('translate-y-full');
+      sheet.classList.add('translate-y-0');
+    }
+
+    function closeMobilePanel() {
+      const panel = document.getElementById('sideGlassPanel');
+      const backdrop = document.getElementById('mobilePanelBackdrop');
+      const sheet = document.getElementById('sidePanelSheet');
+
+      panel.classList.add('pointer-events-none');
+      backdrop.classList.add('opacity-0');
+      backdrop.classList.remove('opacity-100');
+      sheet.classList.add('translate-y-full');
+      sheet.classList.remove('translate-y-0');
+    }
+
+    function openQuickChat(handle, notifId) {
+      if (notifId) {
+        const item = notificationsData.find(n => n.id === notifId);
+        if (item) item.unread = false;
+        renderNotifications();
+      }
+      activeChatHandle = dmThreads[handle] ? handle : '@sora_motion';
+      openMobilePanel('chat');
+      renderQuickChat();
+    }
+
+    function renderQuickChat() {
+      const thread = dmThreads[activeChatHandle];
+      if (!thread) return;
+
+      document.getElementById('chatPartnerAvatar').src = thread.avatar;
+      document.getElementById('chatPartnerName').textContent = thread.name;
+      document.getElementById('chatPartnerHandle').textContent = `${thread.handle} • Online`;
+
+      const container = document.getElementById('chatMessagesContainer');
+      container.innerHTML = thread.messages.map(m => {
+        const isMe = m.from === 'me';
+        return `
+          <div class="flex flex-col ${isMe ? 'items-end' : 'items-start'}">
+            <div class="max-w-[82%] px-3 py-2 rounded-2xl text-xs ${
+              isMe
+                ? 'glass-pill-active text-white'
+                : 'glass-card text-slate-800'
+            }">
+              ${m.img ? `<img src="${m.img}" class="w-full h-24 object-cover rounded-lg mb-1.5" />` : ''}
+              <p>${m.text}</p>
+            </div>
+            <span class="text-[9.5px] text-slate-400 mt-0.5 px-1">${m.time}</span>
+          </div>
+        `;
+      }).join('');
+      container.scrollTop = container.scrollHeight;
+      lucide.createIcons();
+    }
+
+    function sendQuickReply() {
+      const input = document.getElementById('chatInputField');
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = '';
+      dmThreads[activeChatHandle].messages.push({
+        from: 'me',
+        text,
+        time: 'Now'
+      });
+      renderQuickChat();
+      showToast('Reply sent');
+    }
+
+    // Dynamic Island Live Alert Simulation
+    function triggerSampleDynamicIsland() {
+      const islandEnabled = document.getElementById('islandToggle')?.checked ?? true;
+      if (!islandEnabled) {
+        showToast('Enable Dynamic Island in Controls first');
+        return;
+      }
+      isIslandExpanded = false;
+      const host = document.getElementById('dynamicIslandHost');
+      host.classList.remove('hidden');
+      renderDynamicIsland();
+
+      clearTimeout(islandTimeout);
+      islandTimeout = setTimeout(() => {
+        if (!isIslandExpanded) hideDynamicIsland();
+      }, 3600);
+    }
+
+    function renderDynamicIsland() {
+      const pill = document.getElementById('dynamicIslandPill');
+      if (!isIslandExpanded) {
+        pill.style.width = '228px';
+        pill.style.height = '34px';
+        pill.style.borderRadius = '9999px';
+        pill.innerHTML = `
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="w-5 h-5 rounded-full bg-[#0A84FF] flex items-center justify-center shrink-0">
+              <i data-lucide="send" class="w-3 h-3 text-white"></i>
+            </span>
+            <span class="text-[11px] font-semibold text-white truncate">Sora: New stem ready</span>
+          </div>
+          <span class="text-[10px] font-bold text-blue-400 shrink-0">Tap</span>
+        `;
+      } else {
+        pill.style.width = '330px';
+        pill.style.height = '74px';
+        pill.style.borderRadius = '22px';
+        pill.innerHTML = `
+          <div class="w-full flex items-center justify-between gap-2.5">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <img src="https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=120&auto=format&fit=crop&q=80" class="w-9 h-9 rounded-full object-cover border border-blue-400/50 shrink-0" />
+              <div class="min-w-0">
+                <p class="text-xs font-bold text-white truncate">Sora Takahashi</p>
+                <p class="text-[11px] text-blue-200 truncate">Sent 3 messages in Studio Chat</p>
+              </div>
+            </div>
+            <button
+              onclick="hideDynamicIsland(event); openQuickChat('@sora_motion', 'n1');"
+              class="px-3 py-1 rounded-full bg-[#0A84FF] text-[11px] font-bold text-white shrink-0"
+            >
+              Reply
+            </button>
+          </div>
+        `;
+      }
+      lucide.createIcons();
+    }
+
+    function expandDynamicIsland(e) {
+      if (e) e.stopPropagation();
+      if (!isIslandExpanded) {
+        isIslandExpanded = true;
+        renderDynamicIsland();
+        clearTimeout(islandTimeout);
+        islandTimeout = setTimeout(() => hideDynamicIsland(), 5000);
+      }
+    }
+
+    function hideDynamicIsland(e) {
+      if (e) e.stopPropagation();
+      document.getElementById('dynamicIslandHost').classList.add('hidden');
+      isIslandExpanded = false;
+    }
+
+    let toastTimer = null;
+    function showToast(msg) {
+      const banner = document.getElementById('toastBanner');
+      document.getElementById('toastLabel').textContent = msg;
+      banner.classList.remove('opacity-0', 'translate-y-2');
+      banner.classList.add('opacity-100', 'translate-y-0');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        banner.classList.add('opacity-0', 'translate-y-2');
+        banner.classList.remove('opacity-100', 'translate-y-0');
+      }, 2000);
+    }
+
+    window.onload = () => {
+      renderNotifications();
+      renderQuickChat();
+      lucide.createIcons();
+    };
+  </script>
+</body>
+</html>

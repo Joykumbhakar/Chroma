@@ -15,7 +15,88 @@ import kotlinx.coroutines.coroutineScope
 class DiscoverViewModel : ViewModel() {
     val repository = DiscoverRepository()
 
-    private val _works = MutableStateFlow<List<DiscoverPost>>(emptyList())
+    companion object {
+        val SAMPLE_PLACEHOLDER_POSTS = listOf(
+            // 1. FLASH VIDEO POST (Vertical 9:16 cinematic video with playback controls & mute toggle)
+            DiscoverPost(
+                id = "placeholder_flash_video_001",
+                creatorId = "placeholder_creator_elena",
+                authorUsername = "elena.motion",
+                authorDisplayName = "Elena Rostova",
+                authorAvatarUrl = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80",
+                authorVerified = true,
+                title = "Cybernetic Fluidity // Flash Vol. 1",
+                description = "Exploring vertical 9:16 cinematic pacing and ambient lighting in Chroma Flash. 60 FPS fluid rendering with ambient chromatic dispersion. Tap anywhere to pause, toggle audio in corner.",
+                aspectRatio = "9:16",
+                likesCount = 428,
+                remixCount = 74,
+                downloadCount = 112,
+                shareCount = 38,
+                saveCount = 195,
+                postType = "video",
+                videoUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+                thumbnailUrl = "https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=1080&q=80",
+                tags = listOf("FlashVideo", "MotionDesign", "Oscellion", "FlashStudio"),
+                mentions = listOf("chroma.studio", "elena.motion"),
+                timestamp = System.currentTimeMillis() - 1000L * 60 * 25 // 25m ago
+            ),
+            // 2. IMAGE POST (Multi-Image 4:5 Carousel with swipe dot indicators)
+            DiscoverPost(
+                id = "placeholder_image_post_002",
+                creatorId = "placeholder_creator_marcus",
+                authorUsername = "marcus_design",
+                authorDisplayName = "Marcus Vance",
+                authorAvatarUrl = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&q=80",
+                authorVerified = true,
+                title = "Prismatic Refraction in Titanium Quartz",
+                description = "High-fidelity spectrum dispersion study. Swipe left to view all 3 multi-angle exposures rendered with physical light caustics and simulated chromatic aberration in Chroma.",
+                aspectRatio = "4:5",
+                likesCount = 612,
+                remixCount = 36,
+                downloadCount = 85,
+                shareCount = 59,
+                saveCount = 310,
+                postType = "image",
+                imageUrl = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1080&q=80",
+                imageUrls = listOf(
+                    "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1080&q=80",
+                    "https://images.unsplash.com/photo-1634017839464-5c339ebe3cb4?w=1080&q=80",
+                    "https://images.unsplash.com/photo-1618005198919-d3d4b5a92ead?w=1080&q=80"
+                ),
+                tags = listOf("VisualArts", "Prism", "Generative", "DesignSystem"),
+                mentions = listOf("marcus_design", "oscellion_arts"),
+                timestamp = System.currentTimeMillis() - 1000L * 60 * 60 * 2 // 2h ago
+            ),
+            // 3. WORK POST (Interactive Chroma Studio Project with Remix Attribution)
+            DiscoverPost(
+                id = "placeholder_work_post_003",
+                creatorId = "placeholder_creator_sofia",
+                authorUsername = "sofia.aurora",
+                authorDisplayName = "Sofia Al-Mansoor",
+                authorAvatarUrl = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&q=80",
+                authorVerified = true,
+                title = "Nordic Aurora Mesh Gradient System",
+                description = "Interactive 5-layer fluid mesh gradient preset with dynamic noise displacement. Tap the Remix button (handshake) to customize color stops and curves in Chroma Studio workspace.",
+                aspectRatio = "16:9",
+                likesCount = 954,
+                remixCount = 312,
+                downloadCount = 520,
+                shareCount = 184,
+                saveCount = 680,
+                postType = "work",
+                imageUrl = "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=1080&q=80",
+                tags = listOf("MeshGradient", "UIUX", "Preset", "Interactive", "Remixable"),
+                mentions = listOf("sofia.aurora", "oscellion"),
+                remixedFromPostId = "original_core_aurora",
+                remixedFromAuthorUsername = "chroma_labs",
+                remixedFromAuthorDisplayName = "Chroma Labs",
+                remixedFromAuthorVerified = true,
+                timestamp = System.currentTimeMillis() - 1000L * 60 * 60 * 6 // 6h ago
+            )
+        )
+    }
+
+    private val _works = MutableStateFlow<List<DiscoverPost>>(SAMPLE_PLACEHOLDER_POSTS)
     val works: StateFlow<List<DiscoverPost>> = _works.asStateFlow()
 
     private val _trendingWorks = MutableStateFlow<List<DiscoverPost>>(emptyList())
@@ -93,7 +174,8 @@ class DiscoverViewModel : ViewModel() {
             try {
                 val recentWorks = repository.getRecentWorks()
                 if (recentWorks.size < 10) hasMoreWorks = false
-                _works.value = recentWorks
+                val combined = (SAMPLE_PLACEHOLDER_POSTS + recentWorks).distinctBy { it.id }
+                _works.value = combined
 
                 val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
                 val currentUid = currentUser?.uid
@@ -129,7 +211,10 @@ class DiscoverViewModel : ViewModel() {
         viewModelScope.launch {
             _isTrendingLoading.value = true
             try {
-                _trendingWorks.value = repository.getTrendingWorks(5)
+                val remoteTrending = repository.getTrendingWorks(5)
+                val combined = (SAMPLE_PLACEHOLDER_POSTS + remoteTrending).distinctBy { it.id }
+                    .sortedByDescending { it.likesCount }
+                _trendingWorks.value = combined
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
             } finally {
@@ -222,7 +307,11 @@ class DiscoverViewModel : ViewModel() {
                 }
             },
             performServerSync = { nextLiked ->
-                repository.setLike(workId, uid, nextLiked)
+                if (!workId.startsWith("placeholder_")) {
+                    repository.setLike(workId, uid, nextLiked)
+                } else {
+                    true
+                }
             },
             onRollback = {
                 _likedWorkIds.value = prevLikedSet
@@ -267,7 +356,11 @@ class DiscoverViewModel : ViewModel() {
                 }
             },
             performServerSync = { nextSaved ->
-                repository.setSave(workId, currentUser.uid, nextSaved)
+                if (!workId.startsWith("placeholder_")) {
+                    repository.setSave(workId, currentUser.uid, nextSaved)
+                } else {
+                    true
+                }
             },
             onRollback = {
                 _savedWorkIds.value = prevSavedSet
@@ -348,7 +441,9 @@ class DiscoverViewModel : ViewModel() {
             } else it
         }
         viewModelScope.launch {
-            repository.incrementShareCount(workId, uid)
+            if (!workId.startsWith("placeholder_")) {
+                repository.incrementShareCount(workId, uid)
+            }
         }
     }
 
@@ -366,7 +461,9 @@ class DiscoverViewModel : ViewModel() {
             } else it
         }
         viewModelScope.launch {
-            repository.incrementDownloadCount(workId, uid)
+            if (!workId.startsWith("placeholder_")) {
+                repository.incrementDownloadCount(workId, uid)
+            }
         }
     }
 

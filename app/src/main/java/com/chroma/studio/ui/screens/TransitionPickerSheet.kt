@@ -1,11 +1,14 @@
 package com.chroma.studio.ui.screens
 
+import android.graphics.Bitmap
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -21,8 +24,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -31,11 +38,14 @@ import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.composables.icons.lucide.*
 import kotlin.math.sin
 
+@Deprecated("Use AppleVideoTransitionStudio from FinalCutProVideoEditor instead. This sheet is locked to 7 legacy transitions and will be removed.")
 @Composable
 fun TransitionPickerSheet(
     currentTransition: TransitionType,
     onTransitionSelected: (TransitionType) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    outgoingBitmap: Bitmap? = null,
+    incomingBitmap: Bitmap? = null
 ) {
     val colors = LocalOscellionColors.current
     var previewType by remember { mutableStateOf(currentTransition) }
@@ -94,55 +104,45 @@ fun TransitionPickerSheet(
 
         Spacer(Modifier.height(14.dp))
 
-        // Live Animated Transition Preview Card (Plain Red 'A' to Plain Blue 'B')
+        // Live Animated Transition Preview Card (Real Video Clip Frames / Cinematic HUD)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(140.dp)
                 .clip(RoundedCornerShape(14.dp))
-                .background(Color(0xFFE53935))
-                .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(14.dp)),
+                .background(Color(0xFF0F172A))
+                .border(1.dp, Color(0xFF334155), RoundedCornerShape(14.dp)),
             contentAlignment = Alignment.Center
         ) {
-            // Outgoing Clip (Plain Red with big letter 'A')
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color(0xFFE53935)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "A",
-                    color = Color.White,
-                    fontSize = 44.sp,
-                    fontWeight = FontWeight.Black
-                )
-            }
+            // Outgoing Video Clip Scene (Real Frame or Cinematic Scene 1)
+            CinematicClipScene(
+                bitmap = outgoingBitmap,
+                isIncoming = false,
+                modifier = Modifier.fillMaxSize()
+            )
 
-            // Animated Transition Overlay Effect (Plain Blue with big letter 'B')
+            // Animated Transition Overlay Effect with Real Incoming Video Clip Scene
             when (previewType) {
                 TransitionType.NONE -> {
-                    // Split boundary line
+                    // Split boundary line at current progress
                     Box(
                         modifier = Modifier
                             .fillMaxHeight()
                             .width(2.dp)
-                            .background(Color.White.copy(alpha = 0.5f))
+                            .align(Alignment.Center)
+                            .background(Color.White.copy(alpha = 0.6f))
                     )
                 }
                 TransitionType.CROSSFADE, TransitionType.DISSOLVE -> {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(Color(0xFF1E88E5))
-                            .alpha(rawProgress),
-                        contentAlignment = Alignment.Center
+                            .alpha(rawProgress)
                     ) {
-                        Text(
-                            text = "B",
-                            color = Color.White,
-                            fontSize = 44.sp,
-                            fontWeight = FontWeight.Black
+                        CinematicClipScene(
+                            bitmap = incomingBitmap,
+                            isIncoming = true,
+                            modifier = Modifier.fillMaxSize()
                         )
                     }
                 }
@@ -152,14 +152,11 @@ fun TransitionPickerSheet(
                             .fillMaxHeight()
                             .fillMaxWidth(fraction = rawProgress)
                             .align(Alignment.CenterEnd)
-                            .background(Color(0xFF1E88E5)),
-                        contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = "B",
-                            color = Color.White,
-                            fontSize = 44.sp,
-                            fontWeight = FontWeight.Black
+                        CinematicClipScene(
+                            bitmap = incomingBitmap,
+                            isIncoming = true,
+                            modifier = Modifier.fillMaxSize()
                         )
                     }
                 }
@@ -169,30 +166,27 @@ fun TransitionPickerSheet(
                             .fillMaxHeight()
                             .fillMaxWidth(fraction = rawProgress)
                             .align(Alignment.CenterStart)
-                            .background(Color(0xFF1E88E5)),
-                        contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = "B",
-                            color = Color.White,
-                            fontSize = 44.sp,
-                            fontWeight = FontWeight.Black
+                        CinematicClipScene(
+                            bitmap = incomingBitmap,
+                            isIncoming = true,
+                            modifier = Modifier.fillMaxSize()
                         )
                     }
                 }
                 TransitionType.ZOOM_IN -> {
                     val zoomAlpha = sin(rawProgress * Math.PI.toFloat()).coerceIn(0f, 1f)
+                    val zoomScale = 0.75f + 0.25f * zoomAlpha
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(Color(0xFF1E88E5).copy(alpha = zoomAlpha)),
-                        contentAlignment = Alignment.Center
+                            .alpha(zoomAlpha)
+                            .graphicsLayer(scaleX = zoomScale, scaleY = zoomScale)
                     ) {
-                        Text(
-                            text = "B",
-                            color = Color.White.copy(alpha = zoomAlpha),
-                            fontSize = (44 * (0.5f + 0.5f * zoomAlpha)).sp,
-                            fontWeight = FontWeight.Black
+                        CinematicClipScene(
+                            bitmap = incomingBitmap,
+                            isIncoming = true,
+                            modifier = Modifier.fillMaxSize()
                         )
                     }
                 }
@@ -202,14 +196,11 @@ fun TransitionPickerSheet(
                             .fillMaxHeight()
                             .fillMaxWidth(fraction = rawProgress)
                             .align(Alignment.CenterStart)
-                            .background(Color(0xFF1E88E5)),
-                        contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = "B",
-                            color = Color.White,
-                            fontSize = 44.sp,
-                            fontWeight = FontWeight.Black
+                        CinematicClipScene(
+                            bitmap = incomingBitmap,
+                            isIncoming = true,
+                            modifier = Modifier.fillMaxSize()
                         )
                         Box(
                             modifier = Modifier
@@ -314,6 +305,93 @@ fun TransitionPickerSheet(
                 color = Color.White,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+@Composable
+private fun CinematicClipScene(
+    bitmap: Bitmap?,
+    isIncoming: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(
+                Brush.linearGradient(
+                    colors = if (!isIncoming) {
+                        listOf(Color(0xFF1B1B2F), Color(0xFF3B1D54), Color(0xFF8C3A5C), Color(0xFFE07A5F))
+                    } else {
+                        listOf(Color(0xFF0A192F), Color(0xFF112240), Color(0xFF1F4068), Color(0xFF00B4D8))
+                    }
+                )
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap.asImageBitmap(),
+                contentDescription = if (isIncoming) "Incoming Scene" else "Outgoing Scene",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val w = size.width
+                val h = size.height
+                val thirdsColor = Color.White.copy(alpha = 0.12f)
+                drawLine(thirdsColor, Offset(w / 3f, 0f), Offset(w / 3f, h), 1f)
+                drawLine(thirdsColor, Offset(2f * w / 3f, 0f), Offset(2f * w / 3f, h), 1f)
+                drawLine(thirdsColor, Offset(0f, h / 3f), Offset(w, h / 3f), 1f)
+                drawLine(thirdsColor, Offset(0f, 2f * h / 3f), Offset(w, 2f * h / 3f), 1f)
+                val reticleColor = if (!isIncoming) Color.White.copy(alpha = 0.28f) else Color(0xFF38BDF8).copy(alpha = 0.35f)
+                val cx = w / 2f
+                val cy = h / 2f
+                drawLine(reticleColor, Offset(cx - 10f, cy), Offset(cx + 10f, cy), 1.5f)
+                drawLine(reticleColor, Offset(cx, cy - 10f), Offset(cx, cy + 10f), 1.5f)
+            }
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(5.dp)
+                        .clip(CircleShape)
+                        .background(if (!isIncoming) Color(0xFFEF4444) else Color(0xFF10B981))
+                )
+                Text(
+                    text = if (!isIncoming) "REC 4K" else "PLAY 4K",
+                    color = Color.White.copy(alpha = 0.85f),
+                    fontSize = 8.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+            Text(
+                text = if (!isIncoming) "SCENE 01" else "SCENE 02",
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(6.dp),
+                color = Color.White.copy(alpha = 0.90f),
+                fontSize = 8.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                fontFamily = FontFamily.Monospace
+            )
+            Text(
+                text = if (!isIncoming) "01:23:45:12" else "01:23:47:08",
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(6.dp),
+                color = Color.White.copy(alpha = 0.75f),
+                fontSize = 8.5.sp,
+                fontWeight = FontWeight.Normal,
+                fontFamily = FontFamily.Monospace
             )
         }
     }

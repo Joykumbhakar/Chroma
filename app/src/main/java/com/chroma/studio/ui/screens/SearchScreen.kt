@@ -6,6 +6,8 @@
 
 package com.chroma.studio.ui.screens
 
+import com.chroma.studio.ui.components.VerifiedBadge
+
 import android.content.Context
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -871,11 +873,7 @@ private fun CreatorSearchResultCard(
                         )
                         if (user.verified) {
                             Spacer(Modifier.width(4.dp))
-                            Image(
-                                painter = painterResource(id = R.drawable.verification_badge),
-                                contentDescription = "Verified",
-                                modifier = Modifier.size(14.dp)
-                            )
+                            VerifiedBadge(size = 14.dp)
                         }
                     }
                     Text(
@@ -985,11 +983,7 @@ private fun SpotlightCreatorBanner(
                             )
                             if (post.authorVerified) {
                                 Spacer(Modifier.width(4.dp))
-                                Image(
-                                    painter = painterResource(id = R.drawable.verification_badge),
-                                    contentDescription = "Verified",
-                                    modifier = Modifier.size(13.dp)
-                                )
+                                VerifiedBadge(size = 13.dp)
                             }
                         }
                         Text(
@@ -1087,11 +1081,7 @@ private fun ExploreQuickLookSheet(
                             )
                             if (post.authorVerified) {
                                 Spacer(Modifier.width(4.dp))
-                                Image(
-                                    painter = painterResource(id = R.drawable.verification_badge),
-                                    contentDescription = "Verified",
-                                    modifier = Modifier.size(13.dp)
-                                )
+                                VerifiedBadge(size = 13.dp)
                             }
                         }
                         Row(

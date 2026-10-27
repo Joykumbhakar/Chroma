@@ -13,6 +13,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.foundation.*
@@ -105,6 +106,20 @@ fun FlashPickerScreen(
     // Multi-select for photos
     var selectedPhotoUris by remember { mutableStateOf<Set<Uri>>(emptySet()) }
 
+    // Direct system photo/video picker launcher (zero permission barrier on Android 13/14/15)
+    val systemPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val mime = context.contentResolver.getType(uri) ?: ""
+            if (mime.startsWith("video/")) {
+                onVideoSelected(uri)
+            } else {
+                onPhotosSelected(listOf(uri))
+            }
+        }
+    }
+
     // Load media when permission granted or filter changes
     LaunchedEffect(hasVideoPermission, hasImagePermission, filter) {
         if (!hasVideoPermission && !hasImagePermission) return@LaunchedEffect
@@ -127,12 +142,32 @@ fun FlashPickerScreen(
             showBackButton = true,
             onBack = onBack,
             actions = {
-                if (selectedPhotoUris.isNotEmpty()) {
-                    ChromaHeaderActionButton(
-                        text = "Next (${selectedPhotoUris.size})",
-                        icon = Lucide.ArrowRight,
-                        onClick = { onPhotosSelected(selectedPhotoUris.toList()) }
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = {
+                            systemPickerLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
+                            )
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = colors.primary,
+                            contentColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        modifier = Modifier.height(32.dp)
+                    ) {
+                        Icon(Lucide.FolderOpen, contentDescription = null, tint = Color.White, modifier = Modifier.size(13.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Gallery", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    if (selectedPhotoUris.isNotEmpty()) {
+                        ChromaHeaderActionButton(
+                            text = "Next (${selectedPhotoUris.size})",
+                            icon = Lucide.ArrowRight,
+                            onClick = { onPhotosSelected(selectedPhotoUris.toList()) }
+                        )
+                    }
                 }
             }
         )
@@ -147,6 +182,11 @@ fun FlashPickerScreen(
                         arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
                     }
                     permissionLauncher.launch(perms)
+                },
+                onOpenSystemPicker = {
+                    systemPickerLauncher.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
+                    )
                 }
             )
             return@Column
@@ -156,10 +196,10 @@ fun FlashPickerScreen(
         Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
             Row(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
+                    .clip(RoundedCornerShape(8.dp))
                     .background(Color.White.copy(alpha = 0.1f))
                     .clickable { filterExpanded = true }
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
@@ -318,7 +358,10 @@ fun FlashPickerScreen(
 }
 
 @Composable
-private fun PermissionRequestCard(onRequest: () -> Unit) {
+private fun PermissionRequestCard(
+    onRequest: () -> Unit,
+    onOpenSystemPicker: () -> Unit
+) {
     Box(
         modifier = Modifier.fillMaxSize().background(Color(0xFF0D1117)),
         contentAlignment = Alignment.Center
@@ -351,16 +394,29 @@ private fun PermissionRequestCard(onRequest: () -> Unit) {
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 lineHeight = 22.sp
             )
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(28.dp))
             GlassButton(
                 onClick = onRequest,
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF)),
-                shape = RoundedCornerShape(32.dp),
-                modifier = Modifier.fillMaxWidth().height(52.dp)
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth().height(48.dp)
             ) {
                 Icon(Lucide.Shield, null, tint = Color.White)
                 Spacer(Modifier.width(8.dp))
-                Text("Allow Access", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text("Allow Access", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            }
+            Spacer(Modifier.height(14.dp))
+            HorizontalDivider(color = Color.White.copy(alpha = 0.12f), thickness = 0.5.dp)
+            Spacer(Modifier.height(14.dp))
+            Button(
+                onClick = onOpenSystemPicker,
+                colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.12f)),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth().height(48.dp)
+            ) {
+                Icon(Lucide.FolderOpen, null, tint = Color.White)
+                Spacer(Modifier.width(8.dp))
+                Text("Choose from System Gallery", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
             }
         }
     }

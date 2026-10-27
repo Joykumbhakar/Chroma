@@ -15,6 +15,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.isSystemInDarkTheme
 import com.chroma.studio.ui.components.AppleStatusBlueGradient
+import com.chroma.studio.ui.components.StoryCreationBottomSheet
 
 import com.chroma.studio.ui.components.ChromaPillButton
 import com.chroma.studio.ui.components.AppleWorksGraphic
@@ -34,6 +35,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -154,6 +156,7 @@ fun UserProfileScreen(
     onNavigateToChat: ((String) -> Unit)? = null,
     onNavigateToSettings: () -> Unit = {},
     onNavigateToEditProfile: () -> Unit = {},
+    onNavigateToCreateStory: (() -> Unit)? = null,
     onBack: () -> Unit
 ) {
     val colors = LocalOscellionColors.current
@@ -164,6 +167,7 @@ fun UserProfileScreen(
     val likedStoryIds by storyVm.likedStoryIds.collectAsState()
     val isUploadingStory by storyVm.isUploading.collectAsState()
     var showStoryViewer by remember { mutableStateOf(false) }
+    var showStoryCreationSheet by remember { mutableStateOf(false) }
     var storyViewerInitialIndex by remember { mutableIntStateOf(0) }
 
     var works by remember { mutableStateOf<List<DiscoverPost>>(emptyList()) }
@@ -409,15 +413,11 @@ fun UserProfileScreen(
                             storyViewerInitialIndex = if (isCurrentUser) -1 else 0
                             showStoryViewer = true
                         } else {
-                            storyMediaPicker.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                            )
+                            showStoryCreationSheet = true
                         }
                     },
                     onAddStoryClick = {
-                        storyMediaPicker.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                        )
+                        showStoryCreationSheet = true
                     },
                     onStoryClick = { groupIdx ->
                         val targetGroup = filteredStories.getOrNull(groupIdx)
@@ -517,7 +517,7 @@ fun UserProfileScreen(
                     // Flash Videos Tab
                     if (isFlashesLoading) {
                         items(6) {
-                            Box(modifier = Modifier.aspectRatio(9f / 16f).clip(RectangleShape).shimmerEffect())
+                            Box(modifier = Modifier.aspectRatio(9f / 16f).clip(RoundedCornerShape(12.dp)).shimmerEffect())
                         }
                     } else if (flashPosts.isEmpty()) {
                         item(span = { GridItemSpan(maxLineSpan) }) {
@@ -885,6 +885,23 @@ fun UserProfileScreen(
                 if (clickedUid != userId) {
                     onNavigateToUserList?.invoke(clickedUid, "followers")
                 }
+            }
+        )
+    }
+
+    // Story Creation Options Bottom Sheet
+    if (showStoryCreationSheet) {
+        StoryCreationBottomSheet(
+            onDismissRequest = { showStoryCreationSheet = false },
+            onChooseFromGallery = {
+                showStoryCreationSheet = false
+                storyMediaPicker.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                )
+            },
+            onTextStory = {
+                showStoryCreationSheet = false
+                onNavigateToCreateStory?.invoke()
             }
         )
     }
@@ -1453,7 +1470,7 @@ fun AppleDetailRow(
             ) {
                 Icon(icon, contentDescription = title, tint = Color.White, modifier = Modifier.size(15.dp))
             }
-            Text(title, color = Color(0xFF8E8E93), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            Text(title, color = colors.textMuted, fontSize = 13.sp, fontWeight = FontWeight.Medium)
         }
         Text(value, color = colors.textMain, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
     }
@@ -1496,11 +1513,11 @@ fun AppleSettingSheetItem(
             )
             Text(
                 subtitle,
-                color = Color(0xFF8E8E93),
+                color = colors.textMuted,
                 fontSize = 12.sp
             )
         }
-        Icon(Lucide.ChevronRight, contentDescription = null, tint = Color(0xFFC7C7CC), modifier = Modifier.size(18.dp))
+        Icon(Lucide.ChevronRight, contentDescription = null, tint = colors.textMuted.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
     }
 }
 
@@ -1527,7 +1544,7 @@ fun AppleEmptyTabState(
                 modifier = Modifier.size(64.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(icon, contentDescription = null, tint = Color(0xFF8E8E93), modifier = Modifier.size(36.dp))
+                Icon(icon, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(36.dp))
             }
         }
         Spacer(Modifier.height(16.dp))
@@ -1543,14 +1560,16 @@ fun ProfileFlashCard(
     isOwner: Boolean,
     onDeleteClick: () -> Unit
 ) {
+    val colors = LocalOscellionColors.current
     var showMenu by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(9f / 16f)
-            .clip(RectangleShape)
-            .background(Color(0xFF1E1E1E))
+            .clip(RoundedCornerShape(12.dp))
+            .background(colors.glassBgHover)
+            .border(1.dp, colors.glassBorder, RoundedCornerShape(12.dp))
     ) {
         if (flash.thumbnailUrl.isNotBlank()) {
             AsyncImage(
@@ -1561,10 +1580,82 @@ fun ProfileFlashCard(
             )
         } else {
             Box(
-                modifier = Modifier.fillMaxSize().background(Color(0xFF262626)),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(colors.bg),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Lucide.Play, contentDescription = null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(28.dp))
+                Icon(
+                    imageVector = Lucide.Play,
+                    contentDescription = null,
+                    tint = colors.textMuted.copy(alpha = 0.8f),
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+        }
+
+        // Top Reel Header Bar
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.TopStart)
+                .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.65f), Color.Transparent)))
+                .padding(horizontal = 6.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Surface(
+                shape = RoundedCornerShape(4.dp),
+                color = Color.Black.copy(alpha = 0.6f),
+                border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.25f))
+            ) {
+                Text(
+                    text = "REEL",
+                    fontSize = 8.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                    letterSpacing = 0.5.sp
+                )
+            }
+
+            if (isOwner) {
+                Box(
+                    modifier = Modifier
+                        .size(26.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color.Black.copy(alpha = 0.4f))
+                        .clickable { showMenu = true },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Lucide.EllipsisVertical,
+                        contentDescription = "Options",
+                        tint = Color.White,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false },
+                    modifier = Modifier
+                        .shadow(16.dp, RoundedCornerShape(16.dp), ambientColor = Color.Black.copy(alpha = 0.25f), spotColor = Color.Black.copy(alpha = 0.15f))
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(colors.glassBg)
+                        .border(1.dp, colors.glassBorder, RoundedCornerShape(16.dp))
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Delete Flash", color = colors.error, fontWeight = FontWeight.SemiBold) },
+                        onClick = {
+                            showMenu = false
+                            onDeleteClick()
+                        },
+                        leadingIcon = {
+                            Icon(Lucide.Trash2, contentDescription = null, tint = colors.error, modifier = Modifier.size(16.dp))
+                        }
+                    )
+                }
             }
         }
 
@@ -1574,7 +1665,7 @@ fun ProfileFlashCard(
                 .height(48.dp)
                 .align(Alignment.BottomCenter)
                 .background(
-                    Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)))
+                    Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f)))
                 )
         )
 
@@ -1592,50 +1683,6 @@ fun ProfileFlashCard(
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold
             )
-        }
-
-        if (isOwner) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(4.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(26.dp)
-                        
-                        .clickable { showMenu = true },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Lucide.EllipsisVertical,
-                        contentDescription = "Options",
-                        tint = Color.White,
-                        modifier = Modifier.size(14.dp)
-                    )
-                }
-
-                DropdownMenu(
-                    expanded = showMenu,
-                    onDismissRequest = { showMenu = false },
-                    modifier = Modifier
-                        .shadow(16.dp, RoundedCornerShape(24.dp), ambientColor = Color.Black.copy(alpha = 0.25f), spotColor = Color.Black.copy(alpha = 0.15f))
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(Color(0xF21C1C1E))
-                        .border(0.5.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(24.dp))
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("Delete Flash", color = Color(0xFFFF3B30), fontWeight = FontWeight.SemiBold) },
-                        onClick = {
-                            showMenu = false
-                            onDeleteClick()
-                        },
-                        leadingIcon = {
-                            Icon(Lucide.Trash2, contentDescription = null, tint = Color(0xFFFF3B30), modifier = Modifier.size(16.dp))
-                        }
-                    )
-                }
-            }
         }
     }
 }

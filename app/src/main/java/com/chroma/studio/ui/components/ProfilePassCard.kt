@@ -1,5 +1,7 @@
 package com.chroma.studio.ui.components
 
+import com.chroma.studio.ui.components.VerifiedBadge
+
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.ContentValues
@@ -421,12 +423,7 @@ fun ProfilePassCardView(
                                 overflow = TextOverflow.Ellipsis
                             )
                             if (profile.verified) {
-                                Icon(
-                                    imageVector = Lucide.BadgeCheck,
-                                    contentDescription = "Verified",
-                                    tint = customization.accentColor,
-                                    modifier = Modifier.size(17.dp)
-                                )
+                                VerifiedBadge(size = 17.dp)
                             }
                         }
 

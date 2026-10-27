@@ -823,5 +823,31 @@ class SupabaseChatRepository {
             android.util.Log.e("SupabaseChatRepo", "muteChat error", e)
         }
     }
+
+    suspend fun archiveChat(roomId: String, archive: Boolean) = withContext(Dispatchers.IO) {
+        val currentUserId = auth.currentUser?.uid ?: return@withContext
+        try {
+            val roomRef = chatsCollection.document(roomId)
+            if (archive) {
+                roomRef.update("archivedBy", com.google.firebase.firestore.FieldValue.arrayUnion(currentUserId)).await()
+            } else {
+                roomRef.update("archivedBy", com.google.firebase.firestore.FieldValue.arrayRemove(currentUserId)).await()
+            }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            android.util.Log.e("SupabaseChatRepo", "archiveChat error", e)
+        }
+    }
+
+    suspend fun clearChatHistory(roomId: String) = withContext(Dispatchers.IO) {
+        val currentUserId = auth.currentUser?.uid ?: return@withContext
+        try {
+            val roomRef = chatsCollection.document(roomId)
+            roomRef.update("deletedAt.$currentUserId", System.currentTimeMillis()).await()
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            android.util.Log.e("SupabaseChatRepo", "clearChatHistory error", e)
+        }
+    }
 }
 

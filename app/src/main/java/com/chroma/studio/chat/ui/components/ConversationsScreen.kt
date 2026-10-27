@@ -1,5 +1,7 @@
 package com.chroma.studio.chat.ui.components
 
+import com.chroma.studio.ui.components.VerifiedBadge
+
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -48,7 +50,6 @@ import com.chroma.studio.chat.sound.SoundManager
 import com.chroma.studio.chat.ui.theme.LocalChatColors
 import com.chroma.studio.chat.ui.theme.StoryGradient
 import com.chroma.studio.ui.components.getAvatarPresetDrawableRes
-import com.composables.icons.lucide.BadgeCheck
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Plus
 import com.chroma.studio.ui.components.StoriesSection
@@ -1126,12 +1127,7 @@ private fun IosConversationListRow(
                         modifier = Modifier.weight(1f, fill = false)
                     )
                     if (chat.isVerified) {
-                        Icon(
-                            imageVector = Lucide.BadgeCheck,
-                            contentDescription = "Verified Account",
-                            tint = colors.iosBlue,
-                            modifier = Modifier.size(15.dp)
-                        )
+                        VerifiedBadge(size = 15.dp)
                     }
                     if (isPinned) {
                         LucidePin(tint = colors.iosBlue, size = 12.dp)

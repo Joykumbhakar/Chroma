@@ -1,5 +1,7 @@
 package com.chroma.studio.chat.ui.components
 
+import com.chroma.studio.ui.components.VerifiedBadge
+
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -197,12 +199,7 @@ fun ChatHeader(
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 if (activeChat.isVerified) {
-                                    Icon(
-                                        imageVector = Lucide.BadgeCheck,
-                                        contentDescription = "Verified",
-                                        tint = colors.iosBlue,
-                                        modifier = Modifier.size(16.dp)
-                                    )
+                                    VerifiedBadge(size = 16.dp)
                                 }
                                 if (activeChat.isMuted) {
                                     LucideBellOff(tint = colors.textMuted, size = 13.dp)

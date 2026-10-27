@@ -24,14 +24,14 @@ class FlashRepository {
     suspend fun getFlashFeed(limit: Long = 12, lastTimestamp: Long? = null): List<FlashVideo> {
         return try {
             var query = collection
-                .whereEqualTo("archived", false)
                 .orderBy("timestamp", Query.Direction.DESCENDING)
                 .limit(limit)
             if (lastTimestamp != null) {
                 query = query.startAfter(lastTimestamp)
             }
             val snapshot = query.get().await()
-            snapshot.toObjects(FlashVideo::class.java)
+            val items = snapshot.toObjects(FlashVideo::class.java)
+            items.filter { !it.isArchived }
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("FlashRepository", "Error fetching flash feed", e)
@@ -42,7 +42,6 @@ class FlashRepository {
     /** Real-time Flow of the latest 30 flashes — used for live updates. */
     fun listenToFlashFeed(): Flow<List<FlashVideo>> = callbackFlow {
         val listener = collection
-            .whereEqualTo("archived", false)
             .orderBy("timestamp", Query.Direction.DESCENDING)
             .limit(30)
             .addSnapshotListener { snapshot, error ->
@@ -50,7 +49,7 @@ class FlashRepository {
                     Log.e("FlashRepository", "Snapshot error", error)
                     return@addSnapshotListener
                 }
-                val items = snapshot?.toObjects(FlashVideo::class.java) ?: emptyList()
+                val items = snapshot?.toObjects(FlashVideo::class.java)?.filter { !it.isArchived } ?: emptyList()
                 trySend(items)
             }
         awaitClose { listener.remove() }
@@ -101,6 +100,36 @@ class FlashRepository {
             turnOffRemix = turnOffRemix
         )
         docRef.set(flash).await()
+
+        // Also write to community_works collection so it appears everywhere in Community tabs
+        try {
+            val communityPost = com.chroma.studio.model.DiscoverPost(
+                id = docRef.id,
+                creatorId = user.uid,
+                authorUsername = username,
+                authorDisplayName = displayName,
+                authorAvatarUrl = avatarUrl,
+                authorVerified = verified,
+                title = caption.ifBlank { "Flash Video" },
+                description = caption,
+                aspectRatio = "9:16",
+                videoUrl = videoUrl,
+                thumbnailUrl = thumbnailUrl,
+                postType = "video",
+                tags = hashtags,
+                mentions = mentions,
+                remixedFromPostId = remixedFromPostId,
+                remixedFromAuthorUsername = remixedFromAuthorUsername,
+                timestamp = flash.timestamp,
+                hideLikesCount = hideLikesCount,
+                turnOffComments = turnOffComments,
+                turnOffRemix = turnOffRemix
+            )
+            db.collection("community_works").document(docRef.id).set(communityPost).await()
+        } catch (ce: Exception) {
+            Log.e("FlashRepository", "Error syncing flash to community_works", ce)
+        }
+
         return docRef.id
     }
 

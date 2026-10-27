@@ -155,12 +155,15 @@ import com.chroma.studio.data.DraftPostRepository
 import com.chroma.studio.model.CreatorPostDraft
 import androidx.compose.ui.graphics.toArgb
 import com.composables.icons.lucide.*
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import android.os.SystemClock
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
@@ -655,6 +658,96 @@ enum class FcpVisualEffect(
     ANAMORPHIC_FLARE("Anamorphic", Lucide.Maximize2, "Horizontal cinematic blue streak flare")
 }
 
+enum class FcpClipAnimation(
+    val label: String,
+    val icon: ImageVector,
+    val description: String,
+    val badgeLabel: String
+) {
+    NONE("None", Lucide.X, "Clean unaltered camera framing", "NONE"),
+    SHAKE("Shake", Lucide.Activity, "High-energy camera shake with dynamic jitter", "SHAKE"),
+    BEAT_PULSE("Pulse", Lucide.Flame, "Rhythmic beat pulse and scale punch", "PULSE"),
+    ZOOM_IN("Zoom In", Lucide.ZoomIn, "Slow dramatic dolly zoom into subject", "ZOOM IN"),
+    ZOOM_OUT("Zoom Out", Lucide.ZoomOut, "Expansive cinematic pull-back revealing context", "ZOOM OUT"),
+    CAMERA_JITTER("Handheld", Lucide.Camera, "Natural organic handheld drift and motion", "HANDHELD"),
+    PAN_LEFT("Pan Left", Lucide.ArrowLeft, "Continuous cinematic slide to the left", "PAN L"),
+    PAN_RIGHT("Pan Right", Lucide.ArrowRight, "Continuous cinematic slide to the right", "PAN R"),
+    FLASH_STROBE("Strobe", Lucide.Sparkles, "High-impact rhythmic luminance strobe flash", "STROBE"),
+    WOBBLE("Wobble", Lucide.RotateCw, "Subtle rotational tilt and sway", "WOBBLE")
+}
+
+data class FcpAnimationTransforms(
+    val scale: Float = 1.0f,
+    val panX: Float = 0f,
+    val panY: Float = 0f,
+    val rotationZ: Float = 0f,
+    val flashAlpha: Float = 0f
+)
+
+fun calculateAnimationTransforms(
+    animation: FcpClipAnimation,
+    intensity: Float,
+    timeSec: Float,
+    progress: Float
+): FcpAnimationTransforms {
+    val normInt = intensity.coerceIn(0.1f, 1.0f)
+    return when (animation) {
+        FcpClipAnimation.NONE -> FcpAnimationTransforms()
+        FcpClipAnimation.SHAKE -> {
+            val s = 1.0f + (0.09f * normInt)
+            val px = (sin(timeSec * 38f) * 16f + cos(timeSec * 55f) * 8f) * normInt
+            val py = (cos(timeSec * 45f) * 14f + sin(timeSec * 33f) * 7f) * normInt
+            val rot = (sin(timeSec * 29f) * 1.8f) * normInt
+            FcpAnimationTransforms(scale = s, panX = px, panY = py, rotationZ = rot)
+        }
+        FcpClipAnimation.BEAT_PULSE -> {
+            val period = 0.6f
+            val phase = (timeSec % period) / period
+            val decay = (1f - phase).pow(2.5f)
+            val s = 1.0f + (0.12f * decay * normInt)
+            FcpAnimationTransforms(scale = s)
+        }
+        FcpClipAnimation.ZOOM_IN -> {
+            val s = 1.0f + (0.24f * progress * normInt)
+            FcpAnimationTransforms(scale = s)
+        }
+        FcpClipAnimation.ZOOM_OUT -> {
+            val s = 1.0f + (0.24f * (1f - progress) * normInt)
+            FcpAnimationTransforms(scale = s)
+        }
+        FcpClipAnimation.CAMERA_JITTER -> {
+            val s = 1.0f + (0.05f * normInt)
+            val px = (sin(timeSec * 3.4f) * 9f + cos(timeSec * 5.1f) * 5f) * normInt
+            val py = (cos(timeSec * 4.2f) * 8f + sin(timeSec * 2.8f) * 4f) * normInt
+            val rot = (sin(timeSec * 2.2f) * 0.8f) * normInt
+            FcpAnimationTransforms(scale = s, panX = px, panY = py, rotationZ = rot)
+        }
+        FcpClipAnimation.PAN_LEFT -> {
+            val s = 1.15f
+            val px = (40f * (0.5f - progress)) * normInt
+            FcpAnimationTransforms(scale = s, panX = px)
+        }
+        FcpClipAnimation.PAN_RIGHT -> {
+            val s = 1.15f
+            val px = (40f * (progress - 0.5f)) * normInt
+            FcpAnimationTransforms(scale = s, panX = px)
+        }
+        FcpClipAnimation.FLASH_STROBE -> {
+            val period = 0.4f
+            val phase = (timeSec % period) / period
+            val decay = (1f - phase).pow(3f)
+            val flashAlpha = 0.35f * decay * normInt
+            val s = 1.0f + (0.04f * decay * normInt)
+            FcpAnimationTransforms(scale = s, flashAlpha = flashAlpha)
+        }
+        FcpClipAnimation.WOBBLE -> {
+            val rot = (sin(timeSec * 4.5f) * 3.2f) * normInt
+            val s = 1.05f
+            FcpAnimationTransforms(scale = s, rotationZ = rot)
+        }
+    }
+}
+
 data class FcpClip(
     val id: String = UUID.randomUUID().toString(),
     val uri: Uri,
@@ -671,6 +764,8 @@ data class FcpClip(
     val lut: FcpLutPreset = FcpLutPreset.NONE,
     val effect: FcpVisualEffect = FcpVisualEffect.NONE,
     val effectIntensity: Float = 0.8f,
+    val animationEffect: FcpClipAnimation = FcpClipAnimation.NONE,
+    val animationIntensity: Float = 0.8f,
     val roleColor: Color = Color(0xFF0A84FF),
     val scale: Float = 1f,
     val panX: Float = 0f,
@@ -936,6 +1031,7 @@ fun FinalCutProVideoEditorScreen(
     initialUri: Uri? = null,
     initialUris: List<Uri> = emptyList(),
     draftId: String? = null,
+    remixedFromAuthorUsername: String? = null,
     onDone: (startMs: Long, endMs: Long, clips: List<Uri>) -> Unit,
     onBack: () -> Unit
 ) {
@@ -945,11 +1041,12 @@ fun FinalCutProVideoEditorScreen(
     val density = LocalDensity.current
     val colors = LocalOscellionColors.current
 
-    // Suppress Dynamic Island HUD overlay while in the Video Editor screen
+    // Suppress Dynamic Island HUD overlay while in the Video Editor screen and clear caches on exit
     DisposableEffect(Unit) {
         com.chroma.studio.ui.components.DynamicIslandManager.isSuppressed = true
         onDispose {
             com.chroma.studio.ui.components.DynamicIslandManager.isSuppressed = false
+            FcpThumbnailMemoryCache.clear()
         }
     }
 
@@ -982,9 +1079,15 @@ fun FinalCutProVideoEditorScreen(
     var isExporting by remember { mutableStateOf(false) }
     var exportProgress by remember { mutableFloatStateOf(0f) }
     var exportStageText by remember { mutableStateOf("Rendering frames...") }
+    var exportJob by remember { mutableStateOf<Job?>(null) }
+    var lastAudioSyncUptimeMs by remember { mutableLongStateOf(0L) }
 
     // ── Dialog & Quick Overlay States ─────────────────────────────────────
     var showExitConfirmationDialog by remember { mutableStateOf(false) }
+    var showDurationWarningDialog by remember { mutableStateOf(false) }
+    var showAnimationQuickSheet by remember { mutableStateOf(false) }
+    var animationEditingClipId by remember { mutableStateOf<String?>(null) }
+    var hasShownOneMinuteWarning by remember { mutableStateOf(false) }
     var flashOverlayIcon by remember { mutableStateOf<FlatPlaybackIconType?>(null) }
     var flashOverlayVisible by remember { mutableStateOf(false) }
 
@@ -1024,6 +1127,12 @@ fun FinalCutProVideoEditorScreen(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         if (uri != null) {
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (_: Throwable) {}
             val fileName = queryMediaFileName(context, uri)
             val dur = extractVideoDurationSec(context, uri) ?: 0f
             customAudio = FcpCustomAudio(
@@ -1042,6 +1151,12 @@ fun FinalCutProVideoEditorScreen(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         if (uri != null) {
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (_: Throwable) {}
             val fileName = queryMediaFileName(context, uri)
             val dur = extractVideoDurationSec(context, uri) ?: 0f
             customAudio = FcpCustomAudio(
@@ -1072,8 +1187,43 @@ fun FinalCutProVideoEditorScreen(
     val totalDurationSec = remember(timelineSpans) {
         timelineSpans.lastOrNull()?.timelineEndSec?.coerceAtLeast(1f) ?: 1f
     }
+    val isOverOneMinute = totalDurationSec > 60f
+
+    LaunchedEffect(totalDurationSec) {
+        if (totalDurationSec > 60f && !hasShownOneMinuteWarning) {
+            showDurationWarningDialog = true
+            hasShownOneMinuteWarning = true
+        }
+    }
     val selectedClip = remember(clips, selectedId) {
         clips.find { it.id == selectedId } ?: clips.firstOrNull()
+    }
+    var activeClipPreviewBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    LaunchedEffect(selectedClip?.uri) {
+        val uri = selectedClip?.uri ?: return@LaunchedEffect
+        val key = "${uri}_0"
+        val cached = FcpThumbnailMemoryCache.get(key)
+        if (cached != null) {
+            activeClipPreviewBitmap = cached
+        } else {
+            withContext(Dispatchers.IO) {
+                try {
+                    val retriever = MediaMetadataRetriever()
+                    try {
+                        retriever.setDataSource(context, uri)
+                        val bmp = retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                        if (bmp != null) {
+                            FcpThumbnailMemoryCache.put(key, bmp)
+                            withContext(Dispatchers.Main) {
+                                activeClipPreviewBitmap = bmp
+                            }
+                        }
+                    } finally {
+                        retriever.release()
+                    }
+                } catch (_: Throwable) {}
+            }
+        }
     }
 
     fun saveProjectDraft(): Boolean {
@@ -1102,8 +1252,164 @@ fun FinalCutProVideoEditorScreen(
         }
     }
 
+    // ── Background Video Duration Extraction (Asynchronous) ──────────────
+    var probedClipIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    LaunchedEffect(clips) {
+        val unprobed = clips.filter { !it.isDurationLoaded && it.id !in probedClipIds }
+        if (unprobed.isNotEmpty()) {
+            val probedMap = withContext(Dispatchers.IO) {
+                unprobed.associate { clip ->
+                    clip.id to extractVideoDurationSec(context, clip.uri)
+                }
+            }
+            probedClipIds = probedClipIds + unprobed.map { it.id }
+            clips = clips.map { clip ->
+                if (!clip.isDurationLoaded && probedMap.containsKey(clip.id)) {
+                    val realDur = probedMap[clip.id]
+                    if (realDur != null && realDur > 0f) {
+                        clip.copy(
+                            durationSec = realDur,
+                            trimStartSec = clip.trimStartSec.coerceIn(0f, (realDur - 0.25f).coerceAtLeast(0f)),
+                            trimEndSec = if (clip.trimEndSec >= clip.durationSec - 0.1f) realDur else clip.trimEndSec.coerceAtMost(realDur),
+                            isDurationLoaded = true
+                        )
+                    } else clip
+                } else clip
+            }
+        }
+    }
+
+    // ── ExoPlayer Engine (Low Latency Realtime LoadControl) ───────────────
+    val exoPlayer = remember {
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                /* minBufferMs = */ 1500,
+                /* maxBufferMs = */ 5000,
+                /* bufferForPlaybackMs = */ 60,
+                /* bufferForPlaybackAfterRebufferMs = */ 120
+            )
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
+
+        ExoPlayer.Builder(context)
+            .setLoadControl(loadControl)
+            .setSeekParameters(SeekParameters.EXACT)
+            .build().apply {
+                playWhenReady = false
+                repeatMode = Player.REPEAT_MODE_OFF
+                addListener(object : Player.Listener {
+                    override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                        android.util.Log.e("FinalCutProVideoEditor", "ExoPlayer playback error: ${error.errorCodeName} - ${error.message}", error)
+                        isPlaying = false
+                    }
+                })
+            }
+    }
+    DisposableEffect(Unit) {
+        onDispose { exoPlayer.release() }
+    }
+
+    // ── Secondary Low-Latency ExoPlayer Engine (Dedicated to Custom Soundtrack) ──
+    val customAudioPlayer = remember {
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                /* minBufferMs = */ 2000,
+                /* maxBufferMs = */ 10000,
+                /* bufferForPlaybackMs = */ 80,
+                /* bufferForPlaybackAfterRebufferMs = */ 200
+            )
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
+        ExoPlayer.Builder(context)
+            .setLoadControl(loadControl)
+            .build().apply {
+                playWhenReady = false
+                repeatMode = Player.REPEAT_MODE_ONE
+                addListener(object : Player.Listener {
+                    override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                        android.util.Log.e("FinalCutProVideoEditor", "customAudioPlayer playback error: ${error.errorCodeName} - ${error.message}", error)
+                    }
+                })
+            }
+    }
+    DisposableEffect(Unit) {
+        onDispose { customAudioPlayer.release() }
+    }
+
+    LaunchedEffect(customAudio?.loopAudio) {
+        customAudioPlayer.repeatMode = if (customAudio?.loopAudio != false) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+    }
+
+    // Synchronize customAudioPlayer media source and volume with customAudio state
+    LaunchedEffect(customAudio?.uri) {
+        val audio = customAudio
+        if (audio != null) {
+            customAudioPlayer.setMediaItem(MediaItem.fromUri(audio.uri))
+            customAudioPlayer.repeatMode = if (audio.loopAudio) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+            customAudioPlayer.prepare()
+            val posMs = (currentTimeSec * 1000f).toLong().coerceAtLeast(0L)
+            customAudioPlayer.seekTo(posMs)
+            customAudioPlayer.volume = audio.volume.coerceIn(0f, 1f)
+            customAudioPlayer.playWhenReady = isPlaying
+            if (isPlaying && !customAudioPlayer.isPlaying) {
+                customAudioPlayer.play()
+            }
+        } else {
+            customAudioPlayer.stop()
+            customAudioPlayer.clearMediaItems()
+        }
+    }
+
+    // Hardware LoudnessEnhancer for positive dialogue gain and voice isolation
+    var loudnessEnhancer by remember { mutableStateOf<LoudnessEnhancer?>(null) }
+    DisposableEffect(exoPlayer) {
+        val listener = object : Player.Listener {
+            override fun onAudioSessionIdChanged(audioSessionId: Int) {
+                if (audioSessionId != 0) {
+                    try {
+                        loudnessEnhancer?.release()
+                        loudnessEnhancer = LoudnessEnhancer(audioSessionId).apply {
+                            enabled = true
+                        }
+                    } catch (_: Throwable) {}
+                }
+            }
+        }
+        exoPlayer.addListener(listener)
+        val initialSession = exoPlayer.audioSessionId
+        if (initialSession != 0) {
+            try {
+                loudnessEnhancer = LoudnessEnhancer(initialSession).apply {
+                    enabled = true
+                }
+            } catch (_: Throwable) {}
+        }
+        onDispose {
+            exoPlayer.removeListener(listener)
+            try { loudnessEnhancer?.release() } catch (_: Throwable) {}
+        }
+    }
+
+    fun cancelExport() {
+        exportJob?.cancel()
+        exportJob = null
+        FcpTimelineExporter.cancelExport()
+        isExporting = false
+        exportProgress = 0f
+        exportStageText = ""
+        showExportSheet = false
+        ToastManager.showToast("Export cancelled")
+    }
+
     fun performExport(res: String, fps: String, saveToGallery: Boolean) {
-        scope.launch {
+        // Pause and stop timeline preview playback immediately during export
+        if (isPlaying) {
+            isPlaying = false
+            try { exoPlayer.pause() } catch (_: Throwable) {}
+            try { if (customAudioPlayer.isPlaying) customAudioPlayer.pause() } catch (_: Throwable) {}
+        }
+        exportJob?.cancel()
+        exportJob = scope.launch {
             try {
                 if (clips.isEmpty()) {
                     ToastManager.showToast("No video clips to export")
@@ -1202,145 +1508,15 @@ fun FinalCutProVideoEditorScreen(
                     ToastManager.showToast("Export completed! Sending to Studio...")
                     onDone(0L, totalTimelineDurationMs, listOf(Uri.fromFile(exportedFile)))
                 }
+            } catch (e: CancellationException) {
+                isExporting = false
+                exportProgress = 0f
+                showExportSheet = false
             } catch (e: Exception) {
                 isExporting = false
                 showExportSheet = false
                 ToastManager.showToast("Export error: ${e.localizedMessage ?: "Unknown error"}")
             }
-        }
-    }
-
-    // ── Background Video Duration Extraction (Asynchronous) ──────────────
-    var probedClipIds by remember { mutableStateOf<Set<String>>(emptySet()) }
-    LaunchedEffect(clips) {
-        val unprobed = clips.filter { !it.isDurationLoaded && it.id !in probedClipIds }
-        if (unprobed.isNotEmpty()) {
-            val probedMap = withContext(Dispatchers.IO) {
-                unprobed.associate { clip ->
-                    clip.id to extractVideoDurationSec(context, clip.uri)
-                }
-            }
-            probedClipIds = probedClipIds + unprobed.map { it.id }
-            clips = clips.map { clip ->
-                if (!clip.isDurationLoaded && probedMap.containsKey(clip.id)) {
-                    val realDur = probedMap[clip.id]
-                    if (realDur != null && realDur > 0f) {
-                        clip.copy(
-                            durationSec = realDur,
-                            trimStartSec = clip.trimStartSec.coerceIn(0f, (realDur - 0.25f).coerceAtLeast(0f)),
-                            trimEndSec = if (clip.trimEndSec >= clip.durationSec - 0.1f) realDur else clip.trimEndSec.coerceAtMost(realDur),
-                            isDurationLoaded = true
-                        )
-                    } else clip
-                } else clip
-            }
-        }
-    }
-
-    // ── ExoPlayer Engine (Low Latency Realtime LoadControl) ───────────────
-    val exoPlayer = remember {
-        val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(
-                /* minBufferMs = */ 1500,
-                /* maxBufferMs = */ 5000,
-                /* bufferForPlaybackMs = */ 60,
-                /* bufferForPlaybackAfterRebufferMs = */ 120
-            )
-            .setPrioritizeTimeOverSizeThresholds(true)
-            .build()
-
-        ExoPlayer.Builder(context)
-            .setLoadControl(loadControl)
-            .setSeekParameters(SeekParameters.EXACT)
-            .build().apply {
-                playWhenReady = false
-                repeatMode = Player.REPEAT_MODE_OFF
-                addListener(object : Player.Listener {
-                    override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                        android.util.Log.e("FinalCutProVideoEditor", "ExoPlayer playback error: ${error.errorCodeName} - ${error.message}", error)
-                        isPlaying = false
-                    }
-                })
-            }
-    }
-    DisposableEffect(Unit) {
-        onDispose { exoPlayer.release() }
-    }
-
-    // ── Secondary Low-Latency ExoPlayer Engine (Dedicated to Custom Soundtrack) ──
-    val customAudioPlayer = remember {
-        val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(1500, 5000, 250, 500)
-            .setPrioritizeTimeOverSizeThresholds(true)
-            .build()
-        ExoPlayer.Builder(context)
-            .setLoadControl(loadControl)
-            .setSeekParameters(SeekParameters.EXACT)
-            .build().apply {
-                playWhenReady = false
-                repeatMode = Player.REPEAT_MODE_ONE
-                addListener(object : Player.Listener {
-                    override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                        android.util.Log.e("FinalCutProVideoEditor", "customAudioPlayer playback error: ${error.errorCodeName} - ${error.message}", error)
-                    }
-                })
-            }
-    }
-    DisposableEffect(Unit) {
-        onDispose { customAudioPlayer.release() }
-    }
-
-    LaunchedEffect(customAudio?.loopAudio) {
-        customAudioPlayer.repeatMode = if (customAudio?.loopAudio != false) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
-    }
-
-    // Synchronize customAudioPlayer media source and volume with customAudio state
-    LaunchedEffect(customAudio?.uri) {
-        val audio = customAudio
-        if (audio != null) {
-            customAudioPlayer.setMediaItem(MediaItem.fromUri(audio.uri))
-            customAudioPlayer.repeatMode = if (audio.loopAudio) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
-            customAudioPlayer.prepare()
-            val posMs = (currentTimeSec * 1000f).toLong().coerceAtLeast(0L)
-            customAudioPlayer.seekTo(posMs)
-            customAudioPlayer.volume = audio.volume.coerceIn(0f, 1f)
-            customAudioPlayer.playWhenReady = isPlaying
-            if (isPlaying && !customAudioPlayer.isPlaying) {
-                customAudioPlayer.play()
-            }
-        } else {
-            customAudioPlayer.stop()
-            customAudioPlayer.clearMediaItems()
-        }
-    }
-
-    // Hardware LoudnessEnhancer for positive dialogue gain and voice isolation
-    var loudnessEnhancer by remember { mutableStateOf<LoudnessEnhancer?>(null) }
-    DisposableEffect(exoPlayer) {
-        val listener = object : Player.Listener {
-            override fun onAudioSessionIdChanged(audioSessionId: Int) {
-                if (audioSessionId != 0) {
-                    try {
-                        loudnessEnhancer?.release()
-                        loudnessEnhancer = LoudnessEnhancer(audioSessionId).apply {
-                            enabled = true
-                        }
-                    } catch (_: Throwable) {}
-                }
-            }
-        }
-        exoPlayer.addListener(listener)
-        val initialSession = exoPlayer.audioSessionId
-        if (initialSession != 0) {
-            try {
-                loudnessEnhancer = LoudnessEnhancer(initialSession).apply {
-                    enabled = true
-                }
-            } catch (_: Throwable) {}
-        }
-        onDispose {
-            exoPlayer.removeListener(listener)
-            try { loudnessEnhancer?.release() } catch (_: Throwable) {}
         }
     }
 
@@ -1376,6 +1552,7 @@ fun FinalCutProVideoEditorScreen(
         seamlessTransition: Boolean = false,
         forceExactSeek: Boolean = true
     ) {
+        if (isExporting) return
         val mediaMs = (targetMediaSec * 1000f).toLong().coerceAtLeast(0L)
         val isDifferentClip = loadedClipId != clip.id
         val isDifferentUri = loadedClipUri != clip.uri
@@ -1429,6 +1606,7 @@ fun FinalCutProVideoEditorScreen(
     var lastSnapPoint by remember { mutableFloatStateOf(-1f) }
 
     fun onScrubStart() {
+        if (isExporting) return
         isUserScrubbing = true
         if (isPlaying) {
             isPlaying = false
@@ -1439,6 +1617,7 @@ fun FinalCutProVideoEditorScreen(
     }
 
     fun onScrubSec(newSec: Float) {
+        if (isExporting) return
         // Magnetic cut boundary snapping (±0.06s)
         val snapThreshold = 0.06f
         var snappedSec = newSec
@@ -1480,6 +1659,7 @@ fun FinalCutProVideoEditorScreen(
     }
 
     fun onScrubEnd(finalSec: Float) {
+        if (isExporting) return
         lastSnapPoint = -1f
         isClipSwitching = false
         val clamped = finalSec.coerceIn(0f, totalDurationSec)
@@ -1504,9 +1684,12 @@ fun FinalCutProVideoEditorScreen(
         isUserScrubbing = false
     }
 
-    // High performance throttled frame seek loop (smooth 60/120 FPS display pacing without frame drops)
+    // High performance debounced frame seek loop (smooth 60/120 FPS display pacing without seek storms across cuts)
     LaunchedEffect(exoPlayer, totalDurationSec, clips) {
+        var lastScrubUri: Uri? = null
+        var lastCutCrossMs = 0L
         for (targetGlobalSec in scrubChannel) {
+            if (isExporting) continue
             val clamped = targetGlobalSec.coerceIn(0f, totalDurationSec)
             val span = getActiveSpanAt(clamped) ?: continue
             val targetMediaSec = getMediaTimeForGlobal(span, clamped)
@@ -1514,6 +1697,18 @@ fun FinalCutProVideoEditorScreen(
             if (selectedId != span.clip.id) {
                 selectedId = span.clip.id
             }
+
+            val now = SystemClock.uptimeMillis()
+            val isCutCross = lastScrubUri != null && lastScrubUri != span.clip.uri
+            if (isCutCross) {
+                // Debounce rapid cut-boundary crossing while scrubbing to eliminate seek storms & decoder thrashing
+                if (now - lastCutCrossMs < 75L) {
+                    continue
+                }
+                lastCutCrossMs = now
+            }
+            lastScrubUri = span.clip.uri
+
             ensureClipLoadedInPlayer(
                 clip = span.clip,
                 targetMediaSec = targetMediaSec,
@@ -1525,6 +1720,7 @@ fun FinalCutProVideoEditorScreen(
     }
 
     fun seekToGlobalTime(targetGlobalSec: Float, autoPlay: Boolean? = null) {
+        if (isExporting) return
         val clamped = targetGlobalSec.coerceIn(0f, totalDurationSec)
         currentTimeSec = clamped
         isClipSwitching = false
@@ -1601,13 +1797,19 @@ fun FinalCutProVideoEditorScreen(
 
     LaunchedEffect(isPlaying) {
         if (customAudio != null) {
-            if (isPlaying && (customAudioPlayer.playbackState == Player.STATE_ENDED || customAudioPlayer.playbackState == Player.STATE_IDLE)) {
-                customAudioPlayer.prepare()
-            }
-            customAudioPlayer.playWhenReady = isPlaying
             if (isPlaying) {
+                if (customAudioPlayer.playbackState == Player.STATE_ENDED || customAudioPlayer.playbackState == Player.STATE_IDLE) {
+                    customAudioPlayer.prepare()
+                }
+                val targetMs = (currentTimeSec * 1000f).toLong().coerceAtLeast(0L)
+                if (abs(customAudioPlayer.currentPosition - targetMs) > 120L) {
+                    customAudioPlayer.seekTo(targetMs)
+                    lastAudioSyncUptimeMs = SystemClock.uptimeMillis()
+                }
+                customAudioPlayer.playWhenReady = true
                 if (!customAudioPlayer.isPlaying) customAudioPlayer.play()
             } else {
+                customAudioPlayer.playWhenReady = false
                 if (customAudioPlayer.isPlaying) customAudioPlayer.pause()
             }
         }
@@ -1765,18 +1967,50 @@ fun FinalCutProVideoEditorScreen(
                     }
                 }
 
-                // Drift compensation for custom soundtrack
+                // Master soundtrack synchronization & dynamic tempo smoothing (Rock-solid, glitch-free audio)
                 if (customAudio != null && isPlaying) {
+                    val audioState = customAudioPlayer.playbackState
+                    val nowUptime = SystemClock.uptimeMillis()
                     val audioPosMs = customAudioPlayer.currentPosition
                     val targetMs = (currentTimeSec * 1000f).toLong()
-                    if (abs(audioPosMs - targetMs) > 400L) {
-                        if (customAudioPlayer.playbackState == Player.STATE_ENDED || customAudioPlayer.playbackState == Player.STATE_IDLE) {
-                            customAudioPlayer.prepare()
+                    val driftMs = abs(audioPosMs - targetMs)
+                    val signedDriftMs = targetMs - audioPosMs // > 0: audio trailing; < 0: audio leading
+
+                    if (audioState == Player.STATE_ENDED) {
+                        if (customAudio?.loopAudio != false) {
+                            customAudioPlayer.seekTo(0L)
+                            customAudioPlayer.setPlaybackSpeed(1.0f)
+                            customAudioPlayer.play()
+                            lastAudioSyncUptimeMs = nowUptime
                         }
-                        customAudioPlayer.seekTo(targetMs.coerceAtLeast(0L))
-                    }
-                    if (!customAudioPlayer.isPlaying && customAudioPlayer.playWhenReady && customAudioPlayer.playbackState == Player.STATE_READY) {
-                        customAudioPlayer.play()
+                    } else if (audioState == Player.STATE_READY) {
+                        if (customAudioPlayer.playWhenReady && !customAudioPlayer.isPlaying) {
+                            customAudioPlayer.play()
+                        }
+                        if (driftMs > 500L) {
+                            // Hard drift (> 500ms): seek only when drift exceeds threshold, throttled to 1.5s
+                            if (nowUptime - lastAudioSyncUptimeMs > 1500L) {
+                                lastAudioSyncUptimeMs = nowUptime
+                                customAudioPlayer.setPlaybackSpeed(1.0f)
+                                customAudioPlayer.seekTo(targetMs.coerceAtLeast(0L))
+                            }
+                        } else if (driftMs in 35L..500L) {
+                            // Sub-second acoustic drift (35-500ms): apply dynamic playback speed micro-adjustments (0.96x - 1.04x)
+                            // for imperceptible, glitch-free acoustic convergence without hard seeks
+                            val targetSpeed = if (signedDriftMs > 0) {
+                                (1.0f + (signedDriftMs.toFloat() / 500f) * 0.04f).coerceIn(1.01f, 1.04f)
+                            } else {
+                                (1.0f - (driftMs.toFloat() / 500f) * 0.04f).coerceIn(0.96f, 0.99f)
+                            }
+                            if (abs(customAudioPlayer.playbackParameters.speed - targetSpeed) > 0.005f) {
+                                customAudioPlayer.setPlaybackSpeed(targetSpeed)
+                            }
+                        } else {
+                            // Audio is in lock-step (< 35ms drift): restore standard 1.0x playback speed
+                            if (customAudioPlayer.playbackParameters.speed != 1.0f) {
+                                customAudioPlayer.setPlaybackSpeed(1.0f)
+                            }
+                        }
                     }
                 }
             }
@@ -1887,6 +2121,34 @@ fun FinalCutProVideoEditorScreen(
         )
         undoStack = (undoStack + listOf(snapshot)).takeLast(25)
         redoStack = emptyList()
+    }
+
+    fun trimTimelineToOneMinute() {
+        if (clips.isEmpty()) return
+        saveStateForUndo()
+        var accumulatedSec = 0f
+        val newClips = mutableListOf<FcpClip>()
+        for (clip in clips) {
+            val clipDur = clip.trimmedDurationSec
+            if (accumulatedSec + clipDur <= 60f) {
+                newClips.add(clip)
+                accumulatedSec += clipDur
+            } else if (accumulatedSec < 60f) {
+                val remainingSec = (60f - accumulatedSec) * clip.speed
+                val newTrimEnd = clip.trimStartSec + remainingSec
+                newClips.add(clip.copy(trimEndSec = newTrimEnd))
+                accumulatedSec = 60f
+                break
+            } else {
+                break
+            }
+        }
+        if (newClips.isNotEmpty()) {
+            clips = newClips
+            selectedId = newClips.first().id
+            currentTimeSec = 0f
+            try { exoPlayer.seekTo(0L) } catch (_: Throwable) {}
+        }
     }
 
     fun undo() {
@@ -2127,11 +2389,45 @@ fun FinalCutProVideoEditorScreen(
                                 .background(colors.glassBorder)
                         )
 
+                        if (isOverOneMinute) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(Color(0xFFFF9500).copy(alpha = 0.18f))
+                                    .border(0.5.dp, Color(0xFFFF9500).copy(alpha = 0.4f), RoundedCornerShape(6.dp))
+                                    .clickable { showDurationWarningDialog = true }
+                                    .padding(horizontal = 7.dp, vertical = 4.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Lucide.TriangleAlert,
+                                        contentDescription = null,
+                                        tint = Color(0xFFFF9500),
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Text(
+                                        text = ">1m",
+                                        color = Color(0xFFFF9500),
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+
                         // Export Primary Button
                         PrimaryGradientButton(
                             onClick = {
                                 SoundManager.playTap(context)
-                                showExportSheet = true
+                                if (totalDurationSec > 60f) {
+                                    showDurationWarningDialog = true
+                                } else {
+                                    showExportSheet = true
+                                }
                             },
                             height = 34.dp,
                             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
@@ -2150,6 +2446,33 @@ fun FinalCutProVideoEditorScreen(
                             )
                         }
                     }
+                }
+            }
+
+            if (remixedFromAuthorUsername != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFF007AFF).copy(alpha = 0.15f))
+                        .border(0.5.dp, Color(0xFF007AFF).copy(alpha = 0.35f), RoundedCornerShape(10.dp))
+                        .padding(horizontal = 12.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Lucide.Sparkles,
+                        contentDescription = "Remix",
+                        tint = Color(0xFF007AFF),
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = "Remixing Flash from @$remixedFromAuthorUsername",
+                        color = Color.White,
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
             }
 
@@ -2290,6 +2613,35 @@ fun FinalCutProVideoEditorScreen(
                     )
 
                     // ExoPlayer Video Surface with dynamic Color Matrix filter
+                    var aspectRatioLayoutRef by remember { mutableStateOf<AspectRatioFrameLayout?>(null) }
+                    DisposableEffect(exoPlayer) {
+                        val videoSizeListener = object : Player.Listener {
+                            override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
+                                if (videoSize.height > 0 && videoSize.width > 0) {
+                                    val ratio = (videoSize.width * videoSize.pixelWidthHeightRatio) / videoSize.height
+                                    aspectRatioLayoutRef?.setAspectRatio(ratio)
+                                }
+                            }
+                        }
+                        exoPlayer.addListener(videoSizeListener)
+                        onDispose {
+                            exoPlayer.removeListener(videoSizeListener)
+                        }
+                    }
+
+                    val activeSpanForAnim = activePlayingSpan ?: timelineSpans.firstOrNull { it.clip.id == activeClip?.id }
+                    val clipElapsedSec = if (activeSpanForAnim != null) (currentTimeSec - activeSpanForAnim.timelineStartSec).coerceAtLeast(0f) else 0f
+                    val clipFrac = if (activeSpanForAnim != null && activeSpanForAnim.durationSec > 0f) {
+                        (clipElapsedSec / activeSpanForAnim.durationSec).coerceIn(0f, 1f)
+                    } else 0f
+
+                    val animTransforms = calculateAnimationTransforms(
+                        animation = activeClip?.animationEffect ?: FcpClipAnimation.NONE,
+                        intensity = activeClip?.animationIntensity ?: 0.8f,
+                        timeSec = clipElapsedSec,
+                        progress = clipFrac
+                    )
+
                     AndroidView(
                         factory = { ctx ->
                             val aspectRatioLayout = AspectRatioFrameLayout(ctx).apply {
@@ -2298,6 +2650,7 @@ fun FinalCutProVideoEditorScreen(
                                 isClickable = false
                                 isFocusable = false
                             }
+                            aspectRatioLayoutRef = aspectRatioLayout
                             val textureView = TextureView(ctx).apply {
                                 isOpaque = true
                                 isClickable = false
@@ -2311,25 +2664,20 @@ fun FinalCutProVideoEditorScreen(
 
                             aspectRatioLayout.addView(textureView, layoutParams)
                             exoPlayer.setVideoTextureView(textureView)
-
-                            exoPlayer.addListener(object : Player.Listener {
-                                override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
-                                    if (videoSize.height > 0 && videoSize.width > 0) {
-                                        val ratio = (videoSize.width * videoSize.pixelWidthHeightRatio) / videoSize.height
-                                        aspectRatioLayout.setAspectRatio(ratio)
-                                    }
-                                }
-                            })
                             aspectRatioLayout
+                        },
+                        onRelease = {
+                            aspectRatioLayoutRef = null
                         },
                         update = { _ -> },
                         modifier = Modifier
                             .fillMaxSize()
                             .graphicsLayer {
-                                scaleX = activeScale
-                                scaleY = activeScale
-                                translationX = activePanX
-                                translationY = activePanY
+                                scaleX = activeScale * animTransforms.scale
+                                scaleY = activeScale * animTransforms.scale
+                                translationX = activePanX + animTransforms.panX
+                                translationY = activePanY + animTransforms.panY
+                                rotationZ = animTransforms.rotationZ
                                 if (supportsRenderEffect) {
                                     renderEffect = activeRenderEffect
                                 }
@@ -2351,10 +2699,11 @@ fun FinalCutProVideoEditorScreen(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .graphicsLayer {
-                                    scaleX = activeScale
-                                    scaleY = activeScale
-                                    translationX = activePanX
-                                    translationY = activePanY
+                                    scaleX = activeScale * animTransforms.scale
+                                    scaleY = activeScale * animTransforms.scale
+                                    translationX = activePanX + animTransforms.panX
+                                    translationY = activePanY + animTransforms.panY
+                                    rotationZ = animTransforms.rotationZ
                                     if (supportsRenderEffect) {
                                         renderEffect = activeRenderEffect
                                     }
@@ -2370,6 +2719,16 @@ fun FinalCutProVideoEditorScreen(
                         currentTimeSec = currentTimeSec,
                         modifier = Modifier.fillMaxSize().zIndex(15f)
                     )
+
+                    // Live Flash Strobe Scrim
+                    if (animTransforms.flashAlpha > 0.01f) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .zIndex(16f)
+                                .background(Color.White.copy(alpha = animTransforms.flashAlpha))
+                        )
+                    }
 
                     // Live Transition Visual Overlay Layer (Renders seamlessly across video boundary cut)
                     FcpActiveTransitionOverlay(
@@ -2505,7 +2864,9 @@ fun FinalCutProVideoEditorScreen(
                                                 lastTapTimestamp = now
                                                 pendingTapJob?.cancel()
                                                 pendingTapJob = scope.launch {
+                                                    if (isExporting) return@launch
                                                     kotlinx.coroutines.delay(260L)
+                                                    if (isExporting) return@launch
                                                     val isAtEnd = currentTotalDuration > 0f && currentTimeSec >= currentTotalDuration - 0.08f
                                                     if (isAtEnd) {
                                                         seekToGlobalTime(0f, autoPlay = true)
@@ -2952,21 +3313,23 @@ fun FinalCutProVideoEditorScreen(
                                             ToastManager.showToast(if (isAutoReplay) "Auto Replay: ON" else "Auto Replay: OFF")
                                         },
                                         onPlayToggle = {
-                                            SoundManager.playTap(context)
-                                            val isAtEnd = totalDurationSec > 0f && currentTimeSec >= totalDurationSec - 0.08f
-                                            if (isAtEnd) {
-                                                seekToGlobalTime(0f, autoPlay = true)
-                                            } else {
-                                                val nextPlaying = !isPlaying
-                                                if (nextPlaying) {
-                                                    isPlaying = true
-                                                    exoPlayer.play()
+                                            if (!isExporting) {
+                                                SoundManager.playTap(context)
+                                                val isAtEnd = totalDurationSec > 0f && currentTimeSec >= totalDurationSec - 0.08f
+                                                if (isAtEnd) {
+                                                    seekToGlobalTime(0f, autoPlay = true)
                                                 } else {
-                                                    isPlaying = false
-                                                    exoPlayer.pause()
+                                                    val nextPlaying = !isPlaying
+                                                    if (nextPlaying) {
+                                                        isPlaying = true
+                                                        exoPlayer.play()
+                                                    } else {
+                                                        isPlaying = false
+                                                        exoPlayer.pause()
+                                                    }
                                                 }
+                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                             }
-                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                         },
                                         onSelectClip = { clipId ->
                                             selectedId = clipId
@@ -2974,6 +3337,19 @@ fun FinalCutProVideoEditorScreen(
                                             if (span != null) {
                                                 seekToGlobalTime(span.timelineStartSec)
                                             }
+                                        },
+                                        onDoubleTapClip = { clipId ->
+                                            selectedId = clipId
+                                            val span = timelineSpans.find { it.clip.id == clipId }
+                                            if (span != null) {
+                                                seekToGlobalTime(span.timelineStartSec)
+                                            }
+                                            activeTab = FcpWorkspaceTab.EFFECTS
+                                            animationEditingClipId = clipId
+                                            showAnimationQuickSheet = true
+                                            SoundManager.playTap(context)
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            ToastManager.showToast("Clip Motion: Choose Shake or Animation")
                                         },
                                         onTrimStart = {
                                             onScrubStart()
@@ -3023,6 +3399,11 @@ fun FinalCutProVideoEditorScreen(
                                         onScrubSec = { sec -> onScrubSec(sec) },
                                         onScrubEnd = { sec -> onScrubEnd(sec) },
                                         onSplitClip = {
+                                            if (isPlaying) {
+                                                isPlaying = false
+                                                try { exoPlayer.pause() } catch (_: Throwable) {}
+                                                try { if (customAudioPlayer.isPlaying) customAudioPlayer.pause() } catch (_: Throwable) {}
+                                            }
                                             val threshold = 0.08f
                                             val activeSpan = if (selectedId != null) {
                                                 timelineSpans.find { it.clip.id == selectedId && currentTimeSec >= it.timelineStartSec + threshold && currentTimeSec <= it.timelineEndSec - threshold }
@@ -3119,14 +3500,14 @@ fun FinalCutProVideoEditorScreen(
                                     background = canvasBackground,
                                     onBackgroundChange = { canvasBackground = it },
                                     onPickImage = { bgImagePicker.launch("image/*") },
-                                    blurBitmap = blurBackgroundBitmap ?: selectedClip?.let { FcpThumbnailMemoryCache.get("${it.uri}_0") },
+                                    blurBitmap = activeClipPreviewBitmap ?: blurBackgroundBitmap ?: selectedClip?.let { FcpThumbnailMemoryCache.get("${it.uri}_0") },
                                     isDarkMode = colors.isDark
                                 )
                             }
                             FcpWorkspaceTab.COLOR -> {
                                 ColorTabContent(
                                     selectedClip = selectedClip,
-                                    previewBitmap = blurBackgroundBitmap ?: selectedClip?.let { FcpThumbnailMemoryCache.get("${it.uri}_0") },
+                                    previewBitmap = activeClipPreviewBitmap ?: blurBackgroundBitmap ?: selectedClip?.let { FcpThumbnailMemoryCache.get("${it.uri}_0") },
                                     onUpdateClip = { updated ->
                                         clips = clips.map { if (it.id == updated.id) updated else it }
                                     },
@@ -3168,6 +3549,19 @@ fun FinalCutProVideoEditorScreen(
                             }
                             FcpWorkspaceTab.EFFECTS -> {
                                 EffectsTabContent(
+                                    selectedAnimation = selectedClip?.animationEffect ?: FcpClipAnimation.NONE,
+                                    onSelectAnimation = { newAnim ->
+                                        selectedClip?.let { cur ->
+                                            saveStateForUndo()
+                                            clips = clips.map { if (it.id == cur.id) it.copy(animationEffect = newAnim) else it }
+                                        }
+                                    },
+                                    animationIntensity = selectedClip?.animationIntensity ?: 0.8f,
+                                    onAnimationIntensityChange = { newInt ->
+                                        selectedClip?.let { cur ->
+                                            clips = clips.map { if (it.id == cur.id) it.copy(animationIntensity = newInt) else it }
+                                        }
+                                    },
                                     selectedEffect = selectedClip?.effect ?: FcpVisualEffect.NONE,
                                     onSelectEffect = { newEff ->
                                         selectedClip?.let { cur ->
@@ -3191,7 +3585,8 @@ fun FinalCutProVideoEditorScreen(
                                             saveStateForUndo()
                                             clips = clips.map { if (it.id == cur.id) it.copy(speed = newSpeed) else it }
                                         }
-                                    }
+                                    },
+                                    previewBitmap = activeClipPreviewBitmap ?: blurBackgroundBitmap ?: selectedClip?.let { FcpThumbnailMemoryCache.get("${it.uri}_0") }
                                 )
                             }
                             FcpWorkspaceTab.TITLES -> {
@@ -3254,6 +3649,28 @@ fun FinalCutProVideoEditorScreen(
             }
         }
 
+        // Clip Animation Quick Sheet (Double-tap clip in timeline)
+        if (showAnimationQuickSheet) {
+            val targetClip = clips.firstOrNull { it.id == animationEditingClipId } ?: selectedClip
+            if (targetClip != null) {
+                FcpClipAnimationDialog(
+                    clip = targetClip,
+                    onDismiss = {
+                        showAnimationQuickSheet = false
+                        animationEditingClipId = null
+                    },
+                    onApplyAnimation = { newAnim, newInt ->
+                        saveStateForUndo()
+                        clips = clips.map {
+                            if (it.id == targetClip.id) it.copy(animationEffect = newAnim, animationIntensity = newInt) else it
+                        }
+                    }
+                )
+            } else {
+                showAnimationQuickSheet = false
+            }
+        }
+
         // Clip Transition Selection Dialog
         if (editingTransitionClipId != null) {
             val clipIndex = clips.indexOfFirst { it.id == editingTransitionClipId }
@@ -3312,8 +3729,34 @@ fun FinalCutProVideoEditorScreen(
                     saveProjectDraft()
                     showExportSheet = false
                 },
+                onCancelExport = {
+                    cancelExport()
+                },
                 onDismiss = {
-                    showExportSheet = false
+                    if (isExporting) {
+                        cancelExport()
+                    } else {
+                        showExportSheet = false
+                    }
+                }
+            )
+        }
+
+        // Over 1-Minute Duration Warning Dialog
+        if (showDurationWarningDialog) {
+            FcpDurationWarningDialog(
+                totalDurationSec = totalDurationSec,
+                onAutoTrimTo1Min = {
+                    trimTimelineToOneMinute()
+                    showDurationWarningDialog = false
+                    ToastManager.showToast("Timeline trimmed to 1 minute ✂️")
+                },
+                onExportFullToGallery = {
+                    showDurationWarningDialog = false
+                    showExportSheet = true
+                },
+                onDismiss = {
+                    showDurationWarningDialog = false
                 }
             )
         }
@@ -3424,9 +3867,14 @@ private fun VideoWorkspaceTabs(
 // ============================================================================
 
 object FcpThumbnailMemoryCache {
-    private val cache = LruCache<String, Bitmap>(300)
+    private val maxMemoryKb = (Runtime.getRuntime().maxMemory() / 1024).toInt()
+    private val cacheSizeKb = (maxMemoryKb / 8).coerceIn(16384, 131072)
+    private val cache = object : LruCache<String, Bitmap>(cacheSizeKb) {
+        override fun sizeOf(key: String, value: Bitmap): Int = (value.byteCount / 1024).coerceAtLeast(1)
+    }
     fun get(key: String): Bitmap? = cache.get(key)
     fun put(key: String, bitmap: Bitmap) { cache.put(key, bitmap) }
+    fun clear() { cache.evictAll() }
 }
 
 @Composable
@@ -3594,6 +4042,7 @@ data class FcpTimelineActions(
     val onAutoReplayToggle: () -> Unit = {},
     val onPlayToggle: () -> Unit = {},
     val onSelectClip: (String) -> Unit = {},
+    val onDoubleTapClip: (String) -> Unit = {},
     val onTrimLeft: (String, Float) -> Unit = { _, _ -> },
     val onTrimRight: (String, Float) -> Unit = { _, _ -> },
     val onTrimStart: () -> Unit = {},
@@ -3767,6 +4216,7 @@ private fun TimelineClipCard(
     onDragMove: (String, Float) -> Unit,
     onDragEnd: () -> Unit,
     onSelectClip: (String) -> Unit,
+    onDoubleTapClip: (String) -> Unit = {},
     onScrubStart: () -> Unit,
     onScrubSec: (Float) -> Unit,
     onScrubEnd: (Float) -> Unit,
@@ -3837,6 +4287,15 @@ private fun TimelineClipCard(
                         onScrubSec(tappedSec)
                         onScrubEnd(tappedSec)
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    },
+                    onDoubleTap = { offset ->
+                        onSelectClip(clip.id)
+                        val tappedSec = (span.timelineStartSec + (offset.x / (pixelsPerSec * density))).coerceIn(0f, totalDurationSec)
+                        onScrubStart()
+                        onScrubSec(tappedSec)
+                        onScrubEnd(tappedSec)
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onDoubleTapClip(clip.id)
                     }
                 )
             }
@@ -4011,13 +4470,44 @@ private fun TimelineClipCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "${String.format("%.1f", clip.trimmedDurationSec)}s",
-                    fontSize = 9.sp,
-                    color = subTextColor,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Medium
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "${String.format("%.1f", clip.trimmedDurationSec)}s",
+                        fontSize = 9.sp,
+                        color = subTextColor,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Medium
+                    )
+                    if (clip.animationEffect != FcpClipAnimation.NONE) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(Color(0xFFE11D48).copy(alpha = 0.9f))
+                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Icon(
+                                    imageVector = clip.animationEffect.icon,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(7.5.dp)
+                                )
+                                Text(
+                                    text = clip.animationEffect.badgeLabel,
+                                    fontSize = 7.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                        }
+                    }
+                }
                 if (clip.speed != 1f) {
                     Text(
                         text = "${clip.speed}x",
@@ -4633,6 +5123,7 @@ private fun TimelineTabContent(
                                     actions.onSelectClip(clipId)
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 },
+                                onDoubleTapClip = actions.onDoubleTapClip,
                                 onDragMove = { activeId, deltaX ->
                                     val currentList = currentClips
                                     val currentIdx = currentList.indexOfFirst { it.id == activeId }
@@ -5801,7 +6292,279 @@ private fun AudioTabContent(
 // ============================================================================
 
 @Composable
+private fun FcpEffectThumbnailCard(
+    effect: FcpVisualEffect,
+    isSelected: Boolean,
+    previewBitmap: Bitmap?,
+    onClick: () -> Unit
+) {
+    val colors = LocalOscellionColors.current
+    val borderColor by animateColorAsState(
+        targetValue = if (isSelected) colors.primary else colors.glassBorder,
+        animationSpec = tween(150),
+        label = "effectCardBorder"
+    )
+
+    Column(
+        modifier = Modifier
+            .width(88.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (isSelected) colors.primary.copy(alpha = 0.16f) else colors.glassBg)
+            .border(if (isSelected) 2.dp else 1.dp, borderColor, RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+            .padding(bottom = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        // 16:9 Thumbnail Viewport with actual video frame & visual effect simulation
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp)
+                .clip(RoundedCornerShape(topStart = 9.dp, topEnd = 9.dp))
+                .background(Color.Black),
+            contentAlignment = Alignment.Center
+        ) {
+            if (previewBitmap != null) {
+                val colorFilter = remember(effect) {
+                    when (effect) {
+                        FcpVisualEffect.NOIR_CONTRAST -> ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) })
+                        FcpVisualEffect.VHS_RETRO -> ColorFilter.colorMatrix(ColorMatrix(floatArrayOf(
+                            0.9f, 0.1f, 0.1f, 0f, 10f,
+                            0.1f, 0.95f, 0.1f, 0f, 15f,
+                            0.1f, 0.1f, 0.75f, 0f, -5f,
+                            0f, 0f, 0f, 1f, 0f
+                        )))
+                        FcpVisualEffect.FILM_GRAIN -> ColorFilter.colorMatrix(ColorMatrix(floatArrayOf(
+                            1.05f, 0f, 0f, 0f, 12f,
+                            0f, 1.0f, 0f, 0f, 8f,
+                            0f, 0f, 0.92f, 0f, -6f,
+                            0f, 0f, 0f, 1f, 0f
+                        )))
+                        else -> null
+                    }
+                }
+
+                Image(
+                    bitmap = previewBitmap.asImageBitmap(),
+                    contentDescription = effect.label,
+                    contentScale = ContentScale.Crop,
+                    colorFilter = colorFilter,
+                    modifier = Modifier.fillMaxSize()
+                )
+
+                // Overlay simulation matching FcpVisualEffectsOverlay
+                when (effect) {
+                    FcpVisualEffect.GLITCH -> {
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val w = size.width
+                            val h = size.height
+                            // Digital scanlines
+                            for (y in 0 until h.toInt() step 6) {
+                                drawLine(
+                                    color = Color.Cyan.copy(alpha = 0.35f),
+                                    start = Offset(0f, y.toFloat()),
+                                    end = Offset(w, y.toFloat()),
+                                    strokeWidth = 1.5f
+                                )
+                            }
+                            // Chromatic slice bar
+                            drawRect(
+                                color = Color.Magenta.copy(alpha = 0.4f),
+                                topLeft = Offset(0f, h * 0.35f),
+                                size = Size(w, h * 0.15f)
+                            )
+                        }
+                    }
+                    FcpVisualEffect.VHS_RETRO -> {
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val w = size.width
+                            val h = size.height
+                            for (y in 0 until h.toInt() step 5) {
+                                drawLine(
+                                    color = Color.Black.copy(alpha = 0.45f),
+                                    start = Offset(0f, y.toFloat()),
+                                    end = Offset(w, y.toFloat()),
+                                    strokeWidth = 1f
+                                )
+                            }
+                            drawRect(
+                                color = Color.White.copy(alpha = 0.25f),
+                                topLeft = Offset(0f, h * 0.7f),
+                                size = Size(w, 2.5f)
+                            )
+                        }
+                    }
+                    FcpVisualEffect.FILM_GRAIN -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color(0xFF805A20).copy(alpha = 0.12f))
+                        )
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val pts = 35
+                            for (k in 0 until pts) {
+                                val x = ((k * 37) % size.width.toInt()).toFloat()
+                                val y = ((k * 59) % size.height.toInt()).toFloat()
+                                drawCircle(
+                                    color = if (k % 2 == 0) Color.White.copy(alpha = 0.3f) else Color.Black.copy(alpha = 0.35f),
+                                    radius = 1.2f,
+                                    center = Offset(x, y)
+                                )
+                            }
+                        }
+                    }
+                    FcpVisualEffect.CINEMA_BLOOM -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.radialGradient(
+                                        colors = listOf(
+                                            Color(0xFFFFF7ED).copy(alpha = 0.55f),
+                                            Color(0xFFFDE68A).copy(alpha = 0.25f),
+                                            Color.Transparent
+                                        )
+                                    )
+                                )
+                        )
+                    }
+                    FcpVisualEffect.PRISM_SPLIT -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.horizontalGradient(
+                                        listOf(
+                                            Color.Red.copy(alpha = 0.25f),
+                                            Color.Transparent,
+                                            Color.Cyan.copy(alpha = 0.30f)
+                                        )
+                                    )
+                                )
+                        )
+                    }
+                    FcpVisualEffect.VIGNETTE_MOOD -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.radialGradient(
+                                        colors = listOf(
+                                            Color.Transparent,
+                                            Color.Black.copy(alpha = 0.3f),
+                                            Color.Black.copy(alpha = 0.75f)
+                                        )
+                                    )
+                                )
+                        )
+                    }
+                    FcpVisualEffect.NOIR_CONTRAST -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        listOf(
+                                            Color.Black.copy(alpha = 0.15f),
+                                            Color.Transparent,
+                                            Color.Black.copy(alpha = 0.35f)
+                                        )
+                                    )
+                                )
+                        )
+                    }
+                    FcpVisualEffect.ANAMORPHIC_FLARE -> {
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val midY = size.height * 0.5f
+                            drawLine(
+                                brush = Brush.horizontalGradient(
+                                    listOf(
+                                        Color.Transparent,
+                                        Color(0xFF38BDF8).copy(alpha = 0.85f),
+                                        Color.White,
+                                        Color(0xFF38BDF8).copy(alpha = 0.85f),
+                                        Color.Transparent
+                                    )
+                                ),
+                                start = Offset(0f, midY),
+                                end = Offset(size.width, midY),
+                                strokeWidth = 3f
+                            )
+                        }
+                    }
+                    FcpVisualEffect.NONE -> {}
+                }
+            } else {
+                // Fallback stylized video frame with effect simulation
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.linearGradient(
+                                listOf(
+                                    Color(0xFF1E293B),
+                                    Color(0xFF0F172A)
+                                )
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = effect.icon,
+                        contentDescription = effect.label,
+                        tint = if (isSelected) colors.primary else Color.White.copy(alpha = 0.6f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            // Bottom subtle scrim
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(18.dp)
+                    .align(Alignment.BottomCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.65f))
+                        )
+                    )
+            )
+
+            // Top-right indicator if selected
+            if (isSelected) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(3.dp)
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(colors.primary)
+                )
+            }
+        }
+
+        // Effect Title
+        Text(
+            text = effect.label,
+            fontSize = 11.sp,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+            color = if (isSelected) colors.primary else colors.textMain,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 4.dp)
+        )
+    }
+}
+
+@Composable
 private fun EffectsTabContent(
+    selectedAnimation: FcpClipAnimation,
+    onSelectAnimation: (FcpClipAnimation) -> Unit,
+    animationIntensity: Float,
+    onAnimationIntensityChange: (Float) -> Unit,
     selectedEffect: FcpVisualEffect,
     onSelectEffect: (FcpVisualEffect) -> Unit,
     effectIntensity: Float,
@@ -5811,7 +6574,8 @@ private fun EffectsTabContent(
     bokehAperture: Float,
     onBokehChange: (Float) -> Unit,
     speed: Float,
-    onSpeedChange: (Float) -> Unit
+    onSpeedChange: (Float) -> Unit,
+    previewBitmap: Bitmap? = null
 ) {
     val colors = LocalOscellionColors.current
     val haptic = LocalHapticFeedback.current
@@ -5822,11 +6586,128 @@ private fun EffectsTabContent(
             .padding(horizontal = 16.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // 1. VISUAL EFFECTS CATALOG (Capsule/Pill free, Clean Rectangular Cards)
+        // 0. DEDICATED CLIP ANIMATION & MOTION EFFECTS (SHAKE, PULSE, ZOOM, JITTER)
+        item {
+            WorkspaceSectionCard(title = "CLIP MOTION & CAMERA ANIMATIONS", icon = Lucide.Activity) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FcpClipAnimation.entries.forEach { anim ->
+                            val isSelected = selectedAnimation == anim
+                            FcpAnimationThumbnailCard(
+                                animation = anim,
+                                isSelected = isSelected,
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    onSelectAnimation(anim)
+                                }
+                            )
+                        }
+                    }
+
+                    // Intensity Slider for Animation
+                    if (selectedAnimation != FcpClipAnimation.NONE) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "${selectedAnimation.label} Intensity",
+                                    fontSize = 11.5.sp,
+                                    color = colors.textMuted,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = "${(animationIntensity * 100).toInt()}%",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = Color(0xFFE11D48)
+                                )
+                            }
+
+                            BoxWithConstraints(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(36.dp),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                val sliderWidthPx = constraints.maxWidth.toFloat().coerceAtLeast(1f)
+                                val fraction = animationIntensity.coerceIn(0.1f, 1f)
+
+                                var isDragging by remember { mutableStateOf(false) }
+                                val animatedScale by animateFloatAsState(
+                                    targetValue = if (isDragging) 1.22f else 1.0f,
+                                    animationSpec = spring(dampingRatio = 0.65f, stiffness = Spring.StiffnessMediumLow),
+                                    label = "animKnobScale"
+                                )
+
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(3.dp)
+                                        .clip(RoundedCornerShape(1.5.dp))
+                                        .background(if (colors.isDark) Color(0xFF282C37) else Color(0xFFE2E8F0))
+                                )
+
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(fraction)
+                                        .height(3.dp)
+                                        .clip(RoundedCornerShape(1.5.dp))
+                                        .background(Color(0xFFE11D48))
+                                )
+
+                                val knobOffsetDp = with(LocalDensity.current) {
+                                    ((fraction * sliderWidthPx) - 10.dp.toPx()).toDp().coerceIn(0.dp, maxWidth - 20.dp)
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .offset(x = knobOffsetDp)
+                                        .size(20.dp)
+                                        .graphicsLayer {
+                                            scaleX = animatedScale
+                                            scaleY = animatedScale
+                                        }
+                                        .pointerInput(sliderWidthPx) {
+                                            detectHorizontalDragGestures(
+                                                onDragStart = { isDragging = true },
+                                                onDragEnd = { isDragging = false },
+                                                onDragCancel = { isDragging = false },
+                                                onHorizontalDrag = { change, _ ->
+                                                    change.consume()
+                                                    val newFrac = (change.position.x / sliderWidthPx).coerceIn(0.1f, 1.0f)
+                                                    onAnimationIntensityChange(newFrac)
+                                                }
+                                            )
+                                        }
+                                ) {
+                                    LiquidGlassKnob(
+                                        width = 20.dp,
+                                        height = 20.dp,
+                                        scale = animatedScale,
+                                        baseAlpha = 0.95f
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 1. VISUAL EFFECTS CATALOG (Real Video Frame Previews, Capsule/Pill free)
         item {
             WorkspaceSectionCard(title = "CINEMATIC VISUAL EFFECTS", icon = Lucide.Sparkles) {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    // Effects Horizontal Scroll Row
+                    // Effects Horizontal Scroll Row with Real Video Frame Previews
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -5835,43 +6716,15 @@ private fun EffectsTabContent(
                     ) {
                         FcpVisualEffect.entries.forEach { eff ->
                             val isSelected = selectedEffect == eff
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(
-                                        if (isSelected) colors.primary.copy(alpha = 0.22f) else colors.glassBg,
-                                        RoundedCornerShape(8.dp)
-                                    )
-                                    .border(
-                                        width = if (isSelected) 1.5.dp else 0.5.dp,
-                                        color = if (isSelected) colors.primary else colors.glassBorder,
-                                        shape = RoundedCornerShape(8.dp)
-                                    )
-                                    .clickable {
-                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                        onSelectEffect(eff)
-                                    }
-                                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = eff.icon,
-                                        contentDescription = eff.label,
-                                        tint = if (isSelected) colors.primary else colors.textMuted,
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                    Text(
-                                        text = eff.label,
-                                        fontSize = 11.5.sp,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                        color = if (isSelected) colors.primary else colors.textMain
-                                    )
+                            FcpEffectThumbnailCard(
+                                effect = eff,
+                                isSelected = isSelected,
+                                previewBitmap = previewBitmap,
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    onSelectEffect(eff)
                                 }
-                            }
+                            )
                         }
                     }
 
@@ -7517,7 +8370,7 @@ private fun FcpTitleLayerCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .animateContentSize(spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow))
+            .animateContentSize(animationSpec = tween(durationMillis = 200))
             .clip(shape)
             .background(if (isSelected) colors.primary.copy(alpha = 0.05f) else colors.glassBg, shape)
             .border(
@@ -7800,11 +8653,11 @@ private fun FcpTitleLayerCard(
 
         // ── 2. Expanded Detail Controls ──────────────────────────────────────
         if (layer.isExpanded) {
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(10.dp))
             HorizontalDivider(color = colors.glassBorder.copy(alpha = 0.4f), thickness = 0.5.dp)
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(10.dp))
 
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
 
                 // Live Layer Mini-Preview Banner
                 val primaryFont = remember(layer.primaryFontAsset) {
@@ -7947,7 +8800,24 @@ private fun FcpTitleLayerCard(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        FieldLabel("Animations", value = "${layer.inAnimation.label} • ${layer.comboAnimation.label}")
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = "ANIMATIONS",
+                                color = colors.textMuted,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.5.sp
+                            )
+                            Text(
+                                text = "${layer.inAnimation.label} • ${layer.comboAnimation.label}",
+                                color = colors.primary,
+                                fontSize = 9.5.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -9432,48 +10302,50 @@ private fun TitlesTabContent(
             }
         }
 
-        // ── 2. Top Action Banner: Add Text and Presets Gallery ───────────────
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Primary Add Text button (Single plus icon only)
-                PrimaryGradientButton(
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        onAddLayer(null)
-                    },
-                    height = 36.dp,
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(horizontal = 12.dp)
+        // ── 2. Top Action Banner: Add Text and Presets Gallery (Layers view) ───
+        if (currentSubSection == TitlesSubSection.LAYERS) {
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Lucide.Plus, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Add Text", color = Color.White, fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
-                }
-
-                // Quick Browse Presets button
-                Box(
-                    modifier = Modifier
-                        .height(36.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(colors.glassBg)
-                        .border(1.dp, colors.glassBorder, RoundedCornerShape(8.dp))
-                        .clickable {
+                    // Primary Add Text button (Single plus icon only)
+                    PrimaryGradientButton(
+                        onClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            currentSubSection = TitlesSubSection.PRESETS
-                        }
-                        .padding(horizontal = 14.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            onAddLayer(null)
+                        },
+                        height = 36.dp,
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = 12.dp)
                     ) {
-                        Icon(Lucide.Sparkles, contentDescription = null, tint = colors.primary, modifier = Modifier.size(13.dp))
-                        Text("Presets Gallery", color = colors.textMain, fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
+                        Icon(Lucide.Plus, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Add Text", color = Color.White, fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    // Quick Browse Presets button
+                    Box(
+                        modifier = Modifier
+                            .height(36.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(colors.glassBg)
+                            .border(1.dp, colors.glassBorder, RoundedCornerShape(8.dp))
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                currentSubSection = TitlesSubSection.PRESETS
+                            }
+                            .padding(horizontal = 14.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Icon(Lucide.Sparkles, contentDescription = null, tint = colors.primary, modifier = Modifier.size(13.dp))
+                            Text("Presets Gallery", color = colors.textMain, fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
+                        }
                     }
                 }
             }
@@ -10151,8 +11023,8 @@ private fun FcpActiveTransitionOverlay(
             if (existing != null) {
                 cachedFrameA = existing
             } else {
+                val mmr = MediaMetadataRetriever()
                 try {
-                    val mmr = MediaMetadataRetriever()
                     mmr.setDataSource(context, clipA.uri)
                     val targetUs = ((clipA.trimEndSec - 0.05f).coerceAtLeast(0f) * 1_000_000L).toLong()
                     val bmp = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
@@ -10164,8 +11036,10 @@ private fun FcpActiveTransitionOverlay(
                         FcpThumbnailMemoryCache.put(keyA, bmp)
                         cachedFrameA = bmp
                     }
-                    mmr.release()
-                } catch (_: Throwable) {}
+                } catch (_: Throwable) {
+                } finally {
+                    try { mmr.release() } catch (_: Throwable) {}
+                }
             }
         }
     }
@@ -10180,8 +11054,8 @@ private fun FcpActiveTransitionOverlay(
             if (existing != null) {
                 cachedFrameB = existing
             } else {
+                val mmr = MediaMetadataRetriever()
                 try {
-                    val mmr = MediaMetadataRetriever()
                     mmr.setDataSource(context, clipB.uri)
                     val targetUs = (clipB.trimStartSec * 1_000_000L).toLong()
                     val bmp = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
@@ -10193,8 +11067,10 @@ private fun FcpActiveTransitionOverlay(
                         FcpThumbnailMemoryCache.put(keyB, bmp)
                         cachedFrameB = bmp
                     }
-                    mmr.release()
-                } catch (_: Throwable) {}
+                } catch (_: Throwable) {
+                } finally {
+                    try { mmr.release() } catch (_: Throwable) {}
+                }
             }
         }
     }
@@ -10246,22 +11122,26 @@ private fun FcpTransitionClipContent(
                     .build(),
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Fit
+                contentScale = ContentScale.Crop
             )
         } else {
-            val bmp = liveBitmap ?: cachedBitmap
+            val bmp = liveBitmap ?: cachedBitmap ?: FcpThumbnailMemoryCache.get("${clip.uri}_0")
             if (bmp != null) {
                 Image(
                     bitmap = bmp.asImageBitmap(),
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Fit
+                    contentScale = ContentScale.Crop
                 )
             } else {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black)
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(clip.uri)
+                        .crossfade(false)
+                        .build(),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
                 )
             }
         }
@@ -11016,21 +11896,23 @@ fun FcpTransitionDialog(
                 if (existing != null) {
                     cachedBmpA = existing
                 } else {
-                    try {
-                        val mmr = MediaMetadataRetriever()
-                        mmr.setDataSource(context, clip.uri)
-                        val targetUs = ((clip.trimEndSec - 0.05f).coerceAtLeast(0f) * 1_000_000L).toLong()
-                        val bmp = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-                            mmr.getScaledFrameAtTime(targetUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 720, 1280)
-                        } else {
-                            mmr.getFrameAtTime(targetUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                        }
-                        if (bmp != null) {
-                            FcpThumbnailMemoryCache.put(keyA, bmp)
-                            cachedBmpA = bmp
-                        }
-                        mmr.release()
-                    } catch (_: Throwable) {}
+                val mmr = MediaMetadataRetriever()
+                try {
+                    mmr.setDataSource(context, clip.uri)
+                    val targetUs = ((clip.trimEndSec - 0.05f).coerceAtLeast(0f) * 1_000_000L).toLong()
+                    val bmp = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                        mmr.getScaledFrameAtTime(targetUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 720, 1280)
+                    } else {
+                        mmr.getFrameAtTime(targetUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                    }
+                    if (bmp != null) {
+                        FcpThumbnailMemoryCache.put(keyA, bmp)
+                        cachedBmpA = bmp
+                    }
+                } catch (_: Throwable) {
+                } finally {
+                    try { mmr.release() } catch (_: Throwable) {}
+                }
                 }
             }
         }
@@ -11047,21 +11929,23 @@ fun FcpTransitionDialog(
                 if (existing != null) {
                     cachedBmpB = existing
                 } else {
-                    try {
-                        val mmr = MediaMetadataRetriever()
-                        mmr.setDataSource(context, nc.uri)
-                        val targetUs = (nc.trimStartSec * 1_000_000L).toLong()
-                        val bmp = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-                            mmr.getScaledFrameAtTime(targetUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 720, 1280)
-                        } else {
-                            mmr.getFrameAtTime(targetUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                        }
-                        if (bmp != null) {
-                            FcpThumbnailMemoryCache.put(keyB, bmp)
-                            cachedBmpB = bmp
-                        }
-                        mmr.release()
-                    } catch (_: Throwable) {}
+                val mmr = MediaMetadataRetriever()
+                try {
+                    mmr.setDataSource(context, nc.uri)
+                    val targetUs = (nc.trimStartSec * 1_000_000L).toLong()
+                    val bmp = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                        mmr.getScaledFrameAtTime(targetUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 720, 1280)
+                    } else {
+                        mmr.getFrameAtTime(targetUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                    }
+                    if (bmp != null) {
+                        FcpThumbnailMemoryCache.put(keyB, bmp)
+                        cachedBmpB = bmp
+                    }
+                } catch (_: Throwable) {
+                } finally {
+                    try { mmr.release() } catch (_: Throwable) {}
+                }
                 }
             }
         }
@@ -11183,7 +12067,7 @@ fun FcpTransitionDialog(
                                 cachedBitmap = cachedBmpB
                             )
                         } else {
-                            DemoIncomingVideoClip(letterSize = 56.sp)
+                            DemoIncomingVideoClip(bitmap = cachedBmpB, letterSize = 56.sp)
                         }
                     }
                 )
@@ -11237,7 +12121,9 @@ fun FcpTransitionDialog(
 @Composable
 fun FcpTransitionPreviewCard(
     transitionType: FcpTransitionType,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    bitmapA: Bitmap? = null,
+    bitmapB: Bitmap? = null
 ) {
     val colors = LocalOscellionColors.current
     val infiniteTransition = rememberInfiniteTransition(label = "fcpTransitionPreview")
@@ -11279,14 +12165,14 @@ fun FcpTransitionPreviewCard(
                 effect = effect,
                 progress = p,
                 modifier = Modifier.fillMaxSize(),
-                outgoingClip = { FcpPreviewSceneOne() },
-                incomingClip = { FcpPreviewSceneTwo() }
+                outgoingClip = { FcpPreviewSceneOne(bitmap = bitmapA) },
+                incomingClip = { FcpPreviewSceneTwo(bitmap = bitmapB) }
             )
         } else {
             if (p < 0.5f) {
-                FcpPreviewSceneOne()
+                FcpPreviewSceneOne(bitmap = bitmapA)
             } else {
-                FcpPreviewSceneTwo()
+                FcpPreviewSceneTwo(bitmap = bitmapB)
             }
         }
 
@@ -11357,36 +12243,136 @@ fun FcpTransitionPreviewCard(
 }
 
 @Composable
-private fun FcpPreviewSceneOne(modifier: Modifier = Modifier) {
+private fun FcpPreviewSceneOne(
+    modifier: Modifier = Modifier,
+    bitmap: Bitmap? = null
+) {
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFFE53935)),
+            .background(Color(0xFF0F172A)),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = "A",
-            color = Color.White,
-            fontSize = 44.sp,
-            fontWeight = FontWeight.Black
-        )
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap.asImageBitmap(),
+                contentDescription = "Clip 1",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            // Realistic simulated cinematic film frame (Scene 1)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.linearGradient(
+                            listOf(Color(0xFF9A3412), Color(0xFF1E293B), Color(0xFF0F172A))
+                        )
+                    )
+            )
+        }
+        // Cinematic frame overlays (grid lines, timecode, scene tag)
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val w = size.width
+            val h = size.height
+            val gridCol = Color.White.copy(alpha = 0.12f)
+            drawLine(gridCol, Offset(w / 3f, 0f), Offset(w / 3f, h), strokeWidth = 1f)
+            drawLine(gridCol, Offset(2f * w / 3f, 0f), Offset(2f * w / 3f, h), strokeWidth = 1f)
+            drawLine(gridCol, Offset(0f, h / 3f), Offset(w, h / 3f), strokeWidth = 1f)
+            drawLine(gridCol, Offset(0f, 2f * h / 3f), Offset(w, 2f * h / 3f), strokeWidth = 1f)
+        }
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(6.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(Color.Black.copy(alpha = 0.65f))
+                .padding(horizontal = 6.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFEF4444))
+            )
+            Text(
+                text = "CLIP 1 • 00:01:24:18",
+                color = Color.White,
+                fontSize = 9.sp,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Medium
+            )
+        }
     }
 }
 
 @Composable
-private fun FcpPreviewSceneTwo(modifier: Modifier = Modifier) {
+private fun FcpPreviewSceneTwo(
+    modifier: Modifier = Modifier,
+    bitmap: Bitmap? = null
+) {
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF1E88E5)),
+            .background(Color(0xFF0F172A)),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = "B",
-            color = Color.White,
-            fontSize = 44.sp,
-            fontWeight = FontWeight.Black
-        )
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap.asImageBitmap(),
+                contentDescription = "Clip 2",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            // Realistic simulated cinematic film frame (Scene 2)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.linearGradient(
+                            listOf(Color(0xFF0369A1), Color(0xFF065F46), Color(0xFF0F172A))
+                        )
+                    )
+            )
+        }
+        // Cinematic frame overlays (grid lines, timecode, scene tag)
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val w = size.width
+            val h = size.height
+            val gridCol = Color.White.copy(alpha = 0.12f)
+            drawLine(gridCol, Offset(w / 3f, 0f), Offset(w / 3f, h), strokeWidth = 1f)
+            drawLine(gridCol, Offset(2f * w / 3f, 0f), Offset(2f * w / 3f, h), strokeWidth = 1f)
+            drawLine(gridCol, Offset(0f, h / 3f), Offset(w, h / 3f), strokeWidth = 1f)
+            drawLine(gridCol, Offset(0f, 2f * h / 3f), Offset(w, 2f * h / 3f), strokeWidth = 1f)
+        }
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(6.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(Color.Black.copy(alpha = 0.65f))
+                .padding(horizontal = 6.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF10B981))
+            )
+            Text(
+                text = "CLIP 2 • 00:01:25:02",
+                color = Color.White,
+                fontSize = 9.sp,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Medium
+            )
+        }
     }
 }
 
@@ -11403,6 +12389,7 @@ fun FcpExportSheet(
     onSaveToGallery: (String, String) -> Unit,
     onExportToStudio: (String, String) -> Unit,
     onSaveDraftOnly: () -> Unit,
+    onCancelExport: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
     val colors = LocalOscellionColors.current
@@ -11412,14 +12399,14 @@ fun FcpExportSheet(
     val frameRates = listOf("24 FPS", "30 FPS", "60 FPS")
 
     Dialog(
-        onDismissRequest = { if (!isExporting) onDismiss() },
+        onDismissRequest = { if (isExporting) onCancelExport() else onDismiss() },
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.65f))
-                .clickable { if (!isExporting) onDismiss() },
+                .clickable { if (isExporting) onCancelExport() else onDismiss() },
             contentAlignment = Alignment.BottomCenter
         ) {
             Box(
@@ -11462,18 +12449,16 @@ fun FcpExportSheet(
                                 color = colors.textMuted
                             )
                         }
-                        if (!isExporting) {
-                            IconButton(
-                                onClick = onDismiss,
-                                modifier = Modifier.size(32.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Lucide.X,
-                                    contentDescription = "Close",
-                                    tint = colors.textMuted,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
+                        IconButton(
+                            onClick = { if (isExporting) onCancelExport() else onDismiss() },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Lucide.X,
+                                contentDescription = if (isExporting) "Cancel Export" else "Close",
+                                tint = if (isExporting) Color(0xFFEF4444) else colors.textMuted,
+                                modifier = Modifier.size(18.dp)
+                            )
                         }
                     }
 
@@ -11605,6 +12590,32 @@ fun FcpExportSheet(
                                 fontSize = 11.sp,
                                 color = colors.textMuted
                             )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            OutlinedButton(
+                                onClick = onCancelExport,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(42.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                border = BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.5f)),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = Color(0xFFEF4444)
+                                )
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.X,
+                                    contentDescription = null,
+                                    tint = Color(0xFFEF4444),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Cancel Export",
+                                    color = Color(0xFFEF4444),
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
                         }
                     } else {
                         // Resolution selector
@@ -11987,6 +12998,7 @@ fun FcpExitConfirmationDialog(
     onDiscardAndExit: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val colors = LocalOscellionColors.current
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
@@ -12030,8 +13042,8 @@ fun FcpExitConfirmationDialog(
                     }
                     .shadow(24.dp, RoundedCornerShape(16.dp), spotColor = Color(0x33000000))
                     .clip(RoundedCornerShape(16.dp))
-                    .background(Color.White)
-                    .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(16.dp))
+                    .background(colors.glassBg)
+                    .border(1.dp, colors.glassBorder, RoundedCornerShape(16.dp))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
@@ -12047,7 +13059,7 @@ fun FcpExitConfirmationDialog(
                     Spacer(Modifier.height(12.dp))
                     Text(
                         text = "Save changes?",
-                        color = Color(0xFF0F172A),
+                        color = colors.textMain,
                         fontSize = 17.sp,
                         fontWeight = FontWeight.SemiBold,
                         textAlign = TextAlign.Center,
@@ -12056,14 +13068,14 @@ fun FcpExitConfirmationDialog(
                     Spacer(Modifier.height(4.dp))
                     Text(
                         text = "Save before leaving?",
-                        color = Color(0xFF64748B),
+                        color = colors.textMuted,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Normal,
                         textAlign = TextAlign.Center
                     )
                 }
 
-                HorizontalDivider(color = Color(0xFFE2E8F0), thickness = 0.5.dp)
+                HorizontalDivider(color = colors.glassBorder, thickness = 0.5.dp)
 
                 // Actions:
                 // 1. Solid Blue Save Draft & Exit Button
@@ -12071,7 +13083,7 @@ fun FcpExitConfirmationDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(46.dp)
-                        .background(Color(0xFF007AFF))
+                        .background(colors.primary)
                         .clickable { onSaveDraftAndExit() },
                     contentAlignment = Alignment.Center
                 ) {
@@ -12083,14 +13095,14 @@ fun FcpExitConfirmationDialog(
                     )
                 }
 
-                HorizontalDivider(color = Color(0xFFE2E8F0), thickness = 0.5.dp)
+                HorizontalDivider(color = colors.glassBorder, thickness = 0.5.dp)
 
                 // 2. Discard Changes Button (Destructive Red)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(44.dp)
-                        .background(Color.White)
+                        .background(colors.glassBg)
                         .clickable { onDiscardAndExit() },
                     contentAlignment = Alignment.Center
                 ) {
@@ -12102,23 +13114,448 @@ fun FcpExitConfirmationDialog(
                     )
                 }
 
-                HorizontalDivider(color = Color(0xFFE2E8F0), thickness = 0.5.dp)
+                HorizontalDivider(color = colors.glassBorder, thickness = 0.5.dp)
 
                 // 3. Keep Editing Button
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(44.dp)
-                        .background(Color(0xFFF8FAFD))
+                        .background(colors.glassBg)
                         .clickable { onDismiss() },
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = "Cancel",
-                        color = Color(0xFF64748B),
+                        color = colors.textMuted,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Medium
                     )
+                }
+            }
+        }
+    }
+}
+
+
+// ============================================================================
+// DURATION WARNING DIALOG (> 1 MINUTE FLASH LIMIT)
+// ============================================================================
+
+@Composable
+fun FcpDurationWarningDialog(
+    totalDurationSec: Float,
+    onAutoTrimTo1Min: () -> Unit,
+    onExportFullToGallery: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val colors = LocalOscellionColors.current
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+    ) {
+        val scaleAnim = remember { Animatable(0.94f) }
+        val alphaAnim = remember { Animatable(0f) }
+
+        LaunchedEffect(Unit) {
+            launch {
+                scaleAnim.animateTo(
+                    1f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioLowBouncy,
+                        stiffness = Spring.StiffnessMedium
+                    )
+                )
+            }
+            launch {
+                alphaAnim.animateTo(1f, tween(180, easing = LinearOutSlowInEasing))
+            }
+        }
+
+        val totalMinutes = (totalDurationSec / 60f).toInt()
+        val remainingSeconds = (totalDurationSec % 60f).toInt()
+        val formattedDuration = if (totalMinutes > 0) "${totalMinutes}m ${remainingSeconds}s" else "${remainingSeconds}s"
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.55f * alphaAnim.value))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDismiss
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                modifier = Modifier
+                    .width(300.dp)
+                    .graphicsLayer {
+                        scaleX = scaleAnim.value
+                        scaleY = scaleAnim.value
+                        alpha = alphaAnim.value
+                    }
+                    .shadow(28.dp, RoundedCornerShape(16.dp), spotColor = Color(0x44000000))
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(colors.glassBg)
+                    .border(1.dp, colors.glassBorder, RoundedCornerShape(16.dp))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {},
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Column(
+                    modifier = Modifier.padding(top = 22.dp, bottom = 14.dp, start = 20.dp, end = 20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(52.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFFFF9500).copy(alpha = 0.16f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Lucide.TriangleAlert,
+                            contentDescription = null,
+                            tint = Color(0xFFFF9500),
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
+                    Spacer(Modifier.height(14.dp))
+                    Text(
+                        text = "Video Exceeds 1 Minute",
+                        color = colors.textMain,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = "Your timeline is currently $formattedDuration.\nVideos shared to Flash or Community feeds must be 60 seconds or less. You can auto-trim to 1 minute or export the full video directly to your gallery.",
+                        color = colors.textMuted,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Normal,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 18.sp
+                    )
+                }
+
+                HorizontalDivider(color = colors.glassBorder, thickness = 0.5.dp)
+
+                // 1. Auto-Trim to 1 Min Button (Primary Blue)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(46.dp)
+                        .background(colors.primary)
+                        .clickable { onAutoTrimTo1Min() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "Auto-Trim to 1 Min",
+                            color = Color.White,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+
+                HorizontalDivider(color = colors.glassBorder, thickness = 0.5.dp)
+
+                // 2. Export Full to Gallery Button
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp)
+                        .background(colors.glassBg)
+                        .clickable { onExportFullToGallery() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Lucide.Download,
+                            contentDescription = null,
+                            tint = Color(0xFF34C759),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = "Export Full Video to Gallery",
+                            color = Color(0xFF34C759),
+                            fontSize = 14.5.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+
+                HorizontalDivider(color = colors.glassBorder, thickness = 0.5.dp)
+
+                // 3. Dismiss / Keep Editing Button
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp)
+                        .background(colors.glassBg)
+                        .clickable { onDismiss() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Dismiss",
+                        color = colors.textMuted,
+                        fontSize = 14.5.sp,
+                        fontWeight = FontWeight.Normal
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FcpAnimationThumbnailCard(
+    animation: FcpClipAnimation,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    val colors = LocalOscellionColors.current
+    val cardBg = if (isSelected) Color(0xFFE11D48).copy(alpha = 0.18f) else if (colors.isDark) Color(0xFF1B1E26) else Color(0xFFF1F5F9)
+    val cardBorder = if (isSelected) Color(0xFFE11D48) else colors.glassBorder
+
+    Column(
+        modifier = Modifier
+            .width(82.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(cardBg)
+            .border(if (isSelected) 1.5.dp else 0.5.dp, cardBorder, RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp, horizontal = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(if (isSelected) Color(0xFFE11D48) else if (colors.isDark) Color(0xFF282C37) else Color(0xFFE2E8F0)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = animation.icon,
+                contentDescription = animation.label,
+                tint = if (isSelected) Color.White else colors.textMain,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        Text(
+            text = animation.label,
+            fontSize = 10.5.sp,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+            color = if (isSelected) Color(0xFFE11D48) else colors.textMain,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
+fun FcpClipAnimationDialog(
+    clip: FcpClip,
+    onDismiss: () -> Unit,
+    onApplyAnimation: (FcpClipAnimation, Float) -> Unit
+) {
+    val colors = LocalOscellionColors.current
+    val haptic = LocalHapticFeedback.current
+    var selectedAnim by remember { mutableStateOf(clip.animationEffect) }
+    var animIntensity by remember { mutableFloatStateOf(clip.animationIntensity) }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.5f))
+                .clickable { onDismiss() },
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = false) {}
+                    .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
+                    .background(if (colors.isDark) Color(0xFF181A20) else Color.White)
+                    .border(0.5.dp, colors.glassBorder, RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
+                    .padding(horizontal = 18.dp, vertical = 16.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    // Header Bar
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(30.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFFE11D48).copy(alpha = 0.15f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Lucide.Activity, contentDescription = null, tint = Color(0xFFE11D48), modifier = Modifier.size(16.dp))
+                            }
+                            Column {
+                                Text(
+                                    text = "Clip Motion & Animations",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colors.textMain
+                                )
+                                Text(
+                                    text = "${clip.name} • Double-tap any clip to animate",
+                                    fontSize = 11.sp,
+                                    color = colors.textMuted
+                                )
+                            }
+                        }
+
+                        // Close Button
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(if (colors.isDark) Color(0xFF2B2F3A) else Color(0xFFE5E7EB))
+                                .clickable { onDismiss() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Lucide.X, contentDescription = "Close", tint = colors.textMain, modifier = Modifier.size(15.dp))
+                        }
+                    }
+
+                    HorizontalDivider(color = colors.glassBorder, thickness = 0.5.dp)
+
+                    // Animation Cards Row
+                    Text(
+                        text = "SELECT ANIMATION PRESET",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = colors.textMuted,
+                        letterSpacing = 0.5.sp
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FcpClipAnimation.entries.forEach { anim ->
+                            val isSelected = selectedAnim == anim
+                            FcpAnimationThumbnailCard(
+                                animation = anim,
+                                isSelected = isSelected,
+                                onClick = {
+                                    selectedAnim = anim
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    onApplyAnimation(anim, animIntensity)
+                                }
+                            )
+                        }
+                    }
+
+                    // Intensity Slider
+                    if (selectedAnim != FcpClipAnimation.NONE) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "${selectedAnim.label} Intensity",
+                                    fontSize = 12.sp,
+                                    color = colors.textMuted,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = "${(animIntensity * 100).toInt()}%",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = Color(0xFFE11D48)
+                                )
+                            }
+
+                            Slider(
+                                value = animIntensity,
+                                onValueChange = {
+                                    animIntensity = it
+                                    onApplyAnimation(selectedAnim, it)
+                                },
+                                valueRange = 0.1f..1.0f,
+                                colors = SliderDefaults.colors(
+                                    thumbColor = Color(0xFFE11D48),
+                                    activeTrackColor = Color(0xFFE11D48),
+                                    inactiveTrackColor = if (colors.isDark) Color(0xFF282C37) else Color(0xFFE2E8F0)
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+
+                    // Action Buttons: Done & Reset
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (selectedAnim != FcpClipAnimation.NONE) {
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(40.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (colors.isDark) Color(0xFF282C37) else Color(0xFFF1F5F9))
+                                    .border(0.5.dp, colors.glassBorder, RoundedCornerShape(8.dp))
+                                    .clickable {
+                                        selectedAnim = FcpClipAnimation.NONE
+                                        onApplyAnimation(FcpClipAnimation.NONE, animIntensity)
+                                        ToastManager.showToast("Animation removed")
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("Remove", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .weight(if (selectedAnim != FcpClipAnimation.NONE) 2f else 1f)
+                                .height(40.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFFE11D48))
+                                .clickable {
+                                    onApplyAnimation(selectedAnim, animIntensity)
+                                    onDismiss()
+                                    ToastManager.showToast(if (selectedAnim == FcpClipAnimation.NONE) "Animation reset" else "${selectedAnim.label} applied")
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("Done", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
             }
         }

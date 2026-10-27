@@ -6,8 +6,6 @@
 
 package com.chroma.studio.ui.screens
 
-import com.chroma.studio.ui.components.ChromaPillButton
-import com.chroma.studio.ui.components.ChromaPillVariant
 import com.chroma.studio.ui.components.LiquidGlassProgressBar
 import com.chroma.studio.ui.components.AiWaveSphereIcon
 import com.chroma.studio.ui.components.ApplePhotosGraphic
@@ -19,6 +17,7 @@ import com.chroma.studio.ui.components.PostScrollDotsIndicator
 import com.chroma.studio.ui.components.resolvePostMediaSlides
 import com.chroma.studio.ui.components.isVideoPost
 import com.chroma.studio.ui.components.extractVideoUrlFromPost
+import com.chroma.studio.ui.components.VerifiedBadge
 import androidx.compose.foundation.pager.rememberPagerState
 import android.content.Context
 import android.content.Intent
@@ -39,6 +38,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.DpOffset
 import kotlinx.coroutines.delay
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -82,7 +82,9 @@ import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -114,6 +116,10 @@ import com.composables.icons.lucide.CirclePlus
 import com.composables.icons.lucide.Palette
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import androidx.compose.ui.graphics.asImageBitmap
+import com.chroma.studio.data.FlashUploadManager
+import com.chroma.studio.data.FlashUploadTask
+import com.chroma.studio.data.UploadStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -151,6 +157,24 @@ object LayerCache {
     fun put(url: String, layers: List<GradientLayer>) { cache.put(url, layers) }
 }
 
+/**
+ * Clean Cupertino Category Tabs for Community Feed.
+ * Adheres strictly to the Chroma brand identity (Text + Icon + Animated Hr Line indicator; No Pills, No Capsules).
+ */
+enum class CommunityFeedTab(val label: String, val icon: ImageVector) {
+    ALL("Latest", Lucide.Clock),
+    FOLLOWING("Following", Lucide.Users),
+    SAVED("Saved", Lucide.Bookmark),
+    FLASH("Flash Videos", Lucide.Film),
+    TRENDING("Trending", Lucide.Flame)
+}
+
+enum class CommunitySortOrder(val label: String, val icon: ImageVector) {
+    LATEST("Latest Drops", Lucide.Clock),
+    TOP_LIKED("Most Liked", Lucide.Heart),
+    MOST_REMIXED("Most Remixed", Lucide.Sparkles)
+}
+
 @Composable
 fun DiscoverScreen(
     works: List<DiscoverPost>,
@@ -176,9 +200,18 @@ fun DiscoverScreen(
     onCreateFlash: () -> Unit = onCreatePost,
     onPublishWork: () -> Unit,
     onNavigateToNotifications: () -> Unit,
-    onStoryViewerChange: ((Boolean) -> Unit)? = null
+    onStoryViewerChange: ((Boolean) -> Unit)? = null,
+    onNavigateToCreateStory: (() -> Unit)? = null,
+    onNavigateToDrafts: () -> Unit = {}
 ) {
     val colors = LocalOscellionColors.current
+    val uploadTask by FlashUploadManager.currentTask.collectAsState()
+
+    LaunchedEffect(uploadTask?.status) {
+        if (uploadTask?.status == UploadStatus.SUCCESS) {
+            onRefresh()
+        }
+    }
     var searchQuery by remember { mutableStateOf("") }
     val stories by (storyViewModel?.storyGroups ?: chatViewModel.stories).collectAsState()
     val myStories by (storyViewModel?.myStories ?: kotlinx.coroutines.flow.MutableStateFlow(emptyList())).collectAsState()
@@ -189,6 +222,7 @@ fun DiscoverScreen(
     val context = LocalContext.current
 
     var showStoryViewer by remember { mutableStateOf(false) }
+    var showStoryCreationSheet by remember { mutableStateOf(false) }
     LaunchedEffect(showStoryViewer) {
         onStoryViewerChange?.invoke(showStoryViewer)
     }
@@ -246,17 +280,36 @@ fun DiscoverScreen(
         }
     }
 
-    // Community Feed: All real creations, filtered dynamically by search query
-    val filteredWorks = remember(works, searchQuery) {
-        if (searchQuery.isBlank()) {
-            works
+    val followingUserIds by (discoverViewModel?.followingUserIds ?: com.chroma.studio.data.mutation.OptimisticFollowManager.followingUserIds).collectAsState()
+    var selectedFeedTab by remember { mutableStateOf(CommunityFeedTab.ALL) }
+    var selectedSortOrder by remember { mutableStateOf(CommunitySortOrder.LATEST) }
+    var showCommunityGuidelines by remember { mutableStateOf(false) }
+
+    // Community Feed: All real creations, filtered dynamically by search query, tab, and sort order
+    val filteredWorks = remember(works, searchQuery, selectedFeedTab, selectedSortOrder, trendingWorks, followingUserIds, savedWorkIds) {
+        val baseList = when (selectedFeedTab) {
+            CommunityFeedTab.ALL -> works
+            CommunityFeedTab.TRENDING -> if (trendingWorks.isNotEmpty()) trendingWorks else works.sortedByDescending { it.likesCount }
+            CommunityFeedTab.FLASH -> works.filter { isVideoPost(it) || it.postType == "video" || it.aspectRatio.trim() == "9:16" }
+            CommunityFeedTab.FOLLOWING -> works.filter { followingUserIds.contains(it.creatorId) }
+            CommunityFeedTab.SAVED -> works.filter { savedWorkIds.contains(it.id) }
+        }
+
+        val searchFiltered = if (searchQuery.isBlank()) {
+            baseList
         } else {
-            works.filter {
+            baseList.filter {
                 it.title.contains(searchQuery, ignoreCase = true) ||
                 it.authorUsername.contains(searchQuery, ignoreCase = true) ||
                 it.authorDisplayName.contains(searchQuery, ignoreCase = true) ||
                 it.tags.any { tag -> tag.contains(searchQuery, ignoreCase = true) }
             }
+        }
+
+        when (selectedSortOrder) {
+            CommunitySortOrder.LATEST -> searchFiltered.sortedByDescending { it.timestamp }
+            CommunitySortOrder.TOP_LIKED -> searchFiltered.sortedByDescending { it.likesCount }
+            CommunitySortOrder.MOST_REMIXED -> searchFiltered.sortedByDescending { it.remixCount }
         }
     }
 
@@ -286,6 +339,11 @@ fun DiscoverScreen(
         Column(modifier = Modifier.fillMaxSize()) {
             // 1. Creator Feed Header (No App Logo, Only + Icon, Heart/Notification Icon, Refresh Icon, and Smooth Expanding Search Bar)
             CreatorFeedHeader(
+                selectedFeedTab = selectedFeedTab,
+                onSelectFeedTab = { tab ->
+                    selectedFeedTab = tab
+                    coroutineScope.launch { listState.animateScrollToItem(0) }
+                },
                 isSearchExpanded = isSearchExpanded,
                 searchQuery = searchQuery,
                 isPlusMenuOpen = showCreateMenu,
@@ -351,6 +409,16 @@ fun DiscoverScreen(
                     item {
                         StoriesSection(stories = emptyList(), isLoading = true)
                     }
+                    if (uploadTask != null && uploadTask?.status != UploadStatus.IDLE) {
+                        item(key = "loading_upload_progress_banner") {
+                            CommunityUploadProgressBanner(
+                                task = uploadTask!!,
+                                onRetry = { FlashUploadManager.retry() },
+                                onViewDrafts = { onNavigateToDrafts() },
+                                onDismiss = { FlashUploadManager.dismiss() }
+                            )
+                        }
+                    }
                     items(3) {
                         SkeletonPost()
                     }
@@ -381,15 +449,11 @@ fun DiscoverScreen(
                                         storyViewerInitialIndex = -1
                                         showStoryViewer = true
                                     } else {
-                                        mediaPicker.launch(
-                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                        )
+                                        showStoryCreationSheet = true
                                     }
                                 },
                                 onAddStoryClick = {
-                                    mediaPicker.launch(
-                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                    )
+                                    showStoryCreationSheet = true
                                 },
                                 onStoryClick = { groupIndex ->
                                     storyViewerInitialIndex = groupIndex
@@ -413,10 +477,106 @@ fun DiscoverScreen(
                         }
                     }
 
+                    // ── INSTAGRAM-STYLE FLASH VIDEO / POST UPLOAD PROGRESS BANNER ──
+                    if (uploadTask != null && uploadTask?.status != UploadStatus.IDLE) {
+                        item(key = "community_upload_progress_banner") {
+                            CommunityUploadProgressBanner(
+                                task = uploadTask!!,
+                                onRetry = { FlashUploadManager.retry() },
+                                onViewDrafts = { onNavigateToDrafts() },
+                                onDismiss = { FlashUploadManager.dismiss() }
+                            )
+                            HorizontalDivider(
+                                color = colors.glassBorder,
+                                thickness = 0.5.dp,
+                                modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
+                            )
+                        }
+                    }
+
+                    // ── Active Feed Filter Indicator (When not in default Latest view) ──
+                    if (selectedFeedTab != CommunityFeedTab.ALL) {
+                        item(key = "active_feed_filter_badge") {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = selectedFeedTab.icon,
+                                        contentDescription = null,
+                                        tint = Color(0xFF007AFF),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        text = "Showing: ${selectedFeedTab.label}",
+                                        color = colors.textMain,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .clickable { selectedFeedTab = CommunityFeedTab.ALL }
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        text = "Show All",
+                                        color = Color(0xFF007AFF),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Spacer(Modifier.width(2.dp))
+                                    Icon(
+                                        imageVector = Lucide.X,
+                                        contentDescription = "Clear",
+                                        tint = Color(0xFF007AFF),
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                }
+                            }
+                            HorizontalDivider(color = colors.glassBorder.copy(alpha = 0.5f), thickness = 0.5.dp)
+                        }
+                    }
+
+                    // ── NEW FEATURE 2: TRENDING MASTERWORKS SPOTLIGHT REEL ──
+                    if ((selectedFeedTab == CommunityFeedTab.ALL || selectedFeedTab == CommunityFeedTab.TRENDING) && trendingWorks.isNotEmpty() && searchQuery.isBlank()) {
+                        item(key = "trending_spotlight_reel") {
+                            CommunityTrendingSpotlightReel(
+                                trendingWorks = trendingWorks,
+                                repository = repository,
+                                onWorkClick = { work ->
+                                    val index = filteredWorks.indexOfFirst { it.id == work.id }
+                                    if (index != -1) {
+                                        coroutineScope.launch { listState.animateScrollToItem(index + 3) }
+                                    } else {
+                                        onAuthorClick(work.creatorId, work.id)
+                                    }
+                                }
+                            )
+                        }
+                    }
+
                     // Feed Posts List
                     if (filteredWorks.isEmpty()) {
                         item(key = "empty_state") {
                             val photoState = rememberAppleGraphicAnimationState()
+                            val emptySubtitle = when {
+                                searchQuery.isNotBlank() -> "Try searching for a different creator or keyword."
+                                selectedFeedTab == CommunityFeedTab.FOLLOWING -> "You are not following any creators yet. Explore the community feed to discover and follow creative artists!"
+                                selectedFeedTab == CommunityFeedTab.SAVED -> "No bookmarked creations. Tap the bookmark icon on any post to save it to your private studio collection."
+                                selectedFeedTab == CommunityFeedTab.FLASH -> "No Flash video creations found. Be the first to publish a cinematic video!"
+                                selectedFeedTab == CommunityFeedTab.TRENDING -> "No trending creations right now. Refresh the feed or share your masterwork!"
+                                else -> "Be the first to share an inspiring creation!"
+                            }
                             AppleEmptyTabState(
                                 graphic = {
                                     ApplePhotosGraphic(
@@ -425,17 +585,28 @@ fun DiscoverScreen(
                                         enableClickToAnimate = true
                                     )
                                 },
-                                title = "No Posts Found",
-                                subtitle = if (searchQuery.isNotBlank()) "Try searching for a different creator or keyword."
-                                else "Be the first to share an inspiring creation!"
+                                title = if (selectedFeedTab == CommunityFeedTab.SAVED) "No Saved Creations" else if (selectedFeedTab == CommunityFeedTab.FOLLOWING) "No Followed Creators" else "No Posts Found",
+                                subtitle = emptySubtitle
                             )
                         }
                     } else {
                         items(filteredWorks, key = { it.id }) { work ->
+                            val isFollowing = followingUserIds.contains(work.creatorId)
                             FeedPostCard(
                                 work = work,
                                 isLiked = likedWorkIds.contains(work.id),
                                 isSaved = savedWorkIds.contains(work.id),
+                                isFollowingCreator = isFollowing,
+                                onToggleFollowCreator = {
+                                    val uid = FirebaseAuth.getInstance().currentUser?.uid
+                                    if (uid.isNullOrBlank()) {
+                                        onRequireLogin()
+                                    } else {
+                                        discoverViewModel?.toggleFollow(work.creatorId, uid)
+                                    }
+                                },
+                                onShowGuidelines = { showCommunityGuidelines = true },
+                                onShowToast = { showToast(it) },
                                 repository = repository,
                                 onRequireLogin = onRequireLogin,
                                 onAuthorClick = { authorId -> onAuthorClick(authorId, null) },
@@ -547,6 +718,30 @@ fun DiscoverScreen(
             )
         }
 
+        // Story Creation Options Bottom Sheet
+        if (showStoryCreationSheet) {
+            StoryCreationBottomSheet(
+                onDismissRequest = { showStoryCreationSheet = false },
+                onChooseFromGallery = {
+                    showStoryCreationSheet = false
+                    mediaPicker.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                },
+                onTextStory = {
+                    showStoryCreationSheet = false
+                    onNavigateToCreateStory?.invoke()
+                }
+            )
+        }
+
+        // Community Standards & Guidelines Bottom Sheet
+        if (showCommunityGuidelines) {
+            CommunityGuidelinesSheet(
+                onDismiss = { showCommunityGuidelines = false }
+            )
+        }
+
         // RECTANGULAR TOAST NOTIFICATION (No capsule, no glow)
         AnimatedVisibility(
             visible = toastMessage != null,
@@ -602,111 +797,520 @@ fun TrendingCard(
         }
     }
 
-    LiquidGlassCard(
+    // Clean Single Rectangular Card (Strictly NO double cards, NO pills/capsules)
+    Box(
         modifier = Modifier
             .width(160.dp)
-            .height(126.dp)
-            .clickable { onClick() },
-        shape = RoundedCornerShape(18.dp),
-        contentPadding = PaddingValues(0.dp)
+            .height(132.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(colors.glassBg)
+            .border(0.5.dp, colors.glassBorder, RoundedCornerShape(12.dp))
+            .clickable { onClick() }
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            val isVideo = isVideoPost(work)
+        val isVideo = isVideoPost(work)
 
-            if (isVideo) {
-                val thumb = work.thumbnailUrl?.takeIf { it.isNotBlank() } ?: work.imageUrl
-                if (!thumb.isNullOrBlank()) {
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current).data(thumb).crossfade(true).build(),
-                        contentDescription = work.title,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                }
-                Icon(
-                    imageVector = Lucide.Play,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier
-                        .size(28.dp)
-                        .align(Alignment.Center)
-                )
-            } else if (work.postType == "image" && work.imageUrl != null) {
+        if (isVideo) {
+            val thumb = work.thumbnailUrl?.takeIf { it.isNotBlank() } ?: work.imageUrl
+            if (!thumb.isNullOrBlank()) {
                 AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current).data(work.imageUrl).crossfade(true).build(),
+                    model = ImageRequest.Builder(LocalContext.current).data(thumb).crossfade(true).build(),
                     contentDescription = work.title,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
-            } else if (layers != null && layers!!.isNotEmpty()) {
-                CanvasPreview(
-                    layers = layers!!,
-                    shape = "full",
-                    borderColor = Color.Transparent,
-                    isStatic = true,
-                    timeMillisOverride = 5000L,
-                    modifier = Modifier.fillMaxSize()
-                )
             }
-
-            // Scrim Gradient
-            Box(
+            Icon(
+                imageVector = Lucide.Play,
+                contentDescription = null,
+                tint = Color.White,
                 modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(
-                                Color.Black.copy(alpha = 0.25f),
-                                Color.Transparent,
-                                Color.Black.copy(alpha = 0.85f)
-                            )
+                    .size(28.dp)
+                    .align(Alignment.Center)
+            )
+        } else if (work.postType == "image" && work.imageUrl != null) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current).data(work.imageUrl).crossfade(true).build(),
+                contentDescription = work.title,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        } else if (layers != null && layers!!.isNotEmpty()) {
+            CanvasPreview(
+                layers = layers!!,
+                shape = "full",
+                borderColor = Color.Transparent,
+                isStatic = true,
+                timeMillisOverride = 5000L,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        // Scrim Gradient
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            Color.Black.copy(alpha = 0.35f),
+                            Color.Transparent,
+                            Color.Black.copy(alpha = 0.88f)
                         )
                     )
-            )
+                )
+        )
 
-            // Top-Left Format Pill
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(8.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color.Black.copy(alpha = 0.55f))
-                    .border(0.5.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
-                    .padding(horizontal = 6.dp, vertical = 2.dp)
+        // Top-Left Format Tag (Clean Rectangular Tag with subtle border - NOT A PILL)
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(8.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(Color.Black.copy(alpha = 0.65f))
+                .border(0.5.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(4.dp))
+                .padding(horizontal = 6.dp, vertical = 2.dp)
+        ) {
+            val label = when {
+                isVideo -> "FLASH VIDEO"
+                layers != null && layers!!.isNotEmpty() -> "PROCEDURAL"
+                else -> "MASTERWORK"
+            }
+            Text(label, color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.4.sp)
+        }
+
+        // Bottom Info Column
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(horizontal = 10.dp, vertical = 8.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                val label = when {
-                    isVideo -> "🎬 Flash"
-                    layers != null && layers!!.isNotEmpty() -> "✨ Vector"
-                    else -> "🖼️ Art"
+                Icon(ChromaIcons.HeartFilled, null, tint = Color(0xFFFF2D55), modifier = Modifier.size(11.dp))
+                Text(
+                    "${work.likesCount}",
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.width(2.dp))
+                Text(
+                    "•  @${work.authorUsername}",
+                    color = Color.White.copy(alpha = 0.8f),
+                    fontSize = 10.5.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Spacer(Modifier.height(2.dp))
+            Text(
+                work.title.ifEmpty { "Untitled Creation" },
+                color = Color.White,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+/**
+ * Clean Cupertino Category Tabs for Community Feed.
+ * Features an animated Hr Line underline indicator beneath the selected category tab,
+ * and a subtle full-width HorizontalDivider. Strictly free of pills or capsule shapes.
+ */
+@Composable
+fun CommunityFeedTabBar(
+    selectedTab: CommunityFeedTab,
+    selectedSort: CommunitySortOrder,
+    savedCount: Int,
+    trendingCount: Int,
+    onSelectTab: (CommunityFeedTab) -> Unit,
+    onSelectSort: (CommunitySortOrder) -> Unit
+) {
+    val colors = LocalOscellionColors.current
+    var showSortMenu by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(if (colors.isDark) Color(0xFF16161A) else Color.White)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Horizontal scrollable clean tab items with animated Hr Line underline
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(20.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CommunityFeedTab.values().forEach { tab ->
+                    val isSelected = selectedTab == tab
+                    val activeColor = if (isSelected) Color(0xFF007AFF) else colors.textMuted
+
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) { onSelectTab(tab) }
+                            .padding(vertical = 4.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = tab.icon,
+                                contentDescription = tab.label,
+                                tint = activeColor,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Text(
+                                text = tab.label,
+                                color = if (isSelected) colors.textMain else colors.textMuted,
+                                fontSize = 13.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                            )
+                            if (tab == CommunityFeedTab.SAVED && savedCount > 0) {
+                                Text(
+                                    text = "($savedCount)",
+                                    color = if (isSelected) Color(0xFF007AFF) else colors.textMuted,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+
+                        Spacer(Modifier.height(8.dp))
+
+                        // Animated Hr Underline Indicator (Active Tab)
+                        val indicatorWidth by animateDpAsState(
+                            targetValue = if (isSelected) 32.dp else 0.dp,
+                            animationSpec = tween(280, easing = FluidCubicBezier),
+                            label = "tabIndicatorWidth"
+                        )
+                        Box(
+                            modifier = Modifier
+                                .width(indicatorWidth)
+                                .height(2.dp)
+                                .background(if (isSelected) Color(0xFF007AFF) else Color.Transparent)
+                        )
+                    }
                 }
-                Text(label, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
             }
 
-            // Bottom Info Column
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(horizontal = 10.dp, vertical = 8.dp)
+            // Quick Sort Dropdown Action
+            Box(
+                modifier = Modifier.padding(end = 12.dp)
             ) {
                 Row(
+                    modifier = Modifier
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) { showSortMenu = true }
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Icon(ChromaIcons.HeartFilled, null, tint = Color(0xFFFF2D55), modifier = Modifier.size(11.dp))
+                    Icon(
+                        imageVector = Lucide.ArrowUpDown,
+                        contentDescription = "Sort Feed",
+                        tint = colors.textMuted,
+                        modifier = Modifier.size(14.dp)
+                    )
                     Text(
-                        "${work.likesCount}",
-                        color = Color.White,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
+                        text = when (selectedSort) {
+                            CommunitySortOrder.LATEST -> "Latest"
+                            CommunitySortOrder.TOP_LIKED -> "Liked"
+                            CommunitySortOrder.MOST_REMIXED -> "Remixed"
+                        },
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.textMuted
                     )
                 }
+
+                DropdownMenu(
+                    expanded = showSortMenu,
+                    onDismissRequest = { showSortMenu = false },
+                    modifier = Modifier
+                        .background(colors.glassBg)
+                        .border(0.5.dp, colors.glassBorder, RoundedCornerShape(12.dp))
+                ) {
+                    CommunitySortOrder.values().forEach { sort ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    sort.label,
+                                    fontSize = 13.sp,
+                                    fontWeight = if (selectedSort == sort) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (selectedSort == sort) Color(0xFF007AFF) else colors.textMain
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = sort.icon,
+                                    contentDescription = sort.label,
+                                    tint = if (selectedSort == sort) Color(0xFF007AFF) else colors.textMuted,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            onClick = {
+                                onSelectSort(sort)
+                                showSortMenu = false
+                            }
+                        )
+                    }
+                }
+            }
+        }
+
+        // Full width subtle Hr Line separating tab bar from feed content
+        HorizontalDivider(thickness = 0.5.dp, color = colors.glassBorder)
+    }
+}
+
+/**
+ * Trending Masterworks Spotlight Showcase Reel.
+ * Horizontal carousel displaying top community creations with clean rectangular cards and Hr line.
+ */
+@Composable
+fun CommunityTrendingSpotlightReel(
+    trendingWorks: List<DiscoverPost>,
+    repository: WorkRepository,
+    onWorkClick: (DiscoverPost) -> Unit
+) {
+    val colors = LocalOscellionColors.current
+    if (trendingWorks.isEmpty()) return
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(if (colors.isDark) Color(0xFF16161A) else Color.White)
+            .padding(vertical = 10.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    imageVector = Lucide.Flame,
+                    contentDescription = null,
+                    tint = Color(0xFFFF9500),
+                    modifier = Modifier.size(16.dp)
+                )
                 Text(
-                    work.title.ifEmpty { "Untitled" },
+                    text = "TRENDING MASTERWORKS",
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.textMain,
+                    letterSpacing = 0.5.sp
+                )
+            }
+            Text(
+                text = "${trendingWorks.size} drops",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                color = colors.textMuted
+            )
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(trendingWorks, key = { "trend_${it.id}" }) { work ->
+                TrendingCard(
+                    work = work,
+                    repository = repository,
+                    onClick = { onWorkClick(work) }
+                )
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
+        HorizontalDivider(thickness = 0.5.dp, color = colors.glassBorder)
+    }
+}
+
+/**
+ * Community Standards & Remix Code Bottom Sheet.
+ * Structured with clean Cupertino Hr line dividers between guidelines. Free of pills or double cards.
+ */
+@Composable
+fun CommunityGuidelinesSheet(
+    onDismiss: () -> Unit
+) {
+    val colors = LocalOscellionColors.current
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = colors.bg.copy(alpha = 0.98f),
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        dragHandle = {
+            Box(
+                modifier = Modifier
+                    .padding(vertical = 12.dp)
+                    .width(38.dp)
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(Color.Gray.copy(alpha = 0.4f))
+            )
+        }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .navigationBarsPadding()
+                .padding(bottom = 20.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color(0xFF007AFF).copy(alpha = 0.12f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Lucide.ShieldCheck,
+                            contentDescription = null,
+                            tint = Color(0xFF007AFF),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Column {
+                        Text(
+                            text = "COMMUNITY STANDARDS",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF007AFF),
+                            letterSpacing = 0.5.sp
+                        )
+                        Text(
+                            text = "Chroma Studio Creator Code",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = colors.textMain
+                        )
+                    }
+                }
+                IconButton(onClick = onDismiss, modifier = Modifier.size(30.dp)) {
+                    Icon(Lucide.X, contentDescription = "Close", tint = colors.textMuted, modifier = Modifier.size(18.dp))
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
+            HorizontalDivider(thickness = 0.5.dp, color = colors.glassBorder)
+            Spacer(Modifier.height(14.dp))
+
+            val guidelines = listOf(
+                Triple(
+                    Lucide.Sparkles,
+                    "Creative Attribution & Remix Lineage",
+                    "All remixed works preserve automated cryptographic lineage back to original master shaders and asset stems."
+                ),
+                Triple(
+                    Lucide.Shield,
+                    "Visual Safety & Content Standards",
+                    "Chroma's ML safety scanner ensures real-time compliance with safe community guidelines across all video and art drops."
+                ),
+                Triple(
+                    Lucide.Palette,
+                    "Procedural Shaders & Asset Rights",
+                    "Original creators retain sovereign ownership of their color schemes, curves, and motion parameters."
+                ),
+                Triple(
+                    Lucide.HeartHandshake,
+                    "Creator Respect & Constructive Feedback",
+                    "We foster a community of visual directors, motion designers, and wallpaper artists built on mutual respect and encouragement."
+                )
+            )
+
+            guidelines.forEachIndexed { index, (icon, title, desc) ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = Color(0xFF007AFF),
+                        modifier = Modifier.size(18.dp).padding(top = 2.dp)
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = title,
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = colors.textMain
+                        )
+                        Spacer(Modifier.height(3.dp))
+                        Text(
+                            text = desc,
+                            fontSize = 12.sp,
+                            color = colors.textMuted,
+                            lineHeight = 16.sp
+                        )
+                    }
+                }
+                if (index < guidelines.size - 1) {
+                    HorizontalDivider(thickness = 0.5.dp, color = colors.glassBorder.copy(alpha = 0.5f))
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+            HorizontalDivider(thickness = 0.5.dp, color = colors.glassBorder)
+            Spacer(Modifier.height(16.dp))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(46.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFF007AFF))
+                    .clickable { onDismiss() },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "I Agree to Community Standards",
                     color = Color.White,
-                    fontSize = 12.5.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.5.sp
                 )
             }
         }
@@ -972,6 +1576,8 @@ data class CreatorProfileInfo(
  */
 @Composable
 fun CreatorFeedHeader(
+    selectedFeedTab: CommunityFeedTab = CommunityFeedTab.ALL,
+    onSelectFeedTab: (CommunityFeedTab) -> Unit = {},
     isSearchExpanded: Boolean,
     searchQuery: String,
     isPlusMenuOpen: Boolean,
@@ -988,6 +1594,14 @@ fun CreatorFeedHeader(
     createMenuContent: @Composable () -> Unit
 ) {
     val colors = LocalOscellionColors.current
+    var isFeedMenuOpen by remember { mutableStateOf(false) }
+
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (isFeedMenuOpen) 180f else 0f,
+        animationSpec = tween(260, easing = FluidCubicBezier),
+        label = "chevronRotation"
+    )
+
     val plusRotation by animateFloatAsState(
         targetValue = if (isPlusMenuOpen) 45f else 0f,
         animationSpec = tween(300, easing = FluidCubicBezier),
@@ -1012,16 +1626,16 @@ fun CreatorFeedHeader(
     )
     val refreshRotation = if (isRefreshing) spinningRotation else idleRotation
 
-    // Left action icons slide-out transitions matching web reference (.header-icons-slide-out)
-    val leftGroupOffset by animateDpAsState(
-        targetValue = if (isSearchExpanded) (-68).dp else 0.dp,
+    // Left brand heading and action icons fade-out transitions when search expands
+    val headerItemsOffset by animateDpAsState(
+        targetValue = if (isSearchExpanded) (-40).dp else 0.dp,
         animationSpec = tween(380, easing = FluidCubicBezier),
-        label = "leftGroupOffset"
+        label = "headerItemsOffset"
     )
-    val leftGroupAlpha by animateFloatAsState(
+    val headerItemsAlpha by animateFloatAsState(
         targetValue = if (isSearchExpanded) 0f else 1f,
-        animationSpec = tween(260, easing = LinearEasing),
-        label = "leftGroupAlpha"
+        animationSpec = tween(240, easing = LinearEasing),
+        label = "headerItemsAlpha"
     )
 
     Column(
@@ -1039,15 +1653,127 @@ fun CreatorFeedHeader(
         ) {
             val maxHeaderWidth = maxWidth
 
-            // 1. LEFT ACTION ICONS (+ Icon, Bell/Notification Icon, and Refresh Feed Icon)
+            // 1. LEFT BRAND HEADING: "Oscellion" + Instagram-Style Feed Switcher Dropdown
             Row(
                 modifier = Modifier
-                    .offset(x = leftGroupOffset)
-                    .alpha(leftGroupAlpha),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    .align(Alignment.CenterStart)
+                    .offset(x = headerItemsOffset)
+                    .alpha(headerItemsAlpha),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // 1.1 + ICON (Opens Create Menu with 45° rotation)
+                Box {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable(enabled = !isSearchExpanded) {
+                                isFeedMenuOpen = !isFeedMenuOpen
+                            }
+                            .padding(vertical = 4.dp, horizontal = 2.dp)
+                    ) {
+                        Text(
+                            text = "Oscellion",
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = (-0.5).sp,
+                            color = colors.textMain
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Lucide.ChevronDown,
+                            contentDescription = "Switch Feed",
+                            tint = colors.textMain.copy(alpha = 0.85f),
+                            modifier = Modifier
+                                .size(16.dp)
+                                .rotate(chevronRotation)
+                        )
+                    }
+
+                    // Instagram-Style Feed Switcher Dropdown Menu
+                    DropdownMenu(
+                        expanded = isFeedMenuOpen,
+                        onDismissRequest = { isFeedMenuOpen = false },
+                        offset = DpOffset(x = 0.dp, y = 6.dp),
+                        modifier = Modifier
+                            .width(200.dp)
+                            .background(
+                                color = if (colors.isDark) Color(0xFF16161A) else Color.White,
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .border(
+                                width = 0.5.dp,
+                                color = colors.glassBorder,
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                    ) {
+                        val feedTabs = listOf(
+                            CommunityFeedTab.ALL,
+                            CommunityFeedTab.FOLLOWING,
+                            CommunityFeedTab.SAVED,
+                            CommunityFeedTab.FLASH,
+                            CommunityFeedTab.TRENDING
+                        )
+
+                        feedTabs.forEachIndexed { index, tab ->
+                            val isSelected = selectedFeedTab == tab
+                            DropdownMenuItem(
+                                text = {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = tab.icon,
+                                            contentDescription = null,
+                                            tint = if (isSelected) colors.primary else colors.textMain,
+                                            modifier = Modifier.size(17.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Text(
+                                            text = tab.label,
+                                            fontSize = 14.sp,
+                                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                            color = if (isSelected) colors.primary else colors.textMain,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        if (isSelected) {
+                                            Icon(
+                                                imageVector = Lucide.Check,
+                                                contentDescription = "Selected",
+                                                tint = colors.primary,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+                                },
+                                onClick = {
+                                    isFeedMenuOpen = false
+                                    onSelectFeedTab(tab)
+                                },
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
+                            )
+
+                            if (index < feedTabs.lastIndex) {
+                                HorizontalDivider(
+                                    thickness = 0.5.dp,
+                                    color = colors.glassBorder.copy(alpha = 0.6f)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 2. RIGHT ACTION ICONS: [+] [Heart/Notif] [Refresh] (Slide/fade out when search is expanded)
+            Row(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 40.dp)
+                    .alpha(headerItemsAlpha),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                // 2.1 + ICON (Opens Create Menu with 45° rotation)
                 Box {
                     Box(
                         modifier = Modifier
@@ -1070,7 +1796,7 @@ fun CreatorFeedHeader(
                     createMenuContent()
                 }
 
-                // 1.2 NOTIFICATION / BELL ICON (Navigates directly to Activity Notifications)
+                // 2.2 NOTIFICATION / HEART ICON
                 Box(modifier = Modifier.size(36.dp)) {
                     Box(
                         modifier = Modifier
@@ -1080,7 +1806,7 @@ fun CreatorFeedHeader(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Lucide.Bell,
+                            imageVector = Lucide.Heart,
                             contentDescription = "Notifications",
                             tint = colors.textMain,
                             modifier = Modifier.size(20.dp)
@@ -1098,7 +1824,7 @@ fun CreatorFeedHeader(
                     }
                 }
 
-                // 1.3 REFRESH FEED ICON BUTTON (Spins & fetches latest studio works)
+                // 2.3 REFRESH FEED ICON BUTTON
                 Box(modifier = Modifier.size(36.dp)) {
                     Box(
                         modifier = Modifier
@@ -1150,14 +1876,15 @@ fun CreatorFeedHeader(
                 label = "searchBorderColor"
             )
 
+            val searchShape = if (isSearchExpanded) RoundedCornerShape(10.dp) else CircleShape
             Box(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .width(searchBarWidth)
                     .height(36.dp)
-                    .clip(CircleShape)
+                    .clip(searchShape)
                     .background(searchBgColor)
-                    .border(0.5.dp, searchBorderColor, CircleShape)
+                    .border(0.5.dp, searchBorderColor, searchShape)
             ) {
                 Row(
                     modifier = Modifier.fillMaxSize(),
@@ -1422,74 +2149,41 @@ fun rememberLucideHeartHandshakeIcon(
 }
 
 /**
- * Scalloped Verified Seal Badge (12-point star with crisp white checkmark)
+ * Common Scalloped Verified Seal Badge across the app
  */
 @Composable
 fun ScallopedVerifiedBadge(
     modifier: Modifier = Modifier.size(15.dp),
     badgeColor: Color = Color(0xFF007AFF)
 ) {
-    Canvas(modifier = modifier) {
-        val scaleX = size.width / 24f
-        val scaleY = size.height / 24f
-
-        val sealPath = Path().apply {
-            moveTo(12f * scaleX, 1.8f * scaleY)
-            lineTo(14.6f * scaleX, 3.7f * scaleY)
-            lineTo(17.8f * scaleX, 3.5f * scaleY)
-            lineTo(19.1f * scaleX, 6.4f * scaleY)
-            lineTo(21.8f * scaleX, 8.2f * scaleY)
-            lineTo(20.9f * scaleX, 11.3f * scaleY)
-            lineTo(22.2f * scaleX, 14.2f * scaleY)
-            lineTo(19.6f * scaleX, 16.2f * scaleY)
-            lineTo(19.1f * scaleX, 19.4f * scaleY)
-            lineTo(15.9f * scaleX, 19.8f * scaleY)
-            lineTo(13.6f * scaleX, 22.1f * scaleY)
-            lineTo(10.4f * scaleX, 22.1f * scaleY)
-            lineTo(8.1f * scaleX, 19.8f * scaleY)
-            lineTo(4.9f * scaleX, 19.4f * scaleY)
-            lineTo(4.4f * scaleX, 16.2f * scaleY)
-            lineTo(1.8f * scaleX, 14.2f * scaleY)
-            lineTo(3.1f * scaleX, 11.3f * scaleY)
-            lineTo(2.2f * scaleX, 8.2f * scaleY)
-            lineTo(4.9f * scaleX, 6.4f * scaleY)
-            lineTo(6.2f * scaleX, 3.5f * scaleY)
-            lineTo(9.4f * scaleX, 3.7f * scaleY)
-            close()
-        }
-        drawPath(path = sealPath, color = badgeColor)
-
-        val checkPath = Path().apply {
-            moveTo(9.0f * scaleX, 12.2f * scaleY)
-            lineTo(11.1f * scaleX, 14.3f * scaleY)
-            lineTo(15.4f * scaleX, 9.8f * scaleY)
-        }
-        drawPath(
-            path = checkPath,
-            color = Color.White,
-            style = Stroke(
-                width = 2.2f * scaleX,
-                cap = StrokeCap.Round,
-                join = StrokeJoin.Round
-            )
-        )
-    }
+    VerifiedBadge(
+        modifier = modifier,
+        size = 15.dp,
+        badgeColor = badgeColor
+    )
 }
 
 enum class DrawerRole { USER, ADMIN }
 
-fun parseAspectRatio(ratioStr: String?): Float {
-    val clean = ratioStr?.trim()?.lowercase() ?: return 4f / 3f
+fun parseAspectRatio(ratioStr: String?, postType: String = ""): Float {
+    val clean = ratioStr?.trim()?.lowercase()
+    if (clean.isNullOrBlank() || clean == "original" || clean == "rounded" || clean == "full") {
+        return when (postType.lowercase()) {
+            "video", "flash" -> 9f / 16f
+            "image" -> 1f
+            else -> 4f / 3f
+        }
+    }
     return when {
         clean == "1:1" || clean == "1/1" || clean == "square" -> 1f / 1f
+        clean == "4:5" || clean == "4/5" || clean == "portrait" -> 4f / 5f
+        clean == "3:4" || clean == "3/4" -> 3f / 4f
         clean == "4:3" || clean == "4/3" -> 4f / 3f
         clean == "5:4" || clean == "5/4" -> 5f / 4f
-        clean == "4:5" || clean == "4/5" -> 4f / 5f
-        clean == "3:4" || clean == "3/4" -> 3f / 4f
         clean == "16:9" || clean == "16/9" -> 16f / 9f
         clean == "9:16" || clean == "9/16" -> 9f / 16f
         clean == "21:9" || clean == "21/9" || clean == "cinematic" -> 21f / 9f
-        else -> 4f / 3f
+        else -> if (postType.lowercase() == "image") 1f else 4f / 3f
     }
 }
 
@@ -1498,6 +2192,10 @@ fun FeedPostCard(
     work: DiscoverPost,
     isLiked: Boolean,
     isSaved: Boolean = false,
+    isFollowingCreator: Boolean = false,
+    onToggleFollowCreator: (() -> Unit)? = null,
+    onShowGuidelines: (() -> Unit)? = null,
+    onShowToast: ((String) -> Unit)? = null,
     repository: WorkRepository,
     onRequireLogin: () -> Unit = {},
     onLikeClick: () -> Unit = {},
@@ -1529,7 +2227,6 @@ fun FeedPostCard(
     var showAboutDialog by remember { mutableStateOf(false) }
     var showAnalyticsModal by remember { mutableStateOf(false) }
     var showCreatorProfileModal by remember { mutableStateOf(false) }
-    var isFollowingCreator by remember(work.creatorId) { mutableStateOf(false) }
     var showOriginalPostModal by remember { mutableStateOf(false) }
     var activeRole by remember(isOwner) { mutableStateOf(if (isOwner) DrawerRole.ADMIN else DrawerRole.USER) }
 
@@ -1627,100 +2324,155 @@ fun FeedPostCard(
             .background(if (colors.isDark) Color(0xFF16161A) else Color.White)
             .padding(top = 4.dp)
     ) {
-        // 1. POST HEADER: Small Profile Avatar, Name + Scalloped Verified Badge + Small Remixed Tag, @username, Time + 3-Dot Menu
+        // 1. POST HEADER: Small Profile Avatar, Name + Scalloped Verified Badge, @username • TimeAgo • RemixTag, and 3-Dot Menu
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
+            // Avatar (Clickable to open creator profile)
+            IosAvatarView(
+                name = resolvedDisplayName,
+                avatarUrl = resolvedAvatarUrl,
+                size = 38.dp,
+                modifier = Modifier.clickable { showCreatorProfileModal = true }
+            )
+
+            Spacer(Modifier.width(10.dp))
+
+            // Author metadata column
+            Column(
                 modifier = Modifier
                     .weight(1f)
-                    .clickable { showCreatorProfileModal = true }
+                    .clickable { showCreatorProfileModal = true },
+                verticalArrangement = Arrangement.Center
             ) {
-                IosAvatarView(
-                    name = resolvedDisplayName,
-                    avatarUrl = resolvedAvatarUrl,
-                    size = 38.dp
-                )
+                // Row 1: Name + Scalloped Verified Seal Badge
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = resolvedDisplayName,
+                        color = colors.textMain,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (resolvedVerified) {
+                        ScallopedVerifiedBadge()
+                    }
+                }
 
-                Spacer(Modifier.width(10.dp))
+                Spacer(Modifier.height(1.5.dp))
 
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
+                // Row 2: @username • time ago • [Remix of @author] • [Follow]
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "@${work.authorUsername}",
+                        color = Color(0xFF8E8E93),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "•",
+                        color = Color(0xFF8E8E93),
+                        fontSize = 10.sp
+                    )
+                    Text(
+                        text = getTimeAgo(work.timestamp),
+                        color = Color(0xFF8E8E93),
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+
+                    if (isRemixPost) {
                         Text(
-                            text = resolvedDisplayName,
-                            color = colors.textMain,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            text = "•",
+                            color = Color(0xFF8E8E93),
+                            fontSize = 10.sp
                         )
-                        if (resolvedVerified) {
-                            ScallopedVerifiedBadge()
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(3.dp),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color(0xFF007AFF).copy(alpha = 0.12f))
+                                .clickable { showOriginalPostModal = true }
+                                .padding(horizontal = 5.dp, vertical = 1.5.dp)
+                        ) {
+                            Icon(
+                                imageVector = Lucide.Sparkles,
+                                contentDescription = "Remix",
+                                tint = Color(0xFF007AFF),
+                                modifier = Modifier.size(11.dp)
+                            )
+                            Text(
+                                text = "Remix of @${work.remixedFromAuthorUsername}",
+                                color = Color(0xFF007AFF),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
                     }
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
+                    if (!isOwner && !currentUserId.isNullOrBlank() && work.creatorId.isNotBlank()) {
                         Text(
-                            text = "@${work.authorUsername}",
+                            text = "•",
                             color = Color(0xFF8E8E93),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            fontSize = 10.sp
+                        )
+                        Text(
+                            text = if (isFollowingCreator) "Following" else "Follow",
+                            color = if (isFollowingCreator) Color(0xFF8E8E93) else Color(0xFF007AFF),
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.clickable {
+                                onToggleFollowCreator?.invoke()
+                            }
                         )
                     }
                 }
             }
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = getTimeAgo(work.timestamp),
-                    color = Color(0xFF8E8E93),
-                    fontSize = 11.5.sp,
-                    fontWeight = FontWeight.Medium
+            Spacer(Modifier.width(8.dp))
+
+            // 3-Dot Options Button
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .clickable { showMenu = true },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = LucideComposeIcons.MoreHorizontal,
+                    contentDescription = "Options",
+                    tint = Color(0xFF8E8E93),
+                    modifier = Modifier.size(18.dp)
                 )
-                Spacer(Modifier.width(4.dp))
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .clickable { showMenu = true },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = LucideComposeIcons.MoreHorizontal,
-                        contentDescription = "Options",
-                        tint = Color(0xFF8E8E93),
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
             }
         }
 
         // 2. MEDIA VIEWPORT: Strictly WITHOUT corner radius (RectangleShape), 1:1, 4:3, 5:4, 16:9, 9:16
-        val parsedRatio = parseAspectRatio(work.aspectRatio)
-        val isVerticalVideo = work.aspectRatio.trim() == "9:16"
+        val parsedRatio = parseAspectRatio(work.aspectRatio, work.postType)
+        val isVertical = parsedRatio <= 9f / 16f || work.aspectRatio.trim() == "9:16" || (isVideoPost(work) && parsedRatio < 0.75f)
 
-        if (isVerticalVideo) {
-            // For 9:16 posts we must produce a deterministic pixel height so the Column
+        if (isVertical) {
+            // For vertical posts we produce a deterministic pixel height so the Column
             // places the action-buttons row correctly below the media.
-            // Conflicting .heightIn(max=540.dp).aspectRatio() causes Compose to report an
-            // incorrect intrinsic height to the parent Column → action buttons overlap.
             BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
                 val cardWidthDp = maxWidth
-                // Height = width × (16/9), capped at 540dp so tall phones don't fill the screen
-                val clampedHeightDp = minOf(cardWidthDp * 16f / 9f, 540.dp)
+                val clampedHeightDp = minOf(cardWidthDp * (1f / parsedRatio.coerceAtLeast(0.5f)), 540.dp)
                 PostMediaCarousel(
                     work = work,
                     slides = mediaSlides,
@@ -1776,19 +2528,18 @@ fun FeedPostCard(
 
         // 3. ACTION BUTTONS ROW:
         // Left: Heart (Like), Lucide HeartHandshake (Remix), Download
-        // Center: Animated Scroll Dots Indicator (for multi-image / multi-work posts)
         // Right: Save (Bookmark), Share
-        Box(
+        // Note: Carousel page dots indicator is positioned cleanly at the bottom center of PostMediaCarousel overlay.
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .padding(top = 10.dp, bottom = 8.dp),
-            contentAlignment = Alignment.CenterStart
+                .padding(horizontal = 16.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             // Left Action Group: Like, Remix, Download
             Row(
-                modifier = Modifier.align(Alignment.CenterStart),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // 1. Like Button
@@ -1924,25 +2675,9 @@ fun FeedPostCard(
                 }
             }
 
-            // Centered Scroll Dots Indicator for Multi-Image / Multi-Work Posts
-            if (mediaSlides.size > 1) {
-                PostScrollDotsIndicator(
-                    totalDots = mediaSlides.size,
-                    selectedIndex = pagerState.currentPage,
-                    isDark = colors.isDark,
-                    onDotClick = { targetIndex ->
-                        coroutineScope.launch {
-                            pagerState.animateScrollToPage(targetIndex)
-                        }
-                    },
-                    modifier = Modifier.align(Alignment.Center)
-                )
-            }
-
             // Right Action Group: Save & Share
             Row(
-                modifier = Modifier.align(Alignment.CenterEnd),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // 4. Save / Bookmark Button
@@ -2043,7 +2778,7 @@ fun FeedPostCard(
                 .padding(bottom = 12.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            // Main Title (Max 2 lines then .... with smooth expand animation)
+            // Main Title (Max 2 lines then ... with smooth expand animation)
             if (work.title.isNotBlank()) {
                 val needsTitleExpand = work.title.length > 85
                 val shortTitle = if (needsTitleExpand) work.title.take(85).trim() else work.title
@@ -2072,7 +2807,7 @@ fun FeedPostCard(
                                         letterSpacing = 0.5.sp
                                     )
                                 ) {
-                                    append(" ....")
+                                    append(" ...")
                                 }
                             }
                         },
@@ -2086,10 +2821,10 @@ fun FeedPostCard(
                 }
             }
 
-            // Description (Max 1 line then ...read more with smooth expand animation)
+            // Description (Max 2 lines then ...more with smooth expand animation)
             if (work.description.isNotBlank()) {
-                val needsDescExpand = work.description.length > 55
-                val shortDesc = if (needsDescExpand) work.description.take(55).trim() else work.description
+                val needsDescExpand = work.description.length > 80
+                val shortDesc = if (needsDescExpand) work.description.take(80).trim() else work.description
 
                 Box(
                     modifier = Modifier
@@ -2109,29 +2844,31 @@ fun FeedPostCard(
                                 if (needsDescExpand) {
                                     withStyle(
                                         SpanStyle(
-                                            color = if (colors.isDark) Color(0xFF71717A) else Color(0xFF94A3B8),
-                                            fontSize = 11.sp
+                                            color = Color(0xFF007AFF),
+                                            fontSize = 11.5.sp,
+                                            fontWeight = FontWeight.Medium
                                         )
                                     ) {
-                                        append(" (show less)")
+                                        append(" (less)")
                                     }
                                 }
                             } else {
                                 append(shortDesc)
                                 withStyle(
                                     SpanStyle(
-                                        color = if (colors.isDark) Color(0xFFF1F5F9) else Color(0xFF0F172A),
-                                        fontWeight = FontWeight.SemiBold
+                                        color = Color(0xFF007AFF),
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 11.5.sp
                                     )
                                 ) {
-                                    append(" ...read more")
+                                    append(" ...more")
                                 }
                             }
                         },
                         fontSize = 12.sp,
-                        color = colors.textMain.copy(alpha = 0.82f),
+                        color = colors.textMain.copy(alpha = 0.85f),
                         lineHeight = 16.5.sp,
-                        maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else 1,
+                        maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else 2,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
@@ -2262,7 +2999,12 @@ fun FeedPostCard(
             onDeletePost = {
                 showMenu = false
                 if (isOwner) showDeleteConfirm = true
-            }
+            },
+            onOpenGuidelines = {
+                showMenu = false
+                onShowGuidelines?.invoke()
+            },
+            onShowToast = onShowToast
         )
     }
 
@@ -2345,7 +3087,7 @@ fun FeedPostCard(
             profile = profileInfo,
             creatorPosts = listOf(work),
             onToggleFollow = {
-                isFollowingCreator = !isFollowingCreator
+                onToggleFollowCreator?.invoke()
             },
             onViewFullProfile = {
                 onAuthorClick(work.creatorId)
@@ -2527,15 +3269,15 @@ fun OwnerAnalyticsModal(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(CircleShape)
+                        .clip(RoundedCornerShape(10.dp))
                         .background(if (colors.isDark) Color.White else Color(0xFF0F172A))
                         .clickable { onDismiss() }
-                        .padding(vertical = 9.dp),
+                        .padding(vertical = 11.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         "Close Telemetry",
-                        fontSize = 12.sp,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = if (colors.isDark) Color.Black else Color.White
                     )
@@ -2587,11 +3329,11 @@ fun EditPostModal(
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .clip(CircleShape)
+                                .clip(RoundedCornerShape(8.dp))
                                 .background(if (isSelected) Color(0xFF007AFF) else (if (colors.isDark) Color(0xFF252528) else Color(0xFFF8FAFC)))
-                                .border(1.dp, if (isSelected) Color(0xFF007AFF) else colors.glassBorder, CircleShape)
+                                .border(1.dp, if (isSelected) Color(0xFF007AFF) else colors.glassBorder, RoundedCornerShape(8.dp))
                                 .clickable { selectedRatio = ratio }
-                                .padding(vertical = 6.dp),
+                                .padding(vertical = 7.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
@@ -2642,24 +3384,25 @@ fun EditPostModal(
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .clip(CircleShape)
+                            .clip(RoundedCornerShape(10.dp))
                             .background(if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFF1F5F9))
+                            .border(0.5.dp, colors.glassBorder, RoundedCornerShape(10.dp))
                             .clickable { onDismiss() }
-                            .padding(vertical = 8.dp),
+                            .padding(vertical = 10.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("Cancel", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = colors.textMain)
+                        Text("Cancel", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = colors.textMain)
                     }
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .clip(CircleShape)
+                            .clip(RoundedCornerShape(10.dp))
                             .background(Color(0xFF007AFF))
                             .clickable { onSaveEdits(selectedRatio, titleText, descText) }
-                            .padding(vertical = 8.dp),
+                            .padding(vertical = 10.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("Save Changes", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                        Text("Save Changes", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                     }
                 }
             }
@@ -2830,9 +3573,9 @@ fun CreatorProfileModal(
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .clip(CircleShape)
+                            .clip(RoundedCornerShape(10.dp))
                             .background(if (profile.isFollowing) colors.glassBgHover else colors.primary)
-                            .border(0.5.dp, if (profile.isFollowing) colors.glassBorder else Color.White.copy(alpha = 0.2f), CircleShape)
+                            .border(0.5.dp, if (profile.isFollowing) colors.glassBorder else Color.White.copy(alpha = 0.2f), RoundedCornerShape(10.dp))
                             .clickable { onToggleFollow() }
                             .padding(vertical = 10.dp),
                         contentAlignment = Alignment.Center
@@ -2848,9 +3591,9 @@ fun CreatorProfileModal(
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .clip(CircleShape)
+                            .clip(RoundedCornerShape(10.dp))
                             .background(colors.glassBgHover)
-                            .border(0.5.dp, colors.glassBorder, CircleShape)
+                            .border(0.5.dp, colors.glassBorder, RoundedCornerShape(10.dp))
                             .clickable {
                                 onDismiss()
                                 onViewFullProfile()
@@ -2889,9 +3632,12 @@ fun PostOptionsDrawerSheet(
     onEditPost: () -> Unit,
     onViewAnalytics: () -> Unit,
     onArchive: () -> Unit,
-    onDeletePost: () -> Unit
+    onDeletePost: () -> Unit,
+    onOpenGuidelines: (() -> Unit)? = null,
+    onShowToast: ((String) -> Unit)? = null
 ) {
     val colors = LocalOscellionColors.current
+    val clipboardManager = LocalClipboardManager.current
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -2903,7 +3649,7 @@ fun PostOptionsDrawerSheet(
                     .padding(vertical = 12.dp)
                     .width(38.dp)
                     .height(4.dp)
-                    .clip(CircleShape)
+                    .clip(RoundedCornerShape(2.dp))
                     .background(Color.Gray.copy(alpha = 0.4f))
             )
         }
@@ -2942,25 +3688,25 @@ fun PostOptionsDrawerSheet(
                     )
                 }
 
-                // Segmented Role Switcher Pill: ONLY visible and accessible to the original post creator/admin
+                // Segmented Role Switcher: ONLY visible and accessible to the original post creator/admin
                 if (isOwner) {
                     Spacer(Modifier.width(10.dp))
 
                     Row(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(8.dp))
                             .background(colors.glassBgHover)
-                            .border(0.5.dp, colors.glassBorder, RoundedCornerShape(12.dp))
-                            .padding(3.dp),
-                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                            .border(0.5.dp, colors.glassBorder, RoundedCornerShape(8.dp))
+                            .padding(2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
                         val isUser = activeRole == DrawerRole.USER
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(9.dp))
+                                .clip(RoundedCornerShape(6.dp))
                                 .background(if (!isUser) Color(0xFF007AFF) else Color.Transparent)
                                 .clickable { onRoleChange(DrawerRole.ADMIN) }
-                                .padding(horizontal = 11.dp, vertical = 4.dp)
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
                         ) {
                             Text(
                                 text = "Admin",
@@ -2972,10 +3718,10 @@ fun PostOptionsDrawerSheet(
 
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(9.dp))
+                                .clip(RoundedCornerShape(6.dp))
                                 .background(if (isUser) colors.glassBg else Color.Transparent)
                                 .clickable { onRoleChange(DrawerRole.USER) }
-                                .padding(horizontal = 11.dp, vertical = 4.dp)
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
                         ) {
                             Text(
                                 text = "User View",
@@ -2992,6 +3738,18 @@ fun PostOptionsDrawerSheet(
 
             if (!showAdminTools) {
                 // NORMAL USER OPTIONS:
+                DrawerActionItem(
+                    icon = Lucide.Copy,
+                    title = "Copy Post Link",
+                    subtitle = "Share link to this artwork with other creators",
+                    onClick = {
+                        clipboardManager.setText(AnnotatedString("https://chromastudio.app/p/${work.id}"))
+                        onShowToast?.invoke("Post link copied to clipboard")
+                        onDismiss()
+                    }
+                )
+                HorizontalDivider(thickness = 0.5.dp, color = colors.glassBorder.copy(alpha = 0.5f))
+
                 DrawerActionItem(
                     icon = Lucide.Heart,
                     title = "Interested",
@@ -3025,6 +3783,17 @@ fun PostOptionsDrawerSheet(
                 HorizontalDivider(thickness = 0.5.dp, color = colors.glassBorder.copy(alpha = 0.5f))
 
                 DrawerActionItem(
+                    icon = Lucide.ShieldCheck,
+                    title = "Community Standards & Guidelines",
+                    subtitle = "Remix rights, procedural shader licensing & safety code",
+                    onClick = {
+                        onDismiss()
+                        onOpenGuidelines?.invoke()
+                    }
+                )
+                HorizontalDivider(thickness = 0.5.dp, color = colors.glassBorder.copy(alpha = 0.5f))
+
+                DrawerActionItem(
                     icon = Lucide.Flag,
                     title = "Report",
                     subtitle = "Flag this post for review",
@@ -3042,6 +3811,18 @@ fun PostOptionsDrawerSheet(
                 )
             } else {
                 // ADMIN OPTIONS:
+                DrawerActionItem(
+                    icon = Lucide.Copy,
+                    title = "Copy Post Link",
+                    subtitle = "Share link to this artwork with other creators",
+                    onClick = {
+                        clipboardManager.setText(AnnotatedString("https://chromastudio.app/p/${work.id}"))
+                        onShowToast?.invoke("Post link copied to clipboard")
+                        onDismiss()
+                    }
+                )
+                HorizontalDivider(thickness = 0.5.dp, color = colors.glassBorder.copy(alpha = 0.5f))
+
                 DrawerActionItem(
                     icon = Lucide.Lock,
                     title = "Counter Privacy",
@@ -3075,6 +3856,17 @@ fun PostOptionsDrawerSheet(
                 HorizontalDivider(thickness = 0.5.dp, color = colors.glassBorder.copy(alpha = 0.5f))
 
                 DrawerActionItem(
+                    icon = Lucide.ShieldCheck,
+                    title = "Community Standards & Guidelines",
+                    subtitle = "Remix rights, procedural shader licensing & safety code",
+                    onClick = {
+                        onDismiss()
+                        onOpenGuidelines?.invoke()
+                    }
+                )
+                HorizontalDivider(thickness = 0.5.dp, color = colors.glassBorder.copy(alpha = 0.5f))
+
+                DrawerActionItem(
                     icon = Lucide.Archive,
                     title = "Archive",
                     subtitle = "Hide post from public feed while keeping stats",
@@ -3094,13 +3886,22 @@ fun PostOptionsDrawerSheet(
             Spacer(Modifier.height(14.dp))
 
             // Cancel Button
-            ChromaPillButton(
-                onClick = onDismiss,
-                variant = ChromaPillVariant.Secondary,
-                modifier = Modifier.fillMaxWidth(),
-                height = 44.dp
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(colors.glassBgHover)
+                    .border(0.5.dp, colors.glassBorder, RoundedCornerShape(10.dp))
+                    .clickable { onDismiss() }
+                    .padding(vertical = 12.dp),
+                contentAlignment = Alignment.Center
             ) {
-                Text("Cancel", color = colors.textMain, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                Text(
+                    text = "Cancel",
+                    color = colors.textMain,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp
+                )
             }
         }
     }
@@ -3178,7 +3979,7 @@ fun OriginalPostInspectorSheet(
                     .padding(vertical = 12.dp)
                     .width(38.dp)
                     .height(4.dp)
-                    .clip(CircleShape)
+                    .clip(RoundedCornerShape(2.dp))
                     .background(Color.Gray.copy(alpha = 0.4f))
             )
         }
@@ -3336,30 +4137,37 @@ fun OriginalPostInspectorSheet(
             Spacer(Modifier.height(18.dp))
 
             // Action Buttons
-            ChromaPillButton(
-                onClick = {
-                    onDismiss()
-                    if (origAuthorId.isNotBlank()) {
-                        onNavigateToOriginal(origAuthorId, origPostId)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xFF007AFF))
+                    .clickable {
+                        onDismiss()
+                        if (origAuthorId.isNotBlank()) {
+                            onNavigateToOriginal(origAuthorId, origPostId)
+                        }
                     }
-                },
-                variant = ChromaPillVariant.Blue,
-                modifier = Modifier.fillMaxWidth(),
-                height = 44.dp
+                    .padding(vertical = 12.dp),
+                contentAlignment = Alignment.Center
             ) {
                 Text("View Original Master Work", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.5.sp)
             }
 
             Spacer(Modifier.height(8.dp))
 
-            ChromaPillButton(
-                onClick = {
-                    onDismiss()
-                    onRemixWork?.invoke(work)
-                },
-                variant = ChromaPillVariant.Secondary,
-                modifier = Modifier.fillMaxWidth(),
-                height = 42.dp
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(colors.glassBgHover)
+                    .border(0.5.dp, colors.glassBorder, RoundedCornerShape(10.dp))
+                    .clickable {
+                        onDismiss()
+                        onRemixWork?.invoke(work)
+                    }
+                    .padding(vertical = 11.dp),
+                contentAlignment = Alignment.Center
             ) {
                 Text("Create New Remix", color = colors.textMain, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
             }
@@ -3403,61 +4211,67 @@ fun PostCountersSettingsSheet(
                 modifier = Modifier.padding(top = 2.dp, bottom = 16.dp)
             )
             
-            LiquidGlassCard(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp)
-            ) {
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
-                    CounterToggleRow(
-                        title = "Show Likes Count",
-                        subtitle = "Others will only see \"Liked by...\"",
-                        checked = !hideLikes,
-                        onCheckedChange = { hideLikes = !it }
-                    )
-                    HorizontalDivider(color = colors.glassBorder, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 4.dp))
-                    CounterToggleRow(
-                        title = "Show Shares Count",
-                        subtitle = "Keeps outbound share counts private",
-                        checked = !hideShares,
-                        onCheckedChange = { hideShares = !it }
-                    )
-                    HorizontalDivider(color = colors.glassBorder, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 4.dp))
-                    CounterToggleRow(
-                        title = "Show Remixes Count",
-                        subtitle = "Disables public fork count display",
-                        checked = !hideRemixes,
-                        onCheckedChange = { hideRemixes = !it }
-                    )
-                    HorizontalDivider(color = colors.glassBorder, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 4.dp))
-                    CounterToggleRow(
-                        title = "Show Downloads Count",
-                        subtitle = "Keeps download metric private",
-                        checked = !hideDownloads,
-                        onCheckedChange = { hideDownloads = !it }
-                    )
-                    HorizontalDivider(color = colors.glassBorder, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 4.dp))
-                    CounterToggleRow(
-                        title = "Show Saves / Bookmarks Count",
-                        subtitle = "Only you can see save metrics",
-                        checked = !hideSaves,
-                        onCheckedChange = { hideSaves = !it }
-                    )
-                }
+            HorizontalDivider(thickness = 0.5.dp, color = colors.glassBorder)
+            Spacer(Modifier.height(8.dp))
+
+            Column(modifier = Modifier.fillMaxWidth()) {
+                CounterToggleRow(
+                    title = "Show Likes Count",
+                    subtitle = "Others will only see \"Liked by...\"",
+                    checked = !hideLikes,
+                    onCheckedChange = { hideLikes = !it }
+                )
+                HorizontalDivider(color = colors.glassBorder, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 4.dp))
+                CounterToggleRow(
+                    title = "Show Shares Count",
+                    subtitle = "Keeps outbound share counts private",
+                    checked = !hideShares,
+                    onCheckedChange = { hideShares = !it }
+                )
+                HorizontalDivider(color = colors.glassBorder, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 4.dp))
+                CounterToggleRow(
+                    title = "Show Remixes Count",
+                    subtitle = "Disables public fork count display",
+                    checked = !hideRemixes,
+                    onCheckedChange = { hideRemixes = !it }
+                )
+                HorizontalDivider(color = colors.glassBorder, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 4.dp))
+                CounterToggleRow(
+                    title = "Show Downloads Count",
+                    subtitle = "Keeps download metric private",
+                    checked = !hideDownloads,
+                    onCheckedChange = { hideDownloads = !it }
+                )
+                HorizontalDivider(color = colors.glassBorder, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 4.dp))
+                CounterToggleRow(
+                    title = "Show Saves / Bookmarks Count",
+                    subtitle = "Only you can see save metrics",
+                    checked = !hideSaves,
+                    onCheckedChange = { hideSaves = !it }
+                )
             }
 
-            Spacer(Modifier.height(24.dp))
-            ChromaPillButton(
-                onClick = {
-                    onSave(hideLikes, hideShares, hideRemixes, hideDownloads, hideSaves)
-                    onDismiss()
-                },
-                variant = ChromaPillVariant.Blue,
-                modifier = Modifier.fillMaxWidth(),
-                height = 46.dp
-            ) {
-                Text("Apply Settings", color = androidx.compose.ui.graphics.Color.White, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = 14.sp)
-            }
             Spacer(Modifier.height(20.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xFF007AFF))
+                    .clickable {
+                        onSave(hideLikes, hideShares, hideRemixes, hideDownloads, hideSaves)
+                        onDismiss()
+                    }
+                    .padding(vertical = 12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "Apply Settings",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp
+                )
+            }
+            Spacer(Modifier.height(16.dp))
         }
     }
 }
@@ -3551,5 +4365,274 @@ fun SkeletonPost() {
             thickness = 0.5.dp,
             color = if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.08f)
         )
+    }
+}
+
+/**
+ * Clean Instagram-style Community Upload Banner.
+ * Displays a tiny video thumbnail with real-time upload progress, success confirmation,
+ * or failure handling with "Re-Upload" and "View Saved Drafts" actions.
+ * Adheres strictly to the brand identity: clean rounded corners (no pills, no capsules, no double cards, hr line dividers).
+ */
+@Composable
+fun CommunityUploadProgressBanner(
+    task: FlashUploadTask,
+    onRetry: () -> Unit,
+    onViewDrafts: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val colors = LocalOscellionColors.current
+
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(10.dp),
+        color = if (colors.isDark) Color(0xFF1E293B) else Color(0xFFF8FAFC),
+        border = BorderStroke(
+            width = 1.dp,
+            color = when (task.status) {
+                UploadStatus.FAILED -> Color(0xFFEF4444).copy(alpha = 0.45f)
+                UploadStatus.SUCCESS -> Color(0xFF10B981).copy(alpha = 0.45f)
+                else -> if (colors.isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFE2E8F0)
+            }
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Tiny Thumbnail (44.dp x 44.dp)
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (colors.isDark) Color(0xFF0F172A) else Color(0xFFE2E8F0))
+                        .border(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.1f) else Color(0xFFCBD5E1), RoundedCornerShape(8.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (task.thumbnailBitmap != null) {
+                        Image(
+                            bitmap = task.thumbnailBitmap.asImageBitmap(),
+                            contentDescription = "Upload Thumbnail",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Lucide.Video,
+                            contentDescription = null,
+                            tint = colors.textMuted,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    // Status overlay badge in corner
+                    when (task.status) {
+                        UploadStatus.SUCCESS -> {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Color.Black.copy(alpha = 0.35f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.Check,
+                                    contentDescription = null,
+                                    tint = Color(0xFF10B981),
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                        }
+                        UploadStatus.FAILED -> {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Color(0xFFEF4444).copy(alpha = 0.25f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.Info,
+                                    contentDescription = null,
+                                    tint = Color(0xFFEF4444),
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                        }
+                        else -> {}
+                    }
+                }
+
+                Spacer(Modifier.width(12.dp))
+
+                // Middle: Info and Progress
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    when (task.status) {
+                        UploadStatus.UPLOADING -> {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = if (task.title.isNotBlank()) task.title else "Posting video…",
+                                    color = colors.textMain,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = "${(task.progress * 100).toInt()}%",
+                                    color = Color(0xFF2563EB),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            // Progress Bar
+                            LiquidGlassProgressBar(
+                                progress = task.progress,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(4.dp),
+                                height = 4.dp
+                            )
+
+                            Text(
+                                text = task.statusText,
+                                color = colors.textMuted,
+                                fontSize = 11.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        UploadStatus.SUCCESS -> {
+                            Text(
+                                text = "Posted! 🎉",
+                                color = if (colors.isDark) Color(0xFF34D399) else Color(0xFF059669),
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Your video is now live in the Community feed",
+                                color = colors.textMuted,
+                                fontSize = 11.sp
+                            )
+                        }
+
+                        UploadStatus.FAILED -> {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Uploading failed",
+                                    color = Color(0xFFEF4444),
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Icon(
+                                    imageVector = Lucide.X,
+                                    contentDescription = "Dismiss",
+                                    tint = colors.textMuted,
+                                    modifier = Modifier
+                                        .size(16.dp)
+                                        .clickable { onDismiss() }
+                                )
+                            }
+                            Text(
+                                text = "Uploading failed because of \"${task.errorMessage ?: "Unknown error"}\"",
+                                color = if (colors.isDark) Color(0xFFFCA5A5) else Color(0xFFDC2626),
+                                fontSize = 11.5.sp,
+                                lineHeight = 15.sp,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        UploadStatus.IDLE -> {}
+                    }
+                }
+            }
+
+            // Failed Action Buttons (Re-Upload / View Saved Drafts)
+            if (task.status == UploadStatus.FAILED) {
+                HorizontalDivider(
+                    color = if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0),
+                    thickness = 0.5.dp,
+                    modifier = Modifier.padding(vertical = 10.dp)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Re-Upload Button
+                    Button(
+                        onClick = onRetry,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(36.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+                    ) {
+                        Icon(
+                            imageVector = Lucide.RotateCw,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "Re-Upload",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
+                    // View Saved Drafts Button
+                    OutlinedButton(
+                        onClick = onViewDrafts,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(36.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.2f) else Color(0xFFCBD5E1)),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.textMain),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+                    ) {
+                        Icon(
+                            imageVector = Lucide.FileText,
+                            contentDescription = null,
+                            tint = colors.textMain,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "View Saved Drafts",
+                            color = colors.textMain,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+        }
     }
 }

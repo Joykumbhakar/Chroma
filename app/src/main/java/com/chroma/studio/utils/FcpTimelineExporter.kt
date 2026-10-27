@@ -24,8 +24,10 @@ import com.chroma.studio.ui.screens.FcpTextLayer
 import com.chroma.studio.ui.screens.FcpTitlePresetType
 import com.chroma.studio.ui.screens.FcpTransitionType
 import com.chroma.studio.ui.screens.FcpVisualEffect
+import com.chroma.studio.ui.screens.FcpClipAnimation
 import io.microshow.rxffmpeg.RxFFmpegInvoke
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
@@ -436,6 +438,18 @@ object FcpTimelineExporter {
         return bitmap
     }
 
+    @Volatile
+    private var isCancelled = false
+
+    fun cancelExport() {
+        isCancelled = true
+        try {
+            RxFFmpegInvoke.getInstance().exit()
+        } catch (e: Exception) {
+            Log.w(TAG, "cancelExport error", e)
+        }
+    }
+
     suspend fun exportTimeline(
         context: Context,
         clips: List<FcpClip>,
@@ -447,6 +461,7 @@ object FcpTimelineExporter {
         fps: String,
         onProgress: (Float, String) -> Unit
     ): File? = withContext(Dispatchers.IO) {
+        isCancelled = false
         if (clips.isEmpty()) {
             Log.e(TAG, "exportTimeline: clips list is empty")
             return@withContext null
@@ -454,8 +469,10 @@ object FcpTimelineExporter {
 
         val outputFile = File(context.cacheDir, "pro_export_${System.currentTimeMillis()}.mp4")
         var overlayPngFile: File? = null
+        val localFileCache = mutableMapOf<String, File>()
 
         try {
+            if (isCancelled || !isActive) return@withContext null
             onProgress(0.10f, "Analyzing timeline & ${clips.size} clip(s)...")
 
             // 1. Calculate target dimensions based on resolution & aspect ratio
@@ -480,7 +497,6 @@ object FcpTimelineExporter {
 
             // 2. Resolve media files to local disk
             onProgress(0.18f, "Resolving video inputs...")
-            val localFileCache = mutableMapOf<String, File>()
 
             fun getLocalFile(uri: Uri, isAudio: Boolean = false): File? {
                 val key = uri.toString()
@@ -742,7 +758,53 @@ object FcpTimelineExporter {
                     FcpVisualEffect.NONE -> {}
                 }
 
-                // 5. Boundary Transitions Calculation
+                // 5. Dedicated Motion & Camera Animation Effects (Shake, Pulse, Zoom, Pan, Strobe, Wobble)
+                val animInt = clip.animationIntensity.coerceIn(0.1f, 1.0f)
+                when (clip.animationEffect) {
+                    FcpClipAnimation.SHAKE -> {
+                        val s = 1.15f
+                        val xExpr = String.format(Locale.US, "(iw-ow)/2 + (sin(t*38)*16 + cos(t*55)*8)*%.2f", animInt)
+                        val yExpr = String.format(Locale.US, "(ih-oh)/2 + (cos(t*45)*14 + sin(t*33)*7)*%.2f", animInt)
+                        vFilter.append(String.format(Locale.US, ",scale=w='iw*%.2f':h='ih*%.2f':eval=frame,crop=w=iw/%.2f:h=ih/%.2f:x='%s':y='%s'", s, s, s, s, xExpr, yExpr))
+                    }
+                    FcpClipAnimation.BEAT_PULSE -> {
+                        val durExpr = String.format(Locale.US, ",scale=w='iw*(1.0 + 0.12*pow(1-mod(t,0.6)/0.6, 2)*%.2f)':h='ih*(1.0 + 0.12*pow(1-mod(t,0.6)/0.6, 2)*%.2f)':eval=frame,crop=w=%d:h=%d", animInt, animInt, finalW, finalH)
+                        vFilter.append(durExpr)
+                    }
+                    FcpClipAnimation.ZOOM_IN -> {
+                        val durExpr = String.format(Locale.US, ",scale=w='iw*(1.0 + 0.22*(t/%.3f)*%.2f)':h='ih*(1.0 + 0.22*(t/%.3f)*%.2f)':eval=frame,crop=w=%d:h=%d", effectiveDur, animInt, effectiveDur, animInt, finalW, finalH)
+                        vFilter.append(durExpr)
+                    }
+                    FcpClipAnimation.ZOOM_OUT -> {
+                        val durExpr = String.format(Locale.US, ",scale=w='iw*(1.0 + 0.22*(1.0 - t/%.3f)*%.2f)':h='ih*(1.0 + 0.22*(1.0 - t/%.3f)*%.2f)':eval=frame,crop=w=%d:h=%d", effectiveDur, animInt, effectiveDur, animInt, finalW, finalH)
+                        vFilter.append(durExpr)
+                    }
+                    FcpClipAnimation.CAMERA_JITTER -> {
+                        val s = 1.08f
+                        val xExpr = String.format(Locale.US, "(iw-ow)/2 + (sin(t*3.4)*9 + cos(t*5.1)*5)*%.2f", animInt)
+                        val yExpr = String.format(Locale.US, "(ih-oh)/2 + (cos(t*4.2)*8 + sin(t*2.8)*4)*%.2f", animInt)
+                        vFilter.append(String.format(Locale.US, ",scale=w='iw*%.2f':h='ih*%.2f':eval=frame,crop=w=iw/%.2f:h=ih/%.2f:x='%s':y='%s'", s, s, s, s, xExpr, yExpr))
+                    }
+                    FcpClipAnimation.PAN_LEFT -> {
+                        val s = 1.15f
+                        val xExpr = String.format(Locale.US, "((iw-ow)*(1.0 - t/%.3f))", effectiveDur)
+                        vFilter.append(String.format(Locale.US, ",scale=w='iw*%.2f':h='ih*%.2f':eval=frame,crop=w=iw/%.2f:h=ih/%.2f:x='%s':y=(ih-oh)/2", s, s, s, s, xExpr))
+                    }
+                    FcpClipAnimation.PAN_RIGHT -> {
+                        val s = 1.15f
+                        val xExpr = String.format(Locale.US, "((iw-ow)*(t/%.3f))", effectiveDur)
+                        vFilter.append(String.format(Locale.US, ",scale=w='iw*%.2f':h='ih*%.2f':eval=frame,crop=w=iw/%.2f:h=ih/%.2f:x='%s':y=(ih-oh)/2", s, s, s, s, xExpr))
+                    }
+                    FcpClipAnimation.FLASH_STROBE -> {
+                        vFilter.append(String.format(Locale.US, ",eq=brightness='0.22*pow(1-mod(t,0.4)/0.4, 3)*%.2f':enable='gte(mod(t,0.4),0)'", animInt))
+                    }
+                    FcpClipAnimation.WOBBLE -> {
+                        vFilter.append(String.format(Locale.US, ",rotate='(sin(t*4.5)*0.04*%.2f)':ow=iw:oh=ih:c=black", animInt))
+                    }
+                    FcpClipAnimation.NONE -> {}
+                }
+
+                // 6. Boundary Transitions Calculation
                 val transToNext = if (i < clips.size - 1) clip.transitionToNext else FcpTransitionType.NONE
                 val nextTransDur = clip.transitionDurationSec.coerceIn(0.15f, 2.0f)
                 val halfTrans = (nextTransDur / 2f).coerceAtMost(effectiveDur / 2.2f)
@@ -756,20 +818,20 @@ object FcpTimelineExporter {
                 val hasIncomingHorizSlide = prevTrans in listOf(
                     FcpTransitionType.PUSH_LEFT, FcpTransitionType.SLIDE_LEFT,
                     FcpTransitionType.PUSH_RIGHT, FcpTransitionType.WIPE_RIGHT,
-                    FcpTransitionType.COVER_SLIDE, FcpTransitionType.WIPE_HORIZONTAL
+                    FcpTransitionType.COVER_SLIDE
                 ) && prevHalfTrans > 0.05f
 
                 val hasOutgoingHorizSlide = transToNext in listOf(
                     FcpTransitionType.PUSH_LEFT, FcpTransitionType.SLIDE_LEFT,
                     FcpTransitionType.PUSH_RIGHT, FcpTransitionType.WIPE_RIGHT,
-                    FcpTransitionType.PARALLAX, FcpTransitionType.WIPE_HORIZONTAL
+                    FcpTransitionType.PARALLAX, FcpTransitionType.COVER_SLIDE
                 ) && halfTrans > 0.05f
 
                 if (hasIncomingHorizSlide || hasOutgoingHorizSlide) {
                     val inExpr = when (prevTrans) {
                         FcpTransitionType.PUSH_RIGHT, FcpTransitionType.WIPE_RIGHT ->
                             String.format(Locale.US, "2*%d-%d*t/%.3f", finalW, finalW, prevHalfTrans)
-                        FcpTransitionType.PUSH_LEFT, FcpTransitionType.SLIDE_LEFT, FcpTransitionType.COVER_SLIDE, FcpTransitionType.WIPE_HORIZONTAL ->
+                        FcpTransitionType.PUSH_LEFT, FcpTransitionType.SLIDE_LEFT, FcpTransitionType.COVER_SLIDE ->
                             String.format(Locale.US, "%d*t/%.3f", finalW, prevHalfTrans)
                         else -> "$finalW"
                     }
@@ -777,8 +839,10 @@ object FcpTimelineExporter {
                     val outExpr = when (transToNext) {
                         FcpTransitionType.PUSH_RIGHT, FcpTransitionType.WIPE_RIGHT ->
                             String.format(Locale.US, "%d-%d*(t-%.3f)/%.3f", finalW, finalW, fadeStart, halfTrans)
-                        FcpTransitionType.PUSH_LEFT, FcpTransitionType.SLIDE_LEFT, FcpTransitionType.WIPE_HORIZONTAL ->
+                        FcpTransitionType.PUSH_LEFT, FcpTransitionType.SLIDE_LEFT ->
                             String.format(Locale.US, "%d+%d*(t-%.3f)/%.3f", finalW, finalW, fadeStart, halfTrans)
+                        FcpTransitionType.COVER_SLIDE ->
+                            String.format(Locale.US, "%d-%.1f*(t-%.3f)/%.3f", finalW, finalW * 0.25f, fadeStart, halfTrans)
                         FcpTransitionType.PARALLAX ->
                             String.format(Locale.US, "%d-%.1f*(t-%.3f)/%.3f", finalW, finalW * 0.8f, fadeStart, halfTrans)
                         else -> "$finalW"
@@ -829,7 +893,7 @@ object FcpTimelineExporter {
                     vFilter.append(String.format(Locale.US, ",pad=%d:3*%d:0:%d:black,crop=w=%d:h=%d:x=0:y='%s'", finalW, finalH, finalH, finalW, finalH, yExpr))
                 }
 
-                // 5c. Outgoing Transitions on tail of clip i
+                // 5c. Outgoing Transitions on tail of clip i (All 25 Transitions without xfade)
                 if (i < clips.size - 1 && transToNext != FcpTransitionType.NONE && halfTrans > 0.05f) {
                     when (transToNext) {
                         FcpTransitionType.DIP_TO_BLACK -> {
@@ -839,49 +903,67 @@ object FcpTimelineExporter {
                             vFilter.append(String.format(Locale.US, ",fade=t=out:st=%.3f:d=%.3f:c=white", fadeStart, halfTrans))
                         }
                         FcpTransitionType.FILM_BLOOM -> {
-                            vFilter.append(String.format(Locale.US, ",fade=t=out:st=%.3f:d=%.3f:c=white,eq=brightness=0.15:contrast=1.15:enable='gte(t,%.3f)'", fadeStart, halfTrans, fadeStart))
+                            vFilter.append(String.format(Locale.US, ",scale=w='iw*(1+0.06*(t-%.3f)/%.3f)':h='ih*(1+0.06*(t-%.3f)/%.3f)':eval=frame,crop=w=%d:h=%d,fade=t=out:st=%.3f:d=%.3f:c=white,eq=brightness=0.18:contrast=1.15:saturation=1.20:enable='gte(t,%.3f)',colorbalance=rs=0.12:gs=0.06:bs=-0.08:enable='gte(t,%.3f)'", fadeStart, halfTrans, fadeStart, halfTrans, finalW, finalH, fadeStart, halfTrans, fadeStart, fadeStart))
+                        }
+                        FcpTransitionType.CROSS_DISSOLVE, FcpTransitionType.CROSSFADE -> {
+                            vFilter.append(String.format(Locale.US, ",fade=t=out:st=%.3f:d=%.3f:c=black,eq=contrast=0.96:brightness=0.03:enable='gte(t,%.3f)'", fadeStart, halfTrans, fadeStart))
                         }
                         FcpTransitionType.GLITCH -> {
-                            vFilter.append(String.format(Locale.US, ",noise=c0s=45:c1s=35:allf=t:enable='gte(t,%.3f)',hue=H='PI*sin(20*t)':enable='gte(t,%.3f)',eq=contrast=1.40:brightness=0.08:enable='gte(t,%.3f)'", fadeStart, fadeStart, fadeStart))
+                            vFilter.append(String.format(Locale.US, ",noise=c0s=45:c1s=35:allf=t:enable='gte(t,%.3f)',hue=H='PI*sin(20*t)':enable='gte(t,%.3f)',eq=contrast=1.40:brightness=0.08:enable='gte(t,%.3f)',colorbalance=rs=0.18:bs=-0.15:enable='gte(t,%.3f)'", fadeStart, fadeStart, fadeStart, fadeStart))
                         }
                         FcpTransitionType.ZOOM_IN -> {
-                            vFilter.append(String.format(Locale.US, ",boxblur=12:enable='gte(t,%.3f)',eq=brightness=0.10:contrast=1.20:enable='gte(t,%.3f)',fade=t=out:st=%.3f:d=%.3f:c=black", fadeStart, fadeStart, fadeStart, halfTrans))
+                            vFilter.append(String.format(Locale.US, ",scale=w='iw*(1+1.8*(t-%.3f)/%.3f)':h='ih*(1+1.8*(t-%.3f)/%.3f)':eval=frame,crop=w=%d:h=%d,boxblur=8:enable='gte(t,%.3f)',fade=t=out:st=%.3f:d=%.3f:c=black", fadeStart, halfTrans, fadeStart, halfTrans, finalW, finalH, fadeStart, fadeStart, halfTrans))
                         }
                         FcpTransitionType.ZOOM_OUT -> {
-                            vFilter.append(String.format(Locale.US, ",vignette=angle='max(0.1,(PI/2.5)*(1-(t-%.3f)/%.3f))':enable='gte(t,%.3f)',fade=t=out:st=%.3f:d=%.3f:c=black", fadeStart, halfTrans, fadeStart, fadeStart, halfTrans))
+                            vFilter.append(String.format(Locale.US, ",scale=w='max(2,iw*(1-0.65*(t-%.3f)/%.3f))':h='max(2,ih*(1-0.65*(t-%.3f)/%.3f))':eval=frame,pad=%d:%d:'(%d-iw)/2':'(%d-ih)/2':black,fade=t=out:st=%.3f:d=%.3f:c=black", fadeStart, halfTrans, fadeStart, halfTrans, finalW, finalH, finalW, finalH, fadeStart, halfTrans))
                         }
                         FcpTransitionType.WHIP_SPIN -> {
-                            vFilter.append(String.format(Locale.US, ",rotate='2*PI*(t-%.3f)/%.3f':ow=iw:oh=ih:c=black:enable='gte(t,%.3f)',boxblur=12:enable='gte(t,%.3f)'", fadeStart, halfTrans, fadeStart, fadeStart))
+                            vFilter.append(String.format(Locale.US, ",rotate='2*PI*(t-%.3f)/%.3f':ow=iw:oh=ih:c=black:enable='gte(t,%.3f)',boxblur=10:enable='gte(t,%.3f)',scale=w='iw*(1+0.45*(t-%.3f)/%.3f)':h='ih*(1+0.45*(t-%.3f)/%.3f)':eval=frame,crop=w=%d:h=%d,fade=t=out:st=%.3f:d=%.3f:c=black", fadeStart, halfTrans, fadeStart, fadeStart, fadeStart, halfTrans, fadeStart, halfTrans, finalW, finalH, fadeStart, halfTrans))
+                        }
+                        FcpTransitionType.WIPE_HORIZONTAL -> {
+                            vFilter.append(String.format(Locale.US, ",crop=w='max(2,%d*(1-(t-%.3f)/%.3f))':h=%d:x=0:y=0,pad=%d:%d:0:0:black", finalW, fadeStart, halfTrans, finalH, finalW, finalH))
                         }
                         FcpTransitionType.WIPE_DIAGONAL -> {
                             vFilter.append(String.format(Locale.US, ",pad=2*%d:2*%d:0:0:black,crop=w=%d:h=%d:x='min(%d,%d*(t-%.3f)/%.3f)':y='min(%d,%d*(t-%.3f)/%.3f)'", finalW, finalH, finalW, finalH, finalW, finalW, fadeStart, halfTrans, finalH, finalH, fadeStart, halfTrans))
                         }
+                        FcpTransitionType.CLOCK_SWEEP -> {
+                            vFilter.append(String.format(Locale.US, ",rotate='2*PI*(t-%.3f)/%.3f':ow=iw:oh=ih:c=black:enable='gte(t,%.3f)',vignette=angle='max(0.01,(PI/2.0)*(1-(t-%.3f)/%.3f))':enable='gte(t,%.3f)'", fadeStart, halfTrans, fadeStart, fadeStart, halfTrans, fadeStart))
+                        }
+                        FcpTransitionType.BARN_DOORS -> {
+                            vFilter.append(String.format(Locale.US, ",crop=w='max(2,%d*(1-(t-%.3f)/%.3f))':h=%d:x='%d*0.5*(t-%.3f)/%.3f':y=0,pad=%d:%d:'(%d-iw)/2':0:black", finalW, fadeStart, halfTrans, finalH, finalW, fadeStart, halfTrans, finalW, finalH, finalW))
+                        }
+                        FcpTransitionType.VENETIAN_BLINDS -> {
+                            vFilter.append(String.format(Locale.US, ",crop=w=%d:h='max(2,%d*(1-(t-%.3f)/%.3f))':x=0:y=0,pad=%d:%d:0:0:black,boxblur=4:enable='gte(t,%.3f)'", finalW, finalH, fadeStart, halfTrans, finalW, finalH, fadeStart))
+                        }
                         FcpTransitionType.CIRCLE_IRIS -> {
-                            vFilter.append(String.format(Locale.US, ",vignette=angle='max(0.01,(PI/2.0)*(1-(t-%.3f)/%.3f))':enable='gte(t,%.3f)'", fadeStart, halfTrans, fadeStart))
+                            vFilter.append(String.format(Locale.US, ",vignette=angle='max(0.01,(PI/2.0)*(1-(t-%.3f)/%.3f))':x0='w/2':y0='h/2':enable='gte(t,%.3f)'", fadeStart, halfTrans, fadeStart))
                         }
                         FcpTransitionType.PINHOLE_SNAP -> {
-                            vFilter.append(String.format(Locale.US, ",vignette=angle='max(0.01,(PI/2.0)*(1-(t-%.3f)/%.3f)*(1-(t-%.3f)/%.3f))':enable='gte(t,%.3f)'", fadeStart, halfTrans, fadeStart, halfTrans, fadeStart))
+                            vFilter.append(String.format(Locale.US, ",vignette=angle='max(0.005,(PI/2.0)*(1-(t-%.3f)/%.3f)*(1-(t-%.3f)/%.3f))':x0='w/2':y0='h/2':enable='gte(t,%.3f)'", fadeStart, halfTrans, fadeStart, halfTrans, fadeStart))
                         }
-                        FcpTransitionType.CLOCK_SWEEP, FcpTransitionType.DIAMOND_IRIS, FcpTransitionType.QUAD_SHUTTER, FcpTransitionType.BARN_DOORS, FcpTransitionType.VENETIAN_BLINDS -> {
-                            vFilter.append(String.format(Locale.US, ",vignette=angle='max(0.01,(PI/2.1)*(1-(t-%.3f)/%.3f))':enable='gte(t,%.3f)',fade=t=out:st=%.3f:d=%.3f:c=black", fadeStart, halfTrans, fadeStart, fadeStart, halfTrans))
+                        FcpTransitionType.DIAMOND_IRIS -> {
+                            vFilter.append(String.format(Locale.US, ",vignette=angle='max(0.01,(PI/2.2)*(1-(t-%.3f)/%.3f))':aspect=1.0:enable='gte(t,%.3f)',crop=w='max(2,%d*(1-(t-%.3f)/%.3f))':h='max(2,%d*(1-(t-%.3f)/%.3f))':x='%d*0.5*(t-%.3f)/%.3f':y='%d*0.5*(t-%.3f)/%.3f',pad=%d:%d:'(%d-iw)/2':'(%d-ih)/2':black", fadeStart, halfTrans, fadeStart, finalW, fadeStart, halfTrans, finalH, fadeStart, halfTrans, finalW, fadeStart, halfTrans, finalH, fadeStart, halfTrans, finalW, finalH, finalW, finalH))
                         }
-                        FcpTransitionType.CUBE_3D, FcpTransitionType.PAGE_FLIP_3D -> {
-                            vFilter.append(String.format(Locale.US, ",fade=t=out:st=%.3f:d=%.3f:c=black,boxblur=8:enable='gte(t,%.3f)'", fadeStart, halfTrans, fadeStart))
+                        FcpTransitionType.QUAD_SHUTTER -> {
+                            vFilter.append(String.format(Locale.US, ",crop=w='max(2,%d*(1-(t-%.3f)/%.3f))':h='max(2,%d*(1-(t-%.3f)/%.3f))':x='%d*0.5*(t-%.3f)/%.3f':y='%d*0.5*(t-%.3f)/%.3f',pad=%d:%d:'(%d-iw)/2':'(%d-ih)/2':black", finalW, fadeStart, halfTrans, finalH, fadeStart, halfTrans, finalW, fadeStart, halfTrans, finalH, fadeStart, halfTrans, finalW, finalH, finalW, finalH))
                         }
-                        FcpTransitionType.COVER_SLIDE -> {
+                        FcpTransitionType.CUBE_3D -> {
+                            vFilter.append(String.format(Locale.US, ",scale=w='max(2,%d*cos((PI/2)*(t-%.3f)/%.3f))':h=%d:eval=frame,pad=%d:%d:'(%d-iw)/2':0:black,eq=brightness='-0.12*(t-%.3f)/%.3f':enable='gte(t,%.3f)'", finalW, fadeStart, halfTrans, finalH, finalW, finalH, finalW, fadeStart, halfTrans, fadeStart))
+                        }
+                        FcpTransitionType.PAGE_FLIP_3D -> {
+                            vFilter.append(String.format(Locale.US, ",scale=w='max(2,%d*cos((PI/2)*(t-%.3f)/%.3f)*(1-0.12*(t-%.3f)/%.3f))':h='%d*(1-0.12*(t-%.3f)/%.3f)':eval=frame,pad=%d:%d:'(%d-iw)/2':'(%d-ih)/2':black,boxblur=4:enable='gte(t,%.3f)'", finalW, fadeStart, halfTrans, fadeStart, halfTrans, finalH, fadeStart, halfTrans, finalW, finalH, finalW, finalH, fadeStart))
+                        }
+                        FcpTransitionType.WIPE_LEFT -> {
                             vFilter.append(String.format(Locale.US, ",fade=t=out:st=%.3f:d=%.3f:c=black", fadeStart, halfTrans))
                         }
-                        FcpTransitionType.PUSH_LEFT, FcpTransitionType.SLIDE_LEFT, FcpTransitionType.PUSH_RIGHT, FcpTransitionType.WIPE_RIGHT, FcpTransitionType.PARALLAX, FcpTransitionType.WIPE_HORIZONTAL, FcpTransitionType.PUSH_UP, FcpTransitionType.PUSH_DOWN -> {
+                        FcpTransitionType.PUSH_LEFT, FcpTransitionType.SLIDE_LEFT, FcpTransitionType.PUSH_RIGHT, FcpTransitionType.WIPE_RIGHT, FcpTransitionType.PARALLAX, FcpTransitionType.COVER_SLIDE, FcpTransitionType.PUSH_UP, FcpTransitionType.PUSH_DOWN -> {
                             // Handled above via horizontal/vertical slide crop
                         }
-                        else -> {
-                            // Atmospheric dissolve crossfade
-                            vFilter.append(String.format(Locale.US, ",fade=t=out:st=%.3f:d=%.3f:c=black", fadeStart, halfTrans))
-                        }
+                        FcpTransitionType.NONE -> {}
                     }
                 }
 
-                // 5d. Incoming Transitions on head of clip i
+                // 5d. Incoming Transitions on head of clip i (All 25 Transitions without xfade)
                 if (i > 0 && prevTrans != FcpTransitionType.NONE && prevHalfTrans > 0.05f) {
                     when (prevTrans) {
                         FcpTransitionType.DIP_TO_BLACK -> {
@@ -891,44 +973,66 @@ object FcpTimelineExporter {
                             vFilter.append(String.format(Locale.US, ",fade=t=in:st=0:d=%.3f:c=white", prevHalfTrans))
                         }
                         FcpTransitionType.FILM_BLOOM -> {
-                            vFilter.append(String.format(Locale.US, ",fade=t=in:st=0:d=%.3f:c=white,eq=brightness=0.15:contrast=1.15:enable='lte(t,%.3f)'", prevHalfTrans, prevHalfTrans))
+                            vFilter.append(String.format(Locale.US, ",scale=w='iw*(1.06-0.06*t/%.3f)':h='ih*(1.06-0.06*t/%.3f)':eval=frame,crop=w=%d:h=%d,fade=t=in:st=0:d=%.3f:c=white,eq=brightness=0.18:contrast=1.15:saturation=1.20:enable='lte(t,%.3f)',colorbalance=rs=0.12:gs=0.06:bs=-0.08:enable='lte(t,%.3f)'", prevHalfTrans, prevHalfTrans, finalW, finalH, prevHalfTrans, prevHalfTrans, prevHalfTrans))
+                        }
+                        FcpTransitionType.CROSS_DISSOLVE, FcpTransitionType.CROSSFADE -> {
+                            vFilter.append(String.format(Locale.US, ",fade=t=in:st=0:d=%.3f:c=black,eq=contrast=0.96:brightness=0.03:enable='lte(t,%.3f)'", prevHalfTrans, prevHalfTrans))
                         }
                         FcpTransitionType.GLITCH -> {
-                            vFilter.append(String.format(Locale.US, ",noise=c0s=45:c1s=35:allf=t:enable='lte(t,%.3f)',hue=H='-PI*sin(20*t)':enable='lte(t,%.3f)',eq=contrast=1.40:brightness=0.08:enable='lte(t,%.3f)'", prevHalfTrans, prevHalfTrans, prevHalfTrans))
+                            vFilter.append(String.format(Locale.US, ",noise=c0s=45:c1s=35:allf=t:enable='lte(t,%.3f)',hue=H='-PI*sin(20*t)':enable='lte(t,%.3f)',eq=contrast=1.40:brightness=0.08:enable='lte(t,%.3f)',colorbalance=rs=-0.15:bs=0.18:enable='lte(t,%.3f)'", prevHalfTrans, prevHalfTrans, prevHalfTrans, prevHalfTrans))
                         }
                         FcpTransitionType.ZOOM_IN -> {
-                            vFilter.append(String.format(Locale.US, ",boxblur=12:enable='lte(t,%.3f)',eq=brightness=0.10:contrast=1.20:enable='lte(t,%.3f)',fade=t=in:st=0:d=%.3f:c=black", prevHalfTrans, prevHalfTrans, prevHalfTrans))
+                            vFilter.append(String.format(Locale.US, ",scale=w='iw*(1.8-0.8*t/%.3f)':h='ih*(1.8-0.8*t/%.3f)':eval=frame,crop=w=%d:h=%d,boxblur=10:enable='lte(t,%.3f)',fade=t=in:st=0:d=%.3f:c=black", prevHalfTrans, prevHalfTrans, finalW, finalH, prevHalfTrans, prevHalfTrans))
                         }
                         FcpTransitionType.ZOOM_OUT -> {
-                            vFilter.append(String.format(Locale.US, ",vignette=angle='max(0.1,(PI/2.5)*(t/%.3f))':enable='lte(t,%.3f)',fade=t=in:st=0:d=%.3f:c=black", prevHalfTrans, prevHalfTrans, prevHalfTrans))
+                            vFilter.append(String.format(Locale.US, ",scale=w='iw*(1.75-0.75*t/%.3f)':h='ih*(1.75-0.75*t/%.3f)':eval=frame,crop=w=%d:h=%d,fade=t=in:st=0:d=%.3f:c=black", prevHalfTrans, prevHalfTrans, finalW, finalH, prevHalfTrans))
                         }
                         FcpTransitionType.WHIP_SPIN -> {
-                            vFilter.append(String.format(Locale.US, ",rotate='-2*PI*(1-t/%.3f)':ow=iw:oh=ih:c=black:enable='lte(t,%.3f)',boxblur=12:enable='lte(t,%.3f)'", prevHalfTrans, prevHalfTrans, prevHalfTrans))
+                            vFilter.append(String.format(Locale.US, ",rotate='-2*PI*(1-t/%.3f)':ow=iw:oh=ih:c=black:enable='lte(t,%.3f)',boxblur=10:enable='lte(t,%.3f)',scale=w='iw*(1.45-0.45*t/%.3f)':h='ih*(1.45-0.45*t/%.3f)':eval=frame,crop=w=%d:h=%d,fade=t=in:st=0:d=%.3f:c=black", prevHalfTrans, prevHalfTrans, prevHalfTrans, prevHalfTrans, prevHalfTrans, finalW, finalH, prevHalfTrans))
+                        }
+                        FcpTransitionType.WIPE_HORIZONTAL -> {
+                            vFilter.append(String.format(Locale.US, ",crop=w='max(2,%d*t/%.3f)':h=%d:x=0:y=0,pad=%d:%d:0:0:black", finalW, prevHalfTrans, finalH, finalW, finalH))
                         }
                         FcpTransitionType.WIPE_DIAGONAL -> {
                             vFilter.append(String.format(Locale.US, ",pad=2*%d:2*%d:%d:%d:black,crop=w=%d:h=%d:x='max(0,%d*(1-t/%.3f))':y='max(0,%d*(1-t/%.3f))'", finalW, finalH, finalW, finalH, finalW, finalH, finalW, prevHalfTrans, finalH, prevHalfTrans))
                         }
+                        FcpTransitionType.CLOCK_SWEEP -> {
+                            vFilter.append(String.format(Locale.US, ",rotate='-2*PI*(1-t/%.3f)':ow=iw:oh=ih:c=black:enable='lte(t,%.3f)',vignette=angle='max(0.01,(PI/2.0)*(t/%.3f))':enable='lte(t,%.3f)'", prevHalfTrans, prevHalfTrans, prevHalfTrans, prevHalfTrans))
+                        }
+                        FcpTransitionType.BARN_DOORS -> {
+                            vFilter.append(String.format(Locale.US, ",crop=w='max(2,%d*t/%.3f)':h=%d:x='%d*0.5*(1-t/%.3f)':y=0,pad=%d:%d:'(%d-iw)/2':0:black", finalW, prevHalfTrans, finalH, finalW, prevHalfTrans, finalW, finalH, finalW))
+                        }
+                        FcpTransitionType.VENETIAN_BLINDS -> {
+                            vFilter.append(String.format(Locale.US, ",crop=w=%d:h='max(2,%d*t/%.3f)':x=0:y=0,pad=%d:%d:0:0:black", finalW, finalH, prevHalfTrans, finalW, finalH))
+                        }
                         FcpTransitionType.CIRCLE_IRIS -> {
-                            vFilter.append(String.format(Locale.US, ",vignette=angle='max(0.01,(PI/2.0)*(t/%.3f))':enable='lte(t,%.3f)'", prevHalfTrans, prevHalfTrans))
+                            vFilter.append(String.format(Locale.US, ",vignette=angle='max(0.01,(PI/2.0)*(t/%.3f))':x0='w/2':y0='h/2':enable='lte(t,%.3f)'", prevHalfTrans, prevHalfTrans))
                         }
                         FcpTransitionType.PINHOLE_SNAP -> {
-                            vFilter.append(String.format(Locale.US, ",vignette=angle='max(0.01,(PI/2.0)*(t/%.3f)*(t/%.3f))':enable='lte(t,%.3f)'", prevHalfTrans, prevHalfTrans, prevHalfTrans))
+                            vFilter.append(String.format(Locale.US, ",vignette=angle='max(0.005,(PI/2.0)*(t/%.3f)*(t/%.3f))':x0='w/2':y0='h/2':enable='lte(t,%.3f)'", prevHalfTrans, prevHalfTrans, prevHalfTrans))
                         }
-                        FcpTransitionType.CLOCK_SWEEP, FcpTransitionType.DIAMOND_IRIS, FcpTransitionType.QUAD_SHUTTER, FcpTransitionType.BARN_DOORS, FcpTransitionType.VENETIAN_BLINDS -> {
-                            vFilter.append(String.format(Locale.US, ",vignette=angle='max(0.01,(PI/2.1)*(t/%.3f))':enable='lte(t,%.3f)',fade=t=in:st=0:d=%.3f:c=black", prevHalfTrans, prevHalfTrans, prevHalfTrans))
+                        FcpTransitionType.DIAMOND_IRIS -> {
+                            vFilter.append(String.format(Locale.US, ",vignette=angle='max(0.01,(PI/2.2)*(t/%.3f))':aspect=1.0:enable='lte(t,%.3f)',crop=w='max(2,%d*t/%.3f)':h='max(2,%d*t/%.3f)':x='%d*0.5*(1-t/%.3f)':y='%d*0.5*(1-t/%.3f)',pad=%d:%d:'(%d-iw)/2':'(%d-ih)/2':black", prevHalfTrans, prevHalfTrans, finalW, prevHalfTrans, finalH, prevHalfTrans, finalW, prevHalfTrans, finalH, prevHalfTrans, finalW, finalH, finalW, finalH))
                         }
-                        FcpTransitionType.CUBE_3D, FcpTransitionType.PAGE_FLIP_3D -> {
-                            vFilter.append(String.format(Locale.US, ",fade=t=in:st=0:d=%.3f:c=black,boxblur=8:enable='lte(t,%.3f)'", prevHalfTrans, prevHalfTrans))
+                        FcpTransitionType.QUAD_SHUTTER -> {
+                            vFilter.append(String.format(Locale.US, ",crop=w='max(2,%d*t/%.3f)':h='max(2,%d*t/%.3f)':x='%d*0.5*(1-t/%.3f)':y='%d*0.5*(1-t/%.3f)',pad=%d:%d:'(%d-iw)/2':'(%d-ih)/2':black", finalW, prevHalfTrans, finalH, prevHalfTrans, finalW, prevHalfTrans, finalH, prevHalfTrans, finalW, finalH, finalW, finalH))
+                        }
+                        FcpTransitionType.CUBE_3D -> {
+                            vFilter.append(String.format(Locale.US, ",scale=w='max(2,%d*sin((PI/2)*t/%.3f))':h=%d:eval=frame,pad=%d:%d:'(%d-iw)/2':0:black,eq=brightness='-0.12*(1-t/%.3f)':enable='lte(t,%.3f)'", finalW, prevHalfTrans, finalH, finalW, finalH, finalW, prevHalfTrans, prevHalfTrans))
+                        }
+                        FcpTransitionType.PAGE_FLIP_3D -> {
+                            vFilter.append(String.format(Locale.US, ",scale=w='max(2,%d*sin((PI/2)*t/%.3f)*(0.88+0.12*t/%.3f))':h='%d*(0.88+0.12*t/%.3f)':eval=frame,pad=%d:%d:'(%d-iw)/2':'(%d-ih)/2':black,boxblur=4:enable='lte(t,%.3f)'", finalW, prevHalfTrans, prevHalfTrans, finalH, prevHalfTrans, finalW, finalH, finalW, finalH, prevHalfTrans))
                         }
                         FcpTransitionType.PARALLAX -> {
+                            vFilter.append(String.format(Locale.US, ",scale=w='iw*(0.90+0.10*t/%.3f)':h='ih*(0.90+0.10*t/%.3f)':eval=frame,crop=w=%d:h=%d,fade=t=in:st=0:d=%.3f:c=black", prevHalfTrans, prevHalfTrans, finalW, finalH, prevHalfTrans))
+                        }
+                        FcpTransitionType.WIPE_LEFT -> {
                             vFilter.append(String.format(Locale.US, ",fade=t=in:st=0:d=%.3f:c=black", prevHalfTrans))
                         }
-                        FcpTransitionType.PUSH_LEFT, FcpTransitionType.SLIDE_LEFT, FcpTransitionType.PUSH_RIGHT, FcpTransitionType.WIPE_RIGHT, FcpTransitionType.COVER_SLIDE, FcpTransitionType.WIPE_HORIZONTAL, FcpTransitionType.PUSH_UP, FcpTransitionType.PUSH_DOWN -> {
+                        FcpTransitionType.PUSH_LEFT, FcpTransitionType.SLIDE_LEFT, FcpTransitionType.PUSH_RIGHT, FcpTransitionType.WIPE_RIGHT, FcpTransitionType.COVER_SLIDE, FcpTransitionType.PUSH_UP, FcpTransitionType.PUSH_DOWN -> {
                             // Handled above via horizontal/vertical slide crop
                         }
-                        else -> {
-                            vFilter.append(String.format(Locale.US, ",fade=t=in:st=0:d=%.3f:c=black", prevHalfTrans))
-                        }
+                        FcpTransitionType.NONE -> {}
                     }
                 }
 
@@ -1004,16 +1108,17 @@ object FcpTimelineExporter {
             // Duration limit to protect timeline exact stop
             val totalTimelineDurationSec = clips.sumOf { it.trimmedDurationSec.toDouble() }.toFloat().coerceAtLeast(0.5f)
 
-            // Handle custom soundtrack if present
+            // Handle custom soundtrack if present with looped soundtrack support (aloop)
             if (customAudioInputIndex != null && customAudio != null) {
                 val vol = customAudio.volume.coerceIn(0f, 1f)
                 val muteOrig = customAudio.muteOriginalVideo
+                val loopFilter = if (customAudio.loopAudio) "aloop=loop=-1:size=2147483647," else ""
 
                 if (muteOrig) {
-                    filterGraph.append(String.format(Locale.US, "[$customAudioInputIndex:a]aformat=sample_rates=44100:channel_layouts=stereo,volume=%.3f,apad,atrim=start=0:end=%.3f,asetpts=PTS-STARTPTS[a_custom];", vol, totalTimelineDurationSec))
+                    filterGraph.append(String.format(Locale.US, "[$customAudioInputIndex:a]aformat=sample_rates=44100:channel_layouts=stereo,${loopFilter}atrim=start=0:end=%.3f,asetpts=PTS-STARTPTS,volume=%.3f,apad[a_custom];", totalTimelineDurationSec, vol))
                     finalAudioStream = "[a_custom]"
                 } else {
-                    filterGraph.append(String.format(Locale.US, "[$customAudioInputIndex:a]aformat=sample_rates=44100:channel_layouts=stereo,volume=%.3f[a_custom];", vol))
+                    filterGraph.append(String.format(Locale.US, "[$customAudioInputIndex:a]aformat=sample_rates=44100:channel_layouts=stereo,${loopFilter}atrim=start=0:end=%.3f,asetpts=PTS-STARTPTS,volume=%.3f[a_custom];", totalTimelineDurationSec, vol))
                     filterGraph.append("$finalAudioStream[a_custom]amix=inputs=2:duration=first:dropout_transition=2[a_mixed];")
                     finalAudioStream = "[a_mixed]"
                 }
@@ -1080,6 +1185,7 @@ object FcpTimelineExporter {
 
                 override fun onCancel() {
                     Log.w(TAG, "FFmpeg onCancel callback received")
+                    isCancelled = true
                 }
 
                 override fun onError(message: String?) {
@@ -1088,8 +1194,18 @@ object FcpTimelineExporter {
                 }
             }
 
+            if (isCancelled || !isActive) {
+                try { outputFile.delete() } catch (_: Throwable) {}
+                return@withContext null
+            }
+
             val returnCode = RxFFmpegInvoke.getInstance().runCommand(cmd, listener)
             Log.d(TAG, "FFmpeg returned code: $returnCode (ErrorMsg: $ffmpegErrorMsg)")
+
+            if (isCancelled || !isActive) {
+                try { outputFile.delete() } catch (_: Throwable) {}
+                return@withContext null
+            }
 
             if (returnCode == 0 && outputFile.exists() && outputFile.length() > 0L) {
                 onProgress(0.95f, "Finishing up export...")
@@ -1102,6 +1218,20 @@ object FcpTimelineExporter {
             Log.e(TAG, "exportTimeline encountered exception", e)
         } finally {
             try { overlayPngFile?.delete() } catch (_: Throwable) {}
+            if (isCancelled) {
+                try { outputFile.delete() } catch (_: Throwable) {}
+            }
+            // Clean up all copied temporary input cache files preventing cache directory leaks
+            for (f in localFileCache.values) {
+                if (f.exists() && f.parentFile == context.cacheDir && f.name.startsWith("fcp_input_")) {
+                    try { f.delete() } catch (_: Throwable) {}
+                }
+            }
+        }
+
+        if (isCancelled || !isActive) {
+            try { outputFile.delete() } catch (_: Throwable) {}
+            return@withContext null
         }
 
         // Native fallback if FFmpeg fails:

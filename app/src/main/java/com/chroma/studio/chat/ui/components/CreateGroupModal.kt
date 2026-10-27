@@ -36,6 +36,7 @@ import com.chroma.studio.chat.data.drawableUri
 import com.chroma.studio.chat.sound.SoundManager
 import com.chroma.studio.chat.ui.theme.LocalChatColors
 import com.chroma.studio.ui.components.AppleSwitch
+import com.chroma.studio.ui.components.VerifiedBadge
 
 /**
  * Available Contact item for Group Creation selection.
@@ -45,7 +46,8 @@ data class GroupContact(
     val name: String,
     val role: String,
     val avatar: String,
-    val status: String = "Online"
+    val status: String = "Online",
+    val isVerified: Boolean = false
 )
 
 enum class GroupCreationStep {
@@ -508,14 +510,22 @@ private fun StepSelectParticipants(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    Text(
-                        text = contact.name,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = colors.textDark,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = contact.name,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = colors.textDark,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (contact.isVerified) {
+                            VerifiedBadge(size = 14.dp)
+                        }
+                    }
                     Text(
                         text = contact.role,
                         fontSize = 13.5.sp,
@@ -893,12 +903,20 @@ private fun StepGroupDetails(
                     contentScale = ContentScale.Crop
                 )
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = contact.name,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = colors.textDark
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = contact.name,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = colors.textDark
+                        )
+                        if (contact.isVerified) {
+                            VerifiedBadge(size = 13.dp)
+                        }
+                    }
                     Text(
                         text = contact.role,
                         fontSize = 12.5.sp,

@@ -27,7 +27,11 @@ object VideoProcessor {
     suspend fun getVideoDurationMs(context: Context, uri: Uri): Long = withContext(Dispatchers.IO) {
         val retriever = MediaMetadataRetriever()
         try {
-            retriever.setDataSource(context, uri)
+            if (uri.scheme == "http" || uri.scheme == "https") {
+                retriever.setDataSource(uri.toString(), HashMap<String, String>())
+            } else {
+                retriever.setDataSource(context, uri)
+            }
             val dur = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLong() ?: 0L
             dur
         } catch (e: Exception) {
@@ -43,10 +47,17 @@ object VideoProcessor {
     suspend fun extractThumbnail(context: Context, uri: Uri, positionMs: Long = 0L): Bitmap? = withContext(Dispatchers.IO) {
         val retriever = MediaMetadataRetriever()
         try {
-            retriever.setDataSource(context, uri)
+            if (uri.scheme == "http" || uri.scheme == "https") {
+                retriever.setDataSource(uri.toString(), HashMap<String, String>())
+            } else {
+                retriever.setDataSource(context, uri)
+            }
             val bitmap = retriever.getFrameAtTime(
                 positionMs * 1000L,
                 MediaMetadataRetriever.OPTION_CLOSEST_SYNC
+            ) ?: retriever.getFrameAtTime(
+                positionMs * 1000L,
+                MediaMetadataRetriever.OPTION_CLOSEST
             )
             bitmap
         } catch (e: Exception) {
@@ -104,34 +115,62 @@ object VideoProcessor {
                 }
             }
 
+            if (trackIndexMap.isEmpty()) {
+                outputFile.delete()
+                return@withContext null
+            }
+
             muxer.start()
 
             val bufferInfo = MediaCodec.BufferInfo()
             val buffer = ByteBuffer.allocate(1024 * 1024) // 1 MB buffer
+            val firstSampleTimeUs = mutableMapOf<Int, Long>()
+            val lastPtsUs = mutableMapOf<Int, Long>()
+            val trackDone = mutableSetOf<Int>()
 
-            for ((extTrack, muxTrack) in trackIndexMap) {
+            for (extTrack in trackIndexMap.keys) {
                 extractor.selectTrack(extTrack)
-                extractor.seekTo(startMs * 1000L, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
+            }
+            extractor.seekTo(startMs * 1000L, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
 
-                while (true) {
-                    bufferInfo.offset = 0
-                    val sampleSize = extractor.readSampleData(buffer, 0)
-                    if (sampleSize < 0) break
-
-                    val sampleTimeUs = extractor.sampleTime
-                    if (sampleTimeUs > clampedEnd * 1000L) break
-
-                    bufferInfo.size = sampleSize
-                    bufferInfo.presentationTimeUs = sampleTimeUs - startMs * 1000L
-                    bufferInfo.flags = extractor.sampleFlags
-
-                    muxer.writeSampleData(muxTrack, buffer, bufferInfo)
+            while (trackDone.size < trackIndexMap.size) {
+                val extTrack = extractor.sampleTrackIndex
+                if (extTrack < 0) break // End of stream
+                val muxTrack = trackIndexMap[extTrack]
+                if (muxTrack == null || trackDone.contains(extTrack)) {
                     extractor.advance()
+                    continue
                 }
-                extractor.unselectTrack(extTrack)
+
+                val sampleTimeUs = extractor.sampleTime
+                if (sampleTimeUs > clampedEnd * 1000L) {
+                    trackDone.add(extTrack)
+                    extractor.advance()
+                    continue
+                }
+
+                bufferInfo.offset = 0
+                val sampleSize = extractor.readSampleData(buffer, 0)
+                if (sampleSize < 0) {
+                    trackDone.add(extTrack)
+                    continue
+                }
+
+                val baseTime = firstSampleTimeUs.getOrPut(extTrack) { sampleTimeUs }
+                val computedPts = (sampleTimeUs - baseTime).coerceAtLeast(0L)
+                val prevPts = lastPtsUs[extTrack] ?: -1L
+                val finalPts = if (computedPts <= prevPts) prevPts + 1000L else computedPts
+                lastPtsUs[extTrack] = finalPts
+
+                bufferInfo.size = sampleSize
+                bufferInfo.presentationTimeUs = finalPts
+                bufferInfo.flags = extractor.sampleFlags
+
+                muxer.writeSampleData(muxTrack, buffer, bufferInfo)
+                extractor.advance()
             }
 
-            muxer.stop()
+            try { muxer.stop() } catch (_: Exception) {}
             outputFile
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e

@@ -46,6 +46,7 @@ import com.chroma.studio.ui.components.OscellionLoadingSpinner
 import com.chroma.studio.ui.components.AppleFlashGraphic
 import com.chroma.studio.ui.components.ToastManager
 import com.chroma.studio.ui.components.rememberAppleGraphicAnimationState
+import com.chroma.studio.ui.components.VerifiedBadge
 import com.chroma.studio.ui.theme.ChromaIcons
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.chroma.studio.viewmodel.FlashViewModel
@@ -759,12 +760,7 @@ private fun FlashVideoItem(
                         )
                     )
                     if (video.authorVerified) {
-                        Icon(
-                            painter = androidx.compose.ui.res.painterResource(id = com.chroma.studio.R.drawable.verification_badge),
-                            contentDescription = "Verified",
-                            tint = androidx.compose.ui.graphics.Color.Unspecified,
-                            modifier = Modifier.size(13.dp)
-                        )
+                        VerifiedBadge(size = 13.dp)
                     }
                 }
 
@@ -1417,12 +1413,7 @@ fun FlashCommentsSheet(
                                     )
                                     if (comment.verified) {
                                         Spacer(Modifier.width(4.dp))
-                                        Icon(
-                                            painter = androidx.compose.ui.res.painterResource(id = com.chroma.studio.R.drawable.verification_badge),
-                                            contentDescription = "Verified",
-                                            tint = androidx.compose.ui.graphics.Color.Unspecified,
-                                            modifier = Modifier.size(12.dp)
-                                        )
+                                        VerifiedBadge(size = 12.dp)
                                     }
                                     Spacer(Modifier.width(8.dp))
                                     if (comment.isPending) {

@@ -259,17 +259,33 @@ class FlashViewModel(application: Application) : AndroidViewModel(application) {
             _isUploading.value = true
             _uploadProgress.value = 0f
             _uploadError.value = null
+            com.chroma.studio.data.FlashUploadManager.updateProgress(0.05f, "Preparing video…")
 
             try {
                 // Step 1 & 2: Process video
                 val processedFile = when (mediaType) {
                     FlashMediaType.VIDEO -> {
                         _uploadProgress.value = 0.1f
+                        com.chroma.studio.data.FlashUploadManager.updateProgress(0.1f, "Preparing video…")
                         val videoDur = VideoProcessor.getVideoDurationMs(context, mediaUri)
                         val shouldTrim = trimStartMs > 100L || (trimEndMs > 0L && videoDur > 0L && trimEndMs < videoDur - 100L)
                         val trimmed = if (shouldTrim) {
-                            VideoProcessor.trimVideo(context, mediaUri, trimStartMs, trimEndMs)
-                                ?: throw Exception("Video trimming failed")
+                            com.chroma.studio.data.FlashUploadManager.updateProgress(0.15f, "Trimming video clip…")
+                            val res = try {
+                                VideoProcessor.trimVideo(context, mediaUri, trimStartMs, trimEndMs)
+                            } catch (e: Exception) {
+                                Log.w("FlashViewModel", "Trimming failed, falling back to source video", e)
+                                null
+                            }
+                            res ?: if (mediaUri.scheme == "file") {
+                                java.io.File(mediaUri.path ?: "")
+                            } else {
+                                val tempFile = java.io.File(context.cacheDir, "ready_flash_${System.currentTimeMillis()}.mp4")
+                                context.contentResolver.openInputStream(mediaUri)?.use { input ->
+                                    java.io.FileOutputStream(tempFile).use { output -> input.copyTo(output) }
+                                }
+                                tempFile
+                            }
                         } else {
                             if (mediaUri.scheme == "file") {
                                 java.io.File(mediaUri.path ?: "")
@@ -282,18 +298,22 @@ class FlashViewModel(application: Application) : AndroidViewModel(application) {
                             }
                         }
                         _uploadProgress.value = 0.3f
+                        com.chroma.studio.data.FlashUploadManager.updateProgress(0.3f, "Compressing video…")
                         val compressed = VideoProcessor.compressVideo(context, Uri.fromFile(trimmed))
                         _uploadProgress.value = 0.5f
+                        com.chroma.studio.data.FlashUploadManager.updateProgress(0.5f, "Video ready for upload")
                         compressed ?: trimmed // fallback to trimmed if compression fails
                     }
                     FlashMediaType.SLIDESHOW -> {
                         _uploadProgress.value = 0.2f
+                        com.chroma.studio.data.FlashUploadManager.updateProgress(0.2f, "Creating slideshow…")
                         VideoProcessor.createSlideshow(context, imageUris, durationPerSlideMs)
                             ?: throw Exception("Slideshow creation failed")
                     }
                     FlashMediaType.PHOTO -> {
                         // Single photo: create 3-second slideshow
                         _uploadProgress.value = 0.2f
+                        com.chroma.studio.data.FlashUploadManager.updateProgress(0.2f, "Converting photo to video…")
                         VideoProcessor.createSlideshow(context, listOf(mediaUri), 3000L)
                             ?: throw Exception("Photo-to-video conversion failed")
                     }
@@ -301,11 +321,16 @@ class FlashViewModel(application: Application) : AndroidViewModel(application) {
 
                 // Step 3: Upload video
                 _uploadProgress.value = 0.55f
+                com.chroma.studio.data.FlashUploadManager.updateProgress(0.55f, "Uploading video to Cloudinary…")
                 var videoUrl = CloudinaryClient.uploadVideoFromUri(
                     context = context,
                     uri = Uri.fromFile(processedFile),
                     folder = "flash_videos",
-                    onProgress = { p -> _uploadProgress.value = 0.55f + p * 0.3f }
+                    onProgress = { p ->
+                        val prog = 0.55f + p * 0.3f
+                        _uploadProgress.value = prog
+                        com.chroma.studio.data.FlashUploadManager.updateProgress(prog, "Uploading video… ${(p * 100).toInt()}%")
+                    }
                 ) ?: throw Exception("Video upload to Cloudinary failed")
                 
                 // Apply filter transformation to delivery URL
@@ -313,6 +338,7 @@ class FlashViewModel(application: Application) : AndroidViewModel(application) {
 
                 // Step 4: Upload thumbnail
                 _uploadProgress.value = 0.88f
+                com.chroma.studio.data.FlashUploadManager.updateProgress(0.88f, "Uploading cover thumbnail…")
                 val thumbUrl = if (thumbnailBitmap != null) {
                     val baos = ByteArrayOutputStream()
                     thumbnailBitmap.compress(Bitmap.CompressFormat.JPEG, 85, baos)
@@ -321,6 +347,7 @@ class FlashViewModel(application: Application) : AndroidViewModel(application) {
 
                 // Step 5: Write Firestore document
                 _uploadProgress.value = 0.95f
+                com.chroma.studio.data.FlashUploadManager.updateProgress(0.95f, "Publishing to Community…")
                 val duration = trimEndMs - trimStartMs
                 repository.publishFlash(
                     videoUrl = videoUrl,
@@ -340,6 +367,7 @@ class FlashViewModel(application: Application) : AndroidViewModel(application) {
                 withContext(Dispatchers.IO) { processedFile.delete() }
 
                 _uploadProgress.value = 1f
+                com.chroma.studio.data.FlashUploadManager.setSuccess("Posted! 🎉")
                 loadFeed(isRefresh = true)
                 
                 try {
@@ -352,8 +380,10 @@ class FlashViewModel(application: Application) : AndroidViewModel(application) {
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 Log.e("FlashViewModel", "publishFlash error", e)
-                _uploadError.value = e.message ?: "Upload failed: ${e.javaClass.simpleName}"
-                withContext(Dispatchers.Main) { onError(e.message ?: "Upload failed") }
+                val errMsg = e.message ?: "Upload failed: ${e.javaClass.simpleName}"
+                _uploadError.value = errMsg
+                com.chroma.studio.data.FlashUploadManager.setFailed(errMsg)
+                withContext(Dispatchers.Main) { onError(errMsg) }
             } finally {
                 _isUploading.value = false
             }
@@ -403,6 +433,10 @@ class FlashViewModel(application: Application) : AndroidViewModel(application) {
                     trimStartMs = obj.optLong("trimStartMs"),
                     trimEndMs = obj.optLong("trimEndMs"),
                     filterName = obj.optString("filterName", "None"),
+                    brightness = obj.optDouble("brightness", 0.0).toFloat(),
+                    contrast = obj.optDouble("contrast", 1.0).toFloat(),
+                    saturation = obj.optDouble("saturation", 1.0).toFloat(),
+                    hue = obj.optDouble("hue", 0.0).toFloat(),
                     createdAt = obj.optLong("createdAt")
                 )
             }
@@ -423,6 +457,10 @@ class FlashViewModel(application: Application) : AndroidViewModel(application) {
                 put("trimStartMs", d.trimStartMs)
                 put("trimEndMs", d.trimEndMs)
                 put("filterName", d.filterName)
+                put("brightness", d.brightness.toDouble())
+                put("contrast", d.contrast.toDouble())
+                put("saturation", d.saturation.toDouble())
+                put("hue", d.hue.toDouble())
                 put("createdAt", d.createdAt)
             })
         }

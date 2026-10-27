@@ -1,6 +1,10 @@
 package com.chroma.studio.ui.components
 
+import android.graphics.Bitmap
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -950,58 +954,204 @@ fun VideoTransitionRenderer(
     }
 }
 
-val PlainRedClipColor = Color(0xFFE53935)
-val PlainBlueClipColor = Color(0xFF1E88E5)
+val PlainRedClipColor = Color(0xFF1E293B)
+val PlainBlueClipColor = Color(0xFF0F172A)
 
 /**
- * Clean "Clip A" (Plain Red background with big letter "A") used across all transition previews.
+ * Cinematic outgoing video clip preview.
+ * Renders the provided [bitmap] video frame, or an authentic cinematic camera HUD/scene
+ * eliminating legacy plain 'A' text placeholders.
  */
 @Composable
 fun DemoOutgoingVideoClip(
     modifier: Modifier = Modifier,
+    bitmap: Bitmap? = null,
     letterSize: androidx.compose.ui.unit.TextUnit = 52.sp
 ) {
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(PlainRedClipColor),
+            .background(
+                Brush.linearGradient(
+                    colors = listOf(
+                        Color(0xFF1B1B2F),
+                        Color(0xFF3B1D54),
+                        Color(0xFF8C3A5C),
+                        Color(0xFFE07A5F)
+                    )
+                )
+            ),
         contentAlignment = Alignment.Center
     ) {
-        BasicText(
-            text = "A",
-            style = TextStyle(
-                color = Color.White,
-                fontSize = letterSize,
-                fontWeight = FontWeight.Black,
-                textAlign = TextAlign.Center
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap.asImageBitmap(),
+                contentDescription = "Outgoing Video Clip",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
             )
-        )
+        } else {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val w = size.width
+                val h = size.height
+                val thirdsColor = Color.White.copy(alpha = 0.12f)
+                drawLine(thirdsColor, Offset(w / 3f, 0f), Offset(w / 3f, h), 1f)
+                drawLine(thirdsColor, Offset(2f * w / 3f, 0f), Offset(2f * w / 3f, h), 1f)
+                drawLine(thirdsColor, Offset(0f, h / 3f), Offset(w, h / 3f), 1f)
+                drawLine(thirdsColor, Offset(0f, 2f * h / 3f), Offset(w, 2f * h / 3f), 1f)
+                val reticleColor = Color.White.copy(alpha = 0.28f)
+                val cx = w / 2f
+                val cy = h / 2f
+                drawLine(reticleColor, Offset(cx - 12f, cy), Offset(cx + 12f, cy), 1.5f)
+                drawLine(reticleColor, Offset(cx, cy - 12f), Offset(cx, cy + 12f), 1.5f)
+            }
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFEF4444))
+                )
+                BasicText(
+                    text = "REC 4K",
+                    style = TextStyle(
+                        color = Color.White.copy(alpha = 0.85f),
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                )
+            }
+            BasicText(
+                text = "SCENE 01",
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(6.dp),
+                style = TextStyle(
+                    color = Color.White.copy(alpha = 0.90f),
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    fontFamily = FontFamily.Monospace
+                )
+            )
+            BasicText(
+                text = "01:14:22:04",
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(6.dp),
+                style = TextStyle(
+                    color = Color.White.copy(alpha = 0.75f),
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Normal,
+                    fontFamily = FontFamily.Monospace
+                )
+            )
+        }
     }
 }
 
 /**
- * Clean "Clip B" (Plain Blue background with big letter "B") used across all transition previews.
+ * Cinematic incoming video clip preview.
+ * Renders the provided [bitmap] video frame, or an authentic cinematic camera HUD/scene
+ * eliminating legacy plain 'B' text placeholders.
  */
 @Composable
 fun DemoIncomingVideoClip(
     modifier: Modifier = Modifier,
+    bitmap: Bitmap? = null,
     letterSize: androidx.compose.ui.unit.TextUnit = 52.sp
 ) {
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(PlainBlueClipColor),
+            .background(
+                Brush.linearGradient(
+                    colors = listOf(
+                        Color(0xFF0A192F),
+                        Color(0xFF112240),
+                        Color(0xFF1F4068),
+                        Color(0xFF00B4D8)
+                    )
+                )
+            ),
         contentAlignment = Alignment.Center
     ) {
-        BasicText(
-            text = "B",
-            style = TextStyle(
-                color = Color.White,
-                fontSize = letterSize,
-                fontWeight = FontWeight.Black,
-                textAlign = TextAlign.Center
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap.asImageBitmap(),
+                contentDescription = "Incoming Video Clip",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
             )
-        )
+        } else {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val w = size.width
+                val h = size.height
+                val thirdsColor = Color.White.copy(alpha = 0.12f)
+                drawLine(thirdsColor, Offset(w / 3f, 0f), Offset(w / 3f, h), 1f)
+                drawLine(thirdsColor, Offset(2f * w / 3f, 0f), Offset(2f * w / 3f, h), 1f)
+                drawLine(thirdsColor, Offset(0f, h / 3f), Offset(w, h / 3f), 1f)
+                drawLine(thirdsColor, Offset(0f, 2f * h / 3f), Offset(w, 2f * h / 3f), 1f)
+                val reticleColor = Color(0xFF38BDF8).copy(alpha = 0.35f)
+                val cx = w / 2f
+                val cy = h / 2f
+                drawLine(reticleColor, Offset(cx - 12f, cy), Offset(cx + 12f, cy), 1.5f)
+                drawLine(reticleColor, Offset(cx, cy - 12f), Offset(cx, cy + 12f), 1.5f)
+            }
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF10B981))
+                )
+                BasicText(
+                    text = "PLAY 4K",
+                    style = TextStyle(
+                        color = Color.White.copy(alpha = 0.85f),
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                )
+            }
+            BasicText(
+                text = "SCENE 02",
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(6.dp),
+                style = TextStyle(
+                    color = Color.White.copy(alpha = 0.90f),
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    fontFamily = FontFamily.Monospace
+                )
+            )
+            BasicText(
+                text = "01:14:24:18",
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(6.dp),
+                style = TextStyle(
+                    color = Color.White.copy(alpha = 0.75f),
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Normal,
+                    fontFamily = FontFamily.Monospace
+                )
+            )
+        }
     }
 }
 
@@ -1212,7 +1362,7 @@ fun AppleVideoTransitionStudio(
                 )
             }
 
-            // 16:9 Video Transition Viewport
+            // 16:9 Video Transition Viewport (Real Clip Video Frames or Demo Fallback)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1220,11 +1370,13 @@ fun AppleVideoTransitionStudio(
                     .clip(RoundedCornerShape(12.dp))
                     .border(1.dp, monitorBorder, RoundedCornerShape(12.dp))
             ) {
+                val outClip: @Composable BoxScope.() -> Unit = customOutgoingClip ?: { DemoOutgoingVideoClip(letterSize = 56.sp) }
+                val inClip: @Composable BoxScope.() -> Unit = customIncomingClip ?: { DemoIncomingVideoClip(letterSize = 56.sp) }
                 if (selectedEffect == null) {
                     if (liveProgress < 0.5f) {
-                        DemoOutgoingVideoClip(letterSize = 56.sp)
+                        outClip()
                     } else {
-                        DemoIncomingVideoClip(letterSize = 56.sp)
+                        inClip()
                     }
                 } else {
                     VideoTransitionRenderer(
@@ -1232,8 +1384,8 @@ fun AppleVideoTransitionStudio(
                         progress = liveProgress,
                         easing = selectedEasing,
                         modifier = Modifier.fillMaxSize(),
-                        outgoingClip = { DemoOutgoingVideoClip(letterSize = 56.sp) },
-                        incomingClip = { DemoIncomingVideoClip(letterSize = 56.sp) }
+                        outgoingClip = outClip,
+                        incomingClip = inClip
                     )
                 }
             }
@@ -1340,7 +1492,7 @@ fun AppleVideoTransitionStudio(
             }
         }
 
-        // 5. TRANSITION GRID (Miniature Plain Red 'A' to Plain Blue 'B' previews)
+        // 5. TRANSITION GRID (Miniature Live Video Frame Previews)
         LazyVerticalGrid(
             columns = GridCells.Fixed(3),
             modifier = Modifier
@@ -1359,6 +1511,8 @@ fun AppleVideoTransitionStudio(
                     isSelected = effectItem == selectedEffect,
                     liveProgress = liveProgress,
                     isDark = isDark,
+                    outgoingClip = customOutgoingClip,
+                    incomingClip = customIncomingClip,
                     onClick = {
                         onSelectEffect(effectItem)
                     }
@@ -1369,8 +1523,8 @@ fun AppleVideoTransitionStudio(
 }
 
 /**
- * Individual card inside the Transition Picker grid showing a miniature animated
- * visual diagram of the transition effect and its name with Plain Red "A" and Plain Blue "B".
+ * Individual card inside the Transition Picker grid showing an animated
+ * real-time video frame preview of the transition effect between actual project clips.
  */
 @Composable
 fun TransitionEffectGridCard(
@@ -1378,6 +1532,8 @@ fun TransitionEffectGridCard(
     isSelected: Boolean,
     liveProgress: Float,
     isDark: Boolean = false,
+    outgoingClip: (@Composable BoxScope.() -> Unit)? = null,
+    incomingClip: (@Composable BoxScope.() -> Unit)? = null,
     onClick: () -> Unit
 ) {
     val borderColor by animateColorAsState(
@@ -1409,7 +1565,7 @@ fun TransitionEffectGridCard(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(5.dp)
     ) {
-        // Miniature Real-Time Transition Preview Thumbnail (Plain Red A and Plain Blue B)
+        // Miniature Real-Time Transition Preview Thumbnail with Video Clip Frames
         VideoTransitionRenderer(
             effect = effect,
             progress = if (isSelected) liveProgress else 0.48f,
@@ -1418,8 +1574,8 @@ fun TransitionEffectGridCard(
                 .height(44.dp)
                 .clip(RoundedCornerShape(6.dp))
                 .border(0.5.dp, Color.Black.copy(alpha = 0.15f), RoundedCornerShape(6.dp)),
-            outgoingClip = { DemoOutgoingVideoClip(letterSize = 18.sp) },
-            incomingClip = { DemoIncomingVideoClip(letterSize = 18.sp) }
+            outgoingClip = outgoingClip ?: { DemoOutgoingVideoClip(letterSize = 18.sp) },
+            incomingClip = incomingClip ?: { DemoIncomingVideoClip(letterSize = 18.sp) }
         )
 
         // Transition Title

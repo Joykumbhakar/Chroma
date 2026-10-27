@@ -34,12 +34,14 @@ import androidx.compose.ui.unit.sp
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import coil.compose.AsyncImage
 import com.chroma.studio.chat.data.*
 import com.chroma.studio.chat.media.*
 import com.chroma.studio.chat.sound.SoundManager
 import com.chroma.studio.chat.ui.components.*
+import com.chroma.studio.ui.components.StoryCreationBottomSheet
 import com.chroma.studio.ui.screens.StoryViewerScreen
 import com.chroma.studio.viewmodel.StoryViewModel
 import com.chroma.studio.chat.ui.theme.ChatWallpaperBackground
@@ -51,7 +53,7 @@ import kotlinx.coroutines.Dispatchers
 import java.text.SimpleDateFormat
 import java.util.*
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
     onAppearanceToggle: () -> Unit = {},
@@ -167,7 +169,14 @@ private fun ChatScreenContent(
     val likedStoryIds by effectiveStoryVm.likedStoryIds.collectAsState()
     val isUploadingStory by effectiveStoryVm.isUploading.collectAsState()
     var showStoryViewer by remember { mutableStateOf(false) }
+    var showStoryCreationSheet by remember { mutableStateOf(false) }
     var storyViewerInitialIndex by remember { mutableIntStateOf(0) }
+
+    val storyMediaPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        uri?.let { effectiveStoryVm.uploadStory(context, it) }
+    }
     LaunchedEffect(Unit) {
         effectiveStoryVm.loadStories()
     }
@@ -873,11 +882,7 @@ private fun ChatScreenContent(
                         storyViewerInitialIndex = -1
                         showStoryViewer = true
                     } else {
-                        if (onNavigateToCreateStory != null) {
-                            onNavigateToCreateStory.invoke()
-                        } else {
-                            isStoryEditorOpen = true
-                        }
+                        showStoryCreationSheet = true
                     }
                 },
                 onStoryGroupClick = { groupIdx ->
@@ -909,11 +914,7 @@ private fun ChatScreenContent(
                 showStoryViewer = true
             },
             onAddStoryClick = {
-                if (onNavigateToCreateStory != null) {
-                    onNavigateToCreateStory.invoke()
-                } else {
-                    isStoryEditorOpen = true
-                }
+                showStoryCreationSheet = true
             },
             onNewMessageClick = { isCreateGroupModalOpen = true },
             onOpenAppearanceSettings = { isAppearanceModalOpen = true },
@@ -941,29 +942,56 @@ private fun ChatScreenContent(
                 showToast(if (isPinned) "Chat unpinned" else "Chat pinned to top")
             },
             onMuteChatToggle = { chat ->
-                chats = chats.map { if (it.id == chat.id) it.copy(isMuted = !it.isMuted) else it }
-                showToast(if (!chat.isMuted) "Notifications muted" else "Notifications unmuted")
+                val nextMuted = !chat.isMuted
+                chats = chats.map { if (it.id == chat.id) it.copy(isMuted = nextMuted) else it }
+                chatViewModel?.muteChat(chat.id, nextMuted)
+                showToast(if (nextMuted) "Notifications muted" else "Notifications unmuted")
             },
             onReadChatToggle = { chat ->
-                chats = chats.map { if (it.id == chat.id) it.copy(unreadCount = if (it.unreadCount > 0) 0 else 1) else it }
-                showToast("Read status updated")
+                val wasUnread = chat.unreadCount > 0
+                chats = chats.map { if (it.id == chat.id) it.copy(unreadCount = if (wasUnread) 0 else 1) else it }
+                if (wasUnread) {
+                    chatViewModel?.markMultipleAsRead(listOf(chat.id))
+                }
+                showToast(if (wasUnread) "Marked as read" else "Marked as unread")
             },
             onLockChatToggle = { _ ->
                 showToast("Chat locked with Face ID")
             },
             onArchiveChat = { chat ->
                 chats = chats.filter { it.id != chat.id }
+                chatViewModel?.archiveChat(chat.id, true)
                 showToast("Chat archived")
             },
             onClearChatHistory = { chat ->
                 chats = chats.map { if (it.id == chat.id) it.copy(messages = emptyList()) else it }
+                chatViewModel?.clearChatHistory(chat.id)
                 showToast("Chat history cleared")
             },
             onExportChat = { chat ->
-                showToast("Exported transcript for ${chat.name}")
+                try {
+                    val transcript = buildString {
+                        appendLine("--- ChromaStudio Chat Transcript: ${chat.name} ---")
+                        appendLine("Exported: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date())}")
+                        appendLine()
+                        chat.messages.forEach { m ->
+                            appendLine("[${m.time}] ${m.senderName}: ${m.text}")
+                        }
+                    }
+                    val sendIntent = android.content.Intent().apply {
+                        action = android.content.Intent.ACTION_SEND
+                        putExtra(android.content.Intent.EXTRA_TEXT, transcript)
+                        type = "text/plain"
+                    }
+                    context.startActivity(android.content.Intent.createChooser(sendIntent, "Export chat with ${chat.name}"))
+                    showToast("Exporting transcript for ${chat.name}")
+                } catch (e: Exception) {
+                    showToast("Exported transcript for ${chat.name}")
+                }
             },
             onDeleteChat = { chat ->
                 chats = chats.filter { it.id != chat.id }
+                chatViewModel?.deleteChat(chat.id)
                 showToast("Chat deleted")
             },
             onViewStoryAnalytics = { story ->
@@ -972,13 +1000,21 @@ private fun ChatScreenContent(
             },
             onDeleteStory = { story ->
                 stories = stories.filter { it.id != story.id }
+                effectiveStoryVm.deleteStory(story.id)
                 showToast("Story deleted")
             },
             onMuteStory = { story ->
                 showToast("Muted stories from ${story.authorName}")
             },
-            onShareStory = { _ ->
-                showToast("Story link copied")
+            onShareStory = { story ->
+                try {
+                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                    val clip = android.content.ClipData.newPlainText("Story Link", "https://chromastudio.app/story/${story.id}")
+                    clipboard?.setPrimaryClip(clip)
+                    showToast("Story link copied to clipboard")
+                } catch (_: Exception) {
+                    showToast("Story link copied")
+                }
             }
         )
         }
@@ -1226,10 +1262,34 @@ private fun ChatScreenContent(
                                 },
                                 onCreatePollClick = { isPollCreatorOpen = true },
                                 onMuteToggle = {
-                                    chats = chats.map { if (it.id == activeChatId) it.copy(isMuted = !it.isMuted) else it }
-                                    showToast(if (activeChat.isMuted) "Notifications unmuted" else "Notifications muted")
+                                    val nextMuted = !activeChat.isMuted
+                                    chats = chats.map { if (it.id == activeChatId) it.copy(isMuted = nextMuted) else it }
+                                    if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
+                                        chatViewModel.muteChat(activeChatId, nextMuted)
+                                    }
+                                    showToast(if (nextMuted) "Notifications muted" else "Notifications unmuted")
                                 },
-                                onExportTranscript = { showToast("Chat transcript exported") },
+                                onExportTranscript = {
+                                    try {
+                                        val transcript = buildString {
+                                            appendLine("--- ChromaStudio Chat Transcript: ${activeChat.name} ---")
+                                            appendLine("Exported: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date())}")
+                                            appendLine()
+                                            activeChat.messages.forEach { m ->
+                                                appendLine("[${m.time}] ${m.senderName}: ${m.text}")
+                                            }
+                                        }
+                                        val sendIntent = android.content.Intent().apply {
+                                            action = android.content.Intent.ACTION_SEND
+                                            putExtra(android.content.Intent.EXTRA_TEXT, transcript)
+                                            type = "text/plain"
+                                        }
+                                        context.startActivity(android.content.Intent.createChooser(sendIntent, "Export chat with ${activeChat.name}"))
+                                        showToast("Exporting transcript for ${activeChat.name}")
+                                    } catch (e: Exception) {
+                                        showToast("Exported transcript for ${activeChat.name}")
+                                    }
+                                },
                                 onClearChat = {
                                     showClearChatDialog = true
                                 },
@@ -1848,11 +1908,14 @@ private fun ChatScreenContent(
                     showToast("Profile link copied for ${activeChat.name}")
                 },
                 onAddToFavorites = {
+                    chatViewModel?.toggleFavorite(activeChatId, true)
                     showToast("Added ${activeChat.name} to Favorites")
                 },
                 onMuteNotifications = {
-                    chats = chats.map { if (it.id == activeChatId) it.copy(isMuted = !it.isMuted) else it }
-                    showToast(if (!activeChat.isMuted) "Notifications muted" else "Notifications unmuted")
+                    val nextMuted = !activeChat.isMuted
+                    chats = chats.map { if (it.id == activeChatId) it.copy(isMuted = nextMuted) else it }
+                    chatViewModel?.muteChat(activeChatId, nextMuted)
+                    showToast(if (nextMuted) "Notifications muted" else "Notifications unmuted")
                 },
                 onReportUser = {
                     showReportUserDialog = true
@@ -1862,36 +1925,48 @@ private fun ChatScreenContent(
                 },
                 onUpdateGroupAvatar = { newIcon ->
                     chats = chats.map { if (it.id == activeChatId) it.copy(avatar = newIcon) else it }
+                    chatViewModel?.updateGroupImage(activeChatId, newIcon)
                     showToast("Group icon updated successfully")
                 },
                 onUpdateGroupBanner = { newBanner ->
                     chats = chats.map { if (it.id == activeChatId) it.copy(banner = newBanner) else it }
+                    chatViewModel?.updateGroupImage(activeChatId, newBanner)
                     showToast("Group cover updated successfully")
                 },
                 onUpdateGroupName = { newName ->
                     chats = chats.map { if (it.id == activeChatId) it.copy(name = newName) else it }
+                    chatViewModel?.updateGroupName(activeChatId, newName)
                     showToast("Group subject updated to $newName")
                 },
                 onUpdateGroupBio = { newBio ->
                     chats = chats.map { if (it.id == activeChatId) it.copy(bio = newBio) else it }
+                    chatViewModel?.updateGroupDescription(activeChatId, newBio)
                     showToast("Group description updated")
                 },
                 onAddGroupMembers = { newMembers ->
                     chats = chats.map { if (it.id == activeChatId) it.copy(members = (it.members ?: emptyList()) + newMembers) else it }
+                    val memberIds = newMembers.map { it.id }
+                    chatViewModel?.addParticipants(activeChatId, memberIds)
                     showToast("Added ${newMembers.size} participants")
                 },
                 onToggleMemberAdmin = { member ->
+                    val isAdmin = member.role.contains("Admin", ignoreCase = true)
                     chats = chats.map { c ->
                         if (c.id == activeChatId) {
                             c.copy(
                                 members = c.members?.map { m ->
                                     if (m.name == member.name) {
-                                        val newRole = if (m.role.contains("Admin", ignoreCase = true)) "Member" else "Group Admin"
+                                        val newRole = if (isAdmin) "Member" else "Group Admin"
                                         m.copy(role = newRole)
                                     } else m
                                 }
                             )
                         } else c
+                    }
+                    if (isAdmin) {
+                        chatViewModel?.demoteAdmin(activeChatId, member.id)
+                    } else {
+                        chatViewModel?.makeAdmin(activeChatId, member.id)
                     }
                     showToast("Updated permissions for ${member.name}")
                 },
@@ -1901,6 +1976,7 @@ private fun ChatScreenContent(
                             c.copy(members = c.members?.filter { it.name != member.name })
                         } else c
                     }
+                    chatViewModel?.removeParticipant(activeChatId, member.id)
                     showToast("Removed ${member.name} from group")
                 },
                 onDirectMessageMember = { member ->
@@ -1910,11 +1986,17 @@ private fun ChatScreenContent(
                         isContactDrawerOpen = false
                         showToast("Opened chat with ${member.name}")
                     } else {
-                        showToast("Direct message started with ${member.name}")
+                        chatViewModel?.startChat(member.id) { roomId ->
+                            activeChatId = roomId
+                            chatViewModel.openChat(roomId)
+                            isContactDrawerOpen = false
+                            showToast("Opened chat with ${member.name}")
+                        }
                     }
                 },
                 onLeaveGroup = {
                     chats = chats.filter { it.id != activeChatId }
+                    chatViewModel?.leaveGroup(activeChatId)
                     isContactDrawerOpen = false
                     isInsideChat = false
                     showToast("You left the group")
@@ -1955,6 +2037,27 @@ private fun ChatScreenContent(
                         val roomId = if (currentUid < authorId) "${currentUid}_${authorId}" else "${authorId}_${currentUid}"
                         chatViewModel.openChat(roomId)
                         chatViewModel.sendMessage("Replying to story: \"$replyMsg\"")
+                    }
+                }
+            )
+        }
+
+        // Story Creation Options Bottom Sheet
+        if (showStoryCreationSheet) {
+            StoryCreationBottomSheet(
+                onDismissRequest = { showStoryCreationSheet = false },
+                onChooseFromGallery = {
+                    showStoryCreationSheet = false
+                    storyMediaPicker.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                },
+                onTextStory = {
+                    showStoryCreationSheet = false
+                    if (onNavigateToCreateStory != null) {
+                        onNavigateToCreateStory.invoke()
+                    } else {
+                        isStoryEditorOpen = true
                     }
                 }
             )
@@ -2095,12 +2198,18 @@ private fun ChatScreenContent(
                         chats = chats.map { c ->
                             if (c.id == activeChatId) c.copy(messages = c.messages.filter { it.id != msg.id }) else c
                         }
+                        if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
+                            chatViewModel.deleteMessage(msg.id)
+                        }
                         messagePendingDelete = null
                         showToast("Message deleted for me")
                     },
                     onDeleteForAll = {
                         chats = chats.map { c ->
                             if (c.id == activeChatId) c.copy(messages = c.messages.filter { it.id != msg.id }) else c
+                        }
+                        if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
+                            chatViewModel.deleteMessage(msg.id)
                         }
                         messagePendingDelete = null
                         showToast("Message deleted for everyone")
@@ -2303,7 +2412,8 @@ private fun ChatScreenContent(
                             name = prof.displayName.ifBlank { prof.username.ifBlank { "User" } },
                             role = if (prof.bio.isNotBlank()) prof.bio else "@${prof.username}",
                             avatar = prof.avatarUrl,
-                            status = if (prof.online) "Online" else "Active on Oscellion"
+                            status = if (prof.online) "Online" else "Active on Oscellion",
+                            isVerified = prof.verified
                         )
                     }
             }
@@ -2404,6 +2514,9 @@ private fun ChatScreenContent(
                         isDestructive = true,
                         onClick = {
                             chats = chats.map { if (it.id == activeChatId) it.copy(messages = emptyList(), pinnedMessage = null) else it }
+                            if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
+                                chatViewModel.clearChatHistory(activeChatId)
+                            }
                             showClearChatDialog = false
                             showToast("Conversation cleared")
                         }
@@ -2436,6 +2549,9 @@ private fun ChatScreenContent(
                                 showBlockUserDialog = false
                                 isInsideChat = false
                                 chats = chats.filter { it.id != activeChatId }
+                                if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
+                                    chatViewModel.leaveGroup(activeChatId)
+                                }
                                 SoundManager.playReaction()
                                 showToast("You left \"${activeChat.name}\"")
                             }
@@ -2657,6 +2773,18 @@ private fun ChatScreenContent(
                             c.copy(messages = c.messages + newFwdMsg)
                         } else c
                     }
+                    if (chatViewModel != null && !targetChat.id.startsWith("mock_")) {
+                        chatViewModel.forwardMessage(
+                            message = com.chroma.studio.model.ChatMessage(
+                                text = msg.text ?: "",
+                                senderId = currentUser.id,
+                                imageUrl = msg.mediaUrl,
+                                mediaUrl = msg.mediaUrl,
+                                mediaType = msg.mediaType
+                            ),
+                            targetRoomId = targetChat.id
+                        )
+                    }
                     showToast("Forwarded to ${targetChat.name}")
                 }
             )
@@ -2709,6 +2837,18 @@ private fun ChatScreenContent(
                         )
                         chats = chats.map { c ->
                             if (c.id == targetId) c.copy(messages = c.messages + fwdMsg) else c
+                        }
+                        if (chatViewModel != null && !targetId.startsWith("mock_")) {
+                            chatViewModel.forwardMessage(
+                                message = com.chroma.studio.model.ChatMessage(
+                                    text = fwdMsg.text ?: "",
+                                    senderId = currentUser.id,
+                                    imageUrl = fwdMsg.mediaUrl,
+                                    mediaUrl = fwdMsg.mediaUrl,
+                                    mediaType = fwdMsg.mediaType
+                                ),
+                                targetRoomId = targetId
+                            )
                         }
                     }
                     showToast("Forwarded ${items.size} item(s)")

@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import java.util.UUID
 
 /**
  * Thread-safe local repository for saving, loading, and managing creator post drafts across
@@ -62,6 +63,40 @@ class DraftPostRepository(context: Context) {
         val json = gson.toJson(currentList)
         prefs.edit().putString(KEY_DRAFTS_JSON, json).apply()
         _draftsFlow.value = currentList
+    }
+
+    @Synchronized
+    fun renameDraft(id: String, newTitle: String): Boolean {
+        val currentList = getAllDrafts().toMutableList()
+        val index = currentList.indexOfFirst { it.id == id }
+        if (index != -1) {
+            val updated = currentList[index].copy(
+                title = newTitle,
+                timestamp = System.currentTimeMillis()
+            )
+            currentList[index] = updated
+            val json = gson.toJson(currentList)
+            prefs.edit().putString(KEY_DRAFTS_JSON, json).apply()
+            _draftsFlow.value = currentList
+            return true
+        }
+        return false
+    }
+
+    @Synchronized
+    fun duplicateDraft(id: String): CreatorPostDraft? {
+        val currentList = getAllDrafts().toMutableList()
+        val target = currentList.firstOrNull { it.id == id } ?: return null
+        val copy = target.copy(
+            id = UUID.randomUUID().toString(),
+            title = "${target.title.ifBlank { "Untitled Project" }} (Copy)",
+            timestamp = System.currentTimeMillis()
+        )
+        currentList.add(0, copy)
+        val json = gson.toJson(currentList)
+        prefs.edit().putString(KEY_DRAFTS_JSON, json).apply()
+        _draftsFlow.value = currentList
+        return copy
     }
 
     @Synchronized

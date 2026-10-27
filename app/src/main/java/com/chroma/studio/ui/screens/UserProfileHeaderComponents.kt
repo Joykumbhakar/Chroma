@@ -350,10 +350,7 @@ fun UserProfileBioDetailsSection(
                 )
                 if (profile?.verified == true) {
                     Spacer(Modifier.width(4.dp))
-                    IosVerificationBadge(
-                        userId = profile?.uid,
-                        modifier = Modifier.size(17.dp)
-                    )
+                    VerifiedBadge(size = 17.dp)
                 }
             }
 

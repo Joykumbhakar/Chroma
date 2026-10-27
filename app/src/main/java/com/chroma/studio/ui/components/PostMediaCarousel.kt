@@ -52,6 +52,7 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Play
 import com.composables.icons.lucide.Zap
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
@@ -338,6 +339,7 @@ fun PostVideoSlideView(
     isActivePage: Boolean = true
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
 
     var isPlaying by remember { mutableStateOf(false) }
@@ -541,6 +543,7 @@ fun PostMediaCarousel(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
 
     Box(
         modifier = modifier
@@ -718,7 +721,7 @@ fun PostMediaCarousel(
         }
 
         // Flash Video Controls & Duration Badge (matches creator_feed_mobile_app_ui.html)
-        if (work.postType == "video" || work.postType == "flash") {
+        if (slides.isEmpty() && (work.postType == "video" || work.postType == "flash")) {
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
@@ -766,6 +769,30 @@ fun PostMediaCarousel(
                         )
                     }
                 }
+            }
+        }
+
+        // Centered Glass Scroll Dots Indicator for Multi-Image / Multi-Work Posts (Instagram style)
+        if (slides.size > 1) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 10.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color.Black.copy(alpha = 0.50f))
+                    .padding(horizontal = 8.dp, vertical = 3.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                PostScrollDotsIndicator(
+                    totalDots = slides.size,
+                    selectedIndex = pagerState.currentPage,
+                    isDark = true,
+                    onDotClick = { targetIndex ->
+                        coroutineScope.launch {
+                            pagerState.animateScrollToPage(targetIndex)
+                        }
+                    }
+                )
             }
         }
 

@@ -27,6 +27,39 @@ class DiscoverRepository {
     private val usersCollection = db.collection("users")
     private val usernamesCollection = db.collection("usernames")
 
+    private fun mapFlashToDiscoverPost(fv: com.chroma.studio.model.FlashVideo, docId: String = ""): DiscoverPost {
+        return DiscoverPost(
+            id = docId.ifBlank { fv.id },
+            creatorId = fv.creatorId,
+            authorUsername = fv.authorUsername,
+            authorDisplayName = fv.authorDisplayName,
+            authorAvatarUrl = fv.authorAvatarUrl,
+            authorVerified = fv.authorVerified,
+            title = fv.caption.ifBlank { "Flash Video" },
+            description = fv.caption,
+            aspectRatio = "9:16",
+            videoUrl = fv.videoUrl,
+            thumbnailUrl = fv.thumbnailUrl,
+            postType = "video",
+            tags = fv.hashtags,
+            mentions = fv.mentions,
+            likesCount = fv.likesCount,
+            likedBy = fv.likedBy,
+            remixCount = fv.remixCount,
+            remixedBy = fv.remixedBy,
+            shareCount = fv.shareCount,
+            sharedBy = fv.sharedBy,
+            saveCount = fv.saveCount,
+            savedBy = fv.savedBy,
+            remixedFromPostId = fv.remixedFromPostId,
+            remixedFromAuthorUsername = fv.remixedFromAuthorUsername,
+            timestamp = fv.timestamp,
+            hideLikesCount = fv.hideLikesCount,
+            turnOffComments = fv.turnOffComments,
+            turnOffRemix = fv.turnOffRemix
+        )
+    }
+
     suspend fun getRecentWorks(limit: Long = 10, lastTimestamp: Long? = null): List<DiscoverPost> {
         return try {
             var query = collection.orderBy("timestamp", Query.Direction.DESCENDING).limit(limit)
@@ -38,8 +71,26 @@ class DiscoverRepository {
                 doc.toObject(DiscoverPost::class.java)?.copy(
                     id = if (doc.id.isNotBlank()) doc.id else (doc.toObject(DiscoverPost::class.java)?.id ?: "")
                 )
+            }.filter { !it.isArchived }
+
+            val flashes = try {
+                var flashQuery = db.collection("flash_videos").orderBy("timestamp", Query.Direction.DESCENDING).limit(limit)
+                if (lastTimestamp != null) {
+                    flashQuery = flashQuery.startAfter(lastTimestamp)
+                }
+                val fSnap = flashQuery.get().await()
+                fSnap.documents.mapNotNull { doc ->
+                    val fv = doc.toObject(com.chroma.studio.model.FlashVideo::class.java)
+                    if (fv != null && !fv.isArchived) mapFlashToDiscoverPost(fv, doc.id) else null
+                }
+            } catch (_: Exception) {
+                emptyList()
             }
-            posts.filter { !it.isArchived }
+
+            (posts + flashes)
+                .distinctBy { it.id }
+                .sortedByDescending { it.timestamp }
+                .take(limit.toInt())
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("DiscoverRepository", "Error fetching community works", e)
@@ -371,8 +422,24 @@ class DiscoverRepository {
                 doc.toObject(DiscoverPost::class.java)?.copy(
                     id = if (doc.id.isNotBlank()) doc.id else (doc.toObject(DiscoverPost::class.java)?.id ?: "")
                 )
+            }.filter { !it.isArchived }
+
+            val flashes = try {
+                val fSnap = db.collection("flash_videos")
+                    .whereEqualTo("creatorId", creatorId)
+                    .get()
+                    .await()
+                fSnap.documents.mapNotNull { doc ->
+                    val fv = doc.toObject(com.chroma.studio.model.FlashVideo::class.java)
+                    if (fv != null && !fv.isArchived) mapFlashToDiscoverPost(fv, doc.id) else null
+                }
+            } catch (_: Exception) {
+                emptyList()
             }
-            posts.filter { !it.isArchived }
+
+            (posts + flashes)
+                .distinctBy { it.id }
+                .sortedByDescending { it.timestamp }
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("DiscoverRepository", "Error fetching works for user", e)
@@ -865,15 +932,33 @@ class DiscoverRepository {
         return try {
             val snapshot = collection
                 .orderBy("likesCount", Query.Direction.DESCENDING)
-                .whereEqualTo("isArchived", false)
                 .limit(limit)
                 .get()
                 .await()
-            snapshot.documents.mapNotNull { doc ->
+            val posts = snapshot.documents.mapNotNull { doc ->
                 doc.toObject(DiscoverPost::class.java)?.copy(
                     id = if (doc.id.isNotBlank()) doc.id else (doc.toObject(DiscoverPost::class.java)?.id ?: "")
                 )
+            }.filter { !it.isArchived }
+
+            val flashes = try {
+                val fSnap = db.collection("flash_videos")
+                    .orderBy("likesCount", Query.Direction.DESCENDING)
+                    .limit(limit)
+                    .get()
+                    .await()
+                fSnap.documents.mapNotNull { doc ->
+                    val fv = doc.toObject(com.chroma.studio.model.FlashVideo::class.java)
+                    if (fv != null && !fv.isArchived) mapFlashToDiscoverPost(fv, doc.id) else null
+                }
+            } catch (_: Exception) {
+                emptyList()
             }
+
+            (posts + flashes)
+                .distinctBy { it.id }
+                .sortedByDescending { it.likesCount }
+                .take(limit.toInt())
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("DiscoverRepository", "Error fetching trending works", e)
