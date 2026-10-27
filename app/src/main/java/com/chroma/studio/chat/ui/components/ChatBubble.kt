@@ -640,6 +640,381 @@ private fun Modifier.messageEntrance(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
+private fun MessageCallRow(
+    message: ChatMessage,
+    colors: ChatColors,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier.fillMaxWidth().padding(vertical = 6.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .background(colors.cardBg)
+                .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(8.dp))
+                .padding(horizontal = 12.dp, vertical = 5.dp)
+        ) {
+            LucidePhone(tint = colors.iosBlue, size = 13.dp)
+            Text(
+                text = "${message.callType ?: "Audio"} call ended • ${message.callDuration ?: "0m"}",
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = colors.textMuted
+            )
+        }
+    }
+}
+
+@Composable
+private fun MessageSelectionBox(
+    isSelectionMode: Boolean,
+    isSelected: Boolean,
+    colors: ChatColors,
+    onToggleSelect: () -> Unit
+) {
+    AnimatedVisibility(
+        visible = isSelectionMode,
+        enter = expandHorizontally(
+            animationSpec = spring(dampingRatio = 0.75f, stiffness = 450f),
+            expandFrom = Alignment.Start
+        ) + fadeIn(animationSpec = tween(180)),
+        exit = shrinkHorizontally(
+            animationSpec = spring(dampingRatio = 0.8f, stiffness = 500f),
+            shrinkTowards = Alignment.Start
+        ) + fadeOut(animationSpec = tween(150))
+    ) {
+        val checkScale by animateFloatAsState(
+            targetValue = if (isSelected) 1f else 0f,
+            animationSpec = spring(dampingRatio = 0.6f, stiffness = 500f),
+            label = "checkScale"
+        )
+        Box(
+            modifier = Modifier
+                .padding(end = 10.dp)
+                .size(22.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(if (isSelected) colors.iosBlue else Color.Transparent)
+                .border(
+                    width = if (isSelected) 0.dp else 1.5.dp,
+                    color = if (isSelected) Color.Transparent else colors.textMuted.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(6.dp)
+                )
+                .clickable { onToggleSelect() },
+            contentAlignment = Alignment.Center
+        ) {
+            if (isSelected || checkScale > 0.05f) {
+                Box(modifier = Modifier.graphicsLayer { scaleX = checkScale; scaleY = checkScale }) {
+                    LucideCheck(tint = Color.White, size = 13.dp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BoxScope.MessageSwipeReplyIndicator(
+    dragOffset: Float,
+    colors: ChatColors
+) {
+    if (dragOffset != 0f) {
+        val isSwipingLeft = dragOffset < 0
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .padding(horizontal = 16.dp),
+            contentAlignment = if (isSwipingLeft) Alignment.CenterEnd else Alignment.CenterStart
+        ) {
+            Box(
+                modifier = Modifier.size(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                LucideReply(
+                    tint = colors.iosBlue.copy(alpha = (kotlin.math.abs(dragOffset) / 120f).coerceIn(0.2f, 1f)),
+                    size = 20.dp
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BoxScope.MessageHeartBurstEffect(
+    isActive: Boolean,
+    scale: Float,
+    alpha: Float
+) {
+    if (isActive) {
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .zIndex(100f)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    this.alpha = alpha
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Image(
+                painter = painterResource(id = R.drawable.heart_like),
+                contentDescription = "Heart Like",
+                modifier = Modifier.size(68.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun MessageReactionsPills(
+    reactions: Map<String, Int>,
+    userReaction: String?,
+    isOutgoing: Boolean,
+    colors: ChatColors,
+    onReactionClick: (String) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .offset(
+                y = (-9).dp,
+                x = if (isOutgoing) (-4).dp else 4.dp
+            )
+            .zIndex(60f)
+            .animateContentSize(spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMediumLow))
+            .padding(horizontal = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+        reactions.forEach { (emoji, count) ->
+            val isMyReaction = userReaction == emoji
+            val badgeBg = if (colors.isLight) Color.White else Color(0xFF2C2C2E)
+            val badgeBorderColor = if (isMyReaction && colors.isLight) Color(0x33007AFF) else (if (colors.isLight) Color(0x22000000) else Color(0x38FFFFFF))
+            val badgeBorderWidth = 0.5.dp
+
+            Row(
+                modifier = Modifier
+                    .shadow(2.dp, RoundedCornerShape(8.dp), ambientColor = Color.Black.copy(alpha = 0.18f), spotColor = Color.Black.copy(alpha = 0.14f))
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(badgeBg)
+                    .border(badgeBorderWidth, badgeBorderColor, RoundedCornerShape(8.dp))
+                    .clickable { onReactionClick(emoji) }
+                    .padding(
+                        horizontal = if (count > 1) 6.dp else 4.5.dp,
+                        vertical = 1.5.dp
+                    ),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.5.dp)
+            ) {
+                Text(text = emoji, fontSize = 11.sp)
+                if (count > 1) {
+                    Text(
+                        text = count.toString(),
+                        fontSize = 9.5.sp,
+                        fontWeight = if (isMyReaction) FontWeight.Bold else FontWeight.SemiBold,
+                        color = if (isMyReaction) colors.iosBlue else colors.textMuted
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MessageBubbleCard(
+    message: ChatMessage,
+    isOutgoing: Boolean,
+    isConsecutive: Boolean,
+    isNextSame: Boolean,
+    searchQuery: String,
+    senderDisplayName: String?,
+    showSenderName: Boolean,
+    callbacks: MessageRowCallbacks,
+    isSelectionMode: Boolean,
+    isHighlighted: Boolean,
+    config: MessageBubbleConfig,
+    colors: ChatColors,
+    isFreshMessage: Boolean,
+    showReactionDock: Boolean,
+    onOpenReactionDock: () -> Unit,
+    onCloseReactionDock: () -> Unit,
+    onTriggerHeartBurst: () -> Unit,
+    heartScale: Float,
+    heartAlpha: Float,
+    isHeartBurstActive: Boolean
+) {
+    val haptic = LocalHapticFeedback.current
+    val bubbleStyle = config.bubbleStyle
+    val customCornerConfig = config.customCornerConfig
+    val animationStyle = config.animationStyle
+
+    val isVoiceOnly = message.mediaType == "voice" && message.text.isNullOrEmpty()
+    val isMediaOnly = (message.mediaType in listOf("image", "image_stack")) && message.text.isNullOrEmpty() && message.replyTo == null
+
+    val highlightAnim = remember { Animatable(0f) }
+    LaunchedEffect(isHighlighted) {
+        if (isHighlighted) {
+            highlightAnim.snapTo(0.40f)
+            highlightAnim.animateTo(0f, animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing))
+        }
+    }
+
+    Column(
+        horizontalAlignment = if (isOutgoing) Alignment.End else Alignment.Start,
+        modifier = if (isMediaOnly) Modifier.width(280.dp) else if (isVoiceOnly) Modifier.widthIn(max = 245.dp) else Modifier.widthIn(max = 295.dp)
+    ) {
+        if (!isOutgoing && showSenderName && !isConsecutive && senderDisplayName != null) {
+            Text(
+                text = senderDisplayName,
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = colors.textMuted,
+                modifier = Modifier.padding(start = 4.dp, bottom = 2.dp)
+            )
+        }
+
+        val visual = remember(bubbleStyle, customCornerConfig, isOutgoing, isConsecutive, isNextSame, colors.isLight, colors.iosBlue) {
+            resolveBubbleVisual(bubbleStyle, isOutgoing, isConsecutive, isNextSame, colors, customCornerConfig)
+        }
+
+        Box(
+            contentAlignment = if (isOutgoing) Alignment.BottomEnd else Alignment.BottomStart
+        ) {
+            val bubbleBackground = if (isMediaOnly) SolidColor(Color.Transparent) else visual.background
+            val bubbleBorderWidth = if (isMediaOnly) 0.5.dp else visual.borderWidth
+            val bubbleBorderColor = if (isMediaOnly) (if (colors.isLight) Color(0x18000000) else Color(0x2EFFFFFF)) else visual.borderColor
+            val effectiveShape = if (isMediaOnly) RoundedCornerShape(18.dp) else visual.shape
+
+            Box(
+                modifier = Modifier
+                    .messageEntrance(
+                        isFreshMessage = isFreshMessage,
+                        animationStyle = animationStyle,
+                        isOutgoing = isOutgoing
+                    )
+                    .then(
+                        if (visual.elevation > 0.dp && !isMediaOnly) {
+                            Modifier.shadow(
+                                elevation = visual.elevation,
+                                shape = effectiveShape,
+                                ambientColor = visual.ambientColor,
+                                spotColor = visual.spotColor,
+                                clip = false
+                            )
+                        } else Modifier
+                    )
+                    .clip(effectiveShape)
+                    .background(brush = bubbleBackground, shape = effectiveShape)
+                    .then(
+                        if (visual.borderBrush != null && !isMediaOnly) {
+                            Modifier.border(bubbleBorderWidth, visual.borderBrush, effectiveShape)
+                        } else {
+                            Modifier.border(bubbleBorderWidth, bubbleBorderColor, effectiveShape)
+                        }
+                    )
+                    .pointerInput(message.id, isSelectionMode) {
+                        if (isSelectionMode) {
+                            detectTapGestures(onTap = { callbacks.onToggleSelect() })
+                        } else {
+                            detectTapGestures(
+                                onDoubleTap = { onTriggerHeartBurst() },
+                                onLongPress = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    SoundManager.playReaction()
+                                    onOpenReactionDock()
+                                },
+                                onTap = {
+                                    if (message.status == "error") {
+                                        callbacks.onRetry?.invoke()
+                                    } else if (showReactionDock) {
+                                        onCloseReactionDock()
+                                    }
+                                }
+                            )
+                        }
+                    }
+            ) {
+                if (highlightAnim.value > 0.01f) {
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .clip(effectiveShape)
+                            .background(colors.iosBlue.copy(alpha = highlightAnim.value))
+                    )
+                }
+
+                if (visual.hasTopSpecular && !isMediaOnly) {
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .clip(effectiveShape)
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        if (isOutgoing) Color.White.copy(alpha = 0.28f) else Color.White.copy(alpha = 0.40f),
+                                        Color.Transparent
+                                    ),
+                                    startY = 0f,
+                                    endY = 32f
+                                )
+                            )
+                    )
+                }
+
+                val hasTail = !isNextSame && !isMediaOnly && (bubbleStyle == BubbleStyleType.CLASSIC_IOS || bubbleStyle == BubbleStyleType.ROUNDED)
+                MessageBubbleInnerContent(
+                    message = message,
+                    isOutgoing = isOutgoing,
+                    visual = visual,
+                    isVoiceOnly = isVoiceOnly,
+                    isMediaOnly = isMediaOnly,
+                    searchQuery = searchQuery,
+                    isSelectionMode = isSelectionMode,
+                    colors = colors,
+                    showReactionDock = showReactionDock,
+                    hasTail = hasTail,
+                    onToggleSelect = callbacks.onToggleSelect,
+                    onCloseReactionDock = onCloseReactionDock,
+                    onOpenReactionDock = onOpenReactionDock,
+                    onTriggerHeartBurst = onTriggerHeartBurst,
+                    onImageClick = callbacks.onImageClick,
+                    onImageStackClick = callbacks.onImageStackClick,
+                    onPollVote = callbacks.onPollVote,
+                    onPollRetractVote = callbacks.onPollRetractVote,
+                    onClosePoll = callbacks.onClosePoll,
+                    onViewPollVotes = callbacks.onViewPollVotes,
+                    onQuoteClick = callbacks.onQuoteClick,
+                    onRetry = callbacks.onRetry
+                )
+            }
+
+            MessageHeartBurstEffect(
+                isActive = isHeartBurstActive,
+                scale = heartScale,
+                alpha = heartAlpha
+            )
+
+            if (message.reactions.isNotEmpty()) {
+                Box(modifier = Modifier.align(if (isOutgoing) Alignment.TopStart else Alignment.TopEnd)) {
+                    MessageReactionsPills(
+                        reactions = message.reactions,
+                        userReaction = message.userReaction,
+                        isOutgoing = isOutgoing,
+                        colors = colors,
+                        onReactionClick = callbacks.onReactionClick
+                    )
+                }
+            }
+        }
+
+        if (message.reactions.isNotEmpty()) {
+            Spacer(Modifier.height(5.dp))
+        }
+    }
+}
+
+@Composable
 fun MessageRow(
     message: ChatMessage,
     isOutgoing: Boolean,
@@ -656,47 +1031,18 @@ fun MessageRow(
     config: MessageBubbleConfig = MessageBubbleConfig(),
     modifier: Modifier = Modifier
 ) {
-    val onReactionClick = callbacks.onReactionClick
-    val onDoubleTap = callbacks.onDoubleTap
-    val onLongPress = callbacks.onLongPress
-    val onReplyAction = callbacks.onReplyAction
-    val onEditAction = callbacks.onEditAction
-    val onPinAction = callbacks.onPinAction
-    val onCopyAction = callbacks.onCopyAction
-    val onDeleteAction = callbacks.onDeleteAction
-    val onImageClick = callbacks.onImageClick
-    val onImageStackClick = callbacks.onImageStackClick
-    val onPollVote = callbacks.onPollVote
-    val onPollRetractVote = callbacks.onPollRetractVote
-    val onClosePoll = callbacks.onClosePoll
-    val onViewPollVotes = callbacks.onViewPollVotes
-    val onToggleSelect = callbacks.onToggleSelect
-    val onQuoteClick = callbacks.onQuoteClick
-    val onRetry = callbacks.onRetry
-
-    val bubbleStyle = config.bubbleStyle
-    val customCornerConfig = config.customCornerConfig
-    val animationStyle = config.animationStyle
-
     val colors = LocalChatColors.current
+    if (message.mediaType == "call") {
+        MessageCallRow(message = message, colors = colors, modifier = modifier)
+        return
+    }
+
     val haptic = LocalHapticFeedback.current
     var showReactionDock by remember { mutableStateOf(false) }
     var isHeartBurstActive by remember { mutableStateOf(false) }
     var heartJob by remember { mutableStateOf<Job?>(null) }
-    val highlightAnim = remember { Animatable(0f) }
-    LaunchedEffect(isHighlighted) {
-        if (isHighlighted) {
-            highlightAnim.snapTo(0.40f)
-            highlightAnim.animateTo(
-                0f,
-                animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing)
-            )
-        }
-    }
-    var lastTapTimestamp by remember { mutableLongStateOf(0L) }
     val coroutineScope = rememberCoroutineScope()
     val dragOffset = remember { Animatable(0f) }
-
     val heartScale = remember { Animatable(0.2f) }
     val heartAlpha = remember { Animatable(1f) }
 
@@ -716,44 +1062,12 @@ fun MessageRow(
                 isHeartBurstActive = false
             }
         }
-        onDoubleTap()
+        callbacks.onDoubleTap()
     }
 
-    // Only animate entrance for newly sent or received messages (< 4 sec)
-    // Historical messages on open render instantly at scale=1, alpha=1 to eliminate lag and prevent OOM
     val isFreshMessage = remember(message.id, message.timestamp) {
         val now = System.currentTimeMillis()
         message.timestamp > 0L && (now - message.timestamp) < 4000L
-    }
-
-    // Historical messages render instantly without creating heavyweight Animatable objects (prevents OOM & jank)
-    // Fresh messages delegate to Modifier.messageEntrance
-
-    // System message (e.g. Call ended)
-    if (message.mediaType == "call") {
-        Box(
-            modifier = modifier.fillMaxWidth().padding(vertical = 6.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(colors.cardBg)
-                    .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(8.dp))
-                    .padding(horizontal = 12.dp, vertical = 5.dp)
-            ) {
-                LucidePhone(tint = colors.iosBlue, size = 13.dp)
-                Text(
-                    text = "${message.callType ?: "Audio"} call ended • ${message.callDuration ?: "0m"}",
-                    fontSize = 11.5.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = colors.textMuted
-                )
-            }
-        }
-        return
     }
 
     val rowBgColor = if (isSelectionMode && isSelected) colors.iosBlue.copy(alpha = 0.12f) else Color.Transparent
@@ -764,9 +1078,7 @@ fun MessageRow(
         modifier = modifier
             .fillMaxWidth()
             .background(rowBgColor)
-            .clickable(enabled = isSelectionMode) {
-                onToggleSelect()
-            }
+            .clickable(enabled = isSelectionMode) { callbacks.onToggleSelect() }
             .padding(
                 start = animatedStartPadding,
                 end = animatedEndPadding,
@@ -775,357 +1087,101 @@ fun MessageRow(
             ),
         verticalAlignment = if (isSelectionMode) Alignment.CenterVertically else Alignment.Bottom
     ) {
-        AnimatedVisibility(
-            visible = isSelectionMode,
-            enter = expandHorizontally(
-                animationSpec = spring(dampingRatio = 0.75f, stiffness = 450f),
-                expandFrom = Alignment.Start
-            ) + fadeIn(animationSpec = tween(180)),
-            exit = shrinkHorizontally(
-                animationSpec = spring(dampingRatio = 0.8f, stiffness = 500f),
-                shrinkTowards = Alignment.Start
-            ) + fadeOut(animationSpec = tween(150))
-        ) {
-            val checkScale by animateFloatAsState(
-                targetValue = if (isSelected) 1f else 0f,
-                animationSpec = spring(dampingRatio = 0.6f, stiffness = 500f),
-                label = "checkScale"
-            )
-            Box(
-                modifier = Modifier
-                    .padding(end = 10.dp)
-                    .size(22.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(if (isSelected) colors.iosBlue else Color.Transparent)
-                    .border(
-                        width = if (isSelected) 0.dp else 1.5.dp,
-                        color = if (isSelected) Color.Transparent else colors.textMuted.copy(alpha = 0.5f),
-                        shape = RoundedCornerShape(6.dp)
-                    )
-                    .clickable {
-                        onToggleSelect()
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                if (isSelected || checkScale > 0.05f) {
-                    Box(modifier = Modifier.graphicsLayer { scaleX = checkScale; scaleY = checkScale }) {
-                        LucideCheck(tint = Color.White, size = 13.dp)
-                    }
-                }
-            }
-        }
+        MessageSelectionBox(
+            isSelectionMode = isSelectionMode,
+            isSelected = isSelected,
+            colors = colors,
+            onToggleSelect = callbacks.onToggleSelect
+        )
 
         Column(
             modifier = Modifier.weight(1f, fill = isSelectionMode),
             horizontalAlignment = if (isOutgoing) Alignment.End else Alignment.Start
         ) {
-            // Apple iOS Reaction Dock (0.5s Hold Pop-up IN, Reacted Pop-up OUT)
             MessageReactionDock(
                 visible = showReactionDock,
                 isOutgoing = isOutgoing,
                 userReaction = message.userReaction,
                 colors = colors,
-                onReactionClick = onReactionClick,
-                onLongPress = onLongPress,
-                onReplyAction = onReplyAction,
+                onReactionClick = callbacks.onReactionClick,
+                onLongPress = callbacks.onLongPress,
+                onReplyAction = callbacks.onReplyAction,
                 onCloseDock = { showReactionDock = false }
             )
 
-        // Swipe-to-reply Drag Row
-        Box(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            // Reply icon revealed on swipe
-            if (dragOffset.value != 0f) {
-                val isSwipingLeft = dragOffset.value < 0
-                Box(
+            Box(modifier = Modifier.fillMaxWidth()) {
+                MessageSwipeReplyIndicator(dragOffset = dragOffset.value, colors = colors)
+
+                Row(
                     modifier = Modifier
-                        .matchParentSize()
-                        .padding(horizontal = 16.dp),
-                    contentAlignment = if (isSwipingLeft) Alignment.CenterEnd else Alignment.CenterStart
-                ) {
-                    Box(
-                        modifier = Modifier.size(32.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        LucideReply(
-                            tint = colors.iosBlue.copy(alpha = (kotlin.math.abs(dragOffset.value) / 120f).coerceIn(0.2f, 1f)),
-                            size = 20.dp
-                        )
-                    }
-                }
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .offset { IntOffset(dragOffset.value.roundToInt(), 0) }
-                    .pointerInput(Unit) {
-                        detectHorizontalDragGestures(
-                            onDragEnd = {
-                                if (kotlin.math.abs(dragOffset.value) > 75f) {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    onReplyAction()
-                                }
-                                coroutineScope.launch {
-                                    dragOffset.animateTo(0f, animationSpec = spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMediumLow))
-                                }
-                            },
-                            onDragCancel = {
-                                coroutineScope.launch {
-                                    dragOffset.animateTo(0f, animationSpec = spring(dampingRatio = 0.75f))
-                                }
-                            },
-                            onHorizontalDrag = { _, dragAmount ->
-                                val target = (dragOffset.value + dragAmount * 0.65f).coerceIn(-140f, 140f)
-                                coroutineScope.launch {
-                                    dragOffset.snapTo(target)
-                                }
-                            }
-                        )
-                    },
-                horizontalArrangement = if (isOutgoing) Arrangement.End else Arrangement.Start,
-                verticalAlignment = Alignment.Bottom
-            ) {
-                // Incoming Avatar (Full Circular Shape, aligned with bottom tail of the cluster)
-                if (!isOutgoing) {
-                    if (!isNextSame) {
-                        IosAvatarView(
-                            name = senderDisplayName ?: "",
-                            avatarUrl = senderAvatar,
-                            size = 32.dp,
-                            isOnline = false,
-                            modifier = Modifier.padding(bottom = 2.dp)
-                        )
-                    } else {
-                        Spacer(Modifier.width(32.dp))
-                    }
-                    Spacer(Modifier.width(8.dp))
-                }
-
-                // Message Bubble Container
-                val isVoiceOnly = message.mediaType == "voice" && message.text.isNullOrEmpty()
-                val isMediaOnly = (message.mediaType in listOf("image", "image_stack")) && message.text.isNullOrEmpty() && message.replyTo == null
-                Column(
-                    horizontalAlignment = if (isOutgoing) Alignment.End else Alignment.Start,
-                    modifier = if (isMediaOnly) Modifier.width(280.dp) else if (isVoiceOnly) Modifier.widthIn(max = 245.dp) else Modifier.widthIn(max = 295.dp)
-                ) {
-                    // Sender name in group chat
-                    if (!isOutgoing && showSenderName && !isConsecutive && senderDisplayName != null) {
-                        Text(
-                            text = senderDisplayName,
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = colors.textMuted,
-                            modifier = Modifier.padding(start = 4.dp, bottom = 2.dp)
-                        )
-                    }
-
-                    // Resolve visual styling config for the selected BubbleStyleType & custom corners
-                    val visual = remember(bubbleStyle, customCornerConfig, isOutgoing, isConsecutive, isNextSame, colors.isLight, colors.iosBlue) {
-                        resolveBubbleVisual(bubbleStyle, isOutgoing, isConsecutive, isNextSame, colors, customCornerConfig)
-                    }
-
-                    Box(
-                        contentAlignment = if (isOutgoing) Alignment.BottomEnd else Alignment.BottomStart
-                    ) {
-                        val bubbleBackground = if (isMediaOnly) SolidColor(Color.Transparent) else visual.background
-                        val bubbleBorderWidth = if (isMediaOnly) 0.5.dp else visual.borderWidth
-                        val bubbleBorderColor = if (isMediaOnly) (if (colors.isLight) Color(0x18000000) else Color(0x2EFFFFFF)) else visual.borderColor
-                        val effectiveShape = if (isMediaOnly) RoundedCornerShape(18.dp) else visual.shape
-
-                        Box(
-                            modifier = Modifier
-                                .messageEntrance(
-                                    isFreshMessage = isFreshMessage,
-                                    animationStyle = animationStyle,
-                                    isOutgoing = isOutgoing
-                                )
-                                .then(
-                                    if (visual.elevation > 0.dp && !isMediaOnly) {
-                                        Modifier.shadow(
-                                            elevation = visual.elevation,
-                                            shape = effectiveShape,
-                                            ambientColor = visual.ambientColor,
-                                            spotColor = visual.spotColor,
-                                            clip = false
-                                        )
-                                    } else Modifier
-                                )
-                                .clip(effectiveShape)
-                                .background(brush = bubbleBackground, shape = effectiveShape)
-                                .then(
-                                    if (visual.borderBrush != null && !isMediaOnly) {
-                                        Modifier.border(bubbleBorderWidth, visual.borderBrush, effectiveShape)
-                                    } else {
-                                        Modifier.border(bubbleBorderWidth, bubbleBorderColor, effectiveShape)
+                        .fillMaxWidth()
+                        .offset { IntOffset(dragOffset.value.roundToInt(), 0) }
+                        .pointerInput(Unit) {
+                            detectHorizontalDragGestures(
+                                onDragEnd = {
+                                    if (kotlin.math.abs(dragOffset.value) > 75f) {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        callbacks.onReplyAction()
                                     }
-                                )
-                                .pointerInput(message.id, isSelectionMode) {
-                                    if (isSelectionMode) {
-                                        detectTapGestures(
-                                            onTap = { onToggleSelect() }
-                                        )
-                                    } else {
-                                        detectTapGestures(
-                                            onDoubleTap = {
-                                                triggerHeartBurst()
-                                            },
-                                            onLongPress = {
-                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                SoundManager.playReaction()
-                                                showReactionDock = true
-                                            },
-                                            onTap = {
-                                                if (message.status == "error") {
-                                                    onRetry?.invoke()
-                                                } else if (showReactionDock) {
-                                                    showReactionDock = false
-                                                }
-                                            }
-                                        )
+                                    coroutineScope.launch {
+                                        dragOffset.animateTo(0f, animationSpec = spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMediumLow))
                                     }
-                                }
-                        ) {
-                        // Flash highlight overlay on quote click
-                        if (highlightAnim.value > 0.01f) {
-                            Box(
-                                modifier = Modifier
-                                    .matchParentSize()
-                                    .clip(effectiveShape)
-                                    .background(colors.iosBlue.copy(alpha = highlightAnim.value))
-                            )
-                        }
-
-                        // Glossy top specular light gradient highlight
-                        if (visual.hasTopSpecular && !isMediaOnly) {
-                            Box(
-                                modifier = Modifier
-                                    .matchParentSize()
-                                    .clip(effectiveShape)
-                                    .background(
-                                        Brush.verticalGradient(
-                                            colors = listOf(
-                                                if (isOutgoing) Color.White.copy(alpha = 0.28f) else Color.White.copy(alpha = 0.40f),
-                                                Color.Transparent
-                                            ),
-                                            startY = 0f,
-                                            endY = 32f
-                                        )
-                                    )
-                            )
-                        }
-
-                        val hasTail = !isNextSame && !isMediaOnly && (bubbleStyle == BubbleStyleType.CLASSIC_IOS || bubbleStyle == BubbleStyleType.ROUNDED)
-                        MessageBubbleInnerContent(
-                            message = message,
-                            isOutgoing = isOutgoing,
-                            visual = visual,
-                            isVoiceOnly = isVoiceOnly,
-                            isMediaOnly = isMediaOnly,
-                            searchQuery = searchQuery,
-                            isSelectionMode = isSelectionMode,
-                            colors = colors,
-                            showReactionDock = showReactionDock,
-                            hasTail = hasTail,
-                            onToggleSelect = onToggleSelect,
-                            onCloseReactionDock = { showReactionDock = false },
-                            onOpenReactionDock = { showReactionDock = true },
-                            onTriggerHeartBurst = { triggerHeartBurst() },
-                            onImageClick = onImageClick,
-                            onImageStackClick = onImageStackClick,
-                            onPollVote = onPollVote,
-                            onPollRetractVote = onPollRetractVote,
-                            onClosePoll = onClosePoll,
-                            onViewPollVotes = onViewPollVotes,
-                            onQuoteClick = onQuoteClick,
-                            onRetry = onRetry
-                        )
-                    }
-
-                    // Floating heart pop effect on double-tap (UNCLIPPED, always in front & never cut off)
-                    if (isHeartBurstActive) {
-                        Box(
-                            modifier = Modifier
-                                .matchParentSize()
-                                .zIndex(100f)
-                                .graphicsLayer {
-                                    scaleX = heartScale.value
-                                    scaleY = heartScale.value
-                                    alpha = heartAlpha.value
                                 },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Image(
-                                painter = painterResource(id = R.drawable.heart_like),
-                                contentDescription = "Heart Like",
-                                modifier = Modifier.size(68.dp)
-                            )
-                        }
-                    }
-
-                    // 5. Reaction Tags (Clean Apple frosted capsule pill, anchored to top outer edge)
-                    if (message.reactions.isNotEmpty()) {
-                        Row(
-                            modifier = Modifier
-                                .align(if (isOutgoing) Alignment.TopStart else Alignment.TopEnd)
-                                .offset(
-                                    y = (-9).dp,
-                                    x = if (isOutgoing) (-4).dp else 4.dp
-                                )
-                                .zIndex(60f)
-                                .animateContentSize(spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMediumLow))
-                                .padding(horizontal = 2.dp),
-                            horizontalArrangement = Arrangement.spacedBy(3.dp)
-                        ) {
-                            message.reactions.forEach { (emoji, count) ->
-                                val isMyReaction = message.userReaction == emoji
-                                val badgeBg = if (colors.isLight) Color.White else Color(0xFF2C2C2E)
-                                val badgeBorderColor = if (isMyReaction && colors.isLight) Color(0x33007AFF) else (if (colors.isLight) Color(0x22000000) else Color(0x38FFFFFF))
-                                val badgeBorderWidth = 0.5.dp
-
-                                Row(
-                                    modifier = Modifier
-                                        .shadow(2.dp, RoundedCornerShape(8.dp), ambientColor = Color.Black.copy(alpha = 0.18f), spotColor = Color.Black.copy(alpha = 0.14f))
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(badgeBg)
-                                        .border(badgeBorderWidth, badgeBorderColor, RoundedCornerShape(8.dp))
-                                        .clickable {
-                                            onReactionClick(emoji)
-                                        }
-                                        .padding(
-                                            horizontal = if (count > 1) 6.dp else 4.5.dp,
-                                            vertical = 1.5.dp
-                                        ),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(2.5.dp)
-                                ) {
-                                    Text(
-                                        text = emoji,
-                                        fontSize = 11.sp
-                                    )
-                                    if (count > 1) {
-                                        Text(
-                                            text = count.toString(),
-                                            fontSize = 9.5.sp,
-                                            fontWeight = if (isMyReaction) FontWeight.Bold else FontWeight.SemiBold,
-                                            color = if (isMyReaction) colors.iosBlue else colors.textMuted
-                                        )
+                                onDragCancel = {
+                                    coroutineScope.launch {
+                                        dragOffset.animateTo(0f, animationSpec = spring(dampingRatio = 0.75f))
                                     }
+                                },
+                                onHorizontalDrag = { _, dragAmount ->
+                                    val target = (dragOffset.value + dragAmount * 0.65f).coerceIn(-140f, 140f)
+                                    coroutineScope.launch { dragOffset.snapTo(target) }
                                 }
-                            }
+                            )
+                        },
+                    horizontalArrangement = if (isOutgoing) Arrangement.End else Arrangement.Start,
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    if (!isOutgoing) {
+                        if (!isNextSame) {
+                            IosAvatarView(
+                                name = senderDisplayName ?: "",
+                                avatarUrl = senderAvatar,
+                                size = 32.dp,
+                                isOnline = false,
+                                modifier = Modifier.padding(bottom = 2.dp)
+                            )
+                        } else {
+                            Spacer(Modifier.width(32.dp))
                         }
+                        Spacer(Modifier.width(8.dp))
                     }
-                }
 
-                if (message.reactions.isNotEmpty()) {
-                    Spacer(Modifier.height(5.dp))
+                    MessageBubbleCard(
+                        message = message,
+                        isOutgoing = isOutgoing,
+                        isConsecutive = isConsecutive,
+                        isNextSame = isNextSame,
+                        searchQuery = searchQuery,
+                        senderDisplayName = senderDisplayName,
+                        showSenderName = showSenderName,
+                        callbacks = callbacks,
+                        isSelectionMode = isSelectionMode,
+                        isHighlighted = isHighlighted,
+                        config = config,
+                        colors = colors,
+                        isFreshMessage = isFreshMessage,
+                        showReactionDock = showReactionDock,
+                        onOpenReactionDock = { showReactionDock = true },
+                        onCloseReactionDock = { showReactionDock = false },
+                        onTriggerHeartBurst = { triggerHeartBurst() },
+                        heartScale = heartScale.value,
+                        heartAlpha = heartAlpha.value,
+                        isHeartBurstActive = isHeartBurstActive
+                    )
                 }
             }
         }
     }
-}
-}
 }
 
 @Composable
