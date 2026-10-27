@@ -107,6 +107,21 @@ enum class StudioEditorCategory(val title: String, val icon: androidx.compose.ui
     STICKERS("Stickers", Lucide.Sticker)
 }
 
+enum class StudioAdjustmentNode(
+    val title: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val range: ClosedFloatingPointRange<Float>,
+    val defaultVal: Float
+) {
+    EXPOSURE("Exposure", Lucide.Sun, -100f..100f, 0f),
+    CONTRAST("Contrast", Lucide.Contrast, 0.5f..2.0f, 1.0f),
+    SATURATION("Saturation", Lucide.Palette, 0f..3.0f, 1.0f),
+    WARMTH("Warmth", Lucide.Flame, -100f..100f, 0f),
+    SEPIA("Sepia", Lucide.Clock, 0f..100f, 0f),
+    HUE("Hue", Lucide.RefreshCw, -180f..180f, 0f),
+    INK("Ink", Lucide.PenTool, 0.1f..0.9f, 0.5f)
+}
+
 enum class StudioBackdropType {
     TRANSPARENT,
     SOLID_WHITE,
@@ -391,6 +406,7 @@ fun FlashPhotoEditorScreen(
     // Filter & Grading State
     var selectedFilter by remember { mutableStateOf(StudioFilterPreset.ORIGINAL) }
     var filterIntensity by remember { mutableFloatStateOf(1.0f) }
+    var activeAdjustmentNode by remember { mutableStateOf(StudioAdjustmentNode.EXPOSURE) }
     var brightness by remember { mutableFloatStateOf(0f) }
     var contrast by remember { mutableFloatStateOf(1f) }
     var saturation by remember { mutableFloatStateOf(1f) }
@@ -1106,88 +1122,122 @@ fun FlashPhotoEditorScreen(
                 }
             }
 
-            // ── 4. CHROMA BOTTOM SHEET DRAWER (Tools & Controls) ─────────────
-            val configuration = androidx.compose.ui.platform.LocalConfiguration.current
-            val screenHeightDp = configuration.screenHeightDp.dp
-            val targetDrawerHeight = when (drawerLevel) {
-                PhotoDrawerLevel.COLLAPSED -> 68.dp
-                PhotoDrawerLevel.MID -> minOf(330.dp, screenHeightDp * 0.44f)
-                PhotoDrawerLevel.FULL -> minOf(520.dp, screenHeightDp * 0.70f)
-            }
-
-            val animatedDrawerHeight by animateDpAsState(
-                targetValue = targetDrawerHeight,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMedium
-                ),
-                label = "photoDrawerHeight"
-            )
-
-            val drawerShadowColor = if (colors.isDark) Color.Black.copy(alpha = 0.22f) else Color.Black.copy(alpha = 0.04f)
+            // ── 4. CHROMA BOTTOM DOCK (Unified Tool Console & Category Bar) ─────────
+            val dockShadowColor = if (colors.isDark) Color.Black.copy(alpha = 0.28f) else Color.Black.copy(alpha = 0.05f)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(animatedDrawerHeight)
+                    .height(188.dp)
                     .shadow(
-                        elevation = 4.dp,
+                        elevation = 6.dp,
                         shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
-                        ambientColor = drawerShadowColor,
-                        spotColor = drawerShadowColor
+                        ambientColor = dockShadowColor,
+                        spotColor = dockShadowColor
                     )
                     .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
                     .background(colors.glassBg)
                     .border(0.5.dp, colors.glassBorder, RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
             ) {
-                Column(Modifier.fillMaxSize()) {
-                    // Draggable Grab Bar Handle (Expand / Collapse Bottom Drawer)
+                Column(
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    // Upper Shelf: Active Tool Panel (~130dp)
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(26.dp)
-                            .pointerInput(Unit) {
-                                detectVerticalDragGestures(
-                                    onDragEnd = {
-                                        if (dragAccum < -35f) {
-                                            drawerLevel = when (drawerLevel) {
-                                                PhotoDrawerLevel.COLLAPSED -> PhotoDrawerLevel.MID
-                                                PhotoDrawerLevel.MID -> PhotoDrawerLevel.FULL
-                                                PhotoDrawerLevel.FULL -> PhotoDrawerLevel.FULL
-                                            }
-                                        } else if (dragAccum > 35f) {
-                                            drawerLevel = when (drawerLevel) {
-                                                PhotoDrawerLevel.FULL -> PhotoDrawerLevel.MID
-                                                PhotoDrawerLevel.MID -> PhotoDrawerLevel.COLLAPSED
-                                                PhotoDrawerLevel.COLLAPSED -> PhotoDrawerLevel.COLLAPSED
-                                            }
-                                        }
-                                        dragAccum = 0f
+                            .weight(1f)
+                            .padding(top = 10.dp, bottom = 4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        when (activeCategory) {
+                            StudioEditorCategory.LOOKS -> {
+                                StudioLooksToolPanel(
+                                    selectedFilter = selectedFilter,
+                                    onSelectFilter = { pushSnapshot(); selectedFilter = it },
+                                    intensity = filterIntensity,
+                                    onIntensityChange = { filterIntensity = it }
+                                )
+                            }
+                            StudioEditorCategory.ADJUST -> {
+                                StudioAdjustToolPanel(
+                                    activeNode = activeAdjustmentNode,
+                                    onSelectNode = { activeAdjustmentNode = it },
+                                    brightness = brightness,
+                                    onBrightnessChange = { pushSnapshot(); brightness = it },
+                                    contrast = contrast,
+                                    onContrastChange = { pushSnapshot(); contrast = it },
+                                    saturation = saturation,
+                                    onSaturationChange = { pushSnapshot(); saturation = it },
+                                    warmth = warmth,
+                                    onWarmthChange = { pushSnapshot(); warmth = it },
+                                    sepia = sepia,
+                                    onSepiaChange = { pushSnapshot(); sepia = it },
+                                    hue = hue,
+                                    onHueChange = { pushSnapshot(); hue = it },
+                                    inkClean = inkClean,
+                                    inkThreshold = inkThreshold,
+                                    onInkChange = { clean, thresh ->
+                                        pushSnapshot()
+                                        inkClean = clean
+                                        inkThreshold = thresh
                                     },
-                                    onVerticalDrag = { _, dragAmount ->
-                                        dragAccum += dragAmount
+                                    onAutoEnhance = {
+                                        pushSnapshot()
+                                        brightness = 6f
+                                        contrast = 1.15f
+                                        saturation = 1.18f
+                                        warmth = 8f
+                                        Toast.makeText(context, "Auto enhanced", Toast.LENGTH_SHORT).show()
                                     }
                                 )
                             }
-                            .clickable {
-                                drawerLevel = if (drawerLevel == PhotoDrawerLevel.COLLAPSED) PhotoDrawerLevel.MID else PhotoDrawerLevel.COLLAPSED
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .width(38.dp)
-                                .height(4.5.dp)
-                                .clip(RoundedCornerShape(2.5.dp))
-                                .background(colors.textMuted.copy(alpha = 0.35f))
-                        )
+                            StudioEditorCategory.CROP -> {
+                                StudioCropToolPanel(
+                                    selectedAspectRatio = selectedAspectRatio,
+                                    onSelectAspectRatio = { pushSnapshot(); selectedAspectRatio = it },
+                                    showRuleOfThirds = showRuleOfThirds,
+                                    onToggleRuleOfThirds = { showRuleOfThirds = it },
+                                    onRotate90Cw = { pushSnapshot(); rotation90 = (rotation90 + 90f) % 360f },
+                                    onFlipH = { pushSnapshot(); flipH = !flipH },
+                                    onFlipV = { pushSnapshot(); flipV = !flipV }
+                                )
+                            }
+                            StudioEditorCategory.TYPE -> {
+                                StudioTypographyToolPanel(
+                                    overlayText = overlayText,
+                                    onTextChange = { overlayText = it },
+                                    textColor = textColor,
+                                    onColorChange = { pushSnapshot(); textColor = it },
+                                    bgStyle = textBgStyle,
+                                    onBgStyleChange = { pushSnapshot(); textBgStyle = it }
+                                )
+                            }
+                            StudioEditorCategory.STICKERS -> {
+                                StudioStickerToolPanel(
+                                    activeStickersCount = activeStickers.size,
+                                    onAddStickerClick = { isStickerPickerOpen = true },
+                                    onCreateCustomClick = { isStickerStudioOpen = true },
+                                    onClearAll = {
+                                        activeStickers.clear()
+                                        selectedStickerId = null
+                                    }
+                                )
+                            }
+                        }
                     }
 
-                    // Tool Categories Row (4 Essential Tools, perfectly balanced, zero scrolling)
+                    // Hairline Divider
+                    HorizontalDivider(
+                        color = colors.glassBorder.copy(alpha = 0.5f),
+                        thickness = 0.5.dp
+                    )
+
+                    // Lower Shelf: Category Navigation Dock (~54dp)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 2.dp),
+                            .height(54.dp)
+                            .padding(horizontal = 8.dp),
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -1195,17 +1245,13 @@ fun FlashPhotoEditorScreen(
                             val isActive = activeCategory == category
                             Box(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
+                                    .clip(RoundedCornerShape(10.dp))
                                     .background(
-                                        if (isActive && drawerLevel != PhotoDrawerLevel.COLLAPSED)
-                                            colors.primary.copy(alpha = 0.08f)
+                                        if (isActive) colors.primary.copy(alpha = 0.12f)
                                         else Color.Transparent
                                     )
                                     .clickable {
                                         activeCategory = category
-                                        if (drawerLevel == PhotoDrawerLevel.COLLAPSED) {
-                                            drawerLevel = PhotoDrawerLevel.MID
-                                        }
                                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     }
                                     .padding(horizontal = 14.dp, vertical = 6.dp),
@@ -1218,142 +1264,14 @@ fun FlashPhotoEditorScreen(
                                     Icon(
                                         imageVector = category.icon,
                                         contentDescription = category.title,
-                                        tint = if (isActive && drawerLevel != PhotoDrawerLevel.COLLAPSED) colors.primary else colors.textMuted,
+                                        tint = if (isActive) colors.primary else colors.textMuted,
                                         modifier = Modifier.size(17.dp)
                                     )
                                     Text(
                                         text = category.title,
-                                        color = if (isActive && drawerLevel != PhotoDrawerLevel.COLLAPSED) colors.primary else colors.textMain,
+                                        color = if (isActive) colors.primary else colors.textMain,
                                         fontSize = 12.sp,
-                                        fontWeight = if (isActive && drawerLevel != PhotoDrawerLevel.COLLAPSED) FontWeight.SemiBold else FontWeight.Normal
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    // Expanded Drawer Content Deck
-                    if (drawerLevel != PhotoDrawerLevel.COLLAPSED) {
-                        HorizontalDivider(
-                            color = colors.glassBorder.copy(alpha = 0.5f),
-                            thickness = 0.5.dp,
-                            modifier = Modifier.padding(top = 2.dp)
-                        )
-
-                        // Sub-header with Tool Title and Action Controls
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 6.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Icon(
-                                    imageVector = activeCategory.icon,
-                                    contentDescription = activeCategory.title,
-                                    tint = colors.primary,
-                                    modifier = Modifier.size(15.dp)
-                                )
-                                Text(
-                                    text = activeCategory.title,
-                                    color = colors.textMain,
-                                    fontSize = 12.5.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                IconButton(
-                                    onClick = {
-                                        drawerLevel = PhotoDrawerLevel.COLLAPSED
-                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                    },
-                                    modifier = Modifier.size(32.dp).minimumInteractiveComponentSize()
-                                ) {
-                                    Icon(
-                                        imageVector = Lucide.ChevronDown,
-                                        contentDescription = "Collapse Drawer to Full View",
-                                        tint = colors.textMuted,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                            }
-                        }
-
-                        // Active Tool Panel Content
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f)
-                                .verticalScroll(rememberScrollState())
-                                .padding(start = 16.dp, end = 16.dp, bottom = 10.dp)
-                        ) {
-                            when (activeCategory) {
-                                StudioEditorCategory.LOOKS -> {
-                                    StudioLooksToolPanel(
-                                        selectedFilter = selectedFilter,
-                                        onSelectFilter = { pushSnapshot(); selectedFilter = it },
-                                        intensity = filterIntensity,
-                                        onIntensityChange = { filterIntensity = it }
-                                    )
-                                }
-                                StudioEditorCategory.ADJUST -> {
-                                    StudioGradingToolPanel(
-                                        brightness = brightness,
-                                        onBrightnessChange = { brightness = it },
-                                        contrast = contrast,
-                                        onContrastChange = { contrast = it },
-                                        saturation = saturation,
-                                        onSaturationChange = { saturation = it },
-                                        warmth = warmth,
-                                        onWarmthChange = { warmth = it },
-                                        onAutoEnhance = {
-                                            pushSnapshot()
-                                            brightness = 6f
-                                            contrast = 1.15f
-                                            saturation = 1.18f
-                                            warmth = 8f
-                                            Toast.makeText(context, "Auto enhanced", Toast.LENGTH_SHORT).show()
-                                        }
-                                    )
-                                }
-                                StudioEditorCategory.CROP -> {
-                                    StudioCropToolPanel(
-                                        selectedAspectRatio = selectedAspectRatio,
-                                        onSelectAspectRatio = { pushSnapshot(); selectedAspectRatio = it },
-                                        showRuleOfThirds = showRuleOfThirds,
-                                        onToggleRuleOfThirds = { showRuleOfThirds = it },
-                                        onRotate90Cw = { pushSnapshot(); rotation90 = (rotation90 + 90f) % 360f },
-                                        onFlipH = { pushSnapshot(); flipH = !flipH },
-                                        onFlipV = { pushSnapshot(); flipV = !flipV }
-                                    )
-                                }
-                                StudioEditorCategory.TYPE -> {
-                                    StudioTypographyToolPanel(
-                                        overlayText = overlayText,
-                                        onTextChange = { overlayText = it },
-                                        textColor = textColor,
-                                        onColorChange = { pushSnapshot(); textColor = it },
-                                        bgStyle = textBgStyle,
-                                        onBgStyleChange = { pushSnapshot(); textBgStyle = it }
-                                    )
-                                }
-                                StudioEditorCategory.STICKERS -> {
-                                    StudioStickerToolPanel(
-                                        activeStickersCount = activeStickers.size,
-                                        onAddStickerClick = { isStickerPickerOpen = true },
-                                        onCreateCustomClick = { isStickerStudioOpen = true },
-                                        onClearAll = {
-                                            activeStickers.clear()
-                                            selectedStickerId = null
-                                        }
+                                        fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal
                                     )
                                 }
                             }
@@ -1407,7 +1325,6 @@ fun FlashPhotoEditorScreen(
 // TOOL PANEL IMPLEMENTATIONS
 // ─────────────────────────────────────────────────────────────────────────────
 
-
 @Composable
 private fun StudioStickerToolPanel(
     activeStickersCount: Int,
@@ -1416,55 +1333,51 @@ private fun StudioStickerToolPanel(
     onClearAll: () -> Unit
 ) {
     val colors = LocalOscellionColors.current
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Button(
+            onClick = onAddStickerClick,
+            colors = ButtonDefaults.buttonColors(containerColor = colors.primary),
+            shape = RoundedCornerShape(10.dp),
+            modifier = Modifier.weight(1f).height(42.dp)
         ) {
-            Button(
-                onClick = onAddStickerClick,
-                colors = ButtonDefaults.buttonColors(containerColor = colors.primary),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.weight(1f)
-            ) {
-                Icon(Lucide.Sticker, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Choose Sticker", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-            }
+            Icon(Lucide.Sticker, contentDescription = "Add Sticker", modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("Stickers", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
+        }
 
-            OutlinedButton(
-                onClick = onCreateCustomClick,
-                shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(1.dp, colors.primary),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.primary),
-                modifier = Modifier.weight(1f)
-            ) {
-                Icon(Lucide.Sparkles, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Create 5px Cutout", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-            }
+        OutlinedButton(
+            onClick = onCreateCustomClick,
+            shape = RoundedCornerShape(10.dp),
+            border = BorderStroke(1.dp, colors.primary),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.primary),
+            modifier = Modifier.weight(1f).height(42.dp)
+        ) {
+            Icon(Lucide.Sparkles, contentDescription = "Cutout Sticker", modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("Cutout", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
         }
 
         if (activeStickersCount > 0) {
-            Spacer(modifier = Modifier.height(10.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            IconButton(
+                onClick = onClearAll,
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xFFEF4444).copy(alpha = 0.12f))
+                    .minimumInteractiveComponentSize()
             ) {
-                Text(
-                    "$activeStickersCount sticker(s) placed - drag & pinch to position",
-                    color = colors.textMuted,
-                    fontSize = 12.sp
+                Icon(
+                    imageVector = Lucide.Trash2,
+                    contentDescription = "Clear Stickers",
+                    tint = Color(0xFFEF4444),
+                    modifier = Modifier.size(18.dp)
                 )
-                TextButton(onClick = onClearAll) {
-                    Text("Clear All", color = Color(0xFFEF4444), fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                }
             }
         }
     }
@@ -1483,11 +1396,86 @@ private fun StudioCropToolPanel(
     val colors = LocalOscellionColors.current
     val haptic = LocalHapticFeedback.current
 
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        // Aspect Ratios Row
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // Quick Action Tools: Rotate, Flip H, Flip V, Grid
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(
+                onClick = {
+                    onRotate90Cw()
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                },
+                modifier = Modifier.size(44.dp).minimumInteractiveComponentSize()
+            ) {
+                Icon(
+                    imageVector = Lucide.RotateCw,
+                    contentDescription = "Rotate 90 Degrees",
+                    tint = colors.textMain,
+                    modifier = Modifier.size(19.dp)
+                )
+            }
+
+            IconButton(
+                onClick = {
+                    onFlipH()
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                },
+                modifier = Modifier.size(44.dp).minimumInteractiveComponentSize()
+            ) {
+                Icon(
+                    imageVector = Lucide.FlipHorizontal,
+                    contentDescription = "Flip Horizontal",
+                    tint = colors.textMain,
+                    modifier = Modifier.size(19.dp)
+                )
+            }
+
+            IconButton(
+                onClick = {
+                    onFlipV()
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                },
+                modifier = Modifier.size(44.dp).minimumInteractiveComponentSize()
+            ) {
+                Icon(
+                    imageVector = Lucide.FlipVertical,
+                    contentDescription = "Flip Vertical",
+                    tint = colors.textMain,
+                    modifier = Modifier.size(19.dp)
+                )
+            }
+
+            IconButton(
+                onClick = {
+                    onToggleRuleOfThirds(!showRuleOfThirds)
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                },
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (showRuleOfThirds) colors.primary.copy(alpha = 0.15f) else Color.Transparent)
+                    .minimumInteractiveComponentSize()
+            ) {
+                Icon(
+                    imageVector = Lucide.Grid3x3,
+                    contentDescription = "Grid Guide",
+                    tint = if (showRuleOfThirds) colors.primary else colors.textMain,
+                    modifier = Modifier.size(19.dp)
+                )
+            }
+        }
+
+        // Aspect Ratios
         LazyRow(
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth()
+            verticalAlignment = Alignment.CenterVertically
         ) {
             items(PhotoAspectRatio.values()) { ratioItem ->
                 val isSelected = selectedAspectRatio == ratioItem
@@ -1509,86 +1497,11 @@ private fun StudioCropToolPanel(
                     Text(
                         text = ratioItem.label,
                         color = if (isSelected) Color.White else colors.textMain,
-                        fontSize = 12.sp,
+                        fontSize = 11.5.sp,
                         fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
                     )
                 }
             }
-        }
-
-        HorizontalDivider(color = colors.glassBorder.copy(alpha = 0.4f), thickness = 0.5.dp)
-
-        // Rotate & Flip Actions
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(
-                onClick = {
-                    onRotate90Cw()
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                },
-                modifier = Modifier.size(48.dp).minimumInteractiveComponentSize()
-            ) {
-                Icon(
-                    Lucide.RotateCw,
-                    contentDescription = "Rotate 90 Degrees Clockwise",
-                    tint = colors.textMain,
-                    modifier = Modifier.size(19.dp)
-                )
-            }
-
-            IconButton(
-                onClick = {
-                    onFlipH()
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                },
-                modifier = Modifier.size(48.dp).minimumInteractiveComponentSize()
-            ) {
-                Icon(
-                    Lucide.FlipHorizontal,
-                    contentDescription = "Flip Photo Horizontally",
-                    tint = colors.textMain,
-                    modifier = Modifier.size(19.dp)
-                )
-            }
-
-            IconButton(
-                onClick = {
-                    onFlipV()
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                },
-                modifier = Modifier.size(48.dp).minimumInteractiveComponentSize()
-            ) {
-                Icon(
-                    Lucide.FlipVertical,
-                    contentDescription = "Flip Photo Vertically",
-                    tint = colors.textMain,
-                    modifier = Modifier.size(19.dp)
-                )
-            }
-        }
-
-        HorizontalDivider(color = colors.glassBorder.copy(alpha = 0.4f), thickness = 0.5.dp)
-
-        // Composition Grid Toggle
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Icon(Lucide.Grid3x3, contentDescription = "Rule of Thirds Grid Guide", tint = colors.primary, modifier = Modifier.size(18.dp))
-                Text("Grid Overlay", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-            }
-            AppleSwitch(
-                checked = showRuleOfThirds,
-                onCheckedChange = {
-                    onToggleRuleOfThirds(it)
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                }
-            )
         }
     }
 }
@@ -1603,65 +1516,75 @@ private fun StudioLooksToolPanel(
     val colors = LocalOscellionColors.current
     val haptic = LocalHapticFeedback.current
 
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        // Intensity Slider
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        // Slider or Filter Name row
         Row(
+            modifier = Modifier.fillMaxWidth().height(28.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth()
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                text = "Intensity",
+                text = selectedFilter.displayName,
                 color = colors.textMain,
                 fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.width(68.dp)
+                fontWeight = FontWeight.SemiBold
             )
 
-            AppleSlider(
-                value = intensity,
-                onValueChange = onIntensityChange,
-                valueRange = 0f..1f,
-                modifier = Modifier.weight(1f)
-            )
-
-            Text(
-                text = "${(intensity * 100).toInt()}%",
-                color = colors.textMuted,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.width(36.dp),
-                textAlign = TextAlign.End
-            )
+            if (selectedFilter != StudioFilterPreset.ORIGINAL) {
+                Row(
+                    modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    AppleSlider(
+                        value = intensity,
+                        onValueChange = onIntensityChange,
+                        valueRange = 0f..1f,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                Text(
+                    text = "${(intensity * 100).toInt()}%",
+                    color = colors.primary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.width(36.dp),
+                    textAlign = TextAlign.End
+                )
+            }
         }
 
-        HorizontalDivider(color = colors.glassBorder.copy(alpha = 0.5f), thickness = 0.5.dp)
-
-        // Filter Cards
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        // Filter cards carousel
+        LazyRow(
+            modifier = Modifier.fillMaxWidth().height(72.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             items(StudioFilterPreset.values()) { preset ->
                 val isSelected = selectedFilter == preset
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(if (isSelected) colors.primary.copy(alpha = 0.15f) else colors.glassBg)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (isSelected) colors.primary.copy(alpha = 0.12f) else colors.glassBg)
                         .border(
                             width = if (isSelected) 1.5.dp else 0.5.dp,
                             color = if (isSelected) colors.primary else colors.glassBorder,
-                            shape = RoundedCornerShape(12.dp)
+                            shape = RoundedCornerShape(10.dp)
                         )
                         .clickable {
                             onSelectFilter(preset)
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         }
-                        .padding(horizontal = 14.dp, vertical = 10.dp)
-                        .widthIn(min = 90.dp)
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                        .widthIn(min = 60.dp)
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
-                            .clip(RoundedCornerShape(8.dp))
+                            .size(32.dp)
+                            .clip(RoundedCornerShape(6.dp))
                             .background(
                                 when (preset) {
                                     StudioFilterPreset.ORIGINAL -> Brush.linearGradient(listOf(Color(0xFFBDBDBD), Color(0xFF757575)))
@@ -1680,12 +1603,12 @@ private fun StudioLooksToolPanel(
                                 }
                             )
                     )
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(3.dp))
                     Text(
                         text = preset.displayName,
                         color = if (isSelected) colors.primary else colors.textMain,
-                        fontSize = 11.5.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                        fontSize = 10.5.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                     )
                 }
             }
@@ -1694,7 +1617,9 @@ private fun StudioLooksToolPanel(
 }
 
 @Composable
-private fun StudioGradingToolPanel(
+private fun StudioAdjustToolPanel(
+    activeNode: StudioAdjustmentNode,
+    onSelectNode: (StudioAdjustmentNode) -> Unit,
     brightness: Float,
     onBrightnessChange: (Float) -> Unit,
     contrast: Float,
@@ -1703,181 +1628,226 @@ private fun StudioGradingToolPanel(
     onSaturationChange: (Float) -> Unit,
     warmth: Float,
     onWarmthChange: (Float) -> Unit,
+    sepia: Float,
+    onSepiaChange: (Float) -> Unit,
+    hue: Float,
+    onHueChange: (Float) -> Unit,
+    inkClean: Boolean,
+    inkThreshold: Float,
+    onInkChange: (Boolean, Float) -> Unit,
     onAutoEnhance: () -> Unit
 ) {
     val colors = LocalOscellionColors.current
     val haptic = LocalHapticFeedback.current
 
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        // One-Tap Auto Enhance
-        GlassButton(
-            onClick = {
-                onAutoEnhance()
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-            },
-            shape = RoundedCornerShape(8.dp),
-            modifier = Modifier.fillMaxWidth().height(36.dp)
-        ) {
-            Icon(Lucide.Sparkles, contentDescription = "Auto Enhance Image", tint = colors.primary, modifier = Modifier.size(15.dp))
-            Spacer(modifier = Modifier.width(6.dp))
-            Text("Auto Enhance", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-        }
-
-        HorizontalDivider(color = colors.glassBorder.copy(alpha = 0.4f), thickness = 0.5.dp)
-
-        // 4 Core Photo Tuning Sliders
-        GradingSliderRow(
-            label = "Brightness",
-            value = brightness,
-            onValueChange = onBrightnessChange,
-            range = -100f..100f,
-            formatValue = { "${it.toInt()}" },
-            onReset = { onBrightnessChange(0f) }
-        )
-
-        GradingSliderRow(
-            label = "Contrast",
-            value = contrast,
-            onValueChange = onContrastChange,
-            range = 0.5f..2.0f,
-            formatValue = { String.format(java.util.Locale.US, "%.2f", it) },
-            onReset = { onContrastChange(1.0f) }
-        )
-
-        GradingSliderRow(
-            label = "Saturation",
-            value = saturation,
-            onValueChange = onSaturationChange,
-            range = 0f..3.0f,
-            formatValue = { String.format(java.util.Locale.US, "%.2f", it) },
-            onReset = { onSaturationChange(1.0f) }
-        )
-
-        GradingSliderRow(
-            label = "Warmth",
-            value = warmth,
-            onValueChange = onWarmthChange,
-            range = -100f..100f,
-            formatValue = { "${it.toInt()}" },
-            onReset = { onWarmthChange(0f) }
-        )
+    val currentVal = when (activeNode) {
+        StudioAdjustmentNode.EXPOSURE -> brightness
+        StudioAdjustmentNode.CONTRAST -> contrast
+        StudioAdjustmentNode.SATURATION -> saturation
+        StudioAdjustmentNode.WARMTH -> warmth
+        StudioAdjustmentNode.SEPIA -> sepia
+        StudioAdjustmentNode.HUE -> hue
+        StudioAdjustmentNode.INK -> inkThreshold
     }
-}
 
-@Composable
-private fun GradingSliderRow(
-    label: String,
-    value: Float,
-    onValueChange: (Float) -> Unit,
-    range: ClosedFloatingPointRange<Float>,
-    formatValue: (Float) -> String,
-    onReset: () -> Unit
-) {
-    val colors = LocalOscellionColors.current
-    val haptic = LocalHapticFeedback.current
+    val defaultVal = activeNode.defaultVal
+    val isNodeModified = kotlin.math.abs(currentVal - defaultVal) > 0.01f || (activeNode == StudioAdjustmentNode.INK && inkClean)
 
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier.fillMaxWidth()
+    val formatVal: (Float) -> String = when (activeNode) {
+        StudioAdjustmentNode.EXPOSURE -> { v -> if (v > 0) "+${v.toInt()}" else "${v.toInt()}" }
+        StudioAdjustmentNode.CONTRAST, StudioAdjustmentNode.SATURATION -> { v -> String.format(java.util.Locale.US, "%.2f", v) }
+        StudioAdjustmentNode.WARMTH -> { v -> if (v > 0) "+${v.toInt()}" else "${v.toInt()}" }
+        StudioAdjustmentNode.SEPIA -> { v -> "${v.toInt()}%" }
+        StudioAdjustmentNode.HUE -> { v -> if (v > 0) "+${v.toInt()}°" else "${v.toInt()}°" }
+        StudioAdjustmentNode.INK -> { v -> "${(v * 100).toInt()}%" }
+    }
+
+    val onValueChange: (Float) -> Unit = { newVal ->
+        when (activeNode) {
+            StudioAdjustmentNode.EXPOSURE -> onBrightnessChange(newVal)
+            StudioAdjustmentNode.CONTRAST -> onContrastChange(newVal)
+            StudioAdjustmentNode.SATURATION -> onSaturationChange(newVal)
+            StudioAdjustmentNode.WARMTH -> onWarmthChange(newVal)
+            StudioAdjustmentNode.SEPIA -> onSepiaChange(newVal)
+            StudioAdjustmentNode.HUE -> onHueChange(newVal)
+            StudioAdjustmentNode.INK -> onInkChange(true, newVal)
+        }
+    }
+
+    val onResetNode: () -> Unit = {
+        when (activeNode) {
+            StudioAdjustmentNode.EXPOSURE -> onBrightnessChange(0f)
+            StudioAdjustmentNode.CONTRAST -> onContrastChange(1.0f)
+            StudioAdjustmentNode.SATURATION -> onSaturationChange(1.0f)
+            StudioAdjustmentNode.WARMTH -> onWarmthChange(0f)
+            StudioAdjustmentNode.SEPIA -> onSepiaChange(0f)
+            StudioAdjustmentNode.HUE -> onHueChange(0f)
+            StudioAdjustmentNode.INK -> onInkChange(false, 0.5f)
+        }
+    }
+
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Text(
-            text = label,
-            color = colors.textMain,
-            fontSize = 11.5.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.width(68.dp)
-        )
-
-        AppleSlider(
-            value = value,
-            onValueChange = onValueChange,
-            valueRange = range,
-            modifier = Modifier.weight(1f)
-        )
-
-        Text(
-            text = formatValue(value),
-            color = colors.textMuted,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.width(36.dp),
-            textAlign = TextAlign.End
-        )
-
-        IconButton(
-            onClick = {
-                onReset()
-                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-            },
-            modifier = Modifier.size(48.dp).minimumInteractiveComponentSize()
-        ) {
-            Icon(Lucide.RefreshCcw, contentDescription = "Reset $label Adjustment", tint = colors.textMuted, modifier = Modifier.size(13.dp))
-        }
-    }
-}
-
-@Composable
-private fun StudioToneAndInkPanel(
-    hue: Float,
-    onHueChange: (Float) -> Unit,
-    inkClean: Boolean,
-    onToggleInkClean: (Boolean) -> Unit,
-    inkThreshold: Float,
-    onInkThresholdChange: (Float) -> Unit
-) {
-    val colors = LocalOscellionColors.current
-    val haptic = LocalHapticFeedback.current
-
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        // Hue Shift Slider
-        GradingSliderRow(
-            label = "Hue Shift",
-            value = hue,
-            onValueChange = onHueChange,
-            range = -180f..180f,
-            formatValue = { "${it.toInt()}°" },
-            onReset = { onHueChange(0f) }
-        )
-
-        HorizontalDivider(color = colors.glassBorder.copy(alpha = 0.5f), thickness = 0.5.dp)
-
-        // Signature & Ink Clean Section
-        Text(
-            text = "SIGNATURE & INK CLEAN",
-            color = colors.textMuted,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp
-        )
-
+        // 1. Header Row: Title + Readout + Reset Button
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().height(26.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
-                Text("Clean Ink & Signatures", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                Text("High-contrast binarization threshold", color = colors.textMuted, fontSize = 10.sp)
-            }
-            AppleSwitch(
-                checked = inkClean,
-                onCheckedChange = {
-                    onToggleInkClean(it)
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = activeNode.title,
+                    color = colors.textMain,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                if (isNodeModified) {
+                    Box(
+                        modifier = Modifier
+                            .size(5.dp)
+                            .clip(CircleShape)
+                            .background(colors.primary)
+                    )
                 }
-            )
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = formatVal(currentVal),
+                    color = if (isNodeModified) colors.primary else colors.textMuted,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                if (isNodeModified) {
+                    IconButton(
+                        onClick = {
+                            onResetNode()
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        },
+                        modifier = Modifier.size(24.dp).minimumInteractiveComponentSize()
+                    ) {
+                        Icon(
+                            imageVector = Lucide.RotateCcw,
+                            contentDescription = "Reset ${activeNode.title}",
+                            tint = colors.textMuted,
+                            modifier = Modifier.size(13.dp)
+                        )
+                    }
+                }
+            }
         }
 
-        if (inkClean) {
-            GradingSliderRow(
-                label = "Threshold",
-                value = inkThreshold,
-                onValueChange = onInkThresholdChange,
-                range = 0.1f..0.9f,
-                formatValue = { "${(it * 100).toInt()}%" },
-                onReset = { onInkThresholdChange(0.5f) }
-            )
+        // 2. Active Precision Slider
+        AppleSlider(
+            value = currentVal,
+            onValueChange = onValueChange,
+            valueRange = activeNode.range,
+            modifier = Modifier.fillMaxWidth().height(28.dp)
+        )
+
+        // 3. Node Carousel
+        LazyRow(
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Auto Chip
+            item {
+                val isAutoModified = brightness != 0f || contrast != 1f || saturation != 1f || warmth != 0f
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(colors.glassBg)
+                        .border(0.5.dp, colors.glassBorder, RoundedCornerShape(8.dp))
+                        .clickable {
+                            onAutoEnhance()
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        }
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Icon(
+                        imageVector = Lucide.Sparkles,
+                        contentDescription = "Auto",
+                        tint = if (isAutoModified) colors.primary else colors.textMain,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Auto",
+                        color = if (isAutoModified) colors.primary else colors.textMuted,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+
+            // Adjustment nodes
+            items(StudioAdjustmentNode.values()) { node ->
+                val isSelected = activeNode == node
+                val isModified = when (node) {
+                    StudioAdjustmentNode.EXPOSURE -> kotlin.math.abs(brightness) > 0.01f
+                    StudioAdjustmentNode.CONTRAST -> kotlin.math.abs(contrast - 1f) > 0.01f
+                    StudioAdjustmentNode.SATURATION -> kotlin.math.abs(saturation - 1f) > 0.01f
+                    StudioAdjustmentNode.WARMTH -> kotlin.math.abs(warmth) > 0.01f
+                    StudioAdjustmentNode.SEPIA -> sepia > 0.01f
+                    StudioAdjustmentNode.HUE -> kotlin.math.abs(hue) > 0.01f
+                    StudioAdjustmentNode.INK -> inkClean
+                }
+
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(
+                            if (isSelected) colors.primary.copy(alpha = 0.12f)
+                            else colors.glassBg
+                        )
+                        .border(
+                            width = if (isSelected) 1.dp else 0.5.dp,
+                            color = if (isSelected) colors.primary else colors.glassBorder,
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                        .clickable {
+                            onSelectNode(node)
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        }
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Box(contentAlignment = Alignment.TopEnd) {
+                        Icon(
+                            imageVector = node.icon,
+                            contentDescription = node.title,
+                            tint = if (isSelected) colors.primary else colors.textMain,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        if (isModified) {
+                            Box(
+                                modifier = Modifier
+                                    .offset(x = 3.dp, y = (-2).dp)
+                                    .size(4.dp)
+                                    .clip(CircleShape)
+                                    .background(colors.primary)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = node.title,
+                        color = if (isSelected) colors.primary else colors.textMuted,
+                        fontSize = 10.sp,
+                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                    )
+                }
+            }
         }
     }
 }
@@ -1894,228 +1864,130 @@ private fun StudioTypographyToolPanel(
     val colors = LocalOscellionColors.current
     val haptic = LocalHapticFeedback.current
 
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        // Text Input
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // Compact Text Input
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(10.dp))
                 .background(colors.glassBg)
-                .border(1.dp, colors.glassBorder, RoundedCornerShape(12.dp))
-                .padding(horizontal = 14.dp, vertical = 10.dp)
+                .border(0.5.dp, colors.glassBorder, RoundedCornerShape(10.dp))
+                .padding(horizontal = 12.dp, vertical = 8.dp)
         ) {
-            BasicTextField(
-                value = overlayText,
-                onValueChange = onTextChange,
-                textStyle = TextStyle(
-                    color = colors.textMain,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium
-                ),
-                cursorBrush = SolidColor(colors.primary),
-                decorationBox = { innerTextField ->
-                    if (overlayText.isEmpty()) {
-                        Text("Add headline, caption, or studio watermark...", color = colors.textMuted, fontSize = 13.sp)
-                    }
-                    innerTextField()
-                },
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth()
-            )
+            ) {
+                Icon(
+                    imageVector = Lucide.Type,
+                    contentDescription = "Text Tool",
+                    tint = colors.textMuted,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                BasicTextField(
+                    value = overlayText,
+                    onValueChange = onTextChange,
+                    textStyle = TextStyle(
+                        color = colors.textMain,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
+                    ),
+                    cursorBrush = SolidColor(colors.primary),
+                    decorationBox = { innerTextField ->
+                        if (overlayText.isEmpty()) {
+                            Text("Add text...", color = colors.textMuted, fontSize = 13.sp)
+                        }
+                        innerTextField()
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+                if (overlayText.isNotEmpty()) {
+                    IconButton(
+                        onClick = { onTextChange("") },
+                        modifier = Modifier.size(20.dp).minimumInteractiveComponentSize()
+                    ) {
+                        Icon(
+                            imageVector = Lucide.X,
+                            contentDescription = "Clear Text",
+                            tint = colors.textMuted,
+                            modifier = Modifier.size(13.dp)
+                        )
+                    }
+                }
+            }
         }
 
-        // Style Options (Clean, professional tags)
+        // Styles and Color Palette Row
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            listOf("none" to "Plain", "solid" to "Solid", "glass" to "Glass", "outline" to "Outline").forEach { (styleKey, label) ->
-                val isSelected = bgStyle == styleKey
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(if (isSelected) colors.primary.copy(alpha = 0.12f) else colors.glassBg)
-                        .border(
-                            width = if (isSelected) 1.dp else 0.5.dp,
-                            color = if (isSelected) colors.primary else colors.glassBorder,
-                            shape = RoundedCornerShape(8.dp)
+            // Style Pills: Plain, Solid, Glass, Outline
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf("none" to "Plain", "solid" to "Solid", "glass" to "Glass", "outline" to "Outline").forEach { (styleKey, label) ->
+                    val isSelected = bgStyle == styleKey
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(if (isSelected) colors.primary.copy(alpha = 0.15f) else colors.glassBg)
+                            .border(
+                                width = if (isSelected) 1.dp else 0.5.dp,
+                                color = if (isSelected) colors.primary else colors.glassBorder,
+                                shape = RoundedCornerShape(6.dp)
+                            )
+                            .clickable {
+                                onBgStyleChange(styleKey)
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            }
+                            .padding(horizontal = 9.dp, vertical = 5.dp)
+                    ) {
+                        Text(
+                            text = label,
+                            color = if (isSelected) colors.primary else colors.textMain,
+                            fontSize = 11.sp,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
                         )
-                        .clickable {
-                            onBgStyleChange(styleKey)
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        }
-                        .padding(vertical = 6.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = label,
-                        color = if (isSelected) colors.primary else colors.textMain,
-                        fontSize = 11.5.sp,
-                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
-                    )
+                    }
                 }
             }
-        }
 
-        // Color Palette
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            val palette = listOf(
-                Color(0xFFFFFFFF), // Pure White
-                Color(0xFFF5F5F0), // Soft Ivory
-                Color(0xFFD8D8D8), // Light Gray
-                Color(0xFF757575), // Charcoal Slate
-                Color(0xFF1E2124), // Deep Black
-                Color(0xFFC48B71), // Warm Terracotta
-                Color(0xFF8F9E8B), // Muted Sage
-                Color(0xFF6B8299), // Slate Denim
-                Color(0xFFB59D77)  // Warm Sand
-            )
-            items(palette) { colorOption ->
-                val isSelected = textColor == colorOption
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(colorOption)
-                        .border(
-                            width = if (isSelected) 2.5.dp else 1.dp,
-                            color = if (isSelected) colors.primary else Color.White.copy(alpha = 0.5f),
-                            shape = RoundedCornerShape(6.dp)
-                        )
-                        .clickable {
-                            onColorChange(colorOption)
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        }
-                )
+            // Quick Color Dots
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf(
+                    Color.White,
+                    Color.Black,
+                    colors.primary,
+                    Color(0xFFEF4444),
+                    Color(0xFFF59E0B),
+                    Color(0xFF06B6D4)
+                ).forEach { colorOption ->
+                    val isSelected = textColor == colorOption
+                    Box(
+                        modifier = Modifier
+                            .size(22.dp)
+                            .clip(CircleShape)
+                            .background(colorOption)
+                            .border(
+                                width = if (isSelected) 2.dp else 0.5.dp,
+                                color = if (isSelected) colors.primary else Color.White.copy(alpha = 0.5f),
+                                shape = CircleShape
+                            )
+                            .clickable {
+                                onColorChange(colorOption)
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            }
+                    )
+                }
             }
         }
     }
 }
 
-@Composable
-private fun StudioBorderToolPanel(
-    frameWidthPx: Float,
-    onFrameWidthChange: (Float) -> Unit,
-    frameColor: Color,
-    onFrameColorChange: (Color) -> Unit,
-    backdropType: StudioBackdropType,
-    onSelectBackdrop: (StudioBackdropType) -> Unit,
-    isSlideshow: Boolean,
-    durationPerSlideMs: Long,
-    onDurationChange: (Long) -> Unit,
-    maxDuration: Long
-) {
-    val colors = LocalOscellionColors.current
-    val haptic = LocalHapticFeedback.current
-
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        // Border Width Slider
-        GradingSliderRow(
-            label = "Thickness",
-            value = frameWidthPx,
-            onValueChange = onFrameWidthChange,
-            range = 0f..40f,
-            formatValue = { "${it.toInt()}px" },
-            onReset = { onFrameWidthChange(0f) }
-        )
-
-        // Border Color Palette
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            val palette = listOf(
-                Color(0xFFFFFFFF), // White
-                Color(0xFFF5F5F0), // Off-White
-                Color(0xFF9E9E9E), // Neutral Gray
-                Color(0xFF455A64), // Slate
-                Color(0xFF1E2124), // Dark
-                Color(0xFFC48B71), // Terracotta
-                Color(0xFFB59D77)  // Sand
-            )
-            items(palette) { colorOption ->
-                val isSelected = frameColor == colorOption
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(colorOption)
-                        .border(
-                            width = if (isSelected) 2.5.dp else 1.dp,
-                            color = if (isSelected) colors.primary else Color.White.copy(alpha = 0.5f),
-                            shape = RoundedCornerShape(6.dp)
-                        )
-                        .clickable {
-                            onFrameColorChange(colorOption)
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        }
-                )
-            }
-        }
-
-        HorizontalDivider(color = colors.glassBorder.copy(alpha = 0.5f), thickness = 0.5.dp)
-
-        // Backdrop Types
-        Text(
-            text = "STUDIO BACKDROP",
-            color = colors.textMuted,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp
-        )
-
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(StudioBackdropType.values()) { backdrop ->
-                val isSelected = backdropType == backdrop
-                val label = when (backdrop) {
-                    StudioBackdropType.TRANSPARENT -> "None"
-                    StudioBackdropType.SOLID_WHITE -> "White"
-                    StudioBackdropType.SOLID_GRAY -> "Gray"
-                    StudioBackdropType.SOLID_BLACK -> "Black"
-                    StudioBackdropType.STUDIO_GRADIENT_BLUE -> "Studio Blue"
-                    StudioBackdropType.STUDIO_GRADIENT_DARK -> "Studio Dark"
-                    StudioBackdropType.STUDIO_WARM -> "Warm Sand"
-                    StudioBackdropType.BLUR_ORIGINAL -> "Blur Original"
-                }
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(if (isSelected) colors.primary else colors.glassBg)
-                        .border(
-                            width = if (isSelected) 1.dp else 0.5.dp,
-                            color = if (isSelected) colors.primary else colors.glassBorder,
-                            shape = RoundedCornerShape(10.dp)
-                        )
-                        .clickable {
-                            onSelectBackdrop(backdrop)
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        }
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                ) {
-                    Text(
-                        text = label,
-                        color = if (isSelected) Color.White else colors.textMain,
-                        fontSize = 11.5.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                    )
-                }
-            }
-        }
-
-        // Slideshow Duration
-        if (isSlideshow) {
-            HorizontalDivider(color = colors.glassBorder.copy(alpha = 0.5f), thickness = 0.5.dp)
-            GradingSliderRow(
-                label = "Duration",
-                value = (durationPerSlideMs / 1000f),
-                onValueChange = { onDurationChange((it * 1000).toLong()) },
-                range = 1f..(maxDuration / 1000f),
-                formatValue = { String.format(java.util.Locale.US, "%.1fs", it) },
-                onReset = { onDurationChange(3000L) }
-            )
-        }
-    }
-}
-
-// Note: Social Media Post Editor — Print Layout Engine with cut marks and PdfDocument export
-// (including SubjectSegmentation and AIGenerator compliance checks) removed per user requirements.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // COMPOSITION GUIDES OVERLAYS
