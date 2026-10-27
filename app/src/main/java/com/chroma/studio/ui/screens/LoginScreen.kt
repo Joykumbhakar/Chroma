@@ -173,24 +173,19 @@ fun CupertinoPrimaryButton(
     containerColor: Color = LocalOscellionColors.current.primary,
     content: @Composable RowScope.() -> Unit
 ) {
-    val shape = RoundedCornerShape(9999.dp)
+    // Professional clean modern rectangular button (No Pill, No Shadow)
+    val shape = RoundedCornerShape(10.dp)
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(50.dp)
+            .height(48.dp)
             .clip(shape)
             .background(
-                if (enabled && !isLoading) LiquidGlassTokens.PrimaryBlueGradient
-                else Brush.verticalGradient(listOf(Color(0xFF94A3B8), Color(0xFF64748B)))
-            )
-            .border(
-                1.5.dp,
-                if (enabled && !isLoading) LiquidGlassTokens.PrimarySpecularBorder
-                else Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.2f), Color.Transparent)),
-                shape
+                if (enabled && !isLoading) Color(0xFF007AFF)
+                else Color(0xFF007AFF).copy(alpha = 0.4f)
             )
             .clickable(enabled = enabled && !isLoading, onClick = onClick)
-            .padding(horizontal = 22.dp),
+            .padding(horizontal = 20.dp),
         contentAlignment = Alignment.Center
     ) {
         Row(
@@ -240,34 +235,26 @@ fun CupertinoSecondaryButton(
     isLoading: Boolean = false,
     content: @Composable RowScope.() -> Unit
 ) {
-    val shape = RoundedCornerShape(9999.dp)
+    val colors = LocalOscellionColors.current
+    val shape = RoundedCornerShape(10.dp)
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(50.dp)
+            .height(48.dp)
             .clip(shape)
             .background(
-                if (enabled && !isLoading) LiquidGlassTokens.SecondaryWhiteGradient
-                else Brush.verticalGradient(listOf(Color(0xFFF1F5F9), Color(0xFFE2E8F0)))
-            )
-            .border(
-                1.dp,
-                if (enabled && !isLoading) LiquidGlassTokens.SecondarySpecularBorder
-                else Brush.verticalGradient(listOf(Color(0xFFCBD5E1), Color(0xFF94A3B8))),
-                shape
+                if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
             )
             .clickable(enabled = enabled && !isLoading, onClick = onClick)
-            .padding(horizontal = 22.dp),
+            .padding(horizontal = 20.dp),
         contentAlignment = Alignment.Center
     ) {
-        CompositionLocalProvider(LocalContentColor provides Color.Black) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center,
-                content = content
-            )
-        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            content = content
+        )
     }
 }
 
@@ -519,7 +506,7 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onCancel: () -> Unit) {
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     if (currentStep == AuthStep.INITIAL) {
-                        GlassIconButton(onClick = onCancel) {
+                        IconButton(onClick = onCancel, modifier = Modifier.size(36.dp)) {
                             Icon(Lucide.X, contentDescription = "Close", tint = colors.textMain, modifier = Modifier.size(20.dp))
                         }
                         Spacer(Modifier.weight(1f))

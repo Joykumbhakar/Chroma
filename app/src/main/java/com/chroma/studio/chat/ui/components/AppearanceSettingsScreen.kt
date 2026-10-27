@@ -1409,11 +1409,9 @@ fun IosSquircleIcon(
     modifier: Modifier = Modifier,
     icon: @Composable () -> Unit
 ) {
+    // No background container to adhere to clean icon style without pill/squircle backgrounds
     Box(
-        modifier = modifier
-            .size(30.dp)
-            .clip(RoundedCornerShape(7.5.dp))
-            .background(color.copy(alpha = 0.14f)),
+        modifier = modifier.size(24.dp),
         contentAlignment = Alignment.Center
     ) { icon() }
 }

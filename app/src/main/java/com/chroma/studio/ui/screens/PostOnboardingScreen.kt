@@ -93,17 +93,17 @@ fun PostOnboardingScreen(
     // ── Creative Disciplines / Topics ────────────────────────────────
     val creativeTopics = remember {
         listOf(
-            "🎬 Color Grading",
-            "✨ Motion Graphics",
-            "🎧 Sound Design",
-            "📱 Cinematic Reels",
-            "🎨 3D & VFX",
-            "📐 Typography",
-            "🎞️ Analog 35mm",
-            "🔮 Generative Art"
+            "Color Grading",
+            "Motion Graphics",
+            "Sound Design",
+            "Cinematic Reels",
+            "3D & VFX",
+            "Typography",
+            "Analog 35mm",
+            "Generative Art"
         )
     }
-    val selectedTopics = remember { mutableStateListOf("🎬 Color Grading", "📱 Cinematic Reels", "✨ Motion Graphics") }
+    val selectedTopics = remember { mutableStateListOf("Color Grading", "Cinematic Reels", "Motion Graphics") }
 
     // ── Recommended Creators Discovery ───────────────────────────────
     val discoverRepo = remember { com.chroma.studio.data.DiscoverRepository() }
@@ -379,7 +379,7 @@ private fun AestheticStepContent(
 
                 Surface(
                     onClick = { onSelectAccent(index) },
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(10.dp),
                     color = colors.glassBg,
                     border = BorderStroke(
                         width = if (isSelected) 2.5.dp else 1.dp,
@@ -495,10 +495,10 @@ private fun LiveStudioPreviewCard(
     )
 
     Surface(
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(10.dp),
         color = colors.glassBg,
         border = BorderStroke(1.dp, colors.glassBorder),
-        shadowElevation = 8.dp,
+        shadowElevation = 0.dp,
         modifier = Modifier
             .fillMaxWidth()
             .height(210.dp)
@@ -789,7 +789,7 @@ private fun ProVideoEngineBannerCard(
     val colors = LocalOscellionColors.current
 
     Surface(
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(10.dp),
         color = colors.glassBg,
         border = BorderStroke(1.dp, colors.glassBorder),
         modifier = modifier.fillMaxWidth()
@@ -877,7 +877,7 @@ private fun ThemeSelectionCard(
 
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(10.dp),
         color = colors.glassBg,
         border = BorderStroke(
             width = if (isSelected) 2.dp else 1.dp,
@@ -1173,7 +1173,7 @@ private fun StudioToggleCard(
 
     Surface(
         onClick = { onCheckedChange(!checked) },
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(10.dp),
         color = colors.glassBg,
         border = BorderStroke(1.dp, colors.glassBorder),
         modifier = Modifier.fillMaxWidth()
@@ -1334,7 +1334,7 @@ private fun CommunityStepContent(
                 val isSelected = topic in selectedTopics
                 Surface(
                     onClick = { onToggleTopic(topic) },
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(8.dp),
                     color = if (isSelected) activeAccent.copy(alpha = 0.16f) else colors.glassBg,
                     border = BorderStroke(
                         width = if (isSelected) 1.5.dp else 1.dp,
@@ -1387,7 +1387,7 @@ private fun CommunityStepContent(
                 val isFollowed = creator.id in followedIds
 
                 Surface(
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(10.dp),
                     color = colors.glassBg,
                     border = BorderStroke(1.dp, colors.glassBorder),
                     modifier = Modifier.fillMaxWidth()
@@ -1414,22 +1414,15 @@ private fun CommunityStepContent(
                             Box(
                                 modifier = Modifier
                                     .size(46.dp)
-                                    .clip(RoundedCornerShape(13.dp))
-                                    .background(
-                                        Brush.linearGradient(
-                                            colors = listOf(
-                                                activeAccent.copy(alpha = 0.35f),
-                                                activeAccent.copy(alpha = 0.15f)
-                                            )
-                                        )
-                                    ),
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text(
-                                    text = creator.name.take(1).uppercase(),
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = activeAccent
+                                Icon(
+                                    imageVector = Lucide.User,
+                                    contentDescription = null,
+                                    tint = colors.textMuted,
+                                    modifier = Modifier.size(22.dp)
                                 )
                             }
                         }
@@ -1802,7 +1795,7 @@ private fun OnboardingBottomBar(
                     onClick = onNext,
                     shape = RoundedCornerShape(16.dp),
                     color = activeAccent,
-                    shadowElevation = 8.dp,
+                    shadowElevation = 0.dp,
                     modifier = Modifier
                         .weight(if (currentStep > 0) 0.68f else 1f)
                         .height(52.dp)
@@ -1858,7 +1851,7 @@ private fun FeaturedDirectorShowcaseBanner(
     val clapperState = rememberAppleGraphicAnimationState()
 
     Surface(
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(10.dp),
         color = colors.glassBg,
         border = BorderStroke(1.dp, colors.glassBorder),
         modifier = modifier.fillMaxWidth()
@@ -1905,35 +1898,18 @@ private fun FeaturedDirectorShowcaseBanner(
 
 @Composable
 private fun OnboardingHeaderBadge(
-    icon: ImageVector,
+    icon: ImageVector? = null,
     accentColor: Color,
     text: String
 ) {
-    Surface(
-        shape = RoundedCornerShape(10.dp),
-        color = accentColor.copy(alpha = 0.12f),
-        border = BorderStroke(1.dp, accentColor.copy(alpha = 0.3f))
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = accentColor,
-                modifier = Modifier.size(13.dp)
-            )
-            Text(
-                text = text,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = accentColor,
-                letterSpacing = 0.6.sp
-            )
-        }
-    }
+    // Professional clean uppercase eyebrow (No Pill Capsule, No Icon, Clean Letter Spacing)
+    Text(
+        text = text,
+        fontSize = 11.5.sp,
+        fontWeight = FontWeight.Bold,
+        color = accentColor,
+        letterSpacing = 1.2.sp
+    )
 }
 
 // ============================================================================

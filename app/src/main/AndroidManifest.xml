@@ -21,7 +21,8 @@
         android:icon="@mipmap/ic_launcher"
         android:label="Oscellion"
         android:theme="@style/Theme.Oscellion"
-        android:supportsRtl="true">
+        android:supportsRtl="true"
+        android:enableOnBackInvokedCallback="true">
 
         <!-- Home Screen -->
         <activity

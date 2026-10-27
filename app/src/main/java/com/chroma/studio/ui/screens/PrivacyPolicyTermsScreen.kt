@@ -16,8 +16,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chroma.studio.ui.components.OscellionBackground
-import com.chroma.studio.ui.components.LiquidGlassPrimaryButton
-import com.chroma.studio.ui.components.LiquidGlassSecondaryButton
 import com.chroma.studio.ui.components.LiquidGlassCheckbox
 import com.chroma.studio.ui.theme.InterFontFamily
 import com.chroma.studio.ui.theme.LocalOscellionColors
@@ -43,7 +41,7 @@ fun PrivacyPolicyTermsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .statusBarsPadding()
-                        .height(56.dp)
+                        .height(54.dp)
                         .padding(horizontal = 16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -83,7 +81,7 @@ fun PrivacyPolicyTermsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .navigationBarsPadding()
-                        .padding(horizontal = 24.dp, vertical = 16.dp)
+                        .padding(horizontal = 24.dp, vertical = 14.dp)
                 ) {
                     if (isFirstLaunch) {
                         // Agreement Checkbox Row
@@ -98,12 +96,12 @@ fun PrivacyPolicyTermsScreen(
                                 checked = hasAgreed,
                                 onCheckedChange = { hasAgreed = it }
                             )
-                            Spacer(Modifier.width(8.dp))
+                            Spacer(Modifier.width(10.dp))
                             Text(
                                 text = "I have read and agree to the Privacy Policy and Terms & Conditions",
-                                fontSize = 13.sp,
+                                fontSize = 13.5.sp,
                                 color = colors.textMain,
-                                lineHeight = 17.sp,
+                                lineHeight = 18.sp,
                                 fontFamily = InterFontFamily,
                                 modifier = Modifier.weight(1f)
                             )
@@ -111,17 +109,23 @@ fun PrivacyPolicyTermsScreen(
 
                         Spacer(Modifier.height(14.dp))
 
-                        // Accept Button
-                        LiquidGlassPrimaryButton(
+                        // Accept Button - Professional Clean Rectangular Button (No Pill, No Shadow)
+                        Button(
                             onClick = onAccept,
                             enabled = hasAgreed,
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF007AFF),
+                                disabledContainerColor = Color(0xFF007AFF).copy(alpha = 0.4f)
+                            ),
+                            elevation = ButtonDefaults.buttonElevation(0.dp, 0.dp, 0.dp, 0.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(48.dp)
                         ) {
                             Text(
                                 text = "Agree & Continue",
-                                fontSize = 15.sp,
+                                fontSize = 15.5.sp,
                                 color = Color.White,
                                 fontWeight = FontWeight.SemiBold,
                                 fontFamily = InterFontFamily
@@ -138,19 +142,31 @@ fun PrivacyPolicyTermsScreen(
                             Text(
                                 text = "Decline & Exit App",
                                 fontSize = 14.sp,
-                                color = colors.error,
+                                color = Color(0xFFFF3B30),
                                 fontWeight = FontWeight.Medium,
                                 fontFamily = InterFontFamily
                             )
                         }
                     } else {
-                        LiquidGlassSecondaryButton(
-                            text = "Close",
+                        Button(
                             onClick = onBack,
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
+                            ),
+                            elevation = ButtonDefaults.buttonElevation(0.dp, 0.dp, 0.dp, 0.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(48.dp)
-                        )
+                        ) {
+                            Text(
+                                text = "Close",
+                                fontSize = 15.sp,
+                                color = colors.textMain,
+                                fontWeight = FontWeight.SemiBold,
+                                fontFamily = InterFontFamily
+                            )
+                        }
                     }
                 }
             }
@@ -159,21 +175,21 @@ fun PrivacyPolicyTermsScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues),
-                contentPadding = PaddingValues(horizontal = 24.dp, vertical = 8.dp),
+                contentPadding = PaddingValues(horizontal = 24.dp, vertical = 6.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 item {
-                    // Header Section
+                    // Header Section with Clean Vector Graphic (No Shadows, No Pills)
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 8.dp),
+                            .padding(vertical = 12.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Icon(
                             imageVector = Lucide.ShieldCheck,
                             contentDescription = null,
-                            tint = colors.primary,
+                            tint = Color(0xFF007AFF),
                             modifier = Modifier.size(38.dp)
                         )
 
@@ -196,144 +212,134 @@ fun PrivacyPolicyTermsScreen(
                             color = colors.textMuted,
                             textAlign = TextAlign.Center,
                             lineHeight = 20.sp,
-                            fontFamily = InterFontFamily
+                            fontFamily = InterFontFamily,
+                            modifier = Modifier.padding(horizontal = 8.dp)
                         )
                     }
                 }
 
                 item {
-                    // Direct Segmented Control Tabs (No Pills)
+                    // Segmented Control Tabs (Clean Rectangular, No Pills)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .border(1.dp, colors.glassBorder.copy(alpha = 0.7f), RoundedCornerShape(10.dp))
-                            .padding(3.dp)
+                            .clip(RoundedCornerShape(9.dp))
+                            .background(if (colors.isDark) Color(0xFF1C1C1E) else Color(0xFFE5E5EA))
+                            .padding(2.5.dp)
                     ) {
-                        Surface(
-                            onClick = { selectedTab = 0 },
-                            modifier = Modifier.weight(1f).height(38.dp),
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (selectedTab == 0) colors.primary.copy(alpha = 0.15f) else Color.Transparent
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(
-                                    text = "Privacy Policy",
-                                    fontSize = 14.sp,
-                                    fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (selectedTab == 0) colors.primary else colors.textMuted,
-                                    fontFamily = InterFontFamily
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(34.dp)
+                                .clip(RoundedCornerShape(7.dp))
+                                .background(
+                                    if (selectedTab == 0) (if (colors.isDark) Color(0xFF2C2C2E) else Color.White)
+                                    else Color.Transparent
                                 )
-                            }
+                                .clickable { selectedTab = 0 },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Privacy Policy",
+                                fontSize = 13.5.sp,
+                                fontWeight = if (selectedTab == 0) FontWeight.SemiBold else FontWeight.Normal,
+                                color = if (selectedTab == 0) colors.textMain else colors.textMuted,
+                                fontFamily = InterFontFamily
+                            )
                         }
 
-                        Surface(
-                            onClick = { selectedTab = 1 },
-                            modifier = Modifier.weight(1f).height(38.dp),
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (selectedTab == 1) colors.primary.copy(alpha = 0.15f) else Color.Transparent
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(
-                                    text = "Terms & Conditions",
-                                    fontSize = 14.sp,
-                                    fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (selectedTab == 1) colors.primary else colors.textMuted,
-                                    fontFamily = InterFontFamily
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(34.dp)
+                                .clip(RoundedCornerShape(7.dp))
+                                .background(
+                                    if (selectedTab == 1) (if (colors.isDark) Color(0xFF2C2C2E) else Color.White)
+                                    else Color.Transparent
                                 )
-                            }
+                                .clickable { selectedTab = 1 },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Terms & Conditions",
+                                fontSize = 13.5.sp,
+                                fontWeight = if (selectedTab == 1) FontWeight.SemiBold else FontWeight.Normal,
+                                color = if (selectedTab == 1) colors.textMain else colors.textMuted,
+                                fontFamily = InterFontFamily
+                            )
                         }
                     }
                 }
 
                 if (selectedTab == 0) {
-                    // Privacy Policy Content
+                    // Privacy Policy Content (Clean Typography, No Icons, No Numbers/Bullets)
                     item {
-                        AgreementSection(
-                            icon = Lucide.Database,
-                            iconColor = colors.primary,
-                            title = "1. Information We Collect",
+                        LegalParagraphSection(
+                            title = "Information We Collect",
                             description = "When you sign in with Google or create an account, we collect your display name, username, email address, profile avatar, and user bio. We do not collect unnecessary background telemetries or private device identifiers."
                         )
                     }
 
                     item {
-                        AgreementSection(
-                            icon = Lucide.Lock,
-                            iconColor = Color(0xFF34C759),
-                            title = "2. End-to-End Encryption",
+                        LegalParagraphSection(
+                            title = "End-to-End Encryption",
                             description = "Your chat messages, direct communications, and private voice notes are protected by client-side End-to-End Encryption (AES-GCM & RSA-2048). Chroma Studio servers and administrators cannot read or inspect your private conversations."
                         )
                     }
 
                     item {
-                        AgreementSection(
-                            icon = Lucide.Cloud,
-                            iconColor = Color(0xFF5856D6),
-                            title = "3. Cloud Storage Architecture",
+                        LegalParagraphSection(
+                            title = "Cloud Storage Architecture",
                             description = "We securely utilize Firebase Firestore & Realtime Database for real-time presence and instant updates, Supabase for authenticated profile assets, and Cloudinary for optimized media delivery and gradient storage."
                         )
                     }
 
                     item {
-                        AgreementSection(
-                            icon = Lucide.Shield,
-                            iconColor = Color(0xFFFF9500),
-                            title = "4. Zero Third-Party Tracking",
+                        LegalParagraphSection(
+                            title = "Zero Third-Party Tracking",
                             description = "We will never sell, rent, or trade your personal data, artwork, or behavioral information to third-party data brokers or advertising networks. Your creative data belongs exclusively to you."
                         )
                     }
 
                     item {
-                        AgreementSection(
-                            icon = Lucide.Trash2,
-                            iconColor = Color(0xFFFF3B30),
-                            title = "5. Account & Data Deletion",
+                        LegalParagraphSection(
+                            title = "Account & Data Deletion",
                             description = "You have full sovereignty over your data. You can delete individual posts, clear your chat history, or request a complete permanent account purge from the Account Center settings at any time."
                         )
                     }
                 } else {
-                    // Terms & Conditions Content
+                    // Terms & Conditions Content (Clean Typography, No Icons, No Numbers/Bullets)
                     item {
-                        AgreementSection(
-                            icon = Lucide.FileText,
-                            iconColor = colors.primary,
-                            title = "1. Acceptance of Terms",
+                        LegalParagraphSection(
+                            title = "Acceptance of Terms",
                             description = "By creating an account or accessing Chroma Studio, you agree to abide by these Terms of Service. If you disagree with any part of these terms, please discontinue using the application."
                         )
                     }
 
                     item {
-                        AgreementSection(
-                            icon = Lucide.Palette,
-                            iconColor = Color(0xFFFF9500),
-                            title = "2. Creative Rights & Intellectual Property",
+                        LegalParagraphSection(
+                            title = "Creative Rights & Intellectual Property",
                             description = "You retain 100% intellectual property ownership of any gradient artworks, visual compositions, flashes, and designs you produce. By publishing your work publicly, you grant other users permission to view and interact according to your remix preferences."
                         )
                     }
 
                     item {
-                        AgreementSection(
-                            icon = Lucide.Users,
-                            iconColor = Color(0xFF34C759),
-                            title = "3. Community Safety & Conduct",
+                        LegalParagraphSection(
+                            title = "Community Safety & Conduct",
                             description = "Chroma Studio is a creative and respectful space. Harassment, hate speech, unlawful media, impersonation, or intellectual property infringement are strictly prohibited and will lead to immediate account suspension."
                         )
                     }
 
                     item {
-                        AgreementSection(
-                            icon = Lucide.Share2,
-                            iconColor = Color(0xFF5856D6),
-                            title = "4. Remix & Collaboration Guidelines",
+                        LegalParagraphSection(
+                            title = "Remix & Collaboration Guidelines",
                             description = "When remixing another creator's published gradient work, proper artistic attribution is automatically maintained. You may not misrepresent original collaborative works as solely your own."
                         )
                     }
 
                     item {
-                        AgreementSection(
-                            icon = Lucide.Info,
-                            iconColor = Color(0xFFFF3B30),
-                            title = "5. Service Availability & Modifications",
+                        LegalParagraphSection(
+                            title = "Service Availability & Modifications",
                             description = "We continually enhance Chroma Studio. We reserve the right to update features, improve security protocols, or revise terms with reasonable notice to our creator community."
                         )
                     }
@@ -343,12 +349,11 @@ fun PrivacyPolicyTermsScreen(
     }
 }
 
-// ─── Direct Section (No Cards) ───────────────────────
+// ─── Professional Clean Legal Paragraph Section ───────────────────────
+// No icons, no numbers, no bullets, clean typography and minimal hairline divider.
 
 @Composable
-private fun AgreementSection(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    iconColor: Color,
+private fun LegalParagraphSection(
     title: String,
     description: String
 ) {
@@ -359,37 +364,28 @@ private fun AgreementSection(
             .fillMaxWidth()
             .padding(vertical = 4.dp)
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = iconColor,
-                modifier = Modifier.size(20.dp)
-            )
-            Text(
-                text = title,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
-                color = colors.textMain,
-                fontFamily = InterFontFamily
-            )
-        }
+        Text(
+            text = title,
+            fontSize = 15.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = colors.textMain,
+            fontFamily = InterFontFamily
+        )
 
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(5.dp))
 
         Text(
             text = description,
             fontSize = 13.5.sp,
             color = colors.textMuted,
-            lineHeight = 19.sp,
-            fontFamily = InterFontFamily,
-            modifier = Modifier.padding(start = 30.dp)
+            lineHeight = 20.sp,
+            fontFamily = InterFontFamily
         )
 
-        Spacer(Modifier.height(8.dp))
-        HorizontalDivider(color = colors.glassBorder.copy(alpha = 0.4f), thickness = 0.5.dp)
+        Spacer(Modifier.height(12.dp))
+        HorizontalDivider(
+            color = if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA),
+            thickness = 0.5.dp
+        )
     }
 }
