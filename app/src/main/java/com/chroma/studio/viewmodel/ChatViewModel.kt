@@ -1121,4 +1121,61 @@ class ChatViewModel : ViewModel() {
         }
     }
 
+
+    fun retractPollVote(messageId: String) {
+        val roomId = _activeRoomId.value ?: return
+        val currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
+
+        fun updateList(list: List<ChatMessage>): List<ChatMessage> {
+            return list.map { msg ->
+                if (msg.id == messageId) {
+                    val currentVotes = msg.pollVotes.toMutableMap()
+                    currentVotes.remove(currentUserId)
+                    msg.copy(pollVotes = currentVotes)
+                } else msg
+            }
+        }
+
+        val prevServer = _serverMessages.value
+        val prevLocal = _localMessages.value
+
+        _serverMessages.value = updateList(_serverMessages.value)
+        _localMessages.value = updateList(_localMessages.value)
+
+        viewModelScope.launch {
+            val success = repository.retractPollVote(roomId, messageId)
+            if (!success) {
+                _serverMessages.value = prevServer
+                _localMessages.value = prevLocal
+                com.chroma.studio.ui.components.ToastManager.showToast("Could not retract vote.")
+            }
+        }
+    }
+
+    fun closePoll(messageId: String) {
+        val roomId = _activeRoomId.value ?: return
+
+        fun updateList(list: List<ChatMessage>): List<ChatMessage> {
+            return list.map { msg ->
+                if (msg.id == messageId) {
+                    msg.copy(isPollClosed = true)
+                } else msg
+            }
+        }
+
+        val prevServer = _serverMessages.value
+        val prevLocal = _localMessages.value
+
+        _serverMessages.value = updateList(_serverMessages.value)
+        _localMessages.value = updateList(_localMessages.value)
+
+        viewModelScope.launch {
+            val success = repository.closePoll(roomId, messageId)
+            if (!success) {
+                _serverMessages.value = prevServer
+                _localMessages.value = prevLocal
+                com.chroma.studio.ui.components.ToastManager.showToast("Could not close poll.")
+            }
+        }
+    }
 }

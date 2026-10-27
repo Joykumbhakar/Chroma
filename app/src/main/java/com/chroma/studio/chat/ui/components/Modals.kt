@@ -2826,7 +2826,7 @@ fun PollCreatorModal(
                                         Box(
                                             modifier = Modifier
                                                 .size(24.dp)
-                                                .clip(CircleShape)
+                                                .clip(RoundedCornerShape(8.dp))
                                                 .background(if (colors.isLight) Color(0xFFF2F2F7) else Color(0xFF3A3A3C))
                                                 .clickable {
                                                     SoundManager.playReaction()

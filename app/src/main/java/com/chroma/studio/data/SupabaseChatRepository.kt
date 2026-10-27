@@ -947,4 +947,39 @@ class SupabaseChatRepository {
         }
     }
 
+
+    suspend fun retractPollVote(
+        roomId: String,
+        messageId: String
+    ): Boolean = withContext(Dispatchers.IO) {
+        val currentUser = auth.currentUser ?: return@withContext false
+        try {
+            val msgRef = chatsCollection.document(roomId).collection("messages").document(messageId)
+            firestore.runTransaction { transaction ->
+                val snapshot = transaction.get(msgRef)
+                val msg = snapshot.toObject(ChatMessage::class.java) ?: return@runTransaction
+                val currentVotes = msg.pollVotes.toMutableMap()
+                currentVotes.remove(currentUser.uid)
+                transaction.update(msgRef, "pollVotes", currentVotes)
+            }.await()
+            true
+        } catch (e: Exception) {
+            Log.e("SupabaseChatRepository", "Error retracting poll vote", e)
+            false
+        }
+    }
+
+    suspend fun closePoll(
+        roomId: String,
+        messageId: String
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val msgRef = chatsCollection.document(roomId).collection("messages").document(messageId)
+            msgRef.update("isPollClosed", true).await()
+            true
+        } catch (e: Exception) {
+            Log.e("SupabaseChatRepository", "Error closing poll", e)
+            false
+        }
+    }
 }

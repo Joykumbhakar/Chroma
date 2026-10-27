@@ -22,6 +22,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 
 import androidx.compose.foundation.lazy.items
 
@@ -3263,428 +3264,410 @@ fun IosModalBottomSheet(
 }
 
 @Composable
-
 fun IosPollDetailsModal(
-
     poll: PollData,
-
     currentUser: User,
-
+    onClosePoll: (() -> Unit)? = null,
     onDismiss: () -> Unit
-
 ) {
-
     val colors = LocalChatColors.current
-
     val totalVotes = poll.options.sumOf { it.votes }
+    val maxVotes = poll.options.maxOfOrNull { it.votes } ?: 0
+    var selectedOptionFilter by remember { mutableStateOf<String?>("ALL") }
+    var showEndPollConfirmDialog by remember { mutableStateOf(false) }
 
     val sortedOptions = remember(poll.options) {
-
         poll.options.sortedByDescending { it.votes }
+    }
 
+    val displayedOptions = remember(sortedOptions, selectedOptionFilter) {
+        if (selectedOptionFilter == "ALL" || selectedOptionFilter == null) {
+            sortedOptions
+        } else {
+            sortedOptions.filter { it.id == selectedOptionFilter }
+        }
     }
 
     IosModalBottomSheet(
         onDismissRequest = onDismiss
     ) {
-        Column(modifier = Modifier.fillMaxWidth().heightIn(max = 600.dp)) {
+        Column(modifier = Modifier.fillMaxWidth().heightIn(max = 640.dp)) {
+            // Sheet Header
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(if (colors.isLight) Color.White else Color(0xFF2C2C2E))
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Close",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Normal,
+                    color = colors.iosBlue,
+                    modifier = Modifier.clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {
+                        SoundManager.playReaction()
+                        onDismiss()
+                    }
+                )
 
-                    // Sheet Header
+                Text(
+                    text = "Poll Details",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = colors.textDark
+                )
 
+                if (onClosePoll != null && !poll.isClosed) {
+                    Text(
+                        text = "End Poll",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFFFF3B30),
+                        modifier = Modifier.clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) {
+                            SoundManager.playReaction()
+                            showEndPollConfirmDialog = true
+                        }
+                    )
+                } else {
+                    Box(modifier = Modifier.width(42.dp))
+                }
+            }
+
+            HorizontalDivider(color = colors.separator, thickness = 0.5.dp)
+
+            // Poll Question Summary Header
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(if (colors.isLight) Color.White else Color(0xFF2C2C2E))
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
                     Row(
-
-                        modifier = Modifier
-
-                            .fillMaxWidth()
-
-                            .background(if (colors.isLight) Color.White else Color(0xFF2C2C2E))
-
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
-
-                        horizontalArrangement = Arrangement.SpaceBetween,
-
-                        verticalAlignment = Alignment.CenterVertically
-
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-
-                        Text(
-
-                            text = "Close",
-
-                            fontSize = 17.sp,
-
-                            fontWeight = FontWeight.Normal,
-
-                            color = colors.iosBlue,
-
-                            modifier = Modifier
-
-                                .clickable(
-
-                                    interactionSource = remember { MutableInteractionSource() },
-
-                                    indication = null
-
-                                ) {
-
-                                    SoundManager.playReaction()
-
-                                    onDismiss()
-
-                                }
-
-                        )
-
-                        Text(
-
-                            text = "Poll Details",
-
-                            fontSize = 17.sp,
-
-                            fontWeight = FontWeight.SemiBold,
-
-                            color = colors.textDark
-
-                        )
-
-                        // Spacer to balance
-
-                        Box(modifier = Modifier.width(42.dp))
-
-                    }
-
-                    HorizontalDivider(color = colors.separator, thickness = 0.5.dp)
-
-                    // Poll Question Summary Header
-
-                    Column(
-
-                        modifier = Modifier
-
-                            .fillMaxWidth()
-
-                            .background(if (colors.isLight) Color.White else Color(0xFF2C2C2E))
-
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-
-                    ) {
-
-                        Row(
-
-                            verticalAlignment = Alignment.CenterVertically,
-
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-
-                        ) {
-
-                            Icon(Lucide.ChartColumn, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(15.dp))
-
+                        if (poll.isClosed) {
+                            LucideLock(tint = Color(0xFFFF9500), size = 15.dp)
                             Text(
-
-                                text = if (poll.allowMultipleAnswers) "Select one or more options" else "Single Choice",
-
+                                text = "Final Results • Voting Closed",
                                 fontSize = 12.5.sp,
-
-                                color = colors.textMuted
-
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFFFF9500)
                             )
-
+                        } else {
+                            Icon(Lucide.ChartColumn, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(15.dp))
+                            Text(
+                                text = if (poll.allowMultipleAnswers) "Select one or more options" else "Single Choice",
+                                fontSize = 12.5.sp,
+                                color = colors.textMuted
+                            )
                         }
-
-                        Text(
-
-                            text = poll.question,
-
-                            fontSize = 16.sp,
-
-                            fontWeight = FontWeight.SemiBold,
-
-                            color = colors.textDark,
-
-                            lineHeight = 20.sp
-
-                        )
-
-                        Text(
-
-                            text = "$totalVotes total vote${if (totalVotes == 1) "" else "s"}",
-
-                            fontSize = 12.5.sp,
-
-                            color = colors.iosBlue,
-
-                            fontWeight = FontWeight.Medium
-
-                        )
-
                     }
 
-                    HorizontalDivider(color = colors.separator, thickness = 0.5.dp)
-
-                    // Options Breakdown List
-
-                    if (totalVotes == 0) {
-
-                        Box(
-
-                            modifier = Modifier
-
-                                .fillMaxWidth()
-
-                                .weight(1f)
-
-                                .padding(32.dp),
-
-                            contentAlignment = Alignment.Center
-
-                        ) {
-
-                            Column(
-
-                                horizontalAlignment = Alignment.CenterHorizontally,
-
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-
-                            ) {
-
-                                Icon(Lucide.ChartColumn, contentDescription = null, tint = colors.textMuted.copy(alpha = 0.4f), modifier = Modifier.size(48.dp))
-
-                                Text(
-
-                                    text = "No votes cast yet",
-
-                                    fontSize = 16.sp,
-
-                                    fontWeight = FontWeight.Medium,
-
-                                    color = colors.textMuted
-
-                                )
-
-                            }
-
-                        }
-
-                    } else {
-
-                        LazyColumn(
-
-                            modifier = Modifier
-
-                                .fillMaxWidth()
-
-                                .weight(1f),
-
-                            contentPadding = PaddingValues(16.dp),
-
-                            verticalArrangement = Arrangement.spacedBy(14.dp)
-
-                        ) {
-
-                            items(sortedOptions.filter { it.votes > 0 }) { option ->
-
-                                val percentage = if (totalVotes > 0) (option.votes.toFloat() / totalVotes * 100).toInt() else 0
-
-                                Column(
-
-                                    modifier = Modifier
-
-                                        .fillMaxWidth()
-
-                                        .clip(RoundedCornerShape(14.dp))
-
-                                        .background(if (colors.isLight) Color.White else Color(0xFF2C2C2E))
-
-                                        .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(14.dp))
-
-                                ) {
-
-                                    // Option Header
-
-                                    Row(
-
-                                        modifier = Modifier
-
-                                            .fillMaxWidth()
-
-                                            .background(if (colors.isLight) Color(0xFFF9F9FB) else Color(0xFF343438))
-
-                                            .padding(horizontal = 14.dp, vertical = 10.dp),
-
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-
-                                        verticalAlignment = Alignment.CenterVertically
-
-                                    ) {
-
-                                        Text(
-
-                                            text = option.text,
-
-                                            fontSize = 15.sp,
-
-                                            fontWeight = FontWeight.SemiBold,
-
-                                            color = colors.textDark,
-
-                                            modifier = Modifier.weight(1f).padding(end = 8.dp)
-
-                                        )
-
-                                        Text(
-
-                                            text = "${option.votes} (${percentage}%)",
-
-                                            fontSize = 13.5.sp,
-
-                                            fontWeight = FontWeight.Medium,
-
-                                            color = colors.textMuted
-
-                                        )
-
-                                    }
-
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 14.dp, vertical = 6.dp)
-                                    ) {
-                                        LiquidGlassProgressBar(
-                                            progress = if (totalVotes > 0) (option.votes.toFloat() / totalVotes) else 0f,
-                                            height = 6.dp
-                                        )
-                                    }
-
-                                    HorizontalDivider(color = colors.separator, thickness = 0.5.dp)
-
-                                    if (poll.isAnonymous) {
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(horizontal = 14.dp, vertical = 10.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            LucideLock(tint = colors.textMuted, size = 15.dp)
-                                            Text(
-                                                text = "Anonymous voting — voter identities are hidden",
-                                                fontSize = 13.sp,
-                                                color = colors.textMuted
-                                            )
-                                        }
-                                    } else {
-                                        // Voters List
-                                        val voters = if (option.voters.isNotEmpty()) {
-                                            option.voters
-                                        } else {
-                                            buildList {
-                                                if (option.isUserVoted) {
-                                                    add(PollVoter(name = "${currentUser.name} (You)", avatar = currentUser.avatar, isCurrentUser = true, time = "Just now"))
-                                                }
-                                                val remaining = option.votes - (if (option.isUserVoted) 1 else 0)
-                                                for (i in 0 until remaining) {
-                                                    add(PollVoter(name = "Participant ${i + 1}", avatar = "", isCurrentUser = false, time = ""))
-                                                }
-                                            }
-                                        }
-
-                                    voters.forEachIndexed { voterIdx, voter ->
-
-                                        Row(
-
-                                            modifier = Modifier
-
-                                                .fillMaxWidth()
-
-                                                .padding(horizontal = 14.dp, vertical = 9.dp),
-
-                                            verticalAlignment = Alignment.CenterVertically,
-
-                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-
-                                        ) {
-
-                                            AsyncImage(
-
-                                                model = voter.avatar,
-
-                                                contentDescription = voter.name,
-
-                                                modifier = Modifier
-
-                                                    .size(34.dp)
-
-                                                    .clip(CircleShape)
-
-                                                    .border(0.5.dp, colors.borderSubtle, CircleShape),
-
-                                                contentScale = ContentScale.Crop
-
-                                            )
-
-                                            Column(modifier = Modifier.weight(1f)) {
-
-                                                Text(
-
-                                                    text = voter.name,
-
-                                                    fontSize = 15.sp,
-
-                                                    fontWeight = if (voter.isCurrentUser) FontWeight.SemiBold else FontWeight.Normal,
-
-                                                    color = if (voter.isCurrentUser) colors.iosBlue else colors.textDark
-
-                                                )
-
-                                                if (voter.time.isNotBlank()) {
-
-                                                    Text(
-
-                                                        text = voter.time,
-
-                                                        fontSize = 11.5.sp,
-
-                                                        color = colors.textMuted
-
-                                                    )
-
-                                                }
-
-                                            }
-
-                                        }
-
-                                        if (voterIdx < voters.size - 1) {
-
-                                            HorizontalDivider(
-
-                                                color = colors.separator,
-
-                                                thickness = 0.5.dp,
-
-                                                modifier = Modifier.padding(start = 58.dp)
-
-                                            )
-
-                                        }
-
-                                    }
-                                }
-                                }
-
-                            }
-
-                        }
-
-                    }
-
+                    Text(
+                        text = "$totalVotes total vote${if (totalVotes == 1) "" else "s"}",
+                        fontSize = 12.5.sp,
+                        color = colors.iosBlue,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
 
+                Text(
+                    text = poll.question,
+                    fontSize = 16.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = colors.textDark,
+                    lineHeight = 22.sp
+                )
+            }
+
+            // Option Filter Tabs (Segmented pills)
+            if (sortedOptions.size > 1) {
+                LazyRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(if (colors.isLight) Color(0xFFF9F9FB) else Color(0xFF1C1C1E))
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    item {
+                        val isAllSelected = selectedOptionFilter == "ALL" || selectedOptionFilter == null
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isAllSelected) colors.iosBlue else if (colors.isLight) Color(0xFFE5E5EA) else Color(0xFF2C2C2E))
+                                .clickable { selectedOptionFilter = "ALL" }
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = "All ($totalVotes)",
+                                fontSize = 13.sp,
+                                fontWeight = if (isAllSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isAllSelected) Color.White else colors.textDark
+                            )
+                        }
+                    }
+
+                    items(sortedOptions) { opt ->
+                        val isOptSelected = selectedOptionFilter == opt.id
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isOptSelected) colors.iosBlue else if (colors.isLight) Color(0xFFE5E5EA) else Color(0xFF2C2C2E))
+                                .clickable { selectedOptionFilter = opt.id }
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = "${opt.text.take(16)}${if (opt.text.length > 16) "…" else ""} (${opt.votes})",
+                                fontSize = 13.sp,
+                                fontWeight = if (isOptSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isOptSelected) Color.White else colors.textDark
+                            )
+                        }
+                    }
+                }
+            }
+
+            HorizontalDivider(color = colors.separator, thickness = 0.5.dp)
+
+            // Options Breakdown List
+            if (totalVotes == 0) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(Lucide.ChartColumn, contentDescription = null, tint = colors.textMuted.copy(alpha = 0.4f), modifier = Modifier.size(48.dp))
+                        Text(
+                            text = "No votes cast yet",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = colors.textMuted
+                        )
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    items(displayedOptions) { option ->
+                        val percentage = if (totalVotes > 0) (option.votes.toFloat() / totalVotes * 100).toInt() else 0
+                        val isLeading = maxVotes > 0 && option.votes == maxVotes && totalVotes > 0
+                        val isWinner = poll.isClosed && isLeading
+
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(if (colors.isLight) Color.White else Color(0xFF2C2C2E))
+                                .border(
+                                    0.5.dp,
+                                    if (isWinner) Color(0xFF34C759).copy(alpha = 0.6f) else colors.borderSubtle,
+                                    RoundedCornerShape(14.dp)
+                                )
+                        ) {
+                            // Option Header
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(
+                                        if (isWinner) Color(0xFF34C759).copy(alpha = if (colors.isLight) 0.1f else 0.16f)
+                                        else (if (colors.isLight) Color(0xFFF9F9FB) else Color(0xFF343438))
+                                    )
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    modifier = Modifier.weight(1f).padding(end = 8.dp)
+                                ) {
+                                    Text(
+                                        text = option.text,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = colors.textDark
+                                    )
+                                    if (isWinner) {
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(Color(0xFF34C759).copy(alpha = 0.2f))
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = "WINNER",
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF34C759)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Text(
+                                    text = "${option.votes} (${percentage}%)",
+                                    fontSize = 13.5.sp,
+                                    fontWeight = if (isWinner) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isWinner) Color(0xFF34C759) else colors.textMuted
+                                )
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 6.dp)
+                            ) {
+                                LiquidGlassProgressBar(
+                                    progress = if (totalVotes > 0) (option.votes.toFloat() / totalVotes) else 0f,
+                                    height = 6.dp,
+                                    fillBrush = if (isWinner) Brush.horizontalGradient(listOf(Color(0xFF34C759), Color(0xFF30D158))) else null
+                                )
+                            }
+
+                            HorizontalDivider(color = colors.separator, thickness = 0.5.dp)
+
+                            if (poll.isAnonymous) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    LucideLock(tint = colors.textMuted, size = 15.dp)
+                                    Text(
+                                        text = "Anonymous voting — voter identities are hidden",
+                                        fontSize = 13.sp,
+                                        color = colors.textMuted
+                                    )
+                                }
+                            } else if (option.votes == 0) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 14.dp, vertical = 10.dp)
+                                ) {
+                                    Text(
+                                        text = "No votes for this option",
+                                        fontSize = 13.sp,
+                                        color = colors.textMuted
+                                    )
+                                }
+                            } else {
+                                // Voters List
+                                val voters = if (option.voters.isNotEmpty()) {
+                                    option.voters
+                                } else {
+                                    buildList {
+                                        if (option.isUserVoted) {
+                                            add(PollVoter(name = "${currentUser.name} (You)", avatar = currentUser.avatar, isCurrentUser = true, time = "Just now"))
+                                        }
+                                        val remaining = option.votes - (if (option.isUserVoted) 1 else 0)
+                                        for (i in 0 until remaining) {
+                                            add(PollVoter(name = "Participant ${i + 1}", avatar = "", isCurrentUser = false, time = ""))
+                                        }
+                                    }
+                                }
+
+                                voters.forEachIndexed { voterIdx, voter ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 14.dp, vertical = 9.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        AsyncImage(
+                                            model = voter.avatar,
+                                            contentDescription = voter.name,
+                                            modifier = Modifier
+                                                .size(34.dp)
+                                                .clip(CircleShape)
+                                                .border(0.5.dp, colors.borderSubtle, CircleShape),
+                                            contentScale = ContentScale.Crop
+                                        )
+
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = voter.name,
+                                                fontSize = 15.sp,
+                                                fontWeight = if (voter.isCurrentUser) FontWeight.SemiBold else FontWeight.Normal,
+                                                color = if (voter.isCurrentUser) colors.iosBlue else colors.textDark
+                                            )
+                                            if (voter.time.isNotBlank()) {
+                                                Text(
+                                                    text = voter.time,
+                                                    fontSize = 11.5.sp,
+                                                    color = colors.textMuted
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    if (voterIdx < voters.size - 1) {
+                                        HorizontalDivider(
+                                            color = colors.separator,
+                                            thickness = 0.5.dp,
+                                            modifier = Modifier.padding(start = 58.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
+    if (showEndPollConfirmDialog) {
+        IosAlertDialog(
+            title = "End Poll?",
+            message = "Voting will be closed and final results will be locked for all participants.",
+            actions = listOf(
+                IosAlertAction(
+                    title = "Cancel",
+                    isCancel = true,
+                    onClick = { showEndPollConfirmDialog = false }
+                ),
+                IosAlertAction(
+                    title = "End Poll",
+                    isDestructive = true,
+                    onClick = {
+                        showEndPollConfirmDialog = false
+                        onClosePoll?.invoke()
+                    }
+                )
+            ),
+            onDismiss = { showEndPollConfirmDialog = false }
+        )
+    }
 }
-
 

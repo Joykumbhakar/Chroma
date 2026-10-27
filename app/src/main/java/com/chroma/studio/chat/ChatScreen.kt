@@ -3079,6 +3079,53 @@ private fun ChatScreenContent(
 
                                         },
 
+                                        onPollRetractVote = {
+                                            SoundManager.playReaction()
+                                            if (chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
+                                                chatViewModel.retractPollVote(msg.id)
+                                            }
+                                            chats = chats.map { c ->
+                                                if (c.id == activeChatId) {
+                                                    c.copy(
+                                                        messages = c.messages.map { m ->
+                                                            if (m.id == msg.id && m.pollData != null) {
+                                                                val updatedOpts = m.pollData.options.map { o ->
+                                                                    if (o.isUserVoted) {
+                                                                        o.copy(
+                                                                            votes = (o.votes - 1).coerceAtLeast(0),
+                                                                            isUserVoted = false,
+                                                                            voters = o.voters.filterNot { it.id == currentUser.id }
+                                                                        )
+                                                                    } else o
+                                                                }
+                                                                m.copy(pollData = m.pollData.copy(options = updatedOpts))
+                                                            } else m
+                                                        }
+                                                    )
+                                                } else c
+                                            }
+                                            showToast("Vote retracted")
+                                        },
+
+                                        onClosePoll = {
+                                            SoundManager.playReaction()
+                                            if (chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
+                                                chatViewModel.closePoll(msg.id)
+                                            }
+                                            chats = chats.map { c ->
+                                                if (c.id == activeChatId) {
+                                                    c.copy(
+                                                        messages = c.messages.map { m ->
+                                                            if (m.id == msg.id && m.pollData != null) {
+                                                                m.copy(pollData = m.pollData.copy(isClosed = true))
+                                                            } else m
+                                                        }
+                                                    )
+                                                } else c
+                                            }
+                                            showToast("Poll closed. Voting ended.")
+                                        },
+
                                         onViewPollVotes = { poll ->
 
                                             activePollForDetails = poll
@@ -4348,7 +4395,8 @@ private fun ChatScreenContent(
 
                     if (chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
 
-                        val pollPayload = "[POLL]:$question|||${options.joinToString(";;;")}"
+                        val metaFlags = "anon=$isAnon;mult=$allowMult;closed=false"
+                        val pollPayload = "[POLL]:$question|||${options.joinToString(";;;")}|||$metaFlags"
 
                         chatViewModel.sendMessage(pollPayload, replyToMessageId = replyQuoteSnapshot?.messageId)
 
@@ -5757,6 +5805,27 @@ private fun ChatScreenContent(
                 poll = poll,
 
                 currentUser = currentUser,
+
+                onClosePoll = if (!poll.isClosed) {
+                    {
+                        activePollForDetails = poll.copy(isClosed = true)
+                        if (chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
+                            chatViewModel.closePoll(poll.id)
+                        }
+                        chats = chats.map { c ->
+                            if (c.id == activeChatId) {
+                                c.copy(
+                                    messages = c.messages.map { m ->
+                                        if (m.id == poll.id && m.pollData != null) {
+                                            m.copy(pollData = m.pollData.copy(isClosed = true))
+                                        } else m
+                                    }
+                                )
+                            } else c
+                        }
+                        showToast("Poll closed. Voting ended.")
+                    }
+                } else null,
 
                 onDismiss = { activePollForDetails = null }
 

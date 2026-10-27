@@ -160,6 +160,10 @@ object ChatAdapters {
                 val parts = payload.split("|||")
                 val question = parts.getOrNull(0)?.trim() ?: "Poll"
                 val optionsStr = parts.getOrNull(1) ?: ""
+                val metaStr = parts.getOrNull(2) ?: ""
+                val isAnon = metaStr.contains("anon=true") || metaStr.contains("anon")
+                val allowMult = metaStr.contains("mult=true") || metaStr.contains("multiple")
+                val isClosed = msg.isPollClosed || metaStr.contains("closed=true")
                 val rawOptions = optionsStr.split(";;;").filter { it.isNotBlank() }
                 val optionsList = rawOptions.mapIndexed { optIdx, optText ->
                     val votersForOpt = msg.pollVotes.entries.filter { entry ->
@@ -182,10 +186,15 @@ object ChatAdapters {
                         voters = votersForOpt
                     )
                 }
+                val totalVoters = msg.pollVotes.keys.size
                 PollData(
                     id = msg.id,
                     question = question,
                     options = if (optionsList.isNotEmpty()) optionsList else listOf(PollOption(text = "Yes"), PollOption(text = "No")),
+                    allowMultipleAnswers = allowMult,
+                    isAnonymous = isAnon,
+                    isClosed = isClosed,
+                    totalVotersCount = totalVoters,
                     creatorName = senderName
                 )
             } catch (_: Exception) {

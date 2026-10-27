@@ -195,7 +195,8 @@ data class ChatMessage(
     val replyToMessageId: String? = null,
     val pollVotes: Map<String, String> = emptyMap(), // userId -> comma-separated option indexes e.g. "0" or "0,2"
     val isEdited: Boolean = false,
-    val deletedFor: List<String> = emptyList() // User IDs who have deleted this message for themselves
+    val deletedFor: List<String> = emptyList(), // User IDs who have deleted this message for themselves
+    val isPollClosed: Boolean = false
 )
 
 @kotlinx.serialization.Serializable
