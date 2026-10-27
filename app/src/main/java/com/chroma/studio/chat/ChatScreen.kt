@@ -389,6 +389,7 @@ private fun ChatScreenContent(
     val typingStatuses by (chatViewModel?.typingStatuses?.collectAsState() ?: remember { mutableStateOf(emptyMap()) })
 
     val mutedChatIds by (chatViewModel?.mutedChatIds?.collectAsState() ?: remember { mutableStateOf(emptySet()) })
+    val blockedUserIds by (chatViewModel?.blockedUserIds?.collectAsState() ?: remember { mutableStateOf(emptySet()) })
 
 
 
@@ -887,6 +888,7 @@ private fun ChatScreenContent(
     var selectedMessageForInfo by remember { mutableStateOf<ChatMessage?>(null) }
 
     var messageToForward by remember { mutableStateOf<ChatMessage?>(null) }
+    var lockedChatIds by remember { mutableStateOf<Set<String>>(emptySet()) }
 
     var activePollForDetails by remember { mutableStateOf<PollData?>(null) }
 
@@ -1660,6 +1662,12 @@ private fun ChatScreenContent(
 
 
 
+        val isTargetBlocked = activeChat.isBlocked || (activeChat.otherUserId != null && activeChat.otherUserId in blockedUserIds)
+        if (isTargetBlocked) {
+            showToast("Cannot send message to blocked contact")
+            return
+        }
+
         val replyMessageId = activeReplyQuote?.messageId
 
         if (chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
@@ -1835,31 +1843,40 @@ private fun ChatScreenContent(
                 onSearchQueryChanged = { sidebarSearchQuery = it },
 
                 onChatSelected = { chatId ->
-
-                    activeChatId = chatId
-
-                    chats = chats.map { if (it.id == chatId) it.copy(unreadCount = 0) else it }
-
-                    isInitialScrollDone = false
-
-                    isInsideChat = true
-
-                    chatViewModel?.openChat(chatId)
-
-                    val targetRoom = recentRooms.find { it.id == chatId }
-
-                    if (targetRoom != null && !targetRoom.isGroup) {
-
-                        val otherUid = targetRoom.participants.firstOrNull { it != currentUid }
-
-                        if (otherUid != null) {
-
-                            chatViewModel?.observeUserOnlineStatus(otherUid)
-
+                    val openChatAction = {
+                        activeChatId = chatId
+                        chats = chats.map { if (it.id == chatId) it.copy(unreadCount = 0) else it }
+                        isInitialScrollDone = false
+                        isInsideChat = true
+                        chatViewModel?.openChat(chatId)
+                        val targetRoom = recentRooms.find { it.id == chatId }
+                        if (targetRoom != null && !targetRoom.isGroup) {
+                            val otherUid = targetRoom.participants.firstOrNull { it != currentUid }
+                            if (otherUid != null) {
+                                chatViewModel?.observeUserOnlineStatus(otherUid)
+                            }
                         }
-
                     }
 
+                    if (chatId in lockedChatIds) {
+                        val activity = context as? android.app.Activity
+                        val targetChat = chats.find { it.id == chatId }
+                        if (activity != null) {
+                            com.chroma.studio.chat.util.BiometricHelper.authenticate(
+                                activity = activity,
+                                title = "Locked Chat",
+                                subtitle = "Authenticate to open ${targetChat?.name ?: "conversation"}",
+                                onSuccess = openChatAction,
+                                onError = {
+                                    showToast("Authentication required to view locked chat")
+                                }
+                            )
+                        } else {
+                            openChatAction()
+                        }
+                    } else {
+                        openChatAction()
+                    }
                 },
 
             onStoryClick = { story ->
@@ -1956,10 +1973,46 @@ private fun ChatScreenContent(
 
             },
 
-            onLockChatToggle = { _ ->
-
-                showToast("Chat locked with Face ID")
-
+            onLockChatToggle = { chat ->
+                val isCurrentlyLocked = chat.id in lockedChatIds
+                val activity = context as? android.app.Activity
+                if (isCurrentlyLocked) {
+                    if (activity != null) {
+                        com.chroma.studio.chat.util.BiometricHelper.authenticate(
+                            activity = activity,
+                            title = "Unlock ${chat.name}",
+                            subtitle = "Verify identity to remove biometric lock",
+                            onSuccess = {
+                                lockedChatIds = lockedChatIds - chat.id
+                                showToast("Biometric lock removed from ${chat.name}")
+                            },
+                            onError = { err ->
+                                showToast("Authentication failed: $err")
+                            }
+                        )
+                    } else {
+                        lockedChatIds = lockedChatIds - chat.id
+                        showToast("Biometric lock removed")
+                    }
+                } else {
+                    if (activity != null) {
+                        com.chroma.studio.chat.util.BiometricHelper.authenticate(
+                            activity = activity,
+                            title = "Lock ${chat.name}",
+                            subtitle = "Confirm Face ID or fingerprint to lock chat",
+                            onSuccess = {
+                                lockedChatIds = lockedChatIds + chat.id
+                                showToast("${chat.name} locked with Biometrics")
+                            },
+                            onError = { err ->
+                                showToast("Could not lock chat: $err")
+                            }
+                        )
+                    } else {
+                        lockedChatIds = lockedChatIds + chat.id
+                        showToast("${chat.name} locked")
+                    }
+                }
             },
 
             onArchiveChat = { chat ->
@@ -2338,7 +2391,7 @@ private fun ChatScreenContent(
 
                     val totalUnread = chats.filter { it.id != activeChatId }.sumOf { it.unreadCount }
 
-                    val searchMatches = if (searchInsideQuery.isEmpty()) 0 else activeChat.messages.count { it.text?.contains(searchInsideQuery, ignoreCase = true) == true }
+                    val searchMatches = if (searchInsideQuery.isEmpty()) 0 else allMessages.count { it.text?.contains(searchInsideQuery, ignoreCase = true) == true }
 
 
 
@@ -2523,27 +2576,22 @@ private fun ChatScreenContent(
                                 onSearchQueryChange = { searchInsideQuery = it },
 
                                 onAudioCallClick = {
-
                                     activeCallType = "Audio Call"
-
                                     isCallBannerActive = true
-
                                     isFullCallModalOpen = true
-
+                                    callDurationSeconds = 0
+                                    chatViewModel?.initializeCallManager(context)
+                                    chatViewModel?.startCall(activeChatId)
                                     SoundManager.playRing()
-
                                 },
-
                                 onVideoCallClick = {
-
                                     activeCallType = "Video Call"
-
                                     isCallBannerActive = true
-
                                     isFullCallModalOpen = true
-
+                                    callDurationSeconds = 0
+                                    chatViewModel?.initializeCallManager(context)
+                                    chatViewModel?.startCall(activeChatId)
                                     SoundManager.playRing()
-
                                 },
 
                                 onAppearanceToggle = onAppearanceToggle,
@@ -2587,45 +2635,38 @@ private fun ChatScreenContent(
                                 },
 
                                 onExportTranscript = {
-
                                     try {
-
                                         val transcript = buildString {
-
                                             appendLine("--- ChromaStudio Chat Transcript: ${activeChat.name} ---")
-
                                             appendLine("Exported: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date())}")
-
                                             appendLine()
-
-                                            activeChat.messages.forEach { m ->
-
-                                                appendLine("[${m.time}] ${m.senderName}: ${m.text}")
-
+                                            allMessages.forEach { m ->
+                                                val content = m.text ?: m.fileName ?: if (m.mediaType == "voice") "[Voice Note]" else "[Media Attachment]"
+                                                appendLine("[${m.time}] ${m.senderName}: $content")
                                             }
-
                                         }
-
+                                        val exportDir = java.io.File(context.cacheDir, "transcripts").apply { if (!exists()) mkdirs() }
+                                        val safeName = activeChat.name.replace("[^a-zA-Z0-9]".toRegex(), "_")
+                                        val exportFile = java.io.File(exportDir, "chat_${safeName}_${System.currentTimeMillis()}.txt").apply {
+                                            writeText(transcript)
+                                        }
+                                        val contentUri = androidx.core.content.FileProvider.getUriForFile(
+                                            context,
+                                            "${context.packageName}.provider",
+                                            exportFile
+                                        )
                                         val sendIntent = android.content.Intent().apply {
-
                                             action = android.content.Intent.ACTION_SEND
-
+                                            putExtra(android.content.Intent.EXTRA_STREAM, contentUri)
                                             putExtra(android.content.Intent.EXTRA_TEXT, transcript)
-
                                             type = "text/plain"
-
+                                            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                         }
-
                                         context.startActivity(android.content.Intent.createChooser(sendIntent, "Export chat with ${activeChat.name}"))
-
                                         showToast("Exporting transcript for ${activeChat.name}")
-
                                     } catch (e: Exception) {
-
-                                        showToast("Exported transcript for ${activeChat.name}")
-
+                                        showToast("Exporting transcript for ${activeChat.name}")
                                     }
-
                                 },
 
                                 onClearChat = {
@@ -2641,11 +2682,11 @@ private fun ChatScreenContent(
                                 },
 
                                 onUnpinMessage = {
-
-                                    chats = chats.map { if (it.id == activeChatId) it.copy(pinnedMessage = null) else it }
-
+                                    chats = chats.map { if (it.id == activeChatId) it.copy(pinnedMessage = null, pinnedMessageId = null) else it }
+                                    if (chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
+                                        chatViewModel.unpinMessage(activeChatId)
+                                    }
                                     showToast("Message unpinned")
-
                                 },
 
                                 onEndCall = {
@@ -2734,7 +2775,11 @@ private fun ChatScreenContent(
                             activeReplyQuote = null
                         },
                         onPinMessage = { msg ->
-                            chats = chats.map { if (it.id == activeChatId) it.copy(pinnedMessage = msg.text ?: "Attachment") else it }
+                            val pinText = msg.text ?: msg.fileName ?: "Attachment"
+                            chats = chats.map { if (it.id == activeChatId) it.copy(pinnedMessage = pinText, pinnedMessageId = msg.id) else it }
+                            if (chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
+                                chatViewModel.pinMessage(activeChatId, msg.id, pinText)
+                            }
                             showToast("Message pinned")
                         },
                         onDeleteMessagePending = { msg ->
@@ -3569,30 +3614,36 @@ private fun ChatScreenContent(
 
         ) {
 
+            var isMicMuted by remember { mutableStateOf(false) }
+            var isCamEnabled by remember { mutableStateOf(activeCallType.contains("Video", ignoreCase = true)) }
+            var isSpeakerOn by remember { mutableStateOf(activeCallType.contains("Video", ignoreCase = true)) }
+
             FullCallModal(
-
                 chat = activeChat,
-
                 callType = activeCallType,
-
                 callDurationSec = callDurationSeconds,
-
-                onToggleMic = { showToast("Microphone toggled") },
-
-                onToggleCam = { showToast("Camera toggled") },
-
-                onToggleSpeaker = { showToast("Speaker toggled") },
-
+                onToggleMic = {
+                    isMicMuted = !isMicMuted
+                    chatViewModel?.toggleMute(isMicMuted)
+                    showToast(if (isMicMuted) "Microphone muted" else "Microphone unmuted")
+                },
+                onToggleCam = {
+                    isCamEnabled = !isCamEnabled
+                    chatViewModel?.toggleCamera(isCamEnabled)
+                    showToast(if (isCamEnabled) "Camera enabled" else "Camera disabled")
+                },
+                onToggleSpeaker = {
+                    isSpeakerOn = !isSpeakerOn
+                    val audioManager = context.getSystemService(android.content.Context.AUDIO_SERVICE) as? android.media.AudioManager
+                    audioManager?.isSpeakerphoneOn = isSpeakerOn
+                    showToast(if (isSpeakerOn) "Speaker on" else "Earpiece active")
+                },
                 onHangup = {
-
                     isCallBannerActive = false
-
                     isFullCallModalOpen = false
-
+                    chatViewModel?.endCall()
                     showToast("Call ended")
-
                 }
-
             )
 
         }
@@ -4559,7 +4610,7 @@ private fun ChatScreenContent(
 
             val isGroupChat = activeChat.type == "group"
 
-            val isCurrentlyBlocked = activeChat.isBlocked
+            val isCurrentlyBlocked = activeChat.isBlocked || (activeChat.otherUserId != null && activeChat.otherUserId in blockedUserIds)
 
 
 
@@ -4656,13 +4707,14 @@ private fun ChatScreenContent(
                             isDefault = isCurrentlyBlocked,
 
                             onClick = {
-
-                                chats = chats.map { if (it.id == activeChatId) it.copy(isBlocked = !it.isBlocked) else it }
-
+                                val nextBlocked = !isCurrentlyBlocked
+                                chats = chats.map { if (it.id == activeChatId) it.copy(isBlocked = nextBlocked) else it }
+                                val targetUid = activeChat.otherUserId ?: activeChat.participantUids.firstOrNull { it != currentUid }
+                                if (targetUid != null && chatViewModel != null) {
+                                    chatViewModel.toggleBlockUser(targetUid, nextBlocked)
+                                }
                                 showBlockUserDialog = false
-
-                                showToast(if (!isCurrentlyBlocked) "${activeChat.name} blocked" else "${activeChat.name} unblocked")
-
+                                showToast(if (nextBlocked) "${activeChat.name} blocked" else "${activeChat.name} unblocked")
                             }
 
                         )
@@ -4702,19 +4754,24 @@ private fun ChatScreenContent(
                     ),
 
                     IosAlertAction(
-
                         title = "Report Contact",
-
                         isDestructive = true,
-
                         onClick = {
-
+                            val targetUid = activeChat.otherUserId ?: activeChat.participantUids.firstOrNull { it != currentUid }
+                            val last5Snippets = allMessages.takeLast(5).map { m ->
+                                "[${m.senderName}]: ${m.text ?: m.fileName ?: m.mediaType ?: "Media"}"
+                            }
+                            if (targetUid != null && chatViewModel != null) {
+                                chatViewModel.reportUser(
+                                    reportedUserId = targetUid,
+                                    roomId = activeChatId,
+                                    reason = "Inappropriate chat behavior",
+                                    snippetMessages = last5Snippets
+                                )
+                            }
                             showReportUserDialog = false
-
                             showToast("Report submitted for review")
-
                         }
-
                     )
 
                 ),
@@ -4848,13 +4905,16 @@ private fun ChatScreenContent(
                 },
 
                 onPin = {
-
                     val newPinText = if (isPinned) null else (msg.text ?: msg.fileName ?: "Attachment")
-
-                    chats = chats.map { if (it.id == activeChatId) it.copy(pinnedMessage = newPinText) else it }
-
+                    chats = chats.map { if (it.id == activeChatId) it.copy(pinnedMessage = newPinText, pinnedMessageId = if (isPinned) null else msg.id) else it }
+                    if (chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
+                        if (isPinned) {
+                            chatViewModel.unpinMessage(activeChatId)
+                        } else {
+                            chatViewModel.pinMessage(activeChatId, msg.id, newPinText ?: "")
+                        }
+                    }
                     showToast(if (isPinned) "Message unpinned" else "Message pinned to top")
-
                 },
 
                 onForward = {
@@ -4872,37 +4932,38 @@ private fun ChatScreenContent(
                 },
 
                 onTranscribe = {
-
-                    chats = chats.map { c ->
-
-                        if (c.id == activeChatId) {
-
-                            c.copy(
-
-                                messages = c.messages.map { m ->
-
-                                    if (m.id == msg.id) {
-
-                                        m.copy(transcription = "“Hey! Just checking in to see if we're still meeting at 4 PM for the project review.”")
-
-                                    } else m
-
-                                }
-
-                            )
-
-                        } else c
-
+                    val audioUrl = msg.mediaUrl ?: msg.localUri
+                    if (!audioUrl.isNullOrBlank()) {
+                        showToast("Transcribing voice note...")
+                        coroutineScope.launch {
+                            val transcription = com.chroma.studio.ai.AIGenerator.transcribeAudio(context, audioUrl)
+                            chats = chats.map { c ->
+                                if (c.id == activeChatId) {
+                                    c.copy(
+                                        messages = c.messages.map { m ->
+                                            if (m.id == msg.id) {
+                                                m.copy(transcription = transcription)
+                                            } else m
+                                        }
+                                    )
+                                } else c
+                            }
+                            showToast("Audio transcribed")
+                        }
+                    } else {
+                        showToast("No audio file available to transcribe")
                     }
-
-                    showToast("Audio transcribed")
-
                 },
 
                 onSaveMedia = {
-
-                    showToast("Media saved to device")
-
+                    val mediaUrl = msg.mediaUrl ?: msg.localUri
+                    if (!mediaUrl.isNullOrBlank()) {
+                        coroutineScope.launch {
+                            com.chroma.studio.chat.media.MediaStoreHelper.saveMediaToGallery(context, mediaUrl)
+                        }
+                    } else {
+                        showToast("No media file available to save")
+                    }
                 },
 
                 onInfo = {
@@ -5052,16 +5113,12 @@ private fun ChatScreenContent(
                         chatViewModel.forwardMessage(
 
                             message = com.chroma.studio.model.ChatMessage(
-
                                 text = msg.text ?: "",
-
                                 senderId = currentUser.id,
-
                                 imageUrl = msg.mediaUrl,
-
                                 mediaUrl = msg.mediaUrl,
-
-                                mediaType = msg.mediaType
+                                mediaType = msg.mediaType,
+                                isForwarded = true
 
                             ),
 

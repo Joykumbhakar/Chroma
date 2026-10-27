@@ -87,4 +87,39 @@ object AIGenerator {
         
         layers
     }
+
+    suspend fun transcribeAudio(context: android.content.Context, audioUrlOrUri: String): String = withContext(Dispatchers.IO) {
+        try {
+            val audioBytes = if (audioUrlOrUri.startsWith("http://") || audioUrlOrUri.startsWith("https://")) {
+                java.net.URL(audioUrlOrUri).readBytes()
+            } else if (audioUrlOrUri.startsWith("content://")) {
+                context.contentResolver.openInputStream(android.net.Uri.parse(audioUrlOrUri))?.readBytes() ?: ByteArray(0)
+            } else if (audioUrlOrUri.startsWith("file://")) {
+                java.io.File(android.net.Uri.parse(audioUrlOrUri).path ?: audioUrlOrUri).readBytes()
+            } else {
+                java.io.File(audioUrlOrUri).readBytes()
+            }
+            if (audioBytes.isEmpty()) return@withContext "Audio recording is empty."
+
+            val model = com.google.firebase.Firebase.ai(
+                backend = com.google.firebase.ai.type.GenerativeBackend.googleAI()
+            ).generativeModel(
+                modelName = "gemini-1.5-flash",
+                systemInstruction = content { text("Transcribe this voice recording accurately into text. Return ONLY the plain transcribed text without markdown or commentary.") }
+            )
+            val response = model.generateContent(
+                com.google.firebase.ai.type.Content(
+                    role = "user",
+                    parts = listOf(
+                        com.google.firebase.ai.type.InlineDataPart(audioBytes, "audio/mp4"),
+                        com.google.firebase.ai.type.TextPart("Transcribe this voice note accurately:")
+                    )
+                )
+            )
+            val result = response.text?.trim()
+            if (!result.isNullOrBlank()) result else "Voice note (no clear speech detected)"
+        } catch (e: Exception) {
+            "Voice note: ${e.localizedMessage ?: "Transcription unavailable"}"
+        }
+    }
 }

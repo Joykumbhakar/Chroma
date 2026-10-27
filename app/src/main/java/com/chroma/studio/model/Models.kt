@@ -170,7 +170,11 @@ data class ChatRoom(
     val deletedBy: List<String> = emptyList(),
     // Per-user deletion timestamp: uid -> timestamp when they deleted the chat
     // Messages before this timestamp are hidden for that user
-    val deletedAt: Map<String, Long> = emptyMap()
+    val deletedAt: Map<String, Long> = emptyMap(),
+    val pinnedMessageId: String? = null,
+    val pinnedMessageText: String? = null,
+    val pinnedBy: String? = null,
+    val pinnedAt: Long = 0L
 )
 
 data class ChatMessage(
@@ -196,7 +200,8 @@ data class ChatMessage(
     val pollVotes: Map<String, String> = emptyMap(), // userId -> comma-separated option indexes e.g. "0" or "0,2"
     val isEdited: Boolean = false,
     val deletedFor: List<String> = emptyList(), // User IDs who have deleted this message for themselves
-    val isPollClosed: Boolean = false
+    val isPollClosed: Boolean = false,
+    val isForwarded: Boolean = false
 )
 
 @kotlinx.serialization.Serializable

@@ -162,6 +162,142 @@ object MediaStoreHelper {
         val mimeType = context.contentResolver.getType(uri)
         return android.webkit.MimeTypeMap.getSingleton().getExtensionFromMimeType(mimeType)
     }
+
+    /**
+     * Saves media (image or video from remote URL, content URI, or local file) to the device MediaStore / Gallery.
+     */
+    suspend fun saveMediaToGallery(context: Context, mediaUrlOrUri: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val isVideo = mediaUrlOrUri.contains(".mp4", ignoreCase = true) ||
+                    mediaUrlOrUri.contains(".mov", ignoreCase = true) ||
+                    mediaUrlOrUri.contains("video", ignoreCase = true)
+            val extension = if (isVideo) "mp4" else "jpg"
+            val mimeType = if (isVideo) "video/mp4" else "image/jpeg"
+            val fileName = "Chroma_${if (isVideo) "VID" else "IMG"}_${System.currentTimeMillis()}.$extension"
+
+            val rawInput = if (mediaUrlOrUri.startsWith("http://") || mediaUrlOrUri.startsWith("https://")) {
+                java.net.URL(mediaUrlOrUri).openStream()
+            } else if (mediaUrlOrUri.startsWith("content://")) {
+                context.contentResolver.openInputStream(Uri.parse(mediaUrlOrUri))
+            } else if (mediaUrlOrUri.startsWith("file://")) {
+                java.io.FileInputStream(File(Uri.parse(mediaUrlOrUri).path ?: mediaUrlOrUri))
+            } else {
+                java.io.FileInputStream(File(mediaUrlOrUri))
+            }
+            val inputStream = rawInput ?: return@withContext false
+
+            val resolver = context.contentResolver
+            val contentValues = android.content.ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    val relativePath = if (isVideo) {
+                        android.os.Environment.DIRECTORY_MOVIES + "/ChromaStudio/"
+                    } else {
+                        android.os.Environment.DIRECTORY_PICTURES + "/ChromaStudio/"
+                    }
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, relativePath)
+                    put(MediaStore.MediaColumns.IS_PENDING, 1)
+                }
+            }
+
+            val targetCollection = if (isVideo) {
+                MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+            } else {
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+            }
+
+            val uri = resolver.insert(targetCollection, contentValues)
+            if (uri != null) {
+                resolver.openOutputStream(uri)?.use { outputStream ->
+                    inputStream.use { input ->
+                        input.copyTo(outputStream)
+                    }
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    contentValues.clear()
+                    contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0)
+                    resolver.update(uri, contentValues, null, null)
+                }
+                withContext(Dispatchers.Main) {
+                    android.widget.Toast.makeText(context, "Saved to Photos & Gallery", android.widget.Toast.LENGTH_SHORT).show()
+                }
+                return@withContext true
+            }
+            false
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed saving media to gallery: ${e.message}", e)
+            withContext(Dispatchers.Main) {
+                android.widget.Toast.makeText(context, "Failed to save: ${e.localizedMessage ?: "Unknown error"}", android.widget.Toast.LENGTH_SHORT).show()
+            }
+            false
+        }
+    }
+
+    /**
+     * Shares media via the Android system Share Sheet (Intent.ACTION_SEND).
+     * Downloads or caches to a FileProvider-accessible file first.
+     */
+    suspend fun shareMedia(context: Context, mediaUrlOrUri: String) = withContext(Dispatchers.IO) {
+        try {
+            val isVideo = mediaUrlOrUri.contains(".mp4", ignoreCase = true) ||
+                    mediaUrlOrUri.contains(".mov", ignoreCase = true) ||
+                    mediaUrlOrUri.contains("video", ignoreCase = true)
+            val extension = if (isVideo) "mp4" else "jpg"
+            val mimeType = if (isVideo) "video/mp4" else "image/jpeg"
+
+            val shareCacheDir = File(context.cacheDir, "shared_media").apply { if (!exists()) mkdirs() }
+            val tempFile = File(shareCacheDir, "share_${System.currentTimeMillis()}.$extension")
+
+            val inputStream = if (mediaUrlOrUri.startsWith("http://") || mediaUrlOrUri.startsWith("https://")) {
+                java.net.URL(mediaUrlOrUri).openStream()
+            } else if (mediaUrlOrUri.startsWith("content://")) {
+                context.contentResolver.openInputStream(Uri.parse(mediaUrlOrUri))
+            } else if (mediaUrlOrUri.startsWith("file://")) {
+                java.io.FileInputStream(File(Uri.parse(mediaUrlOrUri).path ?: mediaUrlOrUri))
+            } else {
+                java.io.FileInputStream(File(mediaUrlOrUri))
+            }
+
+            if (inputStream != null) {
+                inputStream.use { input ->
+                    tempFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                val contentUri = FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.provider",
+                    tempFile
+                )
+                val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                    type = mimeType
+                    putExtra(android.content.Intent.EXTRA_STREAM, contentUri)
+                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                withContext(Dispatchers.Main) {
+                    context.startActivity(android.content.Intent.createChooser(shareIntent, "Share Media"))
+                }
+            } else {
+                val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(android.content.Intent.EXTRA_TEXT, mediaUrlOrUri)
+                }
+                withContext(Dispatchers.Main) {
+                    context.startActivity(android.content.Intent.createChooser(shareIntent, "Share Media"))
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed sharing media: ${e.message}", e)
+            withContext(Dispatchers.Main) {
+                val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(android.content.Intent.EXTRA_TEXT, mediaUrlOrUri)
+                }
+                context.startActivity(android.content.Intent.createChooser(shareIntent, "Share Media"))
+            }
+        }
+    }
 }
 
 

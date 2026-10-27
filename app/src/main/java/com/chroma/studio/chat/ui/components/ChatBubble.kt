@@ -1218,6 +1218,24 @@ private fun MessageBubbleInnerContent(
             bottom = if (isMediaOnly) 0.dp else if (isVoiceOnly) 5.dp else 7.dp
         )
     ) {
+        // Forwarded Header
+        if (message.isForwarded) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 3.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "↪ Forwarded",
+                    fontSize = 11.sp,
+                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                    color = if (isOutgoing) Color.White.copy(alpha = 0.75f) else colors.textMuted.copy(alpha = 0.85f),
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+
         // 1. Reply Quote Header (Apple frosted card with vertical accent indicator, interactive tap-to-scroll)
         if (message.replyTo != null) {
             val quotedMsgId = message.replyTo.messageId

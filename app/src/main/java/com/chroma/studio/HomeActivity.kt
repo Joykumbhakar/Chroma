@@ -196,6 +196,7 @@ class HomeActivity : ComponentActivity() {
         com.chroma.studio.chat.sound.SoundManager.init(this)
         askNotificationPermission()
         startChatNotificationListener()
+        com.chroma.studio.ChromaMessagingService.syncTokenForCurrentUser()
         window.statusBarColor = android.graphics.Color.TRANSPARENT
         window.navigationBarColor = android.graphics.Color.TRANSPARENT
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {

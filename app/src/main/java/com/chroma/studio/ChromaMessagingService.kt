@@ -14,6 +14,34 @@ import com.google.firebase.messaging.RemoteMessage
 
 class ChromaMessagingService : FirebaseMessagingService() {
 
+    companion object {
+        fun syncTokenForCurrentUser() {
+            val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
+            try {
+                com.google.firebase.messaging.FirebaseMessaging.getInstance().token
+                    .addOnSuccessListener { token ->
+                        if (!token.isNullOrBlank()) {
+                            com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                .collection("users")
+                                .document(uid)
+                                .set(
+                                    mapOf("fcmToken" to token, "lastTokenUpdate" to System.currentTimeMillis()),
+                                    com.google.firebase.firestore.SetOptions.merge()
+                                )
+                                .addOnSuccessListener {
+                                    Log.d("ChromaMessagingService", "FCM token synced successfully for $uid")
+                                }
+                        }
+                    }
+                    .addOnFailureListener { e ->
+                        Log.w("ChromaMessagingService", "Failed to retrieve FCM token", e)
+                    }
+            } catch (e: Exception) {
+                Log.e("ChromaMessagingService", "Error syncing FCM token", e)
+            }
+        }
+    }
+
     override fun onNewToken(token: String) {
         super.onNewToken(token)
         Log.d("ChromaMessagingService", "Refreshed token: $token")

@@ -268,7 +268,8 @@ object ChatAdapters {
             reactions = reactionCounts,
             userReaction = myReaction,
             replyTo = replyToQuote,
-            isEdited = msg.isEdited
+            isEdited = msg.isEdited,
+            isForwarded = msg.isForwarded
         )
     }
 
@@ -380,12 +381,15 @@ object ChatAdapters {
             phone = otherProfile?.socialLinks?.get("phone") ?: "",
             bio = otherProfile?.bio ?: room.groupDescription ?: "",
             unreadCount = unread,
-            pinnedMessage = null,
+            pinnedMessage = room.pinnedMessageText,
+            pinnedMessageId = room.pinnedMessageId,
             isMuted = false,
             isBlocked = false,
             isVerified = isVerified,
             members = membersList,
-            messages = resolvedMessages
+            messages = resolvedMessages,
+            otherUserId = otherUid,
+            participantUids = room.participants
         )
     }
 

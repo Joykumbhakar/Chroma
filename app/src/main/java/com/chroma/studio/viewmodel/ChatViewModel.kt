@@ -95,6 +95,9 @@ class ChatViewModel : ViewModel() {
     private val _isLoadingChats = MutableStateFlow(true)
     val isLoadingChats: StateFlow<Boolean> = _isLoadingChats.asStateFlow()
 
+    private val _blockedUserIds = MutableStateFlow<Set<String>>(emptySet())
+    val blockedUserIds: StateFlow<Set<String>> = _blockedUserIds.asStateFlow()
+
     private val _mutedChatIds = MutableStateFlow<Set<String>>(emptySet())
     val mutedChatIds: StateFlow<Set<String>> = _mutedChatIds.asStateFlow()
 
@@ -102,6 +105,7 @@ class ChatViewModel : ViewModel() {
         observeChats()
         loadStories()
         loadMutedChats()
+        loadBlockedUsers()
     }
 
     private fun loadStories() {
@@ -1069,6 +1073,97 @@ class ChatViewModel : ViewModel() {
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
             }
+        }
+    }
+
+    private fun loadBlockedUsers() {
+        viewModelScope.launch {
+            _blockedUserIds.value = repository.loadBlockedUsers()
+        }
+    }
+
+    fun toggleBlockUser(targetUserId: String, isBlocked: Boolean) {
+        val current = _blockedUserIds.value.toMutableSet()
+        if (isBlocked) current.add(targetUserId) else current.remove(targetUserId)
+        _blockedUserIds.value = current
+        viewModelScope.launch {
+            repository.blockUser(targetUserId, isBlocked)
+        }
+    }
+
+    fun reportUser(reportedUserId: String?, roomId: String, reason: String = "Inappropriate content", snippetMessages: List<String> = emptyList()) {
+        viewModelScope.launch {
+            repository.reportUser(reportedUserId, roomId, reason, snippetMessages)
+        }
+    }
+
+    fun pinMessage(roomId: String, messageId: String, messageText: String) {
+        val currentChats = _recentChats.value.toMutableList()
+        val index = currentChats.indexOfFirst { it.id == roomId }
+        if (index != -1) {
+            val room = currentChats[index]
+            currentChats[index] = room.copy(
+                pinnedMessageId = messageId,
+                pinnedMessageText = messageText,
+                pinnedBy = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid,
+                pinnedAt = System.currentTimeMillis()
+            )
+            _recentChats.value = currentChats
+        }
+        viewModelScope.launch {
+            repository.pinMessage(roomId, messageId, messageText)
+        }
+    }
+
+
+    var callManager: com.chroma.studio.webrtc.CallManager? = null
+        private set
+
+    fun initializeCallManager(context: android.content.Context) {
+        if (callManager == null) {
+            callManager = com.chroma.studio.webrtc.CallManager(context.applicationContext, repository)
+        }
+    }
+
+    fun startCall(roomId: String) {
+        callManager?.startCall(roomId)
+    }
+
+    fun answerCall(roomId: String) {
+        callManager?.answerCall(roomId)
+    }
+
+    fun toggleMute(muted: Boolean) {
+        callManager?.setMicrophoneMute(muted)
+    }
+
+    fun toggleCamera(enabled: Boolean) {
+        callManager?.setCameraEnabled(enabled)
+    }
+
+    fun switchCamera() {
+        callManager?.switchCamera()
+    }
+
+    fun endCall() {
+        callManager?.endCall()
+    }
+
+    fun unpinMessage(roomId: String) {
+        val currentChats = _recentChats.value.toMutableList()
+        val index = currentChats.indexOfFirst { it.id == roomId }
+        if (index != -1) {
+            val room = currentChats[index]
+            currentChats[index] = room.copy(
+                pinnedMessageId = null,
+                pinnedMessageText = null,
+                pinnedBy = null,
+                pinnedAt = 0L
+            )
+            _recentChats.value = currentChats
+        }
+        viewModelScope.launch {
+            repository.pinMessage(roomId, null, null)
         }
     }
 

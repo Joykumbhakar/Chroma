@@ -69,6 +69,18 @@ class CallManager(
         // Send SDP Answer
     }
 
+    fun setMicrophoneMute(muted: Boolean) {
+        webRTCClient?.setAudioEnabled(!muted)
+    }
+
+    fun setCameraEnabled(enabled: Boolean) {
+        webRTCClient?.setVideoEnabled(enabled)
+    }
+
+    fun switchCamera() {
+        webRTCClient?.switchCamera()
+    }
+
     fun endCall() {
         _callState.value = CallState.ENDED
         webRTCClient?.destroy()

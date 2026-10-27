@@ -132,7 +132,8 @@ data class ChatMessage(
     val reactions: Map<String, Int> = emptyMap(),
     val userReaction: String? = null,
     val replyTo: ReplyQuote? = null,
-    val isEdited: Boolean = false
+    val isEdited: Boolean = false,
+    val isForwarded: Boolean = false
 )
 
 @Immutable
@@ -148,11 +149,14 @@ data class ChatConversation(
     val bio: String,
     val unreadCount: Int = 0,
     val pinnedMessage: String? = null,
+    val pinnedMessageId: String? = null,
     val isMuted: Boolean = false,
     val isBlocked: Boolean = false,
     val isVerified: Boolean = false,
     val members: List<GroupMember>? = null,
-    val messages: List<ChatMessage> = emptyList()
+    val messages: List<ChatMessage> = emptyList(),
+    val otherUserId: String? = null,
+    val participantUids: List<String> = emptyList()
 )
 
 enum class AccentColorType(val title: String, val color: Color, val hoverColor: Color, val subtleColor: Color) {

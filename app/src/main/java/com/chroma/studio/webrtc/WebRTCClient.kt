@@ -113,6 +113,18 @@ class WebRTCClient(
         return null
     }
 
+    fun switchCamera(handler: CameraVideoCapturer.CameraSwitchHandler? = null) {
+        (videoCapturer as? CameraVideoCapturer)?.switchCamera(handler)
+    }
+
+    fun setAudioEnabled(enabled: Boolean) {
+        localAudioTrack?.setEnabled(enabled)
+    }
+
+    fun setVideoEnabled(enabled: Boolean) {
+        localVideoTrack?.setEnabled(enabled)
+    }
+
     fun destroy() {
         try {
             videoCapturer?.stopCapture()

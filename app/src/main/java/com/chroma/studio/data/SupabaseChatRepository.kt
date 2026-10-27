@@ -765,6 +765,92 @@ suspend fun uploadAudioToSupabase(audioBytes: ByteArray, extension: String = "m4
         }
     }
 
+    suspend fun pinMessage(roomId: String, messageId: String?, messageText: String?): Boolean = withContext(Dispatchers.IO) {
+        val currentUser = auth.currentUser ?: return@withContext false
+        try {
+            val roomRef = chatsCollection.document(roomId)
+            if (messageId != null && messageText != null) {
+                roomRef.update(
+                    mapOf(
+                        "pinnedMessageId" to messageId,
+                        "pinnedMessageText" to messageText,
+                        "pinnedBy" to currentUser.uid,
+                        "pinnedAt" to System.currentTimeMillis()
+                    )
+                ).await()
+            } else {
+                roomRef.update(
+                    mapOf(
+                        "pinnedMessageId" to null,
+                        "pinnedMessageText" to null,
+                        "pinnedBy" to null,
+                        "pinnedAt" to 0L
+                    )
+                ).await()
+            }
+            true
+        } catch (e: Exception) {
+            Log.e("SupabaseChatRepository", "Error pinning/unpinning message", e)
+            false
+        }
+    }
+
+    suspend fun blockUser(targetUserId: String, isBlocked: Boolean): Boolean = withContext(Dispatchers.IO) {
+        val currentUser = auth.currentUser ?: return@withContext false
+        try {
+            val userRef = usersCollection.document(currentUser.uid)
+            val operation = if (isBlocked) {
+                com.google.firebase.firestore.FieldValue.arrayUnion(targetUserId)
+            } else {
+                com.google.firebase.firestore.FieldValue.arrayRemove(targetUserId)
+            }
+            userRef.update("blockedUsers", operation).await()
+            true
+        } catch (e: Exception) {
+            Log.e("SupabaseChatRepository", "Error updating blocked status for $targetUserId", e)
+            false
+        }
+    }
+
+    suspend fun reportUser(
+        reportedUserId: String?,
+        roomId: String,
+        reason: String,
+        snippetMessages: List<String>
+    ): Boolean = withContext(Dispatchers.IO) {
+        val currentUser = auth.currentUser ?: return@withContext false
+        try {
+            val reportDoc = firestore.collection("reports").document()
+            val reportData = mapOf(
+                "id" to reportDoc.id,
+                "reporterId" to currentUser.uid,
+                "reportedUserId" to (reportedUserId ?: ""),
+                "roomId" to roomId,
+                "reason" to reason,
+                "snippetMessages" to snippetMessages,
+                "timestamp" to System.currentTimeMillis(),
+                "status" to "pending"
+            )
+            reportDoc.set(reportData).await()
+            true
+        } catch (e: Exception) {
+            Log.e("SupabaseChatRepository", "Error submitting abuse report", e)
+            false
+        }
+    }
+
+    suspend fun loadBlockedUsers(): Set<String> = withContext(Dispatchers.IO) {
+        val currentUser = auth.currentUser ?: return@withContext emptySet()
+        try {
+            val doc = usersCollection.document(currentUser.uid).get().await()
+            val list = doc.get("blockedUsers") as? List<*> ?: emptyList<Any>()
+            list.mapNotNull { it?.toString() }.toSet()
+        } catch (e: Exception) {
+            Log.e("SupabaseChatRepository", "Error loading blocked users", e)
+            emptySet()
+        }
+    }
+
     suspend fun deleteMessage(messageId: String, roomId: String): Boolean = withContext(Dispatchers.IO) {
         try {
             // Delete from Firestore

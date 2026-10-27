@@ -3,6 +3,7 @@ package com.chroma.studio.chat.ui.components
 
 import com.chroma.studio.ui.components.VerifiedBadge
 import com.chroma.studio.R
+import com.chroma.studio.chat.media.MediaStoreHelper
 
 import android.content.Intent
 import android.widget.Toast
@@ -2929,6 +2930,7 @@ fun LightboxModal(
     onClose: () -> Unit
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val effectiveImages = remember(imageUrl, imageUrls) {
         if (imageUrls.isNotEmpty()) imageUrls
         else listOfNotNull(imageUrl)
@@ -3104,12 +3106,9 @@ fun LightboxModal(
             IconButton(
                 onClick = {
                     SoundManager.playReaction()
-                    val sendIntent = Intent().apply {
-                        action = Intent.ACTION_SEND
-                        putExtra(Intent.EXTRA_TEXT, currentPhotoUrl)
-                        type = "text/plain"
+                    coroutineScope.launch {
+                        MediaStoreHelper.shareMedia(context, currentPhotoUrl)
                     }
-                    context.startActivity(Intent.createChooser(sendIntent, "Share Photo"))
                 },
                 modifier = Modifier.size(44.dp)
             ) {
@@ -3120,6 +3119,9 @@ fun LightboxModal(
             IconButton(
                 onClick = {
                     SoundManager.playReaction()
+                    coroutineScope.launch {
+                        MediaStoreHelper.saveMediaToGallery(context, currentPhotoUrl)
+                    }
                 },
                 modifier = Modifier.size(44.dp)
             ) {
@@ -3130,6 +3132,9 @@ fun LightboxModal(
             IconButton(
                 onClick = {
                     SoundManager.playReaction()
+                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                    clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Media URL", currentPhotoUrl))
+                    Toast.makeText(context, "Link copied to clipboard", Toast.LENGTH_SHORT).show()
                 },
                 modifier = Modifier.size(44.dp)
             ) {
