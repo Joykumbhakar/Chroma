@@ -61,7 +61,8 @@ fun UserProfileHeroSection(
     isRestricted: Boolean,
     userId: String,
     onAvatarClick: () -> Unit,
-    onNavigateToUserList: ((String, String) -> Unit)?
+    onNavigateToUserList: ((String, String) -> Unit)?,
+    onPostsClick: (() -> Unit)? = null
 ) {
     val colors = LocalOscellionColors.current
     val presetBannerRes = remember(profile?.bannerUrl) { getBannerPresetDrawableRes(profile?.bannerUrl) }
@@ -204,7 +205,13 @@ fun UserProfileHeroSection(
                 // Posts Count
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(1.dp)
+                    verticalArrangement = Arrangement.spacedBy(1.dp),
+                    modifier = Modifier.clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {
+                        onPostsClick?.invoke()
+                    }
                 ) {
                     Text(
                         text = formatCount(worksCount),

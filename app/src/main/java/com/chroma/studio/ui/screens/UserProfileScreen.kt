@@ -100,6 +100,7 @@ import com.chroma.studio.viewmodel.StoryViewModel
 import com.composables.icons.lucide.*
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FieldValue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -219,6 +220,13 @@ fun UserProfileScreen(
     var selectedTabIndex by remember { mutableIntStateOf(0) }
 
     var showBannerLibrarySheet by remember { mutableStateOf(false) }
+    var showOtherUserOptionsSheet by remember { mutableStateOf(false) }
+    var showBlockConfirmDialog by remember { mutableStateOf(false) }
+    var showReportUserSheet by remember { mutableStateOf(false) }
+    var selectedReportReason by remember { mutableStateOf("Spam, Scam, or Fraud") }
+    var isMutedStories by remember { mutableStateOf(false) }
+    var savedWorks by remember { mutableStateOf<List<DiscoverPost>>(emptyList()) }
+    var isSavedLoading by remember { mutableStateOf(false) }
     var isUploadingBanner by remember { mutableStateOf(false) }
 
     val cropBannerLauncher = rememberLauncherForActivityResult(com.canhub.cropper.CropImageContract()) { result ->
@@ -291,6 +299,16 @@ fun UserProfileScreen(
             storyVm.loadUserStories(userId)
         }
 
+        if (isCurrentUser && currentUserId != null) {
+            launch {
+                isSavedLoading = true
+                try {
+                    savedWorks = discoverVm.repository.getSavedWorks(currentUserId)
+                } catch (_: Exception) {}
+                isSavedLoading = false
+            }
+        }
+
         if (currentUserId != null && currentUserId != userId) {
             launch {
                 val serverFollowing = discoverVm.repository.checkIsFollowing(currentUserId, userId)
@@ -337,7 +355,7 @@ fun UserProfileScreen(
     val imagePosts = remember(works) { works.filter { it.postType == "image" } }
     val flashPosts = userFlashes
     val remixWorks = remember(works) { works.filter { it.remixedFromPostId != null } }
-    val profileTabIcons = listOf(Lucide.LayoutGrid, Lucide.Image, Lucide.Zap, Lucide.HeartHandshake)
+    val profileTabIcons = if (isCurrentUser) listOf(Lucide.LayoutGrid, Lucide.Image, Lucide.Zap, Lucide.HeartHandshake, Lucide.Bookmark) else listOf(Lucide.LayoutGrid, Lucide.Image, Lucide.Zap, Lucide.HeartHandshake)
 
     val isScrolled by remember {
         derivedStateOf {
@@ -373,6 +391,10 @@ fun UserProfileScreen(
                     worksCount = works.size + flashPosts.size,
                     isRestricted = isRestricted,
                     userId = userId,
+                    onPostsClick = {
+                        selectedTabIndex = 0
+                        scope.launch { gridState.animateScrollToItem(0) }
+                    },
                     onAvatarClick = {
                         if (hasActiveStories) {
                             if (isCurrentUser) {
@@ -593,6 +615,32 @@ fun UserProfileScreen(
                         }
                     }
                 }
+                4 -> {
+                    // Saved / Bookmarks Tab (Only visible to account owner)
+                    if (isSavedLoading) {
+                        items(6) {
+                            Box(modifier = Modifier.aspectRatio(1f).clip(RectangleShape).shimmerEffect())
+                        }
+                    } else if (savedWorks.isEmpty()) {
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                            AppleEmptyTabState(
+                                icon = Lucide.Bookmark,
+                                title = "No Saved Works",
+                                subtitle = "Works and posts you bookmark will appear here."
+                            )
+                        }
+                    } else {
+                        items(savedWorks.size, key = { savedWorks[it].id }) { index ->
+                            val work = savedWorks[index]
+                            ProfileWorkCard(
+                                work = work,
+                                isLiked = likedWorkIds.contains(work.id),
+                                repository = repository,
+                                onClick = { selectedPostIndex = index }
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -695,13 +743,26 @@ fun UserProfileScreen(
                     Box(
                         modifier = Modifier
                             .size(38.dp)
-                            
                             .clickable { showShareCardModal = true },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             Lucide.Share2,
-                            contentDescription = "Share",
+                            contentDescription = "Share Card",
+                            tint = if (isScrolled) colors.textMain else Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clickable { showOtherUserOptionsSheet = true },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Lucide.EllipsisVertical,
+                            contentDescription = "More Options",
                             tint = if (isScrolled) colors.textMain else Color.White,
                             modifier = Modifier.size(18.dp)
                         )
@@ -724,11 +785,12 @@ fun UserProfileScreen(
         modifier = Modifier.fillMaxSize()
     ) {
         if (selectedPostIndex != null) {
-            val activeList = remember(selectedTabIndex, normalWorks, imagePosts, remixWorks, works) {
+            val activeList = remember(selectedTabIndex, normalWorks, imagePosts, remixWorks, savedWorks, works) {
                 when (selectedTabIndex) {
                     0 -> normalWorks
                     1 -> imagePosts
                     3 -> remixWorks
+                    4 -> savedWorks
                     else -> works
                 }
             }
@@ -776,6 +838,9 @@ fun UserProfileScreen(
                             onSaveClick = {
                                 if (currentUserId != null) {
                                     discoverVm.toggleSave(work.id)
+                                    if (selectedTabIndex == 4) {
+                                        savedWorks = savedWorks.filter { it.id != work.id }
+                                    }
                                 } else onRequireLogin()
                             },
                             onShareClick = {
@@ -1100,6 +1165,52 @@ fun UserProfileScreen(
                     )
                     AppleSettingDivider()
                     AppleSettingNavRow(
+                        title = "Only Friend List",
+                        subtitle = "Manage close friends (${storyVm.onlyFriendsIds.collectAsState().value.size})",
+                        icon = Lucide.Star,
+                        onClick = {
+                            showSettingsBottomSheet = false
+                            showOnlyFriendsManagementSheet = true
+                        }
+                    )
+                    AppleSettingDivider()
+                    AppleSettingNavRow(
+                        title = "Saved Collection",
+                        subtitle = "View bookmarked creations",
+                        icon = Lucide.Bookmark,
+                        onClick = {
+                            showSettingsBottomSheet = false
+                            selectedTabIndex = 4
+                        }
+                    )
+                    AppleSettingDivider()
+                    AppleSettingNavRow(
+                        title = "Share Profile",
+                        subtitle = "Share your profile link with others",
+                        icon = Lucide.Share2,
+                        onClick = {
+                            showSettingsBottomSheet = false
+                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_TEXT, "Check out my profile on Chroma: https://chroma.studio/user/${profile?.username ?: ""}")
+                            }
+                            context.startActivity(Intent.createChooser(shareIntent, "Share Profile"))
+                        }
+                    )
+                    AppleSettingDivider()
+                    AppleSettingNavRow(
+                        title = "Copy Profile Link",
+                        subtitle = "chroma.studio/user/@${profile?.username ?: ""}",
+                        icon = Lucide.Copy,
+                        onClick = {
+                            showSettingsBottomSheet = false
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            clipboard.setPrimaryClip(ClipData.newPlainText("profile_link", "https://chroma.studio/user/@${profile?.username ?: ""}"))
+                            ToastManager.showToast("Profile link copied")
+                        }
+                    )
+                    AppleSettingDivider()
+                    AppleSettingNavRow(
                         title = "Sign Out",
                         subtitle = "Log out from this device",
                         icon = Lucide.LogOut,
@@ -1138,6 +1249,259 @@ fun UserProfileScreen(
             onDismiss = { showSignOutConfirm = false },
             isDestructive = true
         )
+    }
+
+    // Other User Options Bottom Sheet (3-Dots Action Menu)
+    if (showOtherUserOptionsSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showOtherUserOptionsSheet = false },
+            containerColor = if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFF141416) else Color(0xFFF2F2F7),
+            dragHandle = { BottomSheetDefaults.DragHandle() },
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .padding(bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Profile Options",
+                        color = colors.textMain,
+                        fontSize = 19.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    IconButton(
+                        onClick = { showOtherUserOptionsSheet = false },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(Lucide.X, contentDescription = "Close", tint = colors.textMain, modifier = Modifier.size(16.dp))
+                    }
+                }
+
+                AppleSettingsGroup {
+                    AppleSettingNavRow(
+                        title = "Share Profile",
+                        subtitle = "Share @${profile?.username ?: ""} with others",
+                        icon = Lucide.Share2,
+                        onClick = {
+                            showOtherUserOptionsSheet = false
+                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_TEXT, "Check out @${profile?.username ?: ""} on Chroma: https://chroma.studio/user/${profile?.username ?: ""}")
+                            }
+                            context.startActivity(Intent.createChooser(shareIntent, "Share Profile"))
+                        }
+                    )
+                    AppleSettingDivider()
+                    AppleSettingNavRow(
+                        title = "Copy Profile Link",
+                        subtitle = "chroma.studio/user/@${profile?.username ?: ""}",
+                        icon = Lucide.Copy,
+                        onClick = {
+                            showOtherUserOptionsSheet = false
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            clipboard.setPrimaryClip(ClipData.newPlainText("profile_link", "https://chroma.studio/user/@${profile?.username ?: ""}"))
+                            ToastManager.showToast("Profile link copied")
+                        }
+                    )
+                    AppleSettingDivider()
+                    AppleSettingNavRow(
+                        title = "Profile Pass Card",
+                        subtitle = "View scannable digital card",
+                        icon = Lucide.QrCode,
+                        onClick = {
+                            showOtherUserOptionsSheet = false
+                            showShareCardModal = true
+                        }
+                    )
+                    AppleSettingDivider()
+                    AppleSettingNavRow(
+                        title = "Direct Message",
+                        subtitle = "Open conversation with @${profile?.username ?: ""}",
+                        icon = Lucide.MessageSquare,
+                        onClick = {
+                            showOtherUserOptionsSheet = false
+                            onNavigateToChat?.invoke(userId)
+                        }
+                    )
+                    AppleSettingDivider()
+                    AppleSettingNavRow(
+                        title = if (isMutedStories) "Unmute Stories" else "Mute Stories",
+                        subtitle = if (isMutedStories) "Show stories in feed" else "Hide stories from feed",
+                        icon = if (isMutedStories) Lucide.Bell else Lucide.BellOff,
+                        onClick = {
+                            showOtherUserOptionsSheet = false
+                            isMutedStories = !isMutedStories
+                            ToastManager.showToast(if (isMutedStories) "Stories from @${profile?.username ?: ""} muted" else "Stories unmuted")
+                        }
+                    )
+                }
+
+                AppleSettingsGroup {
+                    AppleSettingNavRow(
+                        title = "Block User",
+                        subtitle = "Prevent @${profile?.username ?: ""} from contacting you",
+                        icon = Lucide.Ban,
+                        isDestructive = true,
+                        onClick = {
+                            showOtherUserOptionsSheet = false
+                            showBlockConfirmDialog = true
+                        }
+                    )
+                    AppleSettingDivider()
+                    AppleSettingNavRow(
+                        title = "Report Account",
+                        subtitle = "Report spam, abuse, or safety violation",
+                        icon = Lucide.Flag,
+                        isDestructive = true,
+                        onClick = {
+                            showOtherUserOptionsSheet = false
+                            showReportUserSheet = true
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    // Block User Confirmation Dialog
+    if (showBlockConfirmDialog) {
+        IosAlertDialog(
+            title = "Block @${profile?.username ?: "User"}?",
+            message = "They will not be able to message you or view your profile and posts. They will not be notified that you blocked them.",
+            confirmText = "Block",
+            onConfirm = {
+                showBlockConfirmDialog = false
+                val uid = currentUserId ?: return@IosAlertDialog
+                scope.launch {
+                    try {
+                        FirebaseFirestore.getInstance().collection("users").document(uid)
+                            .update("blockedUserIds", FieldValue.arrayUnion(userId)).await()
+                        ToastManager.showToast("@${profile?.username ?: ""} has been blocked")
+                        isFollowing = false
+                    } catch (e: Exception) {
+                        ToastManager.showToast("Failed to block user")
+                    }
+                }
+            },
+            dismissText = "Cancel",
+            onDismiss = { showBlockConfirmDialog = false },
+            isDestructive = true
+        )
+    }
+
+    // Report User Bottom Sheet
+    if (showReportUserSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showReportUserSheet = false },
+            containerColor = if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFF141416) else Color(0xFFF2F2F7),
+            dragHandle = { BottomSheetDefaults.DragHandle() },
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .padding(bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            "Report @${profile?.username ?: ""}",
+                            color = colors.textMain,
+                            fontSize = 19.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            "Why are you reporting this account?",
+                            color = Color(0xFF8E8E93),
+                            fontSize = 12.sp
+                        )
+                    }
+                    IconButton(
+                        onClick = { showReportUserSheet = false },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(Lucide.X, contentDescription = "Close", tint = colors.textMain, modifier = Modifier.size(16.dp))
+                    }
+                }
+
+                val reportReasons = listOf(
+                    "Spam, Scam, or Fraud",
+                    "Harassment, Bullying, or Hate Speech",
+                    "Inappropriate or Sensitive Media",
+                    "Impersonation or False Identity",
+                    "Violence or Dangerous Activity"
+                )
+
+                AppleSettingsGroup {
+                    reportReasons.forEachIndexed { idx, reason ->
+                        val isSelected = selectedReportReason == reason
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { selectedReportReason = reason }
+                                .padding(horizontal = 16.dp, vertical = 13.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = reason,
+                                color = colors.textMain,
+                                fontSize = 14.sp,
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                            )
+                            if (isSelected) {
+                                Icon(Lucide.Check, contentDescription = "Selected", tint = Color(0xFF007AFF), modifier = Modifier.size(17.dp))
+                            }
+                        }
+                        if (idx < reportReasons.lastIndex) {
+                            AppleSettingDivider()
+                        }
+                    }
+                }
+
+                ChromaPillButton(
+                    onClick = {
+                        showReportUserSheet = false
+                        val uid = currentUserId ?: "anonymous"
+                        scope.launch {
+                            try {
+                                FirebaseFirestore.getInstance().collection("reports").add(
+                                    mapOf(
+                                        "reporterId" to uid,
+                                        "reportedUserId" to userId,
+                                        "reportedUsername" to (profile?.username ?: ""),
+                                        "reason" to selectedReportReason,
+                                        "type" to "user_profile",
+                                        "timestamp" to System.currentTimeMillis()
+                                    )
+                                ).await()
+                                ToastManager.showToast("Report submitted. Thank you for keeping Chroma safe.")
+                            } catch (_: Exception) {
+                                ToastManager.showToast("Failed to submit report")
+                            }
+                        }
+                    },
+                    variant = ChromaPillVariant.Rose,
+                    modifier = Modifier.fillMaxWidth().height(42.dp)
+                ) {
+                    Text("Submit Report", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                }
+            }
+        }
     }
 
     // Banner Library Modal Bottom Sheet
