@@ -553,12 +553,7 @@ fun DiscoverScreen(
                                 trendingWorks = trendingWorks,
                                 repository = repository,
                                 onWorkClick = { work ->
-                                    val index = filteredWorks.indexOfFirst { it.id == work.id }
-                                    if (index != -1) {
-                                        coroutineScope.launch { listState.animateScrollToItem(index + 3) }
-                                    } else {
-                                        onAuthorClick(work.creatorId, work.id)
-                                    }
+                                    onAuthorClick(work.creatorId, work.id)
                                 }
                             )
                         }
@@ -815,14 +810,22 @@ fun TrendingCard(
         }
     }
 
-    // Clean Single Rectangular Card (Strictly NO double cards, NO pills/capsules)
+    val cardShape = RoundedCornerShape(24.dp)
+
     Box(
         modifier = Modifier
-            .width(160.dp)
-            .height(132.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .width(104.dp)
+            .aspectRatio(9f / 16f)
+            .shadow(
+                elevation = 4.dp,
+                shape = cardShape,
+                clip = false,
+                ambientColor = Color.Black.copy(alpha = 0.25f),
+                spotColor = Color.Black.copy(alpha = 0.35f)
+            )
+            .clip(cardShape)
             .background(colors.glassBg)
-            .border(0.5.dp, colors.glassBorder, RoundedCornerShape(12.dp))
+            .border(0.5.dp, colors.glassBorder.copy(alpha = 0.4f), cardShape)
             .clickable { onClick() }
     ) {
         val isVideo = isVideoPost(work)
@@ -837,14 +840,6 @@ fun TrendingCard(
                     contentScale = ContentScale.Crop
                 )
             }
-            Icon(
-                imageVector = Lucide.Play,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier
-                    .size(28.dp)
-                    .align(Alignment.Center)
-            )
         } else if (work.postType == "image" && work.imageUrl != null) {
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current).data(work.imageUrl).crossfade(true).build(),
@@ -861,73 +856,60 @@ fun TrendingCard(
                 timeMillisOverride = 5000L,
                 modifier = Modifier.fillMaxSize()
             )
+        } else if (!work.imageUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current).data(work.imageUrl).crossfade(true).build(),
+                contentDescription = work.title,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
         }
 
-        // Scrim Gradient
+        // Subtle bottom faded shadow scrim
         Box(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
+                .fillMaxHeight(0.65f)
+                .align(Alignment.BottomCenter)
                 .background(
                     Brush.verticalGradient(
-                        listOf(
-                            Color.Black.copy(alpha = 0.35f),
+                        colors = listOf(
                             Color.Transparent,
-                            Color.Black.copy(alpha = 0.88f)
+                            Color.Black.copy(alpha = 0.35f),
+                            Color.Black.copy(alpha = 0.85f)
                         )
                     )
                 )
         )
 
-        // Top-Left Format Tag (Clean Rectangular Tag with subtle border - NOT A PILL)
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(8.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .background(Color.Black.copy(alpha = 0.65f))
-                .border(0.5.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(4.dp))
-                .padding(horizontal = 6.dp, vertical = 2.dp)
-        ) {
-            val label = when {
-                isVideo -> "FLASH VIDEO"
-                layers != null && layers!!.isNotEmpty() -> "PROCEDURAL"
-                else -> "MASTERWORK"
-            }
-            Text(label, color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.4.sp)
-        }
-
-        // Bottom Info Column
+        // Bottom Info: ONLY Like Count and Title
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(horizontal = 10.dp, vertical = 8.dp)
+                .padding(horizontal = 10.dp, vertical = 11.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(3.5.dp)
             ) {
-                Icon(ChromaIcons.HeartFilled, null, tint = Color(0xFFFF2D55), modifier = Modifier.size(11.dp))
+                Icon(
+                    imageVector = ChromaIcons.HeartFilled,
+                    contentDescription = null,
+                    tint = Color(0xFFFF2D55),
+                    modifier = Modifier.size(11.dp)
+                )
                 Text(
-                    "${work.likesCount}",
+                    text = "${work.likesCount}",
                     color = Color.White,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold
                 )
-                Spacer(Modifier.width(2.dp))
-                Text(
-                    "•  @${work.authorUsername}",
-                    color = Color.White.copy(alpha = 0.8f),
-                    fontSize = 10.5.sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
             }
             Spacer(Modifier.height(2.dp))
             Text(
-                work.title.ifEmpty { "Untitled Creation" },
+                text = work.title.ifEmpty { "Untitled" },
                 color = Color.White,
-                fontSize = 12.sp,
+                fontSize = 11.5.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -935,7 +917,6 @@ fun TrendingCard(
         }
     }
 }
-
 /**
  * Clean Cupertino Category Tabs for Community Feed.
  * Features an animated Hr Line underline indicator beneath the selected category tab,
@@ -1158,7 +1139,7 @@ fun CommunityTrendingSpotlightReel(
 
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
         ) {
             items(trendingWorks, key = { "trend_${it.id}" }) { work ->
                 TrendingCard(
