@@ -590,6 +590,11 @@ object FcpTimelineExporter {
             val cmdArgs = mutableListOf<String>()
             cmdArgs.add("ffmpeg")
             cmdArgs.add("-y")
+            val numCores = Runtime.getRuntime().availableProcessors().coerceIn(4, 16)
+            cmdArgs.add("-threads")
+            cmdArgs.add(numCores.toString())
+            cmdArgs.add("-filter_threads")
+            cmdArgs.add(numCores.toString())
 
             // Add input arguments
             clips.indices.forEach { i ->
@@ -692,7 +697,7 @@ object FcpTimelineExporter {
                 }
 
                 // Uniform scale and letterboxing
-                vFilter.append("scale=$finalW:$finalH:force_original_aspect_ratio=decrease,")
+                vFilter.append("scale=$finalW:$finalH:force_original_aspect_ratio=decrease:flags=bilinear,")
                 vFilter.append("pad=$finalW:$finalH:(ow-iw)/2:(oh-ih)/2:$padColorHex,")
                 vFilter.append("setsar=1,fps=$targetFps")
 
@@ -1141,29 +1146,11 @@ object FcpTimelineExporter {
             cmdArgs.add("-t")
             cmdArgs.add(String.format(Locale.US, "%.3f", totalTimelineDurationSec))
 
-            // Encoding flags: ultrafast x264, standard AAC
-            cmdArgs.add("-c:v")
-            cmdArgs.add("libx264")
-            cmdArgs.add("-preset")
-            cmdArgs.add("ultrafast")
-            cmdArgs.add("-crf")
-            cmdArgs.add("23")
-            cmdArgs.add("-pix_fmt")
-            cmdArgs.add("yuv420p")
-
-            cmdArgs.add("-c:a")
-            cmdArgs.add("aac")
-            cmdArgs.add("-b:a")
-            cmdArgs.add("192k")
-
-            cmdArgs.add("-movflags")
-            cmdArgs.add("+faststart")
-
-            cmdArgs.add(outputFile.absolutePath)
-
-            onProgress(0.40f, "Rendering timeline & transitions...")
-            val cmd = cmdArgs.toTypedArray()
-            Log.d(TAG, "Executing FFmpeg (${cmd.size} args): ${cmd.joinToString(" ")}")
+            val (targetBitrate, maxBitrate, bufSize) = when (res.lowercase()) {
+                "720p" -> Triple("4M", "6M", "8M")
+                "4k" -> Triple("18M", "24M", "32M")
+                else -> Triple("8M", "12M", "16M")
+            }
 
             RxFFmpegInvoke.getInstance().setDebug(true)
             var lastLoggedProgress = -1
@@ -1194,13 +1181,82 @@ object FcpTimelineExporter {
                 }
             }
 
+            fun buildEncodingArgs(useHardwareCodec: Boolean): Array<String> {
+                val args = mutableListOf<String>()
+                args.addAll(cmdArgs)
+                args.add("-filter_complex")
+                args.add(finalGraph)
+                args.add("-map")
+                args.add(finalVideoStream)
+                args.add("-map")
+                args.add(finalAudioStream)
+                args.add("-t")
+                args.add(String.format(Locale.US, "%.3f", totalTimelineDurationSec))
+
+                if (useHardwareCodec) {
+                    // Android Hardware MediaCodec Acceleration (GPU/VPU ASIC)
+                    args.add("-c:v")
+                    args.add("h264_mediacodec")
+                    args.add("-b:v")
+                    args.add(targetBitrate)
+                    args.add("-maxrate")
+                    args.add(maxBitrate)
+                    args.add("-bufsize")
+                    args.add(bufSize)
+                    args.add("-pix_fmt")
+                    args.add("yuv420p")
+                } else {
+                    // Multi-threaded CPU libx264 optimized for mobile ARM
+                    args.add("-c:v")
+                    args.add("libx264")
+                    args.add("-preset")
+                    args.add("veryfast")
+                    args.add("-tune")
+                    args.add("zerolatency")
+                    args.add("-crf")
+                    args.add("25")
+                    args.add("-maxrate")
+                    args.add(maxBitrate)
+                    args.add("-bufsize")
+                    args.add(bufSize)
+                    args.add("-threads")
+                    args.add(numCores.toString())
+                    args.add("-pix_fmt")
+                    args.add("yuv420p")
+                }
+
+                args.add("-c:a")
+                args.add("aac")
+                args.add("-b:a")
+                args.add("192k")
+                args.add("-movflags")
+                args.add("+faststart")
+                args.add(outputFile.absolutePath)
+                return args.toTypedArray()
+            }
+
             if (isCancelled || !isActive) {
                 try { outputFile.delete() } catch (_: Throwable) {}
                 return@withContext null
             }
 
-            val returnCode = RxFFmpegInvoke.getInstance().runCommand(cmd, listener)
-            Log.d(TAG, "FFmpeg returned code: $returnCode (ErrorMsg: $ffmpegErrorMsg)")
+            onProgress(0.40f, "⚡ Rendering with Hardware Acceleration...")
+            val hwCmd = buildEncodingArgs(useHardwareCodec = true)
+            Log.d(TAG, "Executing Hardware FFmpeg (${hwCmd.size} args): ${hwCmd.joinToString(" ")}")
+            var returnCode = RxFFmpegInvoke.getInstance().runCommand(hwCmd, listener)
+            Log.d(TAG, "Hardware FFmpeg returned code: $returnCode (ErrorMsg: $ffmpegErrorMsg)")
+
+            // If hardware encoder fails or format is unsupported on device, fallback to multi-threaded CPU libx264
+            if ((returnCode != 0 || !outputFile.exists() || outputFile.length() == 0L) && !isCancelled && isActive) {
+                Log.w(TAG, "Hardware MediaCodec returned $returnCode ($ffmpegErrorMsg). Falling back to multi-core libx264...")
+                onProgress(0.42f, "Rendering video (Multi-threaded CPU)...")
+                try { outputFile.delete() } catch (_: Throwable) {}
+                ffmpegErrorMsg = null
+                val swCmd = buildEncodingArgs(useHardwareCodec = false)
+                Log.d(TAG, "Executing Software FFmpeg (${swCmd.size} args): ${swCmd.joinToString(" ")}")
+                returnCode = RxFFmpegInvoke.getInstance().runCommand(swCmd, listener)
+                Log.d(TAG, "Software FFmpeg returned code: $returnCode (ErrorMsg: $ffmpegErrorMsg)")
+            }
 
             if (isCancelled || !isActive) {
                 try { outputFile.delete() } catch (_: Throwable) {}

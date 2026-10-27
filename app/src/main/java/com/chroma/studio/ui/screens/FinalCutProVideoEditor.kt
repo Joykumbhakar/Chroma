@@ -12181,7 +12181,7 @@ fun FcpExportSheet(
 ) {
     val colors = LocalOscellionColors.current
     var selectedRes by remember { mutableStateOf("1080p") }
-    var selectedFps by remember { mutableStateOf("60 FPS") }
+    var selectedFps by remember { mutableStateOf("30 FPS") }
     val resolutions = listOf("720p", "1080p", "4K")
     val frameRates = listOf("24 FPS", "30 FPS", "60 FPS")
 

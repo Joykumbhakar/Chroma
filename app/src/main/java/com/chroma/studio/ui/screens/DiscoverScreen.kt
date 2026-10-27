@@ -617,6 +617,14 @@ fun DiscoverScreen(
                                         onRequireLogin()
                                     }
                                 },
+                                onForceLike = {
+                                    val authUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                                    if (!authUserId.isNullOrBlank()) {
+                                        discoverViewModel?.toggleLike(work.id, authUserId, forceLike = true)
+                                    } else {
+                                        onRequireLogin()
+                                    }
+                                },
                                 onDownloadClick = {
                                     discoverViewModel?.trackDownload(work.id)
                                     onDownloadWork(work)
@@ -3078,6 +3086,7 @@ fun FeedPostCard(
     repository: WorkRepository,
     onRequireLogin: () -> Unit = {},
     onLikeClick: () -> Unit = {},
+    onForceLike: (() -> Unit)? = null,
     onAuthorClick: (String) -> Unit = {},
     onDownloadClick: () -> Unit = {},
     onRemixClick: () -> Unit = {},
@@ -3168,7 +3177,10 @@ fun FeedPostCard(
                         if (uid.isNullOrBlank()) {
                             onRequireLogin()
                         } else {
-                            if (!isLiked) {
+                            // Double tap ALWAYS LIKES and NEVER DISLIKES (User must tap heart button to unlike)
+                            if (onForceLike != null) {
+                                onForceLike()
+                            } else if (!isLiked) {
                                 onLikeClick()
                             }
                         }
@@ -3194,12 +3206,16 @@ fun FeedPostCard(
                     if (uid.isNullOrBlank()) {
                         onRequireLogin()
                     } else {
-                        if (!isLiked) {
+                        // Double tap ALWAYS LIKES and NEVER DISLIKES (User must tap heart button to unlike)
+                        if (onForceLike != null) {
+                            onForceLike()
+                        } else if (!isLiked) {
                             onLikeClick()
                         }
                     }
                     doubleTapLikeState.trigger(offset)
                     haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                    com.chroma.studio.chat.sound.SoundManager.playReaction()
                     com.chroma.studio.chat.sound.SoundManager.playReaction()
                 },
                 modifier = Modifier

@@ -54,20 +54,15 @@ fun LiquidGlassKnob(
     hazeState: dev.chrisbanes.haze.HazeState? = null,
     modifier: Modifier = Modifier
 ) {
+    val knobShape = RoundedCornerShape(4.dp)
     Box(
         modifier = modifier
             .size(width, height)
             .scale(scale)
-            .shadow(
-                elevation = 3.dp,
-                shape = CircleShape,
-                spotColor = Color.Black.copy(alpha = 0.22f),
-                ambientColor = Color.Black.copy(alpha = 0.12f)
-            )
-            .clip(CircleShape)
-            .then(if (hazeState != null) Modifier.hazeChild(state = hazeState, shape = CircleShape) else Modifier)
+            .clip(knobShape)
+            .then(if (hazeState != null) Modifier.hazeChild(state = hazeState, shape = knobShape) else Modifier)
             .background(Color.White.copy(alpha = baseAlpha.coerceAtLeast(0.96f)))
-            .border(0.5.dp, Color.Black.copy(alpha = 0.08f), CircleShape)
+            .border(1.dp, Color(0x33000000), knobShape)
     ) {
         Box(
             modifier = Modifier
@@ -239,20 +234,21 @@ fun AppleSlider(
                 ((sliderState.value - sliderState.valueRange.start) / range).coerceIn(0f, 1f)
             } else 0f
 
+            val trackShape = RoundedCornerShape(4.dp)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(trackHeight)
-                    .clip(CircleShape)
+                    .clip(trackShape)
                     .background(inactiveTrackColor)
-                    .border(0.5.dp, trackBorderColor, CircleShape)
+                    .border(0.5.dp, trackBorderColor, trackShape)
             ) {
                 if (fraction > 0.001f) {
                     Box(
                         modifier = Modifier
                             .fillMaxHeight()
                             .fillMaxWidth(fraction)
-                            .clip(CircleShape)
+                            .clip(trackShape)
                             .background(Brush.horizontalGradient(activeGrad))
                     )
                 }

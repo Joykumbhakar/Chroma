@@ -478,8 +478,12 @@ private fun FlashVideoItem(
                 detectTapGestures(
                     onDoubleTap = { offset ->
                         doubleTapLikeState.trigger(offset)
-                        if (!isLiked) {
+                        val uid = FirebaseAuth.getInstance().currentUser?.uid
+                        if (uid.isNullOrBlank()) {
                             onLike()
+                        } else {
+                            // Double tap ALWAYS LIKES and NEVER DISLIKES (User must tap heart button to unlike)
+                            flashVm.toggleLike(video.id, forceLike = true)
                         }
                         haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
                         com.chroma.studio.chat.sound.SoundManager.playReaction()

@@ -1017,8 +1017,8 @@ private fun TrimTimeline(
                     .fillMaxHeight()
                     .width(with(density) { selectionWidthPx.toDp() })
                     .offset(x = with(density) { startPx.toDp() })
-                    .background(Color(0xFFFFD60A).copy(alpha = 0.20f))
-                    .border(2.dp, Color(0xFFFFD60A), RoundedCornerShape(2.dp))
+                    .background(Color(0xFF007AFF).copy(alpha = 0.18f))
+                    .border(2.dp, Color(0xFF007AFF), RoundedCornerShape(4.dp))
             )
 
             // Playhead indicator hairline
@@ -1088,7 +1088,7 @@ private fun DragHandle(
             .width(16.dp)
             .offset(x = with(density) { offsetXPx.toDp() })
             .clip(RoundedCornerShape(4.dp))
-            .background(Color(0xFFFFD60A))
+            .background(Color(0xFF007AFF))
             .pointerInput(barWidthPx) {
                 detectHorizontalDragGestures { change, dragAmount ->
                     change.consume()
@@ -1163,21 +1163,67 @@ private fun AdjustSlider(
     min: Float,
     max: Float,
     format: String,
+    defaultValue: Float = if (min < 0f) 0f else 1f,
     onValueChange: (Float) -> Unit
 ) {
-    Column {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(label, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-            Text(String.format(Locale.US, format, value), color = Color(0xFF007AFF), fontSize = 13.sp)
+    val isModified = kotlin.math.abs(value - defaultValue) > 0.01f
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color(0xFF1C1C1E))
+            .border(1.dp, if (isModified) Color(0x33007AFF) else Color(0x18FFFFFF), RoundedCornerShape(10.dp))
+            .padding(horizontal = 14.dp, vertical = 10.dp)
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = label,
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    if (isModified) {
+                        Text(
+                            text = "Reset",
+                            color = Color(0xFF007AFF),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .clickable { onValueChange(defaultValue) }
+                                .padding(horizontal = 4.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(if (isModified) Color(0x26007AFF) else Color(0x14FFFFFF))
+                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = String.format(Locale.US, format, value),
+                        color = if (isModified) Color(0xFF007AFF) else Color(0xCCFFFFFF),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            AppleSlider(
+                value = value,
+                onValueChange = onValueChange,
+                valueRange = min..max,
+                trackHeight = 8.dp
+            )
         }
-        Spacer(Modifier.height(4.dp))
-        AppleSlider(
-            value = value,
-            onValueChange = onValueChange,
-            valueRange = min..max
-        )
     }
 }
