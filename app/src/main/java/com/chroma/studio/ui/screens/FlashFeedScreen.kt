@@ -389,6 +389,7 @@ private fun FlashVideoItem(
 
     val colors = LocalOscellionColors.current
     val doubleTapLikeState = rememberDoubleTapLikeState()
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     var isPlaying by remember { mutableStateOf(player.isPlaying) }
     var showPlayPauseOverlay by remember { mutableStateOf(false) }
     var showMoreOptionsSheet by remember { mutableStateOf(false) }
@@ -480,6 +481,8 @@ private fun FlashVideoItem(
                         if (!isLiked) {
                             onLike()
                         }
+                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                        com.chroma.studio.chat.sound.SoundManager.playReaction()
                     },
                     onTap = {
                         if (isPlaying) player.pause() else player.play()

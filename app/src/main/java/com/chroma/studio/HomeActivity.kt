@@ -236,6 +236,22 @@ class HomeActivity : ComponentActivity() {
 
                 val isMain = currentRoute == "main"
                 val pagerState = androidx.compose.foundation.pager.rememberPagerState(initialPage = 0, pageCount = { 5 })
+
+                val handleLogout: () -> Unit = {
+                    // Optimistic instant UI transition directly to Login screen (never blank)
+                    prefs.edit().putBoolean("is_first_launch", true).apply()
+                    navController.navigate("login") {
+                        popUpTo(0) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                        try {
+                            com.google.firebase.auth.FirebaseAuth.getInstance().signOut()
+                        } catch (e: Exception) {
+                            android.util.Log.e("HomeActivity", "Error signing out", e)
+                        }
+                    }
+                }
                 var isInsideChatTab by remember { mutableStateOf(false) }
                 var isDiscoverStoryViewerActive by remember { mutableStateOf(false) }
                 val hideBottomNavRoutes = setOf(
@@ -854,7 +870,11 @@ class HomeActivity : ComponentActivity() {
                                     }
                                 },
                                 onCancel = {
-                                    finish()
+                                    if (navController.previousBackStackEntry != null) {
+                                        navController.popBackStack()
+                                    } else {
+                                        finish()
+                                    }
                                 }
                             )
                         }
@@ -1115,11 +1135,16 @@ class HomeActivity : ComponentActivity() {
                         val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
                         val currentUser = auth.currentUser
                         if (currentUser == null) {
-                            androidx.compose.runtime.LaunchedEffect(Unit) {
-                                navController.navigate("main") {
-                                    popUpTo("main") { inclusive = true }
+                            // Optimistic fallback: Never display a blank screen! Render LoginScreen immediately
+                            com.chroma.studio.ui.screens.LoginScreen(
+                                onLoginSuccess = {
+                                    prefs.edit().putBoolean("is_first_launch", false).apply()
+                                    vm.refresh()
+                                },
+                                onCancel = {
+                                    coroutineScope.launch { pagerState.animateScrollToPage(0) }
                                 }
-                            }
+                            )
                         } else {
                             com.chroma.studio.ui.screens.UserProfileScreen(
                                 userId = currentUser.uid,
@@ -1128,6 +1153,7 @@ class HomeActivity : ComponentActivity() {
                                 storyViewModel = storyVm,
                                 showBackButton = false,
                                 onRequireLogin = { navController.navigate("login") },
+                                onLogout = handleLogout,
                                 onNavigateToChat = { otherUserId ->
                                     chatVm.startChat(otherUserId) { roomId ->
                                         navController.navigate("chat/$roomId") {
@@ -1410,22 +1436,7 @@ class HomeActivity : ComponentActivity() {
                             onNavigateToActivityHistory = { navController.navigate("activity_history") },
                             onNavigateToPrivacyTerms = { navController.navigate("privacy_terms") },
                             onBack = { navController.popBackStack() },
-                            onLogout = {
-                                // Instant UI switch
-                                prefs.edit().putBoolean("is_first_launch", true).apply()
-                                navController.navigate("login") {
-                                    popUpTo(navController.graph.id) { inclusive = true } // Clear the entire backstack properly
-                                }
-
-                                // Perform network/IO work in background
-                                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                                    try {
-                                        com.google.firebase.auth.FirebaseAuth.getInstance().signOut()
-                                    } catch (e: Exception) {
-                                        android.util.Log.e("HomeActivity", "Error signing out", e)
-                                    }
-                                }
-                            }
+                            onLogout = handleLogout
                         )
                     }
 
@@ -1783,6 +1794,7 @@ class HomeActivity : ComponentActivity() {
                             chatViewModel = chatVm,
                             storyViewModel = storyVm,
                             onRequireLogin = { navController.navigate("login") },
+                            onLogout = handleLogout,
                             onNavigateToChat = { otherUserId ->
                                 chatVm.startChat(otherUserId) { roomId ->
                                     navController.navigate("chat/$roomId") {

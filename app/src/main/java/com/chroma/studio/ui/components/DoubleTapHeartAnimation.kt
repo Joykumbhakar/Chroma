@@ -382,6 +382,7 @@ fun DoubleTapLikeContainer(
     content: @Composable BoxScope.() -> Unit
 ) {
     val state = rememberDoubleTapLikeState()
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
 
     Box(
         modifier = modifier.pointerInput(Unit) {
@@ -389,6 +390,8 @@ fun DoubleTapLikeContainer(
                 onTap = { onSingleTap?.invoke() },
                 onDoubleTap = { offset ->
                     state.trigger(offset)
+                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                    com.chroma.studio.chat.sound.SoundManager.playReaction()
                     onDoubleTap(offset)
                 }
             )

@@ -716,6 +716,31 @@ class SupabaseChatRepository {
         }
     }
 
+
+    suspend fun addReaction(messageId: String, roomId: String, emoji: String): Boolean = withContext(Dispatchers.IO) {
+        val currentUser = auth.currentUser ?: return@withContext false
+        try {
+            val msgRef = chatsCollection.document(roomId).collection("messages").document(messageId)
+            firestore.runTransaction { tx ->
+                val snap = tx.get(msgRef)
+                if (snap.exists()) {
+                    val msg = snap.toObject(ChatMessage::class.java)
+                    if (msg != null) {
+                        val updatedReactions = msg.reactions.toMutableMap()
+                        if (updatedReactions[currentUser.uid] != emoji) {
+                            updatedReactions[currentUser.uid] = emoji
+                            tx.update(msgRef, "reactions", updatedReactions)
+                        }
+                    }
+                }
+            }.await()
+            true
+        } catch (e: Exception) {
+            Log.e("SupabaseChatRepository", "Error adding reaction", e)
+            false
+        }
+    }
+
     suspend fun deleteMessage(messageId: String, roomId: String): Boolean = withContext(Dispatchers.IO) {
         try {
             // Delete from Firestore

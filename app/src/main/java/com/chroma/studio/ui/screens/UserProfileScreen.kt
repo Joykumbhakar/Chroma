@@ -149,6 +149,7 @@ fun UserProfileScreen(
     storyViewModel: com.chroma.studio.viewmodel.StoryViewModel? = null,
     showBackButton: Boolean = true,
     onRequireLogin: () -> Unit,
+    onLogout: (() -> Unit)? = null,
     onDownloadWork: (DiscoverPost) -> Unit,
     onRemixWork: (DiscoverPost) -> Unit,
     onNavigateToOriginal: (String, String) -> Unit,
@@ -1003,8 +1004,16 @@ fun UserProfileScreen(
             confirmText = "Sign Out",
             onConfirm = {
                 showSignOutConfirm = false
-                com.google.firebase.auth.FirebaseAuth.getInstance().signOut()
-                onRequireLogin()
+                if (onLogout != null) {
+                    onLogout()
+                } else {
+                    onRequireLogin()
+                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                        try {
+                            com.google.firebase.auth.FirebaseAuth.getInstance().signOut()
+                        } catch (_: Exception) {}
+                    }
+                }
             },
             dismissText = "Cancel",
             onDismiss = { showSignOutConfirm = false },

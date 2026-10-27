@@ -3100,6 +3100,7 @@ fun FeedPostCard(
     val modalState = remember(work.id, isOwner) { FeedPostModalState(isOwner) }
 
     val doubleTapLikeState = rememberDoubleTapLikeState()
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     val mediaSlides = remember(work.id, work.imageUrls, work.workUrls, work.imageUrl, work.jsonUrl) {
         resolvePostMediaSlides(work)
     }
@@ -3172,6 +3173,8 @@ fun FeedPostCard(
                             }
                         }
                         doubleTapLikeState.trigger(offset)
+                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                        com.chroma.studio.chat.sound.SoundManager.playReaction()
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -3196,6 +3199,8 @@ fun FeedPostCard(
                         }
                     }
                     doubleTapLikeState.trigger(offset)
+                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                    com.chroma.studio.chat.sound.SoundManager.playReaction()
                 },
                 modifier = Modifier
                     .fillMaxWidth()

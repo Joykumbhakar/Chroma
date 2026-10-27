@@ -322,6 +322,16 @@ fun PixelPerfectChatScreen(
         simulateFriendReply()
     }
 
+    fun addOrEnsureReaction(messageId: String, emoji: String) {
+        messages = messages.map { msg ->
+            if (msg.id != messageId) msg
+            else {
+                val updated = if (msg.reactions.contains(emoji)) msg.reactions else msg.reactions + emoji
+                msg.copy(reactions = updated)
+            }
+        }
+    }
+
     fun toggleReaction(messageId: String, emoji: String) {
         messages = messages.map { msg ->
             if (msg.id != messageId) msg
@@ -463,7 +473,7 @@ fun PixelPerfectChatScreen(
                                     activeMessageActionId =
                                         if (activeMessageActionId == message.id) null else message.id
                                 },
-                                onDoubleTapHeart = { toggleReaction(message.id, "❤️") },
+                                onDoubleTapHeart = { addOrEnsureReaction(message.id, "❤️") },
                                 onReact = { emoji ->
                                     toggleReaction(message.id, emoji)
                                     activeMessageActionId = null

@@ -652,6 +652,37 @@ class ChatViewModel : ViewModel() {
         }
     }
 
+
+    fun addOrEnsureReaction(messageId: String, emoji: String) {
+        val roomId = _activeRoomId.value ?: return
+        val currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
+
+        fun updateList(list: List<ChatMessage>): List<ChatMessage> {
+            return list.map { msg ->
+                if (msg.id == messageId) {
+                    val reactions = msg.reactions.toMutableMap()
+                    reactions[currentUserId] = emoji
+                    msg.copy(reactions = reactions)
+                } else msg
+            }
+        }
+
+        val prevServer = _serverMessages.value
+        val prevLocal = _localMessages.value
+
+        // 1. Optimistic instant local apply (never toggles off / dislikes)
+        _serverMessages.value = updateList(_serverMessages.value)
+        _localMessages.value = updateList(_localMessages.value)
+
+        viewModelScope.launch {
+            val success = repository.addReaction(messageId, roomId, emoji)
+            if (!success) {
+                _serverMessages.value = prevServer
+                _localMessages.value = prevLocal
+            }
+        }
+    }
+
     fun deleteMessage(messageId: String) {
         val roomId = _activeRoomId.value ?: return
         val prevServer = _serverMessages.value

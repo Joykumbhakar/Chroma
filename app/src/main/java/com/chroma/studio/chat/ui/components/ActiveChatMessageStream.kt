@@ -80,6 +80,29 @@ fun toggleOrUpdateReactionHelper(msg: ChatMessage, emoji: String): ChatMessage {
     }
 }
 
+
+fun addOrEnsureReactionHelper(msg: ChatMessage, emoji: String): ChatMessage {
+    val prevReaction = msg.userReaction
+    if (prevReaction == emoji) {
+        return msg // Already reacted with this emoji, keep it! Never remove or dislike.
+    }
+    val currentReactions = msg.reactions.toMutableMap()
+    if (prevReaction != null) {
+        val count = (currentReactions[prevReaction] ?: 1) - 1
+        if (count <= 0) {
+            currentReactions.remove(prevReaction)
+        } else {
+            currentReactions[prevReaction] = count
+        }
+    }
+    val currentCount = currentReactions[emoji] ?: 0
+    currentReactions[emoji] = currentCount + 1
+    return msg.copy(
+        reactions = currentReactions,
+        userReaction = emoji
+    )
+}
+
 @Composable
 fun ActiveChatMessageStream(
     modifier: Modifier = Modifier,
@@ -200,15 +223,14 @@ fun ActiveChatMessageStream(
                                     if (c.id == activeChatId) {
                                         c.copy(messages = c.messages.map { m ->
                                             if (m.id == msg.id) {
-                                                val prevReaction = m.userReaction
-                                                if (prevReaction == "❤️") m else toggleOrUpdateReactionHelper(m, "❤️")
+                                                addOrEnsureReactionHelper(m, "❤️")
                                             } else m
                                         })
                                     } else c
                                 }
                             }
                             if (chatViewModel != null && !activeChatId.startsWith("mock_") && !activeChatId.startsWith("chat_fallback")) {
-                                chatViewModel.toggleReaction(msg.id, "❤️")
+                                chatViewModel.addOrEnsureReaction(msg.id, "❤️")
                             }
                             SoundManager.playReaction()
                             showToast("Liked")
