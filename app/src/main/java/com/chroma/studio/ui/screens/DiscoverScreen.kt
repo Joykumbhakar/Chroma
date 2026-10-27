@@ -227,12 +227,13 @@ fun DiscoverScreen(
     var showStoryViewer by remember { mutableStateOf(false) }
     var showStoryCreationSheet by remember { mutableStateOf(false) }
     var showStoryGalleryPicker by remember { mutableStateOf(false) }
+    var showStoryCamera by remember { mutableStateOf(false) }
     var editingStoryImageUri by remember { mutableStateOf<Uri?>(null) }
     var pendingUploadStoryUri by remember { mutableStateOf<Uri?>(null) }
     var showShareStoryAudienceSheet by remember { mutableStateOf(false) }
     var showOnlyFriendsManagementSheet by remember { mutableStateOf(false) }
 
-    val shouldHideBottomNav = showStoryViewer || showStoryCreationSheet || showStoryGalleryPicker || (editingStoryImageUri != null) || showShareStoryAudienceSheet || showOnlyFriendsManagementSheet
+    val shouldHideBottomNav = showStoryViewer || showStoryCreationSheet || showStoryGalleryPicker || showStoryCamera || (editingStoryImageUri != null) || showShareStoryAudienceSheet || showOnlyFriendsManagementSheet
     LaunchedEffect(shouldHideBottomNav) {
         onStoryViewerChange?.invoke(shouldHideBottomNav)
     }
@@ -393,6 +394,9 @@ fun DiscoverScreen(
         }
         BackHandler(enabled = showCreateMenu) {
             showCreateMenu = false
+        }
+        BackHandler(enabled = showStoryCamera) {
+            showStoryCamera = false
         }
         BackHandler(enabled = editingStoryImageUri != null) {
             editingStoryImageUri = null
@@ -814,7 +818,10 @@ fun DiscoverScreen(
         if (showStoryGalleryPicker) {
             com.chroma.studio.chat.ui.components.CustomGalleryPickerModal(
                 onDismiss = { showStoryGalleryPicker = false },
-                onLaunchCamera = { showStoryGalleryPicker = false },
+                onLaunchCamera = {
+                    showStoryGalleryPicker = false
+                    showStoryCamera = true
+                },
                 onRequestMediaPermission = {},
                 onSendMedia = { uris, _ ->
                     showStoryGalleryPicker = false
@@ -822,6 +829,22 @@ fun DiscoverScreen(
                     if (pickedUri != null) {
                         editingStoryImageUri = pickedUri
                     }
+                }
+            )
+        }
+
+        // Professional In-App Camera for Stories
+        if (showStoryCamera) {
+            com.chroma.studio.chat.ui.components.IosCameraScreen(
+                onDismiss = { showStoryCamera = false },
+                onPhotoCaptured = { uri, _ ->
+                    showStoryCamera = false
+                    editingStoryImageUri = uri
+                },
+                onVideoCaptured = { uri, _ ->
+                    showStoryCamera = false
+                    pendingUploadStoryUri = uri
+                    showShareStoryAudienceSheet = true
                 }
             )
         }

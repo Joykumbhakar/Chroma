@@ -1137,6 +1137,38 @@ private fun ChatScreenContent(
 
     }
 
+    fun sendCapturedVideo(uri: Uri, caption: String?) {
+        val replyQuoteSnapshot = activeReplyQuote
+        val videoMsg = ChatMessage(
+            id = "m_${System.currentTimeMillis()}",
+            senderId = currentUser.id,
+            senderName = currentUser.name,
+            mediaType = "video",
+            localUri = uri.toString(),
+            mediaUrl = uri.toString(),
+            text = caption?.takeIf { it.isNotBlank() },
+            time = getCurrentTimeFormatted(),
+            status = "sent",
+            replyTo = replyQuoteSnapshot
+        )
+        if (chatViewModel == null || activeChatId.startsWith("mock_")) {
+            chats = chats.map { if (it.id == activeChatId) it.copy(messages = it.messages + videoMsg) else it }
+        }
+        activeReplyQuote = null
+        coroutineScope.launch {
+            try {
+                val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                if (bytes != null && chatViewModel != null && !activeChatId.startsWith("mock_")) {
+                    chatViewModel.sendMediaMessage(bytes, "mp4", caption ?: "", replyToMessageId = replyQuoteSnapshot?.messageId, localPreviewUri = uri.toString())
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("ChatScreen", "Failed to upload camera video", e)
+            }
+        }
+        SoundManager.playSend()
+        showToast("Video sent ✨")
+    }
+
 
 
     val audioPermissionLauncher = rememberLauncherForActivityResult(
@@ -4274,6 +4306,14 @@ private fun ChatScreenContent(
                     isIosCameraOpen = false
 
                     sendCapturedPhoto(uri, caption)
+
+                },
+
+                onVideoCaptured = { uri, caption ->
+
+                    isIosCameraOpen = false
+
+                    sendCapturedVideo(uri, caption)
 
                 }
 
