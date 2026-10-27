@@ -18,8 +18,32 @@ data class GalleryMediaItem(
     val isVideo: Boolean = false,
     val durationMs: Long = 0L,
     val bucketName: String = "All",
-    val sizeBytes: Long = 0L
-)
+    val sizeBytes: Long = 0L,
+    val width: Int = 0,
+    val height: Int = 0,
+    val mimeType: String = ""
+) {
+    val formattedDate: String by lazy {
+        val millis = if (dateAdded < 100000000000L) dateAdded * 1000L else dateAdded
+        val sdf = java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.getDefault())
+        sdf.format(java.util.Date(millis))
+    }
+
+    val monthYearKey: String by lazy {
+        val millis = if (dateAdded < 100000000000L) dateAdded * 1000L else dateAdded
+        val sdf = java.text.SimpleDateFormat("MMMM yyyy", java.util.Locale.getDefault())
+        sdf.format(java.util.Date(millis))
+    }
+
+    val formattedSize: String by lazy {
+        when {
+            sizeBytes >= 1024 * 1024 * 1024 -> "%.1f GB".format(sizeBytes / (1024.0 * 1024.0 * 1024.0))
+            sizeBytes >= 1024 * 1024 -> "%.1f MB".format(sizeBytes / (1024.0 * 1024.0))
+            sizeBytes >= 1024 -> "%d KB".format(sizeBytes / 1024)
+            else -> "$sizeBytes B"
+        }
+    }
+}
 
 object MediaStoreHelper {
     private const val TAG = "MediaStoreHelper"
@@ -41,10 +65,10 @@ object MediaStoreHelper {
     }
 
     /**
-     * Loads images and videos from device MediaStore asynchronously
+     * Loads images and videos from device MediaStore asynchronously with dimensions and metadata.
      */
-    suspend fun loadDeviceMedia(context: Context, maxCount: Int = 1000): List<GalleryMediaItem> = withContext(Dispatchers.IO) {
-        val mediaList = mutableListOf<GalleryMediaItem>()
+    suspend fun loadDeviceMedia(context: Context, maxCount: Int = 2000): List<GalleryMediaItem> = withContext(Dispatchers.IO) {
+        val mediaList = ArrayList<GalleryMediaItem>(minOf(maxCount, 1200))
 
         // 1. Fetch Images
         try {
@@ -53,7 +77,10 @@ object MediaStoreHelper {
                 MediaStore.Images.Media.DISPLAY_NAME,
                 MediaStore.Images.Media.DATE_ADDED,
                 MediaStore.Images.Media.BUCKET_DISPLAY_NAME,
-                MediaStore.Images.Media.SIZE
+                MediaStore.Images.Media.SIZE,
+                MediaStore.Images.Media.WIDTH,
+                MediaStore.Images.Media.HEIGHT,
+                MediaStore.Images.Media.MIME_TYPE
             )
             val imageSortOrder = "${MediaStore.Images.Media.DATE_ADDED} DESC"
 
@@ -69,6 +96,9 @@ object MediaStoreHelper {
                 val dateCol = cursor.getColumnIndex(MediaStore.Images.Media.DATE_ADDED)
                 val bucketCol = cursor.getColumnIndex(MediaStore.Images.Media.BUCKET_DISPLAY_NAME)
                 val sizeCol = cursor.getColumnIndex(MediaStore.Images.Media.SIZE)
+                val widthCol = cursor.getColumnIndex(MediaStore.Images.Media.WIDTH)
+                val heightCol = cursor.getColumnIndex(MediaStore.Images.Media.HEIGHT)
+                val mimeCol = cursor.getColumnIndex(MediaStore.Images.Media.MIME_TYPE)
 
                 if (idCol != -1) {
                     var count = 0
@@ -78,6 +108,9 @@ object MediaStoreHelper {
                         val dateAdded = if (dateCol != -1) cursor.getLong(dateCol) else System.currentTimeMillis()
                         val bucket = if (bucketCol != -1) cursor.getString(bucketCol) ?: "Photos" else "Photos"
                         val sizeBytes = if (sizeCol != -1) cursor.getLong(sizeCol) else 0L
+                        val width = if (widthCol != -1) cursor.getInt(widthCol) else 0
+                        val height = if (heightCol != -1) cursor.getInt(heightCol) else 0
+                        val mimeType = if (mimeCol != -1) cursor.getString(mimeCol) ?: "image/jpeg" else "image/jpeg"
                         val contentUri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
 
                         mediaList.add(
@@ -87,7 +120,10 @@ object MediaStoreHelper {
                                 dateAdded = dateAdded,
                                 isVideo = false,
                                 bucketName = bucket,
-                                sizeBytes = sizeBytes
+                                sizeBytes = sizeBytes,
+                                width = width,
+                                height = height,
+                                mimeType = mimeType
                             )
                         )
                         count++
@@ -106,7 +142,10 @@ object MediaStoreHelper {
                 MediaStore.Video.Media.DATE_ADDED,
                 MediaStore.Video.Media.DURATION,
                 MediaStore.Video.Media.BUCKET_DISPLAY_NAME,
-                MediaStore.Video.Media.SIZE
+                MediaStore.Video.Media.SIZE,
+                MediaStore.Video.Media.WIDTH,
+                MediaStore.Video.Media.HEIGHT,
+                MediaStore.Video.Media.MIME_TYPE
             )
             val videoSortOrder = "${MediaStore.Video.Media.DATE_ADDED} DESC"
 
@@ -123,6 +162,9 @@ object MediaStoreHelper {
                 val durCol = cursor.getColumnIndex(MediaStore.Video.Media.DURATION)
                 val bucketCol = cursor.getColumnIndex(MediaStore.Video.Media.BUCKET_DISPLAY_NAME)
                 val sizeCol = cursor.getColumnIndex(MediaStore.Video.Media.SIZE)
+                val widthCol = cursor.getColumnIndex(MediaStore.Video.Media.WIDTH)
+                val heightCol = cursor.getColumnIndex(MediaStore.Video.Media.HEIGHT)
+                val mimeCol = cursor.getColumnIndex(MediaStore.Video.Media.MIME_TYPE)
 
                 if (idCol != -1) {
                     var count = 0
@@ -133,6 +175,9 @@ object MediaStoreHelper {
                         val duration = if (durCol != -1) cursor.getLong(durCol) else 0L
                         val bucket = if (bucketCol != -1) cursor.getString(bucketCol) ?: "Videos" else "Videos"
                         val sizeBytes = if (sizeCol != -1) cursor.getLong(sizeCol) else 0L
+                        val width = if (widthCol != -1) cursor.getInt(widthCol) else 0
+                        val height = if (heightCol != -1) cursor.getInt(heightCol) else 0
+                        val mimeType = if (mimeCol != -1) cursor.getString(mimeCol) ?: "video/mp4" else "video/mp4"
                         val contentUri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id)
 
                         mediaList.add(
@@ -143,7 +188,10 @@ object MediaStoreHelper {
                                 isVideo = true,
                                 durationMs = duration,
                                 bucketName = bucket,
-                                sizeBytes = sizeBytes
+                                sizeBytes = sizeBytes,
+                                width = width,
+                                height = height,
+                                mimeType = mimeType
                             )
                         )
                         count++

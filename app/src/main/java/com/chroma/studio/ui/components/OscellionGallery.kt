@@ -44,10 +44,19 @@ import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import coil.request.videoFrameMillis
+import coil.request.CachePolicy
 import coil.size.Scale
 import coil.size.Size
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.input.pointer.pointerInput
@@ -172,6 +181,7 @@ fun OscellionGalleryLayout(
     // Controls state
     var mediaTypeFilter by remember { mutableStateOf(allowedMediaFilter) }
     var selectedAlbum by remember { mutableStateOf("All") }
+    var selectedCategory by remember { mutableStateOf("All") }
     var sortOrder by remember { mutableStateOf(GallerySortOrder.NEWEST) }
     var gridColumns by remember { mutableIntStateOf(3) } // 2, 3, or 4 columns
     var isSearchVisible by remember { mutableStateOf(false) }
@@ -181,15 +191,17 @@ fun OscellionGalleryLayout(
     val selectedUris = remember { mutableStateListOf<Uri>().apply { addAll(initialSelectedUris) } }
     var captionText by remember { mutableStateOf("") }
 
-    // Lightbox quick preview state
-    var lightboxItem by remember { mutableStateOf<GalleryMediaItem?>(null) }
+    // Modern Lightbox multi-item swipe & zoom state
+    var lightboxInitialIndex by remember { mutableIntStateOf(0) }
+    var showLightbox by remember { mutableStateOf(false) }
+    var lightboxMediaList by remember { mutableStateOf<List<GalleryMediaItem>>(emptyList()) }
 
     // Load media from MediaStore
     LaunchedEffect(hasPermission) {
         if (hasPermission) {
             isLoading = true
             allMedia = withContext(Dispatchers.IO) {
-                MediaStoreHelper.loadDeviceMedia(context, maxCount = 1000)
+                MediaStoreHelper.loadDeviceMedia(context, maxCount = 2000)
             }
             isLoading = false
         }
@@ -236,6 +248,57 @@ fun OscellionGalleryLayout(
             GallerySortOrder.OLDEST -> list.sortedBy { it.dateAdded }
             GallerySortOrder.DURATION -> list.sortedByDescending { it.durationMs }
             GallerySortOrder.NAME -> list.sortedBy { it.name.lowercase() }
+        }
+    }
+
+    fun handleCategorySelect(cat: String) {
+        selectedCategory = cat
+        when (cat) {
+            "All" -> {
+                selectedAlbum = "All"
+                mediaTypeFilter = GalleryMediaTypeFilter.ALL
+            }
+            "Camera" -> {
+                val cameraAlbum = albumsWithCounts.firstOrNull {
+                    it.first.contains("Camera", ignoreCase = true) || it.first.contains("DCIM", ignoreCase = true)
+                }?.first ?: "Camera"
+                selectedAlbum = cameraAlbum
+                mediaTypeFilter = GalleryMediaTypeFilter.ALL
+            }
+            "Screenshots" -> {
+                val ssAlbum = albumsWithCounts.firstOrNull {
+                    it.first.contains("Screenshot", ignoreCase = true)
+                }?.first ?: "Screenshots"
+                selectedAlbum = ssAlbum
+                mediaTypeFilter = GalleryMediaTypeFilter.ALL
+            }
+            "Videos" -> {
+                selectedAlbum = "All"
+                mediaTypeFilter = GalleryMediaTypeFilter.VIDEOS
+            }
+            "Photos" -> {
+                selectedAlbum = "All"
+                mediaTypeFilter = GalleryMediaTypeFilter.PHOTOS
+            }
+            "Downloads" -> {
+                val dlAlbum = albumsWithCounts.firstOrNull {
+                    it.first.contains("Download", ignoreCase = true)
+                }?.first ?: "Download"
+                selectedAlbum = dlAlbum
+                mediaTypeFilter = GalleryMediaTypeFilter.ALL
+            }
+        }
+    }
+
+    fun handleSelectAll() {
+        SoundManager.playTap(context)
+        val remaining = maxSelection - selectedUris.size
+        if (remaining > 0) {
+            val toAdd = filteredMedia
+                .map { it.uri }
+                .filter { !selectedUris.contains(it) }
+                .take(remaining)
+            selectedUris.addAll(toAdd)
         }
     }
 
@@ -296,6 +359,8 @@ fun OscellionGalleryLayout(
                     maxSelection = maxSelection,
                     gridColumns = gridColumns,
                     selectedAlbum = selectedAlbum,
+                    selectedCategory = selectedCategory,
+                    onCategorySelected = { handleCategorySelect(it) },
                     albumsWithCounts = albumsWithCounts,
                     mediaTypeFilter = mediaTypeFilter,
                     sortOrder = sortOrder,
@@ -343,12 +408,19 @@ fun OscellionGalleryLayout(
                     },
                     onMediaLongClick = { item ->
                         SoundManager.playReaction()
-                        lightboxItem = item
+                        val idx = filteredMedia.indexOf(item).coerceAtLeast(0)
+                        lightboxInitialIndex = idx
+                        lightboxMediaList = filteredMedia
+                        showLightbox = true
                     },
                     onQuickPreview = { item ->
                         SoundManager.playReaction()
-                        lightboxItem = item
+                        val idx = filteredMedia.indexOf(item).coerceAtLeast(0)
+                        lightboxInitialIndex = idx
+                        lightboxMediaList = filteredMedia
+                        showLightbox = true
                     },
+                    onSelectAll = { handleSelectAll() },
                     onClearSelection = {
                         SoundManager.playTap(context)
                         selectedUris.clear()
@@ -446,6 +518,8 @@ fun OscellionGalleryLayout(
                 maxSelection = maxSelection,
                 gridColumns = gridColumns,
                 selectedAlbum = selectedAlbum,
+                selectedCategory = selectedCategory,
+                onCategorySelected = { handleCategorySelect(it) },
                 albumsWithCounts = albumsWithCounts,
                 mediaTypeFilter = mediaTypeFilter,
                 sortOrder = sortOrder,
@@ -493,12 +567,19 @@ fun OscellionGalleryLayout(
                 },
                 onMediaLongClick = { item ->
                     SoundManager.playReaction()
-                    lightboxItem = item
+                    val idx = filteredMedia.indexOf(item).coerceAtLeast(0)
+                    lightboxInitialIndex = idx
+                    lightboxMediaList = filteredMedia
+                    showLightbox = true
                 },
                 onQuickPreview = { item ->
                     SoundManager.playReaction()
-                    lightboxItem = item
+                    val idx = filteredMedia.indexOf(item).coerceAtLeast(0)
+                    lightboxInitialIndex = idx
+                    lightboxMediaList = filteredMedia
+                    showLightbox = true
                 },
+                onSelectAll = { handleSelectAll() },
                 onClearSelection = {
                     SoundManager.playTap(context)
                     selectedUris.clear()
@@ -533,12 +614,14 @@ fun OscellionGalleryLayout(
         }
     }
 
-    // Lightbox Preview Dialog
-    lightboxItem?.let { item ->
+    // Modern Lightbox Multi-Item Swipe & Zoom Dialog
+    if (showLightbox && lightboxMediaList.isNotEmpty()) {
         GalleryLightboxDialog(
-            item = item,
-            isSelected = selectedUris.contains(item.uri),
-            onToggleSelect = {
+            mediaList = lightboxMediaList,
+            initialIndex = lightboxInitialIndex,
+            selectedUris = selectedUris,
+            maxSelection = maxSelection,
+            onToggleSelect = { item ->
                 SoundManager.playPop()
                 if (selectedUris.contains(item.uri)) {
                     selectedUris.remove(item.uri)
@@ -546,7 +629,7 @@ fun OscellionGalleryLayout(
                     selectedUris.add(item.uri)
                 }
             },
-            onDirectSelect = {
+            onDirectSelect = { item ->
                 SoundManager.playSend(context)
                 if (item.isVideo && onVideoSelected != null) {
                     onVideoSelected(item.uri)
@@ -560,10 +643,10 @@ fun OscellionGalleryLayout(
                         onPhotosSelected?.invoke(selectedUris.toList())
                     }
                 }
-                lightboxItem = null
+                showLightbox = false
                 onClose()
             },
-            onDismiss = { lightboxItem = null }
+            onDismiss = { showLightbox = false }
         )
     }
 }
@@ -649,7 +732,7 @@ private fun GalleryTopBar(
 }
 
 /**
- * Main scrollable body containing dropdown toolbars, search, and the grid
+ * Main scrollable body containing dropdown toolbars, quick category chips, search, and the 120Hz-optimized grid
  */
 @Composable
 private fun GalleryMainBody(
@@ -660,6 +743,8 @@ private fun GalleryMainBody(
     maxSelection: Int,
     gridColumns: Int,
     selectedAlbum: String,
+    selectedCategory: String = "All",
+    onCategorySelected: (String) -> Unit = {},
     albumsWithCounts: List<Pair<String, Int>>,
     mediaTypeFilter: GalleryMediaTypeFilter,
     sortOrder: GallerySortOrder,
@@ -679,6 +764,7 @@ private fun GalleryMainBody(
     onMediaClick: (GalleryMediaItem) -> Unit,
     onMediaLongClick: (GalleryMediaItem) -> Unit,
     onQuickPreview: (GalleryMediaItem) -> Unit,
+    onSelectAll: (() -> Unit)? = null,
     onClearSelection: () -> Unit,
     onRemoveUri: (Uri) -> Unit,
     onSubmitSelection: () -> Unit,
@@ -708,6 +794,12 @@ private fun GalleryMainBody(
                 onTypeFilterChange = onTypeFilterChange,
                 onSortOrderChange = onSortOrderChange,
                 onToggleColumns = onToggleColumns
+            )
+
+            // Quick Category Filter Chips (Camera, Screenshots, Videos, Photos, Downloads)
+            GalleryQuickCategoryChips(
+                selectedCategory = selectedCategory,
+                onCategorySelected = onCategorySelected
             )
 
             // Animated Expandable Search Input
@@ -746,135 +838,197 @@ private fun GalleryMainBody(
                 val haptic = LocalHapticFeedback.current
                 val coroutineScope = rememberCoroutineScope()
 
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(gridColumns),
-                    state = gridState,
-                    contentPadding = PaddingValues(
-                        start = 4.dp,
-                        end = 4.dp,
-                        top = 4.dp,
-                        bottom = if (selectedUris.isNotEmpty()) 120.dp else 24.dp
-                    ),
-                    horizontalArrangement = Arrangement.spacedBy(3.dp),
-                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                // 120Hz Floating Month/Year Date Scrubber
+                val firstVisibleIndex by remember { derivedStateOf { gridState.firstVisibleItemIndex } }
+                val visibleMonthYear by remember(mediaItems) {
+                    derivedStateOf {
+                        val actualIdx = if (showCameraTile) firstVisibleIndex - 1 else firstVisibleIndex
+                        val item = mediaItems.getOrNull(actualIdx.coerceIn(0, (mediaItems.size - 1).coerceAtLeast(0)))
+                        item?.monthYearKey ?: ""
+                    }
+                }
+
+                Box(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        .pointerInput(mediaItems, showCameraTile, maxSelection) {
-                            detectDragGesturesAfterLongPress(
-                                onDragStart = { offset ->
-                                    val hitItem = gridState.layoutInfo.visibleItemsInfo.find { info ->
-                                        offset.x >= info.offset.x && offset.x <= info.offset.x + info.size.width &&
-                                        offset.y >= info.offset.y && offset.y <= info.offset.y + info.size.height
+                ) {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(gridColumns),
+                        state = gridState,
+                        contentPadding = PaddingValues(
+                            start = 4.dp,
+                            end = 4.dp,
+                            top = 4.dp,
+                            bottom = if (selectedUris.isNotEmpty()) 120.dp else 24.dp
+                        ),
+                        horizontalArrangement = Arrangement.spacedBy(3.dp),
+                        verticalArrangement = Arrangement.spacedBy(3.dp),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .pointerInput(gridColumns) {
+                                detectTransformGestures { _, _, zoom, _ ->
+                                    if (zoom > 1.28f && gridColumns > 2) {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        onToggleColumns()
+                                    } else if (zoom < 0.76f && gridColumns < 4) {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        onToggleColumns()
                                     }
-                                    if (hitItem != null) {
-                                        val mediaIdx = if (showCameraTile) hitItem.index - 1 else hitItem.index
-                                        val item = mediaItems.getOrNull(mediaIdx)
-                                        if (item != null) {
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            SoundManager.playPop()
-                                            dragAnchorIndex = mediaIdx
-                                            dragInitialSelectedUris = selectedUris.toSet()
-                                            dragIsSelecting = !selectedUris.contains(item.uri)
-
-                                            val newSelection = if (dragIsSelecting) {
-                                                if (selectedUris.size < maxSelection && !selectedUris.contains(item.uri)) {
-                                                    selectedUris + item.uri
-                                                } else {
-                                                    selectedUris.toList()
-                                                }
-                                            } else {
-                                                selectedUris - item.uri
-                                            }
-                                            onUpdateSelectedUris(newSelection)
+                                }
+                            }
+                            .pointerInput(mediaItems, showCameraTile, maxSelection) {
+                                detectDragGesturesAfterLongPress(
+                                    onDragStart = { offset ->
+                                        val hitItem = gridState.layoutInfo.visibleItemsInfo.find { info ->
+                                            offset.x >= info.offset.x && offset.x <= info.offset.x + info.size.width &&
+                                            offset.y >= info.offset.y && offset.y <= info.offset.y + info.size.height
                                         }
-                                    }
-                                },
-                                onDragEnd = {
-                                    dragAnchorIndex = null
-                                },
-                                onDragCancel = {
-                                    dragAnchorIndex = null
-                                },
-                                onDrag = { change, _ ->
-                                    change.consume()
-                                    val anchor = dragAnchorIndex ?: return@detectDragGesturesAfterLongPress
-                                    val offset = change.position
+                                        if (hitItem != null) {
+                                            val mediaIdx = if (showCameraTile) hitItem.index - 1 else hitItem.index
+                                            val item = mediaItems.getOrNull(mediaIdx)
+                                            if (item != null) {
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                SoundManager.playPop()
+                                                dragAnchorIndex = mediaIdx
+                                                dragInitialSelectedUris = selectedUris.toSet()
+                                                dragIsSelecting = !selectedUris.contains(item.uri)
 
-                                    // Auto-scroll when dragging near viewport edges
-                                    val viewportHeight = gridState.layoutInfo.viewportSize.height.toFloat()
-                                    if (viewportHeight > 0f) {
-                                        if (offset.y < 90f && gridState.canScrollBackward) {
-                                            coroutineScope.launch {
-                                                gridState.scrollBy(-30f)
-                                            }
-                                        } else if (offset.y > viewportHeight - 110f && gridState.canScrollForward) {
-                                            coroutineScope.launch {
-                                                gridState.scrollBy(30f)
-                                            }
-                                        }
-                                    }
-
-                                    val hitItem = gridState.layoutInfo.visibleItemsInfo.find { info ->
-                                        offset.x >= info.offset.x && offset.x <= info.offset.x + info.size.width &&
-                                        offset.y >= info.offset.y && offset.y <= info.offset.y + info.size.height
-                                    }
-                                    if (hitItem != null) {
-                                        val currentIndex = if (showCameraTile) hitItem.index - 1 else hitItem.index
-                                        if (currentIndex in mediaItems.indices) {
-                                            val minIdx = minOf(anchor, currentIndex).coerceAtLeast(0)
-                                            val maxIdx = maxOf(anchor, currentIndex).coerceAtMost(mediaItems.size - 1)
-                                            val draggedUris = (minIdx..maxIdx).mapNotNull { mediaItems.getOrNull(it)?.uri }
-
-                                            val newSet = LinkedHashSet(dragInitialSelectedUris)
-                                            if (dragIsSelecting) {
-                                                for (uri in draggedUris) {
-                                                    if (newSet.size < maxSelection) {
-                                                        newSet.add(uri)
+                                                val newSelection = if (dragIsSelecting) {
+                                                    if (selectedUris.size < maxSelection && !selectedUris.contains(item.uri)) {
+                                                        selectedUris + item.uri
+                                                    } else {
+                                                        selectedUris.toList()
                                                     }
+                                                } else {
+                                                    selectedUris - item.uri
                                                 }
-                                            } else {
-                                                newSet.removeAll(draggedUris.toSet())
-                                            }
-
-                                            val newSelection = newSet.toList()
-                                            if (newSelection != selectedUris) {
-                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                                 onUpdateSelectedUris(newSelection)
                                             }
                                         }
+                                    },
+                                    onDragEnd = {
+                                        dragAnchorIndex = null
+                                    },
+                                    onDragCancel = {
+                                        dragAnchorIndex = null
+                                    },
+                                    onDrag = { change, _ ->
+                                        change.consume()
+                                        val anchor = dragAnchorIndex ?: return@detectDragGesturesAfterLongPress
+                                        val offset = change.position
+
+                                        // Auto-scroll when dragging near viewport edges
+                                        val viewportHeight = gridState.layoutInfo.viewportSize.height.toFloat()
+                                        if (viewportHeight > 0f) {
+                                            if (offset.y < 90f && gridState.canScrollBackward) {
+                                                coroutineScope.launch {
+                                                    gridState.scrollBy(-30f)
+                                                }
+                                            } else if (offset.y > viewportHeight - 110f && gridState.canScrollForward) {
+                                                coroutineScope.launch {
+                                                    gridState.scrollBy(30f)
+                                                }
+                                            }
+                                        }
+
+                                        val hitItem = gridState.layoutInfo.visibleItemsInfo.find { info ->
+                                            offset.x >= info.offset.x && offset.x <= info.offset.x + info.size.width &&
+                                            offset.y >= info.offset.y && offset.y <= info.offset.y + info.size.height
+                                        }
+                                        if (hitItem != null) {
+                                            val currentIndex = if (showCameraTile) hitItem.index - 1 else hitItem.index
+                                            if (currentIndex in mediaItems.indices) {
+                                                val minIdx = minOf(anchor, currentIndex).coerceAtLeast(0)
+                                                val maxIdx = maxOf(anchor, currentIndex).coerceAtMost(mediaItems.size - 1)
+                                                val draggedUris = (minIdx..maxIdx).mapNotNull { mediaItems.getOrNull(it)?.uri }
+
+                                                val newSet = LinkedHashSet(dragInitialSelectedUris)
+                                                if (dragIsSelecting) {
+                                                    for (uri in draggedUris) {
+                                                        if (newSet.size < maxSelection) {
+                                                            newSet.add(uri)
+                                                        }
+                                                    }
+                                                } else {
+                                                    newSet.removeAll(draggedUris.toSet())
+                                                }
+
+                                                val newSelection = newSet.toList()
+                                                if (newSelection != selectedUris) {
+                                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                    onUpdateSelectedUris(newSelection)
+                                                }
+                                            }
+                                        }
                                     }
-                                }
-                            )
+                                )
+                            }
+                    ) {
+                        // Live Camera Tile (First Slot)
+                        if (showCameraTile) {
+                            item {
+                                GalleryCameraTile(
+                                    onClick = onLaunchCamera
+                                )
+                            }
                         }
-                ) {
-                    // Live Camera Tile (First Slot)
-                    if (showCameraTile) {
-                        item {
-                            GalleryCameraTile(
-                                onClick = onLaunchCamera
+
+                        // Media Grid Items (Recycled with contentType and stable keys)
+                        items(
+                            items = mediaItems,
+                            key = { it.uri.toString() },
+                            contentType = { if (it.isVideo) "video" else "photo" }
+                        ) { item ->
+                            val isSelected = selectedUris.contains(item.uri)
+                            val selectionIndex = if (isSelected) selectedUris.indexOf(item.uri) + 1 else null
+
+                            GalleryMediaCard(
+                                item = item,
+                                isSelected = isSelected,
+                                selectionIndex = selectionIndex,
+                                hasAnySelection = selectedUris.isNotEmpty(),
+                                onClick = { onMediaClick(item) },
+                                onLongClick = { onMediaLongClick(item) },
+                                onQuickPreview = { onQuickPreview(item) }
                             )
                         }
                     }
 
-                    // Media Grid Items
-                    items(
-                        items = mediaItems,
-                        key = { it.uri.toString() },
-                        contentType = { if (it.isVideo) "video" else "photo" }
-                    ) { item ->
-                        val isSelected = selectedUris.contains(item.uri)
-                        val selectionIndex = if (isSelected) selectedUris.indexOf(item.uri) + 1 else null
-
-                        GalleryMediaCard(
-                            item = item,
-                            isSelected = isSelected,
-                            selectionIndex = selectionIndex,
-                            hasAnySelection = selectedUris.isNotEmpty(),
-                            onClick = { onMediaClick(item) },
-                            onLongClick = { onMediaLongClick(item) },
-                            onQuickPreview = { onQuickPreview(item) }
-                        )
+                    // 120Hz Floating Month/Year Date Scrubber
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = gridState.isScrollInProgress && visibleMonthYear.isNotBlank(),
+                        enter = fadeIn(animationSpec = tween(100)) + scaleIn(initialScale = 0.88f),
+                        exit = fadeOut(animationSpec = tween(250)) + scaleOut(targetScale = 0.88f),
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = 8.dp)
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = Color.Black.copy(alpha = 0.72f),
+                            border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.22f)),
+                            shadowElevation = 8.dp
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Icon(
+                                    Lucide.Calendar,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Text(
+                                    text = visibleMonthYear,
+                                    color = Color.White,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -893,10 +1047,70 @@ private fun GalleryMainBody(
                 showCaptionInput = showCaptionInput,
                 captionText = captionText,
                 onCaptionChange = onCaptionChange,
+                onSelectAll = onSelectAll,
                 onClear = onClearSelection,
                 onRemoveUri = onRemoveUri,
                 onSubmit = onSubmitSelection
             )
+        }
+    }
+}
+
+/**
+ * Modern 1-Tap Quick Category Filter Chips Bar
+ */
+@Composable
+private fun GalleryQuickCategoryChips(
+    selectedCategory: String,
+    onCategorySelected: (String) -> Unit
+) {
+    val colors = LocalOscellionColors.current
+    val categories = remember {
+        listOf(
+            "All" to Lucide.Layers,
+            "Camera" to Lucide.Camera,
+            "Screenshots" to Lucide.Smartphone,
+            "Videos" to Lucide.Film,
+            "Photos" to Lucide.Image,
+            "Downloads" to Lucide.Download
+        )
+    }
+
+    LazyRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 3.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        items(categories) { (name, icon) ->
+            val isSelected = selectedCategory == name
+            Row(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(if (isSelected) colors.primary else colors.glassBg)
+                    .border(
+                        0.5.dp,
+                        if (isSelected) Color.Transparent else colors.glassBorder,
+                        CircleShape
+                    )
+                    .clickable { onCategorySelected(name) }
+                    .padding(horizontal = 11.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.5.dp)
+            ) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    tint = if (isSelected) Color.White else colors.textMain,
+                    modifier = Modifier.size(12.dp)
+                )
+                Text(
+                    text = name,
+                    fontSize = 11.5.sp,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                    color = if (isSelected) Color.White else colors.textMain
+                )
+            }
         }
     }
 }
@@ -1250,7 +1464,10 @@ private fun GalleryCameraTile(
     Box(
         modifier = Modifier
             .aspectRatio(1f)
-            .clip(RoundedCornerShape(10.dp))
+            .graphicsLayer {
+                shape = RoundedCornerShape(10.dp)
+                clip = true
+            }
             .background(colors.glassBg)
             .border(0.5.dp, colors.glassBorder, RoundedCornerShape(10.dp))
             .clickable(onClick = onClick),
@@ -1260,7 +1477,6 @@ private fun GalleryCameraTile(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            // Clean camera icon (No circle background)
             Icon(
                 Lucide.Camera,
                 contentDescription = null,
@@ -1277,8 +1493,11 @@ private fun GalleryCameraTile(
     }
 }
 
+// 120Hz Optimized Thumbnail Request Size
+private val GALLERY_THUMB_SIZE = Size(240, 240)
+
 /**
- * Individual media thumbnail card with badges & indicators
+ * High-performance 120Hz-optimized media thumbnail card
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -1292,11 +1511,36 @@ private fun GalleryMediaCard(
     onQuickPreview: () -> Unit
 ) {
     val colors = LocalOscellionColors.current
+    val context = LocalContext.current
+
+    // Zero-latency hardware-accelerated image request
+    val imageRequest = remember(item.uri, item.isVideo) {
+        ImageRequest.Builder(context)
+            .data(item.uri)
+            .size(GALLERY_THUMB_SIZE)
+            .scale(Scale.FILL)
+            .apply {
+                if (item.isVideo) {
+                    videoFrameMillis(1000L)
+                }
+            }
+            .crossfade(false) // 120Hz smooth scrolling: eliminates transition overdraw
+            .allowRgb565(true) // Halves memory footprint for instant scroll decodes
+            .allowHardware(true) // GPU direct mapping
+            .memoryCachePolicy(CachePolicy.ENABLED)
+            .diskCachePolicy(CachePolicy.ENABLED)
+            .memoryCacheKey("thumb_${item.uri}")
+            .diskCacheKey("thumb_${item.uri}")
+            .build()
+    }
 
     Box(
         modifier = Modifier
             .aspectRatio(1f)
-            .clip(RoundedCornerShape(10.dp))
+            .graphicsLayer {
+                shape = RoundedCornerShape(10.dp)
+                clip = true
+            }
             .clickable(onClick = onClick)
             .border(
                 width = if (isSelected) 2.dp else 0.5.dp,
@@ -1304,25 +1548,6 @@ private fun GalleryMediaCard(
                 shape = RoundedCornerShape(10.dp)
             )
     ) {
-        val context = LocalContext.current
-        val imageRequest = remember(item.uri, item.isVideo) {
-            ImageRequest.Builder(context)
-                .data(item.uri)
-                .size(Size(260, 260))
-                .scale(Scale.FILL)
-                .apply {
-                    if (item.isVideo) {
-                        videoFrameMillis(1000L)
-                    }
-                }
-                .crossfade(100)
-                .allowRgb565(true)
-                .allowHardware(true)
-                .memoryCacheKey("thumb_${item.uri}")
-                .diskCacheKey("thumb_${item.uri}")
-                .build()
-        }
-
         AsyncImage(
             model = imageRequest,
             contentDescription = item.name,
@@ -1341,8 +1566,11 @@ private fun GalleryMediaCard(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .padding(4.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(Color.Black.copy(alpha = 0.7f))
+                    .graphicsLayer {
+                        shape = RoundedCornerShape(6.dp)
+                        clip = true
+                    }
+                    .background(Color.Black.copy(alpha = 0.72f))
                     .padding(horizontal = 5.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(3.dp)
@@ -1362,7 +1590,7 @@ private fun GalleryMediaCard(
             }
         }
 
-        // Quick Preview Eye Icon (Top-Start - Clean icon with no circle/pill background)
+        // Quick Preview Eye Icon (Top-Start)
         IconButton(
             onClick = onQuickPreview,
             modifier = Modifier
@@ -1378,7 +1606,7 @@ private fun GalleryMediaCard(
             )
         }
 
-        // Selection Indicator (Top-End - Clean checkmark icon with no circle/pill background)
+        // Selection Indicator (Top-End)
         if (isSelected) {
             Box(
                 modifier = Modifier
@@ -1408,6 +1636,7 @@ private fun GalleryFloatingSelectionDock(
     showCaptionInput: Boolean,
     captionText: String,
     onCaptionChange: (String) -> Unit,
+    onSelectAll: (() -> Unit)? = null,
     onClear: () -> Unit,
     onRemoveUri: (Uri) -> Unit,
     onSubmit: () -> Unit
@@ -1429,7 +1658,7 @@ private fun GalleryFloatingSelectionDock(
                 .padding(horizontal = 14.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Top Row: Count Badge, Clear Button, and Selected Thumbnails
+            // Top Row: Count Badge, Select All, Clear Button, and Selected Thumbnails
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1453,16 +1682,34 @@ private fun GalleryFloatingSelectionDock(
                     )
                 }
 
-                IconButton(
-                    onClick = onClear,
-                    modifier = Modifier.size(24.dp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Icon(
-                        Lucide.Trash2,
-                        contentDescription = "Clear",
-                        tint = colors.textMuted,
-                        modifier = Modifier.size(14.dp)
-                    )
+                    if (onSelectAll != null && selectedUris.size < maxSelection) {
+                        Text(
+                            text = "Select All",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.primary,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .clickable { onSelectAll() }
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onClear,
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            Lucide.Trash2,
+                            contentDescription = "Clear",
+                            tint = colors.textMuted,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
                 }
             }
 
@@ -1475,7 +1722,10 @@ private fun GalleryFloatingSelectionDock(
                     Box(
                         modifier = Modifier
                             .size(42.dp)
-                            .clip(RoundedCornerShape(8.dp))
+                            .graphicsLayer {
+                                shape = RoundedCornerShape(8.dp)
+                                clip = true
+                            }
                     ) {
                         val context = LocalContext.current
                         val dockThumbRequest = remember(uri) {
@@ -1483,7 +1733,7 @@ private fun GalleryFloatingSelectionDock(
                                 .data(uri)
                                 .size(Size(120, 120))
                                 .scale(Scale.FILL)
-                                .crossfade(80)
+                                .crossfade(false)
                                 .allowRgb565(true)
                                 .allowHardware(true)
                                 .memoryCacheKey("dock_${uri}")
@@ -1573,16 +1823,29 @@ private fun GalleryFloatingSelectionDock(
 }
 
 /**
- * Fullscreen Lightbox Preview
+ * Fullscreen Interactive Lightbox Preview with Swipe Navigation, Pinch-to-Zoom,
+ * Metadata Info Sheet, and Native Share.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun GalleryLightboxDialog(
-    item: GalleryMediaItem,
-    isSelected: Boolean,
-    onToggleSelect: () -> Unit,
-    onDirectSelect: () -> Unit,
+    mediaList: List<GalleryMediaItem>,
+    initialIndex: Int,
+    selectedUris: List<Uri>,
+    maxSelection: Int,
+    onToggleSelect: (GalleryMediaItem) -> Unit,
+    onDirectSelect: (GalleryMediaItem) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val pagerState = rememberPagerState(
+        initialPage = initialIndex.coerceIn(0, (mediaList.size - 1).coerceAtLeast(0))
+    ) { mediaList.size }
+
+    var showInfoSheet by remember { mutableStateOf(false) }
+    val currentItem = mediaList.getOrNull(pagerState.currentPage)
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -1590,116 +1853,291 @@ private fun GalleryLightboxDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.94f)),
-            contentAlignment = Alignment.Center
+                .background(Color.Black.copy(alpha = 0.96f))
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
-                // Header
+                // Header: Index, Title, Info, Share, Close
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .statusBarsPadding()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
                         Text(
-                            text = item.name,
+                            text = "${pagerState.currentPage + 1} of ${mediaList.size}",
+                            color = Color.White.copy(alpha = 0.65f),
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = currentItem?.name ?: "Media",
                             color = Color.White,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        Text(
-                            text = if (item.isVideo) "Video" else "Photo",
-                            color = Color.White.copy(alpha = 0.6f),
-                            fontSize = 11.sp
-                        )
                     }
 
-                    IconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.size(36.dp)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Icon(Lucide.X, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                        // Info Button
+                        IconButton(
+                            onClick = { showInfoSheet = !showInfoSheet },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                Lucide.Info,
+                                contentDescription = "Info",
+                                tint = if (showInfoSheet) Color(0xFF0A84FF) else Color.White,
+                                modifier = Modifier.size(19.dp)
+                            )
+                        }
+
+                        // Share Button
+                        IconButton(
+                            onClick = {
+                                currentItem?.let { item ->
+                                    coroutineScope.launch {
+                                        MediaStoreHelper.shareMedia(context, item.uri.toString())
+                                    }
+                                }
+                            },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                Lucide.Share2,
+                                contentDescription = "Share",
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        // Close Button
+                        IconButton(
+                            onClick = onDismiss,
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                Lucide.X,
+                                contentDescription = "Close",
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
 
-                // Full Image View
-                Box(
+                // HorizontalPager for swipeable full-screen browsing
+                HorizontalPager(
+                    state = pagerState,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        .padding(8.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    AsyncImage(
-                        model = item.uri,
-                        contentDescription = item.name,
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxSize()
-                    )
+                ) { page ->
+                    val item = mediaList.getOrNull(page)
+                    if (item != null) {
+                        var zoomScale by remember { mutableFloatStateOf(1f) }
+                        var zoomOffset by remember { mutableStateOf(Offset.Zero) }
 
-                    if (item.isVideo) {
-                        Icon(Lucide.Play, null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(52.dp))
+                        val transformableState = rememberTransformableState { zoomChange, offsetChange, _ ->
+                            zoomScale = (zoomScale * zoomChange).coerceIn(1f, 4.5f)
+                            if (zoomScale > 1f) {
+                                zoomOffset += offsetChange
+                            } else {
+                                zoomOffset = Offset.Zero
+                            }
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .pointerInput(Unit) {
+                                    detectTapGestures(
+                                        onDoubleTap = {
+                                            zoomScale = if (zoomScale > 1.2f) 1f else 2.5f
+                                            zoomOffset = Offset.Zero
+                                        }
+                                    )
+                                }
+                                .transformable(state = transformableState),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            AsyncImage(
+                                model = ImageRequest.Builder(context)
+                                    .data(item.uri)
+                                    .crossfade(true)
+                                    .build(),
+                                contentDescription = item.name,
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .graphicsLayer {
+                                        scaleX = zoomScale
+                                        scaleY = zoomScale
+                                        translationX = zoomOffset.x
+                                        translationY = zoomOffset.y
+                                    }
+                            )
+
+                            if (item.isVideo) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(64.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.Black.copy(alpha = 0.55f))
+                                        .border(1.dp, Color.White.copy(alpha = 0.3f), CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        Lucide.Play,
+                                        contentDescription = "Play Video",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(30.dp)
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
 
-                // Bottom Actions
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .navigationBarsPadding()
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                // Info Overlay Card
+                AnimatedVisibility(
+                    visible = showInfoSheet && currentItem != null,
+                    enter = slideInVertically(initialOffsetY = { it / 2 }) + fadeIn(),
+                    exit = slideOutVertically(targetOffsetY = { it / 2 }) + fadeOut()
                 ) {
-                    // Toggle select
-                    Button(
-                        onClick = onToggleSelect,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (isSelected) Color(0xFF0A84FF) else Color.White.copy(alpha = 0.2f)
-                        ),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.height(40.dp)
-                    ) {
-                        Icon(
-                            if (isSelected) Lucide.Check else Lucide.Check,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            text = if (isSelected) "Selected" else "Select",
-                            color = Color.White,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 13.sp
-                        )
-                    }
+                    currentItem?.let { item ->
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 6.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            color = Color(0xFF1E1E22).copy(alpha = 0.95f),
+                            border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.15f))
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Media Details",
+                                        color = Color.White,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = item.formattedSize,
+                                        color = Color(0xFF0A84FF),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
 
-                    // Direct confirm
-                    Button(
-                        onClick = onDirectSelect,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0A84FF)),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.height(40.dp)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "Date: ${item.formattedDate}",
+                                        color = Color.White.copy(alpha = 0.75f),
+                                        fontSize = 11.5.sp
+                                    )
+                                    if (item.width > 0 && item.height > 0) {
+                                        Text(
+                                            text = "${item.width} × ${item.height}",
+                                            color = Color.White.copy(alpha = 0.75f),
+                                            fontSize = 11.5.sp
+                                        )
+                                    }
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "Album: ${item.bucketName}",
+                                        color = Color.White.copy(alpha = 0.75f),
+                                        fontSize = 11.5.sp
+                                    )
+                                    Text(
+                                        text = if (item.isVideo) "Video" else item.mimeType.substringAfterLast("/").uppercase(),
+                                        color = Color.White.copy(alpha = 0.55f),
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Bottom Action Row
+                currentItem?.let { item ->
+                    val isSelected = selectedUris.contains(item.uri)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            Lucide.ArrowRight,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            text = "Next",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
-                        )
+                        Button(
+                            onClick = { onToggleSelect(item) },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isSelected) Color(0xFF0A84FF) else Color.White.copy(alpha = 0.2f)
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.height(40.dp)
+                        ) {
+                            Icon(
+                                Lucide.Check,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = if (isSelected) "Selected" else "Select",
+                                color = Color.White,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp
+                            )
+                        }
+
+                        Button(
+                            onClick = { onDirectSelect(item) },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0A84FF)),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.height(40.dp)
+                        ) {
+                            Icon(
+                                Lucide.ArrowRight,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = "Next",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
+                        }
                     }
                 }
             }
