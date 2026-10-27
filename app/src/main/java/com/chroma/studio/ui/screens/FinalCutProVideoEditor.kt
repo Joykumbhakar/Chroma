@@ -6409,7 +6409,7 @@ private fun EffectsTabContent(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "${selectedAnimation.label} Intensity",
+                                    text = "${selectedAnimation.label} Amount",
                                     fontSize = 11.5.sp,
                                     color = colors.textMuted,
                                     fontWeight = FontWeight.Medium
@@ -6423,71 +6423,15 @@ private fun EffectsTabContent(
                                 )
                             }
 
-                            BoxWithConstraints(
+                            AppleSlider(
+                                value = animationIntensity,
+                                onValueChange = onAnimationIntensityChange,
+                                valueRange = 0.1f..1.0f,
+                                gradientColors = listOf(Color(0xFFE11D48), Color(0xFFFB7185)),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(36.dp),
-                                contentAlignment = Alignment.CenterStart
-                            ) {
-                                val sliderWidthPx = constraints.maxWidth.toFloat().coerceAtLeast(1f)
-                                val fraction = animationIntensity.coerceIn(0.1f, 1f)
-
-                                var isDragging by remember { mutableStateOf(false) }
-                                val animatedScale by animateFloatAsState(
-                                    targetValue = if (isDragging) 1.22f else 1.0f,
-                                    animationSpec = spring(dampingRatio = 0.65f, stiffness = Spring.StiffnessMediumLow),
-                                    label = "animKnobScale"
-                                )
-
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(3.dp)
-                                        .clip(RoundedCornerShape(1.5.dp))
-                                        .background(if (colors.isDark) Color(0xFF282C37) else Color(0xFFE2E8F0))
-                                )
-
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth(fraction)
-                                        .height(3.dp)
-                                        .clip(RoundedCornerShape(1.5.dp))
-                                        .background(Color(0xFFE11D48))
-                                )
-
-                                val knobOffsetDp = with(LocalDensity.current) {
-                                    ((fraction * sliderWidthPx) - 10.dp.toPx()).toDp().coerceIn(0.dp, maxWidth - 20.dp)
-                                }
-
-                                Box(
-                                    modifier = Modifier
-                                        .offset(x = knobOffsetDp)
-                                        .size(20.dp)
-                                        .graphicsLayer {
-                                            scaleX = animatedScale
-                                            scaleY = animatedScale
-                                        }
-                                        .pointerInput(sliderWidthPx) {
-                                            detectHorizontalDragGestures(
-                                                onDragStart = { isDragging = true },
-                                                onDragEnd = { isDragging = false },
-                                                onDragCancel = { isDragging = false },
-                                                onHorizontalDrag = { change, _ ->
-                                                    change.consume()
-                                                    val newFrac = (change.position.x / sliderWidthPx).coerceIn(0.1f, 1.0f)
-                                                    onAnimationIntensityChange(newFrac)
-                                                }
-                                            )
-                                        }
-                                ) {
-                                    LiquidGlassKnob(
-                                        width = 20.dp,
-                                        height = 20.dp,
-                                        scale = animatedScale,
-                                        baseAlpha = 0.95f
-                                    )
-                                }
-                            }
+                                    .height(32.dp)
+                            )
                         }
                     }
                 }
@@ -6528,7 +6472,7 @@ private fun EffectsTabContent(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "Effect Intensity",
+                                    text = "Effect Amount",
                                     fontSize = 11.5.sp,
                                     color = colors.textMuted,
                                     fontWeight = FontWeight.Medium
@@ -6542,75 +6486,15 @@ private fun EffectsTabContent(
                                 )
                             }
 
-                            // Range slider with clean thin blue track and LiquidGlassKnob
-                            BoxWithConstraints(
+                            AppleSlider(
+                                value = effectIntensity,
+                                onValueChange = onIntensityChange,
+                                valueRange = 0.1f..1.0f,
+                                gradientColors = listOf(Color(0xFF007AFF), Color(0xFF38BDF8)),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(36.dp),
-                                contentAlignment = Alignment.CenterStart
-                            ) {
-                                val sliderWidthPx = constraints.maxWidth.toFloat().coerceAtLeast(1f)
-                                val fraction = effectIntensity.coerceIn(0.1f, 1f)
-
-                                var isDragging by remember { mutableStateOf(false) }
-                                val animatedScale by animateFloatAsState(
-                                    targetValue = if (isDragging) 1.22f else 1.0f,
-                                    animationSpec = spring(dampingRatio = 0.65f, stiffness = Spring.StiffnessMediumLow),
-                                    label = "effectKnobScale"
-                                )
-
-                                // Base thin track
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(3.dp)
-                                        .clip(RoundedCornerShape(1.5.dp))
-                                        .background(if (colors.isDark) Color(0xFF282C37) else Color(0xFFE2E8F0))
-                                )
-
-                                // Active fill track (Chroma Electric Blue)
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth(fraction)
-                                        .height(3.dp)
-                                        .clip(RoundedCornerShape(1.5.dp))
-                                        .background(Color(0xFF007AFF))
-                                )
-
-                                // Draggable Bevel Knob
-                                val knobOffsetDp = with(LocalDensity.current) {
-                                    ((fraction * sliderWidthPx) - 10.dp.toPx()).toDp().coerceIn(0.dp, maxWidth - 20.dp)
-                                }
-
-                                Box(
-                                    modifier = Modifier
-                                        .offset(x = knobOffsetDp)
-                                        .size(20.dp)
-                                        .graphicsLayer {
-                                            scaleX = animatedScale
-                                            scaleY = animatedScale
-                                        }
-                                        .pointerInput(sliderWidthPx) {
-                                            detectHorizontalDragGestures(
-                                                onDragStart = { isDragging = true },
-                                                onDragEnd = { isDragging = false },
-                                                onDragCancel = { isDragging = false },
-                                                onHorizontalDrag = { change, _ ->
-                                                    change.consume()
-                                                    val newFrac = (change.position.x / sliderWidthPx).coerceIn(0.1f, 1.0f)
-                                                    onIntensityChange(newFrac)
-                                                }
-                                            )
-                                        }
-                                ) {
-                                    LiquidGlassKnob(
-                                        width = 20.dp,
-                                        height = 20.dp,
-                                        scale = animatedScale,
-                                        baseAlpha = 0.95f
-                                    )
-                                }
-                            }
+                                    .height(32.dp)
+                            )
                         }
                     }
                 }
@@ -13268,7 +13152,7 @@ fun FcpClipAnimationDialog(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "${selectedAnim.label} Intensity",
+                                    text = "${selectedAnim.label} Amount",
                                     fontSize = 12.sp,
                                     color = colors.textMuted,
                                     fontWeight = FontWeight.Medium
@@ -13282,19 +13166,17 @@ fun FcpClipAnimationDialog(
                                 )
                             }
 
-                            Slider(
+                            AppleSlider(
                                 value = animIntensity,
                                 onValueChange = {
                                     animIntensity = it
                                     onApplyAnimation(selectedAnim, it)
                                 },
                                 valueRange = 0.1f..1.0f,
-                                colors = SliderDefaults.colors(
-                                    thumbColor = Color(0xFFE11D48),
-                                    activeTrackColor = Color(0xFFE11D48),
-                                    inactiveTrackColor = if (colors.isDark) Color(0xFF282C37) else Color(0xFFE2E8F0)
-                                ),
-                                modifier = Modifier.fillMaxWidth()
+                                gradientColors = listOf(Color(0xFFE11D48), Color(0xFFFB7185)),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(32.dp)
                             )
                         }
                     }
