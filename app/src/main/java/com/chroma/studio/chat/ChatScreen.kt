@@ -90,6 +90,8 @@ import com.chroma.studio.chat.ui.components.*
 import com.chroma.studio.ui.components.StoryCreationBottomSheet
 
 import com.chroma.studio.ui.screens.StoryViewerScreen
+import com.chroma.studio.ui.screens.FlashPhotoEditorScreen
+import com.chroma.studio.ui.screens.PhotoAspectRatio
 
 import com.chroma.studio.viewmodel.StoryViewModel
 
@@ -347,6 +349,8 @@ private fun ChatScreenContent(
 
     var showStoryGalleryPicker by remember { mutableStateOf(false) }
 
+    var editingStoryImageUri by remember { mutableStateOf<Uri?>(null) }
+
     var storyViewerInitialIndex by remember { mutableIntStateOf(0) }
 
 
@@ -357,7 +361,7 @@ private fun ChatScreenContent(
 
     ) { uri: Uri? ->
 
-        uri?.let { effectiveStoryVm.uploadStory(context, it) }
+        uri?.let { editingStoryImageUri = it }
 
     }
 
@@ -1499,6 +1503,7 @@ private fun ChatScreenContent(
         isFullCallModalOpen ||
         showStoryCreationSheet ||
         showStoryGalleryPicker ||
+        editingStoryImageUri != null ||
         showStoryViewer ||
         isGalleryPickerOpen ||
         previewLightboxImage != null
@@ -1712,6 +1717,7 @@ private fun ChatScreenContent(
         isFullCallModalOpen ||
         showStoryCreationSheet ||
         showStoryGalleryPicker ||
+        editingStoryImageUri != null ||
         showStoryViewer ||
         isGalleryPickerOpen ||
         isInsideChat ||
@@ -1722,6 +1728,7 @@ private fun ChatScreenContent(
 
     BackHandler(enabled = isAnyModalOrSubscreenOpen) {
         when {
+            editingStoryImageUri != null -> editingStoryImageUri = null
             showStoryGalleryPicker -> showStoryGalleryPicker = false
             showStoryCreationSheet -> showStoryCreationSheet = false
             showStoryViewer -> showStoryViewer = false
@@ -3998,12 +4005,37 @@ private fun ChatScreenContent(
 
                     showStoryGalleryPicker = false
 
-                    uris.firstOrNull()?.let { effectiveStoryVm.uploadStory(context, it) }
+                    val pickedUri = uris.firstOrNull()
+
+                    if (pickedUri != null) {
+
+                        editingStoryImageUri = pickedUri
+
+                    }
 
                 }
 
             )
 
+        }
+
+        // Story Image Editor
+        if (editingStoryImageUri != null) {
+            FlashPhotoEditorScreen(
+                photoUris = listOf(editingStoryImageUri!!),
+                title = "Edit Story",
+                initialAspectRatio = PhotoAspectRatio.STORY_9_16,
+                nextButtonLabel = "Share Story",
+                onExportUris = { editedUris ->
+                    val finalUri = editedUris.firstOrNull() ?: editingStoryImageUri!!
+                    editingStoryImageUri = null
+                    effectiveStoryVm.uploadStory(context, finalUri)
+                    com.chroma.studio.ui.components.ToastManager.showToast("Sharing your story... 🌟")
+                },
+                onBack = {
+                    editingStoryImageUri = null
+                }
+            )
         }
 
 

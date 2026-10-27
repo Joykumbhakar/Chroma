@@ -335,8 +335,10 @@ fun buildStudioCombinedColorMatrix(
 fun FlashPhotoEditorScreen(
     photoUris: List<Uri>,
     initialSlideIndex: Int = 0,
+    title: String = "Edit Photo",
+    initialAspectRatio: PhotoAspectRatio = PhotoAspectRatio.FREE,
     nextButtonLabel: String = "Next",
-    onNext: (filterName: String, thumbnailBitmap: Bitmap?, durationPerSlideMs: Long) -> Unit,
+    onNext: (filterName: String, thumbnailBitmap: Bitmap?, durationPerSlideMs: Long) -> Unit = { _, _, _ -> },
     onExportUris: (List<Uri>) -> Unit = {},
     onSaveDraft: (filterName: String) -> Unit = {},
     onBack: () -> Unit
@@ -370,7 +372,7 @@ fun FlashPhotoEditorScreen(
     var rotation90 by remember { mutableFloatStateOf(0f) }
     var flipH by remember { mutableStateOf(false) }
     var flipV by remember { mutableStateOf(false) }
-    var selectedAspectRatio by remember { mutableStateOf(PhotoAspectRatio.FREE) }
+    var selectedAspectRatio by remember(photoUris) { mutableStateOf(initialAspectRatio) }
     var showRuleOfThirds by remember { mutableStateOf(false) }
     var showGoldenRatio by remember { mutableStateOf(false) }
 
@@ -691,7 +693,7 @@ fun FlashPhotoEditorScreen(
         ) {
             // ── 1. STUDIO HEADER (Simple & Clean) ───────────────────────────
             ChromaScreenHeader(
-                title = "Edit Photo",
+                title = title,
                 badgeText = if (isSlideshow) "${previewIndex + 1}/${photoUris.size}" else null,
                 badgeColor = colors.primary,
                 showBackButton = true,

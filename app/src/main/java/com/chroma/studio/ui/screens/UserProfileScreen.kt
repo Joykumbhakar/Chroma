@@ -171,9 +171,10 @@ fun UserProfileScreen(
     var showStoryViewer by remember { mutableStateOf(false) }
     var showStoryCreationSheet by remember { mutableStateOf(false) }
     var showStoryGalleryPicker by remember { mutableStateOf(false) }
+    var editingStoryImageUri by remember { mutableStateOf<Uri?>(null) }
     var storyViewerInitialIndex by remember { mutableIntStateOf(0) }
 
-    val shouldHideBottomNav = showStoryViewer || showStoryCreationSheet || showStoryGalleryPicker
+    val shouldHideBottomNav = showStoryViewer || showStoryCreationSheet || showStoryGalleryPicker || (editingStoryImageUri != null)
     LaunchedEffect(shouldHideBottomNav) {
         onStoryViewerChange?.invoke(shouldHideBottomNav)
     }
@@ -918,13 +919,36 @@ fun UserProfileScreen(
             onRequestMediaPermission = {},
             onSendMedia = { uris, _ ->
                 showStoryGalleryPicker = false
-                uris.firstOrNull()?.let { uri ->
-                    storyVm.uploadStory(context, uri)
+                val pickedUri = uris.firstOrNull()
+                if (pickedUri != null) {
+                    editingStoryImageUri = pickedUri
                 }
             }
         )
     }
 
+    // Story Image Editor
+    if (editingStoryImageUri != null) {
+        FlashPhotoEditorScreen(
+            photoUris = listOf(editingStoryImageUri!!),
+            title = "Edit Story",
+            initialAspectRatio = PhotoAspectRatio.STORY_9_16,
+            nextButtonLabel = "Share Story",
+            onExportUris = { editedUris ->
+                val finalUri = editedUris.firstOrNull() ?: editingStoryImageUri!!
+                editingStoryImageUri = null
+                storyVm.uploadStory(context, finalUri)
+                com.chroma.studio.ui.components.ToastManager.showToast("Sharing your story... 🌟")
+            },
+            onBack = {
+                editingStoryImageUri = null
+            }
+        )
+    }
+
+    androidx.activity.compose.BackHandler(enabled = editingStoryImageUri != null) {
+        editingStoryImageUri = null
+    }
     androidx.activity.compose.BackHandler(enabled = showStoryGalleryPicker) {
         showStoryGalleryPicker = false
     }
