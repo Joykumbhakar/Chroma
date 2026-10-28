@@ -75,20 +75,28 @@ enum class NotificationFilter(val label: String, val icon: ImageVector) {
     LIKES("Likes", Lucide.Heart),
     COMMENTS("Comments", Lucide.MessageCircle),
     FOLLOWS("Follows", Lucide.UserPlus),
+    STORIES("Stories", Lucide.Sparkles),
+    MENTIONS("Mentions", Lucide.AtSign),
     MESSAGES("Messages", Lucide.Send),
     PROJECTS("Projects", Lucide.Layers)
 }
 
 val ChromaNotification.effectiveCategory: NotificationFilter
     get() = when (type) {
-        NotificationActionType.LIKE -> NotificationFilter.LIKES
-        NotificationActionType.COMMENT -> NotificationFilter.COMMENTS
-        NotificationActionType.FOLLOW -> NotificationFilter.FOLLOWS
+        NotificationActionType.LIKE,
+        NotificationActionType.LIKE_COMMENT,
+        NotificationActionType.STORY_LIKE -> NotificationFilter.LIKES
+        NotificationActionType.COMMENT,
+        NotificationActionType.REPLY -> NotificationFilter.COMMENTS
+        NotificationActionType.FOLLOW,
+        NotificationActionType.FOLLOW_REQUEST -> NotificationFilter.FOLLOWS
+        NotificationActionType.STORY_REPLY,
+        NotificationActionType.STORY_REACTION -> NotificationFilter.STORIES
+        NotificationActionType.MENTION -> NotificationFilter.MENTIONS
         NotificationActionType.MESSAGE -> NotificationFilter.MESSAGES
         NotificationActionType.REMIX,
         NotificationActionType.PROJECT_EXPORT,
         NotificationActionType.PROJECT_COLLAB -> NotificationFilter.PROJECTS
-        NotificationActionType.MENTION -> NotificationFilter.COMMENTS
         NotificationActionType.SYSTEM_DROP -> NotificationFilter.ALL
     }
 
@@ -121,9 +129,15 @@ private fun NotifAvatarWithBadge(
 ) {
     val colors = LocalOscellionColors.current
     val (badgeBgColor, badgeIconColor, badgeIcon) = when (notification.type) {
-        NotificationActionType.LIKE        -> Triple(Color(0xFFFFE4E6), Color(0xFFE11D48), Lucide.Heart)
-        NotificationActionType.COMMENT     -> Triple(Color(0xFFFEF3C7), Color(0xFFD97706), Lucide.MessageCircle)
+        NotificationActionType.LIKE,
+        NotificationActionType.LIKE_COMMENT,
+        NotificationActionType.STORY_LIKE  -> Triple(Color(0xFFFFE4E6), Color(0xFFE11D48), Lucide.Heart)
+        NotificationActionType.COMMENT,
+        NotificationActionType.REPLY       -> Triple(Color(0xFFFEF3C7), Color(0xFFD97706), Lucide.MessageCircle)
         NotificationActionType.FOLLOW      -> Triple(Color(0xFFD1FAE5), Color(0xFF059669), Lucide.UserPlus)
+        NotificationActionType.FOLLOW_REQUEST -> Triple(Color(0xFFE0E7FF), Color(0xFF4F46E5), Lucide.UserCheck)
+        NotificationActionType.STORY_REPLY -> Triple(Color(0xFFFCE7F3), Color(0xFFDB2777), Lucide.Sparkles)
+        NotificationActionType.STORY_REACTION -> Triple(Color(0xFFFEF3C7), Color(0xFFF59E0B), Lucide.Flame)
         NotificationActionType.MESSAGE     -> Triple(Color(0xFFDBEAFE), Color(0xFF2563EB), Lucide.Send)
         NotificationActionType.REMIX       -> Triple(Color(0xFFEDE9FE), Color(0xFF7C3AED), Lucide.Sparkles)
         NotificationActionType.MENTION     -> Triple(Color(0xFFE0F2FE), Color(0xFF0284C7), Lucide.AtSign)
@@ -500,7 +514,7 @@ private fun SwipeableNotificationCard(
                                     .height(30.dp)
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(colors.glassBg)
-                                    .border(1.dp, colors.glassBorder, RoundedCornerShape(8.dp))
+                                    .border(0.5.dp, colors.glassBorder, RoundedCornerShape(8.dp))
                                     .clickable { onPrimaryAction(notification) }
                                     .padding(horizontal = 12.dp),
                                 contentAlignment = Alignment.Center
@@ -514,6 +528,94 @@ private fun SwipeableNotificationCard(
                             }
                         }
                     }
+                    NotificationActionType.FOLLOW_REQUEST -> {
+                        // Instagram-style Confirm & Delete buttons
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .height(30.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(colors.primary)
+                                    .clickable { onPrimaryAction(notification) }
+                                    .padding(horizontal = 12.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Confirm",
+                                    color = Color.White,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .height(30.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(colors.glassBg)
+                                    .border(0.5.dp, colors.glassBorder, RoundedCornerShape(8.dp))
+                                    .clickable { onSwipeRightRemove(notification) }
+                                    .padding(horizontal = 10.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Delete",
+                                    color = colors.textMuted,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+                    NotificationActionType.STORY_REACTION -> {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            if (!notification.detailText.isNullOrBlank()) {
+                                Text(
+                                    text = notification.detailText,
+                                    fontSize = 19.sp
+                                )
+                            }
+                            if (!notification.targetPreviewUrl.isNullOrBlank()) {
+                                AsyncImage(
+                                    model = notification.targetPreviewUrl,
+                                    contentDescription = "Story Preview",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .border(0.5.dp, colors.glassBorder, RoundedCornerShape(8.dp))
+                                        .clickable { onCardClick(notification) }
+                                )
+                            }
+                        }
+                    }
+                    NotificationActionType.STORY_LIKE,
+                    NotificationActionType.STORY_REPLY -> {
+                        if (!notification.targetPreviewUrl.isNullOrBlank()) {
+                            AsyncImage(
+                                model = notification.targetPreviewUrl,
+                                contentDescription = "Story Preview",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .border(0.5.dp, colors.glassBorder, RoundedCornerShape(8.dp))
+                                    .clickable { onCardClick(notification) }
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Lucide.Sparkles,
+                                contentDescription = null,
+                                tint = colors.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
                     NotificationActionType.MESSAGE -> {
                         // Clean Reply button
                         Box(
@@ -521,7 +623,7 @@ private fun SwipeableNotificationCard(
                                 .height(30.dp)
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(colors.glassBg)
-                                .border(1.dp, colors.glassBorder, RoundedCornerShape(8.dp))
+                                .border(0.5.dp, colors.glassBorder, RoundedCornerShape(8.dp))
                                 .clickable { onPrimaryAction(notification) }
                                 .padding(horizontal = 12.dp),
                             contentAlignment = Alignment.Center
@@ -545,7 +647,9 @@ private fun SwipeableNotificationCard(
                             }
                         }
                     }
-                    NotificationActionType.COMMENT -> {
+                    NotificationActionType.COMMENT,
+                    NotificationActionType.REPLY,
+                    NotificationActionType.LIKE_COMMENT -> {
                         if (!notification.targetPreviewUrl.isNullOrBlank()) {
                             AsyncImage(
                                 model = notification.targetPreviewUrl,
@@ -1022,7 +1126,22 @@ fun NotificationsFeedScreen(
                     )
                 }
             }
-            NotificationActionType.COMMENT -> {
+            NotificationActionType.FOLLOW_REQUEST -> {
+                if (currentUid != null && item.actorUid.isNotBlank()) {
+                    SoundManager.playTap(context)
+                    showToast("Approved follow request from ${item.actorHandle}")
+                    removeNotification(item)
+                    scope.launch {
+                        com.chroma.studio.data.DiscoverRepository.getInstance().setFollow(
+                            currentUserId = item.actorUid,
+                            targetUserId = currentUid,
+                            targetFollow = true
+                        )
+                    }
+                }
+            }
+            NotificationActionType.COMMENT,
+            NotificationActionType.LIKE_COMMENT -> {
                 val next = !item.likedComment
                 notificationsList = notificationsList.map { if (it.id == item.id) it.copy(likedComment = next, isRead = true) else it }
                 SoundManager.playPop()
@@ -1055,15 +1174,27 @@ fun NotificationsFeedScreen(
                     }
                 }
             }
-            NotificationActionType.FOLLOW -> {
+            NotificationActionType.FOLLOW,
+            NotificationActionType.FOLLOW_REQUEST -> {
                 if (clicked.actorUid.isNotBlank() && onNavigateToProfile != null) {
                     onNavigateToProfile(clicked.actorUid)
                 } else {
                     showToast("Viewed ${clicked.actorName}")
                 }
             }
+            NotificationActionType.STORY_LIKE,
+            NotificationActionType.STORY_REPLY,
+            NotificationActionType.STORY_REACTION -> {
+                if (clicked.actorUid.isNotBlank() && onNavigateToProfile != null) {
+                    onNavigateToProfile(clicked.actorUid)
+                } else {
+                    showToast("Story interaction from ${clicked.actorName}")
+                }
+            }
             NotificationActionType.LIKE,
             NotificationActionType.COMMENT,
+            NotificationActionType.REPLY,
+            NotificationActionType.LIKE_COMMENT,
             NotificationActionType.MENTION -> {
                 if (!clicked.targetId.isNullOrBlank() || clicked.actorUid.isNotBlank()) {
                     if (onNavigateToPost != null) {
@@ -1492,24 +1623,27 @@ fun NotificationsFeedScreen(
                         )
                     }
                     else -> {
-                        val newItems = filteredNotifications.filter { it.isUnread }
-                        val earlierItems = filteredNotifications.filter { !it.isUnread }
+                        val followRequests = filteredNotifications.filter { it.type == NotificationActionType.FOLLOW_REQUEST }
+                        val standardNotifications = filteredNotifications.filter { it.type != NotificationActionType.FOLLOW_REQUEST }
+
+                        val instagramTimeSections = listOf("Today", "Yesterday", "This week", "This month", "Earlier")
+                        val groupedByTime = standardNotifications.groupBy { formatInstagramSection(it.timestamp) }
 
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(bottom = 72.dp)
                         ) {
-                            if (newItems.isNotEmpty()) {
-                                item(key = "header_new") {
+                            if (followRequests.isNotEmpty()) {
+                                item(key = "header_follow_requests") {
                                     SectionHeaderRow(
-                                        title = "NEW",
-                                        count = newItems.size,
+                                        title = "FOLLOW REQUESTS",
+                                        count = followRequests.size,
                                         isAccent = true
                                     )
                                     GlassHrLine()
                                 }
 
-                                items(newItems, key = { it.id }) { item ->
+                                items(followRequests, key = { it.id }) { item ->
                                     val isFollowing = followingUserIds.contains(item.actorUid) || item.following
                                     SwipeableNotificationCard(
                                         notification = item,
@@ -1530,34 +1664,37 @@ fun NotificationsFeedScreen(
                                 }
                             }
 
-                            if (earlierItems.isNotEmpty()) {
-                                item(key = "header_earlier") {
-                                    SectionHeaderRow(
-                                        title = "EARLIER",
-                                        count = earlierItems.size,
-                                        isAccent = false
-                                    )
-                                    GlassHrLine()
-                                }
+                            instagramTimeSections.forEach { sectionTitle ->
+                                val sectionItems = groupedByTime[sectionTitle] ?: emptyList()
+                                if (sectionItems.isNotEmpty()) {
+                                    item(key = "header_${sectionTitle.lowercase().replace(" ", "_")}") {
+                                        SectionHeaderRow(
+                                            title = sectionTitle.uppercase(),
+                                            count = sectionItems.size,
+                                            isAccent = sectionTitle == "Today"
+                                        )
+                                        GlassHrLine()
+                                    }
 
-                                items(earlierItems, key = { it.id }) { item ->
-                                    val isFollowing = followingUserIds.contains(item.actorUid) || item.following
-                                    SwipeableNotificationCard(
-                                        notification = item,
-                                        isFollowingUser = isFollowing,
-                                        isOpenLeftTray = openSwipeCardId == item.id,
-                                        onOpenSwipeChanged = { openSwipeCardId = it },
-                                        onCardClick = { handleCardClick(it) },
-                                        onAvatarClick = { clicked ->
-                                            if (clicked.actorUid.isNotBlank() && onNavigateToProfile != null) {
-                                                onNavigateToProfile(clicked.actorUid)
-                                            }
-                                        },
-                                        onSwipeRightRemove = { removeNotification(it) },
-                                        onPrimaryAction = { handlePrimaryAction(it) },
-                                        onToggleRead = { toggleRead(it) }
-                                    )
-                                    GlassHrLine()
+                                    items(sectionItems, key = { it.id }) { item ->
+                                        val isFollowing = followingUserIds.contains(item.actorUid) || item.following
+                                        SwipeableNotificationCard(
+                                            notification = item,
+                                            isFollowingUser = isFollowing,
+                                            isOpenLeftTray = openSwipeCardId == item.id,
+                                            onOpenSwipeChanged = { openSwipeCardId = it },
+                                            onCardClick = { handleCardClick(it) },
+                                            onAvatarClick = { clicked ->
+                                                if (clicked.actorUid.isNotBlank() && onNavigateToProfile != null) {
+                                                    onNavigateToProfile(clicked.actorUid)
+                                                }
+                                            },
+                                            onSwipeRightRemove = { removeNotification(it) },
+                                            onPrimaryAction = { handlePrimaryAction(it) },
+                                            onToggleRead = { toggleRead(it) }
+                                        )
+                                        GlassHrLine()
+                                    }
                                 }
                             }
                         }
@@ -1636,6 +1773,26 @@ fun NotificationsFeedScreen(
 // ============================================================================
 // RELATIVE TIME FORMATTER
 // ============================================================================
+
+private fun formatInstagramSection(timestamp: Long): String {
+    val now = System.currentTimeMillis()
+    val diff = (now - timestamp).coerceAtLeast(0L)
+    val oneDayMs = 24 * 60 * 60 * 1000L
+
+    val calNow = java.util.Calendar.getInstance().apply { timeInMillis = now }
+    val calItem = java.util.Calendar.getInstance().apply { timeInMillis = timestamp }
+
+    val isSameYear = calNow.get(java.util.Calendar.YEAR) == calItem.get(java.util.Calendar.YEAR)
+    val dayDiff = calNow.get(java.util.Calendar.DAY_OF_YEAR) - calItem.get(java.util.Calendar.DAY_OF_YEAR)
+
+    return when {
+        isSameYear && dayDiff == 0 -> "Today"
+        isSameYear && dayDiff == 1 -> "Yesterday"
+        diff < 7 * oneDayMs -> "This week"
+        diff < 30 * oneDayMs -> "This month"
+        else -> "Earlier"
+    }
+}
 
 private fun formatRelativeTime(timestamp: Long): String {
     val diff = (System.currentTimeMillis() - timestamp).coerceAtLeast(0L)

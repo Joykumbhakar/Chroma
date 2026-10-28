@@ -164,6 +164,26 @@ class FlashRepository {
                 }
                 true
             }.await()
+
+            if (targetLiked) {
+                try {
+                    val videoDoc = collection.document(videoId).get().await()
+                    val creatorId = videoDoc.getString("creatorId")
+                    val thumb = videoDoc.getString("thumbnailUrl")
+                    if (!creatorId.isNullOrBlank() && creatorId != userId) {
+                        NotificationDispatcher.sendNotification(
+                            targetUserId = creatorId,
+                            type = com.chroma.studio.model.NotificationActionType.LIKE,
+                            actionText = "liked your video",
+                            targetPreviewUrl = thumb,
+                            targetId = videoId
+                        )
+                    }
+                } catch (e: Exception) {
+                    Log.w("FlashRepository", "Failed to dispatch video like notification", e)
+                }
+            }
+            true
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("FlashRepository", "setFlashLike error", e)
@@ -368,6 +388,54 @@ class FlashRepository {
                 )
             }
         } catch (_: Exception) {}
+
+        // Dispatch reply notification if replying to a comment
+        if (!replyToCommentId.isNullOrBlank()) {
+            try {
+                val parentDoc = db.collection("flash_comments").document(replyToCommentId).get().await()
+                val parentAuthorId = parentDoc.getString("userId")
+                if (!parentAuthorId.isNullOrBlank() && parentAuthorId != user.uid) {
+                    val videoDoc = collection.document(videoId).get().await()
+                    val thumb = videoDoc.getString("thumbnailUrl")
+                    NotificationDispatcher.sendNotification(
+                        targetUserId = parentAuthorId,
+                        type = com.chroma.studio.model.NotificationActionType.REPLY,
+                        actionText = "replied to your comment",
+                        detailText = text,
+                        targetPreviewUrl = thumb,
+                        targetId = videoId
+                    )
+                }
+            } catch (e: Exception) {
+                Log.w("FlashRepository", "Failed to dispatch reply notification", e)
+            }
+        }
+
+        // Dispatch mention notifications for any @username in comment
+        try {
+            val mentionRegex = Regex("""@([a-zA-Z0-9_.]+)""")
+            val matches = mentionRegex.findAll(text).map { it.groupValues[1].lowercase() }.toSet()
+            if (matches.isNotEmpty()) {
+                val videoDoc = collection.document(videoId).get().await()
+                val thumb = videoDoc.getString("thumbnailUrl")
+                for (targetUsername in matches) {
+                    try {
+                        val usernameDoc = db.collection("usernames").document(targetUsername).get().await()
+                        val mentionedUid = usernameDoc.getString("uid")
+                        if (!mentionedUid.isNullOrBlank() && mentionedUid != user.uid) {
+                            NotificationDispatcher.sendNotification(
+                                targetUserId = mentionedUid,
+                                type = com.chroma.studio.model.NotificationActionType.MENTION,
+                                actionText = "mentioned you in a comment",
+                                detailText = text,
+                                targetPreviewUrl = thumb,
+                                targetId = videoId
+                            )
+                        }
+                    } catch (_: Exception) {}
+                }
+            }
+        } catch (_: Exception) {}
         
         return comment
     }
@@ -400,6 +468,33 @@ class FlashRepository {
                 }
                 true
             }.await()
+
+            if (targetLiked) {
+                try {
+                    val commentDoc = docRef.get().await()
+                    val authorId = commentDoc.getString("userId")
+                    val commentText = commentDoc.getString("text") ?: ""
+                    val videoId = commentDoc.getString("videoId") ?: ""
+                    if (!authorId.isNullOrBlank() && authorId != userId) {
+                        var thumb: String? = null
+                        if (videoId.isNotBlank()) {
+                            val videoDoc = collection.document(videoId).get().await()
+                            thumb = videoDoc.getString("thumbnailUrl")
+                        }
+                        NotificationDispatcher.sendNotification(
+                            targetUserId = authorId,
+                            type = com.chroma.studio.model.NotificationActionType.LIKE_COMMENT,
+                            actionText = "liked your comment",
+                            detailText = commentText,
+                            targetPreviewUrl = thumb,
+                            targetId = videoId.ifBlank { commentId }
+                        )
+                    }
+                } catch (e: Exception) {
+                    Log.w("FlashRepository", "Failed to dispatch comment like notification", e)
+                }
+            }
+            true
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("FlashRepository", "setCommentLike error", e)

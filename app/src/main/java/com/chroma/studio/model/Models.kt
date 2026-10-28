@@ -251,7 +251,13 @@ enum class NotificationActionType {
     MENTION,
     SYSTEM_DROP,
     PROJECT_EXPORT,
-    PROJECT_COLLAB
+    PROJECT_COLLAB,
+    LIKE_COMMENT,
+    REPLY,
+    FOLLOW_REQUEST,
+    STORY_LIKE,
+    STORY_REPLY,
+    STORY_REACTION
 }
 
 data class ChromaNotification(

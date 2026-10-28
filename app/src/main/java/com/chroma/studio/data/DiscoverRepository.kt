@@ -654,7 +654,7 @@ class DiscoverRepository {
             val currentUserDoc = usersCollection.document(currentUserId)
             val targetUserDoc = usersCollection.document(targetUserId)
 
-            db.runTransaction { transaction ->
+            val succeeded = db.runTransaction { transaction ->
                 val followingDoc = transaction.get(currentUserFollowingRef)
                 val alreadyFollowing = followingDoc.exists()
                 if (alreadyFollowing == targetFollow) {
@@ -674,6 +674,28 @@ class DiscoverRepository {
                 }
                 true
             }.await()
+
+            if (succeeded && targetFollow) {
+                try {
+                    val targetSnap = targetUserDoc.get().await()
+                    val isPrivate = targetSnap.getBoolean("privateAccount") ?: false
+                    val notifType = if (isPrivate) {
+                        com.chroma.studio.model.NotificationActionType.FOLLOW_REQUEST
+                    } else {
+                        com.chroma.studio.model.NotificationActionType.FOLLOW
+                    }
+                    val actionMsg = if (isPrivate) "requested to follow you" else "started following you"
+                    NotificationDispatcher.sendNotification(
+                        targetUserId = targetUserId,
+                        type = notifType,
+                        actionText = actionMsg,
+                        targetId = currentUserId
+                    )
+                } catch (e: Exception) {
+                    Log.w("DiscoverRepository", "Failed to dispatch follow notification", e)
+                }
+            }
+
             true
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e

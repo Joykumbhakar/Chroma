@@ -172,7 +172,7 @@ class StoryRepository {
         val uid = auth.currentUser?.uid ?: return false
         return try {
             val docRef = storiesCol.document(storyId)
-            db.runTransaction { transaction ->
+            val isNowLiked = db.runTransaction { transaction ->
                 val snapshot = transaction.get(docRef)
                 val likedBy = snapshot.get("likedBy") as? List<String> ?: emptyList()
                 val currentLikes = snapshot.getLong("likes") ?: 0L
@@ -194,6 +194,26 @@ class StoryRepository {
                     true
                 }
             }.await()
+
+            if (isNowLiked) {
+                try {
+                    val storyDoc = docRef.get().await()
+                    val authorId = storyDoc.getString("userId")
+                    val mediaUrl = storyDoc.getString("mediaUrl")
+                    if (!authorId.isNullOrBlank() && authorId != uid) {
+                        NotificationDispatcher.sendNotification(
+                            targetUserId = authorId,
+                            type = com.chroma.studio.model.NotificationActionType.STORY_LIKE,
+                            actionText = "liked your story",
+                            targetPreviewUrl = mediaUrl,
+                            targetId = storyId
+                        )
+                    }
+                } catch (e: Exception) {
+                    Log.w("StoryRepository", "Failed to dispatch story like notification", e)
+                }
+            }
+            isNowLiked
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             false

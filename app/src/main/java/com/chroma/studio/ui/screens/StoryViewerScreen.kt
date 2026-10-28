@@ -47,6 +47,8 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.chroma.studio.R
 import com.chroma.studio.data.DiscoverRepository
+import com.chroma.studio.data.NotificationDispatcher
+import com.chroma.studio.model.NotificationActionType
 import com.chroma.studio.model.Story
 import com.chroma.studio.model.UserProfile
 import com.chroma.studio.model.UserStoryGroup
@@ -644,6 +646,21 @@ fun StoryViewerScreen(
                                             modifier = Modifier
                                                 .clip(CircleShape)
                                                 .clickable {
+                                                    val authorId = currentStory?.userId ?: currentGroup?.userId ?: ""
+                                                    val storyId = currentStory?.id ?: ""
+                                                    val mediaUrl = currentStory?.mediaUrl
+                                                    if (authorId.isNotBlank()) {
+                                                        scope.launch {
+                                                            NotificationDispatcher.sendNotification(
+                                                                targetUserId = authorId,
+                                                                type = NotificationActionType.STORY_REACTION,
+                                                                actionText = "reacted $emoji to your story",
+                                                                detailText = emoji,
+                                                                targetPreviewUrl = mediaUrl,
+                                                                targetId = storyId
+                                                            )
+                                                        }
+                                                    }
                                                     ToastManager.showToast("Sent $emoji reaction")
                                                     showQuickReactions = false
                                                 }
@@ -696,8 +713,20 @@ fun StoryViewerScreen(
                                                 onClick = {
                                                     val reply = quickReplyText.trim()
                                                     val authorId = currentStory?.userId ?: currentGroup?.userId ?: ""
+                                                    val storyId = currentStory?.id ?: ""
+                                                    val mediaUrl = currentStory?.mediaUrl
                                                     if (authorId.isNotBlank() && reply.isNotBlank()) {
                                                         onReplySend?.invoke(authorId, reply)
+                                                        scope.launch {
+                                                            NotificationDispatcher.sendNotification(
+                                                                targetUserId = authorId,
+                                                                type = NotificationActionType.STORY_REPLY,
+                                                                actionText = "replied to your story",
+                                                                detailText = reply,
+                                                                targetPreviewUrl = mediaUrl,
+                                                                targetId = storyId
+                                                            )
+                                                        }
                                                     }
                                                     ToastManager.showToast("Reply sent!")
                                                     quickReplyText = ""
