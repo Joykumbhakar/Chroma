@@ -712,6 +712,7 @@ fun UserProfileBioDetailsSection(
             profileLinks.forEach { (platform, url) ->
                 ProfileSquircleSocialButton(
                     platform = platform,
+                    url = url,
                     onClick = {
                         try {
                             val targetUri = if (!url.startsWith("http://") && !url.startsWith("https://")) "https://$url" else url
@@ -830,6 +831,7 @@ fun UserProfileBioDetailsSection(
 @Composable
 fun ProfileSquircleSocialButton(
     platform: String,
+    url: String = "",
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -839,6 +841,19 @@ fun ProfileSquircleSocialButton(
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
         label = "squircleScale"
     )
+
+    val isWebsite = platform.lowercase() in listOf("portfolio", "website")
+    val faviconUrl = remember(url, isWebsite) {
+        if (isWebsite && url.isNotBlank()) {
+            try {
+                val fullUrl = if (!url.startsWith("http://") && !url.startsWith("https://")) "https://$url" else url
+                val host = Uri.parse(fullUrl).host
+                if (!host.isNullOrBlank()) "https://www.google.com/s2/favicons?sz=64&domain_url=$host" else null
+            } catch (_: Exception) {
+                null
+            }
+        } else null
+    }
 
     val (icon, gradient, borderColor) = when (platform.lowercase()) {
         "github", "githubacname" -> Triple(
@@ -895,12 +910,37 @@ fun ProfileSquircleSocialButton(
             ),
         contentAlignment = Alignment.Center
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = platform,
-            tint = Color.White,
-            modifier = Modifier.size(16.dp)
-        )
+        if (faviconUrl != null) {
+            var isFaviconError by remember(faviconUrl) { mutableStateOf(false) }
+            if (!isFaviconError) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(faviconUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = platform,
+                    modifier = Modifier
+                        .size(17.dp)
+                        .clip(RoundedCornerShape(3.5.dp)),
+                    contentScale = ContentScale.Fit,
+                    onError = { isFaviconError = true }
+                )
+            } else {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = platform,
+                    tint = Color.White,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        } else {
+            Icon(
+                imageVector = icon,
+                contentDescription = platform,
+                tint = Color.White,
+                modifier = Modifier.size(16.dp)
+            )
+        }
     }
 }
 
