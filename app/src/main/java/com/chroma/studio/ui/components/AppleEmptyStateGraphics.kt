@@ -811,8 +811,6 @@ fun ApplePhotosGraphic(
             scale(scaleFactor, scaleFactor, pivot = Offset.Zero)
             scale(state.squashX.value, state.squashY.value, pivot = Offset(50f, 85f))
         }) {
-            drawFloorShadow(50f, 88f, 36f, 4.8f)
-
             // Back angled photo frame
             rotate(degrees = 7f, pivot = Offset(52f, 43f)) {
                 drawRoundRect(
@@ -1380,23 +1378,6 @@ fun AppleLucidePaletteAndPenIcon(
                     pivot = Offset(500f, 540f)
                 )
             }) {
-                // 1. Ambient Blue Floor Shadow
-                withTransform({
-                    scale(scaleX = 1f, scaleY = 20f / 272f, pivot = Offset(482f, 898f))
-                }) {
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            0.00f to Color(0xFF0055E0).copy(alpha = 0.34f),
-                            0.55f to Color(0xFF007AFF).copy(alpha = 0.11f),
-                            1.00f to Color.Transparent,
-                            center = Offset(482f, 898f),
-                            radius = 272f
-                        ),
-                        radius = 272f,
-                        center = Offset(482f, 898f)
-                    )
-                }
-
                 // 2. Multi-Layer Apple Studio Drop Shadow under Palette Assembly
                 val paletteExtrusionPath = buildLucidePalettePath(yOffset = 24f)
                 val paletteTopPath = buildLucidePalettePath(yOffset = 0f)
@@ -1420,18 +1401,6 @@ fun AppleLucidePaletteAndPenIcon(
                 drawPath(
                     path = paletteExtrusionPath,
                     brush = paletteExtrusionBrush
-                )
-
-                // Bottom Extrusion Rim Specular Catch-Light
-                val bottomRimCatch = Path().apply {
-                    moveTo(195f, 792f)
-                    cubicTo(268f, 864f, 372f, 889f, 476f, 889f)
-                    cubicTo(534f, 889f, 572f, 856f, 581f, 808f)
-                }
-                drawPath(
-                    path = bottomRimCatch,
-                    color = Color(0xFF38B6FF).copy(alpha = 0.45f),
-                    style = Stroke(width = 2.5f, cap = StrokeCap.Round)
                 )
 
                 // 4. Primary Clipped Top Surface of the Lucide Palette
@@ -1469,15 +1438,6 @@ fun AppleLucidePaletteAndPenIcon(
                         )
                     }
 
-                    // Overhead Dome Crown Sheen
-                    drawBlurredOval(
-                        center = Offset(435f, 238f),
-                        rx = 240f,
-                        ry = 48f,
-                        color = Color.White.copy(alpha = 0.28f),
-                        blurRadius = 14f
-                    )
-
                     // Organic Curved Studio Light Dome & Flowing Specular Ridge
                     drawBlurredOval(
                         center = Offset(360f, 320f),
@@ -1485,16 +1445,6 @@ fun AppleLucidePaletteAndPenIcon(
                         ry = 120f,
                         color = Color.White.copy(alpha = 0.22f),
                         blurRadius = 24f
-                    )
-
-                    val arcHighlight = Path().apply {
-                        moveTo(200f, 440f)
-                        cubicTo(160f, 320f, 260f, 210f, 440f, 195f)
-                    }
-                    drawPath(
-                        path = arcHighlight,
-                        color = Color.White.copy(alpha = 0.38f),
-                        style = Stroke(width = 5.5f, cap = StrokeCap.Round)
                     )
 
                     // Right Lobe Secondary Anodized Rim Catch
@@ -1506,16 +1456,7 @@ fun AppleLucidePaletteAndPenIcon(
                         blurRadius = 14f
                     )
 
-                    // Bottom Continuous Curvature Cushion Highlight
-                    val bottomCushionPath = Path().apply {
-                        moveTo(210f, 784f)
-                        cubicTo(282f, 846f, 384f, 856f, 488f, 850f)
-                    }
-                    drawPath(
-                        path = bottomCushionPath,
-                        color = Color(0xFF88E0FF).copy(alpha = 0.52f),
-                        style = Stroke(width = 10f, cap = StrokeCap.Round)
-                    )
+
 
                     // Dynamic Realistic Cast Shadow from Floating Pen onto Palette Surface
                     val penPose = computePenPose(
