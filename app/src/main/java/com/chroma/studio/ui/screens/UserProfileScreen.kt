@@ -284,7 +284,38 @@ fun UserProfileScreen(
     LaunchedEffect(userId) {
         launch {
             isWorksLoading = true
-            works = discoverVm.repository.getWorksByUser(userId)
+            val remoteWorks = try {
+                discoverVm.repository.getWorksByUser(userId)
+            } catch (_: Exception) {
+                emptyList()
+            }
+            val localPosts = if (isCurrentUser) {
+                try {
+                    repository.loadActiveWorks().map { cw ->
+                        DiscoverPost(
+                            id = cw.id,
+                            title = cw.name,
+                            description = cw.description,
+                            jsonUrl = cw.layersJson,
+                            postType = "work",
+                            creatorId = userId,
+                            authorUsername = profile?.username ?: "You",
+                            authorDisplayName = profile?.displayName ?: "You",
+                            authorAvatarUrl = profile?.avatarUrl ?: "",
+                            timestamp = cw.createdAt,
+                            remixedFromPostId = cw.remixedFromPostId,
+                            remixedFromAuthorId = cw.remixedFromAuthorId,
+                            remixedFromAuthorUsername = cw.remixedFromAuthorUsername,
+                            remixedFromAuthorDisplayName = cw.remixedFromAuthorDisplayName,
+                            remixedFromAuthorAvatar = cw.remixedFromAuthorAvatar
+                        )
+                    }
+                } catch (_: Exception) {
+                    emptyList()
+                }
+            } else emptyList()
+
+            works = (remoteWorks + localPosts).distinctBy { it.id }.sortedByDescending { it.timestamp }
             isWorksLoading = false
         }
 
@@ -351,7 +382,7 @@ fun UserProfileScreen(
 
     val gridState = rememberLazyGridState()
 
-    val normalWorks = remember(works) { works.filter { it.remixedFromPostId == null && it.postType == "work" } }
+    val normalWorks = remember(works) { works.filter { it.remixedFromPostId == null && (it.postType == "work" || (it.postType != "image" && it.postType != "video")) } }
     val imagePosts = remember(works) { works.filter { it.postType == "image" } }
     val flashPosts = userFlashes
     val remixWorks = remember(works) { works.filter { it.remixedFromPostId != null } }
@@ -486,37 +517,17 @@ fun UserProfileScreen(
         } else {
             when (selectedTabIndex) {
                 0 -> {
-                    // Works / Creations Tab (Min 3 rows, no radius)
+                    // Works / Creations Tab (No radius)
                     if (isWorksLoading) {
-                        items(9) {
+                        items(6) {
                             Box(modifier = Modifier.aspectRatio(1f).clip(RectangleShape).shimmerEffect())
                         }
                     } else if (normalWorks.isEmpty()) {
-                        items(9) { index ->
-                            ProfileEmptySlot(
-                                aspectRatio = 1f,
-                                
-                                centerContent = if (index == 4) {
-                                    {
-                                        Column(
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Lucide.LayoutGrid,
-                                                contentDescription = null,
-                                                tint = colors.textMuted.copy(alpha = 0.5f),
-                                                modifier = Modifier.size(22.dp)
-                                            )
-                                            Text(
-                                                text = "No Works Yet",
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = colors.textMuted
-                                            )
-                                        }
-                                    }
-                                } else null
+                        item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                            AppleEmptyTabState(
+                                icon = Lucide.LayoutGrid,
+                                title = "No Works Yet",
+                                subtitle = if (isCurrentUser) "Create and save custom gradient works to show them here." else "This user hasn't posted any works yet."
                             )
                         }
                     } else {
@@ -529,44 +540,20 @@ fun UserProfileScreen(
                                 onClick = { selectedPostIndex = index }
                             )
                         }
-                        val remaining = maxOf(0, 9 - normalWorks.size)
-                        items(remaining) {
-                            ProfileEmptySlot(aspectRatio = 1f, )
-                        }
                     }
                 }
                 1 -> {
-                    // Photos Tab (Images, Min 3 rows, no radius)
+                    // Photos Tab (Images, No radius)
                     if (isWorksLoading) {
-                        items(9) {
+                        items(6) {
                             Box(modifier = Modifier.aspectRatio(1f).clip(RectangleShape).shimmerEffect())
                         }
                     } else if (imagePosts.isEmpty()) {
-                        items(9) { index ->
-                            ProfileEmptySlot(
-                                aspectRatio = 1f,
-                                
-                                centerContent = if (index == 4) {
-                                    {
-                                        Column(
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Lucide.Image,
-                                                contentDescription = null,
-                                                tint = colors.textMuted.copy(alpha = 0.5f),
-                                                modifier = Modifier.size(22.dp)
-                                            )
-                                            Text(
-                                                text = "No Photos Yet",
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = colors.textMuted
-                                            )
-                                        }
-                                    }
-                                } else null
+                        item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                            AppleEmptyTabState(
+                                icon = Lucide.Image,
+                                title = "No Photos Yet",
+                                subtitle = if (isCurrentUser) "Share your photos and artwork with the community." else "This user hasn't posted any photos yet."
                             )
                         }
                     } else {
@@ -579,44 +566,20 @@ fun UserProfileScreen(
                                 onClick = { selectedPostIndex = index }
                             )
                         }
-                        val remaining = maxOf(0, 9 - imagePosts.size)
-                        items(remaining) {
-                            ProfileEmptySlot(aspectRatio = 1f, )
-                        }
                     }
                 }
                 2 -> {
-                    // Flash Videos Tab (Reels, Min 3 rows, no radius)
+                    // Flash Videos Tab (Reels, No radius)
                     if (isFlashesLoading) {
-                        items(9) {
+                        items(6) {
                             Box(modifier = Modifier.aspectRatio(9f / 16f).clip(RectangleShape).shimmerEffect())
                         }
                     } else if (flashPosts.isEmpty()) {
-                        items(9) { index ->
-                            ProfileEmptySlot(
-                                aspectRatio = 9f / 16f,
-                                
-                                centerContent = if (index == 4) {
-                                    {
-                                        Column(
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Lucide.Zap,
-                                                contentDescription = null,
-                                                tint = colors.textMuted.copy(alpha = 0.5f),
-                                                modifier = Modifier.size(22.dp)
-                                            )
-                                            Text(
-                                                text = "No Flash Videos",
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = colors.textMuted
-                                            )
-                                        }
-                                    }
-                                } else null
+                        item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                            AppleEmptyTabState(
+                                icon = Lucide.Zap,
+                                title = "No Flash Videos",
+                                subtitle = if (isCurrentUser) "Record or upload short flash videos to showcase your style." else "This user hasn't posted any flash videos yet."
                             )
                         }
                     } else {
@@ -628,44 +591,20 @@ fun UserProfileScreen(
                                 onDeleteClick = { flashToDelete = flash }
                             )
                         }
-                        val remaining = maxOf(0, 9 - flashPosts.size)
-                        items(remaining) {
-                            ProfileEmptySlot(aspectRatio = 9f / 16f, )
-                        }
                     }
                 }
                 3 -> {
-                    // Remixes Tab (Min 3 rows, no radius)
+                    // Remixes Tab (No radius)
                     if (isWorksLoading) {
-                        items(9) {
+                        items(6) {
                             Box(modifier = Modifier.aspectRatio(1f).clip(RectangleShape).shimmerEffect())
                         }
                     } else if (remixWorks.isEmpty()) {
-                        items(9) { index ->
-                            ProfileEmptySlot(
-                                aspectRatio = 1f,
-                                
-                                centerContent = if (index == 4) {
-                                    {
-                                        Column(
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Lucide.HeartHandshake,
-                                                contentDescription = null,
-                                                tint = colors.textMuted.copy(alpha = 0.5f),
-                                                modifier = Modifier.size(22.dp)
-                                            )
-                                            Text(
-                                                text = "No Remixes",
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = colors.textMuted
-                                            )
-                                        }
-                                    }
-                                } else null
+                        item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                            AppleEmptyTabState(
+                                icon = Lucide.HeartHandshake,
+                                title = "No Remixes Yet",
+                                subtitle = if (isCurrentUser) "Remix works from other creators or let others remix yours." else "This user hasn't created any remixes yet."
                             )
                         }
                     } else {
@@ -678,44 +617,20 @@ fun UserProfileScreen(
                                 onClick = { selectedPostIndex = index }
                             )
                         }
-                        val remaining = maxOf(0, 9 - remixWorks.size)
-                        items(remaining) {
-                            ProfileEmptySlot(aspectRatio = 1f, )
-                        }
                     }
                 }
                 4 -> {
-                    // Saved / Bookmarks Tab (Min 3 rows, no radius)
+                    // Saved / Bookmarks Tab (No radius)
                     if (isSavedLoading) {
-                        items(9) {
+                        items(6) {
                             Box(modifier = Modifier.aspectRatio(1f).clip(RectangleShape).shimmerEffect())
                         }
                     } else if (savedWorks.isEmpty()) {
-                        items(9) { index ->
-                            ProfileEmptySlot(
-                                aspectRatio = 1f,
-                                
-                                centerContent = if (index == 4) {
-                                    {
-                                        Column(
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Lucide.Bookmark,
-                                                contentDescription = null,
-                                                tint = colors.textMuted.copy(alpha = 0.5f),
-                                                modifier = Modifier.size(22.dp)
-                                            )
-                                            Text(
-                                                text = "No Saved Works",
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = colors.textMuted
-                                            )
-                                        }
-                                    }
-                                } else null
+                        item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                            AppleEmptyTabState(
+                                icon = Lucide.Bookmark,
+                                title = "No Saved Posts",
+                                subtitle = "Posts and works you save will appear here privately."
                             )
                         }
                     } else {
@@ -727,10 +642,6 @@ fun UserProfileScreen(
                                 repository = repository,
                                 onClick = { selectedPostIndex = index }
                             )
-                        }
-                        val remaining = maxOf(0, 9 - savedWorks.size)
-                        items(remaining) {
-                            ProfileEmptySlot(aspectRatio = 1f, )
                         }
                     }
                 }

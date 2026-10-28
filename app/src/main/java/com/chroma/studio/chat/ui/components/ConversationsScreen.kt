@@ -34,6 +34,8 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
@@ -169,7 +171,9 @@ fun ConversationsScreen(
         containerColor = colors.appBg,
         topBar = {
             Box(
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clipToBounds()
             ) {
                 // Layer 1: Animated gradient background (Home screen design, fades out smoothly on scroll down)
                 Box(
@@ -192,13 +196,13 @@ fun ConversationsScreen(
                         }
                 )
 
-                // Layer 3: Hairline separator at bottom of header (visible when collapsed)
+                // Layer 3: Horizontal rule (hr) divider line after header
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .height(0.5.dp)
-                        .background(colors.separator.copy(alpha = (collapseFraction * 0.5f).coerceIn(0f, 0.5f)))
+                        .height(1.dp)
+                        .background(if (colors.isLight) Color(0xFFE2E2E8) else Color(0xFF2C2C30))
                 )
 
                 // Layer 4: Header Content Column
@@ -206,18 +210,17 @@ fun ConversationsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .windowInsetsPadding(WindowInsets.statusBars)
-                        .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp)
+                        .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 4.dp)
                 ) {
                     // Navigation Bar Row (Fixed height 44.dp)
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(44.dp),
-                        contentAlignment = Alignment.Center
+                            .height(44.dp)
                     ) {
                         if (isSelectionMode) {
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.fillMaxWidth().align(Alignment.CenterStart),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -276,37 +279,34 @@ fun ConversationsScreen(
                             }
                         } else {
                             // Left: Edit Button
-                            Row(
-                                modifier = Modifier.align(Alignment.CenterStart),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "Edit",
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Normal,
-                                    color = colors.textDark,
-                                    modifier = Modifier
-                                        .clickable(
-                                            interactionSource = remember { MutableInteractionSource() },
-                                            indication = null
-                                        ) {
-                                            SoundManager.playReaction()
-                                            isSelectionMode = true
-                                        }
-                                        .padding(vertical = 4.dp, horizontal = 2.dp)
-                                )
-                            }
+                            Text(
+                                text = "Edit",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Normal,
+                                color = colors.textDark,
+                                modifier = Modifier
+                                    .align(Alignment.CenterStart)
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null
+                                    ) {
+                                        SoundManager.playReaction()
+                                        isSelectionMode = true
+                                    }
+                                    .padding(vertical = 6.dp, horizontal = 2.dp)
+                            )
 
-                            // Center: Collapsed "Chats" Title (Centred on Screen, fades in on scroll)
+                            // Center: Collapsed "Chats" Title (Centred on Screen, fades in ONLY on scroll collapse)
                             Text(
                                 text = "Chats",
                                 fontSize = 17.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = colors.textDark,
+                                textAlign = TextAlign.Center,
                                 modifier = Modifier
                                     .align(Alignment.Center)
                                     .graphicsLayer {
-                                        alpha = collapseFraction
+                                        alpha = ((collapseFraction - 0.4f) / 0.6f).coerceIn(0f, 1f)
                                     }
                             )
 
@@ -314,12 +314,12 @@ fun ConversationsScreen(
                             Row(
                                 modifier = Modifier.align(Alignment.CenterEnd),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                // Search Button beside colors palette icon
+                                // Search Button
                                 Box(
                                     modifier = Modifier
-                                        .size(36.dp)
+                                        .size(32.dp)
                                         .clickable(
                                             interactionSource = remember { MutableInteractionSource() },
                                             indication = null
@@ -329,13 +329,13 @@ fun ConversationsScreen(
                                         },
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    LucideSearch(tint = colors.textDark, size = 20.dp)
+                                    LucideSearch(tint = colors.textDark, size = 18.dp)
                                 }
 
                                 // Appearance Theme Button (Palette)
                                 Box(
                                     modifier = Modifier
-                                        .size(36.dp)
+                                        .size(32.dp)
                                         .clickable(
                                             interactionSource = remember { MutableInteractionSource() },
                                             indication = null
@@ -345,13 +345,13 @@ fun ConversationsScreen(
                                         },
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    LucidePalette(tint = colors.textDark, size = 20.dp)
+                                    LucidePalette(tint = colors.textDark, size = 18.dp)
                                 }
 
-                                // Compose New Message Button
+                                // Compose New Message Button (Pencil/Edit)
                                 Box(
                                     modifier = Modifier
-                                        .size(36.dp)
+                                        .size(32.dp)
                                         .clickable(
                                             interactionSource = remember { MutableInteractionSource() },
                                             indication = null
@@ -361,25 +361,26 @@ fun ConversationsScreen(
                                         },
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    LucideEdit(tint = colors.textDark, size = 20.dp)
+                                    LucideEdit(tint = colors.textDark, size = 18.dp)
                                 }
 
-                                // Current User Profile Avatar (Actual Avatar, Zero Letters)
+                                // Current User Profile Avatar
                                 Box(
                                     modifier = Modifier
-                                        .size(36.dp)
+                                        .size(32.dp)
                                         .clickable(
                                             interactionSource = remember { MutableInteractionSource() },
                                             indication = null
                                         ) {
                                             SoundManager.playReaction()
                                             onUserProfileClick()
-                                        }
+                                        },
+                                    contentAlignment = Alignment.Center
                                 ) {
                                     ChatAvatar(
                                         avatarUrl = currentUser.avatar,
                                         name = currentUser.name,
-                                        size = 36.dp,
+                                        size = 32.dp,
                                         showOnline = true,
                                         isOnline = true
                                     )
@@ -390,24 +391,24 @@ fun ConversationsScreen(
 
                     // Expanded Centered "Chats" Title (Centred on Screen, collapses on scroll)
                     if (!isSelectionMode) {
-                        val expandedAlpha = (1f - collapseFraction * 1.4f).coerceIn(0f, 1f)
-                        val expandedHeight = (44.dp * (1f - collapseFraction)).coerceAtLeast(0.dp)
+                        val expandedAlpha = (1f - collapseFraction * 1.8f).coerceIn(0f, 1f)
+                        val expandedHeight = (38.dp * (1f - collapseFraction)).coerceAtLeast(0.dp)
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(expandedHeight)
                                 .graphicsLayer {
                                     alpha = expandedAlpha
-                                    translationY = -10.dp.value * collapseFraction
+                                    translationY = -6.dp.value * collapseFraction
                                 },
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = "Chats",
-                                fontSize = 32.sp,
+                                fontSize = 28.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = colors.textDark,
-                                letterSpacing = (-0.5).sp,
+                                letterSpacing = (-0.4).sp,
                                 textAlign = TextAlign.Center
                             )
                         }
@@ -449,11 +450,10 @@ fun ConversationsScreen(
                                         color = colors.textDark,
                                         fontWeight = FontWeight.Normal
                                     ),
-                                    cursorBrush = SolidColor(colors.iosBlue),
                                     decorationBox = { innerTextField ->
                                         if (searchQuery.isEmpty()) {
                                             Text(
-                                                text = "Search conversations...",
+                                                text = "Search chats and messages...",
                                                 fontSize = 15.sp,
                                                 color = colors.textMuted
                                             )
@@ -466,7 +466,7 @@ fun ConversationsScreen(
                                     Text(
                                         text = "✕",
                                         color = colors.textMuted,
-                                        fontSize = 13.sp,
+                                        fontSize = 14.sp,
                                         fontWeight = FontWeight.Bold,
                                         modifier = Modifier
                                             .clickable(
@@ -1753,7 +1753,10 @@ private fun ChatHeaderAnimatedGradientBackground(isDark: Boolean) {
     )
 
     Box(
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier
+            .fillMaxSize()
+            .background(if (isDark) Color(0xFF0F172A) else Color(0xFFF9F9FB))
+            .clipToBounds()
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val w = size.width
@@ -1762,11 +1765,12 @@ private fun ChatHeaderAnimatedGradientBackground(isDark: Boolean) {
 
             val maxDim = maxOf(w, h)
             val b1x = w * (0.15f + 0.25f * t1)
-            val b1y = h * (0.10f + 0.20f * t2)
-            val b1r = maxDim * 0.70f
+            val b1y = h * (0.20f + 0.30f * t2)
+            val b1r = maxDim * 0.75f
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(Color(0x885E35CA), Color(0x00000000)),
+                    colors = if (isDark) listOf(Color(0x775E35CA), Color.Transparent)
+                             else listOf(Color(0x448B5CF6), Color.Transparent),
                     center = Offset(b1x, b1y),
                     radius = b1r
                 ),
@@ -1774,12 +1778,13 @@ private fun ChatHeaderAnimatedGradientBackground(isDark: Boolean) {
                 center = Offset(b1x, b1y)
             )
 
-            val b2x = w * (0.55f + 0.30f * t2)
+            val b2x = w * (0.65f + 0.25f * t2)
             val b2y = h * (0.30f + 0.25f * t1)
-            val b2r = maxDim * 0.65f
+            val b2r = maxDim * 0.70f
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(Color(0x7700BCD4), Color(0x00000000)),
+                    colors = if (isDark) listOf(Color(0x6600BCD4), Color.Transparent)
+                             else listOf(Color(0x4406B6D4), Color.Transparent),
                     center = Offset(b2x, b2y),
                     radius = b2r
                 ),
@@ -1787,12 +1792,13 @@ private fun ChatHeaderAnimatedGradientBackground(isDark: Boolean) {
                 center = Offset(b2x, b2y)
             )
 
-            val b3x = w * (0.30f + 0.20f * t3)
-            val b3y = h * (0.65f + 0.20f * t2)
-            val b3r = maxDim * 0.60f
+            val b3x = w * (0.40f + 0.20f * t3)
+            val b3y = h * (0.50f + 0.30f * t2)
+            val b3r = maxDim * 0.65f
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(Color(0x66EC407A), Color(0x00000000)),
+                    colors = if (isDark) listOf(Color(0x55EC407A), Color.Transparent)
+                             else listOf(Color(0x38F43F5E), Color.Transparent),
                     center = Offset(b3x, b3y),
                     radius = b3r
                 ),
@@ -1800,7 +1806,7 @@ private fun ChatHeaderAnimatedGradientBackground(isDark: Boolean) {
                 center = Offset(b3x, b3y)
             )
         }
-        val overlayColor = if (isDark) Color(0xDD000000) else Color(0xBBFFFFFF)
+        val overlayColor = if (isDark) Color(0x33000000) else Color(0x22FFFFFF)
         Box(
             modifier = Modifier
                 .fillMaxSize()
