@@ -103,14 +103,14 @@ data class GradientPreset(
 )
 
 val CHROMA_GRADIENT_PRESETS = listOf(
-    GradientPreset("Default Studio", listOf(Color(0xFF007AFF), Color(0xFF0051D5), Color(0xFF32ADE6))),
-    GradientPreset("Ocean Breeze", listOf(Color(0xFF00C6FF), Color(0xFF0072FF))),
-    GradientPreset("Sunset Glow", listOf(Color(0xFFFF512F), Color(0xFFDD2476))),
-    GradientPreset("Neon Aurora", listOf(Color(0xFF00F260), Color(0xFF0575E6))),
-    GradientPreset("Midnight Slate", listOf(Color(0xFF232526), Color(0xFF414345))),
-    GradientPreset("Electric Indigo", listOf(Color(0xFF4A00E0), Color(0xFF8E2DE2))),
-    GradientPreset("Golden Flame", listOf(Color(0xFFF2994A), Color(0xFFF2C94C))),
-    GradientPreset("Rose Quartz", listOf(Color(0xFFFF758C), Color(0xFFFF7EB3)))
+    GradientPreset("Obsidian Stealth", listOf(Color(0xFF141416), Color(0xFF222228), Color(0xFF0C0C0E))),
+    GradientPreset("Cosmic Indigo", listOf(Color(0xFF1E1B4B), Color(0xFF312E81), Color(0xFF4338CA))),
+    GradientPreset("Pacific Titanium", listOf(Color(0xFF0A2540), Color(0xFF0284C7), Color(0xFF0EA5E9))),
+    GradientPreset("Emerald Luxury", listOf(Color(0xFF064E3B), Color(0xFF047857), Color(0xFF10B981))),
+    GradientPreset("Midnight Royal", listOf(Color(0xFF0F172A), Color(0xFF1E293B), Color(0xFF334155))),
+    GradientPreset("Sunset Radiance", listOf(Color(0xFF4C1D95), Color(0xFF9333EA), Color(0xFFF43F5E))),
+    GradientPreset("Golden Amber", listOf(Color(0xFF451A03), Color(0xFF92400E), Color(0xFFD97706))),
+    GradientPreset("Studio Minimal", listOf(Color(0xFFF8FAFC), Color(0xFFEEF2F6), Color(0xFFE2E8F0)))
 )
 
 val QR_COLOR_PRESETS = listOf(
@@ -234,20 +234,16 @@ fun ProfilePassCardView(
     val secondaryTextColor = if (!customization.isDarkText) Color.White.copy(alpha = 0.75f) else Color(0xFF86868B)
     val buttonBgColor = if (!customization.isDarkText) Color.White.copy(alpha = 0.15f) else Color(0xFFF2F2F7)
 
+    val cardShape = RoundedCornerShape(20.dp)
+
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .shadow(
-                elevation = 14.dp,
-                shape = RoundedCornerShape(16.dp),
-                spotColor = customization.accentColor.copy(alpha = 0.20f),
-                ambientColor = Color.Black.copy(alpha = 0.06f)
-            )
-            .clip(RoundedCornerShape(16.dp))
+            .clip(cardShape)
             .border(
-                width = 1.dp,
-                color = if (!customization.isDarkText) Color.White.copy(alpha = 0.25f) else Color(0xFFDBEAFE),
-                shape = RoundedCornerShape(16.dp)
+                width = 0.5.dp,
+                color = if (!customization.isDarkText) Color.White.copy(alpha = 0.28f) else Color.Black.copy(alpha = 0.10f),
+                shape = cardShape
             )
     ) {
         // ── Card Background Layer ──
@@ -326,7 +322,6 @@ fun ProfilePassCardView(
                         .matchParentSize()
                         .background(Brush.linearGradient(listOf(Color(0xFFEEF2FF), Color(0xFFDBEAFE))))
                         .drawBehind {
-                            // Subtle dot-matrix grid overlay
                             val dotSpacing = 20.dp.toPx()
                             val dotRadius = 1.dp.toPx()
                             val dotColor = Color(0xFF1D1D1F).copy(alpha = 0.04f)
@@ -344,170 +339,339 @@ fun ProfilePassCardView(
             }
         }
 
+        // Specular top highlight hairline
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(
+                            Color.Transparent,
+                            Color.White.copy(alpha = if (!customization.isDarkText) 0.55f else 0.25f),
+                            Color.Transparent
+                        )
+                    )
+                )
+        )
+
         // ── Card Foreground Content ──
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // ── Top Section: Identity (Left) + Scannable QR Badge (Right) ──
+            // ── 1. Top Section: Brand Identity & Official Badge ──
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Left Column: Avatar, Display Name, Role, Handle (Immutable Identity)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Lucide.Sparkles,
+                        contentDescription = null,
+                        tint = if (!customization.isDarkText) Color.White.copy(alpha = 0.9f) else customization.accentColor,
+                        modifier = Modifier.size(13.dp)
+                    )
+                    Text(
+                        text = "CHROMA STUDIO",
+                        color = primaryTextColor.copy(alpha = 0.95f),
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.2.sp
+                    )
+                    Text(
+                        text = "•",
+                        color = secondaryTextColor.copy(alpha = 0.6f),
+                        fontSize = 10.sp
+                    )
+                    Text(
+                        text = "CREATOR PASS",
+                        color = secondaryTextColor,
+                        fontSize = 9.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 0.8.sp
+                    )
+                }
+
+                // Official Pass Badge
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(100.dp))
+                        .background(if (!customization.isDarkText) Color.White.copy(alpha = 0.16f) else Color.Black.copy(alpha = 0.05f))
+                        .border(
+                            0.5.dp,
+                            if (!customization.isDarkText) Color.White.copy(alpha = 0.25f) else Color.Black.copy(alpha = 0.08f),
+                            RoundedCornerShape(100.dp)
+                        )
+                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                ) {
+                    Icon(
+                        imageVector = Lucide.ShieldCheck,
+                        contentDescription = null,
+                        tint = if (!customization.isDarkText) Color(0xFF34C759) else Color(0xFF059669),
+                        modifier = Modifier.size(11.dp)
+                    )
+                    Text(
+                        text = "OFFICIAL PASS",
+                        color = primaryTextColor,
+                        fontSize = 8.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.6.sp
+                    )
+                }
+            }
+
+            HorizontalDivider(
+                thickness = 0.5.dp,
+                color = if (!customization.isDarkText) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.06f)
+            )
+
+            // ── 2. Middle Section: Identity (Left) + Scannable QR Badge (Right) ──
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                // Left Column: Avatar + Profile Name + Handle + Organized Metadata Chips
                 Column(
                     modifier = Modifier
                         .weight(1f)
                         .padding(end = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    // Circular Avatar (Immutable)
-                    Box(
-                        modifier = Modifier
-                            .size(60.dp)
-                            .clip(CircleShape)
-                            .background(if (!customization.isDarkText) Color(0xFF2C2C2E) else Color(0xFFF5F5F7))
-                            .border(
-                                width = 2.dp,
-                                color = if (!customization.isDarkText) Color.White.copy(alpha = 0.3f) else Color.White,
-                                shape = CircleShape
-                            ),
-                        contentAlignment = Alignment.Center
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        val presetRes = remember(profile.avatarUrl) { getAvatarPresetDrawableRes(profile.avatarUrl) }
-                        val defaultAvatarRes = remember(profile.gender) { getDefaultAvatarDrawableRes(profile.gender) }
-                        val resolvedDrawable = presetRes ?: if (profile.avatarUrl.isBlank()) defaultAvatarRes else null
+                        // Circular Avatar with Dual Rim
+                        Box(
+                            modifier = Modifier
+                                .size(56.dp)
+                                .clip(CircleShape)
+                                .background(if (!customization.isDarkText) Color(0xFF2C2C2E) else Color(0xFFF5F5F7))
+                                .border(
+                                    width = 1.5.dp,
+                                    color = if (!customization.isDarkText) Color.White.copy(alpha = 0.85f) else Color.White,
+                                    shape = CircleShape
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            val presetRes = remember(profile.avatarUrl) { getAvatarPresetDrawableRes(profile.avatarUrl) }
+                            val defaultAvatarRes = remember(profile.gender) { getDefaultAvatarDrawableRes(profile.gender) }
+                            val resolvedDrawable = presetRes ?: if (profile.avatarUrl.isBlank()) defaultAvatarRes else null
 
-                        if (resolvedDrawable != null) {
-                            Image(
-                                painter = painterResource(id = resolvedDrawable),
-                                contentDescription = "Avatar",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                        } else if (profile.avatarUrl.isNotBlank()) {
-                            AsyncImage(
-                                model = ImageRequest.Builder(context)
-                                    .data(profile.avatarUrl)
-                                    .crossfade(true)
-                                    .build(),
-                                contentDescription = "Avatar",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                        } else {
-                            Image(
-                                painter = painterResource(id = R.drawable.default_avatar_apple),
-                                contentDescription = "Avatar",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
+                            if (resolvedDrawable != null) {
+                                Image(
+                                    painter = painterResource(id = resolvedDrawable),
+                                    contentDescription = "Avatar",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else if (profile.avatarUrl.isNotBlank()) {
+                                AsyncImage(
+                                    model = ImageRequest.Builder(context)
+                                        .data(profile.avatarUrl)
+                                        .crossfade(true)
+                                        .build(),
+                                    contentDescription = "Avatar",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                Image(
+                                    painter = painterResource(id = R.drawable.default_avatar_apple),
+                                    contentDescription = "Avatar",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+                        }
+
+                        // Display Name & Username
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = profile.displayName.ifBlank { "Creator" },
+                                    color = primaryTextColor,
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                if (profile.verified) {
+                                    VerifiedBadge(size = 15.dp, showGlow = true, animated = true)
+                                }
+                            }
+
+                            Text(
+                                text = "@${profile.username.ifBlank { "creator" }}",
+                                color = secondaryTextColor,
+                                fontSize = 12.5.sp,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
 
-                    // Name + Verified Badge + Role + Username (Immutable)
-                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp)
-                        ) {
-                            Text(
-                                text = profile.displayName.ifBlank { "Creator" },
-                                color = primaryTextColor,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            if (profile.verified) {
-                                VerifiedBadge(size = 17.dp, showGlow = true, animated = true)
-                            }
-                        }
-
-                        // Role Display in Pass Card (Prominent & Clean)
+                    // Organized Info Badges with Icons
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Role Chip
                         val roleText = profile.role
                         if (!roleText.isNullOrBlank()) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(5.dp))
-                                    .background(customization.accentColor.copy(alpha = if (!customization.isDarkText) 0.25f else 0.12f))
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(customization.accentColor.copy(alpha = if (!customization.isDarkText) 0.28f else 0.12f))
                                     .border(
                                         width = 0.5.dp,
-                                        color = customization.accentColor.copy(alpha = 0.35f),
-                                        shape = RoundedCornerShape(5.dp)
+                                        color = customization.accentColor.copy(alpha = 0.4f),
+                                        shape = RoundedCornerShape(6.dp)
                                     )
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    .padding(horizontal = 7.dp, vertical = 3.dp)
                             ) {
-                                AiWaveSphereIcon(
-                                    modifier = Modifier.size(13.dp)
+                                Icon(
+                                    imageVector = Lucide.Briefcase,
+                                    contentDescription = null,
+                                    tint = if (!customization.isDarkText) Color.White else customization.accentColor,
+                                    modifier = Modifier.size(11.dp)
                                 )
                                 Text(
                                     text = roleText,
                                     color = if (!customization.isDarkText) Color.White else customization.accentColor,
-                                    fontSize = 11.5.sp,
-                                    fontWeight = FontWeight.SemiBold
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
 
-                        Text(
-                            text = "@${profile.username.ifBlank { "creator" }}",
-                            color = secondaryTextColor,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        // Followers Chip
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(if (!customization.isDarkText) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.05f))
+                                .border(
+                                    width = 0.5.dp,
+                                    color = if (!customization.isDarkText) Color.White.copy(alpha = 0.22f) else Color.Black.copy(alpha = 0.08f),
+                                    shape = RoundedCornerShape(6.dp)
+                                )
+                                .padding(horizontal = 7.dp, vertical = 3.dp)
+                        ) {
+                            Icon(
+                                imageVector = Lucide.Users,
+                                contentDescription = null,
+                                tint = secondaryTextColor,
+                                modifier = Modifier.size(11.dp)
+                            )
+                            val formattedFollowers = if (profile.followersCount >= 1000) {
+                                String.format("%.1fk", profile.followersCount / 1000f)
+                            } else {
+                                profile.followersCount.toString()
+                            }
+                            Text(
+                                text = "$formattedFollowers Followers",
+                                color = primaryTextColor,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+
+                        // Location Chip (if available)
+                        if (profile.location.isNotBlank()) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(if (!customization.isDarkText) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.05f))
+                                    .border(
+                                        width = 0.5.dp,
+                                        color = if (!customization.isDarkText) Color.White.copy(alpha = 0.22f) else Color.Black.copy(alpha = 0.08f),
+                                        shape = RoundedCornerShape(6.dp)
+                                    )
+                                    .padding(horizontal = 7.dp, vertical = 3.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.MapPin,
+                                    contentDescription = null,
+                                    tint = secondaryTextColor,
+                                    modifier = Modifier.size(11.dp)
+                                )
+                                Text(
+                                    text = profile.location,
+                                    color = secondaryTextColor,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
                     }
                 }
 
-                // Right: Scannable QR Code Badge
+                // Right Column: Scannable QR Code Frame
                 val qrContainerModifier = when (customization.qrFrameStyle) {
                     QrFrameStyle.SOLID_WHITE -> Modifier
-                        .shadow(4.dp, RoundedCornerShape(12.dp), spotColor = Color.Black.copy(alpha = 0.08f))
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(14.dp))
                         .background(Color.White)
-                        .border(1.dp, Color(0xFFF2F2F7), RoundedCornerShape(12.dp))
+                        .border(0.5.dp, Color(0xFFE5E5EA), RoundedCornerShape(14.dp))
                     QrFrameStyle.FROSTED_GLASS -> Modifier
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(14.dp))
                         .background(Color.White.copy(alpha = 0.35f))
-                        .border(1.dp, Color.White.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                        .border(0.5.dp, Color.White.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
                     QrFrameStyle.SOLID_DARK -> Modifier
-                        .shadow(4.dp, RoundedCornerShape(12.dp))
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(14.dp))
                         .background(Color(0xFF1C1C1E))
-                        .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+                        .border(0.5.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(14.dp))
                     QrFrameStyle.MINIMAL -> Modifier
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(14.dp))
                 }
 
                 Box(
                     modifier = qrContainerModifier
                         .clickable { onQrClick() }
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        verticalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
                         if (qrBitmap != null) {
                             Image(
                                 bitmap = qrBitmap.asImageBitmap(),
                                 contentDescription = "Scan to connect QR",
-                                modifier = Modifier.size(86.dp)
+                                modifier = Modifier.size(80.dp)
                             )
                         } else {
                             Icon(
                                 imageVector = Lucide.QrCode,
                                 contentDescription = "QR Code",
                                 tint = customization.qrColor,
-                                modifier = Modifier.size(86.dp)
+                                modifier = Modifier.size(80.dp)
                             )
                         }
 
@@ -517,18 +681,29 @@ fun ProfilePassCardView(
                             else -> Color(0xFF86868B)
                         }
 
-                        Text(
-                            text = "SCAN TO CONNECT",
-                            color = scanLabelColor,
-                            fontSize = 8.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            Icon(
+                                imageVector = Lucide.QrCode,
+                                contentDescription = null,
+                                tint = scanLabelColor,
+                                modifier = Modifier.size(9.dp)
+                            )
+                            Text(
+                                text = "CONNECT",
+                                color = scanLabelColor,
+                                fontSize = 8.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.8.sp
+                            )
+                        }
                     }
                 }
             }
 
-            // ── Bottom Section: Action Buttons ──
+            // ── 3. Bottom Section: Action Buttons ──
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -550,6 +725,11 @@ fun ProfilePassCardView(
                         .height(38.dp)
                         .clip(RoundedCornerShape(10.dp))
                         .background(copyBgColor)
+                        .border(
+                            0.5.dp,
+                            if (!customization.isDarkText) Color.White.copy(alpha = 0.20f) else Color.Black.copy(alpha = 0.08f),
+                            RoundedCornerShape(10.dp)
+                        )
                         .clickable {
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             clipboard.setPrimaryClip(ClipData.newPlainText("Profile Link", profileShareUrl))
@@ -612,7 +792,7 @@ fun ProfilePassCardView(
                             modifier = Modifier.size(14.dp)
                         )
                         Text(
-                            text = "Share",
+                            text = "Share Pass",
                             color = Color.White,
                             fontSize = 12.5.sp,
                             fontWeight = FontWeight.SemiBold,
@@ -625,9 +805,6 @@ fun ProfilePassCardView(
     }
 }
 
-/**
- * Saves the Customized Profile Pass Card as a high-res image directly into Gallery.
- */
 private suspend fun savePassCardImageToGallery(
     context: Context,
     profile: UserProfile,

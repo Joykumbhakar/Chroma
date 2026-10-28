@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -605,152 +606,302 @@ private fun PassCardLiveOverlay(
         com.chroma.studio.ui.components.generateQrBitmap(profileShareUrl, sizePx = 280, foregroundColor = android.graphics.Color.BLACK)
     }
 
+    val cardShape = RoundedCornerShape(20.dp)
+
     Box(
         modifier = modifier
             .fillMaxSize()
-            .padding(16.dp),
-        contentAlignment = Alignment.TopStart
+            .clip(cardShape)
+            .border(0.5.dp, androidx.compose.ui.graphics.Color.White.copy(alpha = 0.35f), cardShape)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Top
-        ) {
-            // Left: Avatar + Name + Role + Username
-            Column(
-                modifier = Modifier.weight(1f).padding(end = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                // Avatar
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(androidx.compose.foundation.shape.CircleShape)
-                        .background(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.2f))
-                        .border(1.5.dp, androidx.compose.ui.graphics.Color.White, androidx.compose.foundation.shape.CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    val presetRes = remember(profile.avatarUrl) { getAvatarPresetDrawableRes(profile.avatarUrl) }
-                    val defaultAvatarRes = remember(profile.gender) { getDefaultAvatarDrawableRes(profile.gender) }
-                    val resolvedDrawable = presetRes ?: if (profile.avatarUrl.isBlank()) defaultAvatarRes else null
-
-                    if (resolvedDrawable != null) {
-                        androidx.compose.foundation.Image(
-                            painter = androidx.compose.ui.res.painterResource(id = resolvedDrawable),
-                            contentDescription = "Avatar",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
+        // Specular top highlight hairline
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(
+                    androidx.compose.ui.graphics.Brush.horizontalGradient(
+                        listOf(
+                            androidx.compose.ui.graphics.Color.Transparent,
+                            androidx.compose.ui.graphics.Color.White.copy(alpha = 0.5f),
+                            androidx.compose.ui.graphics.Color.Transparent
                         )
-                    } else if (profile.avatarUrl.isNotBlank()) {
-                        coil.compose.AsyncImage(
-                            model = profile.avatarUrl,
-                            contentDescription = "Avatar",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                        )
-                    } else {
-                        androidx.compose.foundation.Image(
-                            painter = androidx.compose.ui.res.painterResource(id = R.drawable.default_avatar_apple),
-                            contentDescription = "Avatar",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                        )
-                    }
-                }
-
-                // Name & Badges
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        text = profile.displayName.ifBlank { "Creator" },
-                        color = androidx.compose.ui.graphics.Color.White,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
-                    if (profile.verified) {
-                        VerifiedBadge(size = 14.dp)
-                    }
-                }
+                )
+        )
 
-                // Role
-                val roleText = profile.role
-                if (!roleText.isNullOrBlank()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            // ── Top Bar: Brand + Official Pass Badge ──
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(3.dp),
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.25f))
-                            .padding(horizontal = 5.dp, vertical = 1.5.dp)
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
-                        AiWaveSphereIcon(
+                        androidx.compose.material3.Icon(
+                            imageVector = com.composables.icons.lucide.Lucide.Sparkles,
+                            contentDescription = null,
+                            tint = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.95f),
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Text(
+                            text = "CHROMA STUDIO",
+                            color = androidx.compose.ui.graphics.Color.White,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.2.sp
+                        )
+                        Text(
+                            text = "•",
+                            color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.5f),
+                            fontSize = 9.sp
+                        )
+                        Text(
+                            text = "CREATOR PASS",
+                            color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.75f),
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            letterSpacing = 0.8.sp
+                        )
+                    }
+
+                    // Official Pass Badge
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(100.dp))
+                            .background(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.16f))
+                            .border(0.5.dp, androidx.compose.ui.graphics.Color.White.copy(alpha = 0.25f), RoundedCornerShape(100.dp))
+                            .padding(horizontal = 7.dp, vertical = 2.5.dp)
+                    ) {
+                        androidx.compose.material3.Icon(
+                            imageVector = com.composables.icons.lucide.Lucide.ShieldCheck,
+                            contentDescription = null,
+                            tint = androidx.compose.ui.graphics.Color(0xFF34C759),
                             modifier = Modifier.size(11.dp)
                         )
                         Text(
-                            text = roleText,
+                            text = "OFFICIAL PASS",
                             color = androidx.compose.ui.graphics.Color.White,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.SemiBold
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp
                         )
                     }
                 }
 
-                Text(
-                    text = "@${profile.username.ifBlank { "creator" }}",
-                    color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.8f),
-                    fontSize = 11.5.sp,
-                    fontWeight = FontWeight.Medium
+                androidx.compose.material3.HorizontalDivider(
+                    thickness = 0.5.dp,
+                    color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.18f)
                 )
             }
 
-            // Right: QR Code badge
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.9f))
-                    .padding(6.dp),
-                contentAlignment = Alignment.Center
+            // ── Center Content: Identity & QR Code ──
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                // Left: Avatar + Details
                 Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                    modifier = Modifier.weight(1f).padding(end = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    if (qrBitmap != null) {
-                        androidx.compose.foundation.Image(
-                            bitmap = qrBitmap.asImageBitmap(),
-                            contentDescription = "QR Code",
-                            modifier = Modifier.size(54.dp)
-                        )
-                    } else {
-                        androidx.compose.material3.Icon(
-                            com.composables.icons.lucide.Lucide.QrCode,
-                            contentDescription = null,
-                            modifier = Modifier.size(54.dp)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        // Avatar with Dual Rim
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(androidx.compose.foundation.shape.CircleShape)
+                                .background(androidx.compose.ui.graphics.Color(0xFF2C2C2E))
+                                .border(1.5.dp, androidx.compose.ui.graphics.Color.White, androidx.compose.foundation.shape.CircleShape)
+                                .padding(1.5.dp)
+                                .clip(androidx.compose.foundation.shape.CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            val presetRes = remember(profile.avatarUrl) { getAvatarPresetDrawableRes(profile.avatarUrl) }
+                            val defaultAvatarRes = remember(profile.gender) { getDefaultAvatarDrawableRes(profile.gender) }
+                            val resolvedDrawable = presetRes ?: if (profile.avatarUrl.isBlank()) defaultAvatarRes else null
+
+                            if (resolvedDrawable != null) {
+                                androidx.compose.foundation.Image(
+                                    painter = androidx.compose.ui.res.painterResource(id = resolvedDrawable),
+                                    contentDescription = "Avatar",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                )
+                            } else if (profile.avatarUrl.isNotBlank()) {
+                                coil.compose.AsyncImage(
+                                    model = profile.avatarUrl,
+                                    contentDescription = "Avatar",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                )
+                            } else {
+                                androidx.compose.foundation.Image(
+                                    painter = androidx.compose.ui.res.painterResource(id = R.drawable.default_avatar_apple),
+                                    contentDescription = "Avatar",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                )
+                            }
+                        }
+
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = profile.displayName.ifBlank { "Creator" },
+                                    color = androidx.compose.ui.graphics.Color.White,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                                if (profile.verified) {
+                                    VerifiedBadge(size = 13.dp)
+                                }
+                            }
+                            Text(
+                                text = "@${profile.username.ifBlank { "creator" }}",
+                                color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.75f),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+
+                    // Metadata Chips (Role & Followers)
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val roleText = profile.role
+                        if (!roleText.isNullOrBlank()) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.16f))
+                                    .border(0.5.dp, androidx.compose.ui.graphics.Color.White.copy(alpha = 0.22f), RoundedCornerShape(6.dp))
+                                    .padding(horizontal = 6.dp, vertical = 2.5.dp)
+                            ) {
+                                androidx.compose.material3.Icon(
+                                    imageVector = com.composables.icons.lucide.Lucide.Briefcase,
+                                    contentDescription = null,
+                                    tint = androidx.compose.ui.graphics.Color.White,
+                                    modifier = Modifier.size(9.5.dp)
+                                )
+                                Text(
+                                    text = roleText,
+                                    color = androidx.compose.ui.graphics.Color.White,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.16f))
+                                .border(0.5.dp, androidx.compose.ui.graphics.Color.White.copy(alpha = 0.22f), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 6.dp, vertical = 2.5.dp)
+                        ) {
+                            androidx.compose.material3.Icon(
+                                imageVector = com.composables.icons.lucide.Lucide.Users,
+                                contentDescription = null,
+                                tint = androidx.compose.ui.graphics.Color.White,
+                                modifier = Modifier.size(9.5.dp)
+                            )
+                            Text(
+                                text = "${profile.followersCount} followers",
+                                color = androidx.compose.ui.graphics.Color.White,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+
+                // Right: Scannable QR Frame
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(androidx.compose.ui.graphics.Color.White)
+                        .border(0.5.dp, androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.08f), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        if (qrBitmap != null) {
+                            androidx.compose.foundation.Image(
+                                bitmap = qrBitmap.asImageBitmap(),
+                                contentDescription = "QR Code",
+                                modifier = Modifier.size(52.dp)
+                            )
+                        } else {
+                            androidx.compose.material3.Icon(
+                                com.composables.icons.lucide.Lucide.QrCode,
+                                contentDescription = null,
+                                tint = androidx.compose.ui.graphics.Color(0xFF1D1D1F),
+                                modifier = Modifier.size(52.dp)
+                            )
+                        }
+                        Text(
+                            text = "CONNECT",
+                            color = androidx.compose.ui.graphics.Color(0xFF86868B),
+                            fontSize = 6.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.6.sp
                         )
                     }
-                    Text(
-                        text = "CONNECT",
-                        color = androidx.compose.ui.graphics.Color(0xFF86868B),
-                        fontSize = 6.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.5.sp
-                    )
                 }
             }
-        }
 
-        // Bottom Brand
-        Text(
-            text = "CHROMA STUDIO • CREATOR PASS",
-            color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.65f),
-            fontSize = 8.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp,
-            modifier = Modifier.align(Alignment.BottomStart)
-        )
+            // ── Bottom Bar: Clean subtle watermark ──
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "POWERED BY CHROMA STUDIO",
+                    color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.5f),
+                    fontSize = 7.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.8.sp
+                )
+                Text(
+                    text = "TAP TO ROTATE / PREVIEW",
+                    color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.4f),
+                    fontSize = 7.sp,
+                    fontWeight = FontWeight.Medium,
+                    letterSpacing = 0.5.sp
+                )
+            }
+        }
     }
 }
