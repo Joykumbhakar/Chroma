@@ -1365,30 +1365,30 @@ fun NotificationsFeedScreen(
                     }
                 },
                 actions = {
-                    // Search toggle
-                    GlassIconButton(
+                    // Search toggle (clean without circle background)
+                    IconButton(
                         onClick = { searchOpen = !searchOpen },
-                        modifier = Modifier.size(34.dp)
+                        modifier = Modifier.size(36.dp)
                     ) {
                         Icon(
                             imageVector = Lucide.Search,
                             contentDescription = "Search",
                             tint = if (searchOpen) colors.primary else colors.textMain,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                     }
 
-                    // Native Dropdown Menu ("use menus")
+                    // Native Dropdown Menu ("use menus") - clean without circle background
                     Box {
-                        GlassIconButton(
+                        IconButton(
                             onClick = { isMoreMenuOpen = true },
-                            modifier = Modifier.size(34.dp)
+                            modifier = Modifier.size(36.dp)
                         ) {
                             Icon(
                                 imageVector = Lucide.EllipsisVertical,
                                 contentDescription = "More Options",
                                 tint = colors.textMain,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(20.dp)
                             )
                         }
 
