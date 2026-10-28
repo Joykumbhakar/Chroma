@@ -124,7 +124,10 @@ fun UserProfileHeroSection(
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Elevated Apple Glass Avatar
-            Box(contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier.offset(y = 10.dp),
+                contentAlignment = Alignment.Center
+            ) {
                 Box(
                     modifier = Modifier
                         .size(82.dp)
@@ -433,7 +436,7 @@ fun UserProfileBioDetailsSection(
             )
         }
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(14.dp))
 
         // 1. Display Name + Verified Badge + Pass Button
         Row(
