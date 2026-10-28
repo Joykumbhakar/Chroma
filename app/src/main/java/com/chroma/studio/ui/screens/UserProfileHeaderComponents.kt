@@ -394,7 +394,8 @@ fun UserProfileBioDetailsSection(
     mutualFollowers: List<UserProfile>,
     userId: String,
     onShowShareCard: () -> Unit,
-    onNavigateToUserList: ((String, String) -> Unit)?
+    onNavigateToUserList: ((String, String) -> Unit)?,
+    onNavigateToProfile: ((String) -> Unit)? = null
 ) {
     val colors = LocalOscellionColors.current
     val context = LocalContext.current
@@ -760,50 +761,27 @@ fun UserProfileBioDetailsSection(
 
     // Mutual Connections
     if (mutualFollowers.isNotEmpty()) {
-        Spacer(Modifier.height(5.dp))
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.clickable { onNavigateToUserList?.invoke(userId, "followers") }
-        ) {
-            Text("Followed by ", color = Color(0xFF8E8E93), fontSize = 11.5.sp)
-            Row(horizontalArrangement = Arrangement.spacedBy((-5).dp)) {
-                mutualFollowers.take(3).forEach { mutual ->
-                    if (mutual.avatarUrl.isNotBlank()) {
-                        AsyncImage(
-                            model = ImageRequest.Builder(LocalContext.current)
-                                .data(mutual.avatarUrl)
-                                .crossfade(true)
-                                .build(),
-                            contentDescription = "Avatar",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .size(17.dp)
-                                .clip(CircleShape)
-                                .border(1.dp, Color.White, CircleShape)
-                        )
-                    } else {
-                        Image(
-                            painter = painterResource(id = R.drawable.default_avatar_apple),
-                            contentDescription = "Avatar",
-                            modifier = Modifier
-                                .size(17.dp)
-                                .clip(CircleShape)
-                                .border(1.dp, Color.White, CircleShape)
-                        )
-                    }
+        Spacer(Modifier.height(8.dp))
+        val connectedUsers = remember(mutualFollowers) {
+            mutualFollowers.map { it.toConnectedUser() }
+        }
+        ConnectedUsersAvatarGroup(
+            users = connectedUsers,
+            totalCount = mutualFollowers.size,
+            maxVisible = 4,
+            avatarSize = 26.dp,
+            overlapOffset = 7.dp,
+            prefixText = "Followed by",
+            suffixText = "you follow",
+            showTextSummary = true,
+            onUserClick = { clickedUid ->
+                if (onNavigateToProfile != null) {
+                    onNavigateToProfile(clickedUid)
+                } else {
+                    onNavigateToUserList?.invoke(clickedUid, "followers")
                 }
             }
-            Spacer(Modifier.width(5.dp))
-            val names = mutualFollowers.take(2).joinToString(", ") { it.username } + if (mutualFollowers.size > 2) " and ${mutualFollowers.size - 2} others" else ""
-            Text(
-                names,
-                color = colors.textMain,
-                fontSize = 11.5.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
+        )
     }
 }
 }

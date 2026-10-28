@@ -22,6 +22,18 @@ import com.chroma.studio.model.DiscoverPost
 import com.chroma.studio.data.CloudinaryClient
 
 class DiscoverRepository {
+    companion object {
+        @Volatile
+        private var INSTANCE: DiscoverRepository? = null
+
+        fun getInstance(): DiscoverRepository {
+            return INSTANCE ?: synchronized(this) {
+                INSTANCE ?: DiscoverRepository().also { INSTANCE = it }
+            }
+        }
+
+        private val profileCache = java.util.concurrent.ConcurrentHashMap<String, UserProfile>()
+    }
     private val db = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
     private val collection = db.collection("community_works")
@@ -895,12 +907,34 @@ class DiscoverRepository {
     }
 
     suspend fun getUserProfile(uid: String): UserProfile? {
+        if (uid.isBlank()) return null
+        profileCache[uid]?.let { return it }
         return try {
             val doc = usersCollection.document(uid).get().await()
-            doc.toObject(UserProfile::class.java)
+            val profile = doc.toObject(UserProfile::class.java)
+            if (profile != null) {
+                profileCache[uid] = profile
+            }
+            profile
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             null
+        }
+    }
+
+    suspend fun getProfilesByIds(userIds: List<String>, limit: Int = 10): List<UserProfile> {
+        val targetIds = userIds.filter { it.isNotBlank() }.distinct().take(limit)
+        if (targetIds.isEmpty()) return emptyList()
+        return try {
+            coroutineScope {
+                targetIds.map { uid ->
+                    async { getUserProfile(uid) }
+                }.awaitAll().filterNotNull()
+            }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("DiscoverRepository", "Error getting profiles by ids", e)
+            emptyList()
         }
     }
 
@@ -1008,7 +1042,7 @@ class DiscoverRepository {
         }
     }
 
-    suspend fun getMutualFollowers(currentUserId: String, targetUserId: String, limit: Long = 3): List<UserProfile> {
+    suspend fun getMutualFollowers(currentUserId: String, targetUserId: String, limit: Long = 20): List<UserProfile> {
         return try {
             val targetFollowersSnapshot = usersCollection.document(targetUserId).collection("followers").get().await()
             val targetFollowerIds = targetFollowersSnapshot.documents.map { it.id }.toSet()

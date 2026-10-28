@@ -421,7 +421,8 @@ fun UserProfileScreen(
                     mutualFollowers = mutualFollowers,
                     userId = userId,
                     onShowShareCard = { showShareCardModal = true },
-                    onNavigateToUserList = onNavigateToUserList
+                    onNavigateToUserList = onNavigateToUserList,
+                    onNavigateToProfile = { targetUid -> onNavigateToOriginal(targetUid, "") }
                 )
             }
             item(span = { GridItemSpan(maxLineSpan) }) {

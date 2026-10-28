@@ -2830,11 +2830,22 @@ private fun FeedPostActionRow(
 private fun FeedPostMetadata(
     work: DiscoverPost,
     onTagClick: ((String) -> Unit)?,
-    onMentionClick: ((String) -> Unit)?
+    onMentionClick: ((String) -> Unit)?,
+    onAuthorClick: ((String) -> Unit)? = null
 ) {
     val colors = LocalOscellionColors.current
     var isTitleExpanded by remember { mutableStateOf(false) }
     var isDescriptionExpanded by remember { mutableStateOf(false) }
+
+    var likerProfiles by remember(work.id, work.likedBy) { mutableStateOf<List<UserProfile>>(emptyList()) }
+
+    LaunchedEffect(work.id, work.likedBy) {
+        if (!work.hideLikesCount && work.likedBy.isNotEmpty()) {
+            try {
+                likerProfiles = DiscoverRepository.getInstance().getProfilesByIds(work.likedBy, limit = 8)
+            } catch (_: Exception) {}
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -2843,6 +2854,27 @@ private fun FeedPostMetadata(
             .padding(bottom = 12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
+        // Liked By Connected Users Avatar Group
+        if (!work.hideLikesCount && (work.likesCount > 0 || likerProfiles.isNotEmpty())) {
+            val connectedLikers = remember(likerProfiles) {
+                likerProfiles.map { it.toConnectedUser() }
+            }
+            if (connectedLikers.isNotEmpty()) {
+                ConnectedUsersAvatarGroup(
+                    users = connectedLikers,
+                    totalCount = work.likesCount.coerceAtLeast(connectedLikers.size),
+                    maxVisible = 3,
+                    avatarSize = 22.dp,
+                    overlapOffset = 6.dp,
+                    prefixText = "Liked by",
+                    suffixText = "",
+                    showTextSummary = true,
+                    onUserClick = { clickedUid ->
+                        onAuthorClick?.invoke(clickedUid)
+                    }
+                )
+            }
+        }
         // Main Title (Max 2 lines then ... with smooth expand animation)
         if (work.title.isNotBlank()) {
             val needsTitleExpand = work.title.length > 85
@@ -3385,7 +3417,8 @@ fun FeedPostCard(
         FeedPostMetadata(
             work = work,
             onTagClick = onTagClick,
-            onMentionClick = onMentionClick
+            onMentionClick = onMentionClick,
+            onAuthorClick = onAuthorClick
         )
 
         Spacer(Modifier.height(8.dp))
