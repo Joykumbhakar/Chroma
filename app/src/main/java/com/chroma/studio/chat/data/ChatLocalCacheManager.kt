@@ -147,4 +147,24 @@ object ChatLocalCacheManager {
             }
         }
     }
+
+    /**
+     * Removes a single message from both in-memory and disk cache immediately upon deletion.
+     */
+    fun removeMessage(context: Context, roomId: String, messageId: String) {
+        val current = getCachedMessages(context, roomId).toMutableList()
+        val filtered = current.filter { it.id != messageId }
+        memoryCache[roomId] = filtered
+        cacheScope.launch {
+            try {
+                val file = getRoomFile(context, roomId)
+                val tempFile = File(file.parentFile, "${file.name}.tmp")
+                val json = gson.toJson(filtered)
+                tempFile.writeText(json, Charsets.UTF_8)
+                tempFile.renameTo(file)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to remove message $messageId from room $roomId cache", e)
+            }
+        }
+    }
 }

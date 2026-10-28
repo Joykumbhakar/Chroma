@@ -548,6 +548,15 @@ fun IosActionSheet(
 
     val colors = LocalChatColors.current
 
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true,
+            usePlatformDefaultWidth = false
+        )
+    ) {
     Box(
 
         modifier = Modifier
@@ -824,6 +833,7 @@ fun IosActionSheet(
 
         }
 
+    }
     }
 
 }

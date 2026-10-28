@@ -750,14 +750,21 @@ class ChatViewModel : ViewModel() {
         }
     }
 
-    fun deleteMessage(messageId: String) {
-        val roomId = _activeRoomId.value ?: return
+    fun deleteMessage(messageId: String, roomIdOverride: String? = null) {
+        val roomId = roomIdOverride ?: _activeRoomId.value ?: return
         val prevServer = _serverMessages.value
         val prevLocal = _localMessages.value
 
         // 1. Optimistic instant local removal
         _serverMessages.value = _serverMessages.value.filter { it.id != messageId }
         _localMessages.value = _localMessages.value.filter { it.id != messageId }
+
+        // Remove from local disk cache immediately
+        com.chroma.studio.chat.data.ChatLocalCacheManager.removeMessage(
+            com.chroma.studio.ChromaApp.instance,
+            roomId,
+            messageId
+        )
 
         viewModelScope.launch {
             val success = repository.deleteMessage(messageId, roomId)
@@ -770,14 +777,21 @@ class ChatViewModel : ViewModel() {
         }
     }
 
-    fun deleteMessageForMe(messageId: String) {
-        val roomId = _activeRoomId.value ?: return
+    fun deleteMessageForMe(messageId: String, roomIdOverride: String? = null) {
+        val roomId = roomIdOverride ?: _activeRoomId.value ?: return
         val prevServer = _serverMessages.value
         val prevLocal = _localMessages.value
 
         // 1. Optimistic instant local removal
         _serverMessages.value = _serverMessages.value.filter { it.id != messageId }
         _localMessages.value = _localMessages.value.filter { it.id != messageId }
+
+        // Remove from local disk cache immediately
+        com.chroma.studio.chat.data.ChatLocalCacheManager.removeMessage(
+            com.chroma.studio.ChromaApp.instance,
+            roomId,
+            messageId
+        )
 
         viewModelScope.launch {
             val success = repository.deleteMessageForMe(messageId, roomId)

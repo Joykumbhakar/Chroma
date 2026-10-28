@@ -421,7 +421,8 @@ class SupabaseChatRepository {
                     launch(Dispatchers.Default) {
                         val currentUid = auth.currentUser?.uid
                         val messages = snapshot.documents.mapNotNull { doc ->
-                            val msg = doc.toObject(ChatMessage::class.java) ?: return@mapNotNull null
+                            val rawMsg = doc.toObject(ChatMessage::class.java) ?: return@mapNotNull null
+                            val msg = if (rawMsg.id.isBlank() || rawMsg.id != doc.id) rawMsg.copy(id = doc.id) else rawMsg
 
                             // Filter out messages deleted by current user for themselves
                             if (currentUid != null && msg.deletedFor.contains(currentUid)) {
@@ -855,6 +856,40 @@ suspend fun uploadAudioToSupabase(audioBytes: ByteArray, extension: String = "m4
         try {
             // Delete from Firestore
             chatsCollection.document(roomId).collection("messages").document(messageId).delete().await()
+
+            // Optimistically update room's lastMessage if the deleted message was the latest one
+            try {
+                val latestDocs = chatsCollection.document(roomId).collection("messages")
+                    .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                    .limit(1)
+                    .get()
+                    .await()
+                val latestMsgDoc = latestDocs.documents.firstOrNull()
+                val (newLastMessage, newLastMessageTime) = if (latestMsgDoc != null) {
+                    val msg = latestMsgDoc.toObject(ChatMessage::class.java)
+                    val text = when {
+                        msg == null -> ""
+                        msg.messageType == "video" -> "Sent a video"
+                        msg.messageType == "audio" || msg.messageType == "voice" -> "Voice message"
+                        msg.messageType == "image" || msg.imageUrl != null -> "Sent an image"
+                        msg.messageType == "poll" || msg.text.startsWith("[POLL]:") -> "📊 Poll"
+                        msg.messageType == "file" -> "Sent a file"
+                        else -> msg.text
+                    }
+                    Pair(text, msg?.timestamp ?: System.currentTimeMillis())
+                } else {
+                    Pair("", 0L)
+                }
+
+                chatsCollection.document(roomId).update(
+                    mapOf(
+                        "lastMessage" to newLastMessage,
+                        "lastMessageTime" to newLastMessageTime
+                    )
+                ).await()
+            } catch (ex: Exception) {
+                Log.w("SupabaseChatRepository", "Could not refresh lastMessage after delete", ex)
+            }
             true
         } catch (e: Exception) {
             Log.e("SupabaseChatRepository", "Error deleting message", e)

@@ -1740,7 +1740,8 @@ private fun ChatScreenContent(
 
 
 
-    val isAnyModalOrSubscreenOpen = isNewMessageModalOpen ||
+    val isAnyModalOrSubscreenOpen = messagePendingDelete != null ||
+        isNewMessageModalOpen ||
 
         isMessageSelectionMode ||
 
@@ -1778,6 +1779,7 @@ private fun ChatScreenContent(
 
     BackHandler(enabled = isAnyModalOrSubscreenOpen) {
         when {
+            messagePendingDelete != null -> messagePendingDelete = null
             showOnlyFriendsManagementSheet -> showOnlyFriendsManagementSheet = false
             isStickerStudioOpen -> isStickerStudioOpen = false
             isStickerPickerOpen -> isStickerPickerOpen = false
@@ -2840,6 +2842,7 @@ private fun ChatScreenContent(
                             showToast("Message pinned")
                         },
                         onDeleteMessagePending = { msg ->
+                            selectedMessageForContextMenu = null
                             messagePendingDelete = msg
                         },
                         onImageClick = { imgUrl ->
@@ -3009,18 +3012,18 @@ private fun ChatScreenContent(
 
                                     SoundManager.playReaction()
 
+                                    val idsToDelete = selectedMessageIds.toList()
                                     chats = chats.map { c ->
-
                                         if (c.id == activeChatId) {
-
-                                            c.copy(messages = c.messages.filter { it.id !in selectedMessageIds })
-
+                                            c.copy(messages = c.messages.filter { it.id !in idsToDelete })
                                         } else c
-
                                     }
-
-                                    showToast("${selectedMessageIds.size} messages deleted")
-
+                                    if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
+                                        idsToDelete.forEach { id ->
+                                            chatViewModel.deleteMessage(id, activeChatId)
+                                        }
+                                    }
+                                    showToast(if (idsToDelete.size == 1) "Message deleted" else "${idsToDelete.size} messages deleted")
                                     selectedMessageIds.clear()
 
                                 }) {
@@ -3921,71 +3924,35 @@ private fun ChatScreenContent(
 
 
         // Delete Message Confirmation Modal
-
-        AnimatedVisibility(
-
-            visible = messagePendingDelete != null,
-
-            enter = slideInVertically(initialOffsetY = { it / 2 }, animationSpec = spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow)) + fadeIn(),
-
-            exit = slideOutVertically(targetOffsetY = { it / 2 }, animationSpec = tween(150)) + fadeOut()
-
-        ) {
-
-            messagePendingDelete?.let { msg ->
-
-                val isOutgoing = msg.senderId == currentUser.id
-
-                DeleteMessageModal(
-
-                    isOutgoing = isOutgoing,
-
-                    onDeleteForMe = {
-
-                        chats = chats.map { c ->
-
-                            if (c.id == activeChatId) c.copy(messages = c.messages.filter { it.id != msg.id }) else c
-
-                        }
-
-                        if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
-
-                            chatViewModel.deleteMessageForMe(msg.id)
-
-                        }
-
-                        messagePendingDelete = null
-
-                        showToast("Message deleted for me")
-
-                    },
-
-                    onDeleteForAll = {
-
-                        chats = chats.map { c ->
-
-                            if (c.id == activeChatId) c.copy(messages = c.messages.filter { it.id != msg.id }) else c
-
-                        }
-
-                        if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
-
-                            chatViewModel.deleteMessage(msg.id)
-
-                        }
-
-                        messagePendingDelete = null
-
-                        showToast("Message deleted for everyone")
-
-                    },
-
-                    onDismiss = { messagePendingDelete = null }
-
-                )
-
-            }
-
+        if (messagePendingDelete != null) {
+            val msg = messagePendingDelete!!
+            val isOutgoing = msg.senderId == currentUser.id || msg.senderId == currentUid
+            DeleteMessageModal(
+                isOutgoing = isOutgoing,
+                onDeleteForMe = {
+                    val targetMsgId = msg.id
+                    chats = chats.map { c ->
+                        if (c.id == activeChatId) c.copy(messages = c.messages.filter { it.id != targetMsgId }) else c
+                    }
+                    if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
+                        chatViewModel.deleteMessageForMe(targetMsgId, activeChatId)
+                    }
+                    messagePendingDelete = null
+                    showToast("Message deleted for me")
+                },
+                onDeleteForAll = {
+                    val targetMsgId = msg.id
+                    chats = chats.map { c ->
+                        if (c.id == activeChatId) c.copy(messages = c.messages.filter { it.id != targetMsgId }) else c
+                    }
+                    if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
+                        chatViewModel.deleteMessage(targetMsgId, activeChatId)
+                    }
+                    messagePendingDelete = null
+                    showToast("Message deleted for everyone")
+                },
+                onDismiss = { messagePendingDelete = null }
+            )
         }
 
 
@@ -5217,6 +5184,8 @@ private fun ChatScreenContent(
                 },
 
                 onDelete = {
+
+                    selectedMessageForContextMenu = null
 
                     messagePendingDelete = msg
 

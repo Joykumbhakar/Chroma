@@ -1747,7 +1747,9 @@ private fun ChromaTimeline(
     onDragStart:    () -> Unit,
     onDragEnd:      () -> Unit,
     onZoom:         (Float) -> Unit,
-    onTransitionClick: (Clip) -> Unit
+    onTransitionClick: (Clip) -> Unit,
+    onToggleVisibility: (Int) -> Unit = {},
+    onToggleLock: (Int) -> Unit = {}
 ) {
     val colors         = LocalOscellionColors.current
     val pps            = state.pixelsPerSecond
@@ -1841,13 +1843,13 @@ private fun ChromaTimeline(
                                 if (isVisible) Lucide.Eye else Lucide.EyeOff,
                                 contentDescription = "Toggle Visibility",
                                 tint = if (isVisible) Color(0xFF9CA3AF) else Color(0xFFD1D5DB),
-                                modifier = Modifier.size(12.dp).clickable { /* TODO: ViewModel toggle visibility */ }
+                                modifier = Modifier.size(12.dp).clickable { onToggleVisibility(trackId) }
                             )
                             Icon(
                                 if (isLocked) Lucide.Lock else Lucide.LockOpen,
                                 contentDescription = "Toggle Lock",
                                 tint = if (isLocked) Color(0xFF9CA3AF) else Color(0xFFD1D5DB),
-                                modifier = Modifier.size(12.dp).clickable { /* TODO: ViewModel toggle lock */ }
+                                modifier = Modifier.size(12.dp).clickable { onToggleLock(trackId) }
                             )
                         }
                     }
