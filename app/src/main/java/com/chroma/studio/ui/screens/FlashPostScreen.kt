@@ -69,6 +69,8 @@ import com.chroma.studio.model.CreatorPostDraft
 import com.chroma.studio.model.UserProfile
 
 import com.chroma.studio.ui.components.ChromaHeaderActionButton
+import com.chroma.studio.ui.components.LiquidGlassPrimaryButton
+import com.chroma.studio.ui.components.LiquidGlassSecondaryButton
 
 import com.chroma.studio.ui.components.ChromaScreenHeader
 
@@ -986,29 +988,15 @@ fun FlashPostScreen(
 
             ) {
 
-                Button(
-
+                LiquidGlassPrimaryButton(
+                    text = "Post Flash Video",
+                    leadingIcon = Lucide.Send,
                     onClick = { executePostToCommunity() },
-
+                    shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
-
                         .fillMaxWidth()
-
-                        .height(48.dp),
-
-                    shape = RoundedCornerShape(10.dp),
-
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
-
-                ) {
-
-                    Icon(Lucide.Send, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-
-                    Spacer(Modifier.width(8.dp))
-
-                    Text("Post Flash Video", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-
-                }
+                        .height(48.dp)
+                )
 
             }
 

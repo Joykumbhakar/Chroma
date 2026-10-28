@@ -896,12 +896,29 @@ fun ProfileActionButton(
         }
     }
 
+    val thinBorderBrush = if (isPrimary) {
+        Brush.verticalGradient(
+            listOf(Color.White.copy(alpha = 0.42f), Color.White.copy(alpha = 0.12f))
+        )
+    } else {
+        if (colors.isDark) {
+            Brush.verticalGradient(
+                listOf(Color.White.copy(alpha = 0.24f), Color.White.copy(alpha = 0.06f))
+            )
+        } else {
+            Brush.verticalGradient(
+                listOf(Color.White.copy(alpha = 0.70f), Color.Black.copy(alpha = 0.08f))
+            )
+        }
+    }
+
     Box(
         modifier = modifier
             .scale(scale)
             .height(38.dp)
             .clip(shape)
             .background(background)
+            .border(0.5.dp, thinBorderBrush, shape)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -1071,6 +1088,12 @@ fun UserProfileActionsStoriesSection(
                         .size(38.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .background(if (colors.isDark) Color(0x1CFFFFFF) else Color(0xFFF2F2F7))
+                        .border(
+                            0.5.dp,
+                            if (colors.isDark) Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.24f), Color.White.copy(alpha = 0.06f)))
+                            else Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.70f), Color.Black.copy(alpha = 0.08f))),
+                            RoundedCornerShape(12.dp)
+                        )
                         .clickable(
                             interactionSource = shareInteraction,
                             indication = null,

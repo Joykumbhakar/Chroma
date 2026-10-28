@@ -9,11 +9,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -190,11 +192,26 @@ fun ChromaHeaderActionButton(
     isLoading: Boolean = false,
     onClick: () -> Unit
 ) {
+    val thinAppleBorder = remember {
+        Brush.verticalGradient(
+            listOf(
+                Color.White.copy(alpha = 0.42f),
+                Color.White.copy(alpha = 0.12f)
+            )
+        )
+    }
+    val btnShape = RoundedCornerShape(10.dp)
+
     Box(
         modifier = Modifier
             .height(36.dp)
-            .clip(CircleShape)
+            .clip(btnShape)
             .background(if (enabled && !isLoading) accentColor else Color.Gray.copy(alpha = 0.35f))
+            .border(
+                width = 0.5.dp,
+                brush = if (enabled && !isLoading) thinAppleBorder else SolidColor(Color.White.copy(alpha = 0.12f)),
+                shape = btnShape
+            )
             .clickable(enabled = enabled && !isLoading) { onClick() }
             .padding(horizontal = 14.dp),
         contentAlignment = Alignment.Center
