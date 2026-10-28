@@ -14,6 +14,9 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.*
@@ -26,6 +29,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -1005,26 +1009,25 @@ private fun GalleryMainBody(
                             .padding(top = 8.dp)
                     ) {
                         Surface(
-                            shape = CircleShape,
-                            color = Color.Black.copy(alpha = 0.72f),
-                            border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.22f)),
-                            shadowElevation = 8.dp
+                            shape = RoundedCornerShape(9999.dp),
+                            color = Color.Black.copy(alpha = 0.65f),
+                            shadowElevation = 6.dp
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp),
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                horizontalArrangement = Arrangement.spacedBy(4.5.dp)
                             ) {
                                 Icon(
                                     Lucide.Calendar,
                                     contentDescription = null,
                                     tint = Color.White,
-                                    modifier = Modifier.size(13.dp)
+                                    modifier = Modifier.size(11.5.dp)
                                 )
                                 Text(
                                     text = visibleMonthYear,
                                     color = Color.White,
-                                    fontSize = 11.5.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold
                                 )
                             }
@@ -1084,29 +1087,40 @@ private fun GalleryQuickCategoryChips(
     ) {
         items(categories) { (name, icon) ->
             val isSelected = selectedCategory == name
+            val interactionSource = remember { MutableInteractionSource() }
+            val isPressed by interactionSource.collectIsPressedAsState()
+            val scale by animateFloatAsState(
+                targetValue = if (isPressed) 0.92f else 1.0f,
+                animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                label = "chipScale"
+            )
+
             Row(
                 modifier = Modifier
-                    .clip(CircleShape)
-                    .background(if (isSelected) colors.primary else colors.glassBg)
-                    .border(
-                        0.5.dp,
-                        if (isSelected) Color.Transparent else colors.glassBorder,
-                        CircleShape
+                    .scale(scale)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(
+                        if (isSelected) Color(0xFF007AFF)
+                        else if (colors.isDark) Color(0x1FFFFFFF)
+                        else Color(0x0C000000)
                     )
-                    .clickable { onCategorySelected(name) }
-                    .padding(horizontal = 11.dp, vertical = 5.dp),
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = null
+                    ) { onCategorySelected(name) }
+                    .padding(horizontal = 9.dp, vertical = 4.5.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.5.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Icon(
                     icon,
                     contentDescription = null,
                     tint = if (isSelected) Color.White else colors.textMain,
-                    modifier = Modifier.size(12.dp)
+                    modifier = Modifier.size(11.dp)
                 )
                 Text(
                     text = name,
-                    fontSize = 11.5.sp,
+                    fontSize = 11.sp,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                     color = if (isSelected) Color.White else colors.textMain
                 )
@@ -1460,32 +1474,56 @@ private fun GalleryCameraTile(
     onClick: () -> Unit
 ) {
     val colors = LocalOscellionColors.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.94f else 1.0f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "cameraScale"
+    )
 
     Box(
         modifier = Modifier
+            .scale(scale)
             .aspectRatio(1f)
-            .graphicsLayer {
-                shape = RoundedCornerShape(10.dp)
-                clip = true
-            }
-            .background(colors.glassBg)
-            .border(0.5.dp, colors.glassBorder, RoundedCornerShape(10.dp))
-            .clickable(onClick = onClick),
+            .clip(RoundedCornerShape(10.dp))
+            .background(
+                Brush.linearGradient(
+                    colors = if (colors.isDark) {
+                        listOf(Color(0xFF28282C), Color(0xFF18181A))
+                    } else {
+                        listOf(Color(0xFFF2F2F7), Color(0xFFE5E5EA))
+                    }
+                )
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            ),
         contentAlignment = Alignment.Center
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(5.dp)
         ) {
-            Icon(
-                Lucide.Camera,
-                contentDescription = null,
-                tint = colors.primary,
-                modifier = Modifier.size(28.dp)
-            )
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF007AFF).copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Lucide.Camera,
+                    contentDescription = "Camera",
+                    tint = Color(0xFF007AFF),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
             Text(
                 text = "Camera",
-                fontSize = 12.sp,
+                fontSize = 11.5.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = colors.textMain
             )
@@ -1534,17 +1572,28 @@ private fun GalleryMediaCard(
             .build()
     }
 
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.96f else 1.0f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "thumbScale"
+    )
+
     Box(
         modifier = Modifier
+            .scale(scale)
             .aspectRatio(1f)
-            .graphicsLayer {
-                shape = RoundedCornerShape(10.dp)
-                clip = true
-            }
-            .clickable(onClick = onClick)
+            .clip(RoundedCornerShape(10.dp))
+            .combinedClickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
             .border(
                 width = if (isSelected) 2.dp else 0.5.dp,
-                color = if (isSelected) colors.primary else colors.glassBorder,
+                color = if (isSelected) Color(0xFF007AFF) else colors.glassBorder,
                 shape = RoundedCornerShape(10.dp)
             )
     ) {
@@ -1555,7 +1604,7 @@ private fun GalleryMediaCard(
             modifier = Modifier.fillMaxSize()
         )
 
-        // Video Duration Indicator
+        // Video Duration Indicator (Border-less glass pill)
         if (item.isVideo) {
             val totalSec = item.durationMs / 1000
             val min = totalSec / 60
@@ -1565,12 +1614,9 @@ private fun GalleryMediaCard(
             Row(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(4.dp)
-                    .graphicsLayer {
-                        shape = RoundedCornerShape(6.dp)
-                        clip = true
-                    }
-                    .background(Color.Black.copy(alpha = 0.72f))
+                    .padding(5.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Color.Black.copy(alpha = 0.65f))
                     .padding(horizontal = 5.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(3.dp)
@@ -1590,37 +1636,52 @@ private fun GalleryMediaCard(
             }
         }
 
-        // Quick Preview Eye Icon (Top-Start)
-        IconButton(
-            onClick = onQuickPreview,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(2.dp)
-                .size(26.dp)
-        ) {
-            Icon(
-                Lucide.Eye,
-                contentDescription = "Preview",
-                tint = Color.White,
-                modifier = Modifier.size(14.dp)
-            )
-        }
-
-        // Selection Indicator (Top-End)
+        // Apple Photos-style Selection Badge (Top-End)
         if (isSelected) {
+            // Subtle blue tint wash over selected image
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(colors.primary.copy(alpha = 0.22f))
+                    .background(Color(0xFF007AFF).copy(alpha = 0.18f))
             )
-            Icon(
-                Lucide.Check,
-                contentDescription = "Selected",
-                tint = Color.White,
+
+            // Numbered or checked badge
+            Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(6.dp)
-                    .size(18.dp)
+                    .padding(5.dp)
+                    .size(22.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF007AFF))
+                    .border(1.5.dp, Color.White, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                if (selectionIndex != null) {
+                    Text(
+                        text = "$selectionIndex",
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                } else {
+                    Icon(
+                        Lucide.Check,
+                        contentDescription = "Selected",
+                        tint = Color.White,
+                        modifier = Modifier.size(13.dp)
+                    )
+                }
+            }
+        } else if (hasAnySelection) {
+            // Unselected indicator in multi-selection mode (White ring indicating ready to select)
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(5.dp)
+                    .size(22.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.25f))
+                    .border(1.5.dp, Color.White.copy(alpha = 0.85f), CircleShape)
             )
         }
     }
@@ -1647,10 +1708,9 @@ private fun GalleryFloatingSelectionDock(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 14.dp, vertical = 10.dp)
-            .shadow(16.dp, RoundedCornerShape(22.dp), spotColor = Color.Black.copy(alpha = 0.3f)),
-        shape = RoundedCornerShape(22.dp),
-        color = colors.glassBg,
-        border = BorderStroke(0.5.dp, colors.glassBorder)
+            .shadow(18.dp, RoundedCornerShape(18.dp), spotColor = Color.Black.copy(alpha = 0.25f)),
+        shape = RoundedCornerShape(18.dp),
+        color = if (colors.isDark) Color(0xF01C1C1E) else Color(0xF4FFFFFF)
     ) {
         Column(
             modifier = Modifier
@@ -2084,6 +2144,57 @@ private fun GalleryLightboxDialog(
                     }
                 }
 
+                // Bottom Thumbnail Scrubber Strip
+                if (mediaList.size > 1) {
+                    val scrubberListState = rememberLazyListState()
+                    LaunchedEffect(pagerState.currentPage) {
+                        scrubberListState.animateScrollToItem(
+                            (pagerState.currentPage - 2).coerceAtLeast(0)
+                        )
+                    }
+
+                    LazyRow(
+                        state = scrubberListState,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp)
+                    ) {
+                        itemsIndexed(mediaList) { idx, thumbItem ->
+                            val isCurrent = idx == pagerState.currentPage
+                            val isItemSel = selectedUris.contains(thumbItem.uri)
+                            Box(
+                                modifier = Modifier
+                                    .size(if (isCurrent) 44.dp else 36.dp)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .border(
+                                        width = if (isCurrent) 2.dp else if (isItemSel) 1.dp else 0.dp,
+                                        color = if (isCurrent) Color(0xFF007AFF) else if (isItemSel) Color(0xFF34C759) else Color.Transparent,
+                                        shape = RoundedCornerShape(6.dp)
+                                    )
+                                    .clickable {
+                                        coroutineScope.launch {
+                                            pagerState.animateScrollToPage(idx)
+                                        }
+                                    }
+                            ) {
+                                AsyncImage(
+                                    model = ImageRequest.Builder(context)
+                                        .data(thumbItem.uri)
+                                        .size(Size(100, 100))
+                                        .crossfade(false)
+                                        .allowRgb565(true)
+                                        .build(),
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        }
+                    }
+                }
+
                 // Bottom Action Row
                 currentItem?.let { item ->
                     val isSelected = selectedUris.contains(item.uri)
@@ -2201,7 +2312,7 @@ private fun GalleryPermissionCard(
 
             OutlinedButton(
                 onClick = onOpenSystemPicker,
-                shape = RoundedCornerShape(22.dp),
+                shape = RoundedCornerShape(12.dp),
                 border = BorderStroke(0.5.dp, colors.glassBorder),
                 modifier = Modifier.fillMaxWidth().height(42.dp)
             ) {
