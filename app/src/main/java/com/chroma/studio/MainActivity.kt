@@ -601,7 +601,7 @@ private fun PassCardLiveOverlay(
     userId: String,
     modifier: Modifier = Modifier
 ) {
-    val profileShareUrl = "https://chromastudio.app/u/${profile.username.ifBlank { userId }}"
+    val profileShareUrl = "https://oscellion.vercel.app/u/${profile.username.ifBlank { userId }}"
     val qrBitmap = remember(profileShareUrl) {
         com.chroma.studio.ui.components.generateQrBitmap(profileShareUrl, sizePx = 280, foregroundColor = android.graphics.Color.BLACK)
     }

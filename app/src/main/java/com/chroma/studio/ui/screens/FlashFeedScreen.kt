@@ -239,7 +239,7 @@ fun FlashFeedScreen(
                             flashVm.shareFlash(video.id)
                             val sendIntent = Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"
-                                putExtra(Intent.EXTRA_TEXT, "Check out this Flash on Chroma: https://chroma.studio/flash/${video.id}")
+                                putExtra(Intent.EXTRA_TEXT, "Check out this Flash on Oscellion: https://oscellion.vercel.app/flash/${video.id}")
                             }
                             context.startActivity(Intent.createChooser(sendIntent, "Share via"))
                         },

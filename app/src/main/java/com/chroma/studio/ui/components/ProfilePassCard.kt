@@ -218,7 +218,7 @@ fun ProfilePassCardView(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val profileShareUrl = "https://chromastudio.app/u/${profile.username.ifBlank { userId }}"
+    val profileShareUrl = "https://oscellion.vercel.app/u/${profile.username.ifBlank { userId }}"
 
     var isCopied by remember { mutableStateOf(false) }
 
@@ -774,7 +774,7 @@ fun ProfilePassCardView(
                                 type = "text/plain"
                                 putExtra(
                                     Intent.EXTRA_TEXT,
-                                    "Connect with ${profile.displayName} (@${profile.username}) on Chroma Studio: $profileShareUrl"
+                                    "Connect with ${profile.displayName} (@${profile.username}) on Oscellion: $profileShareUrl"
                                 )
                             }
                             context.startActivity(Intent.createChooser(shareIntent, "Share Profile"))
@@ -920,7 +920,7 @@ private suspend fun savePassCardImageToGallery(
         canvas.drawText("CHROMA STUDIO • CREATOR PASS", 80f, 670f, subPaint)
 
         // 7. QR Code Card on Right
-        val profileShareUrl = "https://chromastudio.app/u/${profile.username.ifBlank { userId }}"
+        val profileShareUrl = "https://oscellion.vercel.app/u/${profile.username.ifBlank { userId }}"
         val qrBmp = generateQrBitmap(
             profileShareUrl,
             sizePx = 300,
@@ -1005,7 +1005,7 @@ fun AppleProfileCardSheet(
     val colors = LocalOscellionColors.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val profileShareUrl = "https://chromastudio.app/u/${profile.username.ifBlank { userId }}"
+    val profileShareUrl = "https://oscellion.vercel.app/u/${profile.username.ifBlank { userId }}"
 
     var customization by remember { mutableStateOf(PassCustomization()) }
     var activeTab by remember { mutableStateOf(0) } // 0: Background, 1: QR Code, 2: Text & Accents

@@ -1335,7 +1335,7 @@ fun UserProfileScreen(
                             showSettingsBottomSheet = false
                             val shareIntent = Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"
-                                putExtra(Intent.EXTRA_TEXT, "Check out my profile on Chroma: https://chroma.studio/user/${profile?.username ?: ""}")
+                                putExtra(Intent.EXTRA_TEXT, "Check out my profile on Oscellion: https://oscellion.vercel.app/u/${profile?.username ?: ""}")
                             }
                             context.startActivity(Intent.createChooser(shareIntent, "Share Profile"))
                         }
@@ -1343,12 +1343,12 @@ fun UserProfileScreen(
                     AppleSettingDivider()
                     AppleSettingNavRow(
                         title = "Copy Profile Link",
-                        subtitle = "chroma.studio/user/@${profile?.username ?: ""}",
+                        subtitle = "oscellion.vercel.app/u/${profile?.username ?: ""}",
                         icon = Lucide.Copy,
                         onClick = {
                             showSettingsBottomSheet = false
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            clipboard.setPrimaryClip(ClipData.newPlainText("profile_link", "https://chroma.studio/user/@${profile?.username ?: ""}"))
+                            clipboard.setPrimaryClip(ClipData.newPlainText("profile_link", "https://oscellion.vercel.app/u/${profile?.username ?: ""}"))
                             ToastManager.showToast("Profile link copied")
                         }
                     )
@@ -1437,7 +1437,7 @@ fun UserProfileScreen(
                             showOtherUserOptionsSheet = false
                             val shareIntent = Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"
-                                putExtra(Intent.EXTRA_TEXT, "Check out @${profile?.username ?: ""} on Chroma: https://chroma.studio/user/${profile?.username ?: ""}")
+                                putExtra(Intent.EXTRA_TEXT, "Check out @${profile?.username ?: ""} on Oscellion: https://oscellion.vercel.app/u/${profile?.username ?: ""}")
                             }
                             context.startActivity(Intent.createChooser(shareIntent, "Share Profile"))
                         }
@@ -1445,12 +1445,12 @@ fun UserProfileScreen(
                     AppleSettingDivider()
                     AppleSettingNavRow(
                         title = "Copy Profile Link",
-                        subtitle = "chroma.studio/user/@${profile?.username ?: ""}",
+                        subtitle = "oscellion.vercel.app/u/${profile?.username ?: ""}",
                         icon = Lucide.Copy,
                         onClick = {
                             showOtherUserOptionsSheet = false
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            clipboard.setPrimaryClip(ClipData.newPlainText("profile_link", "https://chroma.studio/user/@${profile?.username ?: ""}"))
+                            clipboard.setPrimaryClip(ClipData.newPlainText("profile_link", "https://oscellion.vercel.app/u/${profile?.username ?: ""}"))
                             ToastManager.showToast("Profile link copied")
                         }
                     )

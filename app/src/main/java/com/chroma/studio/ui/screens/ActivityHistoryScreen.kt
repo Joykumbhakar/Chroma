@@ -388,7 +388,7 @@ fun ActivityHistoryScreen(
                                             type = "text/plain"
                                             putExtra(
                                                 Intent.EXTRA_TEXT,
-                                                "Check out this creation by @${work.authorUsername} on Chroma Studio: https://chromastudio.app/p/${work.id}"
+                                                "Check out this creation by @${work.authorUsername} on Oscellion: https://oscellion.vercel.app/post/${work.id}"
                                             )
                                         }
                                         context.startActivity(Intent.createChooser(shareIntent, "Share Post"))

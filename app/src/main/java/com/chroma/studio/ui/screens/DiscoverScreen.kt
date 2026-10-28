@@ -744,7 +744,7 @@ fun DiscoverScreen(
                                     discoverViewModel?.trackShare(work.id)
                                     val shareIntent = Intent(Intent.ACTION_SEND).apply {
                                         type = "text/plain"
-                                        putExtra(Intent.EXTRA_TEXT, "Check out '${work.title}' by @${work.authorUsername} on Oscellion: Oscellion://post/${work.id}")
+                                        putExtra(Intent.EXTRA_TEXT, "Check out '${work.title}' by @${work.authorUsername} on Oscellion: https://oscellion.vercel.app/post/${work.id}")
                                     }
                                     context.startActivity(Intent.createChooser(shareIntent, "Share Post"))
                                 },
@@ -4226,7 +4226,7 @@ fun PostOptionsDrawerSheet(
                     title = "Copy Post Link",
                     subtitle = "Share link to this artwork with other creators",
                     onClick = {
-                        clipboardManager.setText(AnnotatedString("https://chromastudio.app/p/${work.id}"))
+                        clipboardManager.setText(AnnotatedString("https://oscellion.vercel.app/post/${work.id}"))
                         onShowToast?.invoke("Post link copied to clipboard")
                         onDismiss()
                     }
@@ -4299,7 +4299,7 @@ fun PostOptionsDrawerSheet(
                     title = "Copy Post Link",
                     subtitle = "Share link to this artwork with other creators",
                     onClick = {
-                        clipboardManager.setText(AnnotatedString("https://chromastudio.app/p/${work.id}"))
+                        clipboardManager.setText(AnnotatedString("https://oscellion.vercel.app/post/${work.id}"))
                         onShowToast?.invoke("Post link copied to clipboard")
                         onDismiss()
                     }

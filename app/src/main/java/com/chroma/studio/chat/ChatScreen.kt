@@ -2217,7 +2217,7 @@ private fun ChatScreenContent(
 
                     val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
 
-                    val clip = android.content.ClipData.newPlainText("Story Link", "https://chromastudio.app/story/${story.id}")
+                    val clip = android.content.ClipData.newPlainText("Story Link", "https://oscellion.vercel.app/story/${story.id}")
 
                     clipboard?.setPrimaryClip(clip)
 
