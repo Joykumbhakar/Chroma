@@ -32,8 +32,8 @@ object CloudinaryClient {
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .writeTimeout(60, TimeUnit.SECONDS)
+        .readTimeout(180, TimeUnit.SECONDS)
+        .writeTimeout(180, TimeUnit.SECONDS)
         .build()
 
     suspend fun uploadImage(imageBytes: ByteArray, folder: String = ""): String? {
@@ -104,6 +104,11 @@ object CloudinaryClient {
         }
     }
 
+    fun resetCircuitBreaker() {
+        failureCount.set(0)
+        circuitOpenTime.set(0)
+    }
+
     private fun recordFailure() {
         val currentFails = failureCount.incrementAndGet()
         if (currentFails >= MAX_FAILURES) {
@@ -121,13 +126,13 @@ object CloudinaryClient {
     private val videoUploadPreset: String get() = BuildConfig.CLOUDINARY_VIDEO_UPLOAD_PRESET
 
     /**
-     * Upload a video to Cloudinary from a [android.net.Uri].
-     * Streams the file in chunks — avoids loading the full video into memory.
+     * Upload a video to Cloudinary directly from a [java.io.File].
+     * Streams the file in 32KB chunks directly from disk — avoids loading the video into JVM heap.
+     * Tries the primary video preset first, then falls back to the posts preset.
      * Reports upload progress via [onProgress] (0.0..1.0).
      */
-    suspend fun uploadVideoFromUri(
-        context: android.content.Context,
-        uri: android.net.Uri,
+    suspend fun uploadVideoFile(
+        file: java.io.File,
         folder: String = "flash_videos",
         onProgress: ((Float) -> Unit)? = null
     ): String? {
@@ -139,84 +144,138 @@ object CloudinaryClient {
                     return@withContext null
                 }
             }
-            try {
-                if (cloudName.isBlank()) {
-                    Log.e("CloudinaryClient", "CLOUDINARY_CLOUD_NAME not set")
-                    return@withContext null
+            if (!file.exists() || file.length() == 0L) {
+                Log.e("CloudinaryClient", "Video file does not exist or is empty: ${file.absolutePath}")
+                return@withContext null
+            }
+            if (cloudName.isBlank()) {
+                Log.e("CloudinaryClient", "CLOUDINARY_CLOUD_NAME not set")
+                return@withContext null
+            }
+
+            // Attempt with primary video preset first; fallback to main post preset if needed
+            val presetsToTry = listOfNotNull(
+                videoUploadPreset.takeIf { it.isNotBlank() },
+                uploadPreset.takeIf { it.isNotBlank() && it != videoUploadPreset }
+            ).ifEmpty { listOf("flash_videos", "oscellion_posts") }
+
+            for (preset in presetsToTry) {
+                val url = performVideoUpload(file, folder, preset, onProgress)
+                if (url != null) {
+                    recordSuccess()
+                    return@withContext url
                 }
+                Log.w("CloudinaryClient", "Video upload failed with preset '$preset', trying fallback if available...")
+            }
 
-                val uploadUrl = "https://api.cloudinary.com/v1_1/$cloudName/video/upload"
-                val folderPath = if (folder.isNotBlank()) folder else "flash_videos"
+            recordFailure()
+            null
+        }
+    }
 
-                val mimeType = context.contentResolver.getType(uri) ?: "video/mp4"
-                val inputStream = context.contentResolver.openInputStream(uri)
-                    ?: return@withContext null
-                val videoBytes = inputStream.readBytes()
-                inputStream.close()
+    private fun performVideoUpload(
+        file: java.io.File,
+        folder: String,
+        preset: String,
+        onProgress: ((Float) -> Unit)?
+    ): String? {
+        return try {
+            val uploadUrl = "https://api.cloudinary.com/v1_1/$cloudName/video/upload"
+            val folderPath = if (folder.isNotBlank()) folder else "flash_videos"
+            val totalBytes = file.length()
+            val fileName = "flash_${System.currentTimeMillis()}.mp4"
 
-                val totalBytes = videoBytes.size.toLong()
-                var uploadedBytes = 0L
-
-                // Build multipart body with progress tracking
-                val mediaType = mimeType.toMediaTypeOrNull()
-                val fileName = "flash_${System.currentTimeMillis()}.mp4"
-
-                // Use a CountingRequestBody to track progress
-                val rawBody = videoBytes.toRequestBody(mediaType)
-                val countingBody = object : okhttp3.RequestBody() {
-                    override fun contentType() = rawBody.contentType()
-                    override fun contentLength() = totalBytes
-                    override fun writeTo(sink: okio.BufferedSink) {
-                        val bufferedSource = okio.Buffer()
-                        rawBody.writeTo(bufferedSource)
-                        var bytesRead: Int
-                        val buffer = ByteArray(8192)
-                        while (bufferedSource.read(buffer).also { bytesRead = it } != -1) {
-                            sink.write(buffer, 0, bytesRead)
-                            uploadedBytes += bytesRead
-                            onProgress?.invoke(uploadedBytes.toFloat() / totalBytes.toFloat())
+            val countingBody = object : okhttp3.RequestBody() {
+                override fun contentType() = "video/mp4".toMediaTypeOrNull()
+                override fun contentLength() = totalBytes
+                override fun writeTo(sink: okio.BufferedSink) {
+                    val buffer = ByteArray(32768)
+                    var uploaded = 0L
+                    file.inputStream().use { input ->
+                        var read: Int
+                        while (input.read(buffer).also { read = it } != -1) {
+                            sink.write(buffer, 0, read)
+                            uploaded += read
+                            if (totalBytes > 0L) {
+                                onProgress?.invoke(uploaded.toFloat() / totalBytes.toFloat())
+                            }
                         }
                     }
                 }
-                // Remove eager as unsigned presets typically block it. Apply transformations to delivery URL instead.
-                val requestBody = MultipartBody.Builder()
-                    .setType(MultipartBody.FORM)
-                    .addFormDataPart("file", fileName, countingBody)
-                    .addFormDataPart("upload_preset", videoUploadPreset)
-                    .addFormDataPart("folder", folderPath)
-                    .addFormDataPart("resource_type", "video")
-                    .build()
+            }
 
-                val request = Request.Builder()
-                    .url(uploadUrl)
-                    .post(requestBody)
-                    .build()
+            val requestBody = MultipartBody.Builder()
+                .setType(MultipartBody.FORM)
+                .addFormDataPart("file", fileName, countingBody)
+                .addFormDataPart("upload_preset", preset)
+                .addFormDataPart("folder", folderPath)
+                .addFormDataPart("resource_type", "video")
+                .build()
 
-                val response = client.newCall(request).execute()
-                val responseBody = response.body?.string()
+            val request = Request.Builder()
+                .url(uploadUrl)
+                .post(requestBody)
+                .build()
 
-                if (!response.isSuccessful || responseBody == null) {
-                    Log.e("CloudinaryClient", "Video upload failed: HTTP ${response.code} — $responseBody")
-                    recordFailure()
+            val response = client.newCall(request).execute()
+            val responseBody = response.body?.string()
+
+            if (!response.isSuccessful || responseBody == null) {
+                Log.e("CloudinaryClient", "Video upload failed (preset $preset): HTTP ${response.code} — $responseBody")
+                return null
+            }
+
+            val json = JSONObject(responseBody)
+            val secureUrl = json.optString("secure_url", "")
+            if (secureUrl.isNotBlank()) {
+                Log.d("CloudinaryClient", "Video upload success (preset $preset): $secureUrl")
+                secureUrl
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("CloudinaryClient", "performVideoUpload exception with preset $preset", e)
+            null
+        }
+    }
+
+    /**
+     * Upload a video to Cloudinary from a [android.net.Uri].
+     * If uri is file://, uploads directly without memory duplication.
+     * If uri is content://, streams through a temp cache file.
+     * Reports upload progress via [onProgress] (0.0..1.0).
+     */
+    suspend fun uploadVideoFromUri(
+        context: android.content.Context,
+        uri: android.net.Uri,
+        folder: String = "flash_videos",
+        onProgress: ((Float) -> Unit)? = null
+    ): String? {
+        return withContext(Dispatchers.IO) {
+            if (uri.scheme == "file") {
+                val file = java.io.File(uri.path ?: "")
+                return@withContext uploadVideoFile(file, folder, onProgress)
+            }
+            // For content:// scheme, stream to temporary cache file then upload
+            val tempFile = java.io.File(context.cacheDir, "cloudinary_vid_${System.currentTimeMillis()}.mp4")
+            try {
+                val copied = context.contentResolver.openInputStream(uri)?.use { input ->
+                    tempFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                if (copied == null || copied == 0L || !tempFile.exists()) {
+                    Log.e("CloudinaryClient", "Failed to read content URI: $uri")
                     return@withContext null
                 }
-
-                val json = org.json.JSONObject(responseBody)
-                val secureUrl = json.optString("secure_url", "")
-                return@withContext if (secureUrl.isBlank()) {
-                    Log.e("CloudinaryClient", "Video upload succeeded but no secure_url found.")
-                    recordFailure()
-                    null
-                } else {
-                    recordSuccess()
-                    Log.d("CloudinaryClient", "Video upload success: $secureUrl")
-                    secureUrl
-                }
+                uploadVideoFile(tempFile, folder, onProgress)
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
-                Log.e("CloudinaryClient", "Video upload exception", e)
-                recordFailure()
+                Log.e("CloudinaryClient", "uploadVideoFromUri error", e)
                 null
+            } finally {
+                try { tempFile.delete() } catch (_: Exception) {}
             }
         }
     }
@@ -292,7 +351,7 @@ object CloudinaryClient {
                 }
             }
             try {
-                if (cloudName.isBlank() || videoUploadPreset.isBlank()) {
+                if (cloudName.isBlank()) {
                     Log.e("CloudinaryClient", "Cloudinary credentials not set")
                     return@withContext null
                 }
@@ -301,37 +360,40 @@ object CloudinaryClient {
                 val fileName = "video_${System.currentTimeMillis()}.$extension"
                 val mediaType = "video/$extension".toMediaTypeOrNull()
 
-                val requestBody = MultipartBody.Builder()
-                    .setType(MultipartBody.FORM)
-                    .addFormDataPart("file", fileName, videoBytes.toRequestBody(mediaType))
-                    .addFormDataPart("upload_preset", videoUploadPreset)
-                    .addFormDataPart("folder", folder)
-                    .addFormDataPart("resource_type", "video")
-                    .build()
+                val presetsToTry = listOfNotNull(
+                    videoUploadPreset.takeIf { it.isNotBlank() },
+                    uploadPreset.takeIf { it.isNotBlank() && it != videoUploadPreset }
+                ).ifEmpty { listOf("flash_videos", "oscellion_posts") }
 
-                val request = Request.Builder()
-                    .url(uploadUrl)
-                    .post(requestBody)
-                    .build()
+                for (preset in presetsToTry) {
+                    val requestBody = MultipartBody.Builder()
+                        .setType(MultipartBody.FORM)
+                        .addFormDataPart("file", fileName, videoBytes.toRequestBody(mediaType))
+                        .addFormDataPart("upload_preset", preset)
+                        .addFormDataPart("folder", folder)
+                        .addFormDataPart("resource_type", "video")
+                        .build()
 
-                val response = client.newCall(request).execute()
-                val responseBody = response.body?.string()
+                    val request = Request.Builder()
+                        .url(uploadUrl)
+                        .post(requestBody)
+                        .build()
 
-                if (!response.isSuccessful || responseBody == null) {
-                    Log.e("CloudinaryClient", "Video upload failed: HTTP ${response.code} — $responseBody")
-                    recordFailure()
-                    return@withContext null
+                    val response = client.newCall(request).execute()
+                    val responseBody = response.body?.string()
+
+                    if (response.isSuccessful && responseBody != null) {
+                        val json = JSONObject(responseBody)
+                        val secureUrl = json.optString("secure_url", "")
+                        if (secureUrl.isNotBlank()) {
+                            recordSuccess()
+                            return@withContext secureUrl
+                        }
+                    }
+                    Log.w("CloudinaryClient", "uploadVideo with preset '$preset' failed, trying next...")
                 }
-
-                val json = JSONObject(responseBody)
-                val secureUrl = json.optString("secure_url", "")
-                if (secureUrl.isBlank()) {
-                    recordFailure()
-                    null
-                } else {
-                    recordSuccess()
-                    secureUrl
-                }
+                recordFailure()
+                null
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 Log.e("CloudinaryClient", "Video upload exception", e)

@@ -27,7 +27,9 @@ object VideoProcessor {
     suspend fun getVideoDurationMs(context: Context, uri: Uri): Long = withContext(Dispatchers.IO) {
         val retriever = MediaMetadataRetriever()
         try {
-            if (uri.scheme == "http" || uri.scheme == "https") {
+            if (uri.scheme == "file") {
+                retriever.setDataSource(uri.path)
+            } else if (uri.scheme == "http" || uri.scheme == "https") {
                 retriever.setDataSource(uri.toString(), HashMap<String, String>())
             } else {
                 retriever.setDataSource(context, uri)
@@ -47,7 +49,9 @@ object VideoProcessor {
     suspend fun extractThumbnail(context: Context, uri: Uri, positionMs: Long = 0L): Bitmap? = withContext(Dispatchers.IO) {
         val retriever = MediaMetadataRetriever()
         try {
-            if (uri.scheme == "http" || uri.scheme == "https") {
+            if (uri.scheme == "file") {
+                retriever.setDataSource(uri.path)
+            } else if (uri.scheme == "http" || uri.scheme == "https") {
                 retriever.setDataSource(uri.toString(), HashMap<String, String>())
             } else {
                 retriever.setDataSource(context, uri)
@@ -99,7 +103,11 @@ object VideoProcessor {
         var muxer: MediaMuxer? = null
         try {
             extractor = MediaExtractor()
-            extractor.setDataSource(context, inputUri, null)
+            if (inputUri.scheme == "file") {
+                extractor.setDataSource(inputUri.path ?: "")
+            } else {
+                extractor.setDataSource(context, inputUri, null)
+            }
 
             muxer = MediaMuxer(outputFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
 
@@ -202,7 +210,11 @@ object VideoProcessor {
 
         try {
             extractor = MediaExtractor()
-            extractor.setDataSource(context, inputUri, null)
+            if (inputUri.scheme == "file") {
+                extractor.setDataSource(inputUri.path ?: "")
+            } else {
+                extractor.setDataSource(context, inputUri, null)
+            }
 
             // Find video track
             var videoTrackIndex = -1

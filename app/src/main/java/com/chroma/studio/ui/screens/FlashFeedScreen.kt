@@ -60,6 +60,9 @@ import com.chroma.studio.model.FlashComment
 import com.chroma.studio.viewmodel.CommentSortOrder
 
 import com.google.firebase.auth.FirebaseAuth
+import com.chroma.studio.utils.ExportHelper
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -203,7 +206,8 @@ fun FlashFeedScreen(
                         onAuthorClick = { onNavigateToProfile(video.creatorId) },
                         flashVm = flashVm,
                         commentVm = commentVm,
-                        onRemixRequested = onRemixRequested
+                        onRemixRequested = onRemixRequested,
+                        onNavigateToFlashPicker = onNavigateToFlashPicker
                     )
                 }
             }
@@ -364,7 +368,8 @@ private fun FlashVideoItem(
     onAuthorClick: () -> Unit,
     flashVm: FlashViewModel,
     commentVm: com.chroma.studio.viewmodel.FlashCommentViewModel,
-    onRemixRequested: (Uri, String, String) -> Unit
+    onRemixRequested: (Uri, String, String) -> Unit,
+    onNavigateToFlashPicker: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -957,8 +962,12 @@ private fun FlashVideoItem(
                 video = video,
                 commentVm = commentVm,
                 onDismiss = { showComments = false },
+                onCommentCountChanged = { delta ->
+                    flashVm.incrementCommentCount(video.id, delta)
+                },
                 onReplyWithFlash = {
                     showComments = false
+                    onNavigateToFlashPicker()
                 }
             )
         }
@@ -979,7 +988,36 @@ private fun FlashVideoItem(
                 },
                 onDownloadClick = {
                     showMoreOptionsSheet = false
-                    ToastManager.showToast("Saving video to gallery...")
+                    ToastManager.showToast("Downloading video to gallery…")
+                    coroutineScope.launch(Dispatchers.IO) {
+                        try {
+                            val request = okhttp3.Request.Builder().url(video.videoUrl).build()
+                            val response = okhttp3.OkHttpClient().newCall(request).execute()
+                            val body = response.body
+                            if (response.isSuccessful && body != null) {
+                                val tempFile = java.io.File(context.cacheDir, "flash_dl_${System.currentTimeMillis()}.mp4")
+                                tempFile.outputStream().use { out ->
+                                    body.byteStream().copyTo(out)
+                                }
+                                val savedUri = ExportHelper.saveVideoToGallery(context, tempFile)
+                                withContext(Dispatchers.Main) {
+                                    if (savedUri != null) {
+                                        ToastManager.showToast("Saved to gallery! 🎬")
+                                    } else {
+                                        ToastManager.showToast("Failed to save to gallery")
+                                    }
+                                }
+                            } else {
+                                withContext(Dispatchers.Main) {
+                                    ToastManager.showToast("Failed to download video")
+                                }
+                            }
+                        } catch (e: Exception) {
+                            withContext(Dispatchers.Main) {
+                                ToastManager.showToast("Download failed: ${e.localizedMessage}")
+                            }
+                        }
+                    }
                 }
             )
         }
@@ -1354,6 +1392,7 @@ fun FlashCommentsSheet(
     video: FlashVideo,
     commentVm: com.chroma.studio.viewmodel.FlashCommentViewModel,
     onDismiss: () -> Unit,
+    onCommentCountChanged: (Int) -> Unit = {},
     onReplyWithFlash: (String?) -> Unit
 ) {
     val colors = LocalOscellionColors.current
@@ -1706,6 +1745,7 @@ fun FlashCommentsSheet(
                                     text = commentText.trim(),
                                     replyToId = parentTargetId
                                 )
+                                onCommentCountChanged(1)
                                 if (parentTargetId != null) {
                                     expandedThreads[parentTargetId] = true
                                 }
@@ -1741,6 +1781,7 @@ fun FlashCommentsSheet(
                 val toDelete = comment
                 commentPendingDelete = null
                 commentVm.deleteComment(toDelete)
+                onCommentCountChanged(-1)
                 ToastManager.showToast("Comment deleted")
             },
             dismissText = "Cancel",

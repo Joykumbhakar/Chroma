@@ -291,9 +291,9 @@ class FlashRepository {
         return try {
             val snapshot = db.collection("flash_comments")
                 .whereEqualTo("videoId", videoId)
-                .orderBy("timestamp", Query.Direction.ASCENDING)
                 .get().await()
             snapshot.toObjects(com.chroma.studio.model.FlashComment::class.java)
+                .sortedBy { it.timestamp }
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("FlashRepository", "Error fetching comments", e)
@@ -310,10 +310,13 @@ class FlashRepository {
     ): com.chroma.studio.model.FlashComment {
         val user = auth.currentUser ?: throw Exception("User not authenticated")
         val userDoc = usersCollection.document(user.uid).get().await()
-        val username = userDoc.getString("username") ?: ""
-        val displayName = userDoc.getString("displayName") ?: ""
-        val avatarUrl = userDoc.getString("avatarUrl") ?: ""
+        val rawUsername = userDoc.getString("username")
+        val rawDisplayName = userDoc.getString("displayName")
+        val avatarUrl = userDoc.getString("avatarUrl") ?: user.photoUrl?.toString() ?: ""
         val verified = userDoc.getBoolean("verified") ?: false
+
+        val username = if (!rawUsername.isNullOrBlank()) rawUsername else (user.displayName?.replace(" ", "")?.lowercase() ?: "user_${user.uid.take(5)}")
+        val displayName = if (!rawDisplayName.isNullOrBlank()) rawDisplayName else (user.displayName ?: username)
 
         val docRef = if (!preGeneratedId.isNullOrBlank()) {
             db.collection("flash_comments").document(preGeneratedId)
@@ -335,11 +338,18 @@ class FlashRepository {
         )
         docRef.set(comment).await()
         
-        // Increment comment count
+        // Increment comment count on flash_videos
         try {
             collection.document(videoId).update("commentCount", FieldValue.increment(1)).await()
         } catch (e: Exception) {
-            Log.e("FlashRepository", "Error incrementing comment count", e)
+            Log.e("FlashRepository", "Error incrementing flash comment count", e)
+        }
+
+        // Increment comment count on community_works
+        try {
+            db.collection("community_works").document(videoId).update("commentsCount", FieldValue.increment(1)).await()
+        } catch (e: Exception) {
+            Log.e("FlashRepository", "Error incrementing community_works comment count", e)
         }
 
         // Dispatch real notification to video creator
@@ -489,6 +499,9 @@ class FlashRepository {
             try {
                 collection.document(videoId).update("commentCount", FieldValue.increment(-1)).await()
             } catch (_: Exception) {}
+            try {
+                db.collection("community_works").document(videoId).update("commentsCount", FieldValue.increment(-1)).await()
+            } catch (_: Exception) {}
             true
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
@@ -502,6 +515,20 @@ class FlashRepository {
     suspend fun deleteFlash(videoId: String): Boolean {
         return try {
             collection.document(videoId).delete().await()
+            try {
+                db.collection("community_works").document(videoId).delete().await()
+            } catch (_: Exception) {}
+            // Also clean up associated comments
+            try {
+                val commentsSnapshot = db.collection("flash_comments")
+                    .whereEqualTo("videoId", videoId)
+                    .get().await()
+                val batch = db.batch()
+                for (doc in commentsSnapshot.documents) {
+                    batch.delete(doc.reference)
+                }
+                batch.commit().await()
+            } catch (_: Exception) {}
             true
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e

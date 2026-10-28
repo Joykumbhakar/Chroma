@@ -269,18 +269,19 @@ class FlashViewModel(application: Application) : AndroidViewModel(application) {
             _isUploading.value = true
             _uploadProgress.value = 0f
             _uploadError.value = null
+            CloudinaryClient.resetCircuitBreaker()
             com.chroma.studio.data.FlashUploadManager.updateProgress(0.05f, "Preparing video…")
 
             try {
                 // Step 1 & 2: Process video
                 val processedFile = when (mediaType) {
                     FlashMediaType.VIDEO -> {
-                        _uploadProgress.value = 0.1f
-                        com.chroma.studio.data.FlashUploadManager.updateProgress(0.1f, "Preparing video…")
+                        _uploadProgress.value = 0.15f
+                        com.chroma.studio.data.FlashUploadManager.updateProgress(0.15f, "Preparing video…")
                         val videoDur = VideoProcessor.getVideoDurationMs(context, mediaUri)
                         val shouldTrim = trimStartMs > 100L || (trimEndMs > 0L && videoDur > 0L && trimEndMs < videoDur - 100L)
                         val trimmed = if (shouldTrim) {
-                            com.chroma.studio.data.FlashUploadManager.updateProgress(0.15f, "Trimming video clip…")
+                            com.chroma.studio.data.FlashUploadManager.updateProgress(0.25f, "Trimming video clip…")
                             val res = try {
                                 VideoProcessor.trimVideo(context, mediaUri, trimStartMs, trimEndMs)
                             } catch (e: Exception) {
@@ -307,12 +308,9 @@ class FlashViewModel(application: Application) : AndroidViewModel(application) {
                                 tempFile
                             }
                         }
-                        _uploadProgress.value = 0.3f
-                        com.chroma.studio.data.FlashUploadManager.updateProgress(0.3f, "Compressing video…")
-                        val compressed = VideoProcessor.compressVideo(context, Uri.fromFile(trimmed))
-                        _uploadProgress.value = 0.5f
-                        com.chroma.studio.data.FlashUploadManager.updateProgress(0.5f, "Video ready for upload")
-                        compressed ?: trimmed // fallback to trimmed if compression fails
+                        _uploadProgress.value = 0.45f
+                        com.chroma.studio.data.FlashUploadManager.updateProgress(0.45f, "Video ready for upload")
+                        trimmed
                     }
                     FlashMediaType.SLIDESHOW -> {
                         _uploadProgress.value = 0.2f
@@ -329,19 +327,18 @@ class FlashViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
 
-                // Step 3: Upload video
-                _uploadProgress.value = 0.55f
-                com.chroma.studio.data.FlashUploadManager.updateProgress(0.55f, "Uploading video to Cloudinary…")
-                var videoUrl = CloudinaryClient.uploadVideoFromUri(
-                    context = context,
-                    uri = Uri.fromFile(processedFile),
+                // Step 3: Upload video directly via streaming
+                _uploadProgress.value = 0.50f
+                com.chroma.studio.data.FlashUploadManager.updateProgress(0.50f, "Uploading video to Cloudinary…")
+                var videoUrl = CloudinaryClient.uploadVideoFile(
+                    file = processedFile,
                     folder = "flash_videos",
                     onProgress = { p ->
-                        val prog = 0.55f + p * 0.3f
+                        val prog = 0.50f + p * 0.35f
                         _uploadProgress.value = prog
                         com.chroma.studio.data.FlashUploadManager.updateProgress(prog, "Uploading video… ${(p * 100).toInt()}%")
                     }
-                ) ?: throw Exception("Video upload to Cloudinary failed")
+                ) ?: throw Exception("Video upload to Cloudinary failed. Please check your network or Cloudinary preset.")
                 
                 // Apply filter transformation to delivery URL
                 videoUrl = CloudinaryClient.applyTransformation(videoUrl, filterName, brightness, contrast, saturation, hue)
@@ -353,19 +350,26 @@ class FlashViewModel(application: Application) : AndroidViewModel(application) {
                     val baos = ByteArrayOutputStream()
                     thumbnailBitmap.compress(Bitmap.CompressFormat.JPEG, 85, baos)
                     CloudinaryClient.uploadFlashThumbnail(baos.toByteArray()) ?: ""
-                } else ""
+                } else {
+                    val extracted = VideoProcessor.extractThumbnail(context, Uri.fromFile(processedFile), trimStartMs.coerceAtLeast(0L))
+                    if (extracted != null) {
+                        val baos = ByteArrayOutputStream()
+                        extracted.compress(Bitmap.CompressFormat.JPEG, 85, baos)
+                        CloudinaryClient.uploadFlashThumbnail(baos.toByteArray()) ?: ""
+                    } else ""
+                }
 
                 // Step 5: Write Firestore document
                 _uploadProgress.value = 0.95f
                 com.chroma.studio.data.FlashUploadManager.updateProgress(0.95f, "Publishing to Community…")
-                val duration = trimEndMs - trimStartMs
+                val duration = if (trimEndMs > trimStartMs) trimEndMs - trimStartMs else VideoProcessor.getVideoDurationMs(context, Uri.fromFile(processedFile))
                 repository.publishFlash(
                     videoUrl = videoUrl,
                     thumbnailUrl = thumbUrl,
                     caption = caption,
                     hashtags = hashtags,
                     mentions = mentions,
-                    duration = duration.coerceAtMost(30_000L),
+                    duration = duration.coerceIn(1_000L, 30_000L),
                     remixedFromPostId = remixedFromPostId,
                     remixedFromAuthorUsername = remixedFromAuthorUsername,
                     hideLikesCount = hideLikesCount,
@@ -537,6 +541,12 @@ class FlashViewModel(application: Application) : AndroidViewModel(application) {
                     onResult?.invoke(false)
                 }
             }
+        }
+    }
+
+    fun incrementCommentCount(videoId: String, delta: Int = 1) {
+        _flashFeed.value = _flashFeed.value.map {
+            if (it.id == videoId) it.copy(commentCount = maxOf(0, it.commentCount + delta)) else it
         }
     }
 
