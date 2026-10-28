@@ -535,8 +535,8 @@ fun AppleSettingsGroup(
                 .clip(RoundedCornerShape(18.dp))
                 .background(if (isDark) Color(0xFF1C1C1E) else Color.White)
                 .border(
-                    width = 1.dp,
-                    color = if (isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFDFE8F3),
+                    width = 0.5.dp,
+                    color = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f),
                     shape = RoundedCornerShape(18.dp)
                 )
         ) {
