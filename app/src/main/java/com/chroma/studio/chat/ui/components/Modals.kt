@@ -4,6 +4,7 @@ package com.chroma.studio.chat.ui.components
 import com.chroma.studio.ui.components.VerifiedBadge
 import com.chroma.studio.R
 import com.chroma.studio.chat.media.MediaStoreHelper
+import kotlin.math.roundToInt
 
 import android.content.Intent
 import android.widget.Toast
@@ -2031,32 +2032,98 @@ private fun UserStoryPageView(
                 Spacer(Modifier.height(16.dp))
             }
 
-            // Interactive Poll
+            // Interactive Poll (Apple-Grade Clean Design)
             if (currentStory.pollData != null) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(Color.White)
+                        .shadow(14.dp, RoundedCornerShape(16.dp), spotColor = Color.Black.copy(alpha = 0.20f))
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color.White.copy(alpha = 0.95f))
                         .padding(16.dp)
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            LucideBarChart2(tint = colors.iosBlue, size = 18.dp)
-                            Text(currentStory.pollData.question, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(colors.iosBlue.copy(alpha = 0.12f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                LucideBarChart2(tint = colors.iosBlue, size = 14.dp)
+                            }
+                            Text(
+                                text = currentStory.pollData.question,
+                                fontSize = 15.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF1C1C1E),
+                                modifier = Modifier.weight(1f)
+                            )
                         }
 
                         if (currentStory.isMyStory) {
-                            Text("Admin Results", fontSize = 11.sp, color = colors.textMuted, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                text = "RESULTS • ${currentStory.pollData.totalVotersCount} VOTES",
+                                fontSize = 11.sp,
+                                color = colors.textMuted,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.5.sp
+                            )
                             currentStory.pollData.options.forEach { opt ->
                                 val pct = if (currentStory.pollData.totalVotersCount > 0) (opt.votes.toFloat() / currentStory.pollData.totalVotersCount) else 0f
-                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                        Text(opt.text, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color.Black)
-                                        Text("${opt.votes} votes", fontSize = 12.sp, color = colors.textMuted)
+                                val pctInt = (pct * 100f).roundToInt()
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(Color(0xFFF2F2F7))
+                                ) {
+                                    if (pct > 0f) {
+                                        Box(
+                                            modifier = Modifier.matchParentSize()
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxHeight()
+                                                    .fillMaxWidth(pct)
+                                                    .clip(RoundedCornerShape(10.dp))
+                                                    .background(colors.iosBlue.copy(alpha = 0.18f))
+                                            )
+                                        }
                                     }
-                                    Box(modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape).background(colors.appBg)) {
-                                        Box(modifier = Modifier.fillMaxHeight().fillMaxWidth(pct).background(colors.iosBlue))
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 12.dp, vertical = 9.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = opt.text,
+                                            fontSize = 13.5.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = Color(0xFF1C1C1E)
+                                        )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Text(
+                                                text = "${opt.votes} vote${if (opt.votes == 1) "" else "s"}",
+                                                fontSize = 11.5.sp,
+                                                color = colors.textMuted
+                                            )
+                                            Text(
+                                                text = "$pctInt%",
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = colors.iosBlue
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -2065,13 +2132,32 @@ private fun UserStoryPageView(
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(colors.appBg)
-                                        .clickable { SoundManager.playReaction(); onReaction("Voted") }
-                                        .padding(12.dp),
-                                    contentAlignment = Alignment.Center
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(Color(0xFFF2F2F7))
+                                        .clickable {
+                                            SoundManager.playReaction()
+                                            onReaction("Voted")
+                                        }
+                                        .padding(horizontal = 14.dp, vertical = 11.dp)
                                 ) {
-                                    Text(opt.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = colors.iosBlue)
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = opt.text,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color(0xFF1C1C1E)
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .size(18.dp)
+                                                .clip(CircleShape)
+                                                .border(1.2.dp, colors.iosBlue.copy(alpha = 0.45f), CircleShape)
+                                        )
+                                    }
                                 }
                             }
                         }

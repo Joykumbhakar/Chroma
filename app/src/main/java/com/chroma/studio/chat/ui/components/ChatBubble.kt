@@ -37,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.geometry.CornerRadius
@@ -2094,7 +2095,7 @@ fun PollCard(
             .padding(vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // 1. Poll Header Row: Category Badge + Status Indicator (Backgroundless)
+        // 1. Poll Header Row: Category Badge + Status Indicator (Clean Apple Style)
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -2102,20 +2103,33 @@ fun PollCard(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                if (poll.isClosed) {
-                    LucideLock(
-                        tint = if (isOutgoing) Color.White.copy(alpha = 0.95f) else Color(0xFFFF9500),
-                        size = 13.dp
-                    )
-                } else {
-                    Icon(
-                        imageVector = Lucide.ChartColumn,
-                        contentDescription = null,
-                        tint = if (isOutgoing) Color.White.copy(alpha = 0.95f) else (if (poll.isAnonymous) Color(0xFF8B5CF6) else colors.iosBlue),
-                        modifier = Modifier.size(13.dp)
-                    )
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(
+                            if (isOutgoing) Color.White.copy(alpha = 0.20f)
+                            else if (poll.isClosed) Color(0xFFFF9500).copy(alpha = 0.15f)
+                            else if (poll.isAnonymous) Color(0xFF8B5CF6).copy(alpha = 0.15f)
+                            else colors.iosBlue.copy(alpha = 0.15f)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (poll.isClosed) {
+                        LucideLock(
+                            tint = if (isOutgoing) Color.White else Color(0xFFFF9500),
+                            size = 13.dp
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Lucide.ChartColumn,
+                            contentDescription = null,
+                            tint = if (isOutgoing) Color.White else (if (poll.isAnonymous) Color(0xFF8B5CF6) else colors.iosBlue),
+                            modifier = Modifier.size(13.dp)
+                        )
+                    }
                 }
                 Text(
                     text = when {
@@ -2169,62 +2183,97 @@ fun PollCard(
             color = if (isOutgoing) Color.White else colors.textDark
         )
 
-        // 3. Poll Options with LiquidGlass Progress Bar (Follows Main Design System)
+        // 3. Modern Apple/Telegram Inset Progress Options
         Column(
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(7.dp)
         ) {
             poll.options.forEachIndexed { index, option ->
                 val percentage = if (totalVotes == 0) 0f else (option.votes.toFloat() / totalVotes)
+                val animatedProgress by animateFloatAsState(
+                    targetValue = if (hasVoted || poll.isClosed) percentage else 0f,
+                    animationSpec = tween(durationMillis = 450, easing = FastOutSlowInEasing),
+                    label = "pollOptionProgress"
+                )
                 val isSelected = option.isUserVoted
                 val isLeading = maxVotes > 0 && option.votes == maxVotes && totalVotes > 0
                 val isWinner = poll.isClosed && isLeading
-                val rowShape = RoundedCornerShape(14.dp)
+                val rowShape = RoundedCornerShape(12.dp)
+
+                val interactionSource = remember { MutableInteractionSource() }
+                val isPressed by interactionSource.collectIsPressedAsState()
+                val scale by animateFloatAsState(
+                    targetValue = if (isPressed && !poll.isClosed) 0.98f else 1.0f,
+                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                    label = "pollRowScale"
+                )
 
                 val baseBg = if (isOutgoing) {
-                    Color.White.copy(alpha = if (isSelected) 0.16f else 0.08f)
+                    Color.White.copy(alpha = if (isSelected) 0.15f else 0.08f)
                 } else {
                     if (colors.isLight) {
-                        if (isSelected) colors.iosBlue.copy(alpha = 0.08f) else Color(0xFFF2F2F7).copy(alpha = 0.65f)
+                        if (isSelected) colors.iosBlue.copy(alpha = 0.08f) else Color(0xFFF2F2F7).copy(alpha = 0.75f)
                     } else {
-                        if (isSelected) colors.iosBlue.copy(alpha = 0.16f) else Color(0xFF2C2C2E).copy(alpha = 0.45f)
+                        if (isSelected) colors.iosBlue.copy(alpha = 0.15f) else Color(0xFF2C2C2E).copy(alpha = 0.55f)
                     }
                 }
 
-                val borderStroke = if (isSelected) {
-                    BorderStroke(
-                        0.75.dp,
-                        if (isOutgoing) Color.White.copy(alpha = 0.55f) else colors.iosBlue.copy(alpha = 0.45f)
-                    )
-                } else if (isWinner) {
-                    BorderStroke(0.75.dp, Color(0xFF34C759).copy(alpha = 0.55f))
-                } else {
-                    BorderStroke(
-                        0.5.dp,
-                        if (isOutgoing) Color.White.copy(alpha = 0.12f)
-                        else if (colors.isLight) Color(0x14000000) else Color(0x1FFFFFFF)
-                    )
+                val progressFillColor = when {
+                    isWinner -> if (isOutgoing) Color.White.copy(alpha = 0.35f) else Color(0xFF34C759).copy(alpha = 0.22f)
+                    isSelected -> if (isOutgoing) Color.White.copy(alpha = 0.30f) else colors.iosBlue.copy(alpha = 0.18f)
+                    isLeading -> if (isOutgoing) Color.White.copy(alpha = 0.22f) else colors.iosBlue.copy(alpha = 0.12f)
+                    else -> if (isOutgoing) Color.White.copy(alpha = 0.12f) else (if (colors.isLight) Color(0x0C000000) else Color(0x18FFFFFF))
                 }
 
-                Column(
+                val borderColor = when {
+                    isSelected -> if (isOutgoing) Color.White.copy(alpha = 0.65f) else colors.iosBlue.copy(alpha = 0.55f)
+                    isWinner -> Color(0xFF34C759).copy(alpha = 0.60f)
+                    else -> if (isOutgoing) Color.White.copy(alpha = 0.12f) else if (colors.isLight) Color(0x12000000) else Color(0x1EFFFFFF)
+                }
+
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .scale(scale)
                         .clip(rowShape)
                         .background(baseBg)
-                        .border(borderStroke, shape = rowShape)
-                        .clickable(enabled = !poll.isClosed) {
+                        .border(
+                            width = if (isSelected || isWinner) 1.dp else 0.5.dp,
+                            color = borderColor,
+                            shape = rowShape
+                        )
+                        .clickable(
+                            enabled = !poll.isClosed,
+                            interactionSource = interactionSource,
+                            indication = null
+                        ) {
                             SoundManager.playReaction()
                             onVote(index)
                         }
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    // Top: Selection control + Option Text + Right side stats
+                    // Left-to-Right Animated Progress Track Fill
+                    if (animatedProgress > 0f) {
+                        Box(
+                            modifier = Modifier.matchParentSize()
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .fillMaxWidth(animatedProgress)
+                                    .clip(rowShape)
+                                    .background(progressFillColor)
+                            )
+                        }
+                    }
+
+                    // Content Row: Radio/Check + Option Text + (Voters + Percentage)
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 11.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        // Left: Checkbox / Radio / Winner Check + Option Text
+                        // Left: Radio/Check Indicator + Text
                         Row(
                             modifier = Modifier.weight(1f),
                             verticalAlignment = Alignment.CenterVertically,
@@ -2232,48 +2281,61 @@ fun PollCard(
                         ) {
                             if (!poll.isClosed) {
                                 if (poll.allowMultipleAnswers) {
-                                    LiquidGlassCheckbox(
-                                        checked = isSelected,
-                                        onCheckedChange = {
-                                            SoundManager.playReaction()
-                                            onVote(index)
-                                        },
-                                        size = 19.dp
-                                    )
-                                } else {
-                                    if (isOutgoing) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(20.dp)
-                                                .clip(CircleShape)
-                                                .border(
-                                                    width = if (isSelected) 1.5.dp else 1.dp,
-                                                    color = if (isSelected) Color.White else Color.White.copy(alpha = 0.45f),
-                                                    shape = CircleShape
-                                                ),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            if (isSelected) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(9.dp)
-                                                        .clip(CircleShape)
-                                                        .background(Color.White)
-                                                )
-                                            }
+                                    // Checkbox for Multiple Choice
+                                    Box(
+                                        modifier = Modifier
+                                            .size(20.dp)
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(
+                                                if (isSelected) {
+                                                    if (isOutgoing) Color.White else colors.iosBlue
+                                                } else {
+                                                    Color.Transparent
+                                                }
+                                            )
+                                            .border(
+                                                width = if (isSelected) 0.dp else 1.25.dp,
+                                                color = if (isOutgoing) Color.White.copy(alpha = 0.45f) else colors.borderSubtle,
+                                                shape = RoundedCornerShape(6.dp)
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (isSelected) {
+                                            LucideCheck(
+                                                tint = if (isOutgoing) colors.iosBlue else Color.White,
+                                                size = 12.dp
+                                            )
                                         }
-                                    } else {
-                                        LiquidGlassRadio(
-                                            selected = isSelected,
-                                            onClick = {
-                                                SoundManager.playReaction()
-                                                onVote(index)
-                                            },
-                                            size = 20.dp
-                                        )
+                                    }
+                                } else {
+                                    // Radio circle for Single Choice
+                                    Box(
+                                        modifier = Modifier
+                                            .size(20.dp)
+                                            .clip(CircleShape)
+                                            .border(
+                                                width = if (isSelected) 1.5.dp else 1.2.dp,
+                                                color = if (isSelected) {
+                                                    if (isOutgoing) Color.White else colors.iosBlue
+                                                } else {
+                                                    if (isOutgoing) Color.White.copy(alpha = 0.45f) else colors.borderSubtle
+                                                },
+                                                shape = CircleShape
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (isSelected) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(10.dp)
+                                                    .clip(CircleShape)
+                                                    .background(if (isOutgoing) Color.White else colors.iosBlue)
+                                            )
+                                        }
                                     }
                                 }
                             } else {
+                                // Poll Closed Winner / Selected Indicator
                                 if (isWinner) {
                                     Box(
                                         modifier = Modifier
@@ -2282,7 +2344,7 @@ fun PollCard(
                                             .background(Color(0xFF34C759)),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        LucideCheck(tint = Color.White, size = 13.dp)
+                                        LucideCheck(tint = Color.White, size = 12.dp)
                                     }
                                 } else if (isSelected) {
                                     Box(
@@ -2294,7 +2356,7 @@ fun PollCard(
                                     ) {
                                         LucideCheck(
                                             tint = if (isOutgoing) colors.iosBlue else Color.White,
-                                            size = 13.dp
+                                            size = 12.dp
                                         )
                                     }
                                 } else {
@@ -2314,7 +2376,7 @@ fun PollCard(
                             ) {
                                 Text(
                                     text = option.text,
-                                    fontSize = 14.sp,
+                                    fontSize = 14.5.sp,
                                     fontWeight = if (isSelected || isLeading) FontWeight.SemiBold else FontWeight.Medium,
                                     color = if (isOutgoing) Color.White else colors.textDark,
                                     maxLines = 2,
@@ -2341,10 +2403,10 @@ fun PollCard(
                                         Box(
                                             modifier = Modifier
                                                 .offset(x = (-6 * voterIdx).dp)
-                                                .size(18.dp)
+                                                .size(19.dp)
                                                 .clip(CircleShape)
                                                 .border(
-                                                    1.dp,
+                                                    1.5.dp,
                                                     if (isOutgoing) colors.iosBlue else Color.White,
                                                     CircleShape
                                                 )
@@ -2354,7 +2416,7 @@ fun PollCard(
                                             IosAvatarView(
                                                 name = voter.name,
                                                 avatarUrl = voter.avatar,
-                                                size = 18.dp,
+                                                size = 19.dp,
                                                 isOnline = false
                                             )
                                         }
@@ -2378,7 +2440,7 @@ fun PollCard(
                                     if (option.votes > 0) {
                                         Text(
                                             text = "${option.votes} vote${if (option.votes == 1) "" else "s"}",
-                                            fontSize = 10.5.sp,
+                                            fontSize = 10.sp,
                                             fontWeight = FontWeight.Normal,
                                             color = if (isOutgoing) Color.White.copy(alpha = 0.7f) else colors.textMuted
                                         )
@@ -2394,26 +2456,11 @@ fun PollCard(
                             }
                         }
                     }
-
-                    // Bottom: Dedicated Recessed Specular Progress Bar from Main Design System
-                    if (hasVoted || poll.isClosed) {
-                        LiquidGlassPollOptionMeter(
-                            progress = percentage,
-                            optionIndex = index,
-                            isWinner = isWinner,
-                            isLeading = isLeading,
-                            isOutgoing = isOutgoing,
-                            height = 6.dp,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(start = 30.dp, end = 2.dp)
-                        )
-                    }
                 }
             }
         }
 
-        // 4. Bottom Stats & Clean Borderless Actions (With Icons, Zero Pill Containers)
+        // 4. Bottom Stats & Clean Borderless Actions
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2443,12 +2490,12 @@ fun PollCard(
                 )
             }
 
-            // Right Actions: Retract Vote + End Poll (creator) + View Votes (Borderless + Icons)
+            // Right Actions: Retract Vote + End Poll (creator) + View Votes
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                // Retract Vote Action (Borderless icon + text)
+                // Retract Vote Action
                 if (hasVoted && !poll.isClosed && onRetractVote != null) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -2476,7 +2523,7 @@ fun PollCard(
                     }
                 }
 
-                // End Poll Action (Borderless icon + text)
+                // End Poll Action
                 if (isOutgoing && !poll.isClosed && onClosePoll != null) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -2502,7 +2549,7 @@ fun PollCard(
                     }
                 }
 
-                // View Votes Action (Borderless icon + text)
+                // View Votes Action
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(3.5.dp),
