@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -75,6 +76,180 @@ object AppleGradients {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// 🍏  LIVE VOICE BUBBLE PREVIEW
+@Composable
+fun LiveVoiceBubblePreview(
+    isOutgoing: Boolean,
+    visual: BubbleVisualConfig,
+    colors: ChatColors,
+    modifier: Modifier = Modifier
+) {
+    var isPlaying by remember { mutableStateOf(false) }
+    var currentProgress by remember { mutableFloatStateOf(0.42f) }
+
+    val defaultHeights = remember {
+        listOf(
+            22, 38, 65, 95, 70, 40, 85, 100, 75, 45, 90, 80, 55, 30,
+            65, 95, 100, 70, 40, 85, 95, 60, 35, 75, 90, 65, 40, 22
+        )
+    }
+
+    Box(
+        modifier = modifier
+            .widthIn(min = 210.dp, max = 240.dp)
+            .shadow(visual.elevation, visual.shape)
+            .clip(visual.shape)
+            .background(brush = visual.background)
+            .border(visual.borderWidth, visual.borderColor, visual.shape)
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            val playBtnBg = if (isOutgoing) {
+                Brush.linearGradient(
+                    listOf(Color.White.copy(alpha = 0.28f), Color.White.copy(alpha = 0.16f))
+                )
+            } else {
+                if (colors.isLight) {
+                    Brush.linearGradient(
+                        listOf(colors.iosBlue.copy(alpha = 0.18f), colors.iosBlue.copy(alpha = 0.08f))
+                    )
+                } else {
+                    Brush.linearGradient(
+                        listOf(Color(0xFF3A3A3C), Color(0xFF2C2C2E))
+                    )
+                }
+            }
+            val playBtnBorder = if (isOutgoing) Color.White.copy(alpha = 0.38f)
+            else (if (colors.isLight) colors.iosBlue.copy(alpha = 0.30f) else Color.White.copy(alpha = 0.20f))
+
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .background(playBtnBg)
+                    .border(0.75.dp, playBtnBorder, CircleShape)
+                    .clickable {
+                        SoundManager.playReaction()
+                        isPlaying = !isPlaying
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                if (isPlaying) {
+                    LucidePause(
+                        tint = if (isOutgoing) Color.White else colors.iosBlue,
+                        size = 17.dp
+                    )
+                } else {
+                    LucidePlay(
+                        tint = if (isOutgoing) Color.White else colors.iosBlue,
+                        size = 17.dp,
+                        modifier = Modifier.offset(x = 1.dp)
+                    )
+                }
+            }
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.5.dp)
+            ) {
+                Canvas(
+                    modifier = Modifier
+                        .height(24.dp)
+                        .fillMaxWidth()
+                ) {
+                    val totalBars = defaultHeights.size
+                    val spacingPx = 2.dp.toPx()
+                    val totalSpacing = spacingPx * (totalBars - 1)
+                    val barWidth = (size.width - totalSpacing) / totalBars
+                    val cornerRadius = androidx.compose.ui.geometry.CornerRadius(3.dp.toPx())
+
+                    for (i in 0 until totalBars) {
+                        val h = defaultHeights[i]
+                        val barProgress = i.toFloat() / totalBars.toFloat()
+                        val isPast = barProgress <= currentProgress
+
+                        val barHeightNorm = (h / 100f).coerceIn(0.18f, 1f)
+                        val barPxHeight = size.height * barHeightNorm
+                        val left = i * (barWidth + spacingPx)
+                        val top = (size.height - barPxHeight) / 2f
+
+                        val barColor = if (isOutgoing) {
+                            if (isPast) Color.White else Color.White.copy(alpha = 0.40f)
+                        } else {
+                            if (isPast) colors.iosBlue else colors.iosBlue.copy(alpha = 0.30f)
+                        }
+
+                        drawRoundRect(
+                            color = barColor,
+                            topLeft = Offset(left, top),
+                            size = androidx.compose.ui.geometry.Size(barWidth, barPxHeight),
+                            cornerRadius = cornerRadius
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (isPlaying) "0:06" else "0:14",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isOutgoing) Color.White else colors.textDark,
+                        fontFamily = InterFontFamily
+                    )
+
+                    Spacer(Modifier.width(6.dp))
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(if (isOutgoing) Color.White.copy(alpha = 0.22f) else colors.surfaceSecondary)
+                            .padding(horizontal = 5.dp, vertical = 1.5.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "1.5x",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isOutgoing) Color.White else colors.iosBlue,
+                            fontFamily = InterFontFamily
+                        )
+                    }
+
+                    Spacer(Modifier.weight(1f))
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Text(
+                            text = "10:42 AM",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = visual.timeColor,
+                            fontFamily = InterFontFamily
+                        )
+                        if (isOutgoing) {
+                            Icon(
+                                imageVector = Lucide.ChevronsRight,
+                                contentDescription = null,
+                                tint = Color(0xFF34C759),
+                                modifier = Modifier.size(11.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 // 🍏  LIVE BUBBLE PREVIEW CARD
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -156,6 +331,15 @@ fun LiveBubblePreviewCard(
                     )
                 }
             }
+        }
+
+        // Outgoing Voice Note bubble matching exact ChatBubble style
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            LiveVoiceBubblePreview(
+                isOutgoing = true,
+                visual = outVisual,
+                colors = colors
+            )
         }
 
         // Outgoing message bubble with interactive animation replay
@@ -378,7 +562,7 @@ fun MainAppearanceSections(
                     title = "Voice Globe Style",
                     subtitle = currentGlobeStyle.title,
                     icon = Lucide.Mic,
-                    iconColor = Color(0xFF00C7BE),
+                    iconGradient = currentGlobeStyle.previewGradient,
                     onClick = {
                         SoundManager.playReaction()
                         onNavigateToSubScreen(AppearanceSubScreen.VOICE_GLOBE)
@@ -807,31 +991,22 @@ fun VoiceGlobeSubScreen(
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
         item {
-            AppleSettingsGroup(header = "Voice Globe Preview") {
+            AppleSettingsGroup(header = "3D Liquid Voice Bubble Preview") {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(24.dp),
+                        .padding(vertical = 12.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        DynamicIslandVoiceOrb(style = currentGlobeStyle, size = 96.dp)
-                        Spacer(Modifier.height(14.dp))
-                        Text(
-                            text = currentGlobeStyle.title,
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            fontFamily = InterFontFamily,
-                            color = if (colors.isLight) Color.Black else Color.White
-                        )
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            text = currentGlobeStyle.description,
-                            fontSize = 13.sp,
-                            fontFamily = InterFontFamily,
-                            color = Color(0xFF8E8E93)
-                        )
-                    }
+                    VoiceRecorderCard(
+                        recordingDurationSec = 14,
+                        statusText = "Listening...",
+                        globeStyle = currentGlobeStyle,
+                        onCancel = {},
+                        onTranscribe = {},
+                        onSend = {},
+                        modifier = Modifier.scale(0.92f)
+                    )
                 }
             }
         }
@@ -844,7 +1019,7 @@ fun VoiceGlobeSubScreen(
                         title = globe.title,
                         subtitle = globe.description,
                         icon = Lucide.Activity,
-                        iconColor = Color(0xFF00C7BE),
+                        iconGradient = globe.previewGradient,
                         showChevron = false,
                         valueText = if (isSelected) "✓" else null,
                         valueTextColor = Color(0xFF0A84FF),
