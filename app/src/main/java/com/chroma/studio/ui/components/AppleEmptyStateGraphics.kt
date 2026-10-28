@@ -2588,8 +2588,6 @@ fun AppleFlashGraphic(
             scale(scaleFactor, scaleFactor, pivot = Offset.Zero)
             scale(state.squashX.value, state.squashY.value, pivot = Offset(50f, 85f))
         }) {
-            drawFloorShadow(50f, 88f, 36f, 4.8f)
-
             // 1. Clapperboard Main Slate Body
             drawSculptedSquircleBase(12f, 36f, 76f, 50f, 13f)
 
@@ -2644,17 +2642,6 @@ fun AppleFlashGraphic(
                 ),
                 style = Stroke(1.3f, join = StrokeJoin.Round)
             )
-
-            // 4. Film Perforation Capsules (Bottom of Slate)
-            val perfOffsets = listOf(24f, 37f, 50f, 63f)
-            perfOffsets.forEach { px ->
-                drawRoundRect(
-                    color = Color.White.copy(alpha = 0.5f),
-                    topLeft = Offset(px, 73f),
-                    size = Size(7f, 4f),
-                    cornerRadius = CornerRadius(2f, 2f)
-                )
-            }
 
             // 5. Articulated Clapperboard Striped Top Arm (Claps open and shut with spring physics!)
             withTransform({
@@ -2847,8 +2834,6 @@ fun AppleChatGraphic(
             scale(scaleFactor, scaleFactor, pivot = Offset.Zero)
             scale(state.squashX.value, state.squashY.value, pivot = Offset(50f, 85f))
         }) {
-            drawFloorShadow(50f, 88f, 36f, 4.8f)
-
             // 1. Primary Bottom Message Bubble with Tail
             val primaryBubble = Path().apply {
                 moveTo(24f, 38f)
@@ -3160,13 +3145,6 @@ fun AppleHeartHandshakeGraphic(
     Canvas(modifier = modifier.then(clickModifier)) {
         val s = size.minDimension / 1000f
 
-        // Ambient Floor Shadow
-        drawOval(
-            brush = AppleHigBluePalette.floorGlowBrush(500f, 868f, 225f, s),
-            topLeft = Offset(275f * s, 848f * s),
-            size = Size(450f * s, 38f * s)
-        )
-
         withTransform({
             translate(top = pumpTranslateY.value * s)
             scale(pumpScaleX.value, pumpScaleY.value, pivot = Offset(500f * s, 790f * s))
@@ -3198,17 +3176,6 @@ fun AppleHeartHandshakeGraphic(
                     topLeft = Offset(120f * s, 135f * s),
                     size = Size(760f * s, 690f * s)
                 )
-
-                // Left Lobe Overhead Dome Highlight
-                drawOval(
-                    color = Color.White.copy(alpha = 0.28f),
-                    topLeft = Offset(200f * s, 175f * s),
-                    size = Size(220f * s, 88f * s)
-                )
-
-                with(AppleHigBluePalette) {
-                    drawSoftboxGlossStripes(175f, 145f, 805f, 815f, s)
-                }
 
                 // 2. Sculpted Lower-Right Interlocking Finger Capsules
                 withTransform({
@@ -3290,12 +3257,6 @@ fun AppleHeartHandshakeGraphic(
                             brush = AppleHigBluePalette.lidTopBrush(s),
                             topLeft = Offset(330f * s, 130f * s),
                             size = Size(560f * s, 410f * s)
-                        )
-                        // Soft Overhead Crown Highlight
-                        drawOval(
-                            color = Color.White.copy(alpha = 0.38f),
-                            topLeft = Offset(545f * s, 172f * s),
-                            size = Size(235f * s, 46f * s)
                         )
                         // Sculpted Thumb Pad Knuckle Catch-Light
                         drawCircle(
