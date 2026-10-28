@@ -486,24 +486,37 @@ fun UserProfileScreen(
         } else {
             when (selectedTabIndex) {
                 0 -> {
-                    // Works / Creations Tab
+                    // Works / Creations Tab (Min 3 rows, no radius)
                     if (isWorksLoading) {
-                        items(6) {
+                        items(9) {
                             Box(modifier = Modifier.aspectRatio(1f).clip(RectangleShape).shimmerEffect())
                         }
                     } else if (normalWorks.isEmpty()) {
-                        item(span = { GridItemSpan(maxLineSpan) }) {
-                            val worksGraphicState = rememberAppleGraphicAnimationState()
-                            AppleEmptyTabState(
-                                graphic = {
-                                    AppleWorksGraphic(
-                                        modifier = Modifier.size(130.dp),
-                                        state = worksGraphicState,
-                                        enableClickToAnimate = true
-                                    )
-                                },
-                                title = "No Works Yet",
-                                subtitle = "Creations will appear here once published."
+                        items(9) { index ->
+                            ProfileEmptySlot(
+                                aspectRatio = 1f,
+                                
+                                centerContent = if (index == 4) {
+                                    {
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Lucide.LayoutGrid,
+                                                contentDescription = null,
+                                                tint = colors.textMuted.copy(alpha = 0.5f),
+                                                modifier = Modifier.size(22.dp)
+                                            )
+                                            Text(
+                                                text = "No Works Yet",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = colors.textMuted
+                                            )
+                                        }
+                                    }
+                                } else null
                             )
                         }
                     } else {
@@ -516,27 +529,44 @@ fun UserProfileScreen(
                                 onClick = { selectedPostIndex = index }
                             )
                         }
+                        val remaining = maxOf(0, 9 - normalWorks.size)
+                        items(remaining) {
+                            ProfileEmptySlot(aspectRatio = 1f, )
+                        }
                     }
                 }
                 1 -> {
-                    // Photos Tab (Images)
+                    // Photos Tab (Images, Min 3 rows, no radius)
                     if (isWorksLoading) {
-                        items(6) {
+                        items(9) {
                             Box(modifier = Modifier.aspectRatio(1f).clip(RectangleShape).shimmerEffect())
                         }
                     } else if (imagePosts.isEmpty()) {
-                        item(span = { GridItemSpan(maxLineSpan) }) {
-                            val photosGraphicState = rememberAppleGraphicAnimationState()
-                            AppleEmptyTabState(
-                                graphic = {
-                                    ApplePhotosGraphic(
-                                        modifier = Modifier.size(150.dp),
-                                        state = photosGraphicState,
-                                        enableClickToAnimate = true
-                                    )
-                                },
-                                title = "No Photos Yet",
-                                subtitle = "Photo posts will appear here once shared."
+                        items(9) { index ->
+                            ProfileEmptySlot(
+                                aspectRatio = 1f,
+                                
+                                centerContent = if (index == 4) {
+                                    {
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Lucide.Image,
+                                                contentDescription = null,
+                                                tint = colors.textMuted.copy(alpha = 0.5f),
+                                                modifier = Modifier.size(22.dp)
+                                            )
+                                            Text(
+                                                text = "No Photos Yet",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = colors.textMuted
+                                            )
+                                        }
+                                    }
+                                } else null
                             )
                         }
                     } else {
@@ -549,27 +579,44 @@ fun UserProfileScreen(
                                 onClick = { selectedPostIndex = index }
                             )
                         }
+                        val remaining = maxOf(0, 9 - imagePosts.size)
+                        items(remaining) {
+                            ProfileEmptySlot(aspectRatio = 1f, )
+                        }
                     }
                 }
                 2 -> {
-                    // Flash Videos Tab
+                    // Flash Videos Tab (Reels, Min 3 rows, no radius)
                     if (isFlashesLoading) {
-                        items(6) {
-                            Box(modifier = Modifier.aspectRatio(9f / 16f).clip(RoundedCornerShape(12.dp)).shimmerEffect())
+                        items(9) {
+                            Box(modifier = Modifier.aspectRatio(9f / 16f).clip(RectangleShape).shimmerEffect())
                         }
                     } else if (flashPosts.isEmpty()) {
-                        item(span = { GridItemSpan(maxLineSpan) }) {
-                            val flashGraphicState = rememberAppleGraphicAnimationState()
-                            AppleEmptyTabState(
-                                graphic = {
-                                    AppleFlashGraphic(
-                                        modifier = Modifier.size(150.dp),
-                                        state = flashGraphicState,
-                                        enableClickToAnimate = true
-                                    )
-                                },
-                                title = "No Flash Videos",
-                                subtitle = "Short video moments will appear here."
+                        items(9) { index ->
+                            ProfileEmptySlot(
+                                aspectRatio = 9f / 16f,
+                                
+                                centerContent = if (index == 4) {
+                                    {
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Lucide.Zap,
+                                                contentDescription = null,
+                                                tint = colors.textMuted.copy(alpha = 0.5f),
+                                                modifier = Modifier.size(22.dp)
+                                            )
+                                            Text(
+                                                text = "No Flash Videos",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = colors.textMuted
+                                            )
+                                        }
+                                    }
+                                } else null
                             )
                         }
                     } else {
@@ -581,27 +628,44 @@ fun UserProfileScreen(
                                 onDeleteClick = { flashToDelete = flash }
                             )
                         }
+                        val remaining = maxOf(0, 9 - flashPosts.size)
+                        items(remaining) {
+                            ProfileEmptySlot(aspectRatio = 9f / 16f, )
+                        }
                     }
                 }
                 3 -> {
-                    // Remixes Tab
+                    // Remixes Tab (Min 3 rows, no radius)
                     if (isWorksLoading) {
-                        items(6) {
+                        items(9) {
                             Box(modifier = Modifier.aspectRatio(1f).clip(RectangleShape).shimmerEffect())
                         }
                     } else if (remixWorks.isEmpty()) {
-                        item(span = { GridItemSpan(maxLineSpan) }) {
-                            val remixGraphicState = rememberAppleGraphicAnimationState()
-                            AppleEmptyTabState(
-                                graphic = {
-                                    AppleHeartHandshakeGraphic(
-                                        modifier = Modifier.size(150.dp),
-                                        state = remixGraphicState,
-                                        enableClickToAnimate = true
-                                    )
-                                },
-                                title = "No Remixes",
-                                subtitle = "Remixed co-creations will appear here."
+                        items(9) { index ->
+                            ProfileEmptySlot(
+                                aspectRatio = 1f,
+                                
+                                centerContent = if (index == 4) {
+                                    {
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Lucide.HeartHandshake,
+                                                contentDescription = null,
+                                                tint = colors.textMuted.copy(alpha = 0.5f),
+                                                modifier = Modifier.size(22.dp)
+                                            )
+                                            Text(
+                                                text = "No Remixes",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = colors.textMuted
+                                            )
+                                        }
+                                    }
+                                } else null
                             )
                         }
                     } else {
@@ -614,20 +678,44 @@ fun UserProfileScreen(
                                 onClick = { selectedPostIndex = index }
                             )
                         }
+                        val remaining = maxOf(0, 9 - remixWorks.size)
+                        items(remaining) {
+                            ProfileEmptySlot(aspectRatio = 1f, )
+                        }
                     }
                 }
                 4 -> {
-                    // Saved / Bookmarks Tab (Only visible to account owner)
+                    // Saved / Bookmarks Tab (Min 3 rows, no radius)
                     if (isSavedLoading) {
-                        items(6) {
+                        items(9) {
                             Box(modifier = Modifier.aspectRatio(1f).clip(RectangleShape).shimmerEffect())
                         }
                     } else if (savedWorks.isEmpty()) {
-                        item(span = { GridItemSpan(maxLineSpan) }) {
-                            AppleEmptyTabState(
-                                icon = Lucide.Bookmark,
-                                title = "No Saved Works",
-                                subtitle = "Works and posts you bookmark will appear here."
+                        items(9) { index ->
+                            ProfileEmptySlot(
+                                aspectRatio = 1f,
+                                
+                                centerContent = if (index == 4) {
+                                    {
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Lucide.Bookmark,
+                                                contentDescription = null,
+                                                tint = colors.textMuted.copy(alpha = 0.5f),
+                                                modifier = Modifier.size(22.dp)
+                                            )
+                                            Text(
+                                                text = "No Saved Works",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = colors.textMuted
+                                            )
+                                        }
+                                    }
+                                } else null
                             )
                         }
                     } else {
@@ -639,6 +727,10 @@ fun UserProfileScreen(
                                 repository = repository,
                                 onClick = { selectedPostIndex = index }
                             )
+                        }
+                        val remaining = maxOf(0, 9 - savedWorks.size)
+                        items(remaining) {
+                            ProfileEmptySlot(aspectRatio = 1f, )
                         }
                     }
                 }
@@ -2091,6 +2183,31 @@ fun AppleEmptyTabState(
 }
 
 @Composable
+fun ProfileEmptySlot(
+    aspectRatio: Float = 1f,
+    centerContent: (@Composable () -> Unit)? = null
+) {
+    val colors = LocalOscellionColors.current
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(aspectRatio)
+            .clip(RectangleShape)
+            .background(if (colors.isDark) Color(0xFF141417) else Color(0xFFF4F4F7))
+            .border(
+                width = 0.5.dp,
+                color = if (colors.isDark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.05f),
+                shape = RectangleShape
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        if (centerContent != null) {
+            centerContent()
+        }
+    }
+}
+
+@Composable
 fun ProfileFlashCard(
     flash: FlashVideo,
     isOwner: Boolean,
@@ -2103,15 +2220,15 @@ fun ProfileFlashCard(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(9f / 16f)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RectangleShape)
             .background(colors.glassBgHover)
-            .border(1.dp, colors.glassBorder, RoundedCornerShape(12.dp))
+            .border(0.5.dp, colors.glassBorder, RectangleShape)
     ) {
         if (flash.thumbnailUrl.isNotBlank()) {
             AsyncImage(
                 model = flash.thumbnailUrl,
                 contentDescription = flash.caption,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().clip(RectangleShape),
                 contentScale = ContentScale.Crop
             )
         } else {
@@ -2130,7 +2247,7 @@ fun ProfileFlashCard(
             }
         }
 
-        // Top Reel Header Bar
+        // Top Reel Header Bar (No radius)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2141,7 +2258,7 @@ fun ProfileFlashCard(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Surface(
-                shape = RoundedCornerShape(4.dp),
+                shape = RectangleShape,
                 color = Color.Black.copy(alpha = 0.6f),
                 border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.25f))
             ) {
@@ -2158,10 +2275,10 @@ fun ProfileFlashCard(
             if (isOwner) {
                 Box(
                     modifier = Modifier
-                        .size(28.dp)
-                        .clip(CircleShape)
+                        .size(24.dp)
+                        .clip(RectangleShape)
                         .background(Color.Black.copy(alpha = 0.4f))
-                        .border(0.5.dp, Color.White.copy(alpha = 0.2f), CircleShape)
+                        .border(0.5.dp, Color.White.copy(alpha = 0.2f), RectangleShape)
                         .clickable { showMenu = true },
                     contentAlignment = Alignment.Center
                 ) {
@@ -2169,7 +2286,7 @@ fun ProfileFlashCard(
                         imageVector = Lucide.EllipsisVertical,
                         contentDescription = "Options",
                         tint = Color.White,
-                        modifier = Modifier.size(14.dp)
+                        modifier = Modifier.size(13.dp)
                     )
                 }
 
@@ -2177,10 +2294,9 @@ fun ProfileFlashCard(
                     expanded = showMenu,
                     onDismissRequest = { showMenu = false },
                     modifier = Modifier
-                        .shadow(16.dp, RoundedCornerShape(16.dp), ambientColor = Color.Black.copy(alpha = 0.25f), spotColor = Color.Black.copy(alpha = 0.15f))
-                        .clip(RoundedCornerShape(16.dp))
+                        .clip(RoundedCornerShape(12.dp))
                         .background(colors.glassBg)
-                        .border(1.dp, colors.glassBorder, RoundedCornerShape(16.dp))
+                        .border(1.dp, colors.glassBorder, RoundedCornerShape(12.dp))
                 ) {
                     DropdownMenuItem(
                         text = { Text("Delete Flash", color = colors.error, fontWeight = FontWeight.SemiBold) },
@@ -2264,10 +2380,10 @@ fun ProfileWorkCard(
             Row(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(6.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .padding(4.dp)
+                    .clip(RectangleShape)
                     .background(Color.Black.copy(alpha = 0.45f))
-                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                    .padding(horizontal = 5.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
