@@ -673,18 +673,6 @@ private fun NotificationEmptyState(
     val graphicState = rememberAppleGraphicAnimationState()
     val coroutineScope = rememberCoroutineScope()
 
-    // Smooth pulsing effect for "INBOX ZERO" status dot
-    val infiniteTransition = rememberInfiniteTransition(label = "inboxZeroPulse")
-    val dotAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(900, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "dotAlpha"
-    )
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -692,44 +680,18 @@ private fun NotificationEmptyState(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        // 1. Interactive 3D Cupertino Blue Dome Bell with Acoustic Rings, Clapper & Checkmark Jewel
+        // Clean 3D Cupertino Bell without check badge or floor shadow glow
         AppleNotificationGraphic(
             modifier = Modifier.size(175.dp),
             state = graphicState,
             enableClickToAnimate = true,
             showSonicWaves = true,
-            showCheckBadge = true,
+            showCheckBadge = false,
+            showFloorGlow = false,
             onClick = null
         )
 
-        Spacer(Modifier.height(8.dp))
-
-        // 2. Apple HIG "INBOX ZERO" Pill Status Badge
-        Row(
-            modifier = Modifier
-                .clip(CircleShape)
-                .background(Color(0xFF007AFF).copy(alpha = 0.10f))
-                .border(1.dp, Color(0xFF007AFF).copy(alpha = 0.22f), CircleShape)
-                .padding(horizontal = 12.dp, vertical = 5.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(6.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFF007AFF).copy(alpha = dotAlpha))
-            )
-            Text(
-                text = "INBOX ZERO",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 0.8.sp,
-                color = Color(0xFF007AFF)
-            )
-        }
-
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(16.dp))
 
         // 3. Apple Typography Headline
         Text(

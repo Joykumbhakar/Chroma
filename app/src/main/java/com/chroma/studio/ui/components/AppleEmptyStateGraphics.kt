@@ -3837,6 +3837,7 @@ fun AppleNotificationGraphic(
     enableClickToAnimate: Boolean = true,
     showSonicWaves: Boolean = true,
     showCheckBadge: Boolean = true,
+    showFloorGlow: Boolean = true,
     onClick: (() -> Unit)? = null
 ) {
     val scope = rememberCoroutineScope()
@@ -3862,17 +3863,19 @@ fun AppleNotificationGraphic(
             scale(state.squashX.value, state.squashY.value, pivot = Offset(500f * scale, 876f * scale))
         }) {
             // 1. Ambient Floor Glow
-            drawOval(
-                brush = Brush.radialGradient(
-                    0.00f to Color(0x520055E0),
-                    0.55f to Color(0x1A007AFF),
-                    1.00f to Color(0x00007AFF),
-                    center = Offset(500f * scale, 876f * scale),
-                    radius = 225f * scale
-                ),
-                topLeft = Offset((500f - 225f) * scale, (876f - 18f) * scale),
-                size = Size(450f * scale, 36f * scale)
-            )
+            if (showFloorGlow) {
+                drawOval(
+                    brush = Brush.radialGradient(
+                        0.00f to Color(0x520055E0),
+                        0.55f to Color(0x1A007AFF),
+                        1.00f to Color(0x00007AFF),
+                        center = Offset(500f * scale, 876f * scale),
+                        radius = 225f * scale
+                    ),
+                    topLeft = Offset((500f - 225f) * scale, (876f - 18f) * scale),
+                    size = Size(450f * scale, 36f * scale)
+                )
+            }
 
             // 2. Concentric Acoustic Sonic Rings (Left & Right Empty State Aura)
             if (showSonicWaves) {
