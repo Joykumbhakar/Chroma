@@ -717,6 +717,26 @@ fun UserProfileScreen(
                             .clickable { showBannerLibrarySheet = true },
                         contentAlignment = Alignment.Center
                     ) {
+                        if (!isScrolled) {
+                            // Soft ambient shadow
+                            Icon(
+                                Lucide.Pencil,
+                                contentDescription = null,
+                                tint = Color.Black.copy(alpha = 0.20f),
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .offset(x = 0.dp, y = 1.25.dp)
+                            )
+                            // Crisp key shadow
+                            Icon(
+                                Lucide.Pencil,
+                                contentDescription = null,
+                                tint = Color.Black.copy(alpha = 0.35f),
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .offset(x = 0.5.dp, y = 0.75.dp)
+                            )
+                        }
                         Icon(
                             Lucide.Pencil,
                             contentDescription = "Edit Banner",
@@ -728,10 +748,29 @@ fun UserProfileScreen(
                     Box(
                         modifier = Modifier
                             .size(38.dp)
-                            
                             .clickable { showSettingsBottomSheet = true },
                         contentAlignment = Alignment.Center
                     ) {
+                        if (!isScrolled) {
+                            // Soft ambient shadow
+                            Icon(
+                                Lucide.Settings,
+                                contentDescription = null,
+                                tint = Color.Black.copy(alpha = 0.20f),
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .offset(x = 0.dp, y = 1.25.dp)
+                            )
+                            // Crisp key shadow
+                            Icon(
+                                Lucide.Settings,
+                                contentDescription = null,
+                                tint = Color.Black.copy(alpha = 0.35f),
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .offset(x = 0.5.dp, y = 0.75.dp)
+                            )
+                        }
                         Icon(
                             Lucide.Settings,
                             contentDescription = "Settings",
