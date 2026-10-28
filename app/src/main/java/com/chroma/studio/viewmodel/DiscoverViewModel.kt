@@ -562,6 +562,10 @@ class DiscoverViewModel : ViewModel() {
         }
     }
 
+    suspend fun updateUserProfile(updatedProfile: com.chroma.studio.model.UserProfile): Result<Unit> {
+        return repository.updateUserProfile(updatedProfile)
+    }
+
     fun recordShare(workId: String, userId: String) {
         trackShare(workId)
         viewModelScope.launch {

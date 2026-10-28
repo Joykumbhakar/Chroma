@@ -1,1031 +1,1701 @@
-package com.chroma.studio.ui.screens
-
-import android.Manifest
-import android.app.DatePickerDialog
-import android.content.Context
-import android.location.Geocoder
-import android.location.LocationManager
-import android.net.Uri
-import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
-import com.chroma.studio.ui.components.AiWaveSphereIcon
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.core.content.FileProvider
-import coil.compose.AsyncImage
-import coil.compose.rememberAsyncImagePainter
-import com.chroma.studio.R
-import com.chroma.studio.data.SupabaseClient
-import com.chroma.studio.model.DiscoverPost
-import com.chroma.studio.model.UserProfile
-import com.chroma.studio.ui.components.*
-import com.chroma.studio.ui.theme.LocalOscellionColors
-import com.composables.icons.lucide.*
-import io.github.jan.supabase.storage.storage
-import kotlinx.coroutines.launch
-import java.io.File
-import java.util.*
-
-@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
-@Composable
-fun ProfileIdentityScreen(
-    profile: UserProfile,
-    works: List<DiscoverPost>,
-    onSave: (UserProfile) -> Unit,
-    onBack: () -> Unit
-) {
-    val colors = LocalOscellionColors.current
-    val coroutineScope = rememberCoroutineScope()
-    val context = LocalContext.current
-    val isDark = isSystemInDarkTheme()
-
-    var displayName by remember { mutableStateOf(profile.displayName) }
-    var username by remember { mutableStateOf(profile.username) }
-    var avatarUrl by remember { mutableStateOf(profile.avatarUrl) }
-    var bio by remember { mutableStateOf(profile.bio) }
-    var role by remember { mutableStateOf(profile.role) }
-    var dob by remember { mutableStateOf(profile.dateOfBirthAsLong ?: profile.dob) }
-    var gender by remember { mutableStateOf(profile.gender) }
-    
-    var contentTags by remember { mutableStateOf(profile.contentTags.toList()) }
-    var dataVisibility by remember { mutableStateOf(profile.dataVisibility.toMutableMap()) }
-
-    var officeLocation by remember { mutableStateOf(profile.officeLocation ?: "") }
-    var homeLocation by remember { mutableStateOf(profile.homeLocation ?: "") }
-    var countryLocation by remember { mutableStateOf(profile.countryLocation ?: "") }
-
-    var github by remember { mutableStateOf(profile.socialLinks["github"] ?: "") }
-    var instagram by remember { mutableStateOf(profile.socialLinks["instagram"] ?: "") }
-    var website by remember { mutableStateOf(profile.socialLinks["website"] ?: "") }
-
-    var selectedBannerWorkId by remember { mutableStateOf(profile.bannerWorkId) }
-    var bannerUrl by remember { mutableStateOf(profile.bannerUrl?.takeIf { it.isNotBlank() } ?: "preset:wave_6") }
-
-    var selectedTabIndex by remember { mutableIntStateOf(0) }
-
-    // Upload states
-    var selectedBannerUri by remember { mutableStateOf<Uri?>(null) }
-    var isUploadingBanner by remember { mutableStateOf(false) }
-    var selectedAvatarUri by remember { mutableStateOf<Uri?>(null) }
-    var isUploadingAvatar by remember { mutableStateOf(false) }
-    var showAvatarDialog by remember { mutableStateOf(false) }
-    var cameraImageUri by remember { mutableStateOf<Uri?>(null) }
-
-    fun handleSave() {
-        val newSocialLinks = mutableMapOf<String, String>()
-        if (github.isNotBlank()) newSocialLinks["github"] = github.trim()
-        if (instagram.isNotBlank()) newSocialLinks["instagram"] = instagram.trim()
-        if (website.isNotBlank()) newSocialLinks["website"] = website.trim()
-        
-        val updated = profile.copy(
-            displayName = displayName.trim(),
-            username = username.trim(),
-            avatarUrl = avatarUrl.trim(),
-            bannerUrl = bannerUrl.trim(),
-            bio = bio.trim(),
-            role = role.trim(),
-            dob = dob,
-            dateOfBirth = dob,
-            gender = gender,
-            contentTags = contentTags,
-            dataVisibility = dataVisibility,
-            socialLinks = newSocialLinks,
-            bannerWorkId = selectedBannerWorkId,
-            officeLocation = officeLocation.trim(),
-            homeLocation = homeLocation.trim(),
-            countryLocation = countryLocation.trim()
-        )
-        com.chroma.studio.data.SavedAccountManager.saveFromProfile(context, updated, com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email)
-        onSave(updated)
-        onBack()
-    }
-
-    val bannerGalleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri != null) {
-            selectedBannerUri = uri
-            coroutineScope.launch {
-                isUploadingBanner = true
-                val bytes = com.chroma.studio.utils.ImageUtils.compressBannerForSupabase(context, uri)
-                val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
-                if (bytes != null && uid != null) {
-                    val url = uploadBannerToSupabase(uid, bytes)
-                    if (url != null) bannerUrl = url
-                }
-                isUploadingBanner = false
-            }
-        }
-    }
-
-    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri != null) {
-            selectedAvatarUri = uri
-            coroutineScope.launch {
-                isUploadingAvatar = true
-                val bytes = com.chroma.studio.utils.compressImageToUnder50KB(context, uri)
-                val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
-                if (bytes != null && uid != null) {
-                    val url = uploadAvatarToSupabase(uid, bytes)
-                    if (url != null) avatarUrl = url
-                }
-                isUploadingAvatar = false
-            }
-        }
-    }
-
-    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
-        if (success && cameraImageUri != null) {
-            selectedAvatarUri = cameraImageUri
-            coroutineScope.launch {
-                isUploadingAvatar = true
-                val bytes = com.chroma.studio.utils.compressImageToUnder50KB(context, cameraImageUri!!)
-                val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
-                if (bytes != null && uid != null) {
-                    val url = uploadAvatarToSupabase(uid, bytes)
-                    if (url != null) avatarUrl = url
-                }
-                isUploadingAvatar = false
-            }
-        }
-    }
-
-    val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
-        if (isGranted) {
-            try {
-                val tmpFile = File(context.cacheDir, "avatar_profile_tmp.jpg")
-                val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", tmpFile)
-                cameraImageUri = uri
-                cameraLauncher.launch(uri)
-            } catch (e: Exception) {
-                Toast.makeText(context, "Failed to launch camera: ${e.message}", Toast.LENGTH_SHORT).show()
-            }
-        } else {
-            Toast.makeText(context, "Camera permission is required to take photos", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        val granted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
-                permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
-        if (granted) {
-            try {
-                val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
-                val isGpsEnabled = locationManager?.isProviderEnabled(LocationManager.GPS_PROVIDER) == true
-                val isNetworkEnabled = locationManager?.isProviderEnabled(LocationManager.NETWORK_PROVIDER) == true
-
-                if (isGpsEnabled || isNetworkEnabled) {
-                    val provider = if (isGpsEnabled) LocationManager.GPS_PROVIDER else LocationManager.NETWORK_PROVIDER
-                    @Suppress("MissingPermission")
-                    val location = locationManager?.getLastKnownLocation(provider)
-                    if (location != null) {
-                        val geocoder = Geocoder(context, Locale.getDefault())
-                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                            geocoder.getFromLocation(location.latitude, location.longitude, 1) { addresses ->
-                                val address = addresses.firstOrNull()
-                                if (address != null) {
-                                    countryLocation = address.countryName ?: ""
-                                    if (homeLocation.isBlank()) homeLocation = address.locality ?: address.subAdminArea ?: ""
-                                }
-                            }
-                        } else {
-                            @Suppress("DEPRECATION")
-                            val addresses = geocoder.getFromLocation(location.latitude, location.longitude, 1)
-                            val address = addresses?.firstOrNull()
-                            if (address != null) {
-                                countryLocation = address.countryName ?: ""
-                                if (homeLocation.isBlank()) homeLocation = address.locality ?: address.subAdminArea ?: ""
-                            }
-                        }
-                    }
-                }
-            } catch (e: Exception) { e.printStackTrace() }
-        }
-    }
-
-    val datePickerDialog = DatePickerDialog(
-        context,
-        { _, year, month, dayOfMonth ->
-            val cal = Calendar.getInstance()
-            cal.set(year, month, dayOfMonth)
-            dob = cal.timeInMillis
-        },
-        Calendar.getInstance().get(Calendar.YEAR),
-        Calendar.getInstance().get(Calendar.MONTH),
-        Calendar.getInstance().get(Calendar.DAY_OF_MONTH)
-    )
-
-    var editSheetState by remember { mutableStateOf<EditSheetData?>(null) }
-    
-    // Bottom sheet for editing field values
-    if (editSheetState != null) {
-        val sheetData = editSheetState!!
-        ModalBottomSheet(
-            onDismissRequest = { editSheetState = null },
-            containerColor = colors.bg,
-            dragHandle = { BottomSheetDefaults.DragHandle() }
-        ) {
-            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 36.dp)) {
-                Text("Edit ${sheetData.title}", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = colors.textMain)
-                Spacer(Modifier.height(16.dp))
-                
-                if (sheetData.options != null) {
-                    LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f, fill = false)) {
-                        items(sheetData.options!!) { option ->
-                            val isSelected = sheetData.currentValue == option
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .clickable {
-                                        sheetData.onSave(option)
-                                        editSheetState = null
-                                    }
-                                    .padding(vertical = 14.dp, horizontal = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(option, color = if (isSelected) Color(0xFF007AFF) else colors.textMain, fontSize = 15.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal)
-                                if (isSelected) {
-                                    Icon(Lucide.Check, null, tint = Color(0xFF007AFF), modifier = Modifier.size(18.dp))
-                                }
-                            }
-                            HorizontalDivider(color = colors.glassBorder)
-                        }
-                    }
-                } else {
-                    var textValue by remember(sheetData) { mutableStateOf(sheetData.currentValue) }
-                    OutlinedTextField(
-                        value = textValue,
-                        onValueChange = { textValue = it },
-                        label = { Text(sheetData.title) },
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(Modifier.height(20.dp))
-                    ChromaPillButton(
-                        onClick = { 
-                            sheetData.onSave(textValue)
-                            editSheetState = null
-                        },
-                        variant = ChromaPillVariant.Blue,
-                        height = 46.dp,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Done", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                    }
-                }
-            }
-        }
-    }
-
-    val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-
-    Box(modifier = Modifier.fillMaxSize().background(if(isDark) Color(0xFF0F0F11) else Color(0xFFF6F7FB))) {
-        
-        // Clean Subtle Apple Gradient Header (Light/Dark adaptive)
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(130.dp)
-                .background(
-                    Brush.verticalGradient(
-                        listOf(
-                            Color(0xFF007AFF),
-                            Color(0xFF007AFF).copy(alpha = 0.85f),
-                            Color.Transparent
-                        )
-                    )
-                )
-        )
-
-        // Scrollable Body
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(bottom = 140.dp)
-        ) {
-            Spacer(Modifier.height(statusBarTop + 54.dp))
-            
-            // Clean Apple-style Profile Header Card
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Circular Avatar with perfectly anchored camera action badge
-                Box(
-                    modifier = Modifier
-                        .size(84.dp)
-                        .clickable { showAvatarDialog = true }
-                ) {
-                    val presetRes = remember(avatarUrl) { getAvatarPresetDrawableRes(avatarUrl) }
-                    val displayUri = selectedAvatarUri
-
-                    // Main Avatar Circle
-                    Box(
-                        modifier = Modifier
-                            .size(80.dp)
-                            .align(Alignment.TopStart)
-                            .shadow(6.dp, CircleShape, spotColor = Color.Black.copy(alpha = 0.18f))
-                            .background(if (isDark) Color(0xFF1C1C1E) else Color.White, CircleShape)
-                            .padding(2.5.dp)
-                            .clip(CircleShape)
-                    ) {
-                        if (displayUri != null) {
-                            AsyncImage(displayUri, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                        } else if (presetRes != null) {
-                            Image(painterResource(id = presetRes), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                        } else if (avatarUrl.isNotBlank()) {
-                            AsyncImage(avatarUrl, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                        } else {
-                            Image(painterResource(id = getDefaultAvatarDrawableRes(gender)), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                        }
-                    }
-
-                    // Anchored Camera Action Badge overlapping bottom-right
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .size(28.dp)
-                            .shadow(3.dp, CircleShape, spotColor = Color.Black.copy(alpha = 0.22f))
-                            .background(if (isDark) Color(0xFF1C1C1E) else Color.White, CircleShape)
-                            .padding(2.dp)
-                            .background(
-                                Brush.linearGradient(
-                                    colors = listOf(Color(0xFF006FFF), Color(0xFF111C42)),
-                                    start = Offset.Zero,
-                                    end = Offset.Infinite
-                                ),
-                                CircleShape
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Lucide.Camera,
-                            contentDescription = "Change Avatar",
-                            tint = Color.White,
-                            modifier = Modifier.size(13.dp)
-                        )
-                    }
-                }
-                
-                Spacer(Modifier.width(16.dp))
-                
-                Column(
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(
-                        displayName.trim().ifEmpty { profile.displayName.takeIf { it.isNotBlank() } ?: profile.username.takeIf { it.isNotBlank() } ?: "User" },
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 20.sp,
-                        color = colors.textMain,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .clickable {
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-                                val clip = android.content.ClipData.newPlainText("Username", username.ifBlank { "joykumbhakar" })
-                                clipboard?.setPrimaryClip(clip)
-                                Toast.makeText(context, "Handle copied!", Toast.LENGTH_SHORT).show()
-                            }
-                    ) {
-                        Text(
-                            "@${username.ifBlank { "joykumbhakar" }}",
-                            color = Color(0xFF8E8E93),
-                            fontSize = 13.5.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Icon(Lucide.Copy, null, tint = Color(0xFF8E8E93), modifier = Modifier.size(11.dp))
-                    }
-                    Spacer(Modifier.height(4.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clickable { 
-                            editSheetState = EditSheetData("Role", role, listOf("Developer", "Designer", "Manager", "Creator", "Student", "Other")) { role = it } 
-                        }
-                    ) {
-                        Icon(Lucide.Code, null, tint = Color(0xFF007AFF), modifier = Modifier.size(12.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text(if (role.isNotBlank()) role else "Developer", color = Color(0xFF007AFF), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                    }
-                }
-            }
-
-            // Horizontal Tab Bar (Apple Styled)
-            Spacer(Modifier.height(18.dp))
-            val tabs = listOf(
-                "Profile" to Lucide.User,
-                "Media" to Lucide.Image,
-                "Content" to Lucide.Zap,
-                "Highlights" to Lucide.Heart,
-                "Settings" to Lucide.Settings
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                tabs.forEachIndexed { index, (title, icon) ->
-                    val selected = selectedTabIndex == index
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable { selectedTabIndex = index }
-                    ) {
-                        Icon(
-                            icon,
-                            null,
-                            tint = if (selected) Color(0xFF007AFF) else Color(0xFF8E8E93),
-                            modifier = Modifier.size(19.dp)
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            title,
-                            color = if (selected) Color(0xFF007AFF) else Color(0xFF8E8E93),
-                            fontSize = 11.5.sp,
-                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        if (selected) {
-                            Box(
-                                modifier = Modifier
-                                    .height(2.5.dp)
-                                    .fillMaxWidth(0.65f)
-                                    .background(Color(0xFF007AFF), RoundedCornerShape(2.dp))
-                            )
-                        } else {
-                            Spacer(Modifier.height(2.5.dp))
-                        }
-                    }
-                }
-            }
-            HorizontalDivider(color = colors.glassBorder)
-
-            // Dynamic Cards Content by Selected Tab
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                
-                when (selectedTabIndex) {
-                    0 -> {
-                        // Profile Tab
-                        // 1. About You
-                        DesignCard(icon = Lucide.User, title = "About You", subtitle = "Tell others about yourself.") {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(if (isDark) Color(0xFF2C2C2E) else Color(0xFFF9F9FB))
-                                    .border(0.75.dp, colors.glassBorder, RoundedCornerShape(10.dp))
-                                    .padding(12.dp)
-                                    .clickable { editSheetState = EditSheetData("Bio", bio) { bio = it } }
-                            ) {
-                                Column {
-                                    Text(
-                                        if (bio.isNotBlank()) bio else "Tell the world about yourself and what you create...",
-                                        color = if (bio.isNotBlank()) colors.textMain else Color(0xFF8E8E93),
-                                        fontSize = 13.5.sp,
-                                        maxLines = 4,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Text(
-                                        "${bio.length}/150",
-                                        color = Color(0xFF8E8E93),
-                                        fontSize = 10.5.sp,
-                                        modifier = Modifier.align(Alignment.End).padding(top = 8.dp)
-                                    )
-                                }
-                            }
-                        }
-
-                        // 2. Basic Information
-                        DesignCard(icon = Lucide.FileText, title = "Basic Information", subtitle = "Your public identity details.") {
-                            DesignCardRow(Lucide.User, "Display Name", displayName.ifBlank { "Set Name" }, { editSheetState = EditSheetData("Display Name", displayName) { displayName = it } })
-                            DesignCardRow(Lucide.AtSign, "Username", username.ifBlank { "Set Handle" }, { editSheetState = EditSheetData("Username", username) { username = it } })
-                            val formattedDob = remember(dob) {
-                                if (dob != null && dob != 0L) {
-                                    android.text.format.DateFormat.format("dd MMM yyyy", Date(dob!!)).toString()
-                                } else {
-                                    "Set Date"
-                                }
-                            }
-                            DesignCardRow(Lucide.Calendar, "Date of Birth", formattedDob, { datePickerDialog.show() })
-                            DesignCardRow(Lucide.Users, "Gender", gender.ifBlank { "Prefer not to say" }, { editSheetState = EditSheetData("Gender", gender, listOf("Male", "Female", "Non-Binary", "Prefer not to say")) { gender = it } })
-                            DesignCardRow(Lucide.Briefcase, "Role", role.ifBlank { "Developer" }, { editSheetState = EditSheetData("Role", role, listOf("Developer", "Designer", "Manager", "Creator", "Student", "Other")) { role = it } }, showDivider = false)
-                        }
-
-                        // 3. Location
-                        DesignCard(
-                            icon = Lucide.MapPin,
-                            title = "Location",
-                            subtitle = "Where you are based.",
-                            action = {
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(16.dp))
-                                        .border(1.dp, Color(0xFF007AFF).copy(alpha = 0.35f), RoundedCornerShape(16.dp))
-                                        .clickable {
-                                            permissionLauncher.launch(
-                                                arrayOf(
-                                                    Manifest.permission.ACCESS_FINE_LOCATION,
-                                                    Manifest.permission.ACCESS_COARSE_LOCATION
-                                                )
-                                            )
-                                        }
-                                        .padding(horizontal = 10.dp, vertical = 5.dp)
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Lucide.Navigation, null, tint = Color(0xFF007AFF), modifier = Modifier.size(11.dp))
-                                        Spacer(Modifier.width(4.dp))
-                                        Text("Auto-detect", color = Color(0xFF007AFF), fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
-                                    }
-                                }
-                            }
-                        ) {
-                            DesignCardRow(Lucide.Building, "Office Location", officeLocation.ifBlank { "Remotely" }, { editSheetState = EditSheetData("Office Location", officeLocation, listOf("Remotely", "On-site", "Hybrid")) { officeLocation = it } })
-                            DesignCardRow(Lucide.House, "City / Region", homeLocation.ifBlank { "Set City" }, { editSheetState = EditSheetData("Home Location", homeLocation) { homeLocation = it } })
-                            DesignCardRow(Lucide.Globe, "Country", countryLocation.ifBlank { "India" }, { editSheetState = EditSheetData("Country", countryLocation, listOf("India", "United States", "United Kingdom", "Canada", "Australia", "Germany", "Other")) { countryLocation = it } }, showDivider = false)
-                        }
-
-                        // 4. Social Handles
-                        DesignCard(icon = Lucide.Link, title = "Social Handles", subtitle = "Your online presence & portfolios.") {
-                            DesignCardRow(Lucide.Github, "GitHub", github.ifBlank { "Not linked" }, { editSheetState = EditSheetData("GitHub", github) { github = it } })
-                            DesignCardRow(Lucide.Instagram, "Instagram", instagram.ifBlank { "Not linked" }, { editSheetState = EditSheetData("Instagram", instagram) { instagram = it } })
-                            DesignCardRow(Lucide.Globe, "Website", website.ifBlank { "Not linked" }, { editSheetState = EditSheetData("Website", website) { website = it } }, showDivider = false)
-                        }
-                    }
-                    1 -> {
-                        // Media Tab: Banner and Avatars
-                        DesignCard(icon = Lucide.Image, title = "Profile Banner", subtitle = "Choose a vector wave preset or upload a custom image.") {
-                            val displayBannerRes = if (bannerUrl.isNotBlank() && bannerUrl.startsWith("preset:")) {
-                                getBannerPresetDrawableRes(bannerUrl)
-                            } else null
-
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(110.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .border(0.75.dp, colors.glassBorder, RoundedCornerShape(12.dp))
-                            ) {
-                                if (selectedBannerUri != null) {
-                                    Image(
-                                        painter = rememberAsyncImagePainter(selectedBannerUri),
-                                        contentDescription = "Banner Preview",
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                } else if (displayBannerRes != null) {
-                                    Image(
-                                        painter = painterResource(id = displayBannerRes),
-                                        contentDescription = "Banner Preview",
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                } else if (bannerUrl.isNotBlank()) {
-                                    AsyncImage(
-                                        model = bannerUrl,
-                                        contentDescription = "Banner Preview",
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                } else {
-                                    Box(
-                                        modifier = Modifier.fillMaxSize().background(Color(0xFF007AFF)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text("No Banner Selected", color = Color.White, fontSize = 12.sp)
-                                    }
-                                }
-                            }
-
-                            Spacer(Modifier.height(10.dp))
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                Text("Remove Banner", color = Color(0xFFFF3B30), fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.clickable { bannerUrl = ""; selectedBannerUri = null })
-                                Text("Upload Custom", color = Color(0xFF007AFF), fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.clickable { bannerGalleryLauncher.launch("image/*") })
-                            }
-
-                            Spacer(Modifier.height(14.dp))
-
-                            Text("Vector Wave Presets", color = colors.textMain, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                            Spacer(Modifier.height(8.dp))
-                            val wavePresets = AllBannerPresets.filter { it.id.startsWith("preset:wave_") }
-                            LazyRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                items(wavePresets) { preset ->
-                                    val isSelected = bannerUrl == preset.id
-                                    Image(
-                                        painter = painterResource(id = preset.drawableRes),
-                                        contentDescription = preset.name,
-                                        modifier = Modifier
-                                            .width(120.dp).height(44.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .border(
-                                                width = if (isSelected) 2.dp else 0.5.dp,
-                                                color = if (isSelected) Color(0xFF007AFF) else Color.Transparent,
-                                                shape = RoundedCornerShape(8.dp)
-                                            )
-                                            .clickable { 
-                                                bannerUrl = preset.id
-                                                selectedBannerUri = null 
-                                            },
-                                        contentScale = ContentScale.Crop
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    2 -> {
-                        // Content Tab: Categories and Tags
-                        DesignCard(
-                            icon = Lucide.Tag,
-                            title = "Content Categories",
-                            subtitle = "Select tags that best describe your content."
-                        ) {
-                            FlowRow(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                contentTags.forEach { tag ->
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(16.dp))
-                                            .background(Color(0xFF007AFF))
-                                            .clickable { contentTags = contentTags - tag }
-                                            .padding(horizontal = 12.dp, vertical = 6.dp)
-                                    ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(Lucide.Check, null, tint = Color.White, modifier = Modifier.size(12.dp))
-                                            Spacer(Modifier.width(4.dp))
-                                            Text(tag, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                                        }
-                                    }
-                                }
-                                listOf("Creativity & Art", "Application designing", "UI/UX", "Vlogging", "Photography", "Music", "Writing", "Education", "Gaming", "Health & Fitness", "Lifestyle", "Finance").forEach { tag ->
-                                    if (!contentTags.contains(tag)) {
-                                        Box(
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(16.dp))
-                                                .border(1.dp, colors.glassBorder, RoundedCornerShape(16.dp))
-                                                .clickable { contentTags = contentTags + tag }
-                                                .padding(horizontal = 12.dp, vertical = 6.dp)
-                                        ) {
-                                            Text(tag, color = colors.textMain, fontSize = 12.sp)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    3 -> {
-                        // Highlights Tab: Featured Works
-                        DesignCard(icon = Lucide.Heart, title = "Featured Highlights", subtitle = "Works pinned to the top of your profile.") {
-                            if (works.isEmpty()) {
-                                Box(
-                                    modifier = Modifier.fillMaxWidth().height(100.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text("No creations available to pin", color = Color(0xFF8E8E93), fontSize = 12.5.sp)
-                                }
-                            } else {
-                                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    items(works) { work ->
-                                        Box(
-                                            modifier = Modifier
-                                                .size(72.dp)
-                                                .clip(RoundedCornerShape(10.dp))
-                                                .border(0.5.dp, colors.glassBorder, RoundedCornerShape(10.dp))
-                                        ) {
-                                            if (!work.imageUrl.isNullOrBlank()) {
-                                                AsyncImage(model = work.imageUrl, contentDescription = work.title, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                                            } else {
-                                                Box(modifier = Modifier.fillMaxSize().background(Color(0xFF007AFF).copy(alpha = 0.2f)), contentAlignment = Alignment.Center) {
-                                                    AiWaveSphereIcon(modifier = Modifier.size(24.dp))
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    4 -> {
-                        // Settings Tab: Privacy & Visibility
-                        DesignCard(icon = Lucide.Lock, title = "Privacy & Data Visibility", subtitle = "Control who sees your personal information.") {
-                            listOf("dob" to "Date of Birth", "gender" to "Gender", "location" to "Location").forEach { (key, title) ->
-                                val vis = dataVisibility[key] ?: "public"
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(title, color = colors.textMain, fontSize = 14.sp)
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .background(if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA))
-                                            .clickable {
-                                                val nextVis = when (vis) {
-                                                    "public" -> "followers"
-                                                    "followers" -> "private"
-                                                    else -> "public"
-                                                }
-                                                dataVisibility = dataVisibility.toMutableMap().apply { put(key, nextVis) }
-                                            }
-                                            .padding(horizontal = 10.dp, vertical = 5.dp)
-                                    ) {
-                                        Text(vis.replaceFirstChar { it.uppercase() }, color = Color(0xFF007AFF), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                                    }
-                                }
-                                HorizontalDivider(color = colors.glassBorder)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
-        // Clean Minimal Apple-style Top Bar
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = statusBarTop + 6.dp, start = 14.dp, end = 14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(
-                    onClick = onBack,
-                    modifier = Modifier.size(38.dp)
-                ) {
-                    Icon(Lucide.ArrowLeft, contentDescription = "Back", tint = Color.White, modifier = Modifier.size(22.dp))
-                }
-                Spacer(Modifier.width(10.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Edit Profile", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp, maxLines = 1)
-                    Text("Identity & Information", color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp, maxLines = 1)
-                }
-            }
-            // Clean minimal Preview button
-            IconButton(
-                onClick = onBack,
-                modifier = Modifier.size(38.dp)
-            ) {
-                Icon(Lucide.Eye, contentDescription = "Preview", tint = Color.White, modifier = Modifier.size(22.dp))
-            }
-        }
-
-        // Fixed Floating Bottom Save Button
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .background(
-                    Brush.verticalGradient(
-                        listOf(
-                            Color.Transparent,
-                            if (isDark) Color(0xFF0F0F11).copy(alpha = 0.95f) else Color(0xFFF6F7FB).copy(alpha = 0.95f),
-                            if (isDark) Color(0xFF0F0F11) else Color(0xFFF6F7FB)
-                        )
-                    )
-                )
-                .navigationBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 12.dp)
-        ) {
-            ChromaPillButton(
-                onClick = { handleSave() },
-                variant = ChromaPillVariant.Blue,
-                height = 48.dp,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Lucide.Save, null, tint = Color.White, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Save Changes", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-            }
-        }
-    }
-    
-    // Avatar Preset & Upload Sheet
-    if (showAvatarDialog) {
-        ModalBottomSheet(
-            onDismissRequest = { showAvatarDialog = false },
-            containerColor = colors.bg,
-            dragHandle = { BottomSheetDefaults.DragHandle() }
-        ) {
-            Column(modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 36.dp)) {
-                Text("Choose Profile Avatar", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = colors.textMain)
-                Text("Pick from 3D vector avatars or upload your own", fontSize = 12.sp, color = Color(0xFF8E8E93))
-                Spacer(Modifier.height(16.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    ChromaPillButton(
-                        onClick = { galleryLauncher.launch("image/*"); showAvatarDialog = false },
-                        variant = ChromaPillVariant.Blue,
-                        height = 40.dp,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(Lucide.Image, null, tint = Color.White, modifier = Modifier.size(15.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Gallery", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                    }
-                    ChromaPillButton(
-                        onClick = { 
-                            if (androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                                val tmpFile = File(context.cacheDir, "avatar_profile_tmp.jpg")
-                                val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", tmpFile)
-                                cameraImageUri = uri
-                                cameraLauncher.launch(uri)
-                            } else {
-                                cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
-                            }
-                            showAvatarDialog = false 
-                        },
-                        variant = ChromaPillVariant.Secondary,
-                        height = 40.dp,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(Lucide.Camera, null, tint = Color.Black, modifier = Modifier.size(15.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Camera", color = Color.Black, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                    }
-                }
-                Spacer(Modifier.height(18.dp))
-                Text("Vector Avatar Catalog", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = colors.textMain)
-                Spacer(Modifier.height(10.dp))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    items(AllAvatarPresets) { preset ->
-                        val isSelected = avatarUrl == preset.id
-                        Image(
-                            painter = painterResource(id = preset.drawableRes),
-                            contentDescription = preset.name,
-                            modifier = Modifier
-                                .size(68.dp)
-                                .clip(CircleShape)
-                                .border(
-                                    width = if (isSelected) 2.5.dp else 0.5.dp,
-                                    color = if (isSelected) Color(0xFF007AFF) else Color.Transparent,
-                                    shape = CircleShape
-                                )
-                                .clickable {
-                                    avatarUrl = preset.id
-                                    selectedAvatarUri = null
-                                    showAvatarDialog = false
-                                },
-                            contentScale = ContentScale.Crop
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-data class EditSheetData(val title: String, val currentValue: String, val options: List<String>? = null, val onSave: (String) -> Unit)
-
-@Composable
-fun ChipItem(icon: ImageVector?, text: String, onClick: () -> Unit = {}) {
-    val colors = LocalOscellionColors.current
-    val isDark = isSystemInDarkTheme()
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(if (isDark) Color(0xFF1C1C1E) else Color.White)
-            .border(0.75.dp, colors.glassBorder, RoundedCornerShape(16.dp))
-            .clickable { onClick() }
-            .padding(horizontal = 12.dp, vertical = 6.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (icon != null) {
-                Icon(icon, null, tint = Color(0xFF007AFF), modifier = Modifier.size(12.5.dp))
-                Spacer(Modifier.width(5.dp))
-            }
-            Text(text, color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-        }
-    }
-}
-
-@Composable
-fun DesignCard(
-    icon: ImageVector? = null,
-    graphic3dId: com.chroma.studio.ui.graphics3d.Apple3DGraphicId? = null,
-    title: String,
-    subtitle: String,
-    action: @Composable (() -> Unit)? = null,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    val colors = LocalOscellionColors.current
-    val isDark = isSystemInDarkTheme()
-    val cardBg = if (isDark) Color(0xFF1C1C1E) else Color.White
-    
-    LiquidGlassCard(
-        modifier = Modifier.fillMaxWidth(),
-        backgroundColor = cardBg,
-        shape = RoundedCornerShape(22.dp),
-        borderColor = if (isDark) colors.glassBorder else Color(0xFFDFE8F3),
-        contentPadding = PaddingValues(18.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (graphic3dId != null || icon != null) {
-                    AppleIconBadge(icon = icon, graphic3dId = graphic3dId, size = 24.dp)
-                    Spacer(Modifier.width(12.dp))
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(title, color = colors.textMain, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                    Text(subtitle, color = Color(0xFF8E8E93), fontSize = 11.5.sp)
-                }
-                if (action != null) action()
-        }
-        content()
-    }
-}
-
-@Composable
-fun DesignCardRow(
-    icon: ImageVector,
-    label: String,
-    value: String,
-    onClick: () -> Unit,
-    showDivider: Boolean = true
-) {
-    val colors = LocalOscellionColors.current
-    Column(modifier = Modifier.fillMaxWidth().clickable { onClick() }) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 13.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(icon, null, tint = Color(0xFF007AFF), modifier = Modifier.size(17.dp))
-            Spacer(Modifier.width(10.dp))
-            Text(label, color = colors.textMain, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-            Spacer(Modifier.width(12.dp))
-            Text(
-                value,
-                color = Color(0xFF8E8E93),
-                fontSize = 13.5.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-                textAlign = TextAlign.End
-            )
-            Spacer(Modifier.width(6.dp))
-            Icon(Lucide.ChevronRight, null, tint = Color(0xFF8E8E93), modifier = Modifier.size(14.dp))
-        }
-        if (showDivider) {
-            HorizontalDivider(color = colors.glassBorder)
-        }
-    }
-}
-
-suspend fun uploadBannerToSupabase(uid: String, imageBytes: ByteArray): String? {
-    return try {
-        val compressedBytes = com.chroma.studio.utils.ImageUtils.compressAvatarBytesForSupabase(imageBytes) ?: imageBytes
-        val bucket = SupabaseClient.client.storage["banner"]
-        val path = "$uid/banner.jpg"
-        bucket.upload(path, compressedBytes, upsert = true)
-        bucket.publicUrl(path)
-    } catch (e: Exception) {
-        android.util.Log.e("BannerUpload", "Upload failed", e)
-        null
-    }
-}
+package com.chroma.studio.ui.screens
+
+
+import android.Manifest
+import android.app.DatePickerDialog
+import android.content.Context
+import android.location.Geocoder
+import android.location.LocationManager
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
+import coil.compose.AsyncImage
+import coil.compose.rememberAsyncImagePainter
+import com.chroma.studio.data.SupabaseClient
+import com.chroma.studio.model.DiscoverPost
+import com.chroma.studio.model.UserProfile
+import com.chroma.studio.ui.components.*
+import com.chroma.studio.ui.theme.LocalOscellionColors
+import com.composables.icons.lucide.*
+import io.github.jan.supabase.storage.storage
+import kotlinx.coroutines.launch
+import java.io.File
+import java.util.*
+
+
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+@Composable
+fun ProfileIdentityScreen(
+    profile: UserProfile,
+    works: List<DiscoverPost> = emptyList(),
+    onSave: suspend (UserProfile) -> Result<Unit>,
+    onBack: () -> Unit
+) {
+    val colors = LocalOscellionColors.current
+    val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
+    val isDark = isSystemInDarkTheme()
+
+
+    // Form states
+    var displayName by remember { mutableStateOf(profile.displayName) }
+    var username by remember { mutableStateOf(profile.username) }
+    var avatarUrl by remember { mutableStateOf(profile.avatarUrl) }
+    var bio by remember { mutableStateOf(profile.bio) }
+    var role by remember { mutableStateOf(profile.role.ifBlank { "Developer" }) }
+    var dob by remember { mutableStateOf(profile.dateOfBirthAsLong ?: profile.dob) }
+    var gender by remember { mutableStateOf(profile.gender.ifBlank { "Prefer not to say" }) }
+    
+    var contentTags by remember { mutableStateOf(profile.contentTags.toList()) }
+    var dataVisibility by remember { mutableStateOf(profile.dataVisibility.toMutableMap()) }
+    var isPrivateAccount by remember { mutableStateOf(profile.isPrivateAccount) }
+
+
+    var officeLocation by remember { mutableStateOf(profile.officeLocation.ifBlank { "Remotely" }) }
+    var homeLocation by remember { mutableStateOf(profile.homeLocation) }
+    var countryLocation by remember { mutableStateOf(profile.countryLocation.ifBlank { "United States" }) }
+
+
+    var github by remember { mutableStateOf(profile.socialLinks["github"] ?: "") }
+    var instagram by remember { mutableStateOf(profile.socialLinks["instagram"] ?: "") }
+    var website by remember { mutableStateOf(profile.socialLinks["website"] ?: "") }
+
+
+    var selectedBannerWorkId by remember { mutableStateOf(profile.bannerWorkId) }
+    var bannerUrl by remember { mutableStateOf(profile.bannerUrl.takeIf { it.isNotBlank() } ?: "preset:wave_6") }
+
+
+    // Navigation and Upload states
+    var selectedTabIndex by remember { mutableIntStateOf(0) }
+    var isSaving by remember { mutableStateOf(false) }
+
+
+    var selectedBannerUri by remember { mutableStateOf<Uri?>(null) }
+    var isUploadingBanner by remember { mutableStateOf(false) }
+    var selectedAvatarUri by remember { mutableStateOf<Uri?>(null) }
+    var isUploadingAvatar by remember { mutableStateOf(false) }
+    var showAvatarDialog by remember { mutableStateOf(false) }
+    var cameraImageUri by remember { mutableStateOf<Uri?>(null) }
+
+
+    // Generic Modal Sheet State
+    var activePickerSheet by remember { mutableStateOf<PickerSheetConfig?>(null) }
+
+
+    val isUsernameValid = remember(username) {
+        val clean = username.trim().lowercase()
+        clean.length in 3..30 && clean.matches(Regex("^[a-z0-9._]+$"))
+    }
+
+
+    val isDisplayNameValid = remember(displayName) {
+        displayName.trim().isNotBlank() && displayName.trim().length <= 50
+    }
+
+
+    // Save Execution with Verification
+    fun handleSave() {
+        if (isSaving) return
+
+
+        val cleanName = displayName.trim()
+        val cleanUser = username.trim().lowercase()
+
+
+        if (cleanName.isBlank()) {
+            Toast.makeText(context, "Display name cannot be empty", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+
+        if (cleanUser.length < 3 || cleanUser.length > 30) {
+            Toast.makeText(context, "Username must be between 3 and 30 characters", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+
+        if (!cleanUser.matches(Regex("^[a-z0-9._]+$"))) {
+            Toast.makeText(context, "Username can only contain lowercase letters, numbers, periods, and underscores", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+
+        if (isUploadingAvatar || isUploadingBanner) {
+            Toast.makeText(context, "Please wait for media upload to finish", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+
+
+        coroutineScope.launch {
+            isSaving = true
+            val newSocialLinks = mutableMapOf<String, String>()
+            if (github.isNotBlank()) newSocialLinks["github"] = github.trim()
+            if (instagram.isNotBlank()) newSocialLinks["instagram"] = instagram.trim()
+            if (website.isNotBlank()) newSocialLinks["website"] = website.trim()
+
+
+            val updated = profile.copy(
+                displayName = cleanName,
+                username = cleanUser,
+                avatarUrl = avatarUrl.trim(),
+                bannerUrl = bannerUrl.trim(),
+                bio = bio.trim(),
+                role = role.trim(),
+                dob = dob,
+                dateOfBirth = dob,
+                gender = gender,
+                contentTags = contentTags,
+                dataVisibility = dataVisibility,
+                socialLinks = newSocialLinks,
+                bannerWorkId = selectedBannerWorkId,
+                location = homeLocation.trim().ifBlank { countryLocation.trim() },
+                officeLocation = officeLocation.trim(),
+                homeLocation = homeLocation.trim(),
+                countryLocation = countryLocation.trim(),
+                isPrivateAccount = isPrivateAccount
+            )
+
+
+            val result = onSave(updated)
+            isSaving = false
+
+
+            if (result.isSuccess) {
+                com.chroma.studio.data.SavedAccountManager.saveFromProfile(
+                    context,
+                    updated,
+                    com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email
+                )
+                Toast.makeText(context, "Profile updated successfully", Toast.LENGTH_SHORT).show()
+                onBack()
+            } else {
+                val err = result.exceptionOrNull()?.localizedMessage ?: "Failed to save profile changes"
+                Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+
+    // Banner and Avatar Upload Launchers
+    val bannerGalleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            selectedBannerUri = uri
+            coroutineScope.launch {
+                isUploadingBanner = true
+                val bytes = com.chroma.studio.utils.ImageUtils.compressBannerForSupabase(context, uri)
+                val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                if (bytes != null && uid != null) {
+                    val url = uploadBannerToSupabase(uid, bytes)
+                    if (url != null) {
+                        bannerUrl = url
+                        Toast.makeText(context, "Banner uploaded", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                isUploadingBanner = false
+            }
+        }
+    }
+
+
+    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            selectedAvatarUri = uri
+            coroutineScope.launch {
+                isUploadingAvatar = true
+                val bytes = com.chroma.studio.utils.compressImageToUnder50KB(context, uri)
+                val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                if (bytes != null && uid != null) {
+                    val url = uploadAvatarToSupabase(uid, bytes)
+                    if (url != null) {
+                        avatarUrl = url
+                        Toast.makeText(context, "Avatar uploaded", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                isUploadingAvatar = false
+            }
+        }
+    }
+
+
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        if (success && cameraImageUri != null) {
+            selectedAvatarUri = cameraImageUri
+            coroutineScope.launch {
+                isUploadingAvatar = true
+                val bytes = com.chroma.studio.utils.compressImageToUnder50KB(context, cameraImageUri!!)
+                val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                if (bytes != null && uid != null) {
+                    val url = uploadAvatarToSupabase(uid, bytes)
+                    if (url != null) {
+                        avatarUrl = url
+                        Toast.makeText(context, "Avatar captured and saved", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                isUploadingAvatar = false
+            }
+        }
+    }
+
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+        if (isGranted) {
+            try {
+                val tmpFile = File(context.cacheDir, "avatar_profile_tmp.jpg")
+                val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", tmpFile)
+                cameraImageUri = uri
+                cameraLauncher.launch(uri)
+            } catch (e: Exception) {
+                Toast.makeText(context, "Failed to launch camera: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            Toast.makeText(context, "Camera permission required to capture photos", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val granted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+                permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (granted) {
+            try {
+                val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+                val isGpsEnabled = locationManager?.isProviderEnabled(LocationManager.GPS_PROVIDER) == true
+                val isNetworkEnabled = locationManager?.isProviderEnabled(LocationManager.NETWORK_PROVIDER) == true
+
+
+                if (isGpsEnabled || isNetworkEnabled) {
+                    val provider = if (isGpsEnabled) LocationManager.GPS_PROVIDER else LocationManager.NETWORK_PROVIDER
+                    @Suppress("MissingPermission")
+                    val location = locationManager?.getLastKnownLocation(provider)
+                    if (location != null) {
+                        val geocoder = Geocoder(context, Locale.getDefault())
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                            geocoder.getFromLocation(location.latitude, location.longitude, 1) { addresses ->
+                                val address = addresses.firstOrNull()
+                                if (address != null) {
+                                    countryLocation = address.countryName ?: countryLocation
+                                    if (homeLocation.isBlank()) {
+                                        homeLocation = address.locality ?: address.subAdminArea ?: ""
+                                    }
+                                    Toast.makeText(context, "Location updated from GPS", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        } else {
+                            @Suppress("DEPRECATION")
+                            val addresses = geocoder.getFromLocation(location.latitude, location.longitude, 1)
+                            val address = addresses?.firstOrNull()
+                            if (address != null) {
+                                countryLocation = address.countryName ?: countryLocation
+                                if (homeLocation.isBlank()) {
+                                    homeLocation = address.locality ?: address.subAdminArea ?: ""
+                                }
+                                Toast.makeText(context, "Location updated from GPS", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    } else {
+                        Toast.makeText(context, "Unable to get current location coordinate", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+
+    val datePickerDialog = remember {
+        val cal = Calendar.getInstance()
+        if (dob != null && dob != 0L) {
+            cal.timeInMillis = dob!!
+        }
+        DatePickerDialog(
+            context,
+            { _, year, month, dayOfMonth ->
+                val newCal = Calendar.getInstance()
+                newCal.set(year, month, dayOfMonth)
+                dob = newCal.timeInMillis
+            },
+            cal.get(Calendar.YEAR),
+            cal.get(Calendar.MONTH),
+            cal.get(Calendar.DAY_OF_MONTH)
+        )
+    }
+
+
+    val pageBg = if (isDark) Color(0xFF000000) else Color(0xFFF2F2F7)
+
+
+    Scaffold(
+        containerColor = pageBg,
+        topBar = {
+            // Authentic iOS Top Navigation Bar with Frosted Glass
+            Surface(
+                color = if (isDark) Color(0xFF161618).copy(alpha = 0.88f) else Color.White.copy(alpha = 0.88f),
+                shadowElevation = 0.5.dp,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Cancel / Back Button
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { onBack() }
+                                .padding(horizontal = 4.dp, vertical = 6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Lucide.ChevronLeft,
+                                contentDescription = "Cancel",
+                                tint = Color(0xFF007AFF),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(Modifier.width(2.dp))
+                            Text(
+                                text = "Cancel",
+                                fontSize = 16.5.sp,
+                                fontWeight = FontWeight.Normal,
+                                color = Color(0xFF007AFF)
+                            )
+                        }
+
+
+                        // Title & Subtitle Center
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "Edit Profile",
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = colors.textMain
+                            )
+                            Text(
+                                text = "Identity & Settings",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Normal,
+                                color = Color(0xFF8E8E93)
+                            )
+                        }
+
+
+                        // Top Save Quick Action
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable(enabled = !isSaving && isDisplayNameValid && isUsernameValid) {
+                                    handleSave()
+                                }
+                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isSaving) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = Color(0xFF007AFF)
+                                )
+                            } else {
+                                Text(
+                                    text = "Done",
+                                    fontSize = 16.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isDisplayNameValid && isUsernameValid) Color(0xFF007AFF) else Color(0xFF8E8E93).copy(alpha = 0.5f)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        bottomBar = {
+            // Floating Frosted Save Changes Bar
+            Surface(
+                color = if (isDark) Color(0xFF161618).copy(alpha = 0.94f) else Color.White.copy(alpha = 0.94f),
+                shadowElevation = 8.dp,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                ) {
+                    ChromaPillButton(
+                        onClick = { handleSave() },
+                        variant = ChromaPillVariant.Blue,
+                        height = 48.dp,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        if (isSaving) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.2.dp,
+                                color = Color.White
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Text(
+                                text = "Saving Profile...",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Lucide.Check,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(17.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = "Save Changes",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // ── 1. SIGNATURE HERO IDENTITY SHOWCASE CARD ────────────────────────
+            AppleSettingsGroup(header = null) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    // Cover Banner with specular vignette
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(130.dp)
+                            .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp))
+                            .background(if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA))
+                    ) {
+                        val bannerRes = remember(bannerUrl) {
+                            if (bannerUrl.isNotBlank() && bannerUrl.startsWith("preset:")) {
+                                getBannerPresetDrawableRes(bannerUrl)
+                            } else null
+                        }
+
+
+                        if (selectedBannerUri != null) {
+                            Image(
+                                painter = rememberAsyncImagePainter(selectedBannerUri),
+                                contentDescription = "Cover Banner",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else if (bannerRes != null) {
+                            Image(
+                                painter = painterResource(id = bannerRes),
+                                contentDescription = "Cover Banner",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else if (bannerUrl.isNotBlank()) {
+                            AsyncImage(
+                                model = bannerUrl,
+                                contentDescription = "Cover Banner",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+
+
+                        // Specular vignette overlay
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        listOf(
+                                            Color.Black.copy(alpha = 0.35f),
+                                            Color.Transparent,
+                                            Color.Black.copy(alpha = 0.45f)
+                                        )
+                                    )
+                                )
+                        )
+
+
+                        // Banner upload indicator
+                        if (isUploadingBanner) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Color.Black.copy(alpha = 0.45f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp,
+                                        color = Color.White
+                                    )
+                                    Text("Updating Banner...", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                }
+                            }
+                        }
+
+
+                        // "Edit Cover" glass pill button in top right
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(10.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(Color.Black.copy(alpha = 0.48f))
+                                .border(0.5.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(14.dp))
+                                .clickable {
+                                    selectedTabIndex = 1 // Switch to Media tab
+                                }
+                                .padding(horizontal = 10.dp, vertical = 5.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Lucide.Image, null, tint = Color.White, modifier = Modifier.size(12.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Edit Cover", color = Color.White, fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
+
+
+                    // Avatar & Details Row (Overlapping banner bottom)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                            .offset(y = (-32).dp),
+                        verticalAlignment = Alignment.Bottom
+                    ) {
+                        // Circular Avatar with Multi-layer Glass Rim & Camera Trigger
+                        Box(
+                            modifier = Modifier
+                                .size(84.dp)
+                                .clickable { showAvatarDialog = true }
+                        ) {
+                            val presetRes = remember(avatarUrl) { getAvatarPresetDrawableRes(avatarUrl) }
+
+
+                            Box(
+                                modifier = Modifier
+                                    .size(80.dp)
+                                    .align(Alignment.TopStart)
+                                    .shadow(6.dp, CircleShape, spotColor = Color.Black.copy(alpha = 0.25f))
+                                    .background(if (isDark) Color(0xFF1C1C1E) else Color.White, CircleShape)
+                                    .padding(3.dp)
+                                    .clip(CircleShape)
+                            ) {
+                                if (selectedAvatarUri != null) {
+                                    AsyncImage(selectedAvatarUri, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                                } else if (presetRes != null) {
+                                    Image(painterResource(id = presetRes), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                                } else if (avatarUrl.isNotBlank()) {
+                                    AsyncImage(avatarUrl, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                                } else {
+                                    Image(painterResource(id = getDefaultAvatarDrawableRes(gender)), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                                }
+
+
+                                if (isUploadingAvatar) {
+                                    Box(
+                                        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = Color.White)
+                                    }
+                                }
+                            }
+
+
+                            // Anchored Camera Action Badge
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .size(28.dp)
+                                    .shadow(4.dp, CircleShape)
+                                    .background(
+                                        Brush.linearGradient(
+                                            listOf(Color(0xFF007AFF), Color(0xFF0051D5)),
+                                            start = Offset.Zero,
+                                            end = Offset.Infinite
+                                        ),
+                                        CircleShape
+                                    )
+                                    .border(2.dp, if (isDark) Color(0xFF1C1C1E) else Color.White, CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.Camera,
+                                    contentDescription = "Change Avatar",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                            }
+                        }
+
+
+                        Spacer(Modifier.width(14.dp))
+
+
+                        // User Identity Text Summary
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(bottom = 6.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    text = displayName.ifBlank { "Your Name" },
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 19.sp,
+                                    color = colors.textMain,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                if (profile.verified) {
+                                    VerifiedBadge(
+                                        size = 17.dp,
+                                        tier = VerifiedBadgeTier.BLUE,
+                                        animated = true
+                                    )
+                                }
+                            }
+
+
+                            Spacer(Modifier.height(2.dp))
+
+
+                            Text(
+                                text = "@${username.ifBlank { "handle" }}",
+                                fontSize = 13.5.sp,
+                                color = Color(0xFF8E8E93),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+
+
+                            Spacer(Modifier.height(4.dp))
+
+
+                            // Role Chip
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(Color(0xFF007AFF).copy(alpha = 0.12f))
+                                    .clickable {
+                                        activePickerSheet = PickerSheetConfig(
+                                            title = "Select Professional Role",
+                                            options = listOf("Developer", "Designer", "Creator", "Photographer", "Video Editor", "Manager", "Student", "Other"),
+                                            selected = role,
+                                            onSelect = { role = it }
+                                        )
+                                    }
+                                    .padding(horizontal = 7.dp, vertical = 2.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Lucide.Briefcase, null, tint = Color(0xFF007AFF), modifier = Modifier.size(11.dp))
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(
+                                        text = role.ifBlank { "Developer" },
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color(0xFF007AFF)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+
+            // ── 2. APPLE SEGMENTED PILL TAB SWITCHER ─────────────────────────
+            val tabs = listOf(
+                "Profile" to Lucide.User,
+                "Media" to Lucide.Image,
+                "Interests" to Lucide.Tag,
+                "Privacy" to Lucide.Lock
+            )
+
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(if (isDark) Color(0xFF1C1C1E) else Color(0xFFE5E5EA))
+                    .padding(3.dp)
+            ) {
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    tabs.forEachIndexed { index, (title, icon) ->
+                        val isSelected = selectedTabIndex == index
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(34.dp)
+                                .clip(RoundedCornerShape(11.dp))
+                                .background(
+                                    if (isSelected) {
+                                        if (isDark) Color(0xFF2C2C2E) else Color.White
+                                    } else Color.Transparent
+                                )
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    selectedTabIndex = index
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = null,
+                                    tint = if (isSelected) Color(0xFF007AFF) else Color(0xFF8E8E93),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = title,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                                    color = if (isSelected) colors.textMain else Color(0xFF8E8E93)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+
+            // ── 3. DYNAMIC CONTENT PANELS ────────────────────────────────────
+            when (selectedTabIndex) {
+                0 -> {
+                    // TAB 0: PROFILE (PUBLIC IDENTITY, PERSONAL INFO, LOCATION, SOCIALS)
+                    
+                    // A. Public Identity
+                    AppleSettingsGroup(header = "Public Identity") {
+                        AppleSettingsTextFieldRow(
+                            icon = Lucide.User,
+                            label = "Display Name",
+                            value = displayName,
+                            onValueChange = { displayName = it },
+                            placeholder = "Enter your display name",
+                            maxLength = 50,
+                            isError = displayName.trim().isBlank(),
+                            errorMessage = if (displayName.trim().isBlank()) "Name cannot be empty" else null
+                        )
+
+
+                        AppleSettingsTextFieldRow(
+                            icon = Lucide.AtSign,
+                            label = "Username Handle",
+                            value = username,
+                            onValueChange = { username = it.trim().lowercase() },
+                            placeholder = "handle",
+                            prefix = "@",
+                            maxLength = 30,
+                            isError = !isUsernameValid,
+                            errorMessage = if (!isUsernameValid) "Use 3-30 letters, numbers, periods, or underscores" else null,
+                            trailingContent = {
+                                if (isUsernameValid) {
+                                    Icon(
+                                        imageVector = Lucide.Check,
+                                        contentDescription = "Valid",
+                                        tint = Color(0xFF34C759),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        )
+
+
+                        AppleSettingsTextFieldRow(
+                            icon = Lucide.AlignLeft,
+                            label = "Bio / Status",
+                            value = bio,
+                            onValueChange = { bio = it },
+                            placeholder = "Tell the world what you create and explore...",
+                            maxLength = 150,
+                            singleLine = false,
+                            maxLines = 4
+                        )
+
+
+                        AppleSettingNavRow(
+                            icon = Lucide.Briefcase,
+                            title = "Professional Role",
+                            valueText = role,
+                            onClick = {
+                                activePickerSheet = PickerSheetConfig(
+                                    title = "Select Professional Role",
+                                    options = listOf("Developer", "Designer", "Creator", "Photographer", "Video Editor", "Manager", "Student", "Artist", "Other"),
+                                    selected = role,
+                                    onSelect = { role = it }
+                                )
+                            }
+                        )
+                    }
+
+
+                    // B. Personal Information
+                    AppleSettingsGroup(header = "Personal Information") {
+                        val formattedDob = remember(dob) {
+                            if (dob != null && dob != 0L) {
+                                android.text.format.DateFormat.format("dd MMM yyyy", Date(dob!!)).toString()
+                            } else {
+                                "Set Date"
+                            }
+                        }
+
+
+                        AppleSettingNavRow(
+                            icon = Lucide.Calendar,
+                            title = "Date of Birth",
+                            valueText = formattedDob,
+                            onClick = { datePickerDialog.show() }
+                        )
+
+                        AppleSettingDivider()
+
+
+                        AppleSettingNavRow(
+                            icon = Lucide.Users,
+                            title = "Gender",
+                            valueText = gender,
+                            onClick = {
+                                activePickerSheet = PickerSheetConfig(
+                                    title = "Select Gender",
+                                    options = listOf("Male", "Female", "Non-Binary", "Prefer not to say"),
+                                    selected = gender,
+                                    onSelect = { gender = it }
+                                )
+                            }
+                        )
+                    }
+
+
+                    // C. Location & Workplace
+                    AppleSettingsGroup(
+                        header = "Location & Workplace",
+                        footer = "Auto-detect retrieves your current city and country using high-accuracy GPS geocoding."
+                    ) {
+                        AppleSettingNavRow(
+                            icon = Lucide.Building,
+                            title = "Work Setup",
+                            valueText = officeLocation,
+                            onClick = {
+                                activePickerSheet = PickerSheetConfig(
+                                    title = "Select Work Setup",
+                                    options = listOf("Remotely", "Hybrid", "On-site", "Studio"),
+                                    selected = officeLocation,
+                                    onSelect = { officeLocation = it }
+                                )
+                            }
+                        )
+
+                        AppleSettingDivider()
+
+
+                        AppleSettingsTextFieldRow(
+                            icon = Lucide.House,
+                            label = "City / Region",
+                            value = homeLocation,
+                            onValueChange = { homeLocation = it },
+                            placeholder = "e.g. San Francisco, California"
+                        )
+
+
+                        AppleSettingNavRow(
+                            icon = Lucide.Globe,
+                            title = "Country",
+                            valueText = countryLocation,
+                            onClick = {
+                                activePickerSheet = PickerSheetConfig(
+                                    title = "Select Country",
+                                    options = listOf("United States", "India", "United Kingdom", "Canada", "Australia", "Germany", "France", "Japan", "Singapore", "Brazil", "Other"),
+                                    selected = countryLocation,
+                                    onSelect = { countryLocation = it }
+                                )
+                            }
+                        )
+
+                        AppleSettingDivider()
+
+
+                        // 1-Tap Auto Detect Row
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    locationPermissionLauncher.launch(
+                                        arrayOf(
+                                            Manifest.permission.ACCESS_FINE_LOCATION,
+                                            Manifest.permission.ACCESS_COARSE_LOCATION
+                                        )
+                                    )
+                                }
+                                .padding(horizontal = 16.dp, vertical = 11.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Icon(Lucide.Navigation, null, tint = Color(0xFF007AFF), modifier = Modifier.size(18.dp))
+                                Text("Auto-detect Current Location", fontSize = 15.sp, color = Color(0xFF007AFF), fontWeight = FontWeight.Medium)
+                            }
+                            Icon(Lucide.ChevronRight, null, tint = Color(0xFFC7C7CC), modifier = Modifier.size(15.dp))
+                        }
+                    }
+
+
+                    // D. Social Handles & Links
+                    AppleSettingsGroup(header = "Online Profiles & Socials") {
+                        AppleSettingsTextFieldRow(
+                            icon = Lucide.Github,
+                            label = "GitHub",
+                            value = github,
+                            onValueChange = { github = it },
+                            placeholder = "username",
+                            prefix = "github.com/"
+                        )
+
+
+                        AppleSettingsTextFieldRow(
+                            icon = Lucide.Instagram,
+                            label = "Instagram",
+                            value = instagram,
+                            onValueChange = { instagram = it },
+                            placeholder = "username",
+                            prefix = "@"
+                        )
+
+
+                        AppleSettingsTextFieldRow(
+                            icon = Lucide.Link,
+                            label = "Portfolio / Website",
+                            value = website,
+                            onValueChange = { website = it },
+                            placeholder = "https://yourportfolio.com"
+                        )
+                    }
+                }
+
+
+                1 -> {
+                    // TAB 1: MEDIA (COVER BANNERS & 3D AVATARS)
+
+
+                    // A. Cover Banner Management
+                    AppleSettingsGroup(
+                        header = "Cover Banner Presets",
+                        footer = "Select from handcrafted dynamic wave graphics or upload a personalized cover image."
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            // Banner Actions
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                ChromaPillButton(
+                                    onClick = { bannerGalleryLauncher.launch("image/*") },
+                                    variant = ChromaPillVariant.Blue,
+                                    height = 38.dp,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Lucide.Upload, null, tint = Color.White, modifier = Modifier.size(14.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Upload Custom", color = Color.White, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
+                                }
+
+
+                                ChromaPillButton(
+                                    onClick = {
+                                        bannerUrl = ""
+                                        selectedBannerUri = null
+                                        Toast.makeText(context, "Cover banner removed", Toast.LENGTH_SHORT).show()
+                                    },
+                                    variant = ChromaPillVariant.Secondary,
+                                    height = 38.dp,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Lucide.Trash2, null, tint = Color(0xFFFF3B30), modifier = Modifier.size(14.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Remove Banner", color = Color(0xFFFF3B30), fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
+                                }
+                            }
+
+
+                            Text(
+                                text = "VECTOR WAVE PRESETS",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF8E8E93),
+                                letterSpacing = 0.5.sp
+                            )
+
+
+                            val wavePresets = remember { AllBannerPresets.filter { it.id.startsWith("preset:wave_") } }
+                            LazyRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                items(wavePresets) { preset ->
+                                    val isSelected = bannerUrl == preset.id
+                                    Box(
+                                        modifier = Modifier
+                                            .width(130.dp)
+                                            .height(54.dp)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .border(
+                                                width = if (isSelected) 2.5.dp else 0.75.dp,
+                                                color = if (isSelected) Color(0xFF007AFF) else Color.Transparent,
+                                                shape = RoundedCornerShape(10.dp)
+                                            )
+                                            .clickable {
+                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                bannerUrl = preset.id
+                                                selectedBannerUri = null
+                                            }
+                                    ) {
+                                        Image(
+                                            painter = painterResource(id = preset.drawableRes),
+                                            contentDescription = preset.name,
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                        if (isSelected) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .align(Alignment.TopEnd)
+                                                    .padding(4.dp)
+                                                    .size(18.dp)
+                                                    .background(Color(0xFF007AFF), CircleShape),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(Lucide.Check, null, tint = Color.White, modifier = Modifier.size(12.dp))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+
+                    // B. Profile Avatar Catalog
+                    AppleSettingsGroup(
+                        header = "Profile Avatar Catalog",
+                        footer = "Choose a 3D vector character preset or take a quick photo with your camera."
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            // Avatar Actions
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                ChromaPillButton(
+                                    onClick = { galleryLauncher.launch("image/*") },
+                                    variant = ChromaPillVariant.Blue,
+                                    height = 38.dp,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Lucide.Image, null, tint = Color.White, modifier = Modifier.size(14.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("From Photos", color = Color.White, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
+                                }
+
+
+                                ChromaPillButton(
+                                    onClick = {
+                                        if (androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                                            val tmpFile = File(context.cacheDir, "avatar_profile_tmp.jpg")
+                                            val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", tmpFile)
+                                            cameraImageUri = uri
+                                            cameraLauncher.launch(uri)
+                                        } else {
+                                            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                                        }
+                                    },
+                                    variant = ChromaPillVariant.Secondary,
+                                    height = 38.dp,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Lucide.Camera, null, tint = colors.textMain, modifier = Modifier.size(14.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Take Photo", color = colors.textMain, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
+                                }
+                            }
+
+
+                            Text(
+                                text = "3D CHARACTER AVATARS",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF8E8E93),
+                                letterSpacing = 0.5.sp
+                            )
+
+
+                            LazyRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(AllAvatarPresets) { preset ->
+                                    val isSelected = avatarUrl == preset.id
+                                    Box(
+                                        modifier = Modifier
+                                            .size(66.dp)
+                                            .clip(CircleShape)
+                                            .border(
+                                                width = if (isSelected) 3.dp else 0.5.dp,
+                                                color = if (isSelected) Color(0xFF007AFF) else Color.Transparent,
+                                                shape = CircleShape
+                                            )
+                                            .clickable {
+                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                avatarUrl = preset.id
+                                                selectedAvatarUri = null
+                                            }
+                                    ) {
+                                        Image(
+                                            painter = painterResource(id = preset.drawableRes),
+                                            contentDescription = preset.name,
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+
+                2 -> {
+                    // TAB 2: INTERESTS & CONTENT TAGS
+                    AppleSettingsGroup(
+                        header = "Content Categories & Tags",
+                        footer = "Selected tags highlight your work in community feeds and help other creators connect with you."
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            val availableCategories = listOf(
+                                "Creativity & Art", "UI/UX Design", "Coding & Tech", "Vlogging",
+                                "Photography", "Music & Audio", "Video Editing", "Writing",
+                                "Gaming", "Health & Fitness", "Lifestyle", "Finance",
+                                "Education", "3D Design", "AI & ML"
+                            )
+
+
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                availableCategories.forEach { tag ->
+                                    val isSelected = contentTags.contains(tag)
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(
+                                                if (isSelected) Color(0xFF007AFF)
+                                                else if (isDark) Color(0xFF2C2C2E) else Color(0xFFF2F2F7)
+                                            )
+                                            .border(
+                                                width = 0.75.dp,
+                                                color = if (isSelected) Color(0xFF007AFF) else colors.glassBorder,
+                                                shape = RoundedCornerShape(16.dp)
+                                            )
+                                            .clickable {
+                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                contentTags = if (isSelected) {
+                                                    contentTags - tag
+                                                } else {
+                                                    contentTags + tag
+                                                }
+                                            }
+                                            .padding(horizontal = 12.dp, vertical = 7.dp)
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = if (isSelected) Lucide.Check else Lucide.Plus,
+                                                contentDescription = null,
+                                                tint = if (isSelected) Color.White else Color(0xFF8E8E93),
+                                                modifier = Modifier.size(13.dp)
+                                            )
+                                            Text(
+                                                text = tag,
+                                                fontSize = 12.5.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                color = if (isSelected) Color.White else colors.textMain
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+
+                3 -> {
+                    // TAB 3: PRIVACY & DATA VISIBILITY
+                    AppleSettingsGroup(
+                        header = "Account Privacy",
+                        footer = "When your account is private, only followers you approve can view your full profile and creations."
+                    ) {
+                        AppleSettingToggleRow(
+                            icon = Lucide.Lock,
+                            title = "Private Account",
+                            subtitle = "Require approval for new followers",
+                            checked = isPrivateAccount,
+                            onCheckedChange = { isPrivateAccount = it }
+                        )
+                    }
+
+
+                    AppleSettingsGroup(
+                        header = "Data Visibility Controls",
+                        footer = "Choose whether other community members can see your personal information on your profile card."
+                    ) {
+                        val visibilityFields = listOf(
+                            "dob" to ("Date of Birth" to Lucide.Calendar),
+                            "gender" to ("Gender" to Lucide.Users),
+                            "location" to ("Location" to Lucide.MapPin)
+                        )
+
+
+                        visibilityFields.forEachIndexed { idx, (key, pair) ->
+                            val (title, icon) = pair
+                            val currentVis = dataVisibility[key] ?: "public"
+
+
+                            AppleSettingNavRow(
+                                icon = icon,
+                                title = title,
+                                valueText = currentVis.replaceFirstChar { it.uppercase() },
+                                onClick = {
+                                    activePickerSheet = PickerSheetConfig(
+                                        title = "$title Visibility",
+                                        options = listOf("Public", "Followers Only", "Private"),
+                                        selected = currentVis.replaceFirstChar { it.uppercase() },
+                                        onSelect = { selectedText ->
+                                            val mapped = selectedText.lowercase().replace(" ", "_").replace("followers_only", "followers")
+                                            dataVisibility = dataVisibility.toMutableMap().apply { put(key, mapped) }
+                                        }
+                                    )
+                                },
+                            )
+
+                            if (idx < visibilityFields.size - 1) {
+                                AppleSettingDivider()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+
+    // ── MODAL PICKER SHEET ───────────────────────────────────────────────────
+    if (activePickerSheet != null) {
+        val sheetConfig = activePickerSheet!!
+        ModalBottomSheet(
+            onDismissRequest = { activePickerSheet = null },
+            containerColor = if (isDark) Color(0xFF1C1C1E) else Color.White,
+            dragHandle = { BottomSheetDefaults.DragHandle() }
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 36.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Text(
+                    text = sheetConfig.title,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.textMain
+                )
+
+
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth().weight(1f, fill = false),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    items(sheetConfig.options) { option ->
+                        val isSelected = sheetConfig.selected.equals(option, ignoreCase = true)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    sheetConfig.onSelect(option)
+                                    activePickerSheet = null
+                                }
+                                .padding(vertical = 13.dp, horizontal = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = option,
+                                fontSize = 15.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isSelected) Color(0xFF007AFF) else colors.textMain
+                            )
+                            if (isSelected) {
+                                Icon(
+                                    imageVector = Lucide.Check,
+                                    contentDescription = null,
+                                    tint = Color(0xFF007AFF),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                        HorizontalDivider(color = colors.glassBorder, thickness = 0.5.dp)
+                    }
+                }
+            }
+        }
+    }
+
+
+    // ── AVATAR PICKER SHEET ──────────────────────────────────────────────────
+    if (showAvatarDialog) {
+        ModalBottomSheet(
+            onDismissRequest = { showAvatarDialog = false },
+            containerColor = if (isDark) Color(0xFF1C1C1E) else Color.White,
+            dragHandle = { BottomSheetDefaults.DragHandle() }
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 36.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Text(
+                    text = "Profile Avatar",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.textMain
+                )
+                Text(
+                    text = "Take a new photo or select from 3D vector characters",
+                    fontSize = 12.5.sp,
+                    color = Color(0xFF8E8E93)
+                )
+
+
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    ChromaPillButton(
+                        onClick = {
+                            galleryLauncher.launch("image/*")
+                            showAvatarDialog = false
+                        },
+                        variant = ChromaPillVariant.Blue,
+                        height = 42.dp,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Lucide.Image, null, tint = Color.White, modifier = Modifier.size(15.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Gallery", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    }
+
+
+                    ChromaPillButton(
+                        onClick = {
+                            if (androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                                val tmpFile = File(context.cacheDir, "avatar_profile_tmp.jpg")
+                                val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", tmpFile)
+                                cameraImageUri = uri
+                                cameraLauncher.launch(uri)
+                            } else {
+                                cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                            }
+                            showAvatarDialog = false
+                        },
+                        variant = ChromaPillVariant.Secondary,
+                        height = 42.dp,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Lucide.Camera, null, tint = colors.textMain, modifier = Modifier.size(15.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Camera", color = colors.textMain, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+
+
+                Text(
+                    text = "VECTOR CHARACTER PRESETS",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF8E8E93),
+                    letterSpacing = 0.5.sp
+                )
+
+
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    items(AllAvatarPresets) { preset ->
+                        val isSelected = avatarUrl == preset.id
+                        Box(
+                            modifier = Modifier
+                                .size(66.dp)
+                                .clip(CircleShape)
+                                .border(
+                                    width = if (isSelected) 3.dp else 0.5.dp,
+                                    color = if (isSelected) Color(0xFF007AFF) else Color.Transparent,
+                                    shape = CircleShape
+                                )
+                                .clickable {
+                                    avatarUrl = preset.id
+                                    selectedAvatarUri = null
+                                    showAvatarDialog = false
+                                }
+                        ) {
+                            Image(
+                                painter = painterResource(id = preset.drawableRes),
+                                contentDescription = preset.name,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+data class PickerSheetConfig(
+    val title: String,
+    val options: List<String>,
+    val selected: String,
+    val onSelect: (String) -> Unit
+)
+
+
+/**
+ * Authentic Apple Inset Settings Text Field Row with Inline Input
+ */
+@Composable
+fun AppleSettingsTextFieldRow(
+    icon: ImageVector? = null,
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String = "",
+    prefix: String? = null,
+    maxLength: Int? = null,
+    singleLine: Boolean = true,
+    maxLines: Int = 1,
+    isError: Boolean = false,
+    errorMessage: String? = null,
+    trailingContent: @Composable (() -> Unit)? = null,
+    showDivider: Boolean = true
+) {
+    val colors = LocalOscellionColors.current
+    val isDark = isSystemInDarkTheme()
+
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = if (singleLine) 10.dp else 12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = if (singleLine) Alignment.CenterVertically else Alignment.Top,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            if (icon != null) {
+                Box(
+                    modifier = Modifier.padding(top = if (singleLine) 0.dp else 2.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = Color(0xFF007AFF),
+                        modifier = Modifier.size(19.dp)
+                    )
+                }
+            }
+
+
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = label,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = if (isError) Color(0xFFFF3B30) else if (isDark) Color(0xFF8E8E93) else Color(0xFF6D6D72)
+                    )
+                    if (maxLength != null) {
+                        Text(
+                            text = "${value.length}/$maxLength",
+                            fontSize = 11.sp,
+                            color = if (value.length > maxLength) Color(0xFFFF3B30) else Color(0xFF8E8E93),
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+
+
+                Spacer(Modifier.height(3.dp))
+
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (prefix != null) {
+                        Text(
+                            text = prefix,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Normal,
+                            color = Color(0xFF8E8E93),
+                            modifier = Modifier.padding(end = 2.dp)
+                        )
+                    }
+                    BasicTextField(
+                        value = value,
+                        onValueChange = { input ->
+                            if (maxLength == null || input.length <= maxLength) {
+                                onValueChange(input)
+                            }
+                        },
+                        textStyle = TextStyle(
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Normal,
+                            color = if (isDark) Color.White else Color(0xFF000000)
+                        ),
+                        singleLine = singleLine,
+                        maxLines = maxLines,
+                        cursorBrush = SolidColor(Color(0xFF007AFF)),
+                        modifier = Modifier.weight(1f),
+                        decorationBox = { innerTextField ->
+                            if (value.isEmpty() && placeholder.isNotEmpty()) {
+                                Text(
+                                    text = placeholder,
+                                    fontSize = 15.sp,
+                                    color = Color(0xFF8E8E93).copy(alpha = 0.6f)
+                                )
+                            }
+                            innerTextField()
+                        }
+                    )
+                    if (trailingContent != null) {
+                        trailingContent()
+                    }
+                }
+
+
+                if (!errorMessage.isNullOrBlank()) {
+                    Spacer(Modifier.height(3.dp))
+                    Text(
+                        text = errorMessage,
+                        fontSize = 11.sp,
+                        color = Color(0xFFFF3B30)
+                    )
+                }
+            }
+        }
+    }
+    if (showDivider) {
+        AppleSettingDivider(paddingStart = if (icon != null) 47.dp else 16.dp)
+    }
+}
+
+
+suspend fun uploadBannerToSupabase(uid: String, imageBytes: ByteArray): String? {
+    return try {
+        val compressedBytes = com.chroma.studio.utils.ImageUtils.compressAvatarBytesForSupabase(imageBytes) ?: imageBytes
+        val bucket = SupabaseClient.client.storage["banner"]
+        val path = "$uid/banner.jpg"
+        bucket.upload(path, compressedBytes, upsert = true)
+        bucket.publicUrl(path)
+    } catch (e: Exception) {
+        android.util.Log.e("BannerUpload", "Upload failed", e)
+        null
+    }
+}

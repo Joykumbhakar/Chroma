@@ -1461,17 +1461,7 @@ class HomeActivity : ComponentActivity() {
                                     profile = profile!!,
                                     works = works,
                                     onSave = { updatedProfile ->
-                                        kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.Main) {
-                                            try {
-                                                com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                                                    .collection("users")
-                                                    .document(updatedProfile.uid)
-                                                    .set(updatedProfile)
-                                                    .await()
-                                            } catch (e: Exception) {
-                                                android.util.Log.e("HomeActivity", "Error updating profile", e)
-                                            }
-                                        }
+                                        discoverVm.updateUserProfile(updatedProfile)
                                     },
                                     onBack = { navController.popBackStack() }
                                 )

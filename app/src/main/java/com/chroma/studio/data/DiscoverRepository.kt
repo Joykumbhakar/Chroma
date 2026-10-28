@@ -11,6 +11,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import android.util.Log
+import android.net.Uri
 
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.SetOptions
@@ -789,6 +790,107 @@ class DiscoverRepository {
             if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("DiscoverRepository", "Error registering detailed user", e)
             false
+        }
+    }
+
+    suspend fun updateUserProfile(updatedProfile: UserProfile): Result<Unit> {
+        return try {
+            val uid = updatedProfile.uid.ifBlank { auth.currentUser?.uid }
+                ?: return Result.failure(IllegalStateException("User is not authenticated"))
+
+            val cleanUsername = updatedProfile.username.trim().lowercase()
+            val cleanDisplayName = updatedProfile.displayName.trim()
+
+            if (cleanDisplayName.isBlank()) {
+                return Result.failure(IllegalArgumentException("Display name cannot be empty"))
+            }
+
+            if (cleanUsername.length < 3 || cleanUsername.length > 30) {
+                return Result.failure(IllegalArgumentException("Username must be between 3 and 30 characters"))
+            }
+
+            if (!cleanUsername.matches(Regex("^[a-z0-9._]+$"))) {
+                return Result.failure(IllegalArgumentException("Username can only contain lowercase letters, numbers, periods, and underscores"))
+            }
+
+            // Fetch current profile to check if username changed
+            val currentProfile = getUserProfile(uid)
+            val oldUsername = currentProfile?.username?.trim()?.lowercase()
+            val usernameChanged = oldUsername != null && oldUsername != cleanUsername
+
+            val now = System.currentTimeMillis()
+
+            db.runTransaction { transaction ->
+                val userRef = usersCollection.document(uid)
+
+                if (usernameChanged) {
+                    val newUsernameRef = usernamesCollection.document(cleanUsername)
+                    val newUsernameDoc = transaction.get(newUsernameRef)
+                    if (newUsernameDoc.exists() && newUsernameDoc.getString("uid") != uid) {
+                        throw IllegalArgumentException("Username @$cleanUsername is already taken")
+                    }
+
+                    // Reserve new username in usernamesCollection index
+                    transaction.set(newUsernameRef, mapOf("uid" to uid, "updatedAt" to now))
+
+                    // Free old username
+                    if (!oldUsername.isNullOrBlank()) {
+                        val oldUsernameRef = usernamesCollection.document(oldUsername)
+                        transaction.delete(oldUsernameRef)
+                    }
+                } else if (cleanUsername.isNotBlank()) {
+                    // Ensure current username document is indexed in usernamesCollection
+                    val usernameRef = usernamesCollection.document(cleanUsername)
+                    transaction.set(usernameRef, mapOf("uid" to uid, "updatedAt" to now), SetOptions.merge())
+                }
+
+                // Prepare safe update map (merging into user doc without clobbering createdAt, counters, verified, etc.)
+                val updates = mutableMapOf<String, Any?>(
+                    "uid" to uid,
+                    "displayName" to cleanDisplayName,
+                    "username" to cleanUsername,
+                    "avatarUrl" to updatedProfile.avatarUrl.trim(),
+                    "bannerUrl" to updatedProfile.bannerUrl.trim(),
+                    "bannerWorkId" to updatedProfile.bannerWorkId,
+                    "bio" to updatedProfile.bio.trim(),
+                    "role" to updatedProfile.role.trim(),
+                    "dob" to updatedProfile.dob,
+                    "dateOfBirth" to updatedProfile.dob,
+                    "gender" to updatedProfile.gender,
+                    "contentTags" to updatedProfile.contentTags,
+                    "dataVisibility" to updatedProfile.dataVisibility,
+                    "socialLinks" to updatedProfile.socialLinks,
+                    "location" to updatedProfile.location.trim(),
+                    "officeLocation" to updatedProfile.officeLocation.trim(),
+                    "homeLocation" to updatedProfile.homeLocation.trim(),
+                    "countryLocation" to updatedProfile.countryLocation.trim(),
+                    "isPrivateAccount" to updatedProfile.isPrivateAccount,
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+
+                transaction.set(userRef, updates, SetOptions.merge())
+            }.await()
+
+            // Synchronize Firebase Auth User Profile
+            try {
+                val firebaseUser = auth.currentUser
+                if (firebaseUser != null && firebaseUser.uid == uid) {
+                    val builder = com.google.firebase.auth.UserProfileChangeRequest.Builder()
+                        .setDisplayName(cleanDisplayName)
+                    if (updatedProfile.avatarUrl.isNotBlank() && !updatedProfile.avatarUrl.startsWith("preset:")) {
+                        builder.setPhotoUri(Uri.parse(updatedProfile.avatarUrl.trim()))
+                    }
+                    firebaseUser.updateProfile(builder.build()).await()
+                }
+            } catch (e: Exception) {
+                Log.w("DiscoverRepository", "Non-fatal error updating FirebaseAuth profile: ${e.message}")
+            }
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("DiscoverRepository", "Error updating user profile", e)
+            Result.failure(e)
         }
     }
 
