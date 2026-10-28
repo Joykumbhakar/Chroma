@@ -37,75 +37,35 @@ fun LiquidGlassKnob(
     modifier: Modifier = Modifier,
     isToggleKnob: Boolean = false
 ) {
-    val knobShape = RoundedCornerShape(50.dp)
+    val knobShape = RoundedCornerShape(100.dp)
+    val isDark = isSystemInDarkTheme()
     Box(
         modifier = modifier
             .size(width, height)
             .scale(scale)
-            .shadow(
-                elevation = if (isToggleKnob) 1.5.dp else 2.dp,
-                shape = knobShape,
-                spotColor = Color.Black.copy(alpha = if (isToggleKnob) 0.12f else 0.20f),
-                ambientColor = Color.Black.copy(alpha = 0.08f)
-            )
             .clip(knobShape)
             .then(if (hazeState != null) Modifier.hazeChild(state = hazeState, shape = knobShape) else Modifier)
-            .background(
-                if (isToggleKnob) {
-                    Color.White.copy(alpha = baseAlpha.coerceIn(0.10f, 0.95f))
-                } else {
-                    Color.White.copy(alpha = baseAlpha.coerceAtLeast(0.90f))
-                }
-            )
+            .background(Color.White)
             .border(
                 0.5.dp,
-                if (isToggleKnob) Color.White.copy(alpha = 0.35f) else Color.Black.copy(alpha = 0.10f),
+                if (isDark) Color.White.copy(alpha = 0.20f) else Color.Black.copy(alpha = 0.08f),
                 knobShape
             )
     ) {
-        // Inset specular glow layer: inset 0 1px 2px rgba(255, 255, 255, 0.8)
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .border(
-                    width = 1.dp,
-                    brush = Brush.verticalGradient(
-                        0.0f to Color.White.copy(alpha = 0.95f),
-                        0.4f to Color.White.copy(alpha = 0.40f),
-                        1.0f to Color.Black.copy(alpha = 0.10f)
-                    ),
-                    shape = knobShape
-                )
-        )
-
-        // Top curved glossy reflection: height 48%, border-radius: 12px 12px 28px 28px / 10px 10px 6px 6px
+        // Pristine Apple hairline top specular highlight
         Box(
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .padding(start = 2.dp, end = 2.dp, top = 1.dp)
+                .padding(horizontal = 2.dp, vertical = 0.5.dp)
                 .fillMaxWidth()
-                .fillMaxHeight(0.48f)
-                .clip(RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp, bottomStart = 6.dp, bottomEnd = 6.dp))
+                .height(1.dp)
                 .background(
-                    Brush.verticalGradient(
-                        0.0f to Color.White.copy(alpha = 0.95f),
-                        1.0f to Color.White.copy(alpha = 0.10f)
-                    )
-                )
-        )
-
-        // Bottom ambient light rim: height 35%, border-radius: 28px 28px 12px 12px / 6px 6px 10px 10px
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(start = 2.dp, end = 2.dp, bottom = 1.dp)
-                .fillMaxWidth()
-                .fillMaxHeight(0.35f)
-                .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp, bottomStart = 10.dp, bottomEnd = 10.dp))
-                .background(
-                    Brush.verticalGradient(
-                        0.0f to Color.Transparent,
-                        1.0f to Color.White.copy(alpha = 0.85f)
+                    Brush.horizontalGradient(
+                        listOf(
+                            Color.White.copy(alpha = 0.2f),
+                            Color.White.copy(alpha = 0.85f),
+                            Color.White.copy(alpha = 0.2f)
+                        )
                     )
                 )
         )
@@ -123,39 +83,38 @@ fun AppleSwitch(
 ) {
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     var isPressed by remember { mutableStateOf(false) }
+    val isDark = isSystemInDarkTheme()
     val trackColor by animateColorAsState(
         if (checked) activeTrackColor else inactiveTrackColor,
-        animationSpec = androidx.compose.animation.core.tween(300),
+        animationSpec = androidx.compose.animation.core.tween(250),
         label = "trackColor"
     )
 
-    // Exact CSS dimensions & translations:
-    // .toggle-wrapper: 44px x 22px
-    // .toggle-knob: top 2px, left 2px, width 24px (28px on active), height 18px
-    // unchecked: translateX(0)
-    // unchecked + active: translateX(-3px), scale(1.26), width 28px
-    // checked: translateX(16px) -> knob starts at 2px + 16px = 18px
-    // checked + active: translateX(15px), scale(1.26), width 28px
-    val targetTranslation = if (!checked && isPressed) -1f
-                            else if (!checked) 2f
-                            else if (checked && isPressed) 15f
-                            else 18f
+    // Authentic iOS UISwitch proportions:
+    // Track: 46dp width x 26dp height (pill shape)
+    // Knob: 22dp height x 22dp width (when pressed stretches to 26dp with fluid Apple spring)
+    // Inactive: X = 2dp
+    // Active (checked): X = 22dp (46 - 22 - 2)
+    val targetTranslation = when {
+        !checked && isPressed -> 2f
+        !checked -> 2f
+        checked && isPressed -> 18f
+        else -> 22f
+    }
 
-    val targetWidth = if (isPressed) 28.dp else 24.dp
-    val targetScale = if (isPressed) 1.26f else 1.0f
+    val targetWidth = if (isPressed) 26.dp else 22.dp
 
-    val jellySpring = androidx.compose.animation.core.spring<Float>(dampingRatio = 0.42f, stiffness = 550f)
-    val jellySpringDp = androidx.compose.animation.core.spring<androidx.compose.ui.unit.Dp>(dampingRatio = 0.42f, stiffness = 550f)
+    val jellySpring = androidx.compose.animation.core.spring<Float>(dampingRatio = 0.65f, stiffness = 600f)
+    val jellySpringDp = androidx.compose.animation.core.spring<androidx.compose.ui.unit.Dp>(dampingRatio = 0.65f, stiffness = 600f)
 
     val thumbTranslationX by animateFloatAsState(targetTranslation, animationSpec = jellySpring, label = "tx")
     val thumbWidth by animateDpAsState(targetWidth, animationSpec = jellySpringDp, label = "tw")
-    val thumbScale by animateFloatAsState(targetScale, animationSpec = jellySpring, label = "ts")
 
     Box(
         modifier = modifier
             .minimumInteractiveComponentSize()
-            .width(44.dp)
-            .height(22.dp)
+            .width(46.dp)
+            .height(26.dp)
             .pointerInput(checked) {
                 detectTapGestures(
                     onPress = {
@@ -170,44 +129,33 @@ fun AppleSwitch(
                 )
             }
     ) {
-        // Track: 44x22 rounded pill with inset shadow
+        // Track: Clean Apple flat pill, zero shadows
+        val trackShape = RoundedCornerShape(100.dp)
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .clip(RoundedCornerShape(100.dp))
+                .clip(trackShape)
                 .background(trackColor)
                 .border(
                     0.5.dp,
-                    if (checked) Color(0x33000000) else Color(0x14000000),
-                    RoundedCornerShape(100.dp)
+                    if (checked) Color(0x1F000000) else if (isDark) Color(0x33FFFFFF) else Color(0x18000000),
+                    trackShape
                 )
-        ) {
-            // Inset top shadow: inset 0 2px 5px rgba(0, 0, 0, 0.15)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(4.dp)
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(Color.Black.copy(alpha = if (checked) 0.18f else 0.12f), Color.Transparent)
-                        )
-                    )
-            )
-        }
+        )
 
-        // Knob: 24x18 (28x18 active), top: 2px, left offset: thumbTranslationX
+        // Knob: Clean white Apple knob, zero shadows
         Box(
             modifier = Modifier
                 .align(Alignment.CenterStart)
-                .padding(top = 2.dp, bottom = 2.dp)
+                .padding(vertical = 2.dp)
                 .offset(x = thumbTranslationX.dp)
-                .size(width = thumbWidth, height = 18.dp)
+                .size(width = thumbWidth, height = 22.dp)
         ) {
             LiquidGlassKnob(
                 width = thumbWidth,
-                height = 18.dp,
-                scale = thumbScale,
-                baseAlpha = 0.90f,
+                height = 22.dp,
+                scale = 1.0f,
+                baseAlpha = 1.0f,
                 isToggleKnob = true,
                 hazeState = hazeState
             )
@@ -225,7 +173,7 @@ fun AppleSlider(
     steps: Int = 0,
     hazeState: dev.chrisbanes.haze.HazeState? = null,
     gradientColors: List<Color>? = null,
-    trackHeight: Dp = 6.dp
+    trackHeight: Dp = 4.dp
 ) {
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -240,21 +188,16 @@ fun AppleSlider(
         }
     }
 
-    // Exact CSS dimensions: 24px normal, 28px active, scale 1.15
-    val thumbWidth by animateDpAsState(
-        targetValue = if (isInteracting) 28.dp else 24.dp,
-        animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.5f, stiffness = 600f),
-        label = "tw"
-    )
+    // Authentic iOS UISlider: 24dp circular white thumb, smooth slight scale on drag
     val thumbScale by animateFloatAsState(
-        targetValue = if (isInteracting) 1.15f else 1.0f,
-        animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.5f, stiffness = 600f),
+        targetValue = if (isInteracting) 1.08f else 1.0f,
+        animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.65f, stiffness = 600f),
         label = "ts"
     )
 
     val isDark = isSystemInDarkTheme()
     val inactiveTrackColor = if (isDark) Color(0xFF39393D) else Color(0xFFE5E5EA)
-    val activeGrad = gradientColors ?: listOf(Color(0xFF0A84FF), Color(0xFF0071E3))
+    val activeGrad = gradientColors ?: listOf(Color(0xFF007AFF), Color(0xFF0A84FF))
 
     Slider(
         value = value.coerceIn(valueRange.start, valueRange.endInclusive),
@@ -264,7 +207,7 @@ fun AppleSlider(
         interactionSource = interactionSource,
         modifier = modifier
             .fillMaxWidth()
-            .height(24.dp),
+            .height(26.dp),
         colors = SliderDefaults.colors(
             activeTrackColor = Color.Transparent,
             inactiveTrackColor = Color.Transparent,
@@ -283,20 +226,8 @@ fun AppleSlider(
                     .height(trackHeight)
                     .clip(trackShape)
                     .background(inactiveTrackColor)
-                    .border(0.5.dp, Color.Black.copy(alpha = if (isDark) 0.15f else 0.05f), trackShape)
+                    .border(0.5.dp, if (isDark) Color(0x22FFFFFF) else Color(0x10000000), trackShape)
             ) {
-                // Inset track shadow: inset 0 2px 5px rgba(0, 0, 0, 0.15)
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(2.5.dp)
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(Color.Black.copy(alpha = 0.15f), Color.Transparent)
-                            )
-                        )
-                )
-
                 if (fraction > 0.001f) {
                     Box(
                         modifier = Modifier
@@ -310,10 +241,10 @@ fun AppleSlider(
         },
         thumb = {
             LiquidGlassKnob(
-                width = thumbWidth,
-                height = 18.dp,
+                width = 24.dp,
+                height = 24.dp,
                 scale = thumbScale,
-                baseAlpha = 0.90f,
+                baseAlpha = 1.0f,
                 isToggleKnob = false,
                 hazeState = hazeState
             )
@@ -338,10 +269,10 @@ fun AppleJellySlider(
     val isActive = isPressed || isDragged
 
     val scale by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (isActive) 1.25f else 1.0f,
+        targetValue = if (isActive) 1.08f else 1.0f,
         animationSpec = androidx.compose.animation.core.spring(
-            dampingRatio = 0.4f, // bouncy jelly effect
-            stiffness = 500f
+            dampingRatio = 0.65f,
+            stiffness = 600f
         ),
         label = "sliderThumbScale"
     )
@@ -360,40 +291,39 @@ fun AppleJellySlider(
         ),
         track = { sliderState ->
             val fraction = (sliderState.value - sliderState.valueRange.start) / (sliderState.valueRange.endInclusive - sliderState.valueRange.start)
+            val trackShape = androidx.compose.foundation.shape.RoundedCornerShape(100.dp)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(5.dp)
-                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(50))
+                    .height(4.dp)
+                    .clip(trackShape)
                     .background(inactiveColor)
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxHeight()
                         .fillMaxWidth(fraction = fraction.coerceIn(0f, 1f))
+                        .clip(trackShape)
                         .background(activeColor)
                 )
             }
         },
         thumb = {
             val thumbWidth = 24.dp
-            val thumbHeight = 20.dp
+            val thumbHeight = 24.dp
+            val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+            val knobShape = androidx.compose.foundation.shape.RoundedCornerShape(100.dp)
             
             Box(
                 modifier = Modifier
                     .size(width = thumbWidth, height = thumbHeight)
                     .scale(scale)
-                    .shadow(
-                        elevation = 3.dp,
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(50),
-                        spotColor = Color.Black.copy(alpha = 0.25f),
-                        ambientColor = Color.Black.copy(alpha = 0.1f)
-                    )
-                    .background(Color.White, shape = androidx.compose.foundation.shape.RoundedCornerShape(50))
+                    .clip(knobShape)
+                    .background(Color.White)
                     .border(
                         width = 0.5.dp, 
-                        color = Color.Black.copy(alpha = 0.15f), 
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(50)
+                        color = if (isDark) Color.White.copy(alpha = 0.20f) else Color.Black.copy(alpha = 0.08f), 
+                        shape = knobShape
                     )
             )
         }
