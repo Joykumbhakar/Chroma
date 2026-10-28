@@ -26,6 +26,7 @@ import com.chroma.studio.data.DraftPostRepository
 import com.chroma.studio.data.WorkRepository
 import com.chroma.studio.model.CreatorPostDraft
 import com.chroma.studio.ui.components.CanvasPreview
+import com.chroma.studio.ui.components.IosAlertDialog
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.composables.icons.lucide.*
 import java.text.SimpleDateFormat
@@ -164,35 +165,19 @@ fun DraftsListScreen(
                 }
             }
 
-            // Confirmation Dialog for deleting draft
+            // Confirmation Dialog for deleting draft (Apple HIG Style)
             draftToDelete?.let { draft ->
-                AlertDialog(
-                    onDismissRequest = { draftToDelete = null },
-                    title = {
-                        Text("Delete Draft?", color = colors.textMain, fontWeight = FontWeight.Bold)
+                IosAlertDialog(
+                    title = "Delete Draft?",
+                    message = "Are you sure you want to delete '${draft.title.ifBlank { "Untitled Draft" }}'? This cannot be undone.",
+                    confirmText = "Delete",
+                    isDestructive = true,
+                    onConfirm = {
+                        actualDraftRepo.deleteDraft(draft.id)
+                        draftToDelete = null
                     },
-                    text = {
-                        Text(
-                            "Are you sure you want to delete '${draft.title.ifBlank { "Untitled Draft" }}'? This cannot be undone.",
-                            color = colors.textMuted
-                        )
-                    },
-                    confirmButton = {
-                        TextButton(
-                            onClick = {
-                                actualDraftRepo.deleteDraft(draft.id)
-                                draftToDelete = null
-                            }
-                        ) {
-                            Text("Delete", color = Color(0xFFEF4444), fontWeight = FontWeight.Bold)
-                        }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { draftToDelete = null }) {
-                            Text("Cancel", color = colors.textMuted)
-                        }
-                    },
-                    containerColor = if (colors.isDark) Color(0xFF1E293B) else Color.White
+                    dismissText = "Cancel",
+                    onDismiss = { draftToDelete = null }
                 )
             }
         }

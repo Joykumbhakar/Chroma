@@ -114,6 +114,7 @@ fun CustomSharedGalleryModal(
     var itemForForward by remember { mutableStateOf<List<SharedMediaItem>?>(null) }
     var itemForEdit by remember { mutableStateOf<SharedMediaItem?>(null) }
     var editingTitle by remember { mutableStateOf("") }
+    var showDeleteSelectedConfirm by remember { mutableStateOf(false) }
 
     // Audio Playback Simulation State
     var activeAudioPlayingId by remember { mutableStateOf<String?>(null) }
@@ -1103,9 +1104,7 @@ fun CustomSharedGalleryModal(
                         modifier = Modifier
                             .clickable {
                                 SoundManager.playReaction()
-                                sharedItems = sharedItems.filter { it.id !in selectedItemIds }
-                                onToast("${selectedItemIds.size} items removed")
-                                selectedItemIds.clear()
+                                showDeleteSelectedConfirm = true
                             }
                             .padding(4.dp)
                     ) {
@@ -1463,6 +1462,33 @@ fun CustomSharedGalleryModal(
                     }
                 }
             }
+        }
+
+        // Delete Selected Media Confirmation Dialog (Apple HIG Style)
+        if (showDeleteSelectedConfirm) {
+            val count = selectedItemIds.size
+            IosAlertDialog(
+                title = "Delete ${if (count == 1) "Item" else "$count Items"}?",
+                message = "Are you sure you want to delete the selected ${if (count == 1) "item" else "items"} from this shared gallery?",
+                actions = listOf(
+                    IosAlertAction(
+                        title = "Cancel",
+                        isCancel = true,
+                        onClick = { showDeleteSelectedConfirm = false }
+                    ),
+                    IosAlertAction(
+                        title = "Delete",
+                        isDestructive = true,
+                        onClick = {
+                            showDeleteSelectedConfirm = false
+                            sharedItems = sharedItems.filter { it.id !in selectedItemIds }
+                            onToast(if (count == 1) "1 item removed" else "$count items removed")
+                            selectedItemIds.clear()
+                        }
+                    )
+                ),
+                onDismiss = { showDeleteSelectedConfirm = false }
+            )
         }
     }
 }

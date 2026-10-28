@@ -42,6 +42,7 @@ import com.chroma.studio.ui.components.GlassDialog
 import com.chroma.studio.ui.components.GlassIconButton
 import com.chroma.studio.ui.components.GlassTextButton
 import com.chroma.studio.ui.components.LiquidGlassSecondaryButton
+import com.chroma.studio.ui.components.IosAlertDialog
 import com.chroma.studio.ui.components.OscellionLoadingSpinner
 import com.chroma.studio.ui.components.AppleFlashGraphic
 import com.chroma.studio.ui.components.ToastManager
@@ -110,6 +111,7 @@ fun FlashFeedScreen(
 
     // Drafts bottom sheet
     var showDraftSheet by remember { mutableStateOf(false) }
+    var draftToDelete by remember { mutableStateOf<FlashDraft?>(null) }
 
     // Global mute state
     var isMuted by remember { mutableStateOf(false) }
@@ -321,11 +323,29 @@ fun FlashFeedScreen(
                     DraftItem(
                         draft = draft,
                         onResume = { showDraftSheet = false; onNavigateToFlashPicker() },
-                        onDelete = { flashVm.deleteDraft(draft.id) }
+                        onDelete = { draftToDelete = draft }
                     )
                 }
             }
         }
+    }
+
+    if (draftToDelete != null) {
+        val draft = draftToDelete!!
+        IosAlertDialog(
+            title = "Delete Draft?",
+            message = "Are you sure you want to delete this Flash video draft? This action cannot be undone.",
+            confirmText = "Delete",
+            isDestructive = true,
+            onConfirm = {
+                val toDelete = draft
+                draftToDelete = null
+                flashVm.deleteDraft(toDelete.id)
+                ToastManager.showToast("Draft deleted")
+            },
+            dismissText = "Cancel",
+            onDismiss = { draftToDelete = null }
+        )
     }
 }
 
@@ -964,56 +984,26 @@ private fun FlashVideoItem(
             )
         }
 
-        // Delete confirmation dialog
+        // Delete confirmation dialog (Apple HIG Style)
         if (showDeleteConfirmDialog) {
-            GlassDialog(
-                onDismissRequest = { showDeleteConfirmDialog = false }
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(24.dp)
-                ) {
-                    Text(
-                        text = "Delete Flash Video?",
-                        color = colors.textMain,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 20.sp
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        text = "Are you sure you want to permanently delete this Flash video? This action cannot be undone.",
-                        color = colors.textMuted,
-                        fontSize = 14.sp
-                    )
-                    Spacer(Modifier.height(24.dp))
-                    Row(
-                        horizontalArrangement = Arrangement.End,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        LiquidGlassSecondaryButton(
-                            text = "Cancel",
-                            onClick = { showDeleteConfirmDialog = false },
-                            isSmall = true
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        GlassTextButton(
-                            onClick = {
-                                showDeleteConfirmDialog = false
-                                flashVm.deleteFlash(video.id) { success ->
-                                    if (success) {
-                                        ToastManager.showToast("Flash video deleted")
-                                    } else {
-                                        ToastManager.showToast("Failed to delete video")
-                                    }
-                                }
-                            }
-                        ) {
-                            Text("Delete", color = Color(0xFFFF3B30), fontWeight = FontWeight.Bold)
+            IosAlertDialog(
+                title = "Delete Flash Video?",
+                message = "Are you sure you want to permanently delete this Flash video? This action cannot be undone.",
+                confirmText = "Delete",
+                isDestructive = true,
+                onConfirm = {
+                    showDeleteConfirmDialog = false
+                    flashVm.deleteFlash(video.id) { success ->
+                        if (success) {
+                            ToastManager.showToast("Flash video deleted")
+                        } else {
+                            ToastManager.showToast("Failed to delete video")
                         }
                     }
-                }
-            }
+                },
+                dismissText = "Cancel",
+                onDismiss = { showDeleteConfirmDialog = false }
+            )
         }
     }
 }
@@ -1374,6 +1364,7 @@ fun FlashCommentsSheet(
     var replyingToComment by remember { mutableStateOf<FlashComment?>(null) }
     val expandedThreads = remember { mutableStateMapOf<String, Boolean>() }
     var sortMenuExpanded by remember { mutableStateOf(false) }
+    var commentPendingDelete by remember { mutableStateOf<FlashComment?>(null) }
     val currentUserId = remember { FirebaseAuth.getInstance().currentUser?.uid }
     val focusRequester = remember { FocusRequester() }
 
@@ -1587,7 +1578,7 @@ fun FlashCommentsSheet(
                             onToggleDislike = { commentVm.toggleDislike(it) },
                             onToggleHeart = { commentVm.toggleCreatorHeart(it) },
                             onTogglePin = { commentVm.togglePin(it, video.id) },
-                            onDelete = { commentVm.deleteComment(it) },
+                            onDelete = { commentPendingDelete = it },
                             onRetry = { commentVm.retryComment(it) }
                         )
 
@@ -1737,6 +1728,24 @@ fun FlashCommentsSheet(
                 }
             }
         }
+    }
+
+    if (commentPendingDelete != null) {
+        val comment = commentPendingDelete!!
+        IosAlertDialog(
+            title = "Delete Comment?",
+            message = "Are you sure you want to delete this comment? This action cannot be undone.",
+            confirmText = "Delete",
+            isDestructive = true,
+            onConfirm = {
+                val toDelete = comment
+                commentPendingDelete = null
+                commentVm.deleteComment(toDelete)
+                ToastManager.showToast("Comment deleted")
+            },
+            dismissText = "Cancel",
+            onDismiss = { commentPendingDelete = null }
+        )
     }
 }
 

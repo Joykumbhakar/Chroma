@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.chroma.studio.ui.components.LiquidGlassSecondaryButton
+import com.chroma.studio.ui.components.IosAlertDialog
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.chroma.studio.R
@@ -760,32 +761,21 @@ fun StoryViewerScreen(
                 )
             }
 
-            // ── Delete Confirmation Dialog ────────────────────────────────────────────
+            // ── Delete Confirmation Dialog (Apple HIG Style) ──────────────────────────
             if (showDeleteConfirm && currentStory != null) {
-                AlertDialog(
-                    onDismissRequest = { showDeleteConfirm = false },
-                    title = { Text("Delete Story?", fontWeight = FontWeight.Bold) },
-                    text = { Text("This will permanently remove this story for all viewers.") },
-                    confirmButton = {
-                        TextButton(
-                            onClick = {
-                                storyViewModel.deleteStory(currentStory.id)
-                                showDeleteConfirm = false
-                                ToastManager.showToast("Story deleted")
-                                onClose()
-                            }
-                        ) {
-                            Text("Delete", color = Color(0xFFFF3B30), fontWeight = FontWeight.Bold)
-                        }
+                IosAlertDialog(
+                    title = "Delete Story?",
+                    message = "This will permanently remove this story for all viewers.",
+                    confirmText = "Delete",
+                    isDestructive = true,
+                    onConfirm = {
+                        storyViewModel.deleteStory(currentStory.id)
+                        showDeleteConfirm = false
+                        ToastManager.showToast("Story deleted")
+                        onClose()
                     },
-                    dismissButton = {
-                        LiquidGlassSecondaryButton(
-                            text = "Cancel",
-                            onClick = { showDeleteConfirm = false },
-                            isSmall = true
-                        )
-                    },
-                    shape = RoundedCornerShape(18.dp)
+                    dismissText = "Cancel",
+                    onDismiss = { showDeleteConfirm = false }
                 )
             }
 

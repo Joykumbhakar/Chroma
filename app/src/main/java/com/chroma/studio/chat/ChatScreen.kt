@@ -1519,6 +1519,8 @@ private fun ChatScreenContent(
 
     var messagePendingDelete by remember { mutableStateOf<ChatMessage?>(null) }
 
+    var showDeleteSelectedMessagesConfirm by remember { mutableStateOf(false) }
+
 
 
     val shouldHideBottomNav = isInsideChat ||
@@ -3007,19 +3009,7 @@ private fun ChatScreenContent(
 
                                     SoundManager.playReaction()
 
-                                    val idsToDelete = selectedMessageIds.toList()
-                                    chats = chats.map { c ->
-                                        if (c.id == activeChatId) {
-                                            c.copy(messages = c.messages.filter { it.id !in idsToDelete })
-                                        } else c
-                                    }
-                                    if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
-                                        idsToDelete.forEach { id ->
-                                            chatViewModel.deleteMessage(id, activeChatId)
-                                        }
-                                    }
-                                    showToast(if (idsToDelete.size == 1) "Message deleted" else "${idsToDelete.size} messages deleted")
-                                    selectedMessageIds.clear()
+                                    showDeleteSelectedMessagesConfirm = true
 
                                 }) {
 
@@ -3947,6 +3937,43 @@ private fun ChatScreenContent(
                     showToast("Message deleted for everyone")
                 },
                 onDismiss = { messagePendingDelete = null }
+            )
+        }
+
+        // Delete Multiple Selected Messages Confirmation Dialog (Apple HIG Style)
+        if (showDeleteSelectedMessagesConfirm) {
+            val count = selectedMessageIds.size
+            IosAlertDialog(
+                title = "Delete ${if (count == 1) "Message" else "$count Messages"}?",
+                message = "Are you sure you want to delete the selected ${if (count == 1) "message" else "messages"}?",
+                actions = listOf(
+                    IosAlertAction(
+                        title = "Cancel",
+                        isCancel = true,
+                        onClick = { showDeleteSelectedMessagesConfirm = false }
+                    ),
+                    IosAlertAction(
+                        title = "Delete",
+                        isDestructive = true,
+                        onClick = {
+                            showDeleteSelectedMessagesConfirm = false
+                            val idsToDelete = selectedMessageIds.toList()
+                            chats = chats.map { c ->
+                                if (c.id == activeChatId) {
+                                    c.copy(messages = c.messages.filter { it.id !in idsToDelete })
+                                } else c
+                            }
+                            if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
+                                idsToDelete.forEach { id ->
+                                    chatViewModel.deleteMessage(id, activeChatId)
+                                }
+                            }
+                            showToast(if (idsToDelete.size == 1) "Message deleted" else "${idsToDelete.size} messages deleted")
+                            selectedMessageIds.clear()
+                        }
+                    )
+                ),
+                onDismiss = { showDeleteSelectedMessagesConfirm = false }
             )
         }
 

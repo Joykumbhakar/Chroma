@@ -236,6 +236,8 @@ fun HomeScreen(
     var showViewModeSheet by remember { mutableStateOf(false) }
     var backgroundWorkToConfirm by remember { mutableStateOf<ChromaWork?>(null) }
     var showResetBgConfirm by remember { mutableStateOf(false) }
+    var workPendingDelete by remember { mutableStateOf<ChromaWork?>(null) }
+    var showDeleteSelectedConfirm by remember { mutableStateOf(false) }
 
     if (showLoginScreen) {
         LoginScreen(
@@ -824,7 +826,7 @@ fun HomeScreen(
                                             .size(36.dp)
                                             .clip(CircleShape)
                                             .background(Color(0xFFFF3B30))
-                                            .clickable { onDeleteSelected() },
+                                            .clickable { showDeleteSelectedConfirm = true },
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
@@ -957,7 +959,7 @@ fun HomeScreen(
                                 onLongClick = { onToggleSelection(work.id) },
                                 onRename = { name, desc -> onRenameWork(work.id, name, desc) },
                                 onDuplicate = { onDuplicateWork(work) },
-                                onSoftDelete = { onSoftDelete(work.id) },
+                                onSoftDelete = { workPendingDelete = work },
                                 onSetAsBackground = { backgroundWorkToConfirm = work },
                                 isCurrentHomeBg = (customHomeBgLayersJson != null && work.layersJson == customHomeBgLayersJson),
                                 onSetAsLiveWallpaper = { onSetAsLiveWallpaper(work) },
@@ -1107,6 +1109,41 @@ fun HomeScreen(
                     )
                 }
             }
+        )
+    }
+
+    // Move Single Work to Trash Confirmation Dialog (Apple HIG Style)
+    if (workPendingDelete != null) {
+        val work = workPendingDelete!!
+        IosAlertDialog(
+            title = "Move to Trash?",
+            message = "Are you sure you want to move \"${work.name.ifBlank { "Untitled" }}\" to Trash?",
+            confirmText = "Move to Trash",
+            isDestructive = true,
+            onConfirm = {
+                val toDelete = work
+                workPendingDelete = null
+                onSoftDelete(toDelete.id)
+            },
+            dismissText = "Cancel",
+            onDismiss = { workPendingDelete = null }
+        )
+    }
+
+    // Move Multiple Works to Trash Confirmation Dialog (Apple HIG Style)
+    if (showDeleteSelectedConfirm) {
+        val count = selectedWorkIds.size
+        IosAlertDialog(
+            title = "Move to Trash?",
+            message = "Are you sure you want to move $count ${if (count == 1) "work" else "works"} to Trash?",
+            confirmText = "Move to Trash",
+            isDestructive = true,
+            onConfirm = {
+                showDeleteSelectedConfirm = false
+                onDeleteSelected()
+            },
+            dismissText = "Cancel",
+            onDismiss = { showDeleteSelectedConfirm = false }
         )
     }
 }

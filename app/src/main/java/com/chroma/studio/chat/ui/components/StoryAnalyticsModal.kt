@@ -1,4 +1,4 @@
-﻿package com.chroma.studio.chat.ui.components
+package com.chroma.studio.chat.ui.components
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -51,54 +51,29 @@ fun StoryAnalyticsModal(
     var selectedFilter by remember { mutableStateOf("all") } // "all", "reactions", "replies"
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
 
-    // Delete Confirmation Dialog
+    // Delete Confirmation Dialog (Apple HIG Style)
     if (showDeleteConfirmDialog) {
-        AlertDialog(
-            onDismissRequest = { showDeleteConfirmDialog = false },
-            title = {
-                Text(
-                    text = "Delete Story?",
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = colors.textDark
-                )
-            },
-            text = {
-                Text(
-                    text = "This story and all its analytics and insights will be permanently deleted.",
-                    fontSize = 14.sp,
-                    color = colors.textMuted
-                )
-            },
-            confirmButton = {
-                TextButton(
+        IosAlertDialog(
+            title = "Delete Story?",
+            message = "This story and all its analytics and insights will be permanently deleted.",
+            actions = listOf(
+                IosAlertAction(
+                    title = "Cancel",
+                    isCancel = true,
+                    onClick = { showDeleteConfirmDialog = false }
+                ),
+                IosAlertAction(
+                    title = "Delete",
+                    isDestructive = true,
                     onClick = {
                         SoundManager.playReaction()
                         showDeleteConfirmDialog = false
                         onDeleteStory(story.id)
                         onClose()
                     }
-                ) {
-                    Text(
-                        text = "Delete",
-                        color = Color(0xFFFF3B30),
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp
-                    )
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteConfirmDialog = false }) {
-                    Text(
-                        text = "Cancel",
-                        color = colors.iosBlue,
-                        fontWeight = FontWeight.Normal,
-                        fontSize = 15.sp
-                    )
-                }
-            },
-            shape = RoundedCornerShape(18.dp),
-            containerColor = if (colors.isLight) Color.White else Color(0xFF2C2C2E)
+                )
+            ),
+            onDismiss = { showDeleteConfirmDialog = false }
         )
     }
 

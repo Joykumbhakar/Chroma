@@ -113,6 +113,9 @@ fun ConversationsScreen(
     var isSelectionMode by remember { mutableStateOf(false) }
     var isSearchExpanded by remember { mutableStateOf(false) }
     val selectedChatIds = remember { mutableStateListOf<String>() }
+    var chatPendingDelete by remember { mutableStateOf<ChatConversation?>(null) }
+    var storyPendingDelete by remember { mutableStateOf<Story?>(null) }
+    var showDeleteSelectedChatsDialog by remember { mutableStateOf(false) }
 
     val totalUnread = remember(chats) { chats.sumOf { it.unreadCount } }
 
@@ -411,11 +414,7 @@ fun ConversationsScreen(
                     // Delete
                     TextButton(onClick = {
                         SoundManager.playReaction()
-                        selectedChatIds.forEach { id ->
-                            chats.find { it.id == id }?.let { onDeleteChat(it) }
-                        }
-                        isSelectionMode = false
-                        selectedChatIds.clear()
+                        showDeleteSelectedChatsDialog = true
                     }) {
                         Text("Delete", color = Color(0xFFFF3B30), fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                     }
@@ -675,7 +674,7 @@ fun ConversationsScreen(
                             },
                             onPinToggle = { onPinChatToggle(chat) },
                             onMuteToggle = { onMuteChatToggle(chat) },
-                            onDelete = { onDeleteChat(chat) }
+                            onDelete = { chatPendingDelete = chat }
                         )
                     }
                 }
@@ -704,7 +703,7 @@ fun ConversationsScreen(
                 onArchive = { onArchiveChat(chat) },
                 onClearHistory = { onClearChatHistory(chat) },
                 onExportChat = { onExportChat(chat) },
-                onDeleteChat = { onDeleteChat(chat) }
+                onDeleteChat = { chatPendingDelete = chat }
             )
         }
 
@@ -718,7 +717,84 @@ fun ConversationsScreen(
                 onAddNewStory = { onAddStoryClick() },
                 onMuteStories = { onMuteStory(story) },
                 onShareStory = { onShareStory(story) },
-                onDeleteStory = { onDeleteStory(story) }
+                onDeleteStory = { storyPendingDelete = story }
+            )
+        }
+
+        // ── Confirmation Dialogs for Deletion (Apple HIG Dialog Style) ───
+        chatPendingDelete?.let { chat ->
+            IosAlertDialog(
+                title = "Delete Chat?",
+                message = "Are you sure you want to delete this chat with \"${chat.name}\"? All message history will be removed.",
+                actions = listOf(
+                    IosAlertAction(
+                        title = "Cancel",
+                        isCancel = true,
+                        onClick = { chatPendingDelete = null }
+                    ),
+                    IosAlertAction(
+                        title = "Delete",
+                        isDestructive = true,
+                        onClick = {
+                            val toDelete = chat
+                            chatPendingDelete = null
+                            onDeleteChat(toDelete)
+                        }
+                    )
+                ),
+                onDismiss = { chatPendingDelete = null }
+            )
+        }
+
+        if (showDeleteSelectedChatsDialog) {
+            val count = selectedChatIds.size
+            IosAlertDialog(
+                title = "Delete ${if (count == 1) "Chat" else "$count Chats"}?",
+                message = "The selected ${if (count == 1) "conversation" else "conversations"} and their messages will be deleted from your device.",
+                actions = listOf(
+                    IosAlertAction(
+                        title = "Cancel",
+                        isCancel = true,
+                        onClick = { showDeleteSelectedChatsDialog = false }
+                    ),
+                    IosAlertAction(
+                        title = "Delete",
+                        isDestructive = true,
+                        onClick = {
+                            showDeleteSelectedChatsDialog = false
+                            selectedChatIds.forEach { id ->
+                                chats.find { it.id == id }?.let { onDeleteChat(it) }
+                            }
+                            isSelectionMode = false
+                            selectedChatIds.clear()
+                        }
+                    )
+                ),
+                onDismiss = { showDeleteSelectedChatsDialog = false }
+            )
+        }
+
+        storyPendingDelete?.let { story ->
+            IosAlertDialog(
+                title = "Delete Story?",
+                message = "Are you sure you want to delete this story? It will be removed for all viewers.",
+                actions = listOf(
+                    IosAlertAction(
+                        title = "Cancel",
+                        isCancel = true,
+                        onClick = { storyPendingDelete = null }
+                    ),
+                    IosAlertAction(
+                        title = "Delete",
+                        isDestructive = true,
+                        onClick = {
+                            val toDelete = story
+                            storyPendingDelete = null
+                            onDeleteStory(toDelete)
+                        }
+                    )
+                ),
+                onDismiss = { storyPendingDelete = null }
             )
         }
     }
