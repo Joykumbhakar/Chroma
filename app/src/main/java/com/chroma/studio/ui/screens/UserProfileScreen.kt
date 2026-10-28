@@ -284,38 +284,7 @@ fun UserProfileScreen(
     LaunchedEffect(userId) {
         launch {
             isWorksLoading = true
-            val remoteWorks = try {
-                discoverVm.repository.getWorksByUser(userId)
-            } catch (_: Exception) {
-                emptyList()
-            }
-            val localPosts = if (isCurrentUser) {
-                try {
-                    repository.loadActiveWorks().map { cw ->
-                        DiscoverPost(
-                            id = cw.id,
-                            title = cw.name,
-                            description = cw.description,
-                            jsonUrl = cw.layersJson,
-                            postType = "work",
-                            creatorId = userId,
-                            authorUsername = profile?.username ?: "You",
-                            authorDisplayName = profile?.displayName ?: "You",
-                            authorAvatarUrl = profile?.avatarUrl ?: "",
-                            timestamp = cw.createdAt,
-                            remixedFromPostId = cw.remixedFromPostId,
-                            remixedFromAuthorId = cw.remixedFromAuthorId,
-                            remixedFromAuthorUsername = cw.remixedFromAuthorUsername,
-                            remixedFromAuthorDisplayName = cw.remixedFromAuthorDisplayName,
-                            remixedFromAuthorAvatar = cw.remixedFromAuthorAvatar
-                        )
-                    }
-                } catch (_: Exception) {
-                    emptyList()
-                }
-            } else emptyList()
-
-            works = (remoteWorks + localPosts).distinctBy { it.id }.sortedByDescending { it.timestamp }
+            works = discoverVm.repository.getWorksByUser(userId)
             isWorksLoading = false
         }
 
@@ -382,7 +351,7 @@ fun UserProfileScreen(
 
     val gridState = rememberLazyGridState()
 
-    val normalWorks = remember(works) { works.filter { it.remixedFromPostId == null && (it.postType == "work" || (it.postType != "image" && it.postType != "video")) } }
+    val normalWorks = remember(works) { works.filter { it.remixedFromPostId == null && it.postType == "work" } }
     val imagePosts = remember(works) { works.filter { it.postType == "image" } }
     val flashPosts = userFlashes
     val remixWorks = remember(works) { works.filter { it.remixedFromPostId != null } }
@@ -517,17 +486,24 @@ fun UserProfileScreen(
         } else {
             when (selectedTabIndex) {
                 0 -> {
-                    // Works / Creations Tab (No radius)
+                    // Works / Creations Tab
                     if (isWorksLoading) {
                         items(6) {
                             Box(modifier = Modifier.aspectRatio(1f).clip(RectangleShape).shimmerEffect())
                         }
                     } else if (normalWorks.isEmpty()) {
-                        item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                            val worksGraphicState = rememberAppleGraphicAnimationState()
                             AppleEmptyTabState(
-                                icon = Lucide.LayoutGrid,
+                                graphic = {
+                                    AppleWorksGraphic(
+                                        modifier = Modifier.size(130.dp),
+                                        state = worksGraphicState,
+                                        enableClickToAnimate = true
+                                    )
+                                },
                                 title = "No Works Yet",
-                                subtitle = if (isCurrentUser) "Create and save custom gradient works to show them here." else "This user hasn't posted any works yet."
+                                subtitle = "Creations will appear here once published."
                             )
                         }
                     } else {
@@ -543,17 +519,24 @@ fun UserProfileScreen(
                     }
                 }
                 1 -> {
-                    // Photos Tab (Images, No radius)
+                    // Photos Tab (Images)
                     if (isWorksLoading) {
                         items(6) {
                             Box(modifier = Modifier.aspectRatio(1f).clip(RectangleShape).shimmerEffect())
                         }
                     } else if (imagePosts.isEmpty()) {
-                        item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                            val photosGraphicState = rememberAppleGraphicAnimationState()
                             AppleEmptyTabState(
-                                icon = Lucide.Image,
+                                graphic = {
+                                    ApplePhotosGraphic(
+                                        modifier = Modifier.size(150.dp),
+                                        state = photosGraphicState,
+                                        enableClickToAnimate = true
+                                    )
+                                },
                                 title = "No Photos Yet",
-                                subtitle = if (isCurrentUser) "Share your photos and artwork with the community." else "This user hasn't posted any photos yet."
+                                subtitle = "Photo posts will appear here once shared."
                             )
                         }
                     } else {
@@ -569,17 +552,24 @@ fun UserProfileScreen(
                     }
                 }
                 2 -> {
-                    // Flash Videos Tab (Reels, No radius)
+                    // Flash Videos Tab
                     if (isFlashesLoading) {
                         items(6) {
                             Box(modifier = Modifier.aspectRatio(9f / 16f).clip(RectangleShape).shimmerEffect())
                         }
                     } else if (flashPosts.isEmpty()) {
-                        item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                            val flashGraphicState = rememberAppleGraphicAnimationState()
                             AppleEmptyTabState(
-                                icon = Lucide.Zap,
+                                graphic = {
+                                    AppleFlashGraphic(
+                                        modifier = Modifier.size(150.dp),
+                                        state = flashGraphicState,
+                                        enableClickToAnimate = true
+                                    )
+                                },
                                 title = "No Flash Videos",
-                                subtitle = if (isCurrentUser) "Record or upload short flash videos to showcase your style." else "This user hasn't posted any flash videos yet."
+                                subtitle = "Short video moments will appear here."
                             )
                         }
                     } else {
@@ -594,17 +584,24 @@ fun UserProfileScreen(
                     }
                 }
                 3 -> {
-                    // Remixes Tab (No radius)
+                    // Remixes Tab
                     if (isWorksLoading) {
                         items(6) {
                             Box(modifier = Modifier.aspectRatio(1f).clip(RectangleShape).shimmerEffect())
                         }
                     } else if (remixWorks.isEmpty()) {
-                        item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                            val remixGraphicState = rememberAppleGraphicAnimationState()
                             AppleEmptyTabState(
-                                icon = Lucide.HeartHandshake,
-                                title = "No Remixes Yet",
-                                subtitle = if (isCurrentUser) "Remix works from other creators or let others remix yours." else "This user hasn't created any remixes yet."
+                                graphic = {
+                                    AppleHeartHandshakeGraphic(
+                                        modifier = Modifier.size(150.dp),
+                                        state = remixGraphicState,
+                                        enableClickToAnimate = true
+                                    )
+                                },
+                                title = "No Remixes",
+                                subtitle = "Remixed co-creations will appear here."
                             )
                         }
                     } else {
@@ -620,17 +617,17 @@ fun UserProfileScreen(
                     }
                 }
                 4 -> {
-                    // Saved / Bookmarks Tab (No radius)
+                    // Saved / Bookmarks Tab (Only visible to account owner)
                     if (isSavedLoading) {
                         items(6) {
                             Box(modifier = Modifier.aspectRatio(1f).clip(RectangleShape).shimmerEffect())
                         }
                     } else if (savedWorks.isEmpty()) {
-                        item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                        item(span = { GridItemSpan(maxLineSpan) }) {
                             AppleEmptyTabState(
                                 icon = Lucide.Bookmark,
-                                title = "No Saved Posts",
-                                subtitle = "Posts and works you save will appear here privately."
+                                title = "No Saved Works",
+                                subtitle = "Works and posts you bookmark will appear here."
                             )
                         }
                     } else {
@@ -900,7 +897,7 @@ fun UserProfileScreen(
                             onShareClick = {
                                 val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                                     type = "text/plain"
-                                    putExtra(android.content.Intent.EXTRA_TEXT, "Check out '${work.title}' by @${work.authorUsername} on Oscellion: Oscellion://post/${work.id}")
+                                    putExtra(android.content.Intent.EXTRA_TEXT, "Check out '${work.title}' by @${work.authorUsername} on Oscellion: https://oscellion.vercel.app/post/${work.id}")
                                 }
                                 context.startActivity(android.content.Intent.createChooser(shareIntent, "Share Post"))
                                 if (currentUserId != null) {
@@ -2094,31 +2091,6 @@ fun AppleEmptyTabState(
 }
 
 @Composable
-fun ProfileEmptySlot(
-    aspectRatio: Float = 1f,
-    centerContent: (@Composable () -> Unit)? = null
-) {
-    val colors = LocalOscellionColors.current
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(aspectRatio)
-            .clip(RectangleShape)
-            .background(if (colors.isDark) Color(0xFF141417) else Color(0xFFF4F4F7))
-            .border(
-                width = 0.5.dp,
-                color = if (colors.isDark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.05f),
-                shape = RectangleShape
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        if (centerContent != null) {
-            centerContent()
-        }
-    }
-}
-
-@Composable
 fun ProfileFlashCard(
     flash: FlashVideo,
     isOwner: Boolean,
@@ -2139,7 +2111,7 @@ fun ProfileFlashCard(
             AsyncImage(
                 model = flash.thumbnailUrl,
                 contentDescription = flash.caption,
-                modifier = Modifier.fillMaxSize().clip(RectangleShape),
+                modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
             )
         } else {
@@ -2158,7 +2130,7 @@ fun ProfileFlashCard(
             }
         }
 
-        // Top Reel Header Bar (No radius)
+        // Top Reel Header Bar
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2169,7 +2141,7 @@ fun ProfileFlashCard(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Surface(
-                shape = RectangleShape,
+                shape = RoundedCornerShape(4.dp),
                 color = Color.Black.copy(alpha = 0.6f),
                 border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.25f))
             ) {
@@ -2186,10 +2158,10 @@ fun ProfileFlashCard(
             if (isOwner) {
                 Box(
                     modifier = Modifier
-                        .size(24.dp)
-                        .clip(RectangleShape)
+                        .size(28.dp)
+                        .clip(CircleShape)
                         .background(Color.Black.copy(alpha = 0.4f))
-                        .border(0.5.dp, Color.White.copy(alpha = 0.2f), RectangleShape)
+                        .border(0.5.dp, Color.White.copy(alpha = 0.2f), CircleShape)
                         .clickable { showMenu = true },
                     contentAlignment = Alignment.Center
                 ) {
@@ -2197,7 +2169,7 @@ fun ProfileFlashCard(
                         imageVector = Lucide.EllipsisVertical,
                         contentDescription = "Options",
                         tint = Color.White,
-                        modifier = Modifier.size(13.dp)
+                        modifier = Modifier.size(14.dp)
                     )
                 }
 
@@ -2205,9 +2177,10 @@ fun ProfileFlashCard(
                     expanded = showMenu,
                     onDismissRequest = { showMenu = false },
                     modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
+                        .shadow(16.dp, RoundedCornerShape(16.dp), ambientColor = Color.Black.copy(alpha = 0.25f), spotColor = Color.Black.copy(alpha = 0.15f))
+                        .clip(RoundedCornerShape(16.dp))
                         .background(colors.glassBg)
-                        .border(1.dp, colors.glassBorder, RoundedCornerShape(12.dp))
+                        .border(1.dp, colors.glassBorder, RoundedCornerShape(16.dp))
                 ) {
                     DropdownMenuItem(
                         text = { Text("Delete Flash", color = colors.error, fontWeight = FontWeight.SemiBold) },
@@ -2291,10 +2264,10 @@ fun ProfileWorkCard(
             Row(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(4.dp)
-                    .clip(RectangleShape)
+                    .padding(6.dp)
+                    .clip(RoundedCornerShape(8.dp))
                     .background(Color.Black.copy(alpha = 0.45f))
-                    .padding(horizontal = 5.dp, vertical = 2.dp),
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
