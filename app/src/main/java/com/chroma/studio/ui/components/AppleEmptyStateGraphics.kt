@@ -915,46 +915,46 @@ data class PaintWellSpec(
 val AppleSystemPaintWells = listOf(
     PaintWellSpec(
         index = 0,
-        name = "System Cyan",
+        name = "System Coral",
         center = Offset(242f, 556f),
-        highlightColor = Color(0xFFE0F7FF),
-        midColor = Color(0xFF38BDF8),
-        deepColor = Color(0xFF007AFF),
-        abyssColor = Color(0xFF0040A8),
-        causticRimColor = Color(0xFFBAE6FD),
+        highlightColor = Color(0xFFFFECEF),
+        midColor = Color(0xFFFF375F),
+        deepColor = Color(0xFFFF2D55),
+        abyssColor = Color(0xFFB3002E),
+        causticRimColor = Color(0xFFFFB3C0),
         dipDelta = Offset(-105f, -18f)
     ),
     PaintWellSpec(
         index = 1,
-        name = "System Indigo",
+        name = "System Amber",
         center = Offset(288f, 382f),
-        highlightColor = Color(0xFFEDE9FE),
-        midColor = Color(0xFF818CF8),
-        deepColor = Color(0xFF5856D6),
-        abyssColor = Color(0xFF2E1065),
-        causticRimColor = Color(0xFFDDD6FE),
+        highlightColor = Color(0xFFFFFBEB),
+        midColor = Color(0xFFFF9F0A),
+        deepColor = Color(0xFFFF8000),
+        abyssColor = Color(0xFFB25000),
+        causticRimColor = Color(0xFFFFDE99),
         dipDelta = Offset(-116f, -118f)
     ),
     PaintWellSpec(
         index = 2,
-        name = "System Coral",
+        name = "System Mint",
         center = Offset(452f, 284f),
-        highlightColor = Color(0xFFFFFBEB),
-        midColor = Color(0xFFFB923C),
-        deepColor = Color(0xFFFF2D55),
-        abyssColor = Color(0xFF881337),
-        causticRimColor = Color(0xFFFED7AA),
+        highlightColor = Color(0xFFE8FCEE),
+        midColor = Color(0xFF34C759),
+        deepColor = Color(0xFF28A745),
+        abyssColor = Color(0xFF136026),
+        causticRimColor = Color(0xFFA3F0B5),
         dipDelta = Offset(-22f, -168f)
     ),
     PaintWellSpec(
         index = 3,
-        name = "System Mint",
+        name = "System Sky",
         center = Offset(636f, 332f),
-        highlightColor = Color(0xFFECFDF5),
-        midColor = Color(0xFF34D399),
-        deepColor = Color(0xFF059669),
-        abyssColor = Color(0xFF064E3B),
-        causticRimColor = Color(0xFFA7F3D0),
+        highlightColor = Color(0xFFE0F7FF),
+        midColor = Color(0xFF00C7BE),
+        deepColor = Color(0xFF007AFF),
+        abyssColor = Color(0xFF0043A8),
+        causticRimColor = Color(0xFF99EEF8),
         dipDelta = Offset(82f, -138f)
     )
 )
@@ -968,23 +968,23 @@ enum class AppleBlueFinish(
     Cupertino(
         label = "Cupertino Blue",
         bodyStops = listOf(
-            0.00f to Color(0xFF56D0FF),
-            0.20f to Color(0xFF1E9BFF),
-            0.50f to Color(0xFF007AFF),
-            0.78f to Color(0xFF0051D5),
-            1.00f to Color(0xFF002B82)
+            0.00f to Color(0xFF7CE1FF),
+            0.18f to Color(0xFF38B6FF),
+            0.45f to Color(0xFF007AFF),
+            0.75f to Color(0xFF0058DE),
+            1.00f to Color(0xFF003FA8)
         ),
         extrusionStops = listOf(
-            0.00f to Color(0xFF0051D5),
-            0.35f to Color(0xFF003594),
-            0.72f to Color(0xFF001F5C),
-            1.00f to Color(0xFF001238)
+            0.00f to Color(0xFF005CE5),
+            0.35f to Color(0xFF0043B5),
+            0.70f to Color(0xFF00308C),
+            1.00f to Color(0xFF002268)
         ),
         crownStops = listOf(
-            0.00f to Color(0xFFA6ECFF),
-            0.32f to Color(0xFF42B9FF),
-            0.70f to Color(0xFF007AFF),
-            1.00f to Color(0xFF0045B8)
+            0.00f to Color(0xFFB8F0FF),
+            0.30f to Color(0xFF56C4FF),
+            0.68f to Color(0xFF007AFF),
+            1.00f to Color(0xFF004EB8)
         )
     ),
     PacificPro(
@@ -1259,13 +1259,12 @@ fun AppleLucidePaletteAndPenIcon(
 
     val cylindricalSheenBrush = remember {
         Brush.linearGradient(
-            0.00f to Color(0xFF88E0FF).copy(alpha = 0.58f),
-            0.13f to Color(0xFFFFFFFF).copy(alpha = 0.34f),
-            0.28f to Color(0xFF38B6FF).copy(alpha = 0.06f),
-            0.54f to Color(0xFF003EB3).copy(alpha = 0.18f),
-            0.81f to Color(0xFF001F6B).copy(alpha = 0.38f),
-            0.92f to Color(0xFF47B8FF).copy(alpha = 0.40f),
-            1.00f to Color(0xFFA3E8FF).copy(alpha = 0.68f),
+            0.00f to Color.White.copy(alpha = 0.36f),
+            0.15f to Color(0xFF7CE1FF).copy(alpha = 0.20f),
+            0.35f to Color(0xFF007AFF).copy(alpha = 0.04f),
+            0.65f to Color(0xFF003FA8).copy(alpha = 0.12f),
+            0.85f to Color(0xFF002268).copy(alpha = 0.22f),
+            1.00f to Color(0xFF56C4FF).copy(alpha = 0.35f),
             start = Offset(100f, 0f),
             end = Offset(900f, 0f)
         )
@@ -1273,13 +1272,11 @@ fun AppleLucidePaletteAndPenIcon(
 
     val penCylindricalSheenBrush = remember {
         Brush.linearGradient(
-            0.00f to Color(0xFF88E0FF).copy(alpha = 0.58f),
-            0.13f to Color(0xFFFFFFFF).copy(alpha = 0.34f),
-            0.28f to Color(0xFF38B6FF).copy(alpha = 0.06f),
-            0.54f to Color(0xFF003EB3).copy(alpha = 0.18f),
-            0.81f to Color(0xFF001F6B).copy(alpha = 0.38f),
-            0.92f to Color(0xFF47B8FF).copy(alpha = 0.40f),
-            1.00f to Color(0xFFA3E8FF).copy(alpha = 0.68f),
+            0.00f to Color.White.copy(alpha = 0.40f),
+            0.18f to Color(0xFFE2E8F0).copy(alpha = 0.25f),
+            0.50f to Color.Transparent,
+            0.82f to Color(0xFF94A3B8).copy(alpha = 0.20f),
+            1.00f to Color.White.copy(alpha = 0.45f),
             start = Offset(-55f, 0f),
             end = Offset(55f, 0f)
         )
@@ -1287,9 +1284,9 @@ fun AppleLucidePaletteAndPenIcon(
 
     val capsuleRecessBrush = remember {
         Brush.linearGradient(
-            0.00f to Color(0xFF00123B),
-            0.46f to Color(0xFF002875),
-            1.00f to Color(0xFF003EA8),
+            0.00f to Color(0xFF001E60),
+            0.50f to Color(0xFF003399),
+            1.00f to Color(0xFF004DB8),
             start = Offset(-35f, -55f),
             end = Offset(35f, 55f)
         )
@@ -1297,10 +1294,10 @@ fun AppleLucidePaletteAndPenIcon(
 
     val capsuleBevelBrush = remember {
         Brush.linearGradient(
-            0.00f to Color(0xFF000D2B).copy(alpha = 0.88f),
-            0.42f to Color(0xFF1A8CFF).copy(alpha = 0.24f),
-            0.82f to Color(0xFF75DAFF).copy(alpha = 0.90f),
-            1.00f to Color(0xFFCCF4FF).copy(alpha = 0.98f),
+            0.00f to Color(0xFF002270).copy(alpha = 0.60f),
+            0.45f to Color(0xFF2898FF).copy(alpha = 0.35f),
+            0.85f to Color(0xFF90E0FF).copy(alpha = 0.85f),
+            1.00f to Color(0xFFE0F7FF).copy(alpha = 0.95f),
             start = Offset(-55f, -55f),
             end = Offset(55f, 55f)
         )
@@ -1481,31 +1478,23 @@ fun AppleLucidePaletteAndPenIcon(
                         blurRadius = 14f
                     )
 
-                    // Diagonal Studio Softbox Ribbons (Identical Optical Signature to Trash Bin)
-                    val wideRibbon = Path().apply {
-                        moveTo(152f, 195f)
-                        lineTo(262f, 195f)
-                        lineTo(348f, 865f)
-                        lineTo(238f, 865f)
-                        close()
-                    }
-                    drawBlurredPath(
-                        path = wideRibbon,
-                        color = Color.White.copy(alpha = 0.19f),
-                        blurRadius = 12f
+                    // Organic Curved Studio Light Dome & Flowing Specular Ridge
+                    drawBlurredOval(
+                        center = Offset(360f, 320f),
+                        rx = 220f,
+                        ry = 120f,
+                        color = Color.White.copy(alpha = 0.22f),
+                        blurRadius = 24f
                     )
 
-                    val coreRibbon = Path().apply {
-                        moveTo(192f, 195f)
-                        lineTo(224f, 195f)
-                        lineTo(310f, 865f)
-                        lineTo(280f, 865f)
-                        close()
+                    val arcHighlight = Path().apply {
+                        moveTo(200f, 440f)
+                        cubicTo(160f, 320f, 260f, 210f, 440f, 195f)
                     }
-                    drawBlurredPath(
-                        path = coreRibbon,
-                        color = Color.White.copy(alpha = 0.31f),
-                        blurRadius = 4f
+                    drawPath(
+                        path = arcHighlight,
+                        color = Color.White.copy(alpha = 0.38f),
+                        style = Stroke(width = 5.5f, cap = StrokeCap.Round)
                     )
 
                     // Right Lobe Secondary Anodized Rim Catch
@@ -1567,12 +1556,12 @@ fun AppleLucidePaletteAndPenIcon(
                     style = Stroke(width = 3.5f)
                 )
 
-                // 6. Recessed Ergonomic Thumbport Bevel & Inner Wall Shadow
+                // 6. Recessed Ergonomic Thumbport CNC Bevel & Inner Wall Shadow
                 drawCircle(
-                    color = Color(0xFF000D2B).copy(alpha = 0.70f),
+                    color = Color(0xFF001F5C).copy(alpha = 0.40f),
                     radius = 67f,
                     center = Offset(394f, 744f),
-                    style = Stroke(width = 7f)
+                    style = Stroke(width = 6f)
                 )
                 withTransform({
                     translate(left = 394f, top = 744f)
@@ -1581,9 +1570,19 @@ fun AppleLucidePaletteAndPenIcon(
                         brush = capsuleBevelBrush,
                         radius = 66f,
                         center = Offset.Zero,
-                        style = Stroke(width = 4.5f)
+                        style = Stroke(width = 3.5f)
                     )
                 }
+                // Precision CNC machined specular catch on bottom-right rim
+                drawArc(
+                    color = Color(0xFFB8F0FF).copy(alpha = 0.75f),
+                    startAngle = 25f,
+                    sweepAngle = 110f,
+                    useCenter = false,
+                    topLeft = Offset(394f - 66f, 744f - 66f),
+                    size = Size(132f, 132f),
+                    style = Stroke(width = 2.5f, cap = StrokeCap.Round)
+                )
 
                 // =========================================================================
                 // 7. FOUR INTERACTIVE CNC-MILLED PAINT WELLS
@@ -1812,32 +1811,60 @@ private fun DrawScope.drawSculptedApplePen(
     // Floating Drop Shadow beneath Pen Assembly
     drawBlurredPathShadow(
         path = barrelPath,
-        color = Color(0xFF001542).copy(alpha = 0.38f),
+        color = Color(0xFF001542).copy(alpha = 0.32f),
         dx = -16f,
         dy = 28f,
         blurRadius = 18f
     )
     drawBlurredPathShadow(
         path = nibConePath,
-        color = Color(0xFF001542).copy(alpha = 0.34f),
+        color = Color(0xFF001542).copy(alpha = 0.28f),
         dx = -12f,
         dy = 22f,
         blurRadius = 14f
     )
 
-    // ---------------- 1. PRECISION FOUNTAIN / STYLUS NIB & FERRULE ----------------
+    // Apple Pencil Ceramic & Mirror Chrome Materials
+    val pencilCeramicBrush = Brush.linearGradient(
+        0.00f to Color(0xFFFFFFFF),
+        0.20f to Color(0xFFF8FAFC),
+        0.55f to Color(0xFFE2E8F0),
+        0.80f to Color(0xFFCBD5E1),
+        1.00f to Color(0xFFE2E8F0),
+        start = Offset(-47f, 0f),
+        end = Offset(47f, 0f)
+    )
+
+    val chromeBandBrush = Brush.linearGradient(
+        0.00f to Color(0xFFE2E8F0),
+        0.22f to Color(0xFFFFFFFF),
+        0.48f to Color(0xFF94A3B8),
+        0.78f to Color(0xFF64748B),
+        1.00f to Color(0xFFCBD5E1),
+        start = Offset(-41f, 88f),
+        end = Offset(41f, 88f)
+    )
+
+    val penSpecularBrush = Brush.linearGradient(
+        0.00f to Color.White.copy(alpha = 0.95f),
+        0.50f to Color(0xFFCBD5E1).copy(alpha = 0.50f),
+        1.00f to Color.White.copy(alpha = 0.85f),
+        start = Offset(-47f, -314f),
+        end = Offset(47f, 244f)
+    )
+
+    // ---------------- 1. PRECISION CERAMIC STYLUS NIB & FERRULE ----------------
     val nibBrush = Brush.linearGradient(
-        0.00f to Color(0xFFF0FAFF),
-        0.24f to Color(0xFF8AE2FF),
-        0.56f to Color(0xFF0A84FF),
-        0.84f to Color(0xFF0044B5),
-        1.00f to Color(0xFF001E5A),
+        0.00f to Color(0xFFFFFFFF),
+        0.35f to Color(0xFFF1F5F9),
+        0.70f to Color(0xFFCBD5E1),
+        1.00f to Color(0xFF94A3B8),
         start = Offset(-38f, 100f),
         end = Offset(38f, 240f)
     )
     drawPath(path = nibConePath, brush = nibBrush)
 
-    // Right Facet Shaded Depth on Nib Cone
+    // Right Facet Subtle Ambient Depth on Nib Cone
     val rightNibFacet = Path().apply {
         moveTo(0f, 96f)
         lineTo(38f, 96f)
@@ -1845,65 +1872,56 @@ private fun DrawScope.drawSculptedApplePen(
         cubicTo(16f, 204f, 7f, 228f, 0f, 244f)
         close()
     }
-    drawPath(path = rightNibFacet, color = Color(0xFF001A57).copy(alpha = 0.34f))
+    drawPath(path = rightNibFacet, color = Color(0xFF64748B).copy(alpha = 0.22f))
 
     // Left Facet Specular Highlight Streak
     drawLine(
-        color = Color.White.copy(alpha = 0.78f),
+        color = Color.White.copy(alpha = 0.90f),
         start = Offset(-29f, 102f),
         end = Offset(-12f, 198f),
-        strokeWidth = 5.5f,
+        strokeWidth = 5f,
         cap = StrokeCap.Round
     )
 
-    // Precision Machined Ferrule Collar Band
-    val ferruleBrush = Brush.linearGradient(
-        0.00f to Color(0xFF9BE7FF),
-        0.22f to Color(0xFFFFFFFF),
-        0.52f to Color(0xFF38B2FF),
-        0.82f to Color(0xFF0040B0),
-        1.00f to Color(0xFF80DCFF),
-        start = Offset(-41f, 88f),
-        end = Offset(41f, 88f)
-    )
+    // Precision Mirror Chrome Ferrule Collar Band
     drawRoundRect(
-        brush = ferruleBrush,
+        brush = chromeBandBrush,
         topLeft = Offset(-41f, 88f),
         size = Size(82f, 14f),
         cornerRadius = CornerRadius(4f, 4f)
     )
     drawRoundRect(
-        color = Color(0xFF002B80),
+        color = Color(0xFF475569).copy(alpha = 0.35f),
         topLeft = Offset(-41f, 88f),
         size = Size(82f, 14f),
         cornerRadius = CornerRadius(4f, 4f),
-        style = Stroke(width = 1.5f)
+        style = Stroke(width = 1.2f)
     )
 
-    // Classic Lucide Fountain Capillary Slit & Breather Hole
+    // Precision Ink Capillary Groove
     drawLine(
-        color = Color(0xFF001238),
+        color = activeMidColor.copy(alpha = 0.85f),
         start = Offset(0f, 154f),
         end = Offset(0f, 238f),
-        strokeWidth = 4f,
+        strokeWidth = 3f,
         cap = StrokeCap.Round
     )
     drawCircle(
-        color = Color(0xFF001238),
-        radius = 8f,
+        color = activeMidColor,
+        radius = 7f,
         center = Offset(0f, 150f)
     )
     drawCircle(
-        color = activeMidColor,
-        radius = 8f,
+        color = Color.White.copy(alpha = 0.70f),
+        radius = 7f,
         center = Offset(0f, 150f),
-        style = Stroke(width = 2.5f)
+        style = Stroke(width = 2f)
     )
 
-    // Dynamic Glowing Ink Tip Droplet
+    // Active Luminous Ink Tip Droplet
     drawCircle(
         color = activeMidColor,
-        radius = 8f,
+        radius = 8.5f,
         center = Offset(0f, 242f)
     )
     drawCircle(
@@ -1913,23 +1931,16 @@ private fun DrawScope.drawSculptedApplePen(
     )
 
     // Outer Specular Bevel on Nib Cone
-    val penSpecularBrush = Brush.linearGradient(
-        0.00f to Color.White.copy(alpha = 0.92f),
-        0.50f to Color(0xFF88E0FF).copy(alpha = 0.55f),
-        1.00f to Color(0xFF70D6FF).copy(alpha = 0.80f),
-        start = Offset(-47f, -314f),
-        end = Offset(47f, 244f)
-    )
     drawPath(
         path = nibConePath,
         brush = penSpecularBrush,
-        style = Stroke(width = 2.2f)
+        style = Stroke(width = 2f)
     )
 
-    // ---------------- 2. UNIBODY ANODIZED PEN BARREL ----------------
+    // ---------------- 2. UNIBODY CERAMIC APPLE PENCIL BARREL ----------------
     clipPath(path = barrelPath) {
         drawRect(
-            brush = appleBodyBrush,
+            brush = pencilCeramicBrush,
             topLeft = Offset(-55f, -320f),
             size = Size(110f, 430f)
         )
@@ -1939,9 +1950,9 @@ private fun DrawScope.drawSculptedApplePen(
             size = Size(110f, 430f)
         )
 
-        // Top Dome Crown Cap Surface
+        // Top Chrome Crown Cap Surface
         drawOval(
-            brush = lidTopCrownBrush,
+            brush = chromeBandBrush,
             topLeft = Offset(-50f, -268f - 34f),
             size = Size(100f, 68f)
         )
@@ -1951,59 +1962,46 @@ private fun DrawScope.drawSculptedApplePen(
         }
         drawPath(
             path = crownHighlight,
-            color = Color.White.copy(alpha = 0.65f),
-            style = Stroke(width = 3.5f, cap = StrokeCap.Round)
+            color = Color.White.copy(alpha = 0.80f),
+            style = Stroke(width = 3f, cap = StrokeCap.Round)
         )
 
-        // Recessed Sapphire Grip Channel Band
+        // Mirror Chrome Grip Channel Band
         drawRect(
-            brush = capsuleRecessBrush,
+            brush = chromeBandBrush,
             topLeft = Offset(-50f, 34f),
-            size = Size(100f, 20f)
+            size = Size(100f, 18f)
         )
         drawLine(
-            color = Color(0xFF000A24).copy(alpha = 0.85f),
+            color = Color(0xFF64748B).copy(alpha = 0.50f),
             start = Offset(-50f, 35f),
             end = Offset(50f, 35f),
-            strokeWidth = 3f
+            strokeWidth = 2f
         )
         drawLine(
-            color = Color(0xFF88E0FF).copy(alpha = 0.80f),
-            start = Offset(-50f, 54f),
-            end = Offset(50f, 54f),
-            strokeWidth = 2.2f
-        )
-
-        // Recessed Center Barrel Precision Ring
-        drawRect(
-            brush = capsuleRecessBrush,
-            topLeft = Offset(-50f, -138f),
-            size = Size(100f, 12f)
-        )
-        drawLine(
-            color = Color(0xFF75DAFF).copy(alpha = 0.70f),
-            start = Offset(-50f, -126f),
-            end = Offset(50f, -126f),
+            color = Color.White.copy(alpha = 0.85f),
+            start = Offset(-50f, 52f),
+            end = Offset(50f, 52f),
             strokeWidth = 2f
         )
 
         // Long Vertical Studio Softbox Highlight Strip Down Left of Barrel
         drawRoundRect(
-            color = Color.White.copy(alpha = 0.32f),
+            color = Color.White.copy(alpha = 0.45f),
             topLeft = Offset(-33f, -298f),
             size = Size(14f, 390f),
             cornerRadius = CornerRadius(7f, 7f)
         )
         drawRoundRect(
-            color = Color.White.copy(alpha = 0.58f),
+            color = Color.White.copy(alpha = 0.75f),
             topLeft = Offset(-26f, -292f),
             size = Size(5.5f, 380f),
             cornerRadius = CornerRadius(2.75f, 2.75f)
         )
 
-        // Right Edge Rim Catch
+        // Right Edge Ambient Rim Catch
         drawRoundRect(
-            color = Color(0xFF99E5FF).copy(alpha = 0.30f),
+            color = Color(0xFF94A3B8).copy(alpha = 0.25f),
             topLeft = Offset(25f, -288f),
             size = Size(9f, 375f),
             cornerRadius = CornerRadius(4.5f, 4.5f)
@@ -2014,21 +2012,21 @@ private fun DrawScope.drawSculptedApplePen(
     drawPath(
         path = barrelPath,
         brush = penSpecularBrush,
-        style = Stroke(width = 2.8f)
+        style = Stroke(width = 2.4f)
     )
 
-    // ---------------- 3. SCULPTED POCKET CLIP ARCH ----------------
+    // ---------------- 3. SCULPTED CHROME POCKET CLIP ----------------
     // Clip Cast Shadow on Barrel
     drawRoundRect(
-        color = Color(0xFF000E30).copy(alpha = 0.48f),
+        color = Color(0xFF0F172A).copy(alpha = 0.25f),
         topLeft = Offset(-10f, -244f),
         size = Size(24f, 154f),
         cornerRadius = CornerRadius(12f, 12f)
     )
 
-    // Sculpted Anodized Clip Body
+    // Sculpted Chrome Clip Body
     drawRoundRect(
-        brush = lidTopCrownBrush,
+        brush = chromeBandBrush,
         topLeft = Offset(-12f, -252f),
         size = Size(24f, 150f),
         cornerRadius = CornerRadius(12f, 12f)
@@ -2038,23 +2036,15 @@ private fun DrawScope.drawSculptedApplePen(
         topLeft = Offset(-12f, -252f),
         size = Size(24f, 150f),
         cornerRadius = CornerRadius(12f, 12f),
-        style = Stroke(width = 2.4f)
-    )
-
-    // Recessed Sapphire Slot inside Clip
-    drawRoundRect(
-        brush = capsuleRecessBrush,
-        topLeft = Offset(-4.5f, -228f),
-        size = Size(9f, 102f),
-        cornerRadius = CornerRadius(4.5f, 4.5f)
+        style = Stroke(width = 2f)
     )
 
     // Top Specular Highlight Ridge on Clip
     drawLine(
-        color = Color.White.copy(alpha = 0.88f),
+        color = Color.White.copy(alpha = 0.95f),
         start = Offset(-2.5f, -242f),
         end = Offset(-2.5f, -114f),
-        strokeWidth = 3.2f,
+        strokeWidth = 3f,
         cap = StrokeCap.Round
     )
 }
@@ -2316,7 +2306,7 @@ private fun DrawScope.drawBlurredOval(
 
 @Composable
 fun AppleWorksGraphic(
-    modifier: Modifier = Modifier.size(165.dp),
+    modifier: Modifier = Modifier.size(135.dp),
     state: AppleGraphicAnimationState = rememberAppleGraphicAnimationState(),
     enableClickToAnimate: Boolean = true,
     onClick: (() -> Unit)? = null

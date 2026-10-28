@@ -496,7 +496,7 @@ fun UserProfileScreen(
                             AppleEmptyTabState(
                                 graphic = {
                                     AppleWorksGraphic(
-                                        modifier = Modifier.size(150.dp),
+                                        modifier = Modifier.size(130.dp),
                                         state = worksGraphicState,
                                         enableClickToAnimate = true
                                     )
@@ -2058,7 +2058,7 @@ fun AppleEmptyTabState(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 20.dp, bottom = 48.dp, start = 24.dp, end = 24.dp),
+            .padding(top = 8.dp, bottom = 24.dp, start = 24.dp, end = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         if (graphic != null) {
