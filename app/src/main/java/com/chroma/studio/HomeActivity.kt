@@ -1751,24 +1751,25 @@ class HomeActivity : ComponentActivity() {
                     }
 
                     composable("flash_post") {
-                        val uri = flashPickerVideoUri ?: flashPickerPhotoUris.firstOrNull() ?: run { navController.popBackStack(); return@composable }
-                        FlashPostScreen(
-                            flashVm = flashVm,
-                            videoUri = uri,
-                            thumbnailBitmap = flashThumbnail,
-                            trimStartMs = flashTrimStart,
-                            trimEndMs = flashTrimEnd,
-                            filterName = flashFilterName,
-                            brightness = flashBrightness,
-                            contrast = flashContrast,
-                            saturation = flashSaturation,
-                            hue = flashHue,
-                            mediaType = flashMediaType,
-                            photoUris = flashPickerPhotoUris,
-                            durationPerSlideMs = flashDurationPerSlide,
-                            remixedFromPostId = flashRemixPostId,
-                            remixedFromAuthorUsername = flashRemixAuthorUsername,
-                            onSuccess = {
+                        val uri = flashPickerVideoUri ?: flashPickerPhotoUris.firstOrNull()
+                        val importedUris = when {
+                            flashPickerVideoUri != null -> listOf(flashPickerVideoUri!!)
+                            flashPickerPhotoUris.isNotEmpty() -> flashPickerPhotoUris
+                            uri != null -> listOf(uri)
+                            else -> emptyList()
+                        }
+                        com.chroma.studio.ui.screens.CreatorPostOnboardingStudioScreen(
+                            initialMode = if (flashPickerVideoUri != null) com.chroma.studio.ui.screens.CreatorStudioMode.FLASH else com.chroma.studio.ui.screens.CreatorStudioMode.POST,
+                            initialImportedUris = importedUris,
+                            workRepository = vm.repository,
+                            discoverRepository = remember { com.chroma.studio.data.DiscoverRepository() },
+                            flashViewModel = flashVm,
+                            onNavigateBack = {
+                                flashImportedMediaUris = emptyList()
+                                navController.popBackStack()
+                            },
+                            onPostSuccess = {
+                                flashImportedMediaUris = emptyList()
                                 try {
                                     navController.navigate("main") {
                                         popUpTo("main") { inclusive = false }
@@ -1786,8 +1787,7 @@ class HomeActivity : ComponentActivity() {
                                 coroutineScope.launch {
                                     pagerState.animateScrollToPage(2)
                                 }
-                            },
-                            onBack = { navController.popBackStack() }
+                            }
                         )
                     }
 

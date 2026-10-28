@@ -784,19 +784,18 @@ fun FlashPhotoEditorScreen(
 
                         Spacer(modifier = Modifier.width(2.dp))
 
-                        // Next / Done Button
-                        Button(
-                            onClick = { handleExportAndNext() },
-                            enabled = !isExporting,
-                            shape = RoundedCornerShape(8.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = colors.primary,
-                                contentColor = Color.White,
-                                disabledContainerColor = colors.primary.copy(alpha = 0.5f)
-                            ),
-                            elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-                            modifier = Modifier.height(34.dp)
+                        // Next / Done Button (Sleek Studio Action Button)
+                        Box(
+                            modifier = Modifier
+                                .height(36.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(
+                                    if (!isExporting) Brush.horizontalGradient(listOf(Color(0xFFF5882E), Color(0xFFEA580C)))
+                                    else Brush.horizontalGradient(listOf(Color(0xFFF5882E).copy(alpha = 0.5f), Color(0xFFEA580C).copy(alpha = 0.5f)))
+                                )
+                                .clickable(enabled = !isExporting) { handleExportAndNext() }
+                                .padding(horizontal = 14.dp),
+                            contentAlignment = Alignment.Center
                         ) {
                             if (isExporting) {
                                 CircularProgressIndicator(
@@ -805,12 +804,23 @@ fun FlashPhotoEditorScreen(
                                     strokeWidth = 2.dp
                                 )
                             } else {
-                                Text(
-                                    nextButtonLabel,
-                                    color = Color.White,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text(
+                                        nextButtonLabel,
+                                        color = Color.White,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Icon(
+                                        imageVector = Lucide.ArrowRight,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
                             }
                         }
                     }

@@ -45,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
@@ -105,13 +106,13 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 
 // ============================================================================
-// DATA MODELS & ENUMS
+// DATA MODELS & ENUMS (V3 UNIFIED CREATOR STUDIO SPEC)
 // ============================================================================
 
 enum class CreatorStudioMode {
-    POST,  // Photo Carousel & Collage Post
-    FLASH, // 9:16 Vertical Short Reel
-    WORK   // Chroma Studio Saved Vector Work
+    POST,  // Photo Carousel & Collage Post (community_posts)
+    FLASH, // 9:16 Vertical Short Reel (flash_videos)
+    WORK   // Chroma Studio Saved Vector Work (community_posts)
 }
 
 enum class StudioStep(val stepNumber: Int, val title: String) {
@@ -119,6 +120,19 @@ enum class StudioStep(val stepNumber: Int, val title: String) {
     STEP_2_ASPECT_COVER(2, "Step 2 · Aspect & Cover"),
     STEP_3_DETAILS(3, "Step 3 · Details & Meta"),
     STEP_4_UPLOAD(4, "Step 4 · Upload & Share")
+}
+
+/**
+ * Step 2 Tabbed Editor Tabs (v3 spec: Trim/Sound/Cover for Flash, Crop/Filters/Adjust for Photo, Frame for Work)
+ */
+enum class StudioEditTab(val id: String, val label: String, val icon: ImageVector) {
+    TRIM("trim", "Trim", Lucide.Scissors),
+    SOUND("sound", "Sound", Lucide.Music),
+    COVER("cover", "Cover", Lucide.Image),
+    CROP("crop", "Crop", Lucide.Crop),
+    FILTERS("filters", "Filters", Lucide.Sparkles),
+    ADJUST("adjust", "Adjust", Lucide.SlidersHorizontal),
+    FRAME("frame", "Frame", Lucide.Crop)
 }
 
 data class AudioTrackItem(
@@ -168,19 +182,24 @@ data class StudioRatioConfig(
 
 val STUDIO_RATIO_CONFIGS = listOf(
     StudioRatioConfig("1:1", "1:1", "Square (1:1)", 1f, 1f, Lucide.Square, 28.dp, 28.dp),
-    StudioRatioConfig("4:3", "4:3", "Classic (4:3)", 4f, 3f, Lucide.Tv, 32.dp, 24.dp),
-    StudioRatioConfig("16:9", "16:9", "Landscape (16:9)", 16f, 9f, Lucide.RectangleHorizontal, 36.dp, 20.dp),
-    StudioRatioConfig("5:4", "5:4", "Portrait (5:4)", 5f, 4f, Lucide.Frame, 28.dp, 23.dp),
-    StudioRatioConfig("9:16", "9:16", "Story/Flash (9:16)", 9f, 16f, Lucide.Smartphone, 20.dp, 36.dp)
+    StudioRatioConfig("4:5", "4:5", "Portrait (4:5)", 4f, 5f, Lucide.Frame, 24.dp, 30.dp),
+    StudioRatioConfig("16:9", "16:9", "Landscape (16:9)", 16f, 9f, Lucide.RectangleHorizontal, 32.dp, 18.dp),
+    StudioRatioConfig("9:16", "9:16", "Story/Flash (9:16)", 9f, 16f, Lucide.Smartphone, 18.dp, 32.dp),
+    StudioRatioConfig("4:3", "4:3", "Classic (4:3)", 4f, 3f, Lucide.Tv, 30.dp, 23.dp)
 )
 
 val ALGO_CATEGORIES = listOf(
-    "Science",
     "Art",
+    "Design",
+    "Motion",
+    "3D",
+    "Photography",
+    "Code",
+    "Music",
+    "Science",
     "Educational",
     "Inspiration",
     "Casually",
-    "Jobs",
     "Others..."
 )
 
@@ -188,163 +207,127 @@ val PHOTO_FILTER_PRESETS = listOf(
     "Original",
     "Vivid",
     "Warm",
-    "Cool",
-    "Onyx",
+    "Noir",
+    "Cyber",
     "Pastel",
-    "Cyberpunk",
+    "Sunset",
+    "Emerald",
+    "Chrome",
+    "Vintage",
+    "Mono",
     "Drama"
+)
+
+/**
+ * Pre-defined Recent Media Items for Step 1 Recents Grids (v3 spec)
+ */
+data class RecentMediaItem(
+    val id: String,
+    val url: String,
+    val durationText: String? = null,
+    val isVideo: Boolean = false,
+    val title: String = ""
+)
+
+val RECENT_FLASH_PRESETS = listOf(
+    RecentMediaItem("rec_f1", "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=80", "15s", true, "Alpine Lake"),
+    RecentMediaItem("rec_f2", "https://images.unsplash.com/photo-1519046904884-53103b34b206?auto=format&fit=crop&w=600&q=80", "08s", true, "Sunset Coast"),
+    RecentMediaItem("rec_f3", "https://images.unsplash.com/photo-1499793983690-e29da59ef1c2?auto=format&fit=crop&w=600&q=80", "24s", true, "Azure Wave"),
+    RecentMediaItem("rec_f4", "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=600&q=80", "30s", true, "Highway Motion")
+)
+
+val RECENT_PHOTO_PRESETS = listOf(
+    RecentMediaItem("rec_p1", "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=80", null, false, "Lakeview"),
+    RecentMediaItem("rec_p2", "https://images.unsplash.com/photo-1519046904884-53103b34b206?auto=format&fit=crop&w=600&q=80", null, false, "Dusk"),
+    RecentMediaItem("rec_p3", "https://images.unsplash.com/photo-1499793983690-e29da59ef1c2?auto=format&fit=crop&w=600&q=80", null, false, "Beach Villa"),
+    RecentMediaItem("rec_p4", "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=600&q=80", null, false, "Canyon"),
+    RecentMediaItem("rec_p5", "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=600&q=80", null, false, "Valley"),
+    RecentMediaItem("rec_p6", "https://images.unsplash.com/photo-1511556532299-8f662fc26c06?auto=format&fit=crop&w=600&q=80", null, false, "Urban")
+)
+
+/**
+ * Share Target Item for Step 4 Share-to Sheet (v3 spec)
+ */
+data class ShareTargetItem(
+    val id: String,
+    val label: String,
+    val icon: ImageVector,
+    val bgTint: Color,
+    val iconTint: Color
+)
+
+val SHARE_TARGETS = listOf(
+    ShareTargetItem("link", "Copy link", Lucide.Link, Color(0xFFEFF6FF), Color(0xFF2563EB)),
+    ShareTargetItem("story", "Story", Lucide.CirclePlus, Color(0xFFFFF1F2), Color(0xFFF43F5E)),
+    ShareTargetItem("message", "Message", Lucide.MessageCircle, Color(0xFFECFDF5), Color(0xFF10B981)),
+    ShareTargetItem("email", "Email", Lucide.Mail, Color(0xFFF5F3FF), Color(0xFF8B5CF6)),
+    ShareTargetItem("more", "More", Lucide.Share2, Color(0xFFF1F5F9), Color(0xFF64748B))
 )
 
 fun formatDurationTime(ms: Long): String {
     val totalSec = (ms / 1000L).coerceAtLeast(0L)
     val mins = totalSec / 60L
     val secs = totalSec % 60L
-    val tenths = (ms % 1000L) / 100L
-    return "%02d:%02d.%d".format(mins, secs, tenths)
+    return String.format("%02d:%02d", mins, secs)
 }
 
-fun formatTimeMinSec(ms: Long): String {
-    val totalSec = (ms / 1000L).coerceAtLeast(0L)
-    val mins = totalSec / 60L
-    val secs = totalSec % 60L
-    return "%02d:%02d".format(mins, secs)
-}
-
-fun buildStudioColorMatrix(
-    brightness: Float,
-    contrast: Float,
-    saturation: Float,
-    warmth: Float,
-    filterName: String
-): ColorMatrix {
-    val cm = ColorMatrix()
-
-    // 1. Saturation
-    val filterSat = when (filterName) {
-        "Onyx" -> 0f
-        "Vivid" -> 1.5f * saturation
-        "Pastel" -> 0.85f * saturation
-        "Cyberpunk" -> 1.6f * saturation
-        "Drama" -> 1.25f * saturation
-        else -> saturation
-    }
-    cm.setToSaturation(filterSat)
-
-    // 2. Contrast & Brightness
-    val scale = when (filterName) {
-        "Vivid" -> contrast * 1.15f
-        "Onyx" -> contrast * 1.25f
-        "Cyberpunk" -> contrast * 1.2f
-        "Drama" -> contrast * 1.3f
-        else -> contrast
-    }
-    val b = when (filterName) {
-        "Pastel" -> brightness + 15f
-        "Drama" -> brightness - 10f
-        else -> brightness
-    }
-    val translate = (-0.5f * scale + 0.5f) * 255f + b
-
-    val contrastMatrix = ColorMatrix(
-        floatArrayOf(
-            scale, 0f, 0f, 0f, translate,
-            0f, scale, 0f, 0f, translate,
-            0f, 0f, scale, 0f, translate,
-            0f, 0f, 0f, 1f, 0f
-        )
-    )
-    cm.timesAssign(contrastMatrix)
-
-    // 3. Warmth / Temperature
-    val warmVal = when (filterName) {
-        "Warm" -> warmth + 35f
-        "Cool" -> warmth - 35f
-        "Cyberpunk" -> warmth - 25f
-        else -> warmth
-    }
-    if (warmVal != 0f) {
-        val warmthMatrix = ColorMatrix(
-            floatArrayOf(
-                1f + (warmVal * 0.002f), 0f, 0f, 0f, warmVal * 0.4f,
-                0f, 1f, 0f, 0f, 0f,
-                0f, 0f, 1f - (warmVal * 0.002f), 0f, -warmVal * 0.4f,
-                0f, 0f, 0f, 1f, 0f
-            )
-        )
-        cm.timesAssign(warmthMatrix)
-    }
-
-    return cm
-}
+// ────────────────────────────────────────────────────────────────────────────
+// HELPER COMPOSABLES: PREVIEWS, OVERLAYS & SETTING ROWS
+// ────────────────────────────────────────────────────────────────────────────
 
 @Composable
-fun SlidePreviewContent(slide: StudioSlide, modifier: Modifier = Modifier) {
-    val context = LocalContext.current
-    when {
-        slide.work != null -> {
-            val repo = remember { WorkRepository(context) }
-            val layers = remember(slide.work.layersJson) { repo.deserializeLayers(slide.work.layersJson) }
-            CanvasPreview(
-                layers = layers,
-                shape = slide.work.canvasShape,
-                borderColor = Color.Transparent,
-                modifier = modifier
-            )
-        }
-        slide.imageUri != null -> {
-            val cm = remember(slide.brightness, slide.contrast, slide.saturation, slide.warmth, slide.filterName) {
-                buildStudioColorMatrix(slide.brightness, slide.contrast, slide.saturation, slide.warmth, slide.filterName)
-            }
-            AsyncImage(
-                model = ImageRequest.Builder(context).data(slide.imageUri).crossfade(true).build(),
-                contentDescription = null,
-                colorFilter = ColorFilter.colorMatrix(cm),
-                modifier = modifier.graphicsLayer(rotationZ = slide.rotationDegrees),
-                contentScale = ContentScale.Crop
-            )
-        }
-        slide.videoUri != null -> {
-            var videoThumbnail by remember(slide.videoUri) { mutableStateOf<Bitmap?>(null) }
-            LaunchedEffect(slide.videoUri) {
-                withContext(Dispatchers.IO) {
-                    try {
-                        val retriever = MediaMetadataRetriever()
-                        retriever.setDataSource(context, slide.videoUri)
-                        val bmp = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-                            retriever.getScaledFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 480, 640)
-                        } else {
-                            retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                        }
-                        retriever.release()
-                        if (bmp != null) videoThumbnail = bmp
-                    } catch (_: Throwable) {}
-                }
-            }
-
-            Box(modifier = modifier.background(Color(0xFF0F172A)), contentAlignment = Alignment.Center) {
-                if (videoThumbnail != null) {
-                    Image(
-                        bitmap = videoThumbnail!!.asImageBitmap(),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
+fun SlidePreviewContent(
+    slide: StudioSlide,
+    modifier: Modifier = Modifier,
+    contentScale: ContentScale = ContentScale.Crop
+) {
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        when {
+            slide.work != null -> {
                 Box(
                     modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.5f))
-                        .border(1.dp, Color.White.copy(alpha = 0.3f), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Lucide.Play,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(16.dp).padding(start = 2.dp)
-                    )
-                }
+                        .fillMaxSize()
+                        .background(
+                            Brush.linearGradient(
+                                listOf(Color(0xFF0F4C64), Color(0xFF38B8D1), Color(0xFFF5882E))
+                            )
+                        )
+                )
+            }
+            slide.imageUri != null -> {
+                AsyncImage(
+                    model = slide.imageUri,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            rotationZ = slide.rotationDegrees
+                        },
+                    contentScale = contentScale
+                )
+            }
+            !slide.imageUrl.isNullOrBlank() -> {
+                AsyncImage(
+                    model = slide.imageUrl,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            rotationZ = slide.rotationDegrees
+                        },
+                    contentScale = contentScale
+                )
+            }
+            else -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.linearGradient(
+                                listOf(Color(0xFF0F4C64), Color(0xFF38B8D1), Color(0xFFF5882E))
+                            )
+                        )
+                )
             }
         }
     }
@@ -354,45 +337,19 @@ fun SlidePreviewContent(slide: StudioSlide, modifier: Modifier = Modifier) {
 fun ThirdsGridOverlay(modifier: Modifier = Modifier) {
     Canvas(modifier = modifier) {
         val strokeWidth = 1.dp.toPx()
-        val gridColor = Color.White.copy(alpha = 0.65f)
-        val shadowColor = Color.Black.copy(alpha = 0.35f)
+        val gridColor = Color.White.copy(alpha = 0.5f)
 
-        // Vertical lines at 1/3 and 2/3
-        val colWidth = size.width / 3f
-        for (i in 1..2) {
-            val x = colWidth * i
-            // Subtle shadow line
-            drawLine(
-                color = shadowColor,
-                start = Offset(x + 1f, 0f),
-                end = Offset(x + 1f, size.height),
-                strokeWidth = strokeWidth
-            )
-            drawLine(
-                color = gridColor,
-                start = Offset(x, 0f),
-                end = Offset(x, size.height),
-                strokeWidth = strokeWidth
-            )
-        }
+        // Vertical lines
+        val x1 = size.width / 3f
+        val x2 = size.width * 2f / 3f
+        drawLine(color = gridColor, start = Offset(x1, 0f), end = Offset(x1, size.height), strokeWidth = strokeWidth)
+        drawLine(color = gridColor, start = Offset(x2, 0f), end = Offset(x2, size.height), strokeWidth = strokeWidth)
 
-        // Horizontal lines at 1/3 and 2/3
-        val rowHeight = size.height / 3f
-        for (i in 1..2) {
-            val y = rowHeight * i
-            drawLine(
-                color = shadowColor,
-                start = Offset(0f, y + 1f),
-                end = Offset(size.width, y + 1f),
-                strokeWidth = strokeWidth
-            )
-            drawLine(
-                color = gridColor,
-                start = Offset(0f, y),
-                end = Offset(size.width, y),
-                strokeWidth = strokeWidth
-            )
-        }
+        // Horizontal lines
+        val y1 = size.height / 3f
+        val y2 = size.height * 2f / 3f
+        drawLine(color = gridColor, start = Offset(0f, y1), end = Offset(size.width, y1), strokeWidth = strokeWidth)
+        drawLine(color = gridColor, start = Offset(0f, y2), end = Offset(size.width, y2), strokeWidth = strokeWidth)
     }
 }
 
@@ -401,30 +358,69 @@ fun SettingToggleRow(
     title: String,
     subtitle: String,
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
+    icon: ImageVector? = null,
+    modifier: Modifier = Modifier
 ) {
     val colors = LocalOscellionColors.current
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-            Text(title, color = colors.textMain, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-            Text(subtitle, color = colors.textMuted, fontSize = 11.sp)
+        Row(
+            modifier = Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (icon != null) {
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(if (colors.isDark) Color(0xFF232838) else Color(0xFFF1F5F9)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = if (checked) colors.primary else colors.textMuted,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = title,
+                    color = colors.textMain,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = subtitle,
+                    color = colors.textMuted,
+                    fontSize = 10.sp,
+                    lineHeight = 13.sp
+                )
+            }
         }
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
             colors = SwitchDefaults.colors(
                 checkedThumbColor = Color.White,
-                checkedTrackColor = Color(0xFFF5882E),
+                checkedTrackColor = colors.primary,
                 uncheckedThumbColor = Color.White,
-                uncheckedTrackColor = if (colors.isDark) Color.White.copy(alpha = 0.2f) else Color(0xFFCBD5E1)
-            )
+                uncheckedTrackColor = if (colors.isDark) Color(0xFF334155) else Color(0xFFCBD5E1),
+                uncheckedBorderColor = Color.Transparent
+            ),
+            modifier = Modifier.scale(0.85f)
         )
     }
 }
+
 
 // ============================================================================
 // MAIN COMPOSABLE: CreatorPostOnboardingStudioScreen
@@ -451,6 +447,10 @@ fun CreatorPostOnboardingStudioScreen(
     // Core Screen State
     var studioMode by remember { mutableStateOf(initialMode) }
     var currentStep by remember { mutableStateOf(StudioStep.STEP_1_MEDIA) }
+    var activeEditTab by remember { mutableStateOf(StudioEditTab.CROP) }
+    var isComparingOriginal by remember { mutableStateOf(false) }
+    var isAdvancedSettingsOpen by remember { mutableStateOf(false) }
+    var isAltTextOpen by remember { mutableStateOf(false) }
     var currentDraftId by remember { mutableStateOf(initialDraftId) }
 
     // Multi-slides & active slide index
@@ -518,6 +518,9 @@ fun CreatorPostOnboardingStudioScreen(
     var workIsSeriesMode by remember { mutableStateOf(false) }
 
     // Modals & Drawers
+    var showPhotoStudioModal by remember { mutableStateOf(false) }
+    var showVideoStudioModal by remember { mutableStateOf(false) }
+    var showInspectorModal by remember { mutableStateOf(false) }
     var showDraftsDrawer by remember { mutableStateOf(false) }
     var showMentionModal by remember { mutableStateOf(false) }
     var safetyViolationResult by remember { mutableStateOf<com.chroma.studio.ml.safety.SafetyScanResult?>(null) }
@@ -1132,6 +1135,7 @@ fun CreatorPostOnboardingStudioScreen(
                     }
                 },
                 onOpenDrafts = { showDraftsDrawer = true },
+                onOpenInspector = { showInspectorModal = true },
                 onNextStep = {
                     when (currentStep) {
                         StudioStep.STEP_1_MEDIA -> currentStep = StudioStep.STEP_2_ASPECT_COVER
@@ -1167,6 +1171,8 @@ fun CreatorPostOnboardingStudioScreen(
                             workIsSeriesMode = workIsSeriesMode,
                             workRepository = workRepository,
                             onSlideChange = { currentSlideIndex = it },
+                            onOpenPhotoStudio = { showPhotoStudioModal = true },
+                            onOpenVideoStudio = { showVideoStudioModal = true },
                             onLaunchImagePicker = {
                                 multipleImagesPickerLauncher.launch(
                                     PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
@@ -1246,7 +1252,27 @@ fun CreatorPostOnboardingStudioScreen(
                                 }
                             },
                             onOpenAudioMixer = { showAudioMixerModal = true },
-                            selectedSoundtrackTitle = selectedSoundtrack?.title
+                            selectedSoundtrackTitle = selectedSoundtrack?.title,
+                            onSelectRecentFlash = { preset ->
+                                if (slides.isEmpty()) {
+                                    slides.add(StudioSlide(imageUrl = preset.url, label = preset.title))
+                                } else {
+                                    slides[0] = slides[0].copy(imageUrl = preset.url, label = preset.title)
+                                }
+                                currentSlideIndex = 0
+                            },
+                            onToggleRecentPhoto = { preset ->
+                                val existingIndex = slides.indexOfFirst { it.imageUrl == preset.url }
+                                if (existingIndex >= 0) {
+                                    if (slides.size > 1) {
+                                        slides.removeAt(existingIndex)
+                                        currentSlideIndex = currentSlideIndex.coerceIn(0, slides.lastIndex)
+                                    }
+                                } else if (slides.size < 10) {
+                                    slides.add(StudioSlide(imageUrl = preset.url, label = preset.title))
+                                    currentSlideIndex = slides.lastIndex
+                                }
+                            }
                         )
                     }
 
@@ -1264,6 +1290,45 @@ fun CreatorPostOnboardingStudioScreen(
                             selectedCoverFrameMs = selectedCoverFrameMs,
                             flashVideoDurationMs = flashVideoDurationMs,
                             coverThumbnailBmp = coverThumbnailBmp,
+                            activeEditTab = activeEditTab,
+                            isComparingOriginal = isComparingOriginal,
+                            flashTrimStartMs = flashTrimStartMs,
+                            flashTrimEndMs = flashTrimEndMs,
+                            flashPlaybackSpeed = flashPlaybackSpeed,
+                            flashIsMuted = flashIsMuted,
+                            flashIsFlipped = flashIsFlipped,
+                            onSelectEditTab = { activeEditTab = it },
+                            onHoldOriginal = { isComparingOriginal = it },
+                            onRotatePhoto = {
+                                val cur = slides.getOrNull(currentSlideIndex)
+                                if (cur != null) {
+                                    slides[currentSlideIndex] = cur.copy(rotationDegrees = (cur.rotationDegrees + 90f) % 360f)
+                                }
+                            },
+                            onFlipPhoto = {
+                                val cur = slides.getOrNull(currentSlideIndex)
+                                if (cur != null) {
+                                    slides[currentSlideIndex] = cur.copy(rotationDegrees = (cur.rotationDegrees + 180f) % 360f)
+                                }
+                            },
+                            onResetFraming = {
+                                cropOffsetX = 50f
+                                cropOffsetY = 50f
+                                selectedRatioId = "1:1"
+                                val cur = slides.getOrNull(currentSlideIndex)
+                                if (cur != null) {
+                                    slides[currentSlideIndex] = cur.copy(
+                                        rotationDegrees = 0f,
+                                        filterName = "Original",
+                                        brightness = 0f,
+                                        contrast = 1f,
+                                        saturation = 1f,
+                                        warmth = 0f,
+                                        vignette = 0f,
+                                        sharpness = 0f
+                                    )
+                                }
+                            },
                             onSelectRatio = { selectedRatioId = it },
                             onToggleThirdsGrid = { showThirdsGrid = !showThirdsGrid },
                             onToggleWatermark = { showWatermark = !showWatermark },
@@ -1287,6 +1352,51 @@ fun CreatorPostOnboardingStudioScreen(
                                 if (slides.size > 1 && idx in slides.indices) {
                                     slides.removeAt(idx)
                                     currentSlideIndex = currentSlideIndex.coerceIn(0, slides.lastIndex)
+                                }
+                            },
+                            onReorderSlide = { from, to ->
+                                if (from in slides.indices && to in slides.indices) {
+                                    val item = slides.removeAt(from)
+                                    slides.add(to, item)
+                                    currentSlideIndex = to
+                                }
+                            },
+                            onUpdateTrim = { s, e ->
+                                flashTrimStartMs = s
+                                flashTrimEndMs = e
+                            },
+                            onCycleSpeed = {
+                                flashPlaybackSpeed = when (flashPlaybackSpeed) {
+                                    0.5f -> 1.0f
+                                    1.0f -> 1.5f
+                                    1.5f -> 2.0f
+                                    else -> 0.5f
+                                }
+                            },
+                            onToggleMute = { flashIsMuted = !flashIsMuted },
+                            onToggleFlip = { flashIsFlipped = !flashIsFlipped },
+                            onSnapFifteenSec = {
+                                flashTrimStartMs = 0L
+                                flashTrimEndMs = 15000L.coerceAtMost(flashVideoDurationMs)
+                            },
+                            onOpenAudioMixer = { showAudioMixerModal = true },
+                            onSelectFilterPreset = { preset ->
+                                val cur = slides.getOrNull(currentSlideIndex)
+                                if (cur != null) {
+                                    slides[currentSlideIndex] = cur.copy(filterName = preset)
+                                }
+                            },
+                            onUpdatePhotoAdjustments = { b, c, s, w, v, sh ->
+                                val cur = slides.getOrNull(currentSlideIndex)
+                                if (cur != null) {
+                                    slides[currentSlideIndex] = cur.copy(
+                                        brightness = b,
+                                        contrast = c,
+                                        saturation = s,
+                                        warmth = w,
+                                        vignette = v,
+                                        sharpness = sh
+                                    )
                                 }
                             }
                         )
@@ -1313,6 +1423,17 @@ fun CreatorPostOnboardingStudioScreen(
                             includeOriginalAudio = includeOriginalAudio,
                             allowDownloads = allowDownloads,
                             highQualityUpload = highQualityUpload,
+                            scheduleReleaseEnabled = scheduleReleaseEnabled,
+                            scheduleDateTime = scheduleDateTime,
+                            remixAttributionEnabled = remixAttributionEnabled,
+                            isAdvancedSettingsOpen = isAdvancedSettingsOpen,
+                            isAltTextOpen = isAltTextOpen,
+                            onEditCoverClick = { currentStep = StudioStep.STEP_2_ASPECT_COVER },
+                            onToggleAdvancedSettings = { isAdvancedSettingsOpen = !isAdvancedSettingsOpen },
+                            onToggleAltText = { isAltTextOpen = !isAltTextOpen },
+                            onToggleScheduleRelease = { scheduleReleaseEnabled = it },
+                            onScheduleDateTimeChange = { scheduleDateTime = it },
+                            onToggleRemixAttribution = { remixAttributionEnabled = it },
                             onTitleChange = { if (it.length <= 100) postTitle = it },
                             onDescriptionChange = { if (it.length <= 1500) postDescription = it },
                             onCategorySelect = { cat ->
@@ -1328,23 +1449,15 @@ fun CreatorPostOnboardingStudioScreen(
                                 }
                             },
                             onRemoveHashtag = { hashtags.remove(it) },
-                            onOpenMentionSearch = { showMentionModal = true },
+                            onOpenMentionModal = { showMentionModal = true },
                             onRemoveMention = { mentionedUsers.remove(it) },
-                            onAudienceVisibilityChange = { audienceVisibility = it },
+                            onAudienceSelect = { audienceVisibility = it },
                             onToggleHideLikes = { hideLikesCount = it },
-                            onToggleTurnOffComments = { turnOffComments = it },
-                            onToggleTurnOffRemix = { turnOffRemix = it },
-                            onToggleIncludeOriginalAudio = { includeOriginalAudio = it },
-                            onToggleAllowDownloads = { allowDownloads = it },
-                            onToggleHighQualityUpload = { highQualityUpload = it },
-                            scheduleReleaseEnabled = scheduleReleaseEnabled,
-                            scheduleDateTime = scheduleDateTime,
-                            remixAttributionEnabled = remixAttributionEnabled,
-                            onToggleScheduleRelease = { scheduleReleaseEnabled = it },
-                            onScheduleDateTimeChange = { scheduleDateTime = it },
-                            onToggleRemixAttribution = { remixAttributionEnabled = it },
-                            onSaveDraft = { saveCurrentDraft(showToast = true) },
-                            onPublishClick = { startUploadPipeline() }
+                            onToggleComments = { turnOffComments = it },
+                            onToggleRemix = { turnOffRemix = it },
+                            onToggleAudio = { includeOriginalAudio = it },
+                            onToggleDownloads = { allowDownloads = it },
+                            onToggleHighQuality = { highQualityUpload = it }
                         )
                     }
 
@@ -1376,7 +1489,51 @@ fun CreatorPostOnboardingStudioScreen(
                                 context.startActivity(Intent.createChooser(sendIntent, "Share Creation"))
                             },
                             onDoneClick = { showFullPostModal = true },
-                            onRetryUpload = { startUploadPipeline() }
+                            onRetryUpload = { startUploadPipeline() },
+                            onShareTargetClick = { target ->
+                                when (target.id) {
+                                    "link" -> {
+                                        clipboardManager.setText(AnnotatedString(generatedDeepLink))
+                                        Toast.makeText(context, "Deep link copied to clipboard", Toast.LENGTH_SHORT).show()
+                                    }
+                                    "story" -> {
+                                        val sendIntent = Intent().apply {
+                                            action = Intent.ACTION_SEND
+                                            putExtra(Intent.EXTRA_TEXT, "Shared to Story: $generatedDeepLink")
+                                            type = "text/plain"
+                                        }
+                                        context.startActivity(Intent.createChooser(sendIntent, "Share to Story"))
+                                    }
+                                    "message" -> {
+                                        val sendIntent = Intent().apply {
+                                            action = Intent.ACTION_SEND
+                                            putExtra(Intent.EXTRA_TEXT, "Check out this creation: $generatedDeepLink")
+                                            type = "text/plain"
+                                        }
+                                        context.startActivity(Intent.createChooser(sendIntent, "Send Message"))
+                                    }
+                                    "email" -> {
+                                        val emailIntent = Intent(Intent.ACTION_SEND).apply {
+                                            type = "message/rfc822"
+                                            putExtra(Intent.EXTRA_SUBJECT, postTitle.ifBlank { "Oscellion Creation" })
+                                            putExtra(Intent.EXTRA_TEXT, "Look at my new creation on Oscellion: $generatedDeepLink")
+                                        }
+                                        try {
+                                            context.startActivity(Intent.createChooser(emailIntent, "Send Email"))
+                                        } catch (e: Exception) {
+                                            Toast.makeText(context, "No email client found", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                    "more" -> {
+                                        val sendIntent = Intent().apply {
+                                            action = Intent.ACTION_SEND
+                                            putExtra(Intent.EXTRA_TEXT, "Check out my new creation on Oscellion: $generatedDeepLink")
+                                            type = "text/plain"
+                                        }
+                                        context.startActivity(Intent.createChooser(sendIntent, "Share Creation"))
+                                    }
+                                }
+                            }
                         )
                     }
                 }
@@ -1486,10 +1643,6 @@ fun CreatorPostOnboardingStudioScreen(
 
 
 // ============================================================================
-// STICKY HEADER COMPONENT (Matches exact HTML reference layout)
-// ============================================================================
-
-// ============================================================================
 // OSCELION DYNAMIC ISLAND (Matches HTML Reference Layout)
 // ============================================================================
 
@@ -1498,7 +1651,7 @@ fun OscellionDynamicIsland(
     isExpanded: Boolean,
     onToggleExpand: () -> Unit,
     title: String = "Oscellion Studio",
-    subtitle: String = "Ready • UnifiedPostPayload synced",
+    subtitle: String = "Ready · UnifiedPostPayload synced",
     badgeText: String = "LIVE",
     modifier: Modifier = Modifier
 ) {
@@ -1516,111 +1669,81 @@ fun OscellionDynamicIsland(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(top = 4.dp, bottom = 2.dp),
+            .padding(top = 8.dp, bottom = 4.dp),
         contentAlignment = Alignment.Center
     ) {
-        Surface(
+        Row(
             modifier = Modifier
                 .width(islandWidth)
                 .height(islandHeight)
-                .clickable { onToggleExpand() },
-            shape = RoundedCornerShape(26.dp),
-            color = Color(0xFF0F1117),
-            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
-            shadowElevation = 8.dp
+                .clip(CircleShape)
+                .background(Color(0xFF0F172A))
+                .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)), CircleShape)
+                .clickable { onToggleExpand() }
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Box(
-                modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
-                contentAlignment = Alignment.Center
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                if (!isExpanded) {
-                    // Compact View
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Box(
-                                modifier = Modifier
-                                    .size(16.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        Brush.linearGradient(listOf(Color(0xFF007AFF), Color(0xFF5AC8FA)))
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text("O", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Black)
-                            }
-                            Text("Oscellion", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                            val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-                            val pulseAlpha by infiniteTransition.animateFloat(
-                                initialValue = 0.4f,
-                                targetValue = 1f,
-                                animationSpec = infiniteRepeatable(
-                                    animation = tween(800, easing = LinearEasing),
-                                    repeatMode = RepeatMode.Reverse
-                                ),
-                                label = "dotPulse"
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .size(7.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFF34D399).copy(alpha = pulseAlpha))
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .size(9.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFF18181B))
-                                    .border(0.5.dp, Color.White.copy(alpha = 0.2f), CircleShape)
-                            )
-                        }
+                // Emerald pulsing dot
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF10B981))
+                )
+
+                if (isExpanded) {
+                    Column(verticalArrangement = Arrangement.Center) {
+                        Text(
+                            text = title,
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1
+                        )
+                        Text(
+                            text = subtitle,
+                            color = Color.White.copy(alpha = 0.65f),
+                            fontSize = 9.sp,
+                            maxLines = 1
+                        )
                     }
                 } else {
-                    // Expanded View
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(34.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(Color(0xFF18181B))
-                                .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(10.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Lucide.Sparkles, contentDescription = null, tint = Color(0xFF5AC8FA), modifier = Modifier.size(18.dp))
-                        }
-                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(title, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(Color(0xFF064E3B))
-                                        .padding(horizontal = 4.dp, vertical = 1.dp)
-                                ) {
-                                    Text(badgeText, color = Color(0xFF34D399), fontSize = 8.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                                }
-                            }
-                            Text(subtitle, color = Color(0xFFD1D5DB), fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                    }
+                    Text(
+                        text = "OSCELLION",
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
                 }
+            }
+
+            // Live Pill Badge
+            Box(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.12f))
+                    .padding(horizontal = 7.dp, vertical = 2.dp)
+            ) {
+                Text(
+                    text = badgeText,
+                    color = Color(0xFF10B981),
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
             }
         }
     }
 }
+
+// ============================================================================
+// STICKY HEADER COMPONENT (Matches exact HTML reference layout)
+// ============================================================================
 
 @Composable
 fun StudioStickyHeader(
@@ -1630,31 +1753,33 @@ fun StudioStickyHeader(
     onBackClick: () -> Unit,
     onSwitchMode: (CreatorStudioMode) -> Unit,
     onOpenDrafts: () -> Unit,
+    onOpenInspector: () -> Unit = {},
     onNextStep: () -> Unit,
-    onJumpToStep: (StudioStep) -> Unit
+    onJumpToStep: (StudioStep) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val colors = LocalOscellionColors.current
 
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .background(if (colors.isDark) Color(0xFF141720) else Color.White)
-            .border(BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)))
-            .padding(horizontal = 14.dp, vertical = 8.dp)
+            .background(if (colors.isDark) Color(0xFF0F1117) else Color(0xFFF8FAFC))
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // Top Action Row
+        // Row 1: Back Button, Mode Switcher, Drafts Drawer Icon & Next Step Liquid Glass Button
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Left: Circular Back Button
+            // Left Action: Back Button
             Box(
                 modifier = Modifier
                     .size(38.dp)
                     .clip(CircleShape)
-                    .background(if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFF1F5F9))
-                    .border(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFE2E8F0), CircleShape)
+                    .background(if (colors.isDark) Color(0xFF1E2230) else Color.White)
+                    .border(BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFE2E8F0)), CircleShape)
                     .clickable { onBackClick() },
                 contentAlignment = Alignment.Center
             ) {
@@ -1662,113 +1787,111 @@ fun StudioStickyHeader(
                     imageVector = Lucide.ArrowLeft,
                     contentDescription = "Back",
                     tint = colors.textMain,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(16.dp)
                 )
             }
 
-            // Center: 3-Mode Switcher Pill
+            // Center: Mode Switcher (Pill with sliding active state)
             Row(
                 modifier = Modifier
-                    .clip(CircleShape)
-                    .background(if (colors.isDark) Color.White.copy(alpha = 0.06f) else Color(0xFFF1F5F9))
-                    .border(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.10f) else Color(0xFFE2E8F0), CircleShape)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(if (colors.isDark) Color(0xFF1A1D27) else Color(0xFFEDF2F7))
+                    .border(BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)), RoundedCornerShape(20.dp))
                     .padding(3.dp),
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Flash Tab
+                // FLASH / REEL Tab
                 val isFlash = studioMode == CreatorStudioMode.FLASH
-                Row(
+                Box(
                     modifier = Modifier
-                        .clip(CircleShape)
-                        .background(if (isFlash) (if (colors.isDark) Color(0xFF1E293B) else Color.White) else Color.Transparent)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(if (isFlash) (if (colors.isDark) Color(0xFF282D3D) else Color.White) else Color.Transparent)
                         .clickable { onSwitchMode(CreatorStudioMode.FLASH) }
-                        .padding(horizontal = 10.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Lucide.Zap,
-                        contentDescription = null,
-                        tint = if (isFlash) Color(0xFFF5882E) else colors.textMuted,
-                        modifier = Modifier.size(13.dp)
-                    )
                     Text(
-                        "Flash",
-                        color = if (isFlash) colors.textMain else colors.textMuted,
+                        text = "REEL",
+                        color = if (isFlash) colors.primary else colors.textMuted,
                         fontSize = 11.sp,
-                        fontWeight = if (isFlash) FontWeight.Bold else FontWeight.Medium
+                        fontWeight = if (isFlash) FontWeight.Bold else FontWeight.SemiBold
                     )
                 }
 
-                // Photo Tab
+                // POST Tab
                 val isPhoto = studioMode == CreatorStudioMode.POST
-                Row(
+                Box(
                     modifier = Modifier
-                        .clip(CircleShape)
-                        .background(if (isPhoto) (if (colors.isDark) Color(0xFF1E293B) else Color.White) else Color.Transparent)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(if (isPhoto) (if (colors.isDark) Color(0xFF282D3D) else Color.White) else Color.Transparent)
                         .clickable { onSwitchMode(CreatorStudioMode.POST) }
-                        .padding(horizontal = 10.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Lucide.Camera,
-                        contentDescription = null,
-                        tint = if (isPhoto) Color(0xFF1696B2) else colors.textMuted,
-                        modifier = Modifier.size(13.dp)
-                    )
                     Text(
-                        "Photo",
-                        color = if (isPhoto) colors.textMain else colors.textMuted,
+                        text = "POST",
+                        color = if (isPhoto) colors.primary else colors.textMuted,
                         fontSize = 11.sp,
-                        fontWeight = if (isPhoto) FontWeight.Bold else FontWeight.Medium
+                        fontWeight = if (isPhoto) FontWeight.Bold else FontWeight.SemiBold
                     )
                 }
 
-                // Work Tab
+                // WORK Tab
                 val isWork = studioMode == CreatorStudioMode.WORK
-                Row(
+                Box(
                     modifier = Modifier
-                        .clip(CircleShape)
-                        .background(if (isWork) (if (colors.isDark) Color(0xFF1E293B) else Color.White) else Color.Transparent)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(if (isWork) (if (colors.isDark) Color(0xFF282D3D) else Color.White) else Color.Transparent)
                         .clickable { onSwitchMode(CreatorStudioMode.WORK) }
-                        .padding(horizontal = 10.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Lucide.Layers,
-                        contentDescription = null,
-                        tint = if (isWork) Color(0xFF8B5CF6) else colors.textMuted,
-                        modifier = Modifier.size(13.dp)
-                    )
                     Text(
-                        "Work",
-                        color = if (isWork) colors.textMain else colors.textMuted,
+                        text = "WORK",
+                        color = if (isWork) colors.primary else colors.textMuted,
                         fontSize = 11.sp,
-                        fontWeight = if (isWork) FontWeight.Bold else FontWeight.Medium
+                        fontWeight = if (isWork) FontWeight.Bold else FontWeight.SemiBold
                     )
                 }
             }
 
-            // Right: Saved Drafts Bookmark Icon + Circular Next Button
+            // Right Action Group: Live Payload Inspector, Saved Drafts + Next Step Button
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                // Drafts Button with Badge
+                // macOS Live Payload & Compose Inspector Icon Button
                 Box(
                     modifier = Modifier
                         .size(38.dp)
                         .clip(CircleShape)
-                        .background(if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFF1F5F9))
-                        .border(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFE2E8F0), CircleShape)
+                        .background(if (colors.isDark) Color(0xFF1E2230) else Color.White)
+                        .border(BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFE2E8F0)), CircleShape)
+                        .clickable { onOpenInspector() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Lucide.Code2,
+                        contentDescription = "Inspect Payload",
+                        tint = Color(0xFFF5882E),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+
+                // Drafts Drawer Icon Button
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(if (colors.isDark) Color(0xFF1E2230) else Color.White)
+                        .border(BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFE2E8F0)), CircleShape)
                         .clickable { onOpenDrafts() },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Lucide.Bookmark,
-                        contentDescription = "Drafts",
+                        imageVector = Lucide.Archive,
+                        contentDescription = "Saved Drafts",
                         tint = colors.textMain,
                         modifier = Modifier.size(16.dp)
                     )
@@ -1776,131 +1899,107 @@ fun StudioStickyHeader(
                         Box(
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
-                                .offset(x = 2.dp, y = (-2).dp)
-                                .size(16.dp)
+                                .size(14.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFF1696B2))
-                                .border(1.5.dp, if (colors.isDark) Color(0xFF141720) else Color.White, CircleShape),
+                                .background(Color(0xFFF5882E)),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = "$draftsCount",
                                 color = Color.White,
                                 fontSize = 8.sp,
-                                fontWeight = FontWeight.ExtraBold
+                                fontWeight = FontWeight.Bold
                             )
                         }
                     }
                 }
 
-                // Next / Publish Circular Action Button
+                // Next Step Liquid Glass Button (Orange gradient)
                 Box(
                     modifier = Modifier
                         .size(38.dp)
                         .clip(CircleShape)
                         .background(
                             Brush.horizontalGradient(
-                                listOf(Color(0xFFFB923C), Color(0xFFF5882E))
+                                listOf(Color(0xFFF5882E), Color(0xFFEA580C))
                             )
                         )
+                        .shadow(elevation = 4.dp, shape = CircleShape)
                         .clickable { onNextStep() },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = if (currentStep == StudioStep.STEP_3_DETAILS) Lucide.Send else Lucide.ArrowRight,
-                        contentDescription = "Continue",
+                        imageVector = if (currentStep == StudioStep.STEP_4_UPLOAD) Lucide.Check else Lucide.ArrowRight,
+                        contentDescription = "Next Step",
                         tint = Color.White,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(17.dp)
                     )
                 }
             }
         }
 
-        Spacer(Modifier.height(8.dp))
-
-        // Step Progress Subtitle & Database Collection Pill
+        // Row 2: Target Collection Pill + 4-Segment Step Indicator
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Icon(
-                    imageVector = when (currentStep) {
-                        StudioStep.STEP_1_MEDIA -> Lucide.SlidersHorizontal
-                        StudioStep.STEP_2_ASPECT_COVER -> Lucide.Frame
-                        StudioStep.STEP_3_DETAILS -> Lucide.PenTool
-                        StudioStep.STEP_4_UPLOAD -> Lucide.CloudUpload
-                    },
-                    contentDescription = null,
-                    tint = Color(0xFF1696B2),
-                    modifier = Modifier.size(14.dp)
-                )
-                Text(
-                    text = currentStep.title,
-                    color = Color(0xFF1696B2),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.5.sp
-                )
-            }
-
-            // Target Database Collection Pill
-            Row(
+            // Target Collection Pill
+            Box(
                 modifier = Modifier
-                    .clip(CircleShape)
-                    .background(if (colors.isDark) Color.White.copy(alpha = 0.06f) else Color(0xFFF1F5F9))
-                    .border(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.10f) else Color(0xFFE2E8F0), CircleShape)
-                .padding(horizontal = 8.dp, vertical = 2.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (colors.isDark) Color(0xFF1696B2).copy(alpha = 0.2f) else Color(0xFFE0F7FA))
+                    .border(BorderStroke(1.dp, if (colors.isDark) Color(0xFF1696B2).copy(alpha = 0.4f) else Color(0xFFB2EBF2)), RoundedCornerShape(12.dp))
+                    .padding(horizontal = 8.dp, vertical = 3.dp)
             ) {
-                Icon(
-                    imageVector = Lucide.Database,
-                    contentDescription = null,
-                    tint = Color(0xFF1696B2),
-                    modifier = Modifier.size(11.dp)
-                )
-                Text(
-                    text = if (studioMode == CreatorStudioMode.FLASH) "flash_videos" else "community_posts",
-                    color = colors.textMuted,
-                    fontSize = 9.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.SemiBold
-                )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Icon(
+                        Lucide.Database,
+                        contentDescription = null,
+                        tint = Color(0xFF1696B2),
+                        modifier = Modifier.size(11.dp)
+                    )
+                    Text(
+                        text = if (studioMode == CreatorStudioMode.FLASH) "flash_videos" else "community_posts",
+                        color = Color(0xFF1696B2),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
             }
-        }
 
-        Spacer(Modifier.height(6.dp))
-
-        // 4-Segment Interactive Step Bar
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(5.dp)
-        ) {
-            StudioStep.values().forEach { step ->
-                val isActive = step.stepNumber <= currentStep.stepNumber
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(5.dp)
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(
-                            if (isActive) Color(0xFFF5882E)
-                            else (if (colors.isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFE2E8F0))
-                        )
-                        .clickable { onJumpToStep(step) }
-                )
+            // 4-Segment Interactive Step Bar
+            Row(
+                modifier = Modifier.weight(1f, fill = false).padding(start = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                StudioStep.values().forEach { step ->
+                    val isActive = step.stepNumber <= currentStep.stepNumber
+                    val isCurrent = step == currentStep
+                    Box(
+                        modifier = Modifier
+                            .height(6.dp)
+                            .width(if (isCurrent) 28.dp else 16.dp)
+                            .clip(CircleShape)
+                            .background(
+                                when {
+                                    isCurrent -> Brush.horizontalGradient(listOf(Color(0xFF38B8D1), Color(0xFFF5882E)))
+                                    isActive -> SolidColor(Color(0xFF1696B2))
+                                    else -> SolidColor(if (colors.isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFCBD5E1))
+                                }
+                            )
+                            .clickable { onJumpToStep(step) }
+                    )
+                }
             }
         }
     }
 }
 
 // ============================================================================
-// STEP 1: MEDIA INGESTION & PRE-TOOL EDITING STAGE
+// STEP 1: MEDIA INGESTION & PRE-TOOL EDITING (V3 ENHANCED SPEC)
 // ============================================================================
 
 @Composable
@@ -1921,6 +2020,8 @@ fun Step1MediaAndEditStage(
     workRepository: WorkRepository,
     onOpenAudioMixer: () -> Unit = {},
     selectedSoundtrackTitle: String? = null,
+    onOpenPhotoStudio: () -> Unit = {},
+    onOpenVideoStudio: () -> Unit = {},
     onSlideChange: (Int) -> Unit,
     onLaunchImagePicker: () -> Unit,
     onLaunchVideoPicker: () -> Unit,
@@ -1937,10 +2038,24 @@ fun Step1MediaAndEditStage(
     onRotateWorkMesh: () -> Unit,
     onWorkSearchChange: (String) -> Unit,
     onToggleWorkSeries: () -> Unit,
-    onSelectWork: (ChromaWork) -> Unit
+    onSelectWork: (ChromaWork) -> Unit,
+    onSelectRecentFlash: (RecentMediaItem) -> Unit = {},
+    onToggleRecentPhoto: (RecentMediaItem) -> Unit = {}
 ) {
     val colors = LocalOscellionColors.current
     val context = LocalContext.current
+
+    val allWorks = remember {
+        try {
+            workRepository.loadActiveWorks()
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+    val filteredWorks = remember(allWorks, workSearchQuery) {
+        if (workSearchQuery.isBlank()) allWorks
+        else allWorks.filter { it.name.contains(workSearchQuery, ignoreCase = true) }
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 10.dp),
@@ -1948,10 +2063,10 @@ fun Step1MediaAndEditStage(
     ) {
         when (studioMode) {
             // ────────────────────────────────────────────────────────────────
-            // 1A. FLASH VIDEO MODE
+            // 1A. FLASH VIDEO MODE (Reel / Flash 9:16)
             // ────────────────────────────────────────────────────────────────
             CreatorStudioMode.FLASH -> {
-                // Source Selector Card
+                // Source Selector Card & Recents Grid
                 item {
                     Column(
                         modifier = Modifier
@@ -1990,11 +2105,11 @@ fun Step1MediaAndEditStage(
                                 }
                                 Column {
                                     Text("Gallery", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                    Text("MP4 · 9:16", color = colors.textMuted, fontSize = 10.sp)
+                                    Text("MP4 · 30s", color = colors.textMuted, fontSize = 10.sp)
                                 }
                             }
 
-                            // Record Camera Button
+                            // Record Live Camera Button
                             Row(
                                 modifier = Modifier
                                     .weight(1f)
@@ -2013,148 +2128,148 @@ fun Step1MediaAndEditStage(
                                         .background(if (colors.isDark) Color(0xFF141720) else Color.White),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(Lucide.Camera, contentDescription = null, tint = Color(0xFFF5882E), modifier = Modifier.size(16.dp))
+                                    Icon(Lucide.Video, contentDescription = null, tint = Color(0xFFF5882E), modifier = Modifier.size(16.dp))
                                 }
                                 Column {
-                                    Text("Record", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                    Text("Max 30.0s", color = colors.textMuted, fontSize = 10.sp)
+                                    Text("Recorder", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text("9:16 Live", color = colors.textMuted, fontSize = 10.sp)
                                 }
                             }
+                        }
 
-                            // Audio Button
-                            Box(
-                                modifier = Modifier
-                                    .size(46.dp)
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(if (colors.isDark) Color(0xFF0F172A) else Color(0xFF0F172A))
-                                    .clickable { onOpenAudioMixer() },
-                                contentAlignment = Alignment.Center
+                        // V3 Recents Grid for Flash Reels (Reels up to 30s)
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(Lucide.Music, contentDescription = null, tint = Color(0xFFFB923C), modifier = Modifier.size(16.dp))
-                                    Text("Audio", color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Icon(Lucide.Clock3, contentDescription = null, tint = Color(0xFF1696B2), modifier = Modifier.size(13.dp))
+                                    Text("Recents", color = colors.textMain, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                                Text("Reels up to 30s", color = colors.textMuted, fontSize = 10.sp)
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                RECENT_FLASH_PRESETS.forEach { preset ->
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .aspectRatio(9f / 16f)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(Color(0xFF0F172A))
+                                            .border(BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.1f) else Color(0xFFE2E8F0)), RoundedCornerShape(12.dp))
+                                            .clickable { onSelectRecentFlash(preset) }
+                                    ) {
+                                        AsyncImage(
+                                            model = preset.url,
+                                            contentDescription = preset.title,
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f))))
+                                        )
+                                        // Duration badge
+                                        preset.durationText?.let { dur ->
+                                            Text(
+                                                text = dur,
+                                                color = Color.White,
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                fontFamily = FontFamily.Monospace,
+                                                modifier = Modifier
+                                                    .align(Alignment.BottomEnd)
+                                                    .padding(4.dp)
+                                                    .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
+                                                    .padding(horizontal = 3.dp, vertical = 1.dp)
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
                 }
 
-                // 9:16 Vertical Reel Player & Vertical Tool Rail
+                // 9:16 Reel Preview Stage with Quick Action Rail
                 item {
-                    val activeVideoUri = slides.firstOrNull { it.videoUri != null }?.videoUri
-                    var isPlaying by remember { mutableStateOf(true) }
-                    var currentPositionMs by remember { mutableLongStateOf(flashTrimStartMs) }
-
-                    val exoPlayer = remember(activeVideoUri) {
-                        if (activeVideoUri != null) {
-                            ExoPlayer.Builder(context).build().apply {
-                                setMediaItem(MediaItem.fromUri(activeVideoUri))
-                                repeatMode = Player.REPEAT_MODE_ALL
-                                volume = if (flashIsMuted) 0f else 1f
-                                playbackParameters = androidx.media3.common.PlaybackParameters(flashPlaybackSpeed)
-                                prepare()
-                                playWhenReady = true
-                            }
-                        } else null
-                    }
-
-                    DisposableEffect(exoPlayer) {
-                        onDispose { exoPlayer?.release() }
-                    }
-
-                    LaunchedEffect(flashPlaybackSpeed, flashIsMuted) {
-                        exoPlayer?.let { player ->
-                            player.playbackParameters = androidx.media3.common.PlaybackParameters(flashPlaybackSpeed)
-                            player.volume = if (flashIsMuted) 0f else 1f
-                        }
-                    }
-
-                    // Loop within trimmed window
-                    LaunchedEffect(exoPlayer, flashTrimStartMs, flashTrimEndMs) {
-                        while (true) {
-                            delay(100)
-                            exoPlayer?.let { player ->
-                                currentPositionMs = player.currentPosition
-                                if (player.currentPosition >= flashTrimEndMs || player.currentPosition < flashTrimStartMs) {
-                                    player.seekTo(flashTrimStartMs)
-                                }
-                            }
-                        }
-                    }
+                    val activeSlide = slides.getOrNull(currentSlideIndex)
+                    var isPlaying by remember { mutableStateOf(false) }
+                    var currentPositionMs by remember { mutableLongStateOf(0L) }
 
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(24.dp))
+                            .clip(RoundedCornerShape(28.dp))
                             .background(if (colors.isDark) Color(0xFF161922) else Color.White)
-                            .border(BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)), RoundedCornerShape(24.dp))
+                            .border(BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)), RoundedCornerShape(28.dp))
                             .padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // 9:16 Video Player Box
+                            // 9:16 Reel Frame (196dp width)
                             Box(
                                 modifier = Modifier
-                                    .width(200.dp)
+                                    .width(196.dp)
                                     .aspectRatio(9f / 16f)
-                                    .clip(RoundedCornerShape(18.dp))
+                                    .clip(RoundedCornerShape(20.dp))
                                     .background(Color(0xFF0F172A))
-                                    .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(18.dp))
-                                    .clickable {
-                                        exoPlayer?.let {
-                                            if (it.isPlaying) {
-                                                it.pause()
-                                                isPlaying = false
-                                            } else {
-                                                it.play()
-                                                isPlaying = true
-                                            }
-                                        }
-                                    }
+                                    .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)), RoundedCornerShape(20.dp))
                             ) {
-                                if (exoPlayer != null) {
-                                    AndroidView(
-                                        factory = { ctx ->
-                                            PlayerView(ctx).apply {
-                                                player = exoPlayer
-                                                useController = false
-                                                layoutParams = FrameLayout.LayoutParams(
-                                                    ViewGroup.LayoutParams.MATCH_PARENT,
-                                                    ViewGroup.LayoutParams.MATCH_PARENT
-                                                )
-                                            }
-                                        },
-                                        modifier = Modifier.fillMaxSize().graphicsLayer(
-                                            scaleX = if (flashIsFlipped) -1f else 1f
-                                        )
+                                // Background preview
+                                if (activeSlide?.imageUri != null || !activeSlide?.imageUrl.isNullOrBlank()) {
+                                    AsyncImage(
+                                        model = activeSlide?.imageUri ?: activeSlide?.imageUrl,
+                                        contentDescription = null,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .graphicsLayer(
+                                                scaleX = if (flashIsFlipped) -1f else 1f
+                                            ),
+                                        contentScale = ContentScale.Crop
                                     )
                                 } else {
-                                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                            Icon(Lucide.Video, contentDescription = null, tint = Color.White.copy(alpha = 0.4f), modifier = Modifier.size(36.dp))
-                                            Spacer(Modifier.height(8.dp))
-                                            Text("Tap Gallery to select MP4", color = Color.White.copy(alpha = 0.6f), fontSize = 11.sp)
-                                        }
-                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(
+                                                Brush.linearGradient(
+                                                    listOf(Color(0xFF0F4C64), Color(0xFF1CA3BC), Color(0xFFF5882E))
+                                                )
+                                            )
+                                    )
                                 }
 
                                 // Top Floating Pills
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(8.dp),
+                                        .padding(10.dp),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Row(
                                         modifier = Modifier
                                             .clip(CircleShape)
-                                            .background(Color.Black.copy(alpha = 0.5f))
-                                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                                            .background(Color.Black.copy(alpha = 0.45f))
+                                            .padding(horizontal = 7.dp, vertical = 3.dp),
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
@@ -2165,28 +2280,32 @@ fun Step1MediaAndEditStage(
                                     Box(
                                         modifier = Modifier
                                             .clip(CircleShape)
-                                            .background(Color.Black.copy(alpha = 0.5f))
-                                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                                            .background(Color.Black.copy(alpha = 0.45f))
+                                            .padding(horizontal = 7.dp, vertical = 3.dp)
                                     ) {
-                                        Text("${flashPlaybackSpeed}x", color = Color.White, fontSize = 9.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                                        Text("${flashPlaybackSpeed}x", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                                     }
                                 }
 
-                                // Center Play Button Overlay
-                                if (!isPlaying) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(48.dp)
-                                            .clip(CircleShape)
-                                            .background(Color.White.copy(alpha = 0.85f))
-                                            .align(Alignment.Center),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(Lucide.Play, contentDescription = null, tint = Color.Black, modifier = Modifier.size(22.dp).padding(start = 2.dp))
-                                    }
+                                // Center Play / Pause Icon Button
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.Center)
+                                        .size(46.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.White.copy(alpha = 0.9f))
+                                        .clickable { isPlaying = !isPlaying },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = if (isPlaying) Lucide.Pause else Lucide.Play,
+                                        contentDescription = "Play/Pause",
+                                        tint = Color(0xFF0F172A),
+                                        modifier = Modifier.size(20.dp)
+                                    )
                                 }
 
-                                // Bottom Audio Marquee & Timecode
+                                // Bottom Sound Pill & Duration
                                 Column(
                                     modifier = Modifier
                                         .align(Alignment.BottomStart)
@@ -2220,7 +2339,7 @@ fun Step1MediaAndEditStage(
                                             fontFamily = FontFamily.Monospace
                                         )
                                         Text(
-                                            text = "Flash 9:16",
+                                            text = "Reel 9:16",
                                             color = Color.White.copy(alpha = 0.8f),
                                             fontSize = 9.sp,
                                             fontWeight = FontWeight.SemiBold
@@ -2231,7 +2350,7 @@ fun Step1MediaAndEditStage(
 
                             Spacer(Modifier.width(12.dp))
 
-                            // Vertical Icon Tool Rail
+                            // Vertical Tool Rail (Quick Actions)
                             Column(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(16.dp))
@@ -2285,13 +2404,13 @@ fun Step1MediaAndEditStage(
                                 ) {
                                     Icon(
                                         imageVector = Lucide.FlipHorizontal,
-                                        contentDescription = "Flip",
+                                        contentDescription = "Mirror",
                                         tint = if (flashIsFlipped) Color(0xFFF5882E) else colors.textMain,
                                         modifier = Modifier.size(16.dp)
                                     )
                                 }
 
-                                // Auto-snap 15s
+                                // Snap 15s
                                 Box(
                                     modifier = Modifier
                                         .size(36.dp)
@@ -2300,101 +2419,84 @@ fun Step1MediaAndEditStage(
                                         .clickable { onSnapFifteenSec() },
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(
-                                        imageVector = Lucide.Sparkles,
-                                        contentDescription = "15s Snap",
-                                        tint = Color(0xFFF5882E),
-                                        modifier = Modifier.size(16.dp)
-                                    )
+                                    Icon(Lucide.WandSparkles, contentDescription = "15s Snap", tint = Color(0xFF10B981), modifier = Modifier.size(16.dp))
+                                }
+
+                                // Audio Mixer Modal Launcher
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(if (colors.isDark) Color(0xFF141720) else Color.White)
+                                        .clickable { onOpenAudioMixer() },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Lucide.SlidersVertical, contentDescription = "Mixer", tint = Color(0xFFF5882E), modifier = Modifier.size(16.dp))
+                                }
+
+                                // Pro Reel Editor Launcher
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(Color(0xFF007AFF))
+                                        .clickable { onOpenVideoStudio() },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Lucide.Film, contentDescription = "Pro Reel Editor", tint = Color.White, modifier = Modifier.size(16.dp))
                                 }
                             }
                         }
 
-                        // Interactive Timeline Scrubber & Trim Controls
-                        Column(
+                        // Horizontal Timeline Scrubber
+                        Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Timeline Trim Range", color = colors.textMuted, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                                Text("${flashTrimStartMs / 1000}s - ${flashTrimEndMs / 1000}s", color = Color(0xFF1696B2), fontSize = 10.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                            }
+                            RangeSlider(
+                                value = (flashTrimStartMs.toFloat())..(flashTrimEndMs.toFloat()),
+                                onValueChange = { range ->
+                                    onUpdateTrim(range.start.toLong(), range.endInclusive.toLong())
+                                },
+                                valueRange = 0f..(flashVideoDurationMs.coerceAtLeast(15000L).toFloat()),
+                                colors = SliderDefaults.colors(
+                                    thumbColor = Color(0xFFF5882E),
+                                    activeTrackColor = Color(0xFF1696B2),
+                                    inactiveTrackColor = if (colors.isDark) Color(0xFF334155) else Color(0xFFE2E8F0)
+                                ),
+                                modifier = Modifier.fillMaxWidth().height(24.dp)
+                            )
+                        }
+
+                        // Wide Pro Reel Editor Launcher
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(16.dp))
-                                .background(if (colors.isDark) Color(0xFF1A1D27) else Color(0xFFF8FAFC))
-                                .border(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0), RoundedCornerShape(16.dp))
-                                .padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                .background(
+                                    Brush.horizontalGradient(
+                                        listOf(Color(0xFF1696B2), Color(0xFF38B8D1))
+                                    )
+                                )
+                                .clickable { onOpenVideoStudio() }
+                                .padding(horizontal = 12.dp, vertical = 9.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
                         ) {
-                            val durationSec = ((flashTrimEndMs - flashTrimStartMs) / 1000f)
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Icon(Lucide.Scissors, contentDescription = null, tint = Color(0xFFF5882E), modifier = Modifier.size(14.dp))
-                                    Text("Timeline Trim", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                }
-
-                                Text(
-                                    text = "${formatTimeMinSec(flashTrimStartMs)} - ${formatTimeMinSec(flashTrimEndMs)} (%.1fs)".format(durationSec),
-                                    color = Color(0xFF1696B2),
-                                    fontSize = 11.sp,
-                                    fontFamily = FontFamily.Monospace,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-
-                            // Start & End Trim Sliders
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text("Trim In (Start)", color = colors.textMuted, fontSize = 10.sp)
-                                    Text(formatDurationTime(flashTrimStartMs), color = colors.textMain, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
-                                }
-                                Slider(
-                                    value = flashTrimStartMs.toFloat(),
-                                    onValueChange = { newStart ->
-                                        val s = newStart.toLong().coerceIn(0L, (flashTrimEndMs - 1000L).coerceAtLeast(0L))
-                                        onUpdateTrim(s, flashTrimEndMs)
-                                    },
-                                    valueRange = 0f..flashVideoDurationMs.toFloat().coerceAtLeast(1000f),
-                                    colors = SliderDefaults.colors(
-                                        thumbColor = Color(0xFFF5882E),
-                                        activeTrackColor = Color(0xFFF5882E)
-                                    )
-                                )
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text("Trim Out (End)", color = colors.textMuted, fontSize = 10.sp)
-                                    Text(formatDurationTime(flashTrimEndMs), color = colors.textMain, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
-                                }
-                                Slider(
-                                    value = flashTrimEndMs.toFloat(),
-                                    onValueChange = { newEnd ->
-                                        val e = newEnd.toLong().coerceIn((flashTrimStartMs + 1000L), flashVideoDurationMs)
-                                        onUpdateTrim(flashTrimStartMs, e)
-                                    },
-                                    valueRange = 0f..flashVideoDurationMs.toFloat().coerceAtLeast(1000f),
-                                    colors = SliderDefaults.colors(
-                                        thumbColor = Color(0xFF1696B2),
-                                        activeTrackColor = Color(0xFF1696B2)
-                                    )
-                                )
-                            }
+                            Icon(Lucide.Film, contentDescription = "Pro Reel Editor", tint = Color.White, modifier = Modifier.size(15.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Open Pro Reel Editor (Timeline & FCP Suite)", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
             }
 
             // ────────────────────────────────────────────────────────────────
-            // 1B. PHOTO POST MODE
+            // 1B. PHOTO POST MODE (Instagram/Facebook Carousel Multi-Select)
             // ────────────────────────────────────────────────────────────────
             CreatorStudioMode.POST -> {
-                // Source & Carousel Bar
+                // Source Selector Bar & Recents Grid with Multi-select Badges
                 item {
                     Column(
                         modifier = Modifier
@@ -2402,14 +2504,15 @@ fun Step1MediaAndEditStage(
                             .clip(RoundedCornerShape(24.dp))
                             .background(if (colors.isDark) Color(0xFF161922) else Color.White)
                             .border(BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)), RoundedCornerShape(24.dp))
-                            .padding(12.dp)
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Gallery Upload
+                            // Gallery Upload Button
                             Row(
                                 modifier = Modifier
                                     .weight(1f)
@@ -2430,10 +2533,13 @@ fun Step1MediaAndEditStage(
                                 ) {
                                     Icon(Lucide.Images, contentDescription = null, tint = Color(0xFF1696B2), modifier = Modifier.size(16.dp))
                                 }
-                                Text("Gallery", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Column {
+                                    Text("Gallery", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text("Up to 10", color = colors.textMuted, fontSize = 10.sp)
+                                }
                             }
 
-                            // Camera Capture
+                            // Camera Capture Button
                             Row(
                                 modifier = Modifier
                                     .weight(1f)
@@ -2454,19 +2560,22 @@ fun Step1MediaAndEditStage(
                                 ) {
                                     Icon(Lucide.Camera, contentDescription = null, tint = Color(0xFFF5882E), modifier = Modifier.size(16.dp))
                                 }
-                                Text("Camera", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Column {
+                                    Text("Camera", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text("High-Res", color = colors.textMuted, fontSize = 10.sp)
+                                }
                             }
 
-                            // Carousel Slides Count Badge
+                            // Carousel Slide Count Badge
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(16.dp))
                                     .background(Color(0xFF1696B2))
-                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    .padding(horizontal = 10.dp, vertical = 10.dp),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Icon(Lucide.Layers, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                                    Icon(Lucide.Layers, contentDescription = null, tint = Color.White, modifier = Modifier.size(13.dp))
                                     Text(
                                         text = "${slides.size.coerceAtLeast(1)}/10",
                                         color = Color.White,
@@ -2476,10 +2585,88 @@ fun Step1MediaAndEditStage(
                                 }
                             }
                         }
+
+                        // V3 Photo Recents Grid with Multi-select Number Badges (1, 2, 3...)
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Icon(Lucide.Clock3, contentDescription = null, tint = Color(0xFF1696B2), modifier = Modifier.size(13.dp))
+                                    Text("Recents", color = colors.textMain, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                                Text("Tap to select up to 10", color = colors.textMuted, fontSize = 10.sp)
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                RECENT_PHOTO_PRESETS.take(4).forEach { preset ->
+                                    val selIndex = slides.indexOfFirst { it.imageUrl == preset.url }
+                                    val isSelected = selIndex >= 0
+
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .aspectRatio(1f)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(Color(0xFF0F172A))
+                                            .border(
+                                                BorderStroke(
+                                                    if (isSelected) 2.dp else 1.dp,
+                                                    if (isSelected) Color(0xFFF5882E) else (if (colors.isDark) Color.White.copy(alpha = 0.1f) else Color(0xFFE2E8F0))
+                                                ),
+                                                RoundedCornerShape(12.dp)
+                                            )
+                                            .clickable { onToggleRecentPhoto(preset) }
+                                    ) {
+                                        AsyncImage(
+                                            model = preset.url,
+                                            contentDescription = preset.title,
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop
+                                        )
+
+                                        // Selection Order Number Badge (1, 2, 3...)
+                                        if (isSelected) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .align(Alignment.TopEnd)
+                                                    .padding(4.dp)
+                                                    .size(20.dp)
+                                                    .clip(CircleShape)
+                                                    .background(
+                                                        Brush.linearGradient(
+                                                            listOf(Color(0xFFF5882E), Color(0xFFEA580C))
+                                                        )
+                                                    )
+                                                    .border(BorderStroke(1.dp, Color.White), CircleShape),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    text = "${selIndex + 1}",
+                                                    color = Color.White,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.ExtraBold
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 
-                // Live Photo Canvas & Mini Strip
+                // Live Active Photo Preview Stage (4:3 aspect)
                 item {
                     val activeSlide = slides.getOrNull(currentSlideIndex)
                     var showOriginal by remember { mutableStateOf(false) }
@@ -2491,9 +2678,9 @@ fun Step1MediaAndEditStage(
                             .background(if (colors.isDark) Color(0xFF161922) else Color.White)
                             .border(BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)), RoundedCornerShape(24.dp))
                             .padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        // Main Photo Preview Stage (4:3 aspect)
+                        // Main Photo Preview Stage
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -2501,50 +2688,28 @@ fun Step1MediaAndEditStage(
                                 .clip(RoundedCornerShape(18.dp))
                                 .background(Color(0xFF0F172A))
                         ) {
-                            if (activeSlide?.imageUri != null) {
-                                val cm = if (showOriginal) ColorMatrix() else remember(
-                                    activeSlide.brightness, activeSlide.contrast,
-                                    activeSlide.saturation, activeSlide.warmth, activeSlide.filterName
-                                ) {
-                                    buildStudioColorMatrix(
-                                        activeSlide.brightness, activeSlide.contrast,
-                                        activeSlide.saturation, activeSlide.warmth, activeSlide.filterName
-                                    )
-                                }
-
+                            if (activeSlide?.imageUri != null || !activeSlide?.imageUrl.isNullOrBlank()) {
                                 AsyncImage(
-                                    model = ImageRequest.Builder(context).data(activeSlide.imageUri).crossfade(true).build(),
+                                    model = activeSlide?.imageUri ?: activeSlide?.imageUrl,
                                     contentDescription = null,
-                                    colorFilter = ColorFilter.colorMatrix(cm),
                                     modifier = Modifier
                                         .fillMaxSize()
-                                        .graphicsLayer(rotationZ = activeSlide.rotationDegrees),
+                                        .graphicsLayer(rotationZ = activeSlide?.rotationDegrees ?: 0f),
                                     contentScale = ContentScale.Crop
                                 )
-
-                                // Vignette shadow overlay
-                                if (activeSlide.vignette > 0f) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .background(
-                                                Brush.radialGradient(
-                                                    colors = listOf(Color.Transparent, Color.Black.copy(alpha = activeSlide.vignette / 100f * 0.75f))
-                                                )
-                                            )
-                                    )
-                                }
                             } else {
-                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Icon(Lucide.Images, contentDescription = null, tint = Color.White.copy(alpha = 0.4f), modifier = Modifier.size(36.dp))
-                                        Spacer(Modifier.height(8.dp))
-                                        Text("Tap Gallery to select photos", color = Color.White.copy(alpha = 0.6f), fontSize = 11.sp)
-                                    }
-                                }
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(
+                                            Brush.linearGradient(
+                                                listOf(Color(0xFF0F4C64), Color(0xFF38B8D1), Color(0xFFF5882E))
+                                            )
+                                        )
+                                )
                             }
 
-                            // Top Floating Controls
+                            // Top Floating Badges
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -2552,233 +2717,137 @@ fun Step1MediaAndEditStage(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                // Slide Index Badge
-                                Box(
+                                Row(
                                     modifier = Modifier
                                         .clip(CircleShape)
-                                        .background(Color.Black.copy(alpha = 0.5f))
-                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                        .background(Color.Black.copy(alpha = 0.45f))
+                                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
-                                    Text(
-                                        text = "${(currentSlideIndex + 1).coerceAtMost(slides.size.coerceAtLeast(1))} / ${slides.size.coerceAtLeast(1)}",
-                                        color = Color.White,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                    Icon(Lucide.Image, contentDescription = null, tint = Color(0xFF38B8D1), modifier = Modifier.size(11.dp))
+                                    Text("Photo 4:3", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                                 }
 
-                                // Icon Action Tools
                                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    // Compare Eye Button
+                                    // Slide Number Pill
                                     Box(
                                         modifier = Modifier
-                                            .size(32.dp)
                                             .clip(CircleShape)
-                                            .background(Color.Black.copy(alpha = 0.5f))
+                                            .background(Color.Black.copy(alpha = 0.45f))
+                                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                                    ) {
+                                        Text("${currentSlideIndex + 1}/${slides.size.coerceAtLeast(1)}", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                                    }
+
+                                    // Hold to Compare Original
+                                    Box(
+                                        modifier = Modifier
+                                            .size(26.dp)
+                                            .clip(CircleShape)
+                                            .background(Color.Black.copy(alpha = 0.45f))
                                             .clickable { showOriginal = !showOriginal },
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Icon(Lucide.Eye, contentDescription = "Original", tint = Color.White, modifier = Modifier.size(15.dp))
-                                    }
-
-                                    // Rotate 90
-                                    Box(
-                                        modifier = Modifier
-                                            .size(32.dp)
-                                            .clip(CircleShape)
-                                            .background(Color.Black.copy(alpha = 0.5f))
-                                            .clickable { onRotatePhoto() },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(Lucide.RotateCw, contentDescription = "Rotate", tint = Color.White, modifier = Modifier.size(15.dp))
-                                    }
-
-                                    // Flip Horizontal
-                                    Box(
-                                        modifier = Modifier
-                                            .size(32.dp)
-                                            .clip(CircleShape)
-                                            .background(Color.Black.copy(alpha = 0.5f))
-                                            .clickable { onFlipPhoto() },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(Lucide.FlipHorizontal, contentDescription = "Flip", tint = Color.White, modifier = Modifier.size(15.dp))
-                                    }
-                                }
-                            }
-
-                            // Mini Carousel Thumbnails Row inside preview bottom
-                            if (slides.size > 1) {
-                                LazyRow(
-                                    modifier = Modifier
-                                        .align(Alignment.BottomStart)
-                                        .fillMaxWidth()
-                                        .background(Color.Black.copy(alpha = 0.4f))
-                                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    itemsIndexed(slides) { idx, s ->
-                                        val isSel = idx == currentSlideIndex
-                                        Box(
-                                            modifier = Modifier
-                                                .size(34.dp)
-                                                .clip(RoundedCornerShape(6.dp))
-                                                .border(
-                                                    if (isSel) 2.dp else 1.dp,
-                                                    if (isSel) Color(0xFFF5882E) else Color.White.copy(alpha = 0.4f),
-                                                    RoundedCornerShape(6.dp)
-                                                )
-                                                .clickable { onSlideChange(idx) }
-                                        ) {
-                                            SlidePreviewContent(slide = s, modifier = Modifier.fillMaxSize())
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // Filter Presets Strip
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    Icon(Lucide.Sparkles, contentDescription = null, tint = Color(0xFF1696B2), modifier = Modifier.size(14.dp))
-                                    Text("Color Presets", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                }
-
-                                Text(
-                                    text = "Reset",
-                                    color = Color(0xFFF5882E),
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.clickable {
-                                        onSelectFilterPreset("Original")
-                                        onUpdatePhotoAdjustments(0f, 1f, 1f, 0f, 0f, 0f)
-                                    }
-                                )
-                            }
-
-                            LazyRow(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                items(PHOTO_FILTER_PRESETS) { preset ->
-                                    val isSel = (activeSlide?.filterName ?: "Original") == preset
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .background(
-                                                if (isSel) Color(0xFF1696B2)
-                                                else (if (colors.isDark) Color(0xFF1A1D27) else Color(0xFFF1F5F9))
-                                            )
-                                            .border(
-                                                1.dp,
-                                                if (isSel) Color(0xFF1696B2)
-                                                else (if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)),
-                                                RoundedCornerShape(12.dp)
-                                            )
-                                            .clickable { onSelectFilterPreset(preset) }
-                                            .padding(horizontal = 12.dp, vertical = 7.dp)
-                                    ) {
-                                        Text(
-                                            text = preset,
-                                            color = if (isSel) Color.White else colors.textMain,
-                                            fontSize = 11.sp,
-                                            fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium
+                                        Icon(
+                                            imageVector = Lucide.Eye,
+                                            contentDescription = "Compare",
+                                            tint = if (showOriginal) Color(0xFFF5882E) else Color.White,
+                                            modifier = Modifier.size(13.dp)
                                         )
                                     }
                                 }
                             }
                         }
 
-                        // 6 Fine-Tuning Sliders
-                        val curBrightness = activeSlide?.brightness ?: 0f
-                        val curContrast = activeSlide?.contrast ?: 1f
-                        val curSaturation = activeSlide?.saturation ?: 1f
-                        val curWarmth = activeSlide?.warmth ?: 0f
-                        val curVignette = activeSlide?.vignette ?: 0f
-                        val curSharpness = activeSlide?.sharpness ?: 0f
-
+                        // V3 Photo Mini Carousel Strip (Thumbnails of all selected photos)
                         Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(if (colors.isDark) Color(0xFF1A1D27) else Color(0xFFF8FAFC))
-                                .border(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0), RoundedCornerShape(16.dp))
-                                .padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            // Brightness
-                            Column {
-                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text("Brightness", color = colors.textMuted, fontSize = 11.sp)
-                                    Text("${curBrightness.toInt()}", color = colors.textMain, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-                                }
-                                Slider(
-                                    value = curBrightness,
-                                    onValueChange = { b -> onUpdatePhotoAdjustments(b, curContrast, curSaturation, curWarmth, curVignette, curSharpness) },
-                                    valueRange = -100f..100f,
-                                    colors = SliderDefaults.colors(thumbColor = Color(0xFFF5882E), activeTrackColor = Color(0xFFF5882E))
-                                )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Carousel Sequence", color = colors.textMuted, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                                Text("${slides.size} slides", color = Color(0xFF1696B2), fontSize = 10.sp, fontWeight = FontWeight.Bold)
                             }
 
-                            // Contrast
-                            Column {
-                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text("Contrast", color = colors.textMuted, fontSize = 11.sp)
-                                    Text("%.1fx".format(curContrast), color = colors.textMain, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-                                }
-                                Slider(
-                                    value = curContrast,
-                                    onValueChange = { c -> onUpdatePhotoAdjustments(curBrightness, c, curSaturation, curWarmth, curVignette, curSharpness) },
-                                    valueRange = 0.5f..2.0f,
-                                    colors = SliderDefaults.colors(thumbColor = Color(0xFF1696B2), activeTrackColor = Color(0xFF1696B2))
-                                )
+                            // Studio Photo Editor Launcher (Filters, Adjustments & Stickers)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(
+                                        Brush.horizontalGradient(
+                                            listOf(Color(0xFFF5882E), Color(0xFFFB923C))
+                                        )
+                                    )
+                                    .clickable { onOpenPhotoStudio() }
+                                    .padding(horizontal = 12.dp, vertical = 9.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(Lucide.Sparkles, contentDescription = "Studio Photo Editor", tint = Color.White, modifier = Modifier.size(15.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Open Studio Photo Editor (Filters, Crop & Stickers)", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
 
-                            // Saturation
-                            Column {
-                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text("Saturation", color = colors.textMuted, fontSize = 11.sp)
-                                    Text("%.1fx".format(curSaturation), color = colors.textMain, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                            LazyRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                itemsIndexed(slides) { idx, slide ->
+                                    val isCur = idx == currentSlideIndex
+                                    Box(
+                                        modifier = Modifier
+                                            .size(54.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(Color(0xFF0F172A))
+                                            .border(
+                                                BorderStroke(
+                                                    if (isCur) 2.dp else 1.dp,
+                                                    if (isCur) Color(0xFFF5882E) else (if (colors.isDark) Color.White.copy(alpha = 0.1f) else Color(0xFFE2E8F0))
+                                                ),
+                                                RoundedCornerShape(12.dp)
+                                            )
+                                            .clickable { onSlideChange(idx) }
+                                    ) {
+                                        SlidePreviewContent(
+                                            slide = slide,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                        // Index badge
+                                        Box(
+                                            modifier = Modifier
+                                                .align(Alignment.BottomEnd)
+                                                .padding(2.dp)
+                                                .size(16.dp)
+                                                .clip(CircleShape)
+                                                .background(if (isCur) Color(0xFFF5882E) else Color.Black.copy(alpha = 0.6f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text("${idx + 1}", color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
                                 }
-                                Slider(
-                                    value = curSaturation,
-                                    onValueChange = { s -> onUpdatePhotoAdjustments(curBrightness, curContrast, s, curWarmth, curVignette, curSharpness) },
-                                    valueRange = 0f..2.5f,
-                                    colors = SliderDefaults.colors(thumbColor = Color(0xFFFB923C), activeTrackColor = Color(0xFFFB923C))
-                                )
-                            }
 
-                            // Warmth
-                            Column {
-                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text("Warmth / Tint", color = colors.textMuted, fontSize = 11.sp)
-                                    Text("${curWarmth.toInt()}", color = colors.textMain, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                                // Add Slide Button Card
+                                item {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(54.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(if (colors.isDark) Color(0xFF1E212B) else Color(0xFFF1F5F9))
+                                            .border(BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.1f) else Color(0xFFCBD5E1)), RoundedCornerShape(12.dp))
+                                            .clickable { onLaunchImagePicker() },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(Lucide.Plus, contentDescription = "Add Slide", tint = colors.textMuted, modifier = Modifier.size(18.dp))
+                                    }
                                 }
-                                Slider(
-                                    value = curWarmth,
-                                    onValueChange = { w -> onUpdatePhotoAdjustments(curBrightness, curContrast, curSaturation, w, curVignette, curSharpness) },
-                                    valueRange = -100f..100f,
-                                    colors = SliderDefaults.colors(thumbColor = Color(0xFFF5882E), activeTrackColor = Color(0xFFF5882E))
-                                )
-                            }
-
-                            // Vignette
-                            Column {
-                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text("Vignette", color = colors.textMuted, fontSize = 11.sp)
-                                    Text("${curVignette.toInt()}%", color = colors.textMain, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-                                }
-                                Slider(
-                                    value = curVignette,
-                                    onValueChange = { v -> onUpdatePhotoAdjustments(curBrightness, curContrast, curSaturation, curWarmth, v, curSharpness) },
-                                    valueRange = 0f..100f,
-                                    colors = SliderDefaults.colors(thumbColor = Color(0xFF1696B2), activeTrackColor = Color(0xFF1696B2))
-                                )
                             }
                         }
                     }
@@ -2786,25 +2855,11 @@ fun Step1MediaAndEditStage(
             }
 
             // ────────────────────────────────────────────────────────────────
-            // 1C. CHROMA WORK MODE
+            // 1C. WORK POST MODE (Room SQLite activeWorks Layer Works)
             // ────────────────────────────────────────────────────────────────
             CreatorStudioMode.WORK -> {
+                // SQLite Project Chooser & Live Mesh Canvas
                 item {
-                    val activeWork = slides.getOrNull(currentSlideIndex)?.work
-                    var allWorks by remember { mutableStateOf<List<ChromaWork>>(emptyList()) }
-
-                    LaunchedEffect(Unit) {
-                        withContext(Dispatchers.IO) {
-                            val list = workRepository.loadActiveWorks()
-                            withContext(Dispatchers.Main) {
-                                allWorks = list
-                                if (activeWork == null && list.isNotEmpty()) {
-                                    onSelectWork(list.first())
-                                }
-                            }
-                        }
-                    }
-
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -2812,180 +2867,177 @@ fun Step1MediaAndEditStage(
                             .background(if (colors.isDark) Color(0xFF161922) else Color.White)
                             .border(BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)), RoundedCornerShape(24.dp))
                             .padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        // Header with Live Canvas controls
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Icon(Lucide.Layers, contentDescription = null, tint = Color(0xFF8B5CF6), modifier = Modifier.size(16.dp))
-                                Text("Chroma Work Canvas", color = colors.textMain, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                            }
-
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(32.dp)
-                                        .clip(CircleShape)
-                                        .background(if (workShowGrain) Color(0xFF8B5CF6) else (if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFF1F5F9)))
-                                        .clickable { onToggleWorkGrain() },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(Lucide.Sparkles, contentDescription = null, tint = if (workShowGrain) Color.White else colors.textMain, modifier = Modifier.size(15.dp))
-                                }
-
-                                Box(
-                                    modifier = Modifier
-                                        .size(32.dp)
-                                        .clip(CircleShape)
-                                        .background(if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFF1F5F9))
-                                        .clickable { onRotateWorkMesh() },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(Lucide.Compass, contentDescription = null, tint = colors.textMain, modifier = Modifier.size(15.dp))
-                                }
-                            }
-                        }
-
-                        // Live Canvas Preview
+                        // Live Mesh Canvas Preview
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .aspectRatio(4f / 3f)
                                 .clip(RoundedCornerShape(18.dp))
                                 .background(Color(0xFF0F172A))
-                                .graphicsLayer(rotationZ = workMeshAngle)
                         ) {
-                            if (activeWork != null) {
-                                val layers = remember(activeWork.layersJson) {
-                                    workRepository.deserializeLayers(activeWork.layersJson)
-                                }
-                                CanvasPreview(
-                                    layers = layers,
-                                    shape = activeWork.canvasShape,
-                                    borderColor = Color.Transparent,
-                                    modifier = Modifier.fillMaxSize()
+                            val activeSlide = slides.getOrNull(currentSlideIndex)
+                            if (activeSlide?.work != null) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(
+                                            Brush.linearGradient(
+                                                listOf(Color(0xFF0F4C64), Color(0xFF38B8D1), Color(0xFFF5882E))
+                                            )
+                                        )
+                                )
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(
+                                            Brush.linearGradient(
+                                                listOf(Color(0xFF0F4C64), Color(0xFF38B8D1), Color(0xFFF5882E))
+                                            )
+                                        )
                                 )
                             }
 
-                            // Top Info Badges
+                            // Top pills
                             Row(
-                                modifier = Modifier.fillMaxWidth().padding(10.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Box(
+                                Row(
                                     modifier = Modifier
                                         .clip(CircleShape)
-                                        .background(Color.Black.copy(alpha = 0.5f))
-                                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                                        .background(Color.Black.copy(alpha = 0.45f))
+                                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
-                                    Text("activeWorks", color = Color(0xFFBAE6FD), fontSize = 9.sp, fontFamily = FontFamily.Monospace)
+                                    Icon(Lucide.Database, contentDescription = null, tint = Color(0xFF38B8D1), modifier = Modifier.size(11.dp))
+                                    Text("activeWorks", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                                 }
 
-                                Box(
-                                    modifier = Modifier
-                                        .clip(CircleShape)
-                                        .background(Color.White.copy(alpha = 0.85f))
-                                        .padding(horizontal = 8.dp, vertical = 3.dp)
-                                ) {
-                                    Text("1:1 Snapshot", color = Color.Black, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    // Grain overlay toggle
+                                    Box(
+                                        modifier = Modifier
+                                            .size(26.dp)
+                                            .clip(CircleShape)
+                                            .background(if (workShowGrain) Color(0xFFF5882E) else Color.Black.copy(alpha = 0.45f))
+                                            .clickable { onToggleWorkGrain() },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(Lucide.Sparkles, contentDescription = "Grain", tint = Color.White, modifier = Modifier.size(12.dp))
+                                    }
+
+                                    // Rotate angle
+                                    Box(
+                                        modifier = Modifier
+                                            .size(26.dp)
+                                            .clip(CircleShape)
+                                            .background(Color.Black.copy(alpha = 0.45f))
+                                            .clickable { onRotateWorkMesh() },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(Lucide.Compass, contentDescription = "Angle", tint = Color.White, modifier = Modifier.size(12.dp))
+                                    }
                                 }
                             }
                         }
 
-                        // Room SQLite Saved Works Project Chooser
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                // Search Input
-                                Row(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(38.dp)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(if (colors.isDark) Color(0xFF1A1D27) else Color(0xFFF1F5F9))
-                                        .padding(horizontal = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(Lucide.Search, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(15.dp))
-                                    Spacer(Modifier.width(8.dp))
-                                    BasicTextField(
-                                        value = workSearchQuery,
-                                        onValueChange = onWorkSearchChange,
-                                        modifier = Modifier.weight(1f),
-                                        textStyle = TextStyle(color = colors.textMain, fontSize = 12.sp),
-                                        decorationBox = { inner ->
-                                            if (workSearchQuery.isEmpty()) {
-                                                Text("Search saved works...", color = colors.textMuted, fontSize = 12.sp)
-                                            }
-                                            inner()
-                                        }
-                                    )
-                                }
+                        // Search and Series Mode Row
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedTextField(
+                                value = workSearchQuery,
+                                onValueChange = onWorkSearchChange,
+                                placeholder = { Text("Search local activeWorks...", fontSize = 11.sp) },
+                                leadingIcon = {
+                                    Icon(Lucide.Search, contentDescription = null, modifier = Modifier.size(14.dp))
+                                },
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = Modifier.weight(1f).height(44.dp),
+                                textStyle = TextStyle(fontSize = 12.sp)
+                            )
 
-                                // Series Pack Toggle
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(if (workIsSeriesMode) Color(0xFF8B5CF6) else (if (colors.isDark) Color(0xFF1A1D27) else Color(0xFFF1F5F9)))
-                                        .clickable { onToggleWorkSeries() }
-                                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
+                            // Series Mode Toggle
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(if (workIsSeriesMode) Color(0xFF1696B2) else (if (colors.isDark) Color(0xFF1E212B) else Color(0xFFEDF2F7)))
+                                    .clickable { onToggleWorkSeries() }
+                                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Icon(Lucide.Layers, contentDescription = null, tint = if (workIsSeriesMode) Color.White else colors.textMain, modifier = Modifier.size(13.dp))
                                     Text(
-                                        text = if (workIsSeriesMode) "Series Pack" else "Single",
+                                        text = if (workIsSeriesMode) "Series" else "Single",
                                         color = if (workIsSeriesMode) Color.White else colors.textMain,
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold
                                     )
                                 }
                             }
+                        }
 
-                            // Works Grid
-                            val filtered = allWorks.filter { it.name.contains(workSearchQuery, ignoreCase = true) }
+                        // Works Grid
+                        if (filteredWorks.isEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 20.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("No local activeWorks found", color = colors.textMuted, fontSize = 11.sp)
+                            }
+                        } else {
                             LazyVerticalGrid(
                                 columns = GridCells.Fixed(2),
                                 modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                items(filtered) { work ->
+                                items(filteredWorks) { work ->
                                     val isSelected = slides.any { it.work?.id == work.id }
-                                    Row(
+                                    Column(
                                         modifier = Modifier
-                                            .fillMaxWidth()
                                             .clip(RoundedCornerShape(14.dp))
-                                            .background(if (isSelected) (if (colors.isDark) Color(0xFF2E1A47) else Color(0xFFF3E8FF)) else (if (colors.isDark) Color(0xFF1A1D27) else Color(0xFFF8FAFC)))
+                                            .background(if (colors.isDark) Color(0xFF1E212B) else Color(0xFFF8FAFC))
                                             .border(
-                                                1.dp,
-                                                if (isSelected) Color(0xFF8B5CF6) else (if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)),
+                                                BorderStroke(
+                                                    if (isSelected) 2.dp else 1.dp,
+                                                    if (isSelected) Color(0xFF1696B2) else (if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0))
+                                                ),
                                                 RoundedCornerShape(14.dp)
                                             )
                                             .clickable { onSelectWork(work) }
                                             .padding(8.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
                                         Box(
                                             modifier = Modifier
-                                                .size(36.dp)
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .background(Color(0xFF0F172A))
-                                        ) {
-                                            val layers = remember(work.layersJson) { workRepository.deserializeLayers(work.layersJson) }
-                                            CanvasPreview(layers = layers, shape = work.canvasShape, borderColor = Color.Transparent, modifier = Modifier.fillMaxSize())
-                                        }
-
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(work.name, color = colors.textMain, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                            Text(work.canvasShape.replaceFirstChar { it.uppercase() } + " Canvas", color = colors.textMuted, fontSize = 9.sp)
-                                        }
+                                                .fillMaxWidth()
+                                                .aspectRatio(4f / 3f)
+                                                .clip(RoundedCornerShape(10.dp))
+                                                .background(
+                                                    Brush.linearGradient(
+                                                        listOf(Color(0xFF0F4C64), Color(0xFF38B8D1), Color(0xFFF5882E))
+                                                    )
+                                                )
+                                        )
+                                        Text(
+                                            text = work.name,
+                                            color = colors.textMain,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1
+                                        )
                                     }
                                 }
                             }
@@ -2999,7 +3051,7 @@ fun Step1MediaAndEditStage(
 
 
 // ============================================================================
-// STEP 2: ASPECT RATIO, CAROUSEL REORDERING & 1:1 PROFILE COVER STAGE
+// STEP 2: EDIT - TABBED EDITOR (Trim/Sound/Cover · Crop/Filters/Adjust)
 // ============================================================================
 
 @Composable
@@ -3016,6 +3068,18 @@ fun Step2AspectAndCoverStage(
     selectedCoverFrameMs: Long,
     flashVideoDurationMs: Long,
     coverThumbnailBmp: Bitmap?,
+    activeEditTab: StudioEditTab,
+    isComparingOriginal: Boolean,
+    flashTrimStartMs: Long,
+    flashTrimEndMs: Long,
+    flashPlaybackSpeed: Float,
+    flashIsMuted: Boolean,
+    flashIsFlipped: Boolean,
+    onSelectEditTab: (StudioEditTab) -> Unit,
+    onHoldOriginal: (Boolean) -> Unit,
+    onRotatePhoto: () -> Unit,
+    onFlipPhoto: () -> Unit,
+    onResetFraming: () -> Unit,
     onSelectRatio: (String) -> Unit,
     onToggleThirdsGrid: () -> Unit,
     onToggleWatermark: () -> Unit,
@@ -3025,16 +3089,34 @@ fun Step2AspectAndCoverStage(
     onScrubCoverFrame: (Long) -> Unit,
     onPickCustomCover: () -> Unit,
     onSelectSlide: (Int) -> Unit,
-    onRemoveSlide: (Int) -> Unit
+    onRemoveSlide: (Int) -> Unit,
+    onReorderSlide: (from: Int, to: Int) -> Unit,
+    onUpdateTrim: (Long, Long) -> Unit,
+    onCycleSpeed: () -> Unit,
+    onToggleMute: () -> Unit,
+    onToggleFlip: () -> Unit,
+    onSnapFifteenSec: () -> Unit,
+    onOpenAudioMixer: () -> Unit,
+    onSelectFilterPreset: (String) -> Unit,
+    onUpdatePhotoAdjustments: (Float, Float, Float, Float, Float, Float) -> Unit
 ) {
     val colors = LocalOscellionColors.current
     val activeSlide = slides.getOrNull(currentSlideIndex) ?: slides.firstOrNull()
+
+    // Determine available tabs for current mode
+    val tabsForMode = remember(studioMode) {
+        when (studioMode) {
+            CreatorStudioMode.FLASH -> listOf(StudioEditTab.TRIM, StudioEditTab.SOUND, StudioEditTab.COVER)
+            CreatorStudioMode.POST -> listOf(StudioEditTab.CROP, StudioEditTab.FILTERS, StudioEditTab.ADJUST)
+            CreatorStudioMode.WORK -> listOf(StudioEditTab.FRAME)
+        }
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // 2A. Aspect Ratio Selector & Compositional Overlays Card
+        // 2A. Header & Canvas Stage Card
         item {
             Column(
                 modifier = Modifier
@@ -3045,17 +3127,81 @@ fun Step2AspectAndCoverStage(
                     .padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                // Header with dynamic title & quick tools
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Icon(Lucide.Frame, contentDescription = null, tint = Color(0xFF1696B2), modifier = Modifier.size(15.dp))
-                        Text("Aspect Ratio & Grid", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Icon(Lucide.WandSparkles, contentDescription = null, tint = Color(0xFF1696B2), modifier = Modifier.size(16.dp))
+                        Text(
+                            text = when (studioMode) {
+                                CreatorStudioMode.FLASH -> "Edit reel"
+                                CreatorStudioMode.POST -> "Edit photos"
+                                CreatorStudioMode.WORK -> "Frame your work"
+                            },
+                            color = colors.textMain,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    // Quick Tool Buttons
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (studioMode == CreatorStudioMode.POST) {
+                            // Hold to Compare Original
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isComparingOriginal) Color(0xFFF5882E) else (if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFF1F5F9)))
+                                    .clickable { onHoldOriginal(!isComparingOriginal) },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Lucide.Eye, contentDescription = "Compare", tint = if (isComparingOriginal) Color.White else colors.textMain, modifier = Modifier.size(14.dp))
+                            }
+
+                            // Flip Horizontal
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .background(if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFF1F5F9))
+                                    .clickable { onFlipPhoto() },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Lucide.FlipHorizontal, contentDescription = "Flip", tint = colors.textMain, modifier = Modifier.size(14.dp))
+                            }
+
+                            // Rotate 90
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .background(if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFF1F5F9))
+                                    .clickable { onRotatePhoto() },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Lucide.RotateCw, contentDescription = "Rotate", tint = colors.textMain, modifier = Modifier.size(14.dp))
+                            }
+                        }
+
+                        // 3x3 Rule-of-Thirds Grid Toggle
+                        Box(
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(if (showThirdsGrid) Color(0xFF1696B2) else (if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFF1F5F9)))
+                                .clickable { onToggleThirdsGrid() }
+                                .padding(horizontal = 8.dp, vertical = 5.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                                Icon(Lucide.Grid3x3, contentDescription = null, tint = if (showThirdsGrid) Color.White else colors.textMain, modifier = Modifier.size(12.dp))
+                                Text("3x3", color = if (showThirdsGrid) Color.White else colors.textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
                         // Watermark Stamp Toggle
                         Box(
                             modifier = Modifier
@@ -3065,132 +3211,27 @@ fun Step2AspectAndCoverStage(
                                 .clickable { onToggleWatermark() },
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Lucide.Award, contentDescription = "Watermark", tint = if (showWatermark) Color.White else colors.textMain, modifier = Modifier.size(15.dp))
-                        }
-
-                        // 3x3 Rule-of-Thirds Grid Toggle
-                        Box(
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .background(if (showThirdsGrid) Color(0xFF1696B2) else (if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFF1F5F9)))
-                                .clickable { onToggleThirdsGrid() }
-                                .padding(horizontal = 10.dp, vertical = 6.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Icon(Lucide.Grid3x3, contentDescription = null, tint = if (showThirdsGrid) Color.White else colors.textMain, modifier = Modifier.size(13.dp))
-                                Text("3x3", color = if (showThirdsGrid) Color.White else colors.textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            }
+                            Icon(Lucide.Award, contentDescription = "Watermark", tint = if (showWatermark) Color.White else colors.textMain, modifier = Modifier.size(14.dp))
                         }
                     }
                 }
 
-                // 5 Aspect Ratio Chips
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    STUDIO_RATIO_CONFIGS.forEach { config ->
-                        val isSel = config.id == selectedRatioId
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(
-                                    if (isSel) Color(0xFF1696B2)
-                                    else (if (colors.isDark) Color(0xFF1A1D27) else Color(0xFFF1F5F9))
-                                )
-                                .border(
-                                    1.dp,
-                                    if (isSel) Color(0xFF1696B2)
-                                    else (if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)),
-                                    RoundedCornerShape(12.dp)
-                                )
-                                .clickable { onSelectRatio(config.id) }
-                                .padding(vertical = 8.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Icon(
-                                imageVector = config.icon,
-                                contentDescription = null,
-                                tint = if (isSel) Color.White else colors.textMain,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Text(
-                                text = config.label,
-                                color = if (isSel) Color.White else colors.textMain,
-                                fontSize = 10.sp,
-                                fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // 2B. Direct-Draggable 1:1 Profile Crop Box Stage
-        item {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(if (colors.isDark) Color(0xFF161922) else Color.White)
-                    .border(BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)), RoundedCornerShape(24.dp))
-                    .padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Icon(Lucide.Crop, contentDescription = null, tint = Color(0xFFF5882E), modifier = Modifier.size(16.dp))
-                        Text("Drag 1:1 Profile Cover", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
-
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Box(
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .background(if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFEBF7FA))
-                                .padding(horizontal = 8.dp, vertical = 3.dp)
-                        ) {
-                            Text(
-                                text = "X:${cropOffsetX.toInt()}% Y:${cropOffsetY.toInt()}%",
-                                color = Color(0xFF1696B2),
-                                fontSize = 10.sp,
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-
-                        // Center Button
-                        Box(
-                            modifier = Modifier
-                                .size(28.dp)
-                                .clip(CircleShape)
-                                .background(if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFF1F5F9))
-                                .clickable { onCenterCrop() },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Lucide.Focus, contentDescription = "Center", tint = colors.textMain, modifier = Modifier.size(14.dp))
-                        }
-                    }
-                }
-
-                // Interactive Framing Stage
-                var stageSize by remember { mutableStateOf(IntSize.Zero) }
-
+                // Interactive Center Viewport Stage
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(230.dp)
-                        .clip(RoundedCornerShape(16.dp))
+                        .aspectRatio(
+                            when (selectedRatioId) {
+                                "1:1" -> 1f
+                                "4:5" -> 4f / 5f
+                                "16:9" -> 16f / 9f
+                                "9:16" -> 9f / 16f
+                                "4:3" -> 4f / 3f
+                                else -> 4f / 3f
+                            }
+                        )
+                        .clip(RoundedCornerShape(18.dp))
                         .background(Color(0xFF0F172A))
-                        .onSizeChanged { stageSize = it },
-                    contentAlignment = Alignment.Center
                 ) {
                     if (activeSlide != null) {
                         SlidePreviewContent(
@@ -3199,58 +3240,36 @@ fun Step2AspectAndCoverStage(
                         )
                     }
 
-                    // Watermark badge
+                    // 3x3 Rule-of-Thirds Grid Overlay
+                    if (showThirdsGrid) {
+                        ThirdsGridOverlay(modifier = Modifier.fillMaxSize())
+                    }
+
+                    // Oscellion Minimalist Watermark Stamp
                     if (showWatermark) {
                         Box(
                             modifier = Modifier
                                 .align(Alignment.BottomStart)
                                 .padding(8.dp)
-                                .clip(CircleShape)
-                                .background(Color.Black.copy(alpha = 0.6f))
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color.Black.copy(alpha = 0.55f))
+                                .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)), RoundedCornerShape(12.dp))
+                                .padding(horizontal = 7.dp, vertical = 3.dp)
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Icon(Lucide.Sparkles, contentDescription = null, tint = Color(0xFFFB923C), modifier = Modifier.size(10.dp))
-                                Text("Chroma Studio", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                Icon(Lucide.Sparkles, contentDescription = null, tint = Color.White, modifier = Modifier.size(11.dp))
+                                Text("@cameron_williamson", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
 
-                    // 3x3 Rule of Thirds
-                    if (showThirdsGrid) {
-                        ThirdsGridOverlay(modifier = Modifier.fillMaxSize())
-                    }
-
-                    // Direct-Draggable 1:1 Square Crop Box
-                    val boxSizeDp = 150.dp
-                    val density = LocalDensity.current
-                    val boxSizePx = with(density) { boxSizeDp.toPx() }
-
-                    val maxX = (stageSize.width - boxSizePx).coerceAtLeast(0f)
-                    val maxY = (stageSize.height - boxSizePx).coerceAtLeast(0f)
-
-                    val offsetX = (cropOffsetX / 100f) * maxX
-                    val offsetY = (cropOffsetY / 100f) * maxY
-
+                    // Interactive 1:1 Square Crop Indicator Box
                     Box(
                         modifier = Modifier
-                            .offset { IntOffset(offsetX.roundToInt(), offsetY.roundToInt()) }
-                            .size(boxSizeDp)
-                            .border(2.dp, Color(0xFFF5882E), RoundedCornerShape(8.dp))
-                            .background(Color(0xFFF5882E).copy(alpha = 0.15f))
-                            .pointerInput(stageSize) {
-                                detectDragGestures { change, dragAmount ->
-                                    change.consume()
-                                    if (maxX > 0f && maxY > 0f) {
-                                        val newX = (offsetX + dragAmount.x).coerceIn(0f, maxX)
-                                        val newY = (offsetY + dragAmount.y).coerceIn(0f, maxY)
-                                        onCropOffsetChange(
-                                            (newX / maxX * 100f).coerceIn(0f, 100f),
-                                            (newY / maxY * 100f).coerceIn(0f, 100f)
-                                        )
-                                    }
-                                }
-                            }
+                            .fillMaxSize(0.72f)
+                            .align(Alignment.Center)
+                            .border(BorderStroke(2.dp, Color(0xFFF5882E)), RoundedCornerShape(8.dp))
+                            .background(Color(0xFFF5882E).copy(alpha = 0.08f))
                     ) {
                         Box(
                             modifier = Modifier
@@ -3258,145 +3277,563 @@ fun Step2AspectAndCoverStage(
                                 .padding(4.dp)
                                 .clip(RoundedCornerShape(4.dp))
                                 .background(Color(0xFFF5882E))
-                                .padding(horizontal = 5.dp, vertical = 2.dp)
+                                .padding(horizontal = 4.dp, vertical = 2.dp)
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Icon(Lucide.Move, contentDescription = null, tint = Color.White, modifier = Modifier.size(9.dp))
-                                Text("1:1", color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                            }
+                            Text("1:1 Crop", color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
 
-                // Precision Sliders & Live 1:1 Profile Feed Preview
+                // 2B. Tab Bar (editTabBar)
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(if (colors.isDark) Color(0xFF1E212B) else Color(0xFFF1F5F9))
+                        .padding(3.dp),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        // Slider X
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("Crop X Alignment", color = colors.textMuted, fontSize = 10.sp)
-                            Text("${cropOffsetX.toInt()}%", color = colors.textMain, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
-                        }
-                        Slider(
-                            value = cropOffsetX,
-                            onValueChange = { onCropOffsetChange(it, cropOffsetY) },
-                            valueRange = 0f..100f,
-                            colors = SliderDefaults.colors(thumbColor = Color(0xFFF5882E), activeTrackColor = Color(0xFFF5882E))
-                        )
-
-                        // Slider Y
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("Crop Y Alignment", color = colors.textMuted, fontSize = 10.sp)
-                            Text("${cropOffsetY.toInt()}%", color = colors.textMain, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
-                        }
-                        Slider(
-                            value = cropOffsetY,
-                            onValueChange = { onCropOffsetChange(cropOffsetX, it) },
-                            valueRange = 0f..100f,
-                            colors = SliderDefaults.colors(thumbColor = Color(0xFF1696B2), activeTrackColor = Color(0xFF1696B2))
-                        )
-                    }
-
-                    // Live 1:1 Profile Mini Card
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("1:1 Grid", color = colors.textMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    tabsForMode.forEach { tab ->
+                        val isSel = tab == activeEditTab
                         Box(
                             modifier = Modifier
-                                .size(64.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .border(2.dp, Color(0xFFF5882E), RoundedCornerShape(12.dp))
-                                .background(Color(0xFF0F172A))
+                                .weight(1f)
+                                .clip(RoundedCornerShape(11.dp))
+                                .background(if (isSel) (if (colors.isDark) Color(0xFF282D3D) else Color.White) else Color.Transparent)
+                                .shadow(if (isSel) 2.dp else 0.dp, RoundedCornerShape(11.dp))
+                                .clickable { onSelectEditTab(tab) }
+                                .padding(vertical = 7.dp),
+                            contentAlignment = Alignment.Center
                         ) {
-                            if (activeSlide != null) {
-                                SlidePreviewContent(slide = activeSlide, modifier = Modifier.fillMaxSize())
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                                Icon(
+                                    imageVector = tab.icon,
+                                    contentDescription = null,
+                                    tint = if (isSel) Color(0xFF1696B2) else colors.textMuted,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = tab.label,
+                                    color = if (isSel) colors.textMain else colors.textMuted,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (isSel) FontWeight.Bold else FontWeight.SemiBold
+                                )
                             }
                         }
                     }
                 }
 
-                // Flash Video Specific Cover Frame Scrubber
-                if (studioMode == CreatorStudioMode.FLASH) {
-                    Spacer(Modifier.height(4.dp))
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(if (colors.isDark) Color(0xFF1A1D27) else Color(0xFFF8FAFC))
-                            .border(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0), RoundedCornerShape(16.dp))
-                            .padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Icon(Lucide.Video, contentDescription = null, tint = Color(0xFF1696B2), modifier = Modifier.size(15.dp))
-                                Text("Cover Source", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                // 2C. Tab Panels Based on Active Edit Tab
+                when (activeEditTab) {
+                    // ── CROP TAB (Photo) ──────────────────────────────────────────
+                    StudioEditTab.CROP -> {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text("ASPECT RATIO", color = colors.textMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                STUDIO_RATIO_CONFIGS.forEach { config ->
+                                    val isSel = config.id == selectedRatioId
+                                    Column(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(
+                                                if (isSel) Color(0xFF1696B2)
+                                                else (if (colors.isDark) Color(0xFF1E212B) else Color(0xFFF8FAFC))
+                                            )
+                                            .border(
+                                                BorderStroke(1.dp, if (isSel) Color(0xFF1696B2) else (if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0))),
+                                                RoundedCornerShape(12.dp)
+                                            )
+                                            .clickable { onSelectRatio(config.id) }
+                                            .padding(vertical = 8.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Icon(config.icon, contentDescription = null, tint = if (isSel) Color.White else colors.textMain, modifier = Modifier.size(16.dp))
+                                        Text(config.label, color = if (isSel) Color.White else colors.textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
                             }
 
-                            Row(
+                            // 1:1 Profile Grid Crop Alignment Box
+                            Column(
                                 modifier = Modifier
-                                    .clip(CircleShape)
-                                    .background(if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0))
-                                    .padding(2.dp)
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(if (colors.isDark) Color(0xFF1A1D27) else Color(0xFFF8FAFC))
+                                    .border(BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)), RoundedCornerShape(16.dp))
+                                    .padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .clip(CircleShape)
-                                        .background(if (coverPickerMode == "frame") (if (colors.isDark) Color(0xFF161922) else Color.White) else Color.Transparent)
-                                        .clickable { onCoverPickerModeChange("frame") }
-                                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text("Frame", color = if (coverPickerMode == "frame") colors.textMain else colors.textMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(36.dp)
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(Color(0xFF0F172A))
+                                        ) {
+                                            activeSlide?.let {
+                                                SlidePreviewContent(slide = it, modifier = Modifier.fillMaxSize())
+                                            }
+                                        }
+                                        Column {
+                                            Text("1:1 Profile Grid Crop", color = colors.textMain, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            Text("X:${cropOffsetX.roundToInt()}% Y:${cropOffsetY.roundToInt()}%", color = Color(0xFF1696B2), fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+                                        }
+                                    }
+
+                                    Box(
+                                        modifier = Modifier
+                                            .size(32.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFEDF2F7))
+                                            .clickable { onCenterCrop() },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(Lucide.Focus, contentDescription = "Center Crop", tint = colors.textMain, modifier = Modifier.size(15.dp))
+                                    }
                                 }
 
-                                Box(
-                                    modifier = Modifier
-                                        .clip(CircleShape)
-                                        .background(if (coverPickerMode == "custom") (if (colors.isDark) Color(0xFF161922) else Color.White) else Color.Transparent)
-                                        .clickable { onCoverPickerModeChange("custom") }
-                                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
-                                    Text("Custom", color = if (coverPickerMode == "custom") colors.textMain else colors.textMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    // X Slider
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("Horizontal (X)", color = colors.textMuted, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
+                                        Slider(
+                                            value = cropOffsetX,
+                                            onValueChange = { onCropOffsetChange(it, cropOffsetY) },
+                                            valueRange = 0f..100f,
+                                            colors = SliderDefaults.colors(thumbColor = Color(0xFF1696B2), activeTrackColor = Color(0xFF1696B2)),
+                                            modifier = Modifier.height(20.dp)
+                                        )
+                                    }
+                                    // Y Slider
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("Vertical (Y)", color = colors.textMuted, fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
+                                        Slider(
+                                            value = cropOffsetY,
+                                            onValueChange = { onCropOffsetChange(cropOffsetX, it) },
+                                            valueRange = 0f..100f,
+                                            colors = SliderDefaults.colors(thumbColor = Color(0xFF1696B2), activeTrackColor = Color(0xFF1696B2)),
+                                            modifier = Modifier.height(20.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
+                    }
 
-                        if (coverPickerMode == "frame") {
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text("Scrub video poster frame", color = colors.textMuted, fontSize = 10.sp)
-                                    Text(formatDurationTime(selectedCoverFrameMs), color = Color(0xFF1696B2), fontSize = 10.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
-                                }
-                                Slider(
-                                    value = selectedCoverFrameMs.toFloat(),
-                                    onValueChange = { onScrubCoverFrame(it.toLong()) },
-                                    valueRange = 0f..flashVideoDurationMs.toFloat().coerceAtLeast(1000f),
-                                    colors = SliderDefaults.colors(thumbColor = Color(0xFF1696B2), activeTrackColor = Color(0xFF1696B2))
-                                )
-                            }
-                        } else {
+                    // ── FILTERS TAB (Photo) ────────────────────────────────────────
+                    StudioEditTab.FILTERS -> {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(if (colors.isDark) Color(0xFF1A2634) else Color(0xFFEBF7FA))
-                                    .border(1.dp, Color(0xFF1696B2).copy(alpha = 0.4f), RoundedCornerShape(12.dp))
-                                    .clickable { onPickCustomCover() }
-                                    .padding(10.dp),
+                                modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Icon(Lucide.Upload, contentDescription = null, tint = Color(0xFF1696B2), modifier = Modifier.size(16.dp))
-                                    Text("Upload High-Res Cover Image", color = Color(0xFF1696B2), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text("COLOR PRESETS", color = colors.textMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                                Box(
+                                    modifier = Modifier
+                                        .size(28.dp)
+                                        .clip(CircleShape)
+                                        .background(if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFF1F5F9))
+                                        .clickable { onResetFraming() },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Lucide.RotateCcw, contentDescription = "Reset", tint = colors.textMuted, modifier = Modifier.size(13.dp))
                                 }
-                                Icon(Lucide.ChevronRight, contentDescription = null, tint = Color(0xFF1696B2), modifier = Modifier.size(16.dp))
+                            }
+
+                            LazyRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(PHOTO_FILTER_PRESETS) { preset ->
+                                    val isCur = (activeSlide?.filterName ?: "Original") == preset
+                                    Column(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(
+                                                if (isCur) Color(0xFF1696B2)
+                                                else (if (colors.isDark) Color(0xFF1E212B) else Color(0xFFF8FAFC))
+                                            )
+                                            .border(
+                                                BorderStroke(1.dp, if (isCur) Color(0xFF1696B2) else (if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0))),
+                                                RoundedCornerShape(12.dp)
+                                            )
+                                            .clickable { onSelectFilterPreset(preset) }
+                                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Text(
+                                            text = preset,
+                                            color = if (isCur) Color.White else colors.textMain,
+                                            fontSize = 11.sp,
+                                            fontWeight = if (isCur) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // ── ADJUST TAB (Photo) ─────────────────────────────────────────
+                    StudioEditTab.ADJUST -> {
+                        val slide = activeSlide ?: StudioSlide()
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("FINE ADJUSTMENTS", color = colors.textMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                                Box(
+                                    modifier = Modifier
+                                        .size(28.dp)
+                                        .clip(CircleShape)
+                                        .background(if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFF1F5F9))
+                                        .clickable {
+                                            onUpdatePhotoAdjustments(0f, 1f, 1f, 0f, 0f, 0f)
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Lucide.RotateCcw, contentDescription = "Reset All", tint = colors.textMuted, modifier = Modifier.size(13.dp))
+                                }
+                            }
+
+                            // Sliders Grid
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                // Brightness
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Text("Brightness", color = colors.textMuted, fontSize = 9.sp)
+                                        Text("${slide.brightness.roundToInt()}", color = colors.textMain, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
+                                    }
+                                    Slider(
+                                        value = slide.brightness,
+                                        onValueChange = { b ->
+                                            onUpdatePhotoAdjustments(b, slide.contrast, slide.saturation, slide.warmth, slide.vignette, slide.sharpness)
+                                        },
+                                        valueRange = -100f..100f,
+                                        colors = SliderDefaults.colors(thumbColor = Color(0xFFF5882E), activeTrackColor = Color(0xFFF5882E)),
+                                        modifier = Modifier.height(20.dp)
+                                    )
+                                }
+                                // Contrast
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Text("Contrast", color = colors.textMuted, fontSize = 9.sp)
+                                        Text(String.format("%.1fx", slide.contrast), color = colors.textMain, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
+                                    }
+                                    Slider(
+                                        value = slide.contrast,
+                                        onValueChange = { c ->
+                                            onUpdatePhotoAdjustments(slide.brightness, c, slide.saturation, slide.warmth, slide.vignette, slide.sharpness)
+                                        },
+                                        valueRange = 0.5f..2.0f,
+                                        colors = SliderDefaults.colors(thumbColor = Color(0xFF1696B2), activeTrackColor = Color(0xFF1696B2)),
+                                        modifier = Modifier.height(20.dp)
+                                    )
+                                }
+                            }
+
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                // Saturation
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Text("Saturation", color = colors.textMuted, fontSize = 9.sp)
+                                        Text(String.format("%.1fx", slide.saturation), color = colors.textMain, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
+                                    }
+                                    Slider(
+                                        value = slide.saturation,
+                                        onValueChange = { s ->
+                                            onUpdatePhotoAdjustments(slide.brightness, slide.contrast, s, slide.warmth, slide.vignette, slide.sharpness)
+                                        },
+                                        valueRange = 0f..3.0f,
+                                        colors = SliderDefaults.colors(thumbColor = Color(0xFF1696B2), activeTrackColor = Color(0xFF1696B2)),
+                                        modifier = Modifier.height(20.dp)
+                                    )
+                                }
+                                // Warmth
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Text("Warmth", color = colors.textMuted, fontSize = 9.sp)
+                                        Text("${slide.warmth.roundToInt()}", color = colors.textMain, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
+                                    }
+                                    Slider(
+                                        value = slide.warmth,
+                                        onValueChange = { w ->
+                                            onUpdatePhotoAdjustments(slide.brightness, slide.contrast, slide.saturation, w, slide.vignette, slide.sharpness)
+                                        },
+                                        valueRange = -50f..50f,
+                                        colors = SliderDefaults.colors(thumbColor = Color(0xFFF5882E), activeTrackColor = Color(0xFFF5882E)),
+                                        modifier = Modifier.height(20.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // ── TRIM TAB (Flash Video) ────────────────────────────────────
+                    StudioEditTab.TRIM -> {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("TRIM TIMELINE", color = colors.textMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color(0xFF10B981).copy(alpha = 0.15f))
+                                        .clickable { onSnapFifteenSec() }
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Text("Snap to 15s", color = Color(0xFF10B981), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("In: ${flashTrimStartMs / 1000}s", color = colors.textMuted, fontSize = 9.sp)
+                                    Slider(
+                                        value = flashTrimStartMs.toFloat(),
+                                        onValueChange = { onUpdateTrim(it.toLong(), flashTrimEndMs) },
+                                        valueRange = 0f..(flashTrimEndMs - 1000L).coerceAtLeast(1000L).toFloat(),
+                                        colors = SliderDefaults.colors(thumbColor = Color(0xFFF5882E), activeTrackColor = Color(0xFFF5882E)),
+                                        modifier = Modifier.height(20.dp)
+                                    )
+                                }
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Out: ${flashTrimEndMs / 1000}s", color = colors.textMuted, fontSize = 9.sp)
+                                    Slider(
+                                        value = flashTrimEndMs.toFloat(),
+                                        onValueChange = { onUpdateTrim(flashTrimStartMs, it.toLong()) },
+                                        valueRange = (flashTrimStartMs + 1000L).toFloat()..(flashVideoDurationMs.coerceAtLeast(15000L).toFloat()),
+                                        colors = SliderDefaults.colors(thumbColor = Color(0xFF1696B2), activeTrackColor = Color(0xFF1696B2)),
+                                        modifier = Modifier.height(20.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // ── SOUND TAB (Flash Video) ───────────────────────────────────
+                    StudioEditTab.SOUND -> {
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(3),
+                            modifier = Modifier.fillMaxWidth().heightIn(max = 140.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            item {
+                                Column(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(if (colors.isDark) Color(0xFF1E212B) else Color(0xFFF8FAFC))
+                                        .border(BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)), RoundedCornerShape(12.dp))
+                                        .clickable { onToggleMute() }
+                                        .padding(10.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(if (flashIsMuted) Lucide.VolumeX else Lucide.Volume2, contentDescription = null, tint = if (flashIsMuted) Color(0xFFEF4444) else Color(0xFF1696B2), modifier = Modifier.size(18.dp))
+                                    Text("Audio", color = colors.textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+
+                            item {
+                                Column(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(if (colors.isDark) Color(0xFF1E212B) else Color(0xFFF8FAFC))
+                                        .border(BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)), RoundedCornerShape(12.dp))
+                                        .clickable { onOpenAudioMixer() }
+                                        .padding(10.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(Lucide.Music, contentDescription = null, tint = Color(0xFFF5882E), modifier = Modifier.size(18.dp))
+                                    Text("Add music", color = colors.textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+
+                            item {
+                                Column(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(if (colors.isDark) Color(0xFF1E212B) else Color(0xFFF8FAFC))
+                                        .border(BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)), RoundedCornerShape(12.dp))
+                                        .clickable { onCycleSpeed() }
+                                        .padding(10.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(Lucide.Gauge, contentDescription = null, tint = Color(0xFF1696B2), modifier = Modifier.size(18.dp))
+                                    Text("${flashPlaybackSpeed}x Speed", color = colors.textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+
+                            item {
+                                Column(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(if (colors.isDark) Color(0xFF1E212B) else Color(0xFFF8FAFC))
+                                        .border(BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)), RoundedCornerShape(12.dp))
+                                        .clickable { onToggleFlip() }
+                                        .padding(10.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(Lucide.FlipHorizontal, contentDescription = null, tint = Color(0xFFF5882E), modifier = Modifier.size(18.dp))
+                                    Text("Mirror", color = colors.textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+
+                            item {
+                                Column(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(if (colors.isDark) Color(0xFF1E212B) else Color(0xFFF8FAFC))
+                                        .border(BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)), RoundedCornerShape(12.dp))
+                                        .clickable { onSnapFifteenSec() }
+                                        .padding(10.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(Lucide.WandSparkles, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(18.dp))
+                                    Text("Snap 15s", color = colors.textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+
+                            item {
+                                Column(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(if (colors.isDark) Color(0xFF1E212B) else Color(0xFFF8FAFC))
+                                        .border(BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)), RoundedCornerShape(12.dp))
+                                        .clickable { onOpenAudioMixer() }
+                                        .padding(10.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(Lucide.SlidersVertical, contentDescription = null, tint = Color(0xFF1696B2), modifier = Modifier.size(18.dp))
+                                    Text("Mixer", color = colors.textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+
+                    // ── COVER TAB (Flash Video) ───────────────────────────────────
+                    StudioEditTab.COVER -> {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("REEL COVER FRAME", color = colors.textMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                                Row(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(20.dp))
+                                        .background(if (colors.isDark) Color(0xFF1E212B) else Color(0xFFEDF2F7))
+                                        .padding(2.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(if (coverPickerMode == "frame") Color(0xFFF5882E) else Color.Transparent)
+                                            .clickable { onCoverPickerModeChange("frame") }
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text("Frame", color = if (coverPickerMode == "frame") Color.White else colors.textMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(if (coverPickerMode == "custom") Color(0xFFF5882E) else Color.Transparent)
+                                            .clickable { onCoverPickerModeChange("custom") }
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text("Upload", color = if (coverPickerMode == "custom") Color.White else colors.textMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+
+                            if (coverPickerMode == "frame") {
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Text("Scrub Video Poster Frame", color = colors.textMuted, fontSize = 10.sp)
+                                        Text(String.format("%.1fs", selectedCoverFrameMs / 1000f), color = Color(0xFF1696B2), fontSize = 10.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                                    }
+                                    Slider(
+                                        value = selectedCoverFrameMs.toFloat(),
+                                        onValueChange = { onScrubCoverFrame(it.toLong()) },
+                                        valueRange = 0f..(flashVideoDurationMs.coerceAtLeast(15000L).toFloat()),
+                                        colors = SliderDefaults.colors(thumbColor = Color(0xFF1696B2), activeTrackColor = Color(0xFF1696B2)),
+                                        modifier = Modifier.height(20.dp)
+                                    )
+                                }
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .border(BorderStroke(1.dp, Color(0xFF1696B2)), RoundedCornerShape(14.dp))
+                                        .background(if (colors.isDark) Color(0xFF1696B2).copy(alpha = 0.1f) else Color(0xFFE0F7FA))
+                                        .clickable { onPickCustomCover() }
+                                        .padding(vertical = 12.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Icon(Lucide.Upload, contentDescription = null, tint = Color(0xFF1696B2), modifier = Modifier.size(15.dp))
+                                        Text("Upload Custom High-Res Cover", color = Color(0xFF1696B2), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // ── FRAME TAB (Work) ──────────────────────────────────────────
+                    StudioEditTab.FRAME -> {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text("FRAME DIMENSIONS", color = colors.textMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                STUDIO_RATIO_CONFIGS.take(4).forEach { config ->
+                                    val isSel = config.id == selectedRatioId
+                                    Column(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(
+                                                if (isSel) Color(0xFF1696B2)
+                                                else (if (colors.isDark) Color(0xFF1E212B) else Color(0xFFF8FAFC))
+                                            )
+                                            .border(
+                                                BorderStroke(1.dp, if (isSel) Color(0xFF1696B2) else (if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0))),
+                                                RoundedCornerShape(12.dp)
+                                            )
+                                            .clickable { onSelectRatio(config.id) }
+                                            .padding(vertical = 8.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Text(config.label, color = if (isSel) Color.White else colors.textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
                             }
                         }
                     }
@@ -3404,8 +3841,8 @@ fun Step2AspectAndCoverStage(
             }
         }
 
-        // 2C. Multi-Slide Carousel Strip (Photo & Work)
-        if (slides.size > 1) {
+        // 2D. Multi-Slide Carousel Strip (Photo & Work Modes)
+        if (studioMode != CreatorStudioMode.FLASH && slides.isNotEmpty()) {
             item {
                 Column(
                     modifier = Modifier
@@ -3422,57 +3859,106 @@ fun Step2AspectAndCoverStage(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Icon(Lucide.Layers, contentDescription = null, tint = Color(0xFF1696B2), modifier = Modifier.size(15.dp))
+                            Icon(Lucide.GalleryHorizontalEnd, contentDescription = null, tint = Color(0xFF1696B2), modifier = Modifier.size(16.dp))
                             Text("Carousel Slides", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
-
-                        Text("${slides.size} slides", color = Color(0xFF1696B2), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF1696B2).copy(alpha = 0.15f))
+                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                        ) {
+                            Text("${currentSlideIndex + 1} / ${slides.size}", color = Color(0xFF1696B2), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
 
                     LazyRow(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        itemsIndexed(slides) { idx, s ->
-                            val isSel = idx == currentSlideIndex
-                            Box(
+                        itemsIndexed(slides) { idx, slide ->
+                            val isCur = idx == currentSlideIndex
+                            Column(
                                 modifier = Modifier
                                     .width(72.dp)
-                                    .height(96.dp)
-                                    .clip(RoundedCornerShape(12.dp))
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(if (colors.isDark) Color(0xFF1E212B) else Color(0xFFF8FAFC))
                                     .border(
-                                        if (isSel) 2.dp else 1.dp,
-                                        if (isSel) Color(0xFFF5882E) else (if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)),
-                                        RoundedCornerShape(12.dp)
+                                        BorderStroke(
+                                            if (isCur) 2.dp else 1.dp,
+                                            if (isCur) Color(0xFFF5882E) else (if (colors.isDark) Color.White.copy(alpha = 0.1f) else Color(0xFFE2E8F0))
+                                        ),
+                                        RoundedCornerShape(14.dp)
                                     )
                                     .clickable { onSelectSlide(idx) }
+                                    .padding(4.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                SlidePreviewContent(slide = s, modifier = Modifier.fillMaxSize())
-
-                                // Slide order badge
+                                // Thumbnail
                                 Box(
                                     modifier = Modifier
-                                        .align(Alignment.TopStart)
-                                        .padding(4.dp)
-                                        .clip(CircleShape)
-                                        .background(Color.Black.copy(alpha = 0.6f))
-                                        .padding(horizontal = 5.dp, vertical = 2.dp)
+                                        .size(64.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(Color(0xFF0F172A))
                                 ) {
-                                    Text("${idx + 1}", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                    SlidePreviewContent(slide = slide, modifier = Modifier.fillMaxSize())
+                                    // Number badge
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.TopStart)
+                                            .padding(3.dp)
+                                            .size(16.dp)
+                                            .clip(CircleShape)
+                                            .background(if (isCur) Color(0xFFF5882E) else Color.Black.copy(alpha = 0.6f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text("${idx + 1}", color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                                    }
                                 }
 
-                                // Delete icon
-                                Box(
-                                    modifier = Modifier
-                                        .align(Alignment.TopEnd)
-                                        .padding(4.dp)
-                                        .size(20.dp)
-                                        .clip(CircleShape)
-                                        .background(Color.Black.copy(alpha = 0.6f))
-                                        .clickable { onRemoveSlide(idx) },
-                                    contentAlignment = Alignment.Center
+                                // Reorder & Delete controls
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Icon(Lucide.X, contentDescription = "Delete", tint = Color.White, modifier = Modifier.size(11.dp))
+                                    // Move Left
+                                    Box(
+                                        modifier = Modifier
+                                            .size(18.dp)
+                                            .clip(CircleShape)
+                                            .background(if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFEDF2F7))
+                                            .clickable { if (idx > 0) onReorderSlide(idx, idx - 1) },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(Lucide.ChevronLeft, contentDescription = "Move Left", tint = colors.textMuted, modifier = Modifier.size(11.dp))
+                                    }
+
+                                    // Remove
+                                    Box(
+                                        modifier = Modifier
+                                            .size(18.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFFEF4444).copy(alpha = 0.15f))
+                                            .clickable { onRemoveSlide(idx) },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(Lucide.X, contentDescription = "Remove", tint = Color(0xFFEF4444), modifier = Modifier.size(10.dp))
+                                    }
+
+                                    // Move Right
+                                    Box(
+                                        modifier = Modifier
+                                            .size(18.dp)
+                                            .clip(CircleShape)
+                                            .background(if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFEDF2F7))
+                                            .clickable { if (idx < slides.lastIndex) onReorderSlide(idx, idx + 1) },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(Lucide.ChevronRight, contentDescription = "Move Right", tint = colors.textMuted, modifier = Modifier.size(11.dp))
+                                    }
                                 }
                             }
                         }
@@ -3484,7 +3970,7 @@ fun Step2AspectAndCoverStage(
 }
 
 // ============================================================================
-// STEP 3: POST DETAILS, METADATA & ADVANCED PRIVACY SETTINGS STAGE
+// STEP 3: POST DETAILS, METADATA & ADVANCED PRIVACY SETTINGS (V3 SPEC)
 // ============================================================================
 
 @Composable
@@ -3511,6 +3997,11 @@ fun Step3PostDetailsStage(
     scheduleReleaseEnabled: Boolean = false,
     scheduleDateTime: String = "Tomorrow, 10:00 AM",
     remixAttributionEnabled: Boolean = true,
+    isAdvancedSettingsOpen: Boolean = false,
+    isAltTextOpen: Boolean = false,
+    onEditCoverClick: () -> Unit = {},
+    onToggleAdvancedSettings: () -> Unit = {},
+    onToggleAltText: () -> Unit = {},
     onToggleScheduleRelease: (Boolean) -> Unit = {},
     onScheduleDateTimeChange: (String) -> Unit = {},
     onToggleRemixAttribution: (Boolean) -> Unit = {},
@@ -3522,89 +4013,120 @@ fun Step3PostDetailsStage(
     onAltTextChange: (String) -> Unit,
     onAddHashtag: (String) -> Unit,
     onRemoveHashtag: (String) -> Unit,
-    onOpenMentionSearch: () -> Unit,
+    onOpenMentionModal: () -> Unit,
     onRemoveMention: (UserProfile) -> Unit,
-    onAudienceVisibilityChange: (String) -> Unit,
+    onAudienceSelect: (String) -> Unit,
     onToggleHideLikes: (Boolean) -> Unit,
-    onToggleTurnOffComments: (Boolean) -> Unit,
-    onToggleTurnOffRemix: (Boolean) -> Unit,
-    onToggleIncludeOriginalAudio: (Boolean) -> Unit,
-    onToggleAllowDownloads: (Boolean) -> Unit,
-    onToggleHighQualityUpload: (Boolean) -> Unit,
-    onSaveDraft: () -> Unit,
-    onPublishClick: () -> Unit
+    onToggleComments: (Boolean) -> Unit,
+    onToggleRemix: (Boolean) -> Unit,
+    onToggleAudio: (Boolean) -> Unit,
+    onToggleDownloads: (Boolean) -> Unit,
+    onToggleHighQuality: (Boolean) -> Unit
 ) {
     val colors = LocalOscellionColors.current
-    var showAltTextBox by remember { mutableStateOf(false) }
-    var hashtagInput by remember { mutableStateOf("") }
     val activeSlide = slides.getOrNull(currentSlideIndex) ?: slides.firstOrNull()
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // 3A. Small Hero Summary Card
+        // ── 3-0. Post Summary Header Row (Instagram "New post" header row) ─────────
         item {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(20.dp))
+                    .clip(RoundedCornerShape(24.dp))
                     .background(if (colors.isDark) Color(0xFF161922) else Color.White)
-                    .border(BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)), RoundedCornerShape(20.dp))
-                    .padding(10.dp),
+                    .border(BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)), RoundedCornerShape(24.dp))
+                    .padding(14.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                // Mini preview box
+                // 68x68 Thumbnail with bottom "Edit" pill button
                 Box(
                     modifier = Modifier
-                        .size(60.dp)
-                        .clip(RoundedCornerShape(12.dp))
+                        .size(68.dp)
+                        .clip(RoundedCornerShape(16.dp))
                         .background(Color(0xFF0F172A))
                 ) {
                     if (activeSlide != null) {
                         SlidePreviewContent(slide = activeSlide, modifier = Modifier.fillMaxSize())
                     }
+                    // Bottom "Edit" overlay button
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .background(Color.Black.copy(alpha = 0.65f))
+                            .clickable { onEditCoverClick() }
+                            .padding(vertical = 2.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (studioMode == CreatorStudioMode.FLASH) "Edit cover" else "Edit",
+                            color = Color.White,
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
 
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                // Metadata Column
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        // Mode Chip
                         Box(
                             modifier = Modifier
-                                .clip(CircleShape)
+                                .clip(RoundedCornerShape(10.dp))
                                 .background(Color(0xFF1696B2).copy(alpha = 0.15f))
                                 .padding(horizontal = 7.dp, vertical = 2.dp)
                         ) {
                             Text(
                                 text = when (studioMode) {
-                                    CreatorStudioMode.FLASH -> "FLASH · $selectedRatioId"
-                                    CreatorStudioMode.WORK -> "WORK · $selectedRatioId"
-                                    CreatorStudioMode.POST -> "PHOTO · $selectedRatioId"
+                                    CreatorStudioMode.FLASH -> "REEL"
+                                    CreatorStudioMode.POST -> "POST"
+                                    CreatorStudioMode.WORK -> "WORK"
                                 },
                                 color = Color(0xFF1696B2),
                                 fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.ExtraBold
                             )
                         }
 
-                        if (selectedCategoryTag != null) {
-                            Box(
-                                modifier = Modifier
-                                    .clip(CircleShape)
-                                    .background(Color(0xFFF5882E).copy(alpha = 0.15f))
-                                    .padding(horizontal = 7.dp, vertical = 2.dp)
-                            ) {
-                                Text(selectedCategoryTag, color = Color(0xFFF5882E), fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                            }
+                        // Audience Pill
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFEDF2F7))
+                                .padding(horizontal = 7.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            Icon(Lucide.Globe, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(10.dp))
+                            Text(audienceVisibility.replaceFirstChar { it.uppercaseChar() }, color = colors.textMain, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                         }
                     }
 
-                    Spacer(Modifier.height(4.dp))
                     Text(
-                        text = postTitle.ifBlank { "Untitled Creation" },
+                        text = when (studioMode) {
+                            CreatorStudioMode.FLASH -> "15.0s · 9:16 Vertical"
+                            CreatorStudioMode.POST -> "${slides.size} Photos · $selectedRatioId"
+                            CreatorStudioMode.WORK -> "Room SQLite · activeWorks"
+                        },
                         color = colors.textMain,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Add a caption, tag people and choose who sees it",
+                        color = colors.textMuted,
+                        fontSize = 10.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -3612,7 +4134,7 @@ fun Step3PostDetailsStage(
             }
         }
 
-        // 3B. Headline & Story (Title & Description)
+        // ── 3A. Content & Copywriting (Title, Caption & Quick Formatting) ──────────
         item {
             Column(
                 modifier = Modifier
@@ -3623,6 +4145,7 @@ fun Step3PostDetailsStage(
                     .padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
+                // Title Input with Character Counter
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -3632,50 +4155,29 @@ fun Step3PostDetailsStage(
                         Icon(Lucide.PenTool, contentDescription = null, tint = Color(0xFF1696B2), modifier = Modifier.size(15.dp))
                         Text("Headline & Story", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
-
-                    Text("${postTitle.length} / 100", color = colors.textMuted, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+                    Text("${postTitle.length} / 100", color = colors.textMuted, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
                 }
 
-                // Title Input
-                BasicTextField(
+                OutlinedTextField(
                     value = postTitle,
                     onValueChange = onTitleChange,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(if (colors.isDark) Color(0xFF1A1D27) else Color(0xFFF8FAFC))
-                        .border(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0), RoundedCornerShape(12.dp))
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    textStyle = TextStyle(color = colors.textMain, fontSize = 13.sp, fontWeight = FontWeight.Bold),
-                    decorationBox = { inner ->
-                        if (postTitle.isEmpty()) {
-                            Text("Give your creation a title...", color = colors.textMuted, fontSize = 13.sp)
-                        }
-                        inner()
-                    }
+                    placeholder = { Text("Give your creation a title...", fontSize = 11.sp) },
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth().height(46.dp),
+                    textStyle = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 )
 
-                // Caption Textarea
-                BasicTextField(
+                // Caption / Story Textarea
+                OutlinedTextField(
                     value = postDescription,
                     onValueChange = onDescriptionChange,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(90.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(if (colors.isDark) Color(0xFF1A1D27) else Color(0xFFF8FAFC))
-                        .border(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0), RoundedCornerShape(12.dp))
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    textStyle = TextStyle(color = colors.textMain, fontSize = 12.sp),
-                    decorationBox = { inner ->
-                        if (postDescription.isEmpty()) {
-                            Text("Write a caption, tell the story behind this work...", color = colors.textMuted, fontSize = 12.sp)
-                        }
-                        inner()
-                    }
+                    placeholder = { Text("Write a caption, tell the story behind this work...", fontSize = 11.sp) },
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 85.dp),
+                    textStyle = TextStyle(fontSize = 11.sp, lineHeight = 16.sp)
                 )
 
-                // Caption Action Toolbar (#, @, Bold, Alt-text)
+                // Formatting Toolbar below Caption (#, @, Bold, Alt, Counter)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -3685,32 +4187,32 @@ fun Step3PostDetailsStage(
                         // Insert #
                         Box(
                             modifier = Modifier
-                                .size(30.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Color(0xFF1696B2).copy(alpha = 0.12f))
-                                .clickable { onAddHashtag("chroma") },
+                                .size(32.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (colors.isDark) Color(0xFF1A2634) else Color(0xFFEBF7FA))
+                                .clickable { onDescriptionChange("$postDescription #") },
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Lucide.Hash, contentDescription = "#", tint = Color(0xFF1696B2), modifier = Modifier.size(14.dp))
+                            Icon(Lucide.Hash, contentDescription = "Hashtag", tint = Color(0xFF1696B2), modifier = Modifier.size(15.dp))
                         }
 
                         // Insert @
                         Box(
                             modifier = Modifier
-                                .size(30.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Color(0xFFF5882E).copy(alpha = 0.12f))
-                                .clickable { onOpenMentionSearch() },
+                                .size(32.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (colors.isDark) Color(0xFF2D1E1E) else Color(0xFFFEF2E8))
+                                .clickable { onOpenMentionModal() },
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Lucide.AtSign, contentDescription = "@", tint = Color(0xFFF5882E), modifier = Modifier.size(14.dp))
+                            Icon(Lucide.AtSign, contentDescription = "Mention", tint = Color(0xFFF5882E), modifier = Modifier.size(15.dp))
                         }
 
-                        // Bold
+                        // Bold Format
                         Box(
                             modifier = Modifier
-                                .size(30.dp)
-                                .clip(RoundedCornerShape(8.dp))
+                                .size(32.dp)
+                                .clip(RoundedCornerShape(10.dp))
                                 .background(if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFF1F5F9))
                                 .clickable { onDescriptionChange("$postDescription **bold**") },
                             contentAlignment = Alignment.Center
@@ -3718,45 +4220,40 @@ fun Step3PostDetailsStage(
                             Icon(Lucide.Bold, contentDescription = "Bold", tint = colors.textMain, modifier = Modifier.size(14.dp))
                         }
 
-                        // Alt text button
+                        // Alt-Text Toggle
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFF1F5F9))
-                                .clickable { showAltTextBox = !showAltTextBox }
-                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isAltTextOpen) Color(0xFF1696B2) else (if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFF1F5F9)))
+                                .clickable { onToggleAltText() }
+                                .padding(horizontal = 8.dp, vertical = 7.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("Alt", color = colors.textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                                Icon(Lucide.Accessibility, contentDescription = null, tint = if (isAltTextOpen) Color.White else colors.textMain, modifier = Modifier.size(12.dp))
+                                Text("Alt", color = if (isAltTextOpen) Color.White else colors.textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
 
-                    Text("${postDescription.length} / 1,500", color = colors.textMuted, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+                    Text("${postDescription.length} / 1,500", color = colors.textMuted, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
                 }
 
-                // Expandable Alt text field
-                if (showAltTextBox) {
-                    BasicTextField(
+                // Expandable Accessibility Alt-Text Input
+                if (isAltTextOpen) {
+                    OutlinedTextField(
                         value = altTextString,
                         onValueChange = onAltTextChange,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(if (colors.isDark) Color(0xFF1A1D27) else Color(0xFFF1F5F9))
-                            .padding(8.dp),
-                        textStyle = TextStyle(color = colors.textMain, fontSize = 11.sp),
-                        decorationBox = { inner ->
-                            if (altTextString.isEmpty()) {
-                                Text("Describe image for visually impaired users...", color = colors.textMuted, fontSize = 11.sp)
-                            }
-                            inner()
-                        }
+                        placeholder = { Text("Describe media for visually impaired users...", fontSize = 10.sp) },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth().height(42.dp),
+                        textStyle = TextStyle(fontSize = 11.sp)
                     )
                 }
             }
         }
 
-        // 3C. Categorization & Location
+        // ── 3B. Categorization, Location, Hashtags & Mentions ──────────────────────
         item {
             Column(
                 modifier = Modifier
@@ -3768,168 +4265,110 @@ fun Step3PostDetailsStage(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 // Category Chips
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Category", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        ALGO_CATEGORIES.forEach { cat ->
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Icon(Lucide.Shapes, contentDescription = null, tint = Color(0xFF1696B2), modifier = Modifier.size(15.dp))
+                        Text("Category", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(ALGO_CATEGORIES) { cat ->
                             val isSel = selectedCategoryTag == cat
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(12.dp))
-                                    .background(
-                                        if (isSel) Color(0xFF1696B2)
-                                        else (if (colors.isDark) Color(0xFF1A1D27) else Color(0xFFF1F5F9))
-                                    )
+                                    .background(if (isSel) Color(0xFF1696B2) else (if (colors.isDark) Color(0xFF1E212B) else Color(0xFFF1F5F9)))
+                                    .border(BorderStroke(1.dp, if (isSel) Color(0xFF1696B2) else (if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0))), RoundedCornerShape(12.dp))
                                     .clickable { onCategorySelect(cat) }
-                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                                    .padding(horizontal = 10.dp, vertical = 6.dp)
                             ) {
-                                Text(
-                                    text = cat,
-                                    color = if (isSel) Color.White else colors.textMain,
-                                    fontSize = 11.sp,
-                                    fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium
-                                )
+                                Text(cat, color = if (isSel) Color.White else colors.textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
-
-                    if (selectedCategoryTag == "Others...") {
-                        BasicTextField(
-                            value = customCategoryTag,
-                            onValueChange = onCustomCategoryChange,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(if (colors.isDark) Color(0xFF1A1D27) else Color(0xFFF1F5F9))
-                                .padding(8.dp),
-                            textStyle = TextStyle(color = colors.textMain, fontSize = 11.sp),
-                            decorationBox = { inner ->
-                                if (customCategoryTag.isEmpty()) {
-                                    Text("Enter custom category tag...", color = colors.textMuted, fontSize = 11.sp)
-                                }
-                                inner()
-                            }
-                        )
-                    }
                 }
 
-                // Location Tag Input
+                // Location Geotag Row
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("Location", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(if (colors.isDark) Color(0xFF1A1D27) else Color(0xFFF8FAFC))
-                            .border(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0), RoundedCornerShape(12.dp))
-                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Lucide.MapPin, contentDescription = null, tint = Color(0xFFF5882E), modifier = Modifier.size(15.dp))
-                        Spacer(Modifier.width(8.dp))
-                        BasicTextField(
-                            value = locationString,
-                            onValueChange = onLocationChange,
-                            modifier = Modifier.weight(1f),
-                            textStyle = TextStyle(color = colors.textMain, fontSize = 12.sp),
-                            decorationBox = { inner ->
-                                if (locationString.isEmpty()) {
-                                    Text("Add location...", color = colors.textMuted, fontSize = 12.sp)
-                                }
-                                inner()
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Icon(Lucide.MapPin, contentDescription = null, tint = Color(0xFFF5882E), modifier = Modifier.size(15.dp))
+                            Text("Location", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Text(locationString, color = Color(0xFF1696B2), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(listOf("Zurich, Switzerland", "Tokyo, Japan", "New York, USA", "London, UK", "Berlin, Germany")) { loc ->
+                            val isCur = locationString == loc
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (isCur) Color(0xFFF5882E) else (if (colors.isDark) Color(0xFF1E212B) else Color(0xFFF1F5F9)))
+                                    .clickable { onLocationChange(loc) }
+                                    .padding(horizontal = 9.dp, vertical = 5.dp)
+                            ) {
+                                Text(loc, color = if (isCur) Color.White else colors.textMain, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                             }
-                        )
+                        }
                     }
                 }
-            }
-        }
 
-        // 3D. Hashtags & Mentions
-        item {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(if (colors.isDark) Color(0xFF161922) else Color.White)
-                    .border(BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)), RoundedCornerShape(24.dp))
-                    .padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
                 // Hashtags
+                var tagInput by remember { mutableStateOf("") }
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("Hashtags", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        BasicTextField(
-                            value = hashtagInput,
-                            onValueChange = { hashtagInput = it },
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(if (colors.isDark) Color(0xFF1A1D27) else Color(0xFFF1F5F9))
-                                .padding(horizontal = 10.dp, vertical = 8.dp),
-                            textStyle = TextStyle(color = colors.textMain, fontSize = 12.sp),
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                            keyboardActions = KeyboardActions(onDone = {
-                                if (hashtagInput.isNotBlank()) {
-                                    onAddHashtag(hashtagInput)
-                                    hashtagInput = ""
-                                }
-                            }),
-                            decorationBox = { inner ->
-                                if (hashtagInput.isEmpty()) {
-                                    Text("Add tag (e.g. art)...", color = colors.textMuted, fontSize = 12.sp)
-                                }
-                                inner()
-                            }
+                        OutlinedTextField(
+                            value = tagInput,
+                            onValueChange = { tagInput = it },
+                            placeholder = { Text("Add discovery tags...", fontSize = 11.sp) },
+                            leadingIcon = { Icon(Lucide.Hash, contentDescription = null, tint = Color(0xFF1696B2), modifier = Modifier.size(14.dp)) },
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.weight(1f).height(42.dp),
+                            textStyle = TextStyle(fontSize = 11.sp)
                         )
-
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(10.dp))
+                                .size(38.dp)
+                                .clip(RoundedCornerShape(12.dp))
                                 .background(Color(0xFF1696B2))
                                 .clickable {
-                                    if (hashtagInput.isNotBlank()) {
-                                        onAddHashtag(hashtagInput)
-                                        hashtagInput = ""
+                                    if (tagInput.isNotBlank()) {
+                                        onAddHashtag(tagInput)
+                                        tagInput = ""
                                     }
-                                }
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                                },
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("Add", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Icon(Lucide.Plus, contentDescription = "Add Tag", tint = Color.White, modifier = Modifier.size(16.dp))
                         }
                     }
 
                     if (hashtags.isNotEmpty()) {
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             hashtags.forEach { tag ->
                                 Row(
                                     modifier = Modifier
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(Color(0xFF1696B2).copy(alpha = 0.12f))
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(if (colors.isDark) Color(0xFF1E212B) else Color(0xFFEDF2F7))
                                         .padding(horizontal = 8.dp, vertical = 4.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
-                                    Text("#$tag", color = Color(0xFF1696B2), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    Text("#$tag", color = colors.textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                     Icon(
-                                        imageVector = Lucide.X,
+                                        Lucide.X,
                                         contentDescription = "Remove",
-                                        tint = Color(0xFF1696B2),
-                                        modifier = Modifier.size(11.dp).clickable { onRemoveHashtag(tag) }
+                                        tint = colors.textMuted,
+                                        modifier = Modifier.size(12.dp).clickable { onRemoveHashtag(tag) }
                                     )
                                 }
                             }
@@ -3944,37 +4383,39 @@ fun Step3PostDetailsStage(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Mentions", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        Text(
-                            "+ Mention Creator",
-                            color = Color(0xFFF5882E),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.clickable { onOpenMentionSearch() }
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Icon(Lucide.AtSign, contentDescription = null, tint = Color(0xFF1696B2), modifier = Modifier.size(15.dp))
+                            Text("Mentions & Collaborators", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFF5882E).copy(alpha = 0.15f))
+                                .clickable { onOpenMentionModal() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Lucide.UserPlus, contentDescription = "Add", tint = Color(0xFFF5882E), modifier = Modifier.size(13.dp))
+                        }
                     }
 
                     if (mentionedUsers.isNotEmpty()) {
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            mentionedUsers.forEach { u ->
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            mentionedUsers.forEach { user ->
                                 Row(
                                     modifier = Modifier
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(Color(0xFFF5882E).copy(alpha = 0.12f))
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(if (colors.isDark) Color(0xFF1E212B) else Color(0xFFEDF2F7))
                                         .padding(horizontal = 8.dp, vertical = 4.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
-                                    Text("@${u.username}", color = Color(0xFFF5882E), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    Text("@${user.username}", color = colors.textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                     Icon(
-                                        imageVector = Lucide.X,
+                                        Lucide.X,
                                         contentDescription = "Remove",
-                                        tint = Color(0xFFF5882E),
-                                        modifier = Modifier.size(11.dp).clickable { onRemoveMention(u) }
+                                        tint = colors.textMuted,
+                                        modifier = Modifier.size(12.dp).clickable { onRemoveMention(user) }
                                     )
                                 }
                             }
@@ -3984,7 +4425,7 @@ fun Step3PostDetailsStage(
             }
         }
 
-        // 3E. Audience Visibility
+        // ── 3C. Audience Visibility Grid ──────────────────────────────────────────
         item {
             Column(
                 modifier = Modifier
@@ -3995,44 +4436,32 @@ fun Step3PostDetailsStage(
                     .padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text("Audience Visibility", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Icon(Lucide.Eye, contentDescription = null, tint = Color(0xFF1696B2), modifier = Modifier.size(15.dp))
+                    Text("Audience Visibility", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
 
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    val audOptions = listOf(
-                        "public" to "Public",
-                        "followers" to "Followers",
-                        "friends" to "Close Friends",
-                        "private" to "Private"
-                    )
-
-                    audOptions.forEach { (id, label) ->
-                        val isSel = audienceVisibility == id
-                        Box(
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("public", "followers", "friends", "private").forEach { aud ->
+                        val isSel = audienceVisibility == aud
+                        Column(
                             modifier = Modifier
                                 .weight(1f)
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(
-                                    if (isSel) Color(0xFF1696B2)
-                                    else (if (colors.isDark) Color(0xFF1A1D27) else Color(0xFFF1F5F9))
-                                )
-                                .clickable { onAudienceVisibilityChange(id) }
+                                .background(if (isSel) Color(0xFF1696B2) else (if (colors.isDark) Color(0xFF1E212B) else Color(0xFFF8FAFC)))
+                                .border(BorderStroke(1.dp, if (isSel) Color(0xFF1696B2) else (if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0))), RoundedCornerShape(12.dp))
+                                .clickable { onAudienceSelect(aud) }
                                 .padding(vertical = 8.dp),
-                            contentAlignment = Alignment.Center
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Text(
-                                text = label,
-                                color = if (isSel) Color.White else colors.textMain,
-                                fontSize = 10.sp,
-                                fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium,
-                                textAlign = TextAlign.Center
-                            )
+                            Text(aud.replaceFirstChar { it.uppercaseChar() }, color = if (isSel) Color.White else colors.textMain, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
             }
         }
 
-        // 3F. Advanced Settings iOS Switches
+        // ── 3D & 3E. Collapsible Advanced Settings (Permissions, Schedule & Remix) ─
         item {
             Column(
                 modifier = Modifier
@@ -4041,92 +4470,129 @@ fun Step3PostDetailsStage(
                     .background(if (colors.isDark) Color(0xFF161922) else Color.White)
                     .border(BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)), RoundedCornerShape(24.dp))
                     .padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text("Advanced Settings", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                // Collapsible Header
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onToggleAdvancedSettings() },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Icon(Lucide.SlidersHorizontal, contentDescription = null, tint = Color(0xFFF5882E), modifier = Modifier.size(16.dp))
+                        Text("Advanced settings", color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
 
-                SettingToggleRow("Hide Likes & Views", "Only you will see total counts", hideLikesCount, onToggleHideLikes)
-                SettingToggleRow("Turn Off Comments", "Disable responses on this creation", turnOffComments, onToggleTurnOffComments)
-                SettingToggleRow("Disable Remix / Reuse", "Prevent re-mixing and duets", turnOffRemix, onToggleTurnOffRemix)
-                SettingToggleRow("Include Original Audio", "Make soundtrack reusable by community", includeOriginalAudio, onToggleIncludeOriginalAudio)
-                SettingToggleRow("Allow Downloads", "Let other users save video", allowDownloads, onToggleAllowDownloads)
-                SettingToggleRow("High Quality Upload", "Upload in full uncompressed resolution", highQualityUpload, onToggleHighQualityUpload)
-
-                // Schedule Post Release
-                SettingToggleRow(
-                    title = "Schedule Release",
-                    subtitle = "Auto-publish at a set time",
-                    checked = scheduleReleaseEnabled,
-                    onCheckedChange = onToggleScheduleRelease
-                )
-
-                if (scheduleReleaseEnabled) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(if (colors.isDark) Color(0xFF1E2230) else Color(0xFFF1F5F9))
-                            .clickable {
-                                val nextTime = when (scheduleDateTime) {
-                                    "Tomorrow, 10:00 AM" -> "Tomorrow, 06:00 PM"
-                                    "Tomorrow, 06:00 PM" -> "Saturday, 12:00 PM"
-                                    else -> "Tomorrow, 10:00 AM"
-                                }
-                                onScheduleDateTimeChange(nextTime)
-                            }
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Icon(Lucide.Calendar, contentDescription = null, tint = Color(0xFFF5882E), modifier = Modifier.size(14.dp))
-                            Text(scheduleDateTime, color = colors.textMain, fontSize = 11.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFEDF2F7))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text("Defaults", color = colors.textMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                         }
-                        Text("Tap to change", color = Color(0xFF1696B2), fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                        Icon(
+                            imageVector = if (isAdvancedSettingsOpen) Lucide.ChevronUp else Lucide.ChevronDown,
+                            contentDescription = "Expand",
+                            tint = colors.textMuted,
+                            modifier = Modifier.size(16.dp)
+                        )
                     }
                 }
 
-                // Remix Attribution
-                SettingToggleRow(
-                    title = "Remix Attribution",
-                    subtitle = "Link source creator in payload",
-                    checked = remixAttributionEnabled,
-                    onCheckedChange = onToggleRemixAttribution
-                )
-            }
-        }
-
-        // 3G. Action Footer
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Save Draft Button
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(if (colors.isDark) Color(0xFF161922) else Color.White)
-                        .border(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFCBD5E1), CircleShape)
-                        .clickable { onSaveDraft() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Lucide.Bookmark, contentDescription = "Save Draft", tint = Color(0xFF1696B2), modifier = Modifier.size(20.dp))
-                }
-
-                // Publish Creation Primary Button
-                PrimaryGradientButton(
-                    onClick = onPublishClick,
-                    modifier = Modifier.weight(1f).height(48.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                // Expandable Body
+                if (isAdvancedSettingsOpen) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Icon(Lucide.Send, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-                        Text("Publish Creation", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        SettingToggleRow(
+                            title = "Hide Like Count",
+                            subtitle = "Only you can see total likes on this post",
+                            checked = hideLikesCount,
+                            onCheckedChange = onToggleHideLikes,
+                            icon = Lucide.HeartOff
+                        )
+
+                        SettingToggleRow(
+                            title = "Disable Comments",
+                            subtitle = "Prevent replies and comments on this creation",
+                            checked = turnOffComments,
+                            onCheckedChange = onToggleComments,
+                            icon = Lucide.MessageSquareOff
+                        )
+
+                        SettingToggleRow(
+                            title = "Disable Remix & Duets",
+                            subtitle = "Prevent other creators from remixing this media",
+                            checked = turnOffRemix,
+                            onCheckedChange = onToggleRemix,
+                            icon = Lucide.CopySlash
+                        )
+
+                        SettingToggleRow(
+                            title = "Include Original Audio",
+                            subtitle = "Publish original recorded soundtrack for discovery",
+                            checked = includeOriginalAudio,
+                            onCheckedChange = onToggleAudio,
+                            icon = Lucide.Disc
+                        )
+
+                        SettingToggleRow(
+                            title = "Allow Downloads",
+                            subtitle = "Let users save original high-res media locally",
+                            checked = allowDownloads,
+                            onCheckedChange = onToggleDownloads,
+                            icon = Lucide.Download
+                        )
+
+                        SettingToggleRow(
+                            title = "High Quality Upload",
+                            subtitle = "Upload at full bitrate without downscaling",
+                            checked = highQualityUpload,
+                            onCheckedChange = onToggleHighQuality,
+                            icon = Lucide.Sparkles
+                        )
+
+                        // Schedule Release
+                        SettingToggleRow(
+                            title = "Schedule Release",
+                            subtitle = "Publish automatically at a future time",
+                            checked = scheduleReleaseEnabled,
+                            onCheckedChange = onToggleScheduleRelease,
+                            icon = Lucide.CalendarClock
+                        )
+
+                        if (scheduleReleaseEnabled) {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                listOf("Tomorrow, 10:00 AM", "Tomorrow, 06:00 PM", "Weekend, 12:00 PM").forEach { time ->
+                                    val isCur = scheduleDateTime == time
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(if (isCur) Color(0xFFF5882E) else (if (colors.isDark) Color(0xFF1E212B) else Color(0xFFF1F5F9)))
+                                            .clickable { onScheduleDateTimeChange(time) }
+                                            .padding(horizontal = 7.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(time, color = if (isCur) Color.White else colors.textMain, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+
+                        // Remix Attribution
+                        SettingToggleRow(
+                            title = "Attach Remix Attribution",
+                            subtitle = "Credit original author and link project hierarchy",
+                            checked = remixAttributionEnabled,
+                            onCheckedChange = onToggleRemixAttribution,
+                            icon = Lucide.GitBranch
+                        )
                     }
                 }
             }
@@ -4157,7 +4623,8 @@ fun Step4UploadAndShareStage(
     onCopyDeepLink: () -> Unit,
     onShareLink: () -> Unit,
     onDoneClick: () -> Unit,
-    onRetryUpload: () -> Unit
+    onRetryUpload: () -> Unit,
+    onShareTargetClick: (ShareTargetItem) -> Unit = {}
 ) {
     val colors = LocalOscellionColors.current
     val activeSlide = slides.getOrNull(currentSlideIndex) ?: slides.firstOrNull()
@@ -4343,6 +4810,63 @@ fun Step4UploadAndShareStage(
                         }
                     }
 
+                    // Share-to sheet (Instagram / Facebook / YouTube style)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(24.dp))
+                            .background(if (colors.isDark) Color(0xFF161922) else Color.White)
+                            .border(BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)), RoundedCornerShape(24.dp))
+                            .padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = "SHARE TO",
+                            color = colors.textMuted,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            SHARE_TARGETS.forEach { target ->
+                                Column(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .clickable { onShareTargetClick(target) }
+                                        .padding(horizontal = 6.dp, vertical = 4.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(42.dp)
+                                            .clip(CircleShape)
+                                            .background(if (colors.isDark) target.bgTint.copy(alpha = 0.2f) else target.bgTint),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = target.icon,
+                                            contentDescription = target.label,
+                                            tint = target.iconTint,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                    Text(
+                                        text = target.label,
+                                        color = colors.textMain,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     // Live Post Preview Card (Matches reference HTML left phone screen)
                     Column(
                         modifier = Modifier
@@ -4421,7 +4945,7 @@ fun Step4UploadAndShareStage(
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                     Icon(Lucide.Globe, contentDescription = null, tint = Color(0xFF1696B2), modifier = Modifier.size(10.dp))
-                                    Text(audienceVisibility.capitalize(Locale.ROOT), color = Color(0xFF1696B2), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                    Text(audienceVisibility.replaceFirstChar { it.uppercaseChar() }, color = Color(0xFF1696B2), fontSize = 9.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -4437,6 +4961,37 @@ fun Step4UploadAndShareStage(
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Icon(Lucide.MapPin, contentDescription = null, tint = Color(0xFFF5882E), modifier = Modifier.size(11.dp))
                                 Text(locationString, color = colors.textMuted, fontSize = 11.sp)
+                            }
+                        }
+
+                        // 4-Column Live Engagement Simulation Row (Count-up animation)
+                        var animTrigger by remember { mutableStateOf(false) }
+                        LaunchedEffect(Unit) {
+                            animTrigger = true
+                        }
+                        val liveViews by animateIntAsState(targetValue = if (animTrigger) 1240 else 0, animationSpec = tween(1200, easing = LinearOutSlowInEasing), label = "views")
+                        val liveLikes by animateIntAsState(targetValue = if (animTrigger) 248 else 0, animationSpec = tween(1000, easing = LinearOutSlowInEasing), label = "likes")
+                        val liveComments by animateIntAsState(targetValue = if (animTrigger) 42 else 0, animationSpec = tween(800, easing = LinearOutSlowInEasing), label = "comments")
+                        val liveShares by animateIntAsState(targetValue = if (animTrigger) 18 else 0, animationSpec = tween(600, easing = LinearOutSlowInEasing), label = "shares")
+
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                            color = if (colors.isDark) Color(0xFF1E2230) else Color(0xFFF8FAFC),
+                            border = BorderStroke(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFE2E8F0))
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp, horizontal = 12.dp),
+                                horizontalArrangement = Arrangement.SpaceAround,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                StatPillItem(icon = Lucide.Eye, count = "$liveViews", label = "Views", tint = Color(0xFF1696B2))
+                                Box(modifier = Modifier.width(1.dp).height(24.dp).background(if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)))
+                                StatPillItem(icon = Lucide.Heart, count = "$liveLikes", label = "Likes", tint = Color(0xFFEF4444))
+                                Box(modifier = Modifier.width(1.dp).height(24.dp).background(if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)))
+                                StatPillItem(icon = Lucide.MessageCircle, count = "$liveComments", label = "Comments", tint = Color(0xFFF5882E))
+                                Box(modifier = Modifier.width(1.dp).height(24.dp).background(if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)))
+                                StatPillItem(icon = Lucide.Share2, count = "$liveShares", label = "Shares", tint = Color(0xFF8B5CF6))
                             }
                         }
 
@@ -5338,5 +5893,218 @@ private fun StatPillItem(icon: ImageVector, count: String, label: String, tint: 
             Text(count, color = colors.textMain, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         }
         Text(label, color = colors.textMuted, fontSize = 9.sp)
+    }
+}
+
+
+// ============================================================================
+// MODAL: UNIFIED POST PAYLOAD & COMPOSE INSPECTOR (macOS Window Style)
+// ============================================================================
+
+@Composable
+fun UnifiedPostInspectorModal(
+    studioMode: CreatorStudioMode,
+    currentStep: StudioStep,
+    selectedRatioId: String,
+    slidesCount: Int,
+    postTitle: String,
+    postDescription: String,
+    categoryTag: String,
+    locationString: String,
+    hashtags: List<String>,
+    mentionedUsers: List<String>,
+    audienceVisibility: String,
+    hideLikesCount: Boolean,
+    turnOffComments: Boolean,
+    turnOffRemix: Boolean,
+    includeOriginalAudio: Boolean,
+    allowDownloads: Boolean,
+    highQualityUpload: Boolean,
+    scheduleReleaseEnabled: Boolean,
+    scheduleDateTime: String,
+    onDismiss: () -> Unit
+) {
+    val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
+    var selectedTab by remember { mutableStateOf("json") } // "json" or "kt"
+
+    val collectionTarget = when (studioMode) {
+        CreatorStudioMode.FLASH -> "flash_videos"
+        CreatorStudioMode.POST -> "community_posts (photos)"
+        CreatorStudioMode.WORK -> "community_posts (vector_work)"
+    }
+
+    val jsonPayload = """{
+  "postType": "${studioMode.name.lowercase()}",
+  "targetCollection": "$collectionTarget",
+  "title": "${postTitle.ifBlank { "Untitled Creation" }}",
+  "description": "${postDescription.replace(""", "\\"").take(80)}...",
+  "aspectRatio": "$selectedRatioId",
+  "categoryTag": "$categoryTag",
+  "location": "$locationString",
+  "hashtags": [${hashtags.joinToString(", ") { "\"$it\"" }}],
+  "mentions": [${mentionedUsers.joinToString(", ") { "\"$it\"" }}],
+  "audience": "$audienceVisibility",
+  "settings": {
+    "hideLikesCount": $hideLikesCount,
+    "turnOffComments": $turnOffComments,
+    "turnOffRemix": $turnOffRemix,
+    "includeOriginalAudio": $includeOriginalAudio,
+    "allowDownloads": $allowDownloads,
+    "highQualityUpload": $highQualityUpload,
+    "scheduleEnabled": $scheduleReleaseEnabled,
+    "scheduleDateTime": "$scheduleDateTime"
+  },
+  "slidesCount": $slidesCount,
+  "currentStep": "${currentStep.title}",
+  "status": "ready_for_cloud_pipeline"
+}"""
+
+    val composeCode = """// Jetpack Compose Model Snapshot
+val postPayload = UnifiedPostPayload(
+    mode = CreatorStudioMode.${studioMode.name},
+    title = "${postTitle.ifBlank { "Untitled" }}",
+    aspectRatio = "$selectedRatioId",
+    category = "$categoryTag",
+    audience = "$audienceVisibility",
+    slidesCount = $slidesCount,
+    hideLikes = $hideLikesCount,
+    turnOffComments = $turnOffComments
+)"""
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.65f))
+                .clickable { onDismiss() }
+                .padding(16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth(0.95f)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(Color(0xFF0F172A))
+                    .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)), RoundedCornerShape(24.dp))
+                    .clickable(enabled = false) {}
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                // macOS Window Toolbar (Traffic lights, tabs, copy button)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Traffic lights
+                    Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                        Box(modifier = Modifier.size(12.dp).clip(CircleShape).background(Color(0xFFFF5F56)).clickable { onDismiss() })
+                        Box(modifier = Modifier.size(12.dp).clip(CircleShape).background(Color(0xFFFFBD2E)))
+                        Box(modifier = Modifier.size(12.dp).clip(CircleShape).background(Color(0xFF27C93F)))
+                    }
+
+                    // Mode Switcher Tabs
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color.White.copy(alpha = 0.08f))
+                            .padding(2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (selectedTab == "json") Color(0xFF1E293B) else Color.Transparent)
+                                .clickable { selectedTab = "json" }
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text("Payload.json", color = if (selectedTab == "json") Color.White else Color.White.copy(alpha = 0.5f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (selectedTab == "kt") Color(0xFF1E293B) else Color.Transparent)
+                                .clickable { selectedTab = "kt" }
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text("Compose.kt", color = if (selectedTab == "kt") Color.White else Color.White.copy(alpha = 0.5f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    // Copy Button
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF007AFF))
+                            .clickable {
+                                val textToCopy = if (selectedTab == "json") jsonPayload else composeCode
+                                clipboardManager.setText(AnnotatedString(textToCopy))
+                                Toast.makeText(context, "Code copied to clipboard", Toast.LENGTH_SHORT).show()
+                            }
+                            .padding(horizontal = 10.dp, vertical = 5.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Icon(Lucide.Copy, contentDescription = "Copy", tint = Color.White, modifier = Modifier.size(11.dp))
+                            Text("Copy", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                // Summary Pill Strip
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(Color(0xFF1E293B)).padding(8.dp)
+                    ) {
+                        Column {
+                            Text("Target Collection", color = Color.White.copy(alpha = 0.5f), fontSize = 9.sp)
+                            Text(collectionTarget.take(16), color = Color(0xFF38B8D1), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Box(
+                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(Color(0xFF1E293B)).padding(8.dp)
+                    ) {
+                        Column {
+                            Text("Aspect Ratio", color = Color.White.copy(alpha = 0.5f), fontSize = 9.sp)
+                            Text(selectedRatioId, color = Color(0xFFF5882E), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Box(
+                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(Color(0xFF1E293B)).padding(8.dp)
+                    ) {
+                        Column {
+                            Text("Media Count", color = Color.White.copy(alpha = 0.5f), fontSize = 9.sp)
+                            Text("$slidesCount items", color = Color(0xFF10B981), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                // Code Preformatted Box
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 340.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color(0xFF030712))
+                        .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)), RoundedCornerShape(14.dp))
+                        .padding(12.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Text(
+                        text = if (selectedTab == "json") jsonPayload else composeCode,
+                        color = if (selectedTab == "json") Color(0xFF38BDF8) else Color(0xFFA7F3D0),
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                        lineHeight = 16.sp
+                    )
+                }
+            }
+        }
     }
 }
