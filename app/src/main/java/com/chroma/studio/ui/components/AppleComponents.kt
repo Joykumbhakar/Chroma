@@ -54,15 +54,21 @@ fun LiquidGlassKnob(
     hazeState: dev.chrisbanes.haze.HazeState? = null,
     modifier: Modifier = Modifier
 ) {
-    val knobShape = RoundedCornerShape(4.dp)
+    val knobShape = CircleShape
     Box(
         modifier = modifier
             .size(width, height)
             .scale(scale)
+            .shadow(
+                elevation = 2.5.dp,
+                shape = knobShape,
+                spotColor = Color.Black.copy(alpha = 0.22f),
+                ambientColor = Color.Black.copy(alpha = 0.10f)
+            )
             .clip(knobShape)
             .then(if (hazeState != null) Modifier.hazeChild(state = hazeState, shape = knobShape) else Modifier)
             .background(Color.White.copy(alpha = baseAlpha.coerceAtLeast(0.96f)))
-            .border(1.dp, Color(0x33000000), knobShape)
+            .border(0.5.dp, Color(0x26000000), knobShape)
     ) {
         Box(
             modifier = Modifier
@@ -112,14 +118,12 @@ fun AppleSwitch(
         label = "trackColor"
     )
 
-    val targetTranslation = if (checked && isPressed) 15f
-                            else if (checked) 16f
-                            else if (isPressed) -3f
+    val targetTranslation = if (checked && isPressed) 18f
+                            else if (checked) 22f
                             else 0f
 
-    val targetWidth = if (isPressed) 28.dp else 24.dp
-    // Match exact liquid active scale
-    val targetScale = if (isPressed) 1.26f else 1f
+    val targetWidth = if (isPressed) 22.dp else 18.dp
+    val targetScale = if (isPressed) 1.15f else 1f
 
     val jellySpring = androidx.compose.animation.core.spring<Float>(dampingRatio = 0.5f, stiffness = 600f)
     val jellySpringDp = androidx.compose.animation.core.spring<androidx.compose.ui.unit.Dp>(dampingRatio = 0.5f, stiffness = 600f)
@@ -201,12 +205,12 @@ fun AppleSlider(
     }
 
     val thumbWidth by animateDpAsState(
-        targetValue = if (isInteracting) 28.dp else 24.dp,
+        targetValue = if (isInteracting) 24.dp else 22.dp,
         animationSpec = spring(dampingRatio = 0.5f, stiffness = 600f),
         label = "tw"
     )
     val thumbScale by animateFloatAsState(
-        targetValue = if (isInteracting) 1.15f else 1.0f,
+        targetValue = if (isInteracting) 1.12f else 1.0f,
         animationSpec = spring(dampingRatio = 0.5f, stiffness = 600f),
         label = "ts"
     )
@@ -257,7 +261,7 @@ fun AppleSlider(
         thumb = {
             LiquidGlassKnob(
                 width = thumbWidth,
-                height = 18.dp,
+                height = 22.dp,
                 scale = thumbScale,
                 baseAlpha = 1.0f,
                 hazeState = hazeState
@@ -322,24 +326,23 @@ fun AppleJellySlider(
             }
         },
         thumb = {
-            val thumbWidth = 24.dp
-            val thumbHeight = 18.dp
+            val thumbSize = 22.dp
             
             Box(
                 modifier = Modifier
-                    .size(width = thumbWidth, height = thumbHeight)
+                    .size(thumbSize)
                     .scale(scale)
                     .shadow(
-                        elevation = 4.dp,
-                        shape = RoundedCornerShape(50),
-                        spotColor = Color.Black.copy(alpha = 0.3f),
-                        ambientColor = Color.Black.copy(alpha = 0.1f)
+                        elevation = 3.dp,
+                        shape = CircleShape,
+                        spotColor = Color.Black.copy(alpha = 0.25f),
+                        ambientColor = Color.Black.copy(alpha = 0.10f)
                     )
-                    .background(Color.White, shape = RoundedCornerShape(50))
+                    .background(Color.White, shape = CircleShape)
                     .border(
                         width = 0.5.dp, 
-                        color = Color.Black.copy(alpha = 0.15f), 
-                        shape = RoundedCornerShape(50)
+                        color = Color.Black.copy(alpha = 0.12f), 
+                        shape = CircleShape
                     )
             )
         }

@@ -1505,7 +1505,7 @@ private fun CommunityStepContent(
 
                         Surface(
                             onClick = { onToggleFollow(creator.id) },
-                            shape = RoundedCornerShape(10.dp),
+                            shape = CircleShape,
                             color = btnBg,
                             border = if (isFollowed) {
                                 BorderStroke(0.5.dp, colors.glassBorder)
@@ -1708,7 +1708,7 @@ private fun OnboardingBottomBar(
                 if (currentStep > 0) {
                     Surface(
                         onClick = onBack,
-                        shape = RoundedCornerShape(12.dp),
+                        shape = CircleShape,
                         color = colors.glassBg,
                         border = BorderStroke(0.5.dp, colors.glassBorder),
                         modifier = Modifier
@@ -1743,7 +1743,7 @@ private fun OnboardingBottomBar(
                 // Primary Next / Launch CTA Button (Apple HIG Specular Border)
                 Surface(
                     onClick = onNext,
-                    shape = RoundedCornerShape(12.dp),
+                    shape = CircleShape,
                     color = activeAccent,
                     border = BorderStroke(
                         0.5.dp,

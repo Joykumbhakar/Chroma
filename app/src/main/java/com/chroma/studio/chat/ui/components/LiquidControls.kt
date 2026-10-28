@@ -99,14 +99,12 @@ fun AppleSwitch(
         label = "trackColor"
     )
 
-    val targetTranslation = if (checked && isPressed) 15f
-                            else if (checked) 16f
-                            else if (isPressed) -3f
+    val targetTranslation = if (checked && isPressed) 20f
+                            else if (checked) 24f
                             else 0f
 
-    val targetWidth = if (isPressed) 35.dp else 31.dp
-    // 50% bigger on press — scale causes the knob to visually overflow the unclipped track
-    val targetScale = if (isPressed) 1.5f else 1f
+    val targetWidth = if (isPressed) 27.dp else 23.dp
+    val targetScale = if (isPressed) 1.15f else 1f
 
     val jellySpring = androidx.compose.animation.core.spring<Float>(dampingRatio = 0.35f, stiffness = 500f)
     val jellySpringDp = androidx.compose.animation.core.spring<androidx.compose.ui.unit.Dp>(dampingRatio = 0.35f, stiffness = 500f)
@@ -186,12 +184,12 @@ fun AppleSlider(
     }
 
     val thumbWidth by animateDpAsState(
-        targetValue = if (isInteracting) 28.dp else 24.dp,
+        targetValue = if (isInteracting) 24.dp else 22.dp,
         animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.5f, stiffness = 600f),
         label = "tw"
     )
     val thumbScale by animateFloatAsState(
-        targetValue = if (isInteracting) 1.15f else 1.0f,
+        targetValue = if (isInteracting) 1.12f else 1.0f,
         animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.5f, stiffness = 600f),
         label = "ts"
     )
@@ -237,7 +235,7 @@ fun AppleSlider(
         thumb = {
             LiquidGlassKnob(
                 width = thumbWidth,
-                height = 18.dp,
+                height = 22.dp,
                 scale = thumbScale,
                 baseAlpha = 1.0f,
                 hazeState = hazeState

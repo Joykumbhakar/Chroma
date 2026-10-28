@@ -136,7 +136,7 @@ fun LiquidGlassPrimaryButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     isSmall: Boolean = false,
-    shape: Shape = RoundedCornerShape(12.dp),
+    shape: Shape = CircleShape,
     content: @Composable RowScope.() -> Unit
 ) {
     val height = if (isSmall) 34.dp else 42.dp
@@ -207,7 +207,7 @@ fun LiquidGlassPrimaryButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     isSmall: Boolean = false,
-    shape: Shape = RoundedCornerShape(12.dp),
+    shape: Shape = CircleShape,
     leadingIcon: ImageVector? = null,
     trailingIcon: ImageVector? = null
 ) {
@@ -254,7 +254,7 @@ fun LiquidGlassSecondaryButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     isSmall: Boolean = false,
-    shape: Shape = RoundedCornerShape(12.dp),
+    shape: Shape = CircleShape,
     content: @Composable RowScope.() -> Unit
 ) {
     val height = if (isSmall) 34.dp else 42.dp
@@ -328,7 +328,7 @@ fun LiquidGlassSecondaryButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     isSmall: Boolean = false,
-    shape: Shape = RoundedCornerShape(12.dp),
+    shape: Shape = CircleShape,
     leadingIcon: ImageVector? = null,
     trailingIcon: ImageVector? = null
 ) {

@@ -885,7 +885,7 @@ fun ProfileActionButton(
         label = "profileBtnScale"
     )
 
-    val shape = RoundedCornerShape(12.dp)
+    val shape = CircleShape
     val background = if (isPrimary) {
         if (isPressed) Color(0xFF0066D6) else Color(0xFF007AFF)
     } else {
