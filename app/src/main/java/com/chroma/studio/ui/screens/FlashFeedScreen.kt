@@ -51,6 +51,13 @@ import com.chroma.studio.ui.theme.ChromaIcons
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.chroma.studio.viewmodel.FlashViewModel
 import com.composables.icons.lucide.*
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import com.chroma.studio.model.FlashComment
+import com.chroma.studio.viewmodel.CommentSortOrder
+
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -1361,12 +1368,45 @@ fun FlashCommentsSheet(
 ) {
     val colors = LocalOscellionColors.current
     val comments by commentVm.comments.collectAsState()
+    val sortOrder by commentVm.sortOrder.collectAsState()
     val isLoading by commentVm.isLoading.collectAsState()
     var commentText by remember { mutableStateOf("") }
+    var replyingToComment by remember { mutableStateOf<FlashComment?>(null) }
+    val expandedThreads = remember { mutableStateMapOf<String, Boolean>() }
+    var sortMenuExpanded by remember { mutableStateOf(false) }
+    val currentUserId = remember { FirebaseAuth.getInstance().currentUser?.uid }
+    val focusRequester = remember { FocusRequester() }
 
     LaunchedEffect(video.id) {
         commentVm.loadComments(video.id)
     }
+
+    // Split top-level and replies
+    val repliesMap = remember(comments) {
+        comments.filter { !it.replyToCommentId.isNullOrBlank() }
+            .groupBy { it.replyToCommentId!! }
+    }
+
+    val topLevelComments = remember(comments, sortOrder) {
+        val parents = comments.filter { it.replyToCommentId.isNullOrBlank() }
+        when (sortOrder) {
+            CommentSortOrder.TOP_COMMENTS -> {
+                parents.sortedWith(
+                    compareByDescending<FlashComment> { it.isPinned }
+                        .thenByDescending { it.likesCount }
+                        .thenByDescending { it.timestamp }
+                )
+            }
+            CommentSortOrder.NEWEST_FIRST -> {
+                parents.sortedWith(
+                    compareByDescending<FlashComment> { it.isPinned }
+                        .thenByDescending { it.timestamp }
+                )
+            }
+        }
+    }
+
+    val totalCommentCount = maxOf(video.commentCount, comments.size)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -1376,166 +1416,738 @@ fun FlashCommentsSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.75f)
+                .fillMaxHeight(0.82f)
         ) {
-            val displayCommentCount = maxOf(video.commentCount, comments.size)
-            Text(
-                text = "$displayCommentCount comments",
-                color = Color(0xFF1C1C1E),
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
+            // YouTube Comments Header: Count, Sort By Dropdown, and Close Button
+            Row(
                 modifier = Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .padding(bottom = 16.dp)
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Comments",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 17.sp,
+                    color = Color(0xFF0F0F0F)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = formatCount(totalCommentCount),
+                    fontWeight = FontWeight.Normal,
+                    fontSize = 15.sp,
+                    color = Color(0xFF606060)
+                )
+
+                Spacer(Modifier.weight(1f))
+
+                // Sort Dropdown Button
+                Box {
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { sortMenuExpanded = true }
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Lucide.SlidersHorizontal,
+                            contentDescription = "Sort comments",
+                            tint = Color(0xFF0F0F0F),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = if (sortOrder == CommentSortOrder.TOP_COMMENTS) "Top comments" else "Newest first",
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF0F0F0F)
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = sortMenuExpanded,
+                        onDismissRequest = { sortMenuExpanded = false },
+                        modifier = Modifier.background(Color.White)
+                    ) {
+                        DropdownMenuItem(
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (sortOrder == CommentSortOrder.TOP_COMMENTS) {
+                                        Icon(Lucide.Check, null, tint = Color(0xFF065FD4), modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(8.dp))
+                                    } else {
+                                        Spacer(Modifier.width(24.dp))
+                                    }
+                                    Text(
+                                        "Top comments",
+                                        fontWeight = if (sortOrder == CommentSortOrder.TOP_COMMENTS) FontWeight.Bold else FontWeight.Normal,
+                                        fontSize = 14.sp
+                                    )
+                                }
+                            },
+                            onClick = {
+                                commentVm.setSortOrder(CommentSortOrder.TOP_COMMENTS)
+                                sortMenuExpanded = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (sortOrder == CommentSortOrder.NEWEST_FIRST) {
+                                        Icon(Lucide.Check, null, tint = Color(0xFF065FD4), modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(8.dp))
+                                    } else {
+                                        Spacer(Modifier.width(24.dp))
+                                    }
+                                    Text(
+                                        "Newest first",
+                                        fontWeight = if (sortOrder == CommentSortOrder.NEWEST_FIRST) FontWeight.Bold else FontWeight.Normal,
+                                        fontSize = 14.sp
+                                    )
+                                }
+                            },
+                            onClick = {
+                                commentVm.setSortOrder(CommentSortOrder.NEWEST_FIRST)
+                                sortMenuExpanded = false
+                            }
+                        )
+                    }
+                }
+
+                Spacer(Modifier.width(4.dp))
+
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(Lucide.X, contentDescription = "Close", tint = Color(0xFF0F0F0F), modifier = Modifier.size(18.dp))
+                }
+            }
+
+            HorizontalDivider(
+                color = Color(0xFFE5E7EB),
+                thickness = 0.5.dp
             )
 
+            // Comment List / States
             if (isLoading) {
                 Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                     OscellionLoadingSpinner(color = colors.primary)
                 }
-            } else if (comments.isEmpty()) {
+            } else if (topLevelComments.isEmpty()) {
                 Column(
-                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
                     Icon(Lucide.MessageCircle, null, tint = Color(0xFF9CA3AF), modifier = Modifier.size(48.dp))
-                    Spacer(Modifier.height(16.dp))
-                    Text("Be the first to comment", color = Color(0xFF6B7280))
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        "No comments yet",
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 16.sp,
+                        color = Color(0xFF1F2937)
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Say something to start the conversation.",
+                        fontSize = 13.sp,
+                        color = Color(0xFF6B7280)
+                    )
                 }
             } else {
                 androidx.compose.foundation.lazy.LazyColumn(
                     modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
                 ) {
-                    items(comments) { comment ->
-                        Row(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
-                            AsyncImage(
-                                model = comment.avatarUrl,
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFFE5E7EB))
-                            )
-                            Spacer(Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        comment.username,
-                                        color = Color(0xFF1C1C1E),
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                    if (comment.verified) {
-                                        Spacer(Modifier.width(4.dp))
-                                        VerifiedBadge(size = 12.dp)
-                                    }
-                                    Spacer(Modifier.width(8.dp))
-                                    if (comment.isPending) {
-                                        Text(
-                                            "Sending...",
-                                            color = Color(0xFF007AFF),
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                    } else if (comment.isError) {
-                                        Text(
-                                            "Failed • Tap to retry",
-                                            color = Color(0xFFFF3B30),
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            modifier = Modifier.clickable { commentVm.retryComment(comment) }
-                                        )
-                                    } else {
-                                        Text(
-                                            android.text.format.DateUtils.getRelativeTimeSpanString(
-                                                comment.timestamp,
-                                                System.currentTimeMillis(),
-                                                android.text.format.DateUtils.MINUTE_IN_MILLIS
-                                            ).toString(),
-                                            color = Color(0xFF9CA3AF),
-                                            fontSize = 11.sp
-                                        )
-                                    }
-                                }
-                                Spacer(Modifier.height(4.dp))
-                                Text(
-                                    comment.text,
-                                    color = if (comment.isError) Color(0xFF9CA3AF) else Color(0xFF374151),
-                                    fontSize = 14.sp
-                                )
-                                Spacer(Modifier.height(6.dp))
-                                if (!comment.isPending && !comment.isError) {
-                                    Text(
-                                        "Reply",
-                                        color = Color(0xFF6B7280),
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        modifier = Modifier.clickable {
-                                            onReplyWithFlash(comment.id)
-                                        }
-                                    )
-                                }
-                            }
-                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(start = 8.dp)) {
-                                val liked = FirebaseAuth.getInstance().currentUser?.uid?.let { comment.likedBy.contains(it) } == true
-                                Icon(
-                                    imageVector = if (liked) ChromaIcons.HeartFilled else Lucide.Heart,
-                                    contentDescription = "Like",
-                                    tint = if (liked) Color(0xFFFF3B30) else Color(0xFF9CA3AF),
-                                    modifier = Modifier.size(16.dp).clickable { commentVm.toggleLike(comment.id) }
-                                )
-                                if (comment.likesCount > 0) {
-                                    Text(
-                                        comment.likesCount.toString(),
-                                        color = Color(0xFF6B7280),
-                                        fontSize = 11.sp
-                                    )
-                                }
-                            }
-                        }
+                    items(topLevelComments, key = { it.id }) { comment ->
+                        val childReplies = repliesMap[comment.id] ?: emptyList()
+                        val isThreadExpanded = expandedThreads[comment.id] ?: false
+
+                        YouTubeCommentCard(
+                            comment = comment,
+                            video = video,
+                            currentUserId = currentUserId,
+                            replies = childReplies,
+                            isRepliesExpanded = isThreadExpanded,
+                            onToggleReplies = {
+                                expandedThreads[comment.id] = !isThreadExpanded
+                            },
+                            onReply = { target ->
+                                replyingToComment = target
+                                focusRequester.requestFocus()
+                            },
+                            onReplyWithFlash = { targetId ->
+                                onReplyWithFlash(targetId)
+                            },
+                            onToggleLike = { commentVm.toggleLike(it) },
+                            onToggleDislike = { commentVm.toggleDislike(it) },
+                            onToggleHeart = { commentVm.toggleCreatorHeart(it) },
+                            onTogglePin = { commentVm.togglePin(it, video.id) },
+                            onDelete = { commentVm.deleteComment(it) },
+                            onRetry = { commentVm.retryComment(it) }
+                        )
+
+                        Spacer(Modifier.height(16.dp))
                     }
                 }
             }
 
-            // Input Row at bottom of comment sheet
-            Row(
+            // Bottom YouTube Comment Dock
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp)
-                    .navigationBarsPadding(),
-                verticalAlignment = Alignment.CenterVertically
+                    .background(Color.White)
+                    .navigationBarsPadding()
+                    .imePadding()
             ) {
-                AsyncImage(
-                    model = FirebaseAuth.getInstance().currentUser?.photoUrl,
+                // Replying Indicator Bar
+                if (replyingToComment != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFFF3F4F6))
+                            .padding(horizontal = 16.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Lucide.Reply,
+                            contentDescription = null,
+                            tint = Color(0xFF065FD4),
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = "Replying to @${replyingToComment?.username}",
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF374151),
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(
+                            onClick = { replyingToComment = null },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = Lucide.X,
+                                contentDescription = "Cancel",
+                                tint = Color(0xFF6B7280),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
+
+                // Quick Reactions Emoji Bar
+                androidx.compose.foundation.lazy.LazyRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val quickEmojis = listOf("❤️", "🔥", "👏", "😂", "😍", "🙌", "✨", "💯", "🎉", "🤯")
+                    items(quickEmojis) { emoji ->
+                        Box(
+                            modifier = Modifier
+                                .size(34.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFF3F4F6))
+                                .clickable { commentText += emoji }
+                                .padding(4.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(text = emoji, fontSize = 16.sp)
+                        }
+                    }
+                }
+
+                // Input Row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    AsyncImage(
+                        model = FirebaseAuth.getInstance().currentUser?.photoUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFFE5E7EB))
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    TextField(
+                        value = commentText,
+                        onValueChange = { commentText = it },
+                        placeholder = {
+                            Text(
+                                if (replyingToComment != null) "Add a reply..." else "Add a comment...",
+                                color = Color(0xFF9CA3AF),
+                                fontSize = 13.5.sp
+                            )
+                        },
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color(0xFFF3F4F6),
+                            unfocusedContainerColor = Color(0xFFF3F4F6),
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
+                            focusedTextColor = Color(0xFF0F0F0F),
+                            unfocusedTextColor = Color(0xFF0F0F0F)
+                        ),
+                        shape = RoundedCornerShape(22.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .focusRequester(focusRequester),
+                        maxLines = 4
+                    )
+                    if (commentText.isNotBlank()) {
+                        Spacer(Modifier.width(8.dp))
+                        IconButton(
+                            onClick = {
+                                val parentTargetId = replyingToComment?.id
+                                commentVm.addComment(
+                                    videoId = video.id,
+                                    text = commentText.trim(),
+                                    replyToId = parentTargetId
+                                )
+                                if (parentTargetId != null) {
+                                    expandedThreads[parentTargetId] = true
+                                }
+                                commentText = ""
+                                replyingToComment = null
+                            },
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF065FD4))
+                        ) {
+                            Icon(
+                                imageVector = Lucide.Send,
+                                contentDescription = "Send",
+                                tint = Color.White,
+                                modifier = Modifier.size(17.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun YouTubeCommentCard(
+    comment: FlashComment,
+    video: FlashVideo,
+    currentUserId: String?,
+    replies: List<FlashComment> = emptyList(),
+    isRepliesExpanded: Boolean = false,
+    onToggleReplies: () -> Unit = {},
+    onReply: (FlashComment) -> Unit,
+    onReplyWithFlash: (String) -> Unit = {},
+    onToggleLike: (String) -> Unit,
+    onToggleDislike: (String) -> Unit,
+    onToggleHeart: (FlashComment) -> Unit,
+    onTogglePin: (FlashComment) -> Unit,
+    onDelete: (FlashComment) -> Unit,
+    onRetry: (FlashComment) -> Unit,
+    isChildReply: Boolean = false
+) {
+    val clipboard = LocalClipboardManager.current
+    var menuExpanded by remember { mutableStateOf(false) }
+    val isLiked = currentUserId != null && comment.likedBy.contains(currentUserId)
+    val isDisliked = currentUserId != null && comment.dislikedBy.contains(currentUserId)
+    val isVideoAuthor = currentUserId != null && currentUserId == video.creatorId
+    val isCommentAuthor = currentUserId != null && currentUserId == comment.userId
+    val isCommentByVideoAuthor = comment.userId == video.creatorId
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        // 1. Pinned comment indicator (YouTube Signature)
+        if (comment.isPinned) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .padding(start = if (isChildReply) 0.dp else 44.dp, bottom = 4.dp)
+            ) {
+                Icon(
+                    imageVector = ChromaIcons.PinFilled,
+                    contentDescription = "Pinned",
+                    tint = Color(0xFF606060),
+                    modifier = Modifier.size(12.dp)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = "Pinned by @${video.authorUsername.ifBlank { "creator" }}",
+                    color = Color(0xFF606060),
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+
+        // 2. Avatar + Comment Body
+        Row(modifier = Modifier.fillMaxWidth()) {
+            AsyncImage(
+                model = comment.avatarUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(if (isChildReply) 28.dp else 34.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFE5E7EB))
+            )
+
+            Spacer(Modifier.width(10.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                // User & Timestamp Header
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (isCommentByVideoAuthor) {
+                        // YouTube Creator Author Badge Pill
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = Color(0xFF27272A),
+                            modifier = Modifier.padding(end = 6.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "@${comment.username}",
+                                    color = Color.White,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(Modifier.width(3.dp))
+                                Icon(
+                                    imageVector = Lucide.Check,
+                                    contentDescription = "Creator",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(10.dp)
+                                )
+                            }
+                        }
+                    } else {
+                        Text(
+                            text = "@${comment.username}",
+                            color = Color(0xFF0F0F0F),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(end = 4.dp)
+                        )
+                    }
+
+                    if (comment.verified) {
+                        VerifiedBadge(size = 11.dp)
+                        Spacer(Modifier.width(4.dp))
+                    }
+
+                    Spacer(Modifier.width(4.dp))
+
+                    if (comment.isPending) {
+                        Text(
+                            text = "Sending...",
+                            color = Color(0xFF065FD4),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    } else if (comment.isError) {
+                        Text(
+                            text = "Failed • Tap to retry",
+                            color = Color(0xFFFF3B30),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.clickable { onRetry(comment) }
+                        )
+                    } else {
+                        Text(
+                            text = android.text.format.DateUtils.getRelativeTimeSpanString(
+                                comment.timestamp,
+                                System.currentTimeMillis(),
+                                android.text.format.DateUtils.MINUTE_IN_MILLIS
+                            ).toString(),
+                            color = Color(0xFF606060),
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+
+                // Comment Text
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    text = comment.text,
+                    color = if (comment.isError) Color(0xFF9CA3AF) else Color(0xFF0F0F0F),
+                    fontSize = 13.5.sp,
+                    lineHeight = 18.sp
+                )
+
+                // 3. YouTube Action Bar: ThumbsUp, ThumbsDown, Creator Heart, Reply, 3-dots
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp)
+                ) {
+                    // Thumbs Up (Like)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(14.dp))
+                            .clickable { onToggleLike(comment.id) }
+                            .padding(horizontal = 6.dp, vertical = 4.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isLiked) ChromaIcons.ThumbsUpFilled else Lucide.ThumbsUp,
+                            contentDescription = "Like",
+                            tint = if (isLiked) Color(0xFF0F0F0F) else Color(0xFF606060),
+                            modifier = Modifier.size(15.dp)
+                        )
+                        if (comment.likesCount > 0) {
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = formatCount(comment.likesCount),
+                                fontSize = 11.5.sp,
+                                fontWeight = if (isLiked) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isLiked) Color(0xFF0F0F0F) else Color(0xFF606060)
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.width(4.dp))
+
+                    // Thumbs Down (Dislike)
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(14.dp))
+                            .clickable { onToggleDislike(comment.id) }
+                            .padding(horizontal = 6.dp, vertical = 4.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isDisliked) ChromaIcons.ThumbsDownFilled else Lucide.ThumbsDown,
+                            contentDescription = "Dislike",
+                            tint = if (isDisliked) Color(0xFF0F0F0F) else Color(0xFF606060),
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
+
+                    // Creator Heart
+                    if (comment.isCreatorHearted) {
+                        Spacer(Modifier.width(6.dp))
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .then(
+                                    if (isVideoAuthor) Modifier.clickable { onToggleHeart(comment) } else Modifier
+                                )
+                                .padding(horizontal = 4.dp, vertical = 2.dp)
+                        ) {
+                            Box(modifier = Modifier.size(20.dp)) {
+                                Icon(
+                                    imageVector = ChromaIcons.HeartFilled,
+                                    contentDescription = "Loved by creator",
+                                    tint = Color(0xFFFF0033),
+                                    modifier = Modifier
+                                        .size(15.dp)
+                                        .align(Alignment.TopStart)
+                                )
+                                AsyncImage(
+                                    model = video.authorAvatarUrl,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .size(11.dp)
+                                        .clip(CircleShape)
+                                        .align(Alignment.BottomEnd)
+                                        .border(0.75.dp, Color.White, CircleShape)
+                                )
+                            }
+                        }
+                    } else if (isVideoAuthor) {
+                        Spacer(Modifier.width(6.dp))
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { onToggleHeart(comment) }
+                                .padding(horizontal = 4.dp, vertical = 2.dp)
+                        ) {
+                            Icon(
+                                imageVector = Lucide.Heart,
+                                contentDescription = "Heart as creator",
+                                tint = Color(0xFF9CA3AF),
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.width(8.dp))
+
+                    // Reply Text Button
+                    if (!comment.isPending && !comment.isError) {
+                        Text(
+                            text = "Reply",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF606060),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable { onReply(comment) }
+                                .padding(horizontal = 6.dp, vertical = 4.dp)
+                        )
+
+                        Spacer(Modifier.width(4.dp))
+
+                        // Video reply shortcut button
+                        IconButton(
+                            onClick = { onReplyWithFlash(comment.id) },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = Lucide.Video,
+                                contentDescription = "Reply with Flash",
+                                tint = Color(0xFF9CA3AF),
+                                modifier = Modifier.size(13.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.weight(1f))
+
+                    // 3-dots overflow menu
+                    Box {
+                        IconButton(
+                            onClick = { menuExpanded = true },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = Lucide.EllipsisVertical,
+                                contentDescription = "More actions",
+                                tint = Color(0xFF8E8E93),
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+
+                        DropdownMenu(
+                            expanded = menuExpanded,
+                            onDismissRequest = { menuExpanded = false },
+                            modifier = Modifier.background(Color.White)
+                        ) {
+                            if (isVideoAuthor && !isChildReply) {
+                                DropdownMenuItem(
+                                    leadingIcon = {
+                                        Icon(
+                                            ChromaIcons.PinFilled,
+                                            null,
+                                            modifier = Modifier.size(16.dp),
+                                            tint = Color(0xFF0F0F0F)
+                                        )
+                                    },
+                                    text = { Text(if (comment.isPinned) "Unpin comment" else "Pin to top") },
+                                    onClick = {
+                                        menuExpanded = false
+                                        onTogglePin(comment)
+                                    }
+                                )
+                            }
+                            if (isCommentAuthor || isVideoAuthor) {
+                                DropdownMenuItem(
+                                    leadingIcon = {
+                                        Icon(
+                                            Lucide.Trash2,
+                                            null,
+                                            modifier = Modifier.size(16.dp),
+                                            tint = Color(0xFFFF3B30)
+                                        )
+                                    },
+                                    text = { Text("Delete", color = Color(0xFFFF3B30)) },
+                                    onClick = {
+                                        menuExpanded = false
+                                        onDelete(comment)
+                                    }
+                                )
+                            }
+                            DropdownMenuItem(
+                                leadingIcon = {
+                                    Icon(
+                                        Lucide.Copy,
+                                        null,
+                                        modifier = Modifier.size(16.dp),
+                                        tint = Color(0xFF0F0F0F)
+                                    )
+                                },
+                                text = { Text("Copy text") },
+                                onClick = {
+                                    menuExpanded = false
+                                    clipboard.setText(AnnotatedString(comment.text))
+                                    ToastManager.showToast("Comment copied")
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // 4. Threaded Nested Replies Accordion (YouTube Signature)
+        if (replies.isNotEmpty() && !isChildReply) {
+            val replyCount = replies.size
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .padding(start = 44.dp, top = 2.dp, bottom = 4.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .clickable { onToggleReplies() }
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            ) {
+                Icon(
+                    imageVector = if (isRepliesExpanded) Lucide.ChevronUp else Lucide.ChevronDown,
                     contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.size(36.dp).clip(CircleShape).background(Color(0xFFE5E7EB))
+                    tint = Color(0xFF065FD4),
+                    modifier = Modifier.size(14.dp)
                 )
-                Spacer(Modifier.width(12.dp))
-                TextField(
-                    value = commentText,
-                    onValueChange = { commentText = it },
-                    placeholder = { Text("Add comment...", color = Color(0xFF9CA3AF)) },
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color(0xFFF3F4F6),
-                        unfocusedContainerColor = Color(0xFFF3F4F6),
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                        focusedTextColor = Color(0xFF1C1C1E),
-                        unfocusedTextColor = Color(0xFF1C1C1E)
-                    ),
-                    shape = RoundedCornerShape(20.dp),
-                    modifier = Modifier.weight(1f)
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = if (isRepliesExpanded) "Hide $replyCount ${if (replyCount == 1) "reply" else "replies"}" else "$replyCount ${if (replyCount == 1) "reply" else "replies"}",
+                    color = Color(0xFF065FD4),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
                 )
-                if (commentText.isNotBlank()) {
-                    IconButton(onClick = {
-                        commentVm.addComment(video.id, commentText)
-                        commentText = ""
-                    }) {
-                        Icon(Lucide.Send, "Send", tint = Color(0xFF007AFF))
+            }
+
+            AnimatedVisibility(
+                visible = isRepliesExpanded,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 38.dp, top = 4.dp)
+                ) {
+                    replies.sortedBy { it.timestamp }.forEach { childReply ->
+                        YouTubeCommentCard(
+                            comment = childReply,
+                            video = video,
+                            currentUserId = currentUserId,
+                            onReply = onReply,
+                            onReplyWithFlash = onReplyWithFlash,
+                            onToggleLike = onToggleLike,
+                            onToggleDislike = onToggleDislike,
+                            onToggleHeart = onToggleHeart,
+                            onTogglePin = onTogglePin,
+                            onDelete = onDelete,
+                            onRetry = onRetry,
+                            isChildReply = true
+                        )
+                        Spacer(Modifier.height(12.dp))
                     }
                 }
             }

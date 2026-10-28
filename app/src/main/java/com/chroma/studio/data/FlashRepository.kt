@@ -152,6 +152,7 @@ class FlashRepository {
                     transaction.update(
                         docRef,
                         "likedBy", FieldValue.arrayUnion(userId),
+                        "dislikedBy", FieldValue.arrayRemove(userId),
                         "likesCount", currentLikes + 1
                     )
                 } else {
@@ -410,6 +411,88 @@ class FlashRepository {
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("FlashRepository", "toggleCommentLike error", e)
+            false
+        }
+    }
+
+    suspend fun setCommentDislike(commentId: String, userId: String, targetDisliked: Boolean): Boolean {
+        return try {
+            val docRef = db.collection("flash_comments").document(commentId)
+            db.runTransaction { transaction ->
+                val snapshot = transaction.get(docRef)
+                val dislikedBy = snapshot.get("dislikedBy") as? List<String> ?: emptyList()
+                val alreadyDisliked = dislikedBy.contains(userId)
+
+                if (alreadyDisliked == targetDisliked) {
+                    return@runTransaction true
+                }
+
+                if (targetDisliked) {
+                    transaction.update(
+                        docRef,
+                        "dislikedBy", FieldValue.arrayUnion(userId),
+                        "likedBy", FieldValue.arrayRemove(userId)
+                    )
+                } else {
+                    transaction.update(
+                        docRef,
+                        "dislikedBy", FieldValue.arrayRemove(userId)
+                    )
+                }
+                true
+            }.await()
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("FlashRepository", "setCommentDislike error", e)
+            false
+        }
+    }
+
+    suspend fun setCommentPinned(commentId: String, videoId: String, isPinned: Boolean): Boolean {
+        return try {
+            val commentsRef = db.collection("flash_comments")
+            if (isPinned) {
+                val currentPinned = commentsRef.whereEqualTo("videoId", videoId).whereEqualTo("isPinned", true).get().await()
+                val batch = db.batch()
+                for (doc in currentPinned.documents) {
+                    if (doc.id != commentId) {
+                        batch.update(doc.reference, "isPinned", false)
+                    }
+                }
+                batch.update(commentsRef.document(commentId), "isPinned", true)
+                batch.commit().await()
+            } else {
+                commentsRef.document(commentId).update("isPinned", false).await()
+            }
+            true
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("FlashRepository", "setCommentPinned error", e)
+            false
+        }
+    }
+
+    suspend fun setCommentCreatorHeart(commentId: String, isHearted: Boolean): Boolean {
+        return try {
+            db.collection("flash_comments").document(commentId).update("isCreatorHearted", isHearted).await()
+            true
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("FlashRepository", "setCommentCreatorHeart error", e)
+            false
+        }
+    }
+
+    suspend fun deleteComment(commentId: String, videoId: String): Boolean {
+        return try {
+            db.collection("flash_comments").document(commentId).delete().await()
+            try {
+                collection.document(videoId).update("commentCount", FieldValue.increment(-1)).await()
+            } catch (_: Exception) {}
+            true
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("FlashRepository", "deleteComment error", e)
             false
         }
     }
