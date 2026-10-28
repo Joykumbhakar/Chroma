@@ -822,67 +822,22 @@ fun ProfileSquircleSocialButton(
         label = "squircleScale"
     )
 
-    val isWebsite = platform.lowercase() in listOf("portfolio", "website")
-    val faviconUrl = remember(url, isWebsite) {
-        if (isWebsite && url.isNotBlank()) {
-            try {
-                val fullUrl = if (!url.startsWith("http://") && !url.startsWith("https://")) "https://$url" else url
-                val host = Uri.parse(fullUrl).host
-                if (!host.isNullOrBlank()) "https://www.google.com/s2/favicons?sz=64&domain_url=$host" else null
-            } catch (_: Exception) {
-                null
-            }
-        } else null
-    }
+    val cleanPlatform = platform.lowercase().trim()
+    val cleanUrl = url.lowercase().trim()
 
-    val (icon, gradient, borderColor) = when (platform.lowercase()) {
-        "github", "githubacname" -> Triple(
-            Lucide.Github,
-            Brush.linearGradient(listOf(Color(0xFF374151), Color(0xFF111827))),
-            Color(0x804B5563)
-        )
-        "portfolio", "website" -> Triple(
-            Lucide.Globe,
-            Brush.linearGradient(listOf(Color(0xFF2563EB), Color(0xFF1E40AF))),
-            Color(0x803B82F6)
-        )
-        "instagram" -> Triple(
-            Lucide.Instagram,
-            Brush.linearGradient(listOf(Color(0xFF833AB4), Color(0xFFFD1D1D), Color(0xFFFCB045))),
-            Color(0x80FD1D1D)
-        )
-        "twitter", "x" -> Triple(
-            Lucide.Twitter,
-            Brush.linearGradient(listOf(Color(0xFF1DA1F2), Color(0xFF0C7ABF))),
-            Color(0x801DA1F2)
-        )
-        "linkedin" -> Triple(
-            Lucide.Linkedin,
-            Brush.linearGradient(listOf(Color(0xFF0077B5), Color(0xFF004182))),
-            Color(0x800077B5)
-        )
-        else -> Triple(
-            Lucide.Link,
-            Brush.linearGradient(listOf(Color(0xFF0284C7), Color(0xFF0369A1))),
-            Color(0x800284C7)
-        )
+    val imageRes = when {
+        cleanPlatform.contains("github") || cleanUrl.contains("github.com") -> R.drawable.ic_social_github
+        cleanPlatform.contains("instagram") || cleanPlatform == "ig" || cleanPlatform == "insta" || cleanUrl.contains("instagram.com") -> R.drawable.ic_social_instagram
+        cleanPlatform.contains("portfolio") || cleanPlatform.contains("website") || cleanPlatform == "web" || cleanPlatform == "site" || cleanPlatform == "works" || cleanPlatform == "dribbble" || cleanPlatform == "behance" || cleanUrl.contains("dribbble.com") || cleanUrl.contains("behance.net") -> R.drawable.ic_social_portfolio
+        cleanPlatform.contains("camera") || cleanPlatform.contains("photo") || cleanPlatform == "vsco" || cleanPlatform == "flickr" || cleanPlatform == "unsplash" || cleanPlatform == "gallery" || cleanUrl.contains("vsco.co") || cleanUrl.contains("flickr.com") || cleanUrl.contains("unsplash.com") -> R.drawable.ic_social_camera
+        cleanPlatform.contains("fingerprint") || cleanPlatform.contains("ident") || cleanPlatform.contains("bio") || cleanPlatform.contains("secur") || cleanPlatform.contains("key") || cleanPlatform.contains("verify") || cleanPlatform.contains("pass") -> R.drawable.ic_social_fingerprint
+        else -> null
     }
-
-    val shape = RoundedCornerShape(9.5.dp)
 
     Box(
         modifier = Modifier
             .scale(scale)
-            .size(32.dp)
-            .shadow(
-                elevation = if (isPressed) 1.dp else 3.5.dp,
-                shape = shape,
-                ambientColor = Color.Black.copy(alpha = 0.15f),
-                spotColor = Color.Black.copy(alpha = 0.35f)
-            )
-            .clip(shape)
-            .background(gradient)
-            .border(0.75.dp, borderColor, shape)
+            .size(34.dp)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -890,36 +845,35 @@ fun ProfileSquircleSocialButton(
             ),
         contentAlignment = Alignment.Center
     ) {
-        if (faviconUrl != null) {
-            var isFaviconError by remember(faviconUrl) { mutableStateOf(false) }
-            if (!isFaviconError) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(faviconUrl)
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = platform,
-                    modifier = Modifier
-                        .size(17.dp)
-                        .clip(RoundedCornerShape(3.5.dp)),
-                    contentScale = ContentScale.Fit,
-                    onError = { isFaviconError = true }
-                )
-            } else {
+        if (imageRes != null) {
+            Image(
+                painter = painterResource(id = imageRes),
+                contentDescription = platform,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Fit
+            )
+        } else {
+            // Border-less fallback for unmapped platforms (e.g. twitter/x, linkedin, link)
+            val (icon, gradient) = when (cleanPlatform) {
+                "twitter", "x" -> Lucide.Twitter to Brush.linearGradient(listOf(Color(0xFF1DA1F2), Color(0xFF0C7ABF)))
+                "linkedin" -> Lucide.Linkedin to Brush.linearGradient(listOf(Color(0xFF0077B5), Color(0xFF004182)))
+                else -> Lucide.Link to Brush.linearGradient(listOf(Color(0xFF0284C7), Color(0xFF0369A1)))
+            }
+            val shape = RoundedCornerShape(9.5.dp)
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(shape)
+                    .background(gradient),
+                contentAlignment = Alignment.Center
+            ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = platform,
                     tint = Color.White,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(15.dp)
                 )
             }
-        } else {
-            Icon(
-                imageVector = icon,
-                contentDescription = platform,
-                tint = Color.White,
-                modifier = Modifier.size(16.dp)
-            )
         }
     }
 }
