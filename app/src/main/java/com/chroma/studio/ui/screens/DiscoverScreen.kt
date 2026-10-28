@@ -2323,8 +2323,6 @@ fun ScallopedVerifiedBadge(
     )
 }
 
-enum class DrawerRole { USER, ADMIN }
-
 fun parseAspectRatio(ratioStr: String?, postType: String = ""): Float {
     val clean = ratioStr?.trim()?.lowercase()
     if (clean.isNullOrBlank() || clean == "original" || clean == "rounded" || clean == "full") {
@@ -2359,7 +2357,6 @@ class FeedPostModalState(
     var showAnalyticsModal by mutableStateOf(false)
     var showCreatorProfileModal by mutableStateOf(false)
     var showOriginalPostModal by mutableStateOf(false)
-    var activeRole by mutableStateOf(if (isOwner) DrawerRole.ADMIN else DrawerRole.USER)
 }
 
 @Composable
@@ -3041,8 +3038,6 @@ private fun FeedPostModals(
         PostOptionsDrawerSheet(
             work = work,
             isOwner = isOwner,
-            activeRole = if (isOwner) modalState.activeRole else DrawerRole.USER,
-            onRoleChange = { newRole -> if (isOwner) modalState.activeRole = newRole },
             onDismiss = { modalState.showMenu = false },
             onInterested = { modalState.showMenu = false },
             onNotInterested = { modalState.showMenu = false },
@@ -3910,8 +3905,6 @@ fun CreatorProfileModal(
 fun PostOptionsDrawerSheet(
     work: DiscoverPost,
     isOwner: Boolean,
-    activeRole: DrawerRole,
-    onRoleChange: (DrawerRole) -> Unit,
     onDismiss: () -> Unit,
     onInterested: () -> Unit,
     onNotInterested: () -> Unit,
@@ -3952,9 +3945,7 @@ fun PostOptionsDrawerSheet(
                 .navigationBarsPadding()
                 .padding(bottom = 16.dp)
         ) {
-            val showAdminTools = isOwner && activeRole == DrawerRole.ADMIN
-
-            // Post Context & Role Switcher Header
+            // Post Context Header
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -3965,69 +3956,24 @@ fun PostOptionsDrawerSheet(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = if (isOwner) "Manage Post" else if (work.authorDisplayName.isNotBlank()) "${work.authorDisplayName} (@${work.authorUsername})" else "@${work.authorUsername}",
-                        fontSize = 14.sp,
+                        fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = colors.textMain,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = if (isOwner) "Original Post Creator • Admin Tools" else "Post options",
+                        text = if (isOwner) "Your post" else "Post options",
                         fontSize = 11.5.sp,
                         color = if (isOwner) Color(0xFF007AFF) else Color(0xFF8E8E93),
                         fontWeight = if (isOwner) FontWeight.SemiBold else FontWeight.Normal
                     )
                 }
-
-                // Segmented Role Switcher: ONLY visible and accessible to the original post creator/admin
-                if (isOwner) {
-                    Spacer(Modifier.width(10.dp))
-
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(colors.glassBgHover)
-                            .border(0.5.dp, colors.glassBorder, RoundedCornerShape(8.dp))
-                            .padding(2.dp),
-                        horizontalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        val isUser = activeRole == DrawerRole.USER
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(if (!isUser) Color(0xFF007AFF) else Color.Transparent)
-                                .clickable { onRoleChange(DrawerRole.ADMIN) }
-                                .padding(horizontal = 10.dp, vertical = 4.dp)
-                        ) {
-                            Text(
-                                text = "Admin",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (!isUser) Color.White else colors.textMuted
-                            )
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(if (isUser) colors.glassBg else Color.Transparent)
-                                .clickable { onRoleChange(DrawerRole.USER) }
-                                .padding(horizontal = 10.dp, vertical = 4.dp)
-                        ) {
-                            Text(
-                                text = "User View",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (isUser) colors.textMain else colors.textMuted
-                            )
-                        }
-                    }
-                }
             }
 
             HorizontalDivider(thickness = 0.5.dp, color = colors.glassBorder)
 
-            if (!showAdminTools) {
+            if (!isOwner) {
                 // NORMAL USER OPTIONS:
                 DrawerActionItem(
                     icon = Lucide.Copy,
@@ -4101,7 +4047,7 @@ fun PostOptionsDrawerSheet(
                     onClick = onBlockUser
                 )
             } else {
-                // ADMIN OPTIONS:
+                // OWNER OPTIONS:
                 DrawerActionItem(
                     icon = Lucide.Copy,
                     title = "Copy Post Link",
