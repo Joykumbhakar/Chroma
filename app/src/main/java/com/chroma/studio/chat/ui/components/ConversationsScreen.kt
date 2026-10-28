@@ -20,9 +20,11 @@ import com.chroma.studio.ui.components.rememberAppleGraphicAnimationState
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -33,6 +35,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -141,244 +145,337 @@ fun ConversationsScreen(
         filtered.sortedWith(compareByDescending<ChatConversation> { it.id in pinnedChatIds })
     }
 
+    val listState = rememberLazyListState()
+    val density = LocalDensity.current
+    val collapseThresholdPx = with(density) { 50.dp.toPx() }
+    val scrollOffset by remember {
+        derivedStateOf {
+            if (listState.firstVisibleItemIndex > 0) {
+                collapseThresholdPx
+            } else {
+                listState.firstVisibleItemScrollOffset.toFloat().coerceAtMost(collapseThresholdPx)
+            }
+        }
+    }
+    val collapseFraction by remember {
+        derivedStateOf {
+            if (collapseThresholdPx > 0f) {
+                (scrollOffset / collapseThresholdPx).coerceIn(0f, 1f)
+            } else 0f
+        }
+    }
+
     Scaffold(
         containerColor = colors.appBg,
         topBar = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(colors.appBg)
-                    .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp)
+            Box(
+                modifier = Modifier.fillMaxWidth()
             ) {
-                // ── iOS Navigation Bar Row: Edit/Done (Left) & Actions/Count (Right) ────
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                // Layer 1: Animated gradient background (Home screen design, fades out smoothly on scroll down)
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .graphicsLayer {
+                            alpha = (1f - collapseFraction).coerceIn(0f, 1f)
+                        }
                 ) {
-                    if (isSelectionMode) {
-                        Text(
-                            text = "Done",
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = colors.textDark,
-                            modifier = Modifier
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null
-                                ) {
-                                    SoundManager.playReaction()
-                                    isSelectionMode = false
-                                    selectedChatIds.clear()
-                                }
-                                .padding(vertical = 4.dp)
-                        )
-
-                        Text(
-                            text = "${selectedChatIds.size} Selected",
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = colors.textDark
-                        )
-
-                        Text(
-                            text = if (selectedChatIds.size >= filteredChats.size.coerceAtMost(5) && selectedChatIds.isNotEmpty()) "Deselect" else "Select All",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Normal,
-                            color = colors.textDark,
-                            modifier = Modifier
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null
-                                ) {
-                                    SoundManager.playReaction()
-                                    if (selectedChatIds.size >= filteredChats.size.coerceAtMost(5) && selectedChatIds.isNotEmpty()) {
-                                        selectedChatIds.clear()
-                                    } else {
-                                        selectedChatIds.clear()
-                                        val toTake = filteredChats.take(5).map { it.id }
-                                        selectedChatIds.addAll(toTake)
-                                        if (filteredChats.size > 5) {
-                                            android.widget.Toast.makeText(
-                                                context,
-                                                "Selected top 5 chats (maximum limit is 5)",
-                                                android.widget.Toast.LENGTH_SHORT
-                                            ).show()
-                                        }
-                                    }
-                                }
-                                .padding(vertical = 4.dp)
-                        )
-                    } else {
-                        // "Chats" Title and Edit button
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Text(
-                                text = "Chats",
-                                fontSize = 30.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = colors.textDark,
-                                letterSpacing = (-0.5).sp
-                            )
-
-                            Text(
-                                text = "Edit",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Normal,
-                                color = colors.textDark,
-                                modifier = Modifier
-                                    .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null
-                                    ) {
-                                        SoundManager.playReaction()
-                                        isSelectionMode = true
-                                    }
-                                    .padding(vertical = 4.dp, horizontal = 2.dp)
-                            )
-                        }
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            // Search Button beside colors palette icon
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null
-                                    ) {
-                                        SoundManager.playReaction()
-                                        isSearchExpanded = !isSearchExpanded
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                LucideSearch(tint = colors.textDark, size = 20.dp)
-                            }
-
-                            // Appearance Theme Button (Palette)
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null
-                                    ) {
-                                        SoundManager.playReaction()
-                                        onOpenAppearanceSettings()
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                LucidePalette(tint = colors.textDark, size = 20.dp)
-                            }
-
-                            // Compose New Message Button
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null
-                                    ) {
-                                        SoundManager.playReaction()
-                                        onNewMessageClick()
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                LucideEdit(tint = colors.textDark, size = 20.dp)
-                            }
-
-                            // Current User Profile Avatar (Actual Avatar, Zero Letters)
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null
-                                    ) {
-                                        SoundManager.playReaction()
-                                        onUserProfileClick()
-                                    }
-                            ) {
-                                ChatAvatar(
-                                    avatarUrl = currentUser.avatar,
-                                    name = currentUser.name,
-                                    size = 36.dp,
-                                    showOnline = true,
-                                    isOnline = true
-                                )
-                            }
-                        }
-                    }
+                    ChatHeaderAnimatedGradientBackground(isDark = !colors.isLight)
                 }
 
-                // Expandable Search Bar (revealed when search button clicked or query is present)
-                AnimatedVisibility(
-                    visible = isSearchExpanded || searchQuery.isNotEmpty(),
-                    enter = expandVertically() + fadeIn(),
-                    exit = shrinkVertically() + fadeOut()
+                // Layer 2: Solid background (fades in smoothly as user scrolls down)
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .background(colors.appBg)
+                        .graphicsLayer {
+                            alpha = collapseFraction.coerceIn(0f, 1f)
+                        }
+                )
+
+                // Layer 3: Hairline separator at bottom of header (visible when collapsed)
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(0.5.dp)
+                        .background(colors.separator.copy(alpha = (collapseFraction * 0.5f).coerceIn(0f, 0.5f)))
+                )
+
+                // Layer 4: Header Content Column
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .windowInsetsPadding(WindowInsets.statusBars)
+                        .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp)
                 ) {
+                    // Navigation Bar Row (Fixed height 44.dp)
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 8.dp)
-                            .height(36.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(
-                                if (colors.isLight) Color(0xFF767680).copy(alpha = 0.12f)
-                                else Color(0xFF767680).copy(alpha = 0.24f)
-                            )
-                            .padding(horizontal = 10.dp),
-                        contentAlignment = Alignment.CenterStart
+                            .height(44.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            LucideSearch(tint = colors.textMuted, size = 16.dp)
-
-                            BasicTextField(
-                                value = searchQuery,
-                                onValueChange = onSearchQueryChanged,
-                                modifier = Modifier.weight(1f),
-                                singleLine = true,
-                                textStyle = TextStyle(
-                                    fontSize = 15.sp,
-                                    color = colors.textDark,
-                                    fontWeight = FontWeight.Normal
-                                ),
-                                cursorBrush = SolidColor(colors.iosBlue),
-                                decorationBox = { innerTextField ->
-                                    if (searchQuery.isEmpty()) {
-                                        Text(
-                                            text = "Search conversations...",
-                                            fontSize = 15.sp,
-                                            color = colors.textMuted
-                                        )
-                                    }
-                                    innerTextField()
-                                }
-                            )
-
-                            if (searchQuery.isNotEmpty()) {
+                        if (isSelectionMode) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Text(
-                                    text = "✕",
-                                    color = colors.textMuted,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
+                                    text = "Done",
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = colors.textDark,
                                     modifier = Modifier
                                         .clickable(
                                             interactionSource = remember { MutableInteractionSource() },
                                             indication = null
-                                        ) { onSearchQueryChanged("") }
-                                        .padding(horizontal = 6.dp, vertical = 4.dp)
+                                        ) {
+                                            SoundManager.playReaction()
+                                            isSelectionMode = false
+                                            selectedChatIds.clear()
+                                        }
+                                        .padding(vertical = 4.dp)
                                 )
+
+                                Text(
+                                    text = "${selectedChatIds.size} Selected",
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colors.textDark
+                                )
+
+                                Text(
+                                    text = if (selectedChatIds.size >= filteredChats.size.coerceAtMost(5) && selectedChatIds.isNotEmpty()) "Deselect" else "Select All",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Normal,
+                                    color = colors.textDark,
+                                    modifier = Modifier
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null
+                                        ) {
+                                            SoundManager.playReaction()
+                                            if (selectedChatIds.size >= filteredChats.size.coerceAtMost(5) && selectedChatIds.isNotEmpty()) {
+                                                selectedChatIds.clear()
+                                            } else {
+                                                selectedChatIds.clear()
+                                                val toTake = filteredChats.take(5).map { it.id }
+                                                selectedChatIds.addAll(toTake)
+                                                if (filteredChats.size > 5) {
+                                                    android.widget.Toast.makeText(
+                                                        context,
+                                                        "Selected top 5 chats (maximum limit is 5)",
+                                                        android.widget.Toast.LENGTH_SHORT
+                                                    ).show()
+                                                }
+                                            }
+                                        }
+                                        .padding(vertical = 4.dp)
+                                )
+                            }
+                        } else {
+                            // Left: Edit Button
+                            Row(
+                                modifier = Modifier.align(Alignment.CenterStart),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Edit",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Normal,
+                                    color = colors.textDark,
+                                    modifier = Modifier
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null
+                                        ) {
+                                            SoundManager.playReaction()
+                                            isSelectionMode = true
+                                        }
+                                        .padding(vertical = 4.dp, horizontal = 2.dp)
+                                )
+                            }
+
+                            // Center: Collapsed "Chats" Title (Centred on Screen, fades in on scroll)
+                            Text(
+                                text = "Chats",
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = colors.textDark,
+                                modifier = Modifier
+                                    .align(Alignment.Center)
+                                    .graphicsLayer {
+                                        alpha = collapseFraction
+                                    }
+                            )
+
+                            // Right: Header Action Icons
+                            Row(
+                                modifier = Modifier.align(Alignment.CenterEnd),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                // Search Button beside colors palette icon
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null
+                                        ) {
+                                            SoundManager.playReaction()
+                                            isSearchExpanded = !isSearchExpanded
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    LucideSearch(tint = colors.textDark, size = 20.dp)
+                                }
+
+                                // Appearance Theme Button (Palette)
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null
+                                        ) {
+                                            SoundManager.playReaction()
+                                            onOpenAppearanceSettings()
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    LucidePalette(tint = colors.textDark, size = 20.dp)
+                                }
+
+                                // Compose New Message Button
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null
+                                        ) {
+                                            SoundManager.playReaction()
+                                            onNewMessageClick()
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    LucideEdit(tint = colors.textDark, size = 20.dp)
+                                }
+
+                                // Current User Profile Avatar (Actual Avatar, Zero Letters)
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null
+                                        ) {
+                                            SoundManager.playReaction()
+                                            onUserProfileClick()
+                                        }
+                                ) {
+                                    ChatAvatar(
+                                        avatarUrl = currentUser.avatar,
+                                        name = currentUser.name,
+                                        size = 36.dp,
+                                        showOnline = true,
+                                        isOnline = true
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Expanded Centered "Chats" Title (Centred on Screen, collapses on scroll)
+                    if (!isSelectionMode) {
+                        val expandedAlpha = (1f - collapseFraction * 1.4f).coerceIn(0f, 1f)
+                        val expandedHeight = (44.dp * (1f - collapseFraction)).coerceAtLeast(0.dp)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(expandedHeight)
+                                .graphicsLayer {
+                                    alpha = expandedAlpha
+                                    translationY = -10.dp.value * collapseFraction
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Chats",
+                                fontSize = 32.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = colors.textDark,
+                                letterSpacing = (-0.5).sp,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+
+                    // Expandable Search Bar (revealed when search button clicked or query is present)
+                    AnimatedVisibility(
+                        visible = isSearchExpanded || searchQuery.isNotEmpty(),
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut()
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp)
+                                .height(36.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(
+                                    if (colors.isLight) Color(0xFF767680).copy(alpha = 0.12f)
+                                    else Color(0xFF767680).copy(alpha = 0.24f)
+                                )
+                                .padding(horizontal = 10.dp),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                LucideSearch(tint = colors.textMuted, size = 16.dp)
+
+                                BasicTextField(
+                                    value = searchQuery,
+                                    onValueChange = onSearchQueryChanged,
+                                    modifier = Modifier.weight(1f),
+                                    singleLine = true,
+                                    textStyle = TextStyle(
+                                        fontSize = 15.sp,
+                                        color = colors.textDark,
+                                        fontWeight = FontWeight.Normal
+                                    ),
+                                    cursorBrush = SolidColor(colors.iosBlue),
+                                    decorationBox = { innerTextField ->
+                                        if (searchQuery.isEmpty()) {
+                                            Text(
+                                                text = "Search conversations...",
+                                                fontSize = 15.sp,
+                                                color = colors.textMuted
+                                            )
+                                        }
+                                        innerTextField()
+                                    }
+                                )
+
+                                if (searchQuery.isNotEmpty()) {
+                                    Text(
+                                        text = "✕",
+                                        color = colors.textMuted,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier
+                                            .clickable(
+                                                interactionSource = remember { MutableInteractionSource() },
+                                                indication = null
+                                            ) { onSearchQueryChanged("") }
+                                            .padding(horizontal = 6.dp, vertical = 4.dp)
+                                    )
+                                }
                             }
                         }
                     }
@@ -482,6 +579,7 @@ fun ConversationsScreen(
         modifier = modifier.fillMaxSize()
     ) { innerPadding ->
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
@@ -1628,5 +1726,85 @@ private fun IosConversationListRow(
                 modifier = Modifier.padding(start = 78.dp)
             )
         }
+    }
+}
+
+
+@Composable
+private fun ChatHeaderAnimatedGradientBackground(isDark: Boolean) {
+    val infiniteTransition = rememberInfiniteTransition(label = "chat_header_bg")
+    val t1 by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(14000, easing = EaseInOutSine), RepeatMode.Reverse),
+        label = "t1"
+    )
+    val t2 by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(11000, easing = EaseInOutSine), RepeatMode.Reverse),
+        label = "t2"
+    )
+    val t3 by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(17000, easing = EaseInOutSine), RepeatMode.Reverse),
+        label = "t3"
+    )
+
+    Box(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val w = size.width
+            val h = size.height
+            if (w <= 0f || h <= 0f) return@Canvas
+
+            val maxDim = maxOf(w, h)
+            val b1x = w * (0.15f + 0.25f * t1)
+            val b1y = h * (0.10f + 0.20f * t2)
+            val b1r = maxDim * 0.70f
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(Color(0x885E35CA), Color(0x00000000)),
+                    center = Offset(b1x, b1y),
+                    radius = b1r
+                ),
+                radius = b1r,
+                center = Offset(b1x, b1y)
+            )
+
+            val b2x = w * (0.55f + 0.30f * t2)
+            val b2y = h * (0.30f + 0.25f * t1)
+            val b2r = maxDim * 0.65f
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(Color(0x7700BCD4), Color(0x00000000)),
+                    center = Offset(b2x, b2y),
+                    radius = b2r
+                ),
+                radius = b2r,
+                center = Offset(b2x, b2y)
+            )
+
+            val b3x = w * (0.30f + 0.20f * t3)
+            val b3y = h * (0.65f + 0.20f * t2)
+            val b3r = maxDim * 0.60f
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(Color(0x66EC407A), Color(0x00000000)),
+                    center = Offset(b3x, b3y),
+                    radius = b3r
+                ),
+                radius = b3r,
+                center = Offset(b3x, b3y)
+            )
+        }
+        val overlayColor = if (isDark) Color(0xDD000000) else Color(0xBBFFFFFF)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(overlayColor)
+        )
     }
 }
