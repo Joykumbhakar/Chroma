@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -544,88 +545,83 @@ fun UserProfileBioDetailsSection(
 
         Spacer(Modifier.height(4.dp))
 
-        // 4. Bio Text
-        val bioText = profile?.bio ?: ""
+        // 4. Bio Text with ....Read more
+        val bioText = profile?.bio?.trim() ?: ""
         if (bioText.isNotBlank()) {
-            Spacer(Modifier.height(2.dp))
-            var cutText by remember(bioText) { mutableStateOf<String?>(null) }
-
-            val fullAnnotatedBio = remember(bioText) {
-                buildAnnotatedString {
-                    val words = bioText.split(Regex("(?<=\\s)|(?=\\s)|\\n"))
-                    for (word in words) {
-                        if (word.startsWith("@") || word.startsWith("#")) {
-                            withStyle(style = SpanStyle(color = Color(0xFF007AFF), fontWeight = FontWeight.SemiBold)) {
-                                append(word)
-                            }
-                        } else {
-                            append(word)
-                        }
-                    }
-                }
+            Spacer(Modifier.height(3.dp))
+            val isBioLong = remember(bioText) {
+                bioText.length > 75 || bioText.count { it == '\n' } >= 1
             }
 
-            val displayedBio = remember(isBioExpanded, cutText, fullAnnotatedBio) {
-                if (isBioExpanded) {
-                    buildAnnotatedString {
-                        append(fullAnnotatedBio)
-                        if (cutText != null) {
-                            withStyle(style = SpanStyle(color = Color(0xFF007AFF), fontWeight = FontWeight.Bold)) {
-                                append(" less")
-                            }
-                        }
-                    }
-                } else if (cutText != null) {
-                    buildAnnotatedString {
-                        val words = cutText!!.split(Regex("(?<=\\s)|(?=\\s)|\\n"))
+            val displayedBio = remember(bioText, isBioExpanded, isBioLong) {
+                buildAnnotatedString {
+                    if (!isBioLong || isBioExpanded) {
+                        // Full text with formatted @mentions and #tags
+                        val words = bioText.split(Regex("(?<=\\s)|(?=\\s)|\\n"))
                         for (word in words) {
                             if (word.startsWith("@") || word.startsWith("#")) {
-                                withStyle(style = SpanStyle(color = Color(0xFF007AFF), fontWeight = FontWeight.SemiBold)) {
+                                withStyle(SpanStyle(color = Color(0xFF007AFF), fontWeight = FontWeight.SemiBold)) {
+                                    append(word)
+                                }
+                            } else {
                                 append(word)
                             }
-                        } else {
-                            append(word)
+                        }
+                        if (isBioLong && isBioExpanded) {
+                            withStyle(SpanStyle(color = Color(0xFF007AFF), fontWeight = FontWeight.Bold)) {
+                                append(" Show less")
+                            }
+                        }
+                    } else {
+                        // Truncated preview for ....Read more
+                        val firstNewline = bioText.indexOf('\n')
+                        val cutIndex = when {
+                            firstNewline in 1..75 -> firstNewline
+                            bioText.length > 75 -> {
+                                val spaceIdx = bioText.lastIndexOf(' ', 75)
+                                if (spaceIdx > 40) spaceIdx else 75
+                            }
+                            else -> bioText.length
+                        }
+                        val preview = bioText.take(cutIndex).trimEnd()
+                        val words = preview.split(Regex("(?<=\\s)|(?=\\s)|\\n"))
+                        for (word in words) {
+                            if (word.startsWith("@") || word.startsWith("#")) {
+                                withStyle(SpanStyle(color = Color(0xFF007AFF), fontWeight = FontWeight.SemiBold)) {
+                                    append(word)
+                                }
+                            } else {
+                                append(word)
+                            }
+                        }
+                        withStyle(SpanStyle(color = Color(0xFF8E8E93))) {
+                            append("....")
+                        }
+                        withStyle(SpanStyle(color = Color(0xFF007AFF), fontWeight = FontWeight.Bold)) {
+                            append("Read more")
                         }
                     }
-                    withStyle(style = SpanStyle(color = Color(0xFF8E8E93))) {
-                        append("... ")
-                    }
-                    withStyle(style = SpanStyle(color = Color(0xFF007AFF), fontWeight = FontWeight.Bold)) {
-                        append("more")
-                    }
                 }
-            } else {
-                fullAnnotatedBio
             }
-        }
 
-        Text(
-            text = displayedBio,
-            color = colors.textMain,
-            fontSize = 13.sp,
-            lineHeight = 17.5.sp,
-            maxLines = if (isBioExpanded) Int.MAX_VALUE else 3,
-            overflow = TextOverflow.Clip,
-            onTextLayout = { textLayoutResult ->
-                if (!isBioExpanded && cutText == null && textLayoutResult.hasVisualOverflow) {
-                    val lastLineIndex = 2.coerceAtMost(textLayoutResult.lineCount - 1)
-                    val lastCharIndex = textLayoutResult.getLineEnd(lastLineIndex, visibleEnd = true)
-                    val adjustedCut = (lastCharIndex - 9).coerceAtLeast(0)
-                    if (adjustedCut < bioText.length) {
-                        cutText = bioText.substring(0, adjustedCut).trimEnd()
+            Text(
+                text = displayedBio,
+                color = colors.textMain,
+                fontSize = 13.sp,
+                lineHeight = 17.5.sp,
+                maxLines = if (isBioExpanded) Int.MAX_VALUE else 2,
+                overflow = TextOverflow.Clip,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .animateContentSize()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {
+                        if (isBioLong) isBioExpanded = !isBioExpanded
                     }
-                }
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) {
-                    if (cutText != null) isBioExpanded = !isBioExpanded
-                }
-        )
-    }
+            )
+        }
 
     // 5. Metadata Matrix Chips (Replaces grocery list)
     val metadataItems = remember(locationVisible, office, home, country, dobVisible, genderVisible, profile) {
