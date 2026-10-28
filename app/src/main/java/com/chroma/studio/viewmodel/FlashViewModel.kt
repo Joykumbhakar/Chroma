@@ -85,6 +85,44 @@ class FlashViewModel(application: Application) : AndroidViewModel(application) {
         _flashFeed.value = _flashFeed.value.filter { it.id != flashId }
     }
 
+    fun ensureFlashInFeed(videoId: String, post: com.chroma.studio.model.DiscoverPost? = null) {
+        val current = _flashFeed.value
+        if (current.any { it.id == videoId }) return
+
+        if (post != null) {
+            val video = FlashVideo(
+                id = post.id,
+                creatorId = post.creatorId,
+                authorUsername = post.authorUsername,
+                authorDisplayName = post.authorDisplayName,
+                authorAvatarUrl = post.authorAvatarUrl,
+                authorVerified = post.authorVerified,
+                videoUrl = post.videoUrl ?: "",
+                thumbnailUrl = post.thumbnailUrl ?: post.imageUrl ?: "",
+                caption = post.description.ifBlank { post.title },
+                hashtags = post.tags,
+                mentions = post.mentions,
+                likesCount = post.likesCount,
+                likedBy = post.likedBy,
+                commentCount = post.effectiveCommentsCount,
+                remixCount = post.remixCount,
+                remixedBy = post.remixedBy,
+                shareCount = post.shareCount,
+                sharedBy = post.sharedBy,
+                saveCount = post.saveCount,
+                savedBy = post.savedBy,
+                remixedFromPostId = post.remixedFromPostId,
+                remixedFromAuthorUsername = post.remixedFromAuthorUsername,
+                timestamp = post.timestamp,
+                hideLikesCount = post.hideLikesCount,
+                turnOffComments = post.turnOffComments,
+                turnOffRemix = post.turnOffRemix
+            )
+            _flashFeed.value = listOf(video) + current
+            syncLikedIds()
+        }
+    }
+
     fun loadFeed(isRefresh: Boolean = false) {
         if (_isLoading.value || _isRefreshing.value) return
         viewModelScope.launch {

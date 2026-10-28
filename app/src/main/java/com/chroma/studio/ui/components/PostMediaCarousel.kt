@@ -336,6 +336,7 @@ fun PostVideoSlideView(
     thumbnailUrl: String?,
     modifier: Modifier = Modifier,
     onDoubleTap: ((Offset) -> Unit)? = null,
+    onVideoClick: (() -> Unit)? = null,
     isActivePage: Boolean = true,
     isInViewport: Boolean = false,
     isMuted: Boolean = true,
@@ -447,17 +448,21 @@ fun PostVideoSlideView(
                         onDoubleTap?.invoke(offset)
                     },
                     onTap = {
-                        if (isPlaying) {
-                            userPaused = true
-                            player.pause()
-                            player.playWhenReady = false
+                        if (onVideoClick != null) {
+                            onVideoClick()
                         } else {
-                            userPaused = false
-                            if (player.playbackState == androidx.media3.common.Player.STATE_ENDED) {
-                                player.seekTo(0L)
+                            if (isPlaying) {
+                                userPaused = true
+                                player.pause()
+                                player.playWhenReady = false
+                            } else {
+                                userPaused = false
+                                if (player.playbackState == androidx.media3.common.Player.STATE_ENDED) {
+                                    player.seekTo(0L)
+                                }
+                                player.playWhenReady = true
+                                player.play()
                             }
-                            player.playWhenReady = true
-                            player.play()
                         }
                     }
                 )
@@ -511,6 +516,38 @@ fun PostVideoSlideView(
                 color = Color.White.copy(alpha = 0.85f),
                 strokeWidth = 3.dp
             )
+        }
+
+        // Floating "Watch Reel" pill in bottom-left corner
+        if (onVideoClick != null) {
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(bottom = 10.dp, start = 10.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color.Black.copy(alpha = 0.55f))
+                    .border(0.5.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(14.dp))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { onVideoClick() }
+                    .padding(horizontal = 9.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Icon(
+                    imageVector = Lucide.Play,
+                    contentDescription = "Watch Reel",
+                    tint = Color.White,
+                    modifier = Modifier.size(11.dp)
+                )
+                Text(
+                    text = "Watch Reel",
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
         }
 
         // Floating Audio Mute/Unmute toggle button in bottom-right corner
@@ -574,6 +611,7 @@ fun PostMediaCarousel(
     colors: OscellionPalette = LocalOscellionColors.current,
     doubleTapLikeState: DoubleTapLikeState,
     onDoubleTap: (Offset) -> Unit,
+    onVideoClick: (() -> Unit)? = null,
     isInViewport: Boolean = false,
     isFeedMuted: Boolean = true,
     onToggleFeedMute: (() -> Unit)? = null,
@@ -633,6 +671,7 @@ fun PostMediaCarousel(
                                 videoUrl = slide.videoUrl,
                                 thumbnailUrl = slide.thumbnailUrl,
                                 onDoubleTap = onDoubleTap,
+                                onVideoClick = onVideoClick,
                                 isActivePage = isActive,
                                 isInViewport = isInViewport && isActive,
                                 isMuted = isFeedMuted,
@@ -695,6 +734,7 @@ fun PostMediaCarousel(
                             videoUrl = singleSlide.videoUrl,
                             thumbnailUrl = singleSlide.thumbnailUrl,
                             onDoubleTap = onDoubleTap,
+                            onVideoClick = onVideoClick,
                             isActivePage = true,
                             isInViewport = isInViewport,
                             isMuted = isFeedMuted,

@@ -1110,7 +1110,14 @@ class HomeActivity : ComponentActivity() {
                              onNavigateToNotifications = { navController.navigate("notifications_feed") },
                              onStoryViewerChange = { isDiscoverStoryViewerActive = it },
                              onNavigateToCreateStory = { navController.navigate("story_editor") },
-                             onNavigateToDrafts = { navController.navigate("drafts_list") }
+                             onNavigateToDrafts = { navController.navigate("drafts_list") },
+                             onFlashVideoClick = { videoId ->
+                                 val post = works.firstOrNull { it.id == videoId }
+                                 if (post != null) {
+                                     flashVm.ensureFlashInFeed(videoId, post)
+                                 }
+                                 navController.navigate("flash_feed?videoId=$videoId")
+                             }
                         )
                                 }
                                 3 -> {
@@ -1285,10 +1292,21 @@ class HomeActivity : ComponentActivity() {
                         )
                     }
 
-                    composable("flash_feed") {
+                    composable(
+                        route = "flash_feed?videoId={videoId}",
+                        arguments = listOf(
+                            androidx.navigation.navArgument("videoId") {
+                                type = androidx.navigation.NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            }
+                        )
+                    ) { backStackEntry ->
+                        val initialVideoId = backStackEntry.arguments?.getString("videoId")
                         FlashFeedScreen(
                             flashVm = flashVm,
                             commentVm = commentVm,
+                            initialVideoId = initialVideoId,
                             onNavigateToOldHome = { navController.popBackStack() },
                             onNavigateToProfile = { userId ->
                                 navController.navigate("userProfile/$userId")

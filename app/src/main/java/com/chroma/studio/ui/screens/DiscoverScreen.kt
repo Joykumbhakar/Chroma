@@ -206,7 +206,8 @@ fun DiscoverScreen(
     onNavigateToNotifications: () -> Unit,
     onStoryViewerChange: ((Boolean) -> Unit)? = null,
     onNavigateToCreateStory: (() -> Unit)? = null,
-    onNavigateToDrafts: () -> Unit = {}
+    onNavigateToDrafts: () -> Unit = {},
+    onFlashVideoClick: ((String) -> Unit)? = null
 ) {
     val colors = LocalOscellionColors.current
     val uploadTask by FlashUploadManager.currentTask.collectAsState()
@@ -640,7 +641,11 @@ fun DiscoverScreen(
                                 trendingWorks = qualifyingMasterworks,
                                 repository = repository,
                                 onWorkClick = { work ->
-                                    onAuthorClick(work.creatorId, work.id)
+                                    if (isVideoPost(work)) {
+                                        onFlashVideoClick?.invoke(work.id)
+                                    } else {
+                                        onAuthorClick(work.creatorId, work.id)
+                                    }
                                 }
                             )
                         }
@@ -744,6 +749,7 @@ fun DiscoverScreen(
                                     context.startActivity(Intent.createChooser(shareIntent, "Share Post"))
                                 },
                                 onSaveClick = { discoverViewModel?.toggleSave(work.id) },
+                                onFlashVideoClick = onFlashVideoClick,
                                 onUpdateVisibility = { hideLikes, hideShares, hideRemixes, hideDownloads, hideSaves ->
                                     discoverViewModel?.updateCounterVisibility(
                                         postId = work.id,
@@ -1072,6 +1078,26 @@ fun TrendingCard(
                 fontWeight = FontWeight.Bold,
                 color = Color.White
             )
+        }
+
+        if (isVideo) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(5.5.dp)
+                    .size(16.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.55f))
+                    .border(0.5.dp, Color.White.copy(alpha = 0.22f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Lucide.Play,
+                    contentDescription = "Video",
+                    tint = Color.White,
+                    modifier = Modifier.size(8.dp)
+                )
+            }
         }
 
         // Bottom Scrim & Compact Metrics
@@ -3375,6 +3401,7 @@ fun FeedPostCard(
     onReportClick: ((String) -> Unit)? = null,
     onMentionClick: ((String) -> Unit)? = null,
     onTagClick: ((String) -> Unit)? = null,
+    onFlashVideoClick: ((String) -> Unit)? = null,
     onUpdateVisibility: ((hideLikes: Boolean, hideShares: Boolean, hideRemixes: Boolean, hideDownloads: Boolean, hideSaves: Boolean) -> Unit)? = null
 ) {
     val colors = LocalOscellionColors.current
@@ -3447,6 +3474,7 @@ fun FeedPostCard(
                     repository = repository,
                     colors = colors,
                     doubleTapLikeState = doubleTapLikeState,
+                    onVideoClick = if (isVideoPost(work) || mediaSlides.any { it is PostMediaSlide.VideoSlide }) { { onFlashVideoClick?.invoke(work.id) } } else null,
                     isInViewport = isInViewport,
                     isFeedMuted = isFeedMuted,
                     onToggleFeedMute = onToggleFeedMute,
@@ -3479,6 +3507,7 @@ fun FeedPostCard(
                 repository = repository,
                 colors = colors,
                 doubleTapLikeState = doubleTapLikeState,
+                onVideoClick = if (isVideoPost(work) || mediaSlides.any { it is PostMediaSlide.VideoSlide }) { { onFlashVideoClick?.invoke(work.id) } } else null,
                 isInViewport = isInViewport,
                 isFeedMuted = isFeedMuted,
                 onToggleFeedMute = onToggleFeedMute,

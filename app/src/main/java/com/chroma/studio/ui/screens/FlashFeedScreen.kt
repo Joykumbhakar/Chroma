@@ -2,6 +2,7 @@ package com.chroma.studio.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import com.chroma.studio.ui.components.FlatDoubleTapHeartOverlay
@@ -76,7 +77,8 @@ fun FlashFeedScreen(
     onNavigateToFlashPicker: () -> Unit,
     onRemixRequested: (Uri, String, String) -> Unit,
     onRequireLogin: () -> Unit,
-    emptyContent: (@Composable () -> Unit)? = null
+    emptyContent: (@Composable () -> Unit)? = null,
+    initialVideoId: String? = null
 ) {
     val colors = LocalOscellionColors.current
     val context = LocalContext.current
@@ -88,7 +90,32 @@ fun FlashFeedScreen(
     val drafts by flashVm.drafts.collectAsState()
 
     var selectedTab by remember { mutableStateOf("Reels") }
-    val pagerState = rememberPagerState(pageCount = { flashFeed.size.coerceAtLeast(1) })
+
+    val initialPage = remember(initialVideoId, flashFeed) {
+        if (!initialVideoId.isNullOrBlank()) {
+            val idx = flashFeed.indexOfFirst { it.id == initialVideoId }
+            if (idx >= 0) idx else 0
+        } else {
+            0
+        }
+    }
+    val pagerState = rememberPagerState(
+        initialPage = initialPage,
+        pageCount = { flashFeed.size.coerceAtLeast(1) }
+    )
+
+    BackHandler {
+        onNavigateToOldHome()
+    }
+
+    LaunchedEffect(initialVideoId, flashFeed) {
+        if (!initialVideoId.isNullOrBlank() && flashFeed.isNotEmpty()) {
+            val idx = flashFeed.indexOfFirst { it.id == initialVideoId }
+            if (idx >= 0 && pagerState.currentPage != idx) {
+                pagerState.scrollToPage(idx)
+            }
+        }
+    }
 
     // ExoPlayer Pool of 3 recycled players using CacheDataSource with proper AudioAttributes and AudioFocus
     val exoPlayers = remember {
