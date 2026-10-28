@@ -367,16 +367,16 @@ private fun MessageReactionDock(
                 .padding(bottom = 6.dp)
                 .shadow(
                     elevation = 8.dp,
-                    shape = RoundedCornerShape(26.dp),
+                    shape = RoundedCornerShape(9999.dp),
                     ambientColor = Color.Black.copy(alpha = 0.25f),
                     spotColor = Color.Black.copy(alpha = 0.2f)
                 )
-                .clip(RoundedCornerShape(26.dp))
+                .clip(RoundedCornerShape(9999.dp))
                 .background(if (colors.isLight) Color(0xF8FFFFFF) else Color(0xF82C2C2E))
                 .border(
                     0.5.dp,
                     if (colors.isLight) Color(0x22000000) else Color(0x38FFFFFF),
-                    RoundedCornerShape(26.dp)
+                    RoundedCornerShape(9999.dp)
                 )
                 .padding(horizontal = 8.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -797,6 +797,8 @@ private fun MessageReactionsPills(
     colors: ChatColors,
     onReactionClick: (String) -> Unit
 ) {
+    val pillShape = RoundedCornerShape(9999.dp)
+
     Row(
         modifier = Modifier
             .offset(
@@ -806,32 +808,51 @@ private fun MessageReactionsPills(
             .zIndex(60f)
             .animateContentSize(spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMediumLow))
             .padding(horizontal = 2.dp),
-        horizontalArrangement = Arrangement.spacedBy(3.dp)
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         reactions.forEach { (emoji, count) ->
             val isMyReaction = userReaction == emoji
-            val badgeBg = if (colors.isLight) Color.White else Color(0xFF2C2C2E)
-            val badgeBorderColor = if (isMyReaction && colors.isLight) Color(0x33007AFF) else (if (colors.isLight) Color(0x22000000) else Color(0x38FFFFFF))
+            val badgeBg = if (isMyReaction && colors.isLight) {
+                Color(0xFFF0F6FF)
+            } else if (colors.isLight) {
+                Color.White
+            } else if (isMyReaction) {
+                Color(0xFF1C3252)
+            } else {
+                Color(0xFF2C2C2E)
+            }
+            val badgeBorderColor = if (isMyReaction) {
+                if (colors.isLight) Color(0x50007AFF) else Color(0x70007AFF)
+            } else {
+                if (colors.isLight) Color(0x18000000) else Color(0x30FFFFFF)
+            }
             val badgeBorderWidth = 0.5.dp
 
             Row(
                 modifier = Modifier
-                                        .clip(RoundedCornerShape(8.dp))
+                    .shadow(
+                        elevation = 2.dp,
+                        shape = pillShape,
+                        ambientColor = Color.Black.copy(alpha = 0.12f),
+                        spotColor = Color.Black.copy(alpha = 0.08f)
+                    )
+                    .clip(pillShape)
                     .background(badgeBg)
-                    .border(badgeBorderWidth, badgeBorderColor, RoundedCornerShape(8.dp))
+                    .border(badgeBorderWidth, badgeBorderColor, pillShape)
                     .clickable { onReactionClick(emoji) }
+                    .defaultMinSize(minWidth = if (count > 1) 36.dp else 30.dp, minHeight = 22.dp)
                     .padding(
-                        horizontal = if (count > 1) 6.dp else 4.5.dp,
-                        vertical = 1.5.dp
+                        horizontal = if (count > 1) 8.dp else 7.dp,
+                        vertical = 2.dp
                     ),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(2.5.dp)
+                horizontalArrangement = Arrangement.spacedBy(3.dp)
             ) {
-                Text(text = emoji, fontSize = 11.sp)
+                Text(text = emoji, fontSize = 12.sp)
                 if (count > 1) {
                     Text(
                         text = count.toString(),
-                        fontSize = 9.5.sp,
+                        fontSize = 10.sp,
                         fontWeight = if (isMyReaction) FontWeight.Bold else FontWeight.SemiBold,
                         color = if (isMyReaction) colors.iosBlue else colors.textMuted
                     )
