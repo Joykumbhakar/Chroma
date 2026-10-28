@@ -521,16 +521,6 @@ fun UserProfileBioDetailsSection(
             Surface(
                 shape = RoundedCornerShape(9999.dp),
                 color = if (colors.isDark) Color(0x1A007AFF) else Color(0x0F007AFF),
-                border = BorderStroke(
-                    0.75.dp,
-                    Brush.linearGradient(
-                        listOf(
-                            Color(0x80007AFF),
-                            Color(0x30007AFF),
-                            Color(0x6000C6FF)
-                        )
-                    )
-                ),
                 modifier = Modifier.padding(vertical = 2.dp)
             ) {
                 Row(
@@ -673,11 +663,7 @@ fun UserProfileBioDetailsSection(
             metadataItems.forEach { (icon, text, tintColor) ->
                 Surface(
                     shape = RoundedCornerShape(9999.dp),
-                    color = if (colors.isDark) Color(0x18FFFFFF) else Color(0x0A000000),
-                    border = BorderStroke(
-                        0.5.dp,
-                        if (colors.isDark) Color(0x28FFFFFF) else Color(0x12000000)
-                    )
+                    color = if (colors.isDark) Color(0x18FFFFFF) else Color(0x0A000000)
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -746,11 +732,7 @@ fun UserProfileBioDetailsSection(
                 val tag = if (rawTag.startsWith("#")) rawTag else "#$rawTag"
                 Surface(
                     shape = RoundedCornerShape(9999.dp),
-                    color = if (colors.isDark) Color(0x12FFFFFF) else Color(0x06000000),
-                    border = BorderStroke(
-                        0.5.dp,
-                        if (colors.isDark) Color(0x1FFFFFFF) else Color(0x0E000000)
-                    )
+                    color = if (colors.isDark) Color(0x12FFFFFF) else Color(0x06000000)
                 ) {
                     Text(
                         text = tag,
@@ -766,7 +748,6 @@ fun UserProfileBioDetailsSection(
                 Surface(
                     shape = RoundedCornerShape(9999.dp),
                     color = Color(0x12007AFF),
-                    border = BorderStroke(0.5.dp, Color(0x33007AFF)),
                     modifier = Modifier.clickable { areTagsExpanded = !areTagsExpanded }
                 ) {
                     Text(

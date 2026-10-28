@@ -1871,7 +1871,6 @@ fun AppleDetailTile(
         modifier = modifier
             .clip(RoundedCornerShape(9999.dp))
             .background(colors.bg.copy(alpha = 0.5f))
-            .border(0.5.dp, colors.glassBorder.copy(alpha = 0.5f), RoundedCornerShape(9999.dp))
             .padding(horizontal = 9.dp, vertical = 5.dp)
     ) {
         Box(
