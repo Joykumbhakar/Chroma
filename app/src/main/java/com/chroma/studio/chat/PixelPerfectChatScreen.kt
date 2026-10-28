@@ -715,7 +715,7 @@ private fun GlassHeader(
                     Icon(
                         imageVector = Lucide.ChevronLeft,
                         contentDescription = "Back",
-                        tint = colors.iosBlue,
+                        tint = colors.textDark,
                         modifier = Modifier.size(28.dp)
                     )
                 }
@@ -796,7 +796,7 @@ private fun GlassHeader(
                     Icon(
                         imageVector = Lucide.Search,
                         contentDescription = "Search",
-                        tint = colors.iosBlue,
+                        tint = colors.textDark,
                         modifier = Modifier.size(22.dp)
                     )
                 }
@@ -804,7 +804,7 @@ private fun GlassHeader(
                     Icon(
                         imageVector = Lucide.Phone,
                         contentDescription = "Voice Call",
-                        tint = colors.iosBlue,
+                        tint = colors.textDark,
                         modifier = Modifier.size(22.dp)
                     )
                 }
@@ -812,7 +812,7 @@ private fun GlassHeader(
                     Icon(
                         imageVector = Lucide.Video,
                         contentDescription = "Video Call",
-                        tint = colors.iosBlue,
+                        tint = colors.textDark,
                         modifier = Modifier.size(24.dp)
                     )
                 }
@@ -822,7 +822,7 @@ private fun GlassHeader(
                         Icon(
                             imageVector = Lucide.Ellipsis,
                             contentDescription = "More Options",
-                            tint = colors.iosBlue,
+                            tint = colors.textDark,
                             modifier = Modifier.size(23.dp)
                         )
                     }

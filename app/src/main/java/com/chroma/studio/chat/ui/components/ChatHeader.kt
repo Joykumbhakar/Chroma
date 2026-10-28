@@ -102,13 +102,13 @@ fun ChatHeader(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(0.dp)
                         ) {
-                            Icon(Lucide.ChevronLeft, contentDescription = "Back", tint = colors.iosBlue, modifier = Modifier.size(28.dp))
+                            Icon(Lucide.ChevronLeft, contentDescription = "Back", tint = colors.textDark, modifier = Modifier.size(28.dp))
                             if (unreadBadgeCount > 0) {
                                 Text(
                                     text = unreadBadgeCount.toString(),
                                     fontSize = 17.sp,
                                     fontWeight = FontWeight.Normal,
-                                    color = colors.iosBlue,
+                                    color = colors.textDark,
                                     modifier = Modifier.offset(x = (-4).dp)
                                 )
                             }
@@ -253,7 +253,7 @@ fun ChatHeader(
                         Icon(
                             imageVector = Lucide.Search,
                             contentDescription = "Search",
-                            tint = colors.iosBlue,
+                            tint = colors.textDark,
                             modifier = Modifier.size(19.dp)
                         )
                     }
@@ -262,7 +262,7 @@ fun ChatHeader(
                         Icon(
                             imageVector = Lucide.Phone,
                             contentDescription = "Call",
-                            tint = colors.iosBlue,
+                            tint = colors.textDark,
                             modifier = Modifier.size(19.dp)
                         )
                     }
@@ -271,7 +271,7 @@ fun ChatHeader(
                         Icon(
                             imageVector = Lucide.Video,
                             contentDescription = "Video",
-                            tint = colors.iosBlue,
+                            tint = colors.textDark,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -285,7 +285,7 @@ fun ChatHeader(
                             Icon(
                                 imageVector = Lucide.EllipsisVertical,
                                 contentDescription = "More Options",
-                                tint = colors.iosBlue,
+                                tint = colors.textDark,
                                 modifier = Modifier.size(20.dp)
                             )
                         }

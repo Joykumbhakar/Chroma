@@ -162,7 +162,7 @@ fun ConversationsScreen(
                             text = "Done",
                             fontSize = 17.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = colors.iosBlue,
+                            color = colors.textDark,
                             modifier = Modifier
                                 .clickable(
                                     interactionSource = remember { MutableInteractionSource() },
@@ -186,7 +186,7 @@ fun ConversationsScreen(
                             text = if (selectedChatIds.size >= filteredChats.size.coerceAtMost(5) && selectedChatIds.isNotEmpty()) "Deselect" else "Select All",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Normal,
-                            color = colors.iosBlue,
+                            color = colors.textDark,
                             modifier = Modifier
                                 .clickable(
                                     interactionSource = remember { MutableInteractionSource() },
@@ -228,7 +228,7 @@ fun ConversationsScreen(
                                 text = "Edit",
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Normal,
-                                color = colors.iosBlue,
+                                color = colors.textDark,
                                 modifier = Modifier
                                     .clickable(
                                         interactionSource = remember { MutableInteractionSource() },
@@ -258,7 +258,7 @@ fun ConversationsScreen(
                                     },
                                 contentAlignment = Alignment.Center
                             ) {
-                                LucideSearch(tint = if (isSearchExpanded || searchQuery.isNotEmpty()) colors.iosBlue else colors.textDark, size = 20.dp)
+                                LucideSearch(tint = colors.textDark, size = 20.dp)
                             }
 
                             // Appearance Theme Button (Palette)
@@ -274,7 +274,7 @@ fun ConversationsScreen(
                                     },
                                 contentAlignment = Alignment.Center
                             ) {
-                                LucidePalette(tint = colors.iosBlue, size = 20.dp)
+                                LucidePalette(tint = colors.textDark, size = 20.dp)
                             }
 
                             // Compose New Message Button
@@ -290,7 +290,7 @@ fun ConversationsScreen(
                                     },
                                 contentAlignment = Alignment.Center
                             ) {
-                                LucideEdit(tint = colors.iosBlue, size = 20.dp)
+                                LucideEdit(tint = colors.textDark, size = 20.dp)
                             }
 
                             // Current User Profile Avatar (Actual Avatar, Zero Letters)
