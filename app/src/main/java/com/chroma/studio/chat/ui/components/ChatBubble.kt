@@ -1594,7 +1594,7 @@ private fun MessageBubbleInnerContent(
                                     } else {
                                         url
                                     }
-                                    uriHandler.openUri(fullUrl)
+                                    com.chroma.studio.ui.components.InAppBrowserManager.openUrl(fullUrl)
                                     return@detectTapGestures
                                 } catch (e: Exception) {
                                     // ignore malformed uri

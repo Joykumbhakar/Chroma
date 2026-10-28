@@ -679,7 +679,7 @@ fun UserProfileBioDetailsSection(
                         onClick = {
                             try {
                                 val targetUri = if (!url.startsWith("http://") && !url.startsWith("https://")) "https://$url" else url
-                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(targetUri)))
+                                com.chroma.studio.ui.components.InAppBrowserManager.openUrl(targetUri)
                             } catch (_: Exception) {
                                 ToastManager.showToast("Could not open link")
                             }

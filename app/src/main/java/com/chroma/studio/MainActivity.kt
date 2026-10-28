@@ -528,6 +528,7 @@ fun OscellionApp(vm: ChromaViewModel, workName: String, repository: com.chroma.s
         }
         
         com.chroma.studio.ui.components.ChromaToastHost()
+        com.chroma.studio.ui.components.ChromaInAppBrowserHost()
         
         if (showPublishDialog) {
             com.chroma.studio.ui.screens.ShareToDiscoverDialog(
