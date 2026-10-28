@@ -666,12 +666,15 @@ fun UserProfileScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            val topIconBg = if (isScrolled) Color.Transparent else Color.Black.copy(alpha = 0.22f)
+
             // Back button
             if (showBackButton) {
                 Box(
                     modifier = Modifier
-                        .size(38.dp)
-                        
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(topIconBg)
                         .clickable { onBack() },
                     contentAlignment = Alignment.Center
                 ) {
@@ -683,7 +686,7 @@ fun UserProfileScreen(
                     )
                 }
             } else {
-                Spacer(Modifier.size(38.dp))
+                Spacer(Modifier.size(36.dp))
             }
 
             // Collapsed title when scrolled
@@ -714,7 +717,9 @@ fun UserProfileScreen(
                 if (isCurrentUser) {
                     Box(
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(topIconBg)
                             .clickable { showBannerLibrarySheet = true },
                         contentAlignment = Alignment.Center
                     ) {
@@ -725,7 +730,7 @@ fun UserProfileScreen(
                                 contentDescription = null,
                                 tint = Color.Black.copy(alpha = 0.20f),
                                 modifier = Modifier
-                                    .size(18.dp)
+                                    .size(17.dp)
                                     .offset(x = 0.dp, y = 1.25.dp)
                             )
                             // Crisp key shadow
@@ -734,7 +739,7 @@ fun UserProfileScreen(
                                 contentDescription = null,
                                 tint = Color.Black.copy(alpha = 0.35f),
                                 modifier = Modifier
-                                    .size(18.dp)
+                                    .size(17.dp)
                                     .offset(x = 0.5.dp, y = 0.75.dp)
                             )
                         }
@@ -742,13 +747,15 @@ fun UserProfileScreen(
                             Lucide.Pencil,
                             contentDescription = "Edit Banner",
                             tint = if (isScrolled) colors.textMain else Color.White,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(17.dp)
                         )
                     }
 
                     Box(
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(topIconBg)
                             .clickable { showSettingsBottomSheet = true },
                         contentAlignment = Alignment.Center
                     ) {
@@ -759,7 +766,7 @@ fun UserProfileScreen(
                                 contentDescription = null,
                                 tint = Color.Black.copy(alpha = 0.20f),
                                 modifier = Modifier
-                                    .size(18.dp)
+                                    .size(17.dp)
                                     .offset(x = 0.dp, y = 1.25.dp)
                             )
                             // Crisp key shadow
@@ -768,7 +775,7 @@ fun UserProfileScreen(
                                 contentDescription = null,
                                 tint = Color.Black.copy(alpha = 0.35f),
                                 modifier = Modifier
-                                    .size(18.dp)
+                                    .size(17.dp)
                                     .offset(x = 0.5.dp, y = 0.75.dp)
                             )
                         }
@@ -776,13 +783,15 @@ fun UserProfileScreen(
                             Lucide.Settings,
                             contentDescription = "Settings",
                             tint = if (isScrolled) colors.textMain else Color.White,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(17.dp)
                         )
                     }
                 } else {
                     Box(
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(topIconBg)
                             .clickable { showShareCardModal = true },
                         contentAlignment = Alignment.Center
                     ) {
@@ -790,13 +799,15 @@ fun UserProfileScreen(
                             Lucide.Share2,
                             contentDescription = "Share Card",
                             tint = if (isScrolled) colors.textMain else Color.White,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(17.dp)
                         )
                     }
 
                     Box(
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(topIconBg)
                             .clickable { showOtherUserOptionsSheet = true },
                         contentAlignment = Alignment.Center
                     ) {
@@ -804,7 +815,7 @@ fun UserProfileScreen(
                             Lucide.EllipsisVertical,
                             contentDescription = "More Options",
                             tint = if (isScrolled) colors.textMain else Color.White,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(17.dp)
                         )
                     }
                 }
