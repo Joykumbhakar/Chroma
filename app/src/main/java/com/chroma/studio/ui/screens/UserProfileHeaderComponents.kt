@@ -24,7 +24,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -698,59 +700,35 @@ fun UserProfileBioDetailsSection(
         }
     }
 
-    // 6. Social Links Branded Glass Chips
+    // 6. Social Links Uiverse Squircle Dock
     val profileLinks = profile?.socialLinks ?: emptyMap()
     if (profileLinks.isNotEmpty()) {
-        Spacer(Modifier.height(6.dp))
-        FlowRow(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+        Spacer(Modifier.height(8.dp))
+        Surface(
+            shape = RoundedCornerShape(18.dp),
+            color = if (colors.isDark) Color(0x33000000) else Color(0x0C000000),
+            border = BorderStroke(
+                1.dp,
+                if (colors.isDark) Color(0x1FFFFFFF) else Color(0x10000000)
+            )
         ) {
-            profileLinks.forEach { (platform, url) ->
-                val (icon, tint) = when (platform.lowercase()) {
-                    "github", "githubacname" -> Lucide.Github to (if (colors.isDark) Color(0xFFF0F6FC) else Color(0xFF24292F))
-                    "portfolio", "website" -> Lucide.Globe to Color(0xFF007AFF)
-                    "twitter", "x" -> Lucide.Twitter to Color(0xFF1DA1F2)
-                    "linkedin" -> Lucide.Linkedin to Color(0xFF0A66C2)
-                    "instagram" -> Lucide.Instagram to Color(0xFFE4405F)
-                    else -> Lucide.Link to Color(0xFF007AFF)
-                }
-
-                Surface(
-                    shape = RoundedCornerShape(9999.dp),
-                    color = tint.copy(alpha = if (colors.isDark) 0.16f else 0.08f),
-                    border = BorderStroke(
-                        0.75.dp,
-                        Brush.linearGradient(
-                            listOf(
-                                tint.copy(alpha = 0.45f),
-                                tint.copy(alpha = 0.15f)
-                            )
-                        )
-                    ),
-                    modifier = Modifier.clickable {
-                        try {
-                            val targetUri = if (!url.startsWith("http://") && !url.startsWith("https://")) "https://$url" else url
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(targetUri)))
-                        } catch (_: Exception) {
-                            ToastManager.showToast("Could not open link")
+            Row(
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                profileLinks.forEach { (platform, url) ->
+                    ProfileSquircleSocialButton(
+                        platform = platform,
+                        onClick = {
+                            try {
+                                val targetUri = if (!url.startsWith("http://") && !url.startsWith("https://")) "https://$url" else url
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(targetUri)))
+                            } catch (_: Exception) {
+                                ToastManager.showToast("Could not open link")
+                            }
                         }
-                    }
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.5.dp),
-                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
-                    ) {
-                        Icon(icon, contentDescription = platform, tint = tint, modifier = Modifier.size(12.dp))
-                        Text(
-                            text = platform.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() },
-                            color = tint,
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
+                    )
                 }
             }
         }
@@ -856,6 +834,83 @@ fun UserProfileBioDetailsSection(
         }
     }
 }
+}
+
+@Composable
+fun ProfileSquircleSocialButton(
+    platform: String,
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.90f else 1.0f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "squircleScale"
+    )
+
+    val (icon, gradient, borderColor) = when (platform.lowercase()) {
+        "github", "githubacname" -> Triple(
+            Lucide.Github,
+            Brush.linearGradient(listOf(Color(0xFF374151), Color(0xFF111827))),
+            Color(0x804B5563)
+        )
+        "portfolio", "website" -> Triple(
+            Lucide.Globe,
+            Brush.linearGradient(listOf(Color(0xFF2563EB), Color(0xFF1E40AF))),
+            Color(0x803B82F6)
+        )
+        "instagram" -> Triple(
+            Lucide.Instagram,
+            Brush.linearGradient(listOf(Color(0xFF833AB4), Color(0xFFFD1D1D), Color(0xFFFCB045))),
+            Color(0x80FD1D1D)
+        )
+        "twitter", "x" -> Triple(
+            Lucide.Twitter,
+            Brush.linearGradient(listOf(Color(0xFF1DA1F2), Color(0xFF0C7ABF))),
+            Color(0x801DA1F2)
+        )
+        "linkedin" -> Triple(
+            Lucide.Linkedin,
+            Brush.linearGradient(listOf(Color(0xFF0077B5), Color(0xFF004182))),
+            Color(0x800077B5)
+        )
+        else -> Triple(
+            Lucide.Link,
+            Brush.linearGradient(listOf(Color(0xFF0284C7), Color(0xFF0369A1))),
+            Color(0x800284C7)
+        )
+    }
+
+    val shape = RoundedCornerShape(13.dp)
+
+    Box(
+        modifier = Modifier
+            .scale(scale)
+            .size(42.dp)
+            .shadow(
+                elevation = if (isPressed) 2.dp else 5.dp,
+                shape = shape,
+                ambientColor = Color.Black.copy(alpha = 0.15f),
+                spotColor = Color.Black.copy(alpha = 0.35f)
+            )
+            .clip(shape)
+            .background(gradient)
+            .border(1.dp, borderColor, shape)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = platform,
+            tint = Color.White,
+            modifier = Modifier.size(20.dp)
+        )
+    }
 }
 
 @Composable
