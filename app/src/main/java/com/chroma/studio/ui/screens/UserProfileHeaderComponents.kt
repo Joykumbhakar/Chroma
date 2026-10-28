@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -16,6 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -38,6 +40,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.chroma.studio.ui.components.AiWaveSphereIcon
 import coil.compose.AsyncImage
@@ -194,89 +197,126 @@ fun UserProfileHeroSection(
                 }
             }
 
-            // Top Stats beside Avatar
-            Row(
+            // Top Stats beside Avatar in Apple Frosted Glass Container
+            Surface(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(top = 50.dp, start = 10.dp, bottom = 2.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(start = 12.dp, bottom = 4.dp),
+                shape = RoundedCornerShape(18.dp),
+                color = if (colors.isDark) Color(0x18FFFFFF) else Color(0x08000000),
+                border = BorderStroke(
+                    0.75.dp,
+                    if (colors.isDark) Color(0x24FFFFFF) else Color(0x10000000)
+                )
             ) {
-                // Posts Count
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(1.dp),
-                    modifier = Modifier.clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) {
-                        onPostsClick?.invoke()
-                    }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 10.dp, horizontal = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = formatCount(worksCount),
-                        color = colors.textMain,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "Posts",
-                        color = Color(0xFF8E8E93),
-                        fontSize = 11.5.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
+                    // Posts Count
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(1.5.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) {
+                                onPostsClick?.invoke()
+                            }
+                    ) {
+                        Text(
+                            text = formatCount(worksCount),
+                            color = colors.textMain,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = (-0.02).em
+                        )
+                        Text(
+                            text = "Posts",
+                            color = Color(0xFF8E8E93),
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
 
-                // Followers Count
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(1.dp),
-                    modifier = Modifier.clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) {
-                        if (isRestricted) ToastManager.showToast("This account is private.")
-                        else onNavigateToUserList?.invoke(userId, "followers")
-                    }
-                ) {
-                    Text(
-                        text = formatCount(profile?.followersCount ?: 0),
-                        color = colors.textMain,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold
+                    // Delicate Glass Vertical Hairline
+                    Box(
+                        modifier = Modifier
+                            .height(20.dp)
+                            .width(0.5.dp)
+                            .background(if (colors.isDark) Color(0x28FFFFFF) else Color(0x16000000))
                     )
-                    Text(
-                        text = "Followers",
-                        color = Color(0xFF8E8E93),
-                        fontSize = 11.5.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
 
-                // Following Count
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(1.dp),
-                    modifier = Modifier.clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
+                    // Followers Count
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(1.5.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) {
+                                if (isRestricted) ToastManager.showToast("This account is private.")
+                                else onNavigateToUserList?.invoke(userId, "followers")
+                            }
                     ) {
-                        if (isRestricted) ToastManager.showToast("This account is private.")
-                        else onNavigateToUserList?.invoke(userId, "following")
+                        Text(
+                            text = formatCount(profile?.followersCount ?: 0),
+                            color = colors.textMain,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = (-0.02).em
+                        )
+                        Text(
+                            text = "Followers",
+                            color = Color(0xFF8E8E93),
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Medium
+                        )
                     }
-                ) {
-                    Text(
-                        text = formatCount(profile?.followingCount ?: 0),
-                        color = colors.textMain,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold
+
+                    // Delicate Glass Vertical Hairline
+                    Box(
+                        modifier = Modifier
+                            .height(20.dp)
+                            .width(0.5.dp)
+                            .background(if (colors.isDark) Color(0x28FFFFFF) else Color(0x16000000))
                     )
-                    Text(
-                        text = "Following",
-                        color = Color(0xFF8E8E93),
-                        fontSize = 11.5.sp,
-                        fontWeight = FontWeight.Medium
-                    )
+
+                    // Following Count
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(1.5.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) {
+                                if (isRestricted) ToastManager.showToast("This account is private.")
+                                else onNavigateToUserList?.invoke(userId, "following")
+                            }
+                    ) {
+                        Text(
+                            text = formatCount(profile?.followingCount ?: 0),
+                            color = colors.textMain,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = (-0.02).em
+                        )
+                        Text(
+                            text = "Following",
+                            color = Color(0xFF8E8E93),
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
             }
         }
@@ -335,7 +375,7 @@ fun UserProfileBioDetailsSection(
             )
         }
 
-        Spacer(Modifier.height(2.dp))
+        Spacer(Modifier.height(8.dp))
 
         // 1. Display Name + Verified Badge + Pass Button
         Row(
@@ -350,80 +390,108 @@ fun UserProfileBioDetailsSection(
                 Text(
                     text = profile?.displayName ?: "Unknown",
                     color = colors.textMain,
-                    fontSize = 18.5.sp,
+                    fontSize = 19.sp,
                     fontWeight = FontWeight.Bold,
+                    letterSpacing = (-0.02).em,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 if (profile?.verified == true) {
-                    Spacer(Modifier.width(4.dp))
+                    Spacer(Modifier.width(5.dp))
                     VerifiedBadge(size = 17.dp, showGlow = true)
                 }
             }
 
+            // Quick QR / Pass Apple Glass Button
             Box(
                 modifier = Modifier
-                    .size(28.dp)
+                    .size(32.dp)
                     .clip(CircleShape)
-                    .background(colors.glassBgHover.copy(alpha = 0.6f))
-                    .border(0.75.dp, colors.glassBorder, CircleShape)
+                    .background(if (colors.isDark) Color(0x1A007AFF) else Color(0x10007AFF))
+                    .border(
+                        0.75.dp,
+                        Brush.linearGradient(listOf(Color(0x60007AFF), Color(0x20007AFF))),
+                        CircleShape
+                    )
                     .clickable { onShowShareCard() },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Lucide.QrCode, contentDescription = "Show Pass", tint = com.chroma.studio.ui.components.LiquidGlassTokens.AppleSystemBlue, modifier = Modifier.size(15.dp))
+                Icon(
+                    Lucide.QrCode,
+                    contentDescription = "Show Pass",
+                    tint = LiquidGlassTokens.AppleSystemBlue,
+                    modifier = Modifier.size(15.dp)
+                )
             }
         }
 
         // 2. Username
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(3.5.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
             modifier = Modifier
-                .clip(RoundedCornerShape(4.dp))
+                .clip(RoundedCornerShape(6.dp))
                 .clickable {
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                     val clip = ClipData.newPlainText("username", "@${profile?.username ?: ""}")
                     clipboard.setPrimaryClip(clip)
                     ToastManager.showToast("Username copied to clipboard")
                 }
+                .padding(vertical = 1.dp)
         ) {
             Text(
                 text = "@${profile?.username ?: "unknown"}",
                 color = Color(0xFF8E8E93),
-                fontSize = 12.sp,
+                fontSize = 12.5.sp,
                 fontWeight = FontWeight.Medium
             )
             Icon(
                 imageVector = Lucide.Copy,
                 contentDescription = "Copy username",
-                tint = Color(0xFF8E8E93).copy(alpha = 0.5f),
-                modifier = Modifier.size(10.5.dp)
+                tint = Color(0xFF8E8E93).copy(alpha = 0.6f),
+                modifier = Modifier.size(11.dp)
             )
         }
 
-        // 3. Role
+        // 3. Role Glass Badge
         val roleText = profile?.role
         if (!roleText.isNullOrBlank()) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier.padding(top = 2.dp, bottom = 1.dp)
-            ) {
-                AiWaveSphereIcon(
-                    modifier = Modifier.size(13.dp)
-                )
-                Text(
-                    text = roleText,
-                    style = TextStyle(
-                        brush = roleAnimatedBrush,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold
+            Spacer(Modifier.height(4.dp))
+            Surface(
+                shape = RoundedCornerShape(9999.dp),
+                color = if (colors.isDark) Color(0x1A007AFF) else Color(0x0F007AFF),
+                border = BorderStroke(
+                    0.75.dp,
+                    Brush.linearGradient(
+                        listOf(
+                            Color(0x80007AFF),
+                            Color(0x30007AFF),
+                            Color(0x6000C6FF)
+                        )
                     )
-                )
+                ),
+                modifier = Modifier.padding(vertical = 2.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.5.dp)
+                ) {
+                    AiWaveSphereIcon(modifier = Modifier.size(13.dp))
+                    Text(
+                        text = roleText,
+                        style = TextStyle(
+                            brush = roleAnimatedBrush,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            letterSpacing = (-0.01).em
+                        )
+                    )
+                }
             }
         }
 
-        Spacer(Modifier.height(2.dp))
+        Spacer(Modifier.height(4.dp))
 
         // 4. Bio Text
         val bioText = profile?.bio ?: ""
@@ -508,98 +576,176 @@ fun UserProfileBioDetailsSection(
         )
     }
 
-    // Metadata details (Office, Home, Country, DOB, Gender)
-    val hasDetails = (locationVisible && (!office.isNullOrBlank() || !home.isNullOrBlank() || !country.isNullOrBlank())) ||
-            dobVisible || genderVisible
+    // 5. Metadata Matrix Chips (Replaces grocery list)
+    val metadataItems = remember(locationVisible, office, home, country, dobVisible, genderVisible, profile) {
+        val list = mutableListOf<Triple<ImageVector, String, Color>>()
+        if (locationVisible && !office.isNullOrBlank()) {
+            list.add(Triple(Lucide.Briefcase, office, Color(0xFF007AFF)))
+        }
+        if (locationVisible && !home.isNullOrBlank()) {
+            list.add(Triple(Lucide.House, home, Color(0xFF34C759)))
+        }
+        if (locationVisible && !country.isNullOrBlank()) {
+            list.add(Triple(Lucide.Globe, country, Color(0xFF5856D6)))
+        }
+        if (dobVisible) {
+            val dobStr = profile?.dateOfBirthAsLong?.let {
+                SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(it))
+            }
+            if (!dobStr.isNullOrBlank()) {
+                list.add(Triple(Lucide.Calendar, "Born $dobStr", Color(0xFFFF9500)))
+            }
+        }
+        if (genderVisible && !profile?.gender.isNullOrBlank()) {
+            list.add(Triple(Lucide.User, profile!!.gender, Color(0xFFAF52DE)))
+        }
+        list
+    }
 
-    if (hasDetails) {
-        Spacer(Modifier.height(4.dp))
-        Column(
+    if (metadataItems.isNotEmpty()) {
+        Spacer(Modifier.height(6.dp))
+        FlowRow(
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(3.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            if (locationVisible && !office.isNullOrBlank()) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.5.dp)) {
-                    Icon(Lucide.Briefcase, contentDescription = null, tint = Color(0xFF8E8E93), modifier = Modifier.size(12.5.dp))
-                    Text(office, color = Color(0xFF8E8E93), fontSize = 12.sp)
-                }
-            }
-            if (locationVisible && !home.isNullOrBlank()) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.5.dp)) {
-                    Icon(Lucide.House, contentDescription = null, tint = Color(0xFF8E8E93), modifier = Modifier.size(12.5.dp))
-                    Text(home, color = Color(0xFF8E8E93), fontSize = 12.sp)
-                }
-            }
-            if (locationVisible && !country.isNullOrBlank()) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.5.dp)) {
-                    Icon(Lucide.Globe, contentDescription = null, tint = Color(0xFF8E8E93), modifier = Modifier.size(12.5.dp))
-                    Text(country, color = Color(0xFF8E8E93), fontSize = 12.sp)
-                }
-            }
-            if (dobVisible) {
-                val dobStr = profile?.dateOfBirthAsLong?.let {
-                    SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(it))
-                } ?: ""
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.5.dp)) {
-                    Icon(Lucide.Calendar, contentDescription = null, tint = Color(0xFF8E8E93), modifier = Modifier.size(12.5.dp))
-                    Text("Born $dobStr", color = Color(0xFF8E8E93), fontSize = 12.sp)
-                }
-            }
-            if (genderVisible) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.5.dp)) {
-                    Icon(Lucide.User, contentDescription = null, tint = Color(0xFF8E8E93), modifier = Modifier.size(12.5.dp))
-                    Text(profile?.gender ?: "", color = Color(0xFF8E8E93), fontSize = 12.sp)
+            metadataItems.forEach { (icon, text, tintColor) ->
+                Surface(
+                    shape = RoundedCornerShape(9999.dp),
+                    color = if (colors.isDark) Color(0x18FFFFFF) else Color(0x0A000000),
+                    border = BorderStroke(
+                        0.5.dp,
+                        if (colors.isDark) Color(0x28FFFFFF) else Color(0x12000000)
+                    )
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.5.dp),
+                        modifier = Modifier.padding(horizontal = 8.5.dp, vertical = 4.dp)
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = tintColor.copy(alpha = 0.85f),
+                            modifier = Modifier.size(11.5.dp)
+                        )
+                        Text(
+                            text = text,
+                            color = colors.textMuted,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Medium,
+                            letterSpacing = (-0.01).em
+                        )
+                    }
                 }
             }
         }
     }
 
-    // Social Links & Content Tags
+    // 6. Social Links Branded Glass Chips
     val profileLinks = profile?.socialLinks ?: emptyMap()
-    val hasContentTags = profile?.contentTags?.isNotEmpty() == true
-
-    if (profileLinks.isNotEmpty() || hasContentTags) {
-        Spacer(Modifier.height(5.dp))
+    if (profileLinks.isNotEmpty()) {
+        Spacer(Modifier.height(6.dp))
         FlowRow(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalArrangement = Arrangement.spacedBy(3.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             profileLinks.forEach { (platform, url) ->
-                val icon = when (platform.lowercase()) {
-                    "github", "githubacname" -> Lucide.Github
-                    "portfolio", "website" -> Lucide.Globe
-                    "twitter", "x" -> Lucide.Twitter
-                    "linkedin" -> Lucide.Linkedin
-                    "instagram" -> Lucide.Instagram
-                    else -> Lucide.Link
+                val (icon, tint) = when (platform.lowercase()) {
+                    "github", "githubacname" -> Lucide.Github to (if (colors.isDark) Color(0xFFF0F6FC) else Color(0xFF24292F))
+                    "portfolio", "website" -> Lucide.Globe to Color(0xFF007AFF)
+                    "twitter", "x" -> Lucide.Twitter to Color(0xFF1DA1F2)
+                    "linkedin" -> Lucide.Linkedin to Color(0xFF0A66C2)
+                    "instagram" -> Lucide.Instagram to Color(0xFFE4405F)
+                    else -> Lucide.Link to Color(0xFF007AFF)
                 }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(3.5.dp),
+
+                Surface(
+                    shape = RoundedCornerShape(9999.dp),
+                    color = tint.copy(alpha = if (colors.isDark) 0.16f else 0.08f),
+                    border = BorderStroke(
+                        0.75.dp,
+                        Brush.linearGradient(
+                            listOf(
+                                tint.copy(alpha = 0.45f),
+                                tint.copy(alpha = 0.15f)
+                            )
+                        )
+                    ),
                     modifier = Modifier.clickable {
                         try {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                        } catch (_: Exception) {}
+                            val targetUri = if (!url.startsWith("http://") && !url.startsWith("https://")) "https://$url" else url
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(targetUri)))
+                        } catch (_: Exception) {
+                            ToastManager.showToast("Could not open link")
+                        }
                     }
                 ) {
-                    Icon(icon, contentDescription = platform, tint = Color(0xFF007AFF), modifier = Modifier.size(12.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.5.dp),
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
+                    ) {
+                        Icon(icon, contentDescription = platform, tint = tint, modifier = Modifier.size(12.dp))
+                        Text(
+                            text = platform.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() },
+                            color = tint,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    // 7. Content Tags (Interests with Expand/Collapse)
+    val hasContentTags = profile?.contentTags?.isNotEmpty() == true
+    if (hasContentTags) {
+        Spacer(Modifier.height(6.dp))
+        var areTagsExpanded by remember { mutableStateOf(false) }
+        val allTags = profile!!.contentTags
+        val visibleTags = if (areTagsExpanded || allTags.size <= 4) allTags else allTags.take(4)
+
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            visibleTags.forEach { rawTag ->
+                val tag = if (rawTag.startsWith("#")) rawTag else "#$rawTag"
+                Surface(
+                    shape = RoundedCornerShape(9999.dp),
+                    color = if (colors.isDark) Color(0x12FFFFFF) else Color(0x06000000),
+                    border = BorderStroke(
+                        0.5.dp,
+                        if (colors.isDark) Color(0x1FFFFFFF) else Color(0x0E000000)
+                    )
+                ) {
                     Text(
-                        platform,
-                        color = Color(0xFF007AFF),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
+                        text = tag,
+                        color = Color(0xFF8E8E93),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                     )
                 }
             }
 
-            if (hasContentTags) {
-                profile!!.contentTags.forEach { tag ->
+            if (allTags.size > 4) {
+                Surface(
+                    shape = RoundedCornerShape(9999.dp),
+                    color = Color(0x12007AFF),
+                    border = BorderStroke(0.5.dp, Color(0x33007AFF)),
+                    modifier = Modifier.clickable { areTagsExpanded = !areTagsExpanded }
+                ) {
                     Text(
-                        text = if (tag.startsWith("#")) tag else "#$tag",
-                        color = Color(0xFF8E8E93),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
+                        text = if (areTagsExpanded) "Show less" else "+${allTags.size - 4} more",
+                        color = Color(0xFF007AFF),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                     )
                 }
             }
@@ -686,81 +832,142 @@ fun UserProfileActionsStoriesSection(
     ) {
         Spacer(Modifier.height(6.dp))
 
-        // Action Buttons Row (Gradient Pill Buttons)
+        // Action Buttons Row (Apple Liquid Glass Buttons)
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             if (isCurrentUser) {
-                ChromaPillButton(
-                    onClick = { onNavigateToEditProfile() },
-                    variant = ChromaPillVariant.Blue,
+                LiquidGlassPrimaryButton(
+                    onClick = onNavigateToEditProfile,
                     modifier = Modifier
                         .weight(1f)
-                        .height(38.dp)
+                        .height(40.dp)
                 ) {
-                    Icon(Lucide.Pencil, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Edit Profile", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Icon(
+                        imageVector = Lucide.Pencil,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(14.5.dp)
+                    )
+                    Text(
+                        text = "Edit Profile",
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.5.sp,
+                        letterSpacing = (-0.01).em
+                    )
                 }
 
-                ChromaPillButton(
-                    onClick = { onShowShareCard() },
-                    variant = ChromaPillVariant.Secondary,
+                LiquidGlassSecondaryButton(
+                    onClick = onShowShareCard,
                     modifier = Modifier
                         .weight(1f)
-                        .height(38.dp)
+                        .height(40.dp)
                 ) {
-                    Icon(Lucide.QrCode, contentDescription = null, tint = Color.Black, modifier = Modifier.size(14.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Share Card", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Icon(
+                        imageVector = Lucide.QrCode,
+                        contentDescription = null,
+                        tint = if (colors.isDark) Color.White else Color.Black,
+                        modifier = Modifier.size(14.5.dp)
+                    )
+                    Text(
+                        text = "Share Card",
+                        color = if (colors.isDark) Color.White else Color.Black,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.5.sp,
+                        letterSpacing = (-0.01).em
+                    )
                 }
             } else {
                 if (isFollowing) {
-                    ChromaPillButton(
-                        onClick = { onToggleFollow() },
-                        variant = ChromaPillVariant.Secondary,
+                    LiquidGlassSecondaryButton(
+                        onClick = onToggleFollow,
                         modifier = Modifier
                             .weight(1f)
-                            .height(38.dp)
+                            .height(40.dp)
                     ) {
-                        Icon(Lucide.Check, contentDescription = null, tint = Color.Black, modifier = Modifier.size(14.dp))
-                        Spacer(Modifier.width(5.dp))
-                        Text("Following", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Icon(
+                            imageVector = Lucide.Check,
+                            contentDescription = null,
+                            tint = if (colors.isDark) Color.White else Color.Black,
+                            modifier = Modifier.size(14.5.dp)
+                        )
+                        Text(
+                            text = "Following",
+                            color = if (colors.isDark) Color.White else Color.Black,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.5.sp,
+                            letterSpacing = (-0.01).em
+                        )
                     }
                 } else {
-                    ChromaPillButton(
-                        onClick = { onToggleFollow() },
-                        variant = ChromaPillVariant.Blue,
+                    LiquidGlassPrimaryButton(
+                        onClick = onToggleFollow,
                         modifier = Modifier
                             .weight(1f)
-                            .height(38.dp)
+                            .height(40.dp)
                     ) {
-                        Icon(Lucide.UserPlus, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Follow", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Icon(
+                            imageVector = Lucide.UserPlus,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(14.5.dp)
+                        )
+                        Text(
+                            text = "Follow",
+                            color = Color.White,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.5.sp,
+                            letterSpacing = (-0.01).em
+                        )
                     }
                 }
 
-                ChromaPillButton(
-                    onClick = {
-                        onNavigateToChat?.invoke(userId)
-                    },
-                    variant = ChromaPillVariant.Cyan,
+                LiquidGlassSecondaryButton(
+                    onClick = { onNavigateToChat?.invoke(userId) },
                     modifier = Modifier
                         .weight(1f)
-                        .height(38.dp)
+                        .height(40.dp)
                 ) {
-                    Icon(Lucide.MessageSquare, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Message", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Icon(
+                        imageVector = Lucide.MessageSquare,
+                        contentDescription = null,
+                        tint = if (colors.isDark) Color.White else Color.Black,
+                        modifier = Modifier.size(14.5.dp)
+                    )
+                    Text(
+                        text = "Message",
+                        color = if (colors.isDark) Color.White else Color.Black,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.5.sp,
+                        letterSpacing = (-0.01).em
+                    )
                 }
 
-                IconButton(
-                    onClick = { onShowShareCard() },
-                    modifier = Modifier.size(38.dp)
+                // Apple Glass Share Icon Pill
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(if (colors.isDark) Color(0x18FFFFFF) else Color(0xFFF1F3F5))
+                        .border(
+                            1.dp,
+                            if (colors.isDark) Brush.verticalGradient(listOf(Color(0x30FFFFFF), Color(0x10FFFFFF)))
+                            else LiquidGlassTokens.SurfaceSpecularGlassBorder,
+                            CircleShape
+                        )
+                        .border(0.5.dp, Color.Black.copy(alpha = 0.08f), CircleShape)
+                        .clickable { onShowShareCard() },
+                    contentAlignment = Alignment.Center
                 ) {
-                    Icon(Lucide.Share2, contentDescription = "Share", tint = colors.textMain, modifier = Modifier.size(16.dp))
+                    Icon(
+                        imageVector = Lucide.Share2,
+                        contentDescription = "Share",
+                        tint = colors.textMain,
+                        modifier = Modifier.size(16.dp)
+                    )
                 }
             }
         }

@@ -256,14 +256,31 @@ fun LiquidGlassSecondaryButton(
         label = "secBtnScale"
     )
 
+    val isDark = isSystemInDarkTheme()
+    val secBg = if (isDark) {
+        if (enabled) Brush.verticalGradient(listOf(Color(0xFF2C2C2E), Color(0xFF1C1C1E)))
+        else Brush.verticalGradient(listOf(Color(0xFF1E293B), Color(0xFF0F172A)))
+    } else {
+        if (enabled) LiquidGlassTokens.SecondaryWhiteGradient
+        else Brush.verticalGradient(listOf(Color(0xFFF1F5F9), Color(0xFFE2E8F0)))
+    }
+    val secBorder = if (isDark) {
+        if (enabled) Brush.verticalGradient(listOf(Color(0x40FFFFFF), Color(0x15FFFFFF)))
+        else Brush.verticalGradient(listOf(Color(0x20FFFFFF), Color(0x0AFFFFFF)))
+    } else {
+        if (enabled) LiquidGlassTokens.SurfaceSpecularGlassBorder
+        else Brush.verticalGradient(listOf(Color(0xFFCBD5E1), Color(0xFF94A3B8)))
+    }
+    val contentColor = if (isDark) Color.White else Color.Black
+
     Box(
         modifier = modifier
             .scale(scale)
             .defaultMinSize(minHeight = height)
             .clip(shape)
-            .background(if (enabled) LiquidGlassTokens.SecondaryWhiteGradient else Brush.verticalGradient(listOf(Color(0xFFF1F5F9), Color(0xFFE2E8F0))))
-            .border(1.dp, if (enabled) LiquidGlassTokens.SurfaceSpecularGlassBorder else Brush.verticalGradient(listOf(Color(0xFFCBD5E1), Color(0xFF94A3B8))), shape)
-            .border(0.5.dp, Color.Black.copy(alpha = 0.08f), shape)
+            .background(secBg)
+            .border(1.dp, secBorder, shape)
+            .border(0.5.dp, if (isDark) Color.Transparent else Color.Black.copy(alpha = 0.08f), shape)
             .clickable(
                 enabled = enabled,
                 interactionSource = interactionSource,
@@ -274,7 +291,7 @@ fun LiquidGlassSecondaryButton(
         contentAlignment = Alignment.Center
     ) {
         CompositionLocalProvider(
-            LocalContentColor provides Color.Black
+            LocalContentColor provides contentColor
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -402,17 +419,18 @@ fun LiquidGlassSecondaryButton(
         enabled = enabled,
         isSmall = isSmall
     ) {
+        val contentColor = LocalContentColor.current
         if (leadingIcon != null) {
             Icon(
                 imageVector = leadingIcon,
                 contentDescription = null,
-                tint = Color.Black,
+                tint = contentColor,
                 modifier = Modifier.size(if (isSmall) 14.dp else 16.dp)
             )
         }
         Text(
             text = text,
-            color = Color.Black,
+            color = contentColor,
             fontSize = if (isSmall) 12.5.sp else 14.5.sp,
             fontWeight = FontWeight.SemiBold
         )
@@ -420,7 +438,7 @@ fun LiquidGlassSecondaryButton(
             Icon(
                 imageVector = trailingIcon,
                 contentDescription = null,
-                tint = Color.Black,
+                tint = contentColor,
                 modifier = Modifier.size(if (isSmall) 14.dp else 16.dp)
             )
         }
