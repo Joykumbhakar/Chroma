@@ -294,11 +294,18 @@ fun FlashVideoEditorScreen(
     // Tab: Filters or Adjust
     var activeTab by remember { mutableStateOf(0) } // 0=Filters, 1=Adjust
 
-    // ExoPlayer setup
+    // ExoPlayer setup with media audio attributes
     val player = remember {
-        ExoPlayer.Builder(context).build().apply {
-            repeatMode = Player.REPEAT_MODE_OFF
-        }
+        val audioAttributes = androidx.media3.common.AudioAttributes.Builder()
+            .setUsage(androidx.media3.common.C.USAGE_MEDIA)
+            .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MOVIE)
+            .build()
+        ExoPlayer.Builder(context)
+            .setAudioAttributes(audioAttributes, true)
+            .build().apply {
+                repeatMode = Player.REPEAT_MODE_OFF
+                volume = 1f
+            }
     }
     var isPlaying by remember { mutableStateOf(true) }
     var currentPlayheadMs by remember { mutableLongStateOf(0L) }

@@ -291,6 +291,14 @@ object CloudinaryClient {
     ): String {
         if (url.isBlank()) return url
         
+        val isDefaultFilter = filterName.isBlank() || filterName.equals("None", ignoreCase = true)
+        val isDefaultAdjustments = brightness == 0f && contrast == 1f && saturation == 1f && hue == 0f
+        
+        // Preserve clean direct video URL when no visual filter is requested to prevent Cloudinary audio stripping
+        if (isDefaultFilter && isDefaultAdjustments) {
+            return url
+        }
+
         // Map local filter names to Cloudinary transformations
         val effect = when (filterName) {
             "B&W" -> "e_grayscale"
@@ -316,7 +324,8 @@ object CloudinaryClient {
         
         val adjustmentsStr = adjustments.joinToString(",")
         
-        val allTransformations = mutableListOf("f_auto", "q_auto:good")
+        // Explicitly preserve the audio stream with ac_aac and avoid destructive f_auto conversions
+        val allTransformations = mutableListOf("ac_aac", "q_auto:good")
         if (effect.isNotEmpty()) allTransformations.add(effect)
         if (adjustmentsStr.isNotEmpty()) allTransformations.add(adjustmentsStr)
         

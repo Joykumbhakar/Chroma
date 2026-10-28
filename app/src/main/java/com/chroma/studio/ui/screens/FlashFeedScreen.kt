@@ -90,7 +90,7 @@ fun FlashFeedScreen(
     var selectedTab by remember { mutableStateOf("Reels") }
     val pagerState = rememberPagerState(pageCount = { flashFeed.size.coerceAtLeast(1) })
 
-    // ExoPlayer Pool of 3 recycled players using CacheDataSource
+    // ExoPlayer Pool of 3 recycled players using CacheDataSource with proper AudioAttributes and AudioFocus
     val exoPlayers = remember {
         val cache = com.chroma.studio.utils.MediaCacheManager.getInstance(context)
         val httpDataSourceFactory = androidx.media3.datasource.DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(true)
@@ -99,11 +99,18 @@ fun FlashFeedScreen(
             .setUpstreamDataSourceFactory(httpDataSourceFactory)
             .setFlags(androidx.media3.datasource.cache.CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
 
+        val audioAttributes = androidx.media3.common.AudioAttributes.Builder()
+            .setUsage(androidx.media3.common.C.USAGE_MEDIA)
+            .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MOVIE)
+            .build()
+
         List(3) {
             androidx.media3.exoplayer.ExoPlayer.Builder(context)
                 .setMediaSourceFactory(androidx.media3.exoplayer.source.DefaultMediaSourceFactory(cacheDataSourceFactory))
+                .setAudioAttributes(audioAttributes, true)
                 .build().apply {
                     repeatMode = androidx.media3.common.Player.REPEAT_MODE_ONE
+                    volume = 1f
             }
         }
     }
@@ -118,6 +125,11 @@ fun FlashFeedScreen(
 
     // Global mute state
     var isMuted by remember { mutableStateOf(false) }
+
+    // Sync all pooled players with global mute state
+    LaunchedEffect(isMuted) {
+        exoPlayers.forEach { it.volume = if (isMuted) 0f else 1f }
+    }
 
     // Load more when near end and Trigger AOT Prefetching
     LaunchedEffect(pagerState.currentPage, flashFeed.size) {
@@ -393,8 +405,9 @@ private fun FlashVideoItem(
     }
 
     // Prepare the pooled player for this specific video
-    LaunchedEffect(video.videoUrl) {
+    LaunchedEffect(video.videoUrl, player) {
         player.setMediaItem(androidx.media3.common.MediaItem.fromUri(video.videoUrl))
+        player.volume = if (isMuted) 0f else 1f
         player.prepare()
     }
 
@@ -411,8 +424,9 @@ private fun FlashVideoItem(
     }
 
     // Play/Pause logic based on pager state and app lifecycle
-    LaunchedEffect(isActive, lifecycleEvent) {
+    LaunchedEffect(isActive, lifecycleEvent, isMuted, player) {
         if (isActive && (lifecycleEvent == androidx.lifecycle.Lifecycle.Event.ON_RESUME || lifecycleEvent == androidx.lifecycle.Lifecycle.Event.ON_ANY)) {
+            player.volume = if (isMuted) 0f else 1f
             player.play()
         } else {
             player.pause()
@@ -430,8 +444,8 @@ private fun FlashVideoItem(
     var currentPosition by remember { mutableLongStateOf(0L) }
     var videoDuration by remember { mutableLongStateOf(0L) }
 
-    // Sync volume with global mute state
-    LaunchedEffect(isMuted) {
+    // Sync volume with global mute state and player instance
+    LaunchedEffect(isMuted, player) {
         player.volume = if (isMuted) 0f else 1f
     }
 

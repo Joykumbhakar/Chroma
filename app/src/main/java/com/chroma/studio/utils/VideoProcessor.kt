@@ -139,7 +139,9 @@ object VideoProcessor {
             for (extTrack in trackIndexMap.keys) {
                 extractor.selectTrack(extTrack)
             }
-            extractor.seekTo(startMs * 1000L, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
+            if (startMs > 0L) {
+                extractor.seekTo(startMs * 1000L, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
+            }
 
             while (trackDone.size < trackIndexMap.size) {
                 val extTrack = extractor.sampleTrackIndex
