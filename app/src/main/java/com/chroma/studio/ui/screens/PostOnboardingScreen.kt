@@ -299,7 +299,7 @@ private fun AestheticStepContent(
         OnboardingHeaderBadge(
             icon = Lucide.Palette,
             accentColor = activeAccent,
-            text = "STEP 1 OF 3 • STUDIO IDENTITY"
+            text = "STUDIO IDENTITY"
         )
 
         Spacer(Modifier.height(14.dp))
@@ -959,7 +959,7 @@ private fun PrivacyStepContent(
         OnboardingHeaderBadge(
             icon = Lucide.Shield,
             accentColor = activeAccent,
-            text = "STEP 2 OF 3 • COLLABORATION & PRIVACY"
+            text = "COLLABORATION & PRIVACY"
         )
 
         Spacer(Modifier.height(14.dp))
@@ -1280,7 +1280,7 @@ private fun CommunityStepContent(
         OnboardingHeaderBadge(
             icon = Lucide.Sparkles,
             accentColor = activeAccent,
-            text = "STEP 3 OF 3 • CURATED INSPIRATION"
+            text = "CURATED INSPIRATION"
         )
 
         Spacer(Modifier.height(14.dp))
@@ -1334,15 +1334,15 @@ private fun CommunityStepContent(
                 val isSelected = topic in selectedTopics
                 Surface(
                     onClick = { onToggleTopic(topic) },
-                    shape = RoundedCornerShape(8.dp),
-                    color = if (isSelected) activeAccent.copy(alpha = 0.16f) else colors.glassBg,
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (isSelected) activeAccent.copy(alpha = 0.12f) else colors.glassBg,
                     border = BorderStroke(
-                        width = if (isSelected) 1.5.dp else 1.dp,
-                        color = if (isSelected) activeAccent else colors.glassBorder
+                        width = 0.5.dp,
+                        color = if (isSelected) activeAccent.copy(alpha = 0.70f) else colors.glassBorder
                     )
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+                        modifier = Modifier.padding(horizontal = 13.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
@@ -1357,7 +1357,7 @@ private fun CommunityStepContent(
                                 imageVector = Lucide.Check,
                                 contentDescription = null,
                                 tint = activeAccent,
-                                modifier = Modifier.size(13.dp)
+                                modifier = Modifier.size(12.dp)
                             )
                         }
                     }
@@ -1365,7 +1365,7 @@ private fun CommunityStepContent(
             }
         }
 
-        Spacer(Modifier.height(26.dp))
+        Spacer(Modifier.height(24.dp))
 
         // ── Suggested Creators List ──
         Text(
@@ -1373,56 +1373,68 @@ private fun CommunityStepContent(
             fontSize = 11.5.sp,
             fontWeight = FontWeight.Bold,
             color = colors.textMuted,
-            letterSpacing = 1.sp,
+            letterSpacing = 1.1.sp,
             modifier = Modifier.fillMaxWidth()
         )
 
         Spacer(Modifier.height(12.dp))
 
+        val avatarGradients = remember {
+            listOf(
+                listOf(Color(0xFF007AFF), Color(0xFF5856D6)),
+                listOf(Color(0xFF5856D6), Color(0xFFAF52DE)),
+                listOf(Color(0xFF30B0C7), Color(0xFF34C759)),
+                listOf(Color(0xFFFF9500), Color(0xFFFF2D55))
+            )
+        }
+
         Column(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            creators.forEach { creator ->
+            creators.forEachIndexed { index, creator ->
                 val isFollowed = creator.id in followedIds
 
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(14.dp),
                     color = colors.glassBg,
-                    border = BorderStroke(1.dp, colors.glassBorder),
+                    border = BorderStroke(0.5.dp, colors.glassBorder),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(14.dp),
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        // Avatar with Fallback
+                        // Apple-grade Squircle Avatar
                         if (creator.avatarUrl.isNotBlank()) {
                             AsyncImage(
                                 model = creator.avatarUrl,
                                 contentDescription = creator.name,
                                 modifier = Modifier
-                                    .size(46.dp)
-                                    .clip(RoundedCornerShape(13.dp))
+                                    .size(44.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .border(0.5.dp, colors.glassBorder, RoundedCornerShape(12.dp))
                                     .background(colors.bg),
                                 contentScale = androidx.compose.ui.layout.ContentScale.Crop
                             )
                         } else {
+                            val grad = avatarGradients[index % avatarGradients.size]
                             Box(
                                 modifier = Modifier
-                                    .size(46.dp)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)),
+                                    .size(44.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Brush.linearGradient(grad))
+                                    .border(0.5.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(12.dp)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(
-                                    imageVector = Lucide.User,
-                                    contentDescription = null,
-                                    tint = colors.textMuted,
-                                    modifier = Modifier.size(22.dp)
+                                Text(
+                                    text = creator.name.take(1).uppercase(),
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
                                 )
                             }
                         }
@@ -1435,7 +1447,7 @@ private fun CommunityStepContent(
                             ) {
                                 Text(
                                     text = creator.name,
-                                    fontSize = 15.sp,
+                                    fontSize = 14.5.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = colors.textMain,
                                     maxLines = 1,
@@ -1457,11 +1469,11 @@ private fun CommunityStepContent(
                             // Mini Video Reel Chip
                             Surface(
                                 shape = RoundedCornerShape(6.dp),
-                                color = activeAccent.copy(alpha = 0.10f),
-                                border = BorderStroke(0.5.dp, activeAccent.copy(alpha = 0.35f))
+                                color = activeAccent.copy(alpha = 0.08f),
+                                border = BorderStroke(0.5.dp, activeAccent.copy(alpha = 0.25f))
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
@@ -1473,46 +1485,56 @@ private fun CommunityStepContent(
                                     )
                                     Text(
                                         text = "${creator.featuredReelTitle} • ${creator.reelDuration}",
-                                        fontSize = 10.sp,
+                                        fontSize = 10.5.sp,
                                         fontWeight = FontWeight.Medium,
-                                        color = activeAccent
+                                        color = activeAccent,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
                             }
                         }
 
-                        // Follow Action Button
+                        // Follow Action Button (Apple HIG Style)
                         val btnBg by animateColorAsState(
-                            targetValue = if (isFollowed) colors.bg else activeAccent,
+                            targetValue = if (isFollowed) colors.glassBg else activeAccent,
                             animationSpec = tween(180),
                             label = "btnBg"
                         )
-                        val btnBorderColor = if (isFollowed) colors.glassBorder else Color.Transparent
                         val btnTextColor = if (isFollowed) colors.textMain else Color.White
 
                         Surface(
                             onClick = { onToggleFollow(creator.id) },
                             shape = RoundedCornerShape(10.dp),
                             color = btnBg,
-                            border = BorderStroke(1.dp, btnBorderColor),
-                            modifier = Modifier.height(34.dp)
+                            border = if (isFollowed) {
+                                BorderStroke(0.5.dp, colors.glassBorder)
+                            } else {
+                                BorderStroke(
+                                    0.5.dp,
+                                    Brush.verticalGradient(
+                                        listOf(Color.White.copy(alpha = 0.38f), Color.White.copy(alpha = 0.12f))
+                                    )
+                                )
+                            },
+                            modifier = Modifier.height(32.dp)
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 14.dp),
+                                modifier = Modifier.padding(horizontal = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 if (isFollowed) {
                                     Icon(
                                         imageVector = Lucide.Check,
                                         contentDescription = null,
-                                        tint = btnTextColor,
-                                        modifier = Modifier.size(14.dp)
+                                        tint = activeAccent,
+                                        modifier = Modifier.size(12.dp)
                                     )
                                 }
                                 Text(
                                     text = if (isFollowed) "Following" else "Follow",
-                                    fontSize = 13.sp,
+                                    fontSize = 12.5.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = btnTextColor
                                 )
@@ -1541,16 +1563,15 @@ private fun OnboardingTopBar(
     onSkip: () -> Unit
 ) {
     val colors = LocalOscellionColors.current
-    val stepNames = listOf("Aesthetic", "Privacy", "Creators")
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(horizontal = 20.dp, vertical = 10.dp),
+            .padding(horizontal = 20.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // Top Navigation Row
+        // Minimalist Navigation Bar
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -1562,7 +1583,7 @@ private fun OnboardingTopBar(
                     onClick = onBack,
                     shape = RoundedCornerShape(10.dp),
                     color = colors.glassBg,
-                    border = BorderStroke(1.dp, colors.glassBorder),
+                    border = BorderStroke(0.5.dp, colors.glassBorder),
                     modifier = Modifier.size(36.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
@@ -1595,29 +1616,21 @@ private fun OnboardingTopBar(
                     }
                     Text(
                         text = "CHROMA STUDIO",
-                        fontSize = 13.5.sp,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = colors.textMain,
-                        letterSpacing = 1.1.sp
+                        letterSpacing = 1.sp
                     )
                 }
             }
 
-            // Step Progress Badge in Center
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = activeAccent.copy(alpha = 0.10f),
-                border = BorderStroke(0.5.dp, activeAccent.copy(alpha = 0.35f))
-            ) {
-                Text(
-                    text = "STEP ${currentStep + 1} OF $totalSteps",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = activeAccent,
-                    letterSpacing = 0.8.sp,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                )
-            }
+            // Step Indicator Text in Center (Clean, non-pill)
+            Text(
+                text = "${currentStep + 1} of $totalSteps",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = colors.textMuted
+            )
 
             // Right "Skip" Action
             TextButton(
@@ -1633,94 +1646,31 @@ private fun OnboardingTopBar(
             }
         }
 
-        // Labeled Step Indicator Capsules / Segments Bar
+        // Minimalist Segmented Progress Bar (Apple / Instagram Stories style)
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             for (i in 0 until totalSteps) {
-                val isActive = i == currentStep
-                val isCompleted = i < currentStep
-                val isClickable = i <= currentStep
-
-                val segmentBorderColor by animateColorAsState(
-                    targetValue = when {
-                        isActive -> activeAccent.copy(alpha = 0.8f)
-                        isCompleted -> colors.glassBorder
-                        else -> colors.glassBorder.copy(alpha = 0.4f)
-                    },
-                    animationSpec = tween(240),
-                    label = "seg_border"
+                val isCompletedOrActive = i <= currentStep
+                val progressAlpha by animateFloatAsState(
+                    targetValue = if (isCompletedOrActive) 1f else 0.22f,
+                    animationSpec = tween(260),
+                    label = "step_prog_$i"
                 )
+                val barColor = if (isCompletedOrActive) activeAccent else colors.glassBorder
 
-                val segmentBgColor by animateColorAsState(
-                    targetValue = when {
-                        isActive -> activeAccent.copy(alpha = 0.14f)
-                        isCompleted -> colors.glassBg
-                        else -> colors.glassBg.copy(alpha = 0.45f)
-                    },
-                    animationSpec = tween(240),
-                    label = "seg_bg"
-                )
-
-                Surface(
-                    onClick = { if (isClickable) onStepSelected(i) },
-                    enabled = isClickable,
-                    shape = RoundedCornerShape(12.dp),
-                    color = segmentBgColor,
-                    border = BorderStroke(if (isActive) 1.5.dp else 1.dp, segmentBorderColor),
+                Box(
                     modifier = Modifier
                         .weight(1f)
-                        .height(38.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        if (isCompleted) {
-                            Icon(
-                                imageVector = Lucide.Check,
-                                contentDescription = null,
-                                tint = activeAccent,
-                                modifier = Modifier.size(13.dp)
-                            )
-                            Spacer(Modifier.width(5.dp))
-                        } else {
-                            Box(
-                                modifier = Modifier
-                                    .size(16.dp)
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(if (isActive) activeAccent else colors.glassBorder),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "${i + 1}",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isActive) Color.White else colors.textMuted
-                                )
-                            }
-                            Spacer(Modifier.width(6.dp))
+                        .height(3.5.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(barColor.copy(alpha = progressAlpha))
+                        .clickable(enabled = i < currentStep) {
+                            onStepSelected(i)
                         }
-
-                        Text(
-                            text = stepNames.getOrElse(i) { "Step ${i + 1}" },
-                            fontSize = 12.sp,
-                            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
-                            color = when {
-                                isActive -> activeAccent
-                                isCompleted -> colors.textMain
-                                else -> colors.textMuted
-                            },
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
+                )
             }
         }
     }
@@ -1753,17 +1703,17 @@ private fun OnboardingBottomBar(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 if (currentStep > 0) {
                     Surface(
                         onClick = onBack,
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(12.dp),
                         color = colors.glassBg,
-                        border = BorderStroke(1.dp, colors.glassBorder),
+                        border = BorderStroke(0.5.dp, colors.glassBorder),
                         modifier = Modifier
-                            .weight(0.32f)
-                            .height(52.dp)
+                            .weight(0.30f)
+                            .height(48.dp)
                     ) {
                         Box(
                             contentAlignment = Alignment.Center,
@@ -1781,7 +1731,7 @@ private fun OnboardingBottomBar(
                                 )
                                 Text(
                                     text = "Back",
-                                    fontSize = 15.sp,
+                                    fontSize = 14.5.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = colors.textMain
                                 )
@@ -1790,15 +1740,21 @@ private fun OnboardingBottomBar(
                     }
                 }
 
-                // Primary Next / Launch CTA Button
+                // Primary Next / Launch CTA Button (Apple HIG Specular Border)
                 Surface(
                     onClick = onNext,
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(12.dp),
                     color = activeAccent,
+                    border = BorderStroke(
+                        0.5.dp,
+                        Brush.verticalGradient(
+                            listOf(Color.White.copy(alpha = 0.40f), Color.White.copy(alpha = 0.12f))
+                        )
+                    ),
                     shadowElevation = 0.dp,
                     modifier = Modifier
-                        .weight(if (currentStep > 0) 0.68f else 1f)
-                        .height(52.dp)
+                        .weight(if (currentStep > 0) 0.70f else 1f)
+                        .height(48.dp)
                 ) {
                     Box(
                         modifier = Modifier
@@ -1807,7 +1763,7 @@ private fun OnboardingBottomBar(
                                 Brush.linearGradient(
                                     colors = listOf(
                                         activeAccent,
-                                        activeAccent.copy(alpha = 0.85f)
+                                        activeAccent.copy(alpha = 0.88f)
                                     )
                                 )
                             ),
@@ -1819,8 +1775,8 @@ private fun OnboardingBottomBar(
                         ) {
                             Text(
                                 text = if (isLastStep) "Launch Studio Workspace" else "Next: $nextLabel",
-                                fontSize = 15.5.sp,
-                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
                                 color = Color.White,
                                 letterSpacing = (-0.2).sp
                             )
@@ -1829,7 +1785,7 @@ private fun OnboardingBottomBar(
                                 imageVector = if (isLastStep) Lucide.Rocket else Lucide.ArrowRight,
                                 contentDescription = null,
                                 tint = Color.White,
-                                modifier = Modifier.size(17.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                     }
@@ -1851,36 +1807,36 @@ private fun FeaturedDirectorShowcaseBanner(
     val clapperState = rememberAppleGraphicAnimationState()
 
     Surface(
-        shape = RoundedCornerShape(10.dp),
+        shape = RoundedCornerShape(14.dp),
         color = colors.glassBg,
-        border = BorderStroke(1.dp, colors.glassBorder),
+        border = BorderStroke(0.5.dp, colors.glassBorder),
         modifier = modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
+                .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             AppleFlashGraphic(
-                modifier = Modifier.size(68.dp),
+                modifier = Modifier.size(54.dp),
                 state = clapperState,
                 enableClickToAnimate = true
             )
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "COMMUNITY REEL SPOTLIGHT",
-                    fontSize = 10.5.sp,
+                    text = "SPOTLIGHT",
+                    fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
                     color = activeAccent,
-                    letterSpacing = 0.8.sp
+                    letterSpacing = 1.sp
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = "Trending Director Reels & LUTs",
-                    fontSize = 15.sp,
+                    fontSize = 14.5.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = colors.textMain
                 )
