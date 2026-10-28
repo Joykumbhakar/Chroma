@@ -384,15 +384,32 @@ private fun MessageReactionDock(
             val quickEmojis = listOf("❤️", "👍", "👎", "😂", "‼️", "🔥")
             quickEmojis.forEach { emoji ->
                 val isSelected = userReaction == emoji
+                val scale by animateFloatAsState(
+                    targetValue = if (isSelected) 1.15f else 1.0f,
+                    animationSpec = spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMedium),
+                    label = "reaction_scale"
+                )
                 Box(
                     modifier = Modifier
                         .size(34.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(if (isSelected) colors.iosBlueSubtle else Color.Transparent)
+                        .scale(scale)
+                        .clip(CircleShape)
+                        .background(
+                            if (isSelected) (if (colors.isLight) colors.iosBlue.copy(alpha = 0.16f) else Color(0x38007AFF))
+                            else Color.Transparent
+                        )
                         .border(
                             width = if (isSelected) 1.dp else 0.dp,
-                            color = if (isSelected) colors.iosBlue else Color.Transparent,
-                            shape = RoundedCornerShape(8.dp)
+                            brush = if (isSelected) {
+                                Brush.linearGradient(
+                                    listOf(
+                                        Color(0xFF007AFF),
+                                        Color(0xFF00C6FF),
+                                        Color(0xFF007AFF)
+                                    )
+                                )
+                            } else SolidColor(Color.Transparent),
+                            shape = CircleShape
                         )
                         .clickable {
                             coroutineScope.launch {
@@ -853,6 +870,7 @@ private fun MessageBubbleCard(
 
     val isVoiceOnly = message.mediaType == "voice" && message.text.isNullOrEmpty()
     val isMediaOnly = (message.mediaType in listOf("image", "image_stack", "sticker")) && message.text.isNullOrEmpty() && message.replyTo == null
+    val isPoll = message.mediaType == "poll"
 
     val highlightAnim = remember { Animatable(0f) }
     LaunchedEffect(isHighlighted) {
@@ -864,7 +882,12 @@ private fun MessageBubbleCard(
 
     Column(
         horizontalAlignment = if (isOutgoing) Alignment.End else Alignment.Start,
-        modifier = if (isMediaOnly) Modifier.width(280.dp) else if (isVoiceOnly) Modifier.widthIn(max = 245.dp) else Modifier.widthIn(max = 295.dp)
+        modifier = when {
+            isMediaOnly -> Modifier.width(280.dp)
+            isVoiceOnly -> Modifier.widthIn(max = 245.dp)
+            isPoll -> Modifier.widthIn(min = 280.dp, max = 320.dp)
+            else -> Modifier.widthIn(max = 295.dp)
+        }
     ) {
         if (!isOutgoing && showSenderName && !isConsecutive && senderDisplayName != null) {
             Text(
@@ -2056,17 +2079,22 @@ fun PollCard(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Surface(
-                shape = RoundedCornerShape(10.dp),
+                shape = RoundedCornerShape(9999.dp),
                 color = when {
-                    poll.isClosed -> if (isOutgoing) Color.White.copy(alpha = 0.22f) else Color(0xFFFF9500).copy(alpha = 0.14f)
-                    poll.isAnonymous -> if (isOutgoing) Color.White.copy(alpha = 0.22f) else Color(0xFF8B5CF6).copy(alpha = 0.14f)
-                    else -> if (isOutgoing) Color.White.copy(alpha = 0.22f) else colors.iosBlue.copy(alpha = 0.14f)
-                }
+                    poll.isClosed -> if (isOutgoing) Color.White.copy(alpha = 0.20f) else Color(0xFFFF9500).copy(alpha = 0.14f)
+                    poll.isAnonymous -> if (isOutgoing) Color.White.copy(alpha = 0.20f) else Color(0xFF8B5CF6).copy(alpha = 0.14f)
+                    else -> if (isOutgoing) Color.White.copy(alpha = 0.20f) else colors.iosBlue.copy(alpha = 0.14f)
+                },
+                border = BorderStroke(
+                    0.75.dp,
+                    if (isOutgoing) Brush.linearGradient(listOf(Color.White.copy(alpha = 0.50f), Color.White.copy(alpha = 0.20f)))
+                    else Brush.linearGradient(listOf(colors.iosBlue.copy(alpha = 0.45f), colors.iosBlue.copy(alpha = 0.18f)))
+                )
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp),
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.5.dp),
+                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.5.dp)
                 ) {
                     if (poll.isClosed) {
                         LucideLock(
@@ -2078,7 +2106,7 @@ fun PollCard(
                             imageVector = Lucide.ChartColumn,
                             contentDescription = null,
                             tint = if (isOutgoing) Color.White else (if (poll.isAnonymous) Color(0xFF8B5CF6) else colors.iosBlue),
-                            modifier = Modifier.size(13.dp)
+                            modifier = Modifier.size(12.5.dp)
                         )
                     }
                     Text(
@@ -2130,10 +2158,11 @@ fun PollCard(
             fontSize = 15.5.sp,
             fontWeight = FontWeight.Bold,
             lineHeight = 21.sp,
+            letterSpacing = (-0.2).sp,
             color = if (isOutgoing) Color.White else colors.textDark
         )
 
-        // 3. Modern Fill-Meter Option Cards
+        // 3. Modern Fill-Meter Option Cards (Liquid Glass pebble curvature)
         Column(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -2147,7 +2176,7 @@ fun PollCard(
                 val isSelected = option.isUserVoted
                 val isLeading = maxVotes > 0 && option.votes == maxVotes && totalVotes > 0
                 val isWinner = poll.isClosed && isLeading
-                val tileShape = RoundedCornerShape(13.dp)
+                val tileShape = RoundedCornerShape(20.dp)
 
                 val baseBg = if (isOutgoing) {
                     Color.White.copy(alpha = 0.12f)
@@ -2155,10 +2184,31 @@ fun PollCard(
                     if (colors.isLight) Color(0xFFF2F2F7) else Color(0xFF2C2C2E).copy(alpha = 0.6f)
                 }
 
-                val borderColor = when {
-                    isWinner -> Color(0xFF34C759).copy(alpha = 0.75f)
-                    isSelected -> if (isOutgoing) Color.White else colors.iosBlue
-                    else -> if (isOutgoing) Color.White.copy(alpha = 0.15f) else colors.borderSubtle
+                val borderBrush = when {
+                    isWinner -> Brush.linearGradient(listOf(Color(0xFF34C759), Color(0xFF30D158)))
+                    isSelected -> if (isOutgoing) {
+                        Brush.linearGradient(
+                            listOf(
+                                Color.White.copy(alpha = 0.90f),
+                                Color.White.copy(alpha = 0.45f),
+                                Color(0xFFBEE6FF).copy(alpha = 0.55f),
+                                Color.White.copy(alpha = 0.85f)
+                            )
+                        )
+                    } else {
+                        Brush.linearGradient(
+                            listOf(
+                                Color(0xFF007AFF),
+                                Color(0xFF00C6FF),
+                                Color(0xFF007AFF)
+                            )
+                        )
+                    }
+                    else -> if (isOutgoing) {
+                        SolidColor(Color.White.copy(alpha = 0.18f))
+                    } else {
+                        SolidColor(if (colors.isLight) Color(0x18000000) else Color(0x28FFFFFF))
+                    }
                 }
 
                 Box(
@@ -2167,8 +2217,8 @@ fun PollCard(
                         .clip(tileShape)
                         .background(baseBg)
                         .border(
-                            width = if (isSelected || isWinner) 1.5.dp else 0.5.dp,
-                            color = borderColor,
+                            width = if (isSelected || isWinner) 1.dp else 0.5.dp,
+                            brush = borderBrush,
                             shape = tileShape
                         )
                         .clickable(enabled = !poll.isClosed) {
@@ -2181,26 +2231,26 @@ fun PollCard(
                         val fillBrush = when {
                             isWinner -> Brush.horizontalGradient(
                                 listOf(
-                                    Color(0xFF34C759).copy(alpha = if (isOutgoing) 0.40f else 0.28f),
-                                    Color(0xFF30D158).copy(alpha = if (isOutgoing) 0.25f else 0.16f)
+                                    Color(0xFF34C759).copy(alpha = if (isOutgoing) 0.35f else 0.24f),
+                                    Color(0xFF30D158).copy(alpha = if (isOutgoing) 0.22f else 0.14f)
                                 )
                             )
                             isSelected -> Brush.horizontalGradient(
                                 if (isOutgoing) listOf(
-                                    Color.White.copy(alpha = 0.35f),
-                                    Color.White.copy(alpha = 0.22f)
+                                    Color.White.copy(alpha = 0.28f),
+                                    Color.White.copy(alpha = 0.15f)
                                 ) else listOf(
-                                    colors.iosBlue.copy(alpha = 0.24f),
-                                    colors.iosBlue.copy(alpha = 0.14f)
+                                    colors.iosBlue.copy(alpha = 0.22f),
+                                    colors.iosBlue.copy(alpha = 0.12f)
                                 )
                             )
                             else -> Brush.horizontalGradient(
                                 if (isOutgoing) listOf(
-                                    Color.White.copy(alpha = 0.18f),
-                                    Color.White.copy(alpha = 0.12f)
+                                    Color.White.copy(alpha = 0.14f),
+                                    Color.White.copy(alpha = 0.08f)
                                 ) else listOf(
-                                    (if (colors.isLight) Color(0xFFE5E5EA) else Color(0xFF3A3A3C)).copy(alpha = 0.7f),
-                                    (if (colors.isLight) Color(0xFFE5E5EA) else Color(0xFF3A3A3C)).copy(alpha = 0.5f)
+                                    (if (colors.isLight) Color(0xFFE5E5EA) else Color(0xFF3A3A3C)).copy(alpha = 0.6f),
+                                    (if (colors.isLight) Color(0xFFE5E5EA) else Color(0xFF3A3A3C)).copy(alpha = 0.4f)
                                 )
                             )
                         }
@@ -2217,7 +2267,7 @@ fun PollCard(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 11.dp),
+                            .padding(horizontal = 13.dp, vertical = 11.5.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
@@ -2238,14 +2288,37 @@ fun PollCard(
                                         size = 19.dp
                                     )
                                 } else {
-                                    LiquidGlassRadio(
-                                        selected = isSelected,
-                                        onClick = {
-                                            SoundManager.playReaction()
-                                            onVote(index)
-                                        },
-                                        size = 19.dp
-                                    )
+                                    if (isOutgoing) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(20.dp)
+                                                .clip(CircleShape)
+                                                .border(
+                                                    width = if (isSelected) 1.5.dp else 1.dp,
+                                                    color = if (isSelected) Color.White else Color.White.copy(alpha = 0.45f),
+                                                    shape = CircleShape
+                                                ),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            if (isSelected) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(9.dp)
+                                                        .clip(CircleShape)
+                                                        .background(Color.White)
+                                                )
+                                            }
+                                        }
+                                    } else {
+                                        LiquidGlassRadio(
+                                            selected = isSelected,
+                                            onClick = {
+                                                SoundManager.playReaction()
+                                                onVote(index)
+                                            },
+                                            size = 20.dp
+                                        )
+                                    }
                                 }
                             } else {
                                 if (isWinner) {
@@ -2386,7 +2459,7 @@ fun PollCard(
             }
         }
 
-        // 4. Bottom Stats & Action Footer
+        // 4. Bottom Stats & Action Footer (Apple Specular Glass Pill Actions)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2396,91 +2469,89 @@ fun PollCard(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.5.dp)
             ) {
                 Icon(
                     imageVector = Lucide.Users,
                     contentDescription = null,
-                    tint = if (isOutgoing) Color.White.copy(alpha = 0.75f) else colors.textMuted,
+                    tint = if (isOutgoing) Color.White.copy(alpha = 0.80f) else colors.textMuted,
                     modifier = Modifier.size(13.dp)
                 )
                 Text(
                     text = when {
-                        totalVotes == 0 -> "No votes yet"
+                        totalVotes == 0 -> "No votes"
                         totalVotes == 1 -> "1 vote"
                         else -> "$totalVotes votes"
                     } + if (poll.isClosed) " • Closed" else "",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
-                    color = if (isOutgoing) Color.White.copy(alpha = 0.75f) else colors.textMuted
+                    color = if (isOutgoing) Color.White.copy(alpha = 0.80f) else colors.textMuted
                 )
             }
 
             // Right Actions: Retract Vote + End Poll (creator) + View Votes
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
             ) {
                 // Retract Vote Button
                 if (hasVoted && !poll.isClosed && onRetractVote != null) {
-                    val pillShape = RoundedCornerShape(9999.dp)
                     Surface(
-                        shape = pillShape,
-                        color = if (isOutgoing) Color.White.copy(alpha = 0.18f) else Color(0xFFFF3B30).copy(alpha = 0.10f),
-                        border = BorderStroke(0.5.dp, if (isOutgoing) Color.White.copy(alpha = 0.35f) else Color(0xFFFF3B30).copy(alpha = 0.3f)),
+                        shape = RoundedCornerShape(9999.dp),
+                        color = if (isOutgoing) Color.White.copy(alpha = 0.16f) else Color(0xFFFF3B30).copy(alpha = 0.10f),
+                        border = BorderStroke(
+                            0.5.dp,
+                            if (isOutgoing) Brush.linearGradient(listOf(Color.White.copy(alpha = 0.40f), Color.White.copy(alpha = 0.15f)))
+                            else Brush.linearGradient(listOf(Color(0xFFFF3B30).copy(alpha = 0.40f), Color(0xFFFF3B30).copy(alpha = 0.15f)))
+                        ),
                         modifier = Modifier.clickable {
                             SoundManager.playReaction()
                             onRetractVote()
                         }
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.5.dp)
-                        ) {
-                            Text(
-                                text = "Retract",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (isOutgoing) Color.White else Color(0xFFFF3B30)
-                            )
-                        }
+                        Text(
+                            text = "Retract",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (isOutgoing) Color.White else Color(0xFFFF3B30),
+                            modifier = Modifier.padding(horizontal = 8.5.dp, vertical = 3.5.dp)
+                        )
                     }
                 }
 
                 // End Poll Button (for poll creator if poll is open)
                 if (isOutgoing && !poll.isClosed && onClosePoll != null) {
-                    val pillShape = RoundedCornerShape(9999.dp)
                     Surface(
-                        shape = pillShape,
-                        color = if (isOutgoing) Color.White.copy(alpha = 0.18f) else colors.surfaceSecondary,
-                        border = BorderStroke(0.5.dp, if (isOutgoing) Color.White.copy(alpha = 0.35f) else colors.borderSubtle),
+                        shape = RoundedCornerShape(9999.dp),
+                        color = Color.White.copy(alpha = 0.16f),
+                        border = BorderStroke(
+                            0.5.dp,
+                            Brush.linearGradient(listOf(Color.White.copy(alpha = 0.40f), Color.White.copy(alpha = 0.15f)))
+                        ),
                         modifier = Modifier.clickable {
                             SoundManager.playReaction()
                             showEndPollConfirmDialog = true
                         }
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.5.dp)
-                        ) {
-                            Text(
-                                text = "End Poll",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (isOutgoing) Color.White else colors.textDark
-                            )
-                        }
+                        Text(
+                            text = "End Poll",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 8.5.dp, vertical = 3.5.dp)
+                        )
                     }
                 }
 
                 // "View Votes" Apple Specular Glass Pill Button
-                val viewVotesShape = RoundedCornerShape(9999.dp)
                 Surface(
-                    shape = viewVotesShape,
+                    shape = RoundedCornerShape(9999.dp),
                     color = if (isOutgoing) Color.White.copy(alpha = 0.22f) else colors.iosBlue.copy(alpha = 0.12f),
-                    border = BorderStroke(0.5.dp, if (isOutgoing) Color.White.copy(alpha = 0.45f) else colors.iosBlue.copy(alpha = 0.3f)),
+                    border = BorderStroke(
+                        0.75.dp,
+                        if (isOutgoing) Brush.linearGradient(listOf(Color.White.copy(alpha = 0.60f), Color.White.copy(alpha = 0.25f)))
+                        else Brush.linearGradient(listOf(colors.iosBlue.copy(alpha = 0.45f), colors.iosBlue.copy(alpha = 0.15f)))
+                    ),
                     modifier = Modifier.clickable(enabled = onViewVotes != null) {
                         SoundManager.playReaction()
                         onViewVotes?.invoke()
@@ -2488,18 +2559,18 @@ fun PollCard(
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        modifier = Modifier.padding(horizontal = 11.dp, vertical = 4.5.dp)
+                        horizontalArrangement = Arrangement.spacedBy(3.dp),
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.5.dp)
                     ) {
                         Text(
-                            text = "View Votes",
-                            fontSize = 12.sp,
+                            text = "Votes",
+                            fontSize = 11.5.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = if (isOutgoing) Color.White else colors.iosBlue
                         )
                         LucideChevronRight(
                             tint = if (isOutgoing) Color.White else colors.iosBlue,
-                            size = 13.dp
+                            size = 12.dp
                         )
                     }
                 }
