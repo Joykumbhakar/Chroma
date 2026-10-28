@@ -78,7 +78,8 @@ fun FlashFeedScreen(
     onRemixRequested: (Uri, String, String) -> Unit,
     onRequireLogin: () -> Unit,
     emptyContent: (@Composable () -> Unit)? = null,
-    initialVideoId: String? = null
+    initialVideoId: String? = null,
+    onRemixVideo: ((FlashVideo) -> Unit)? = null
 ) {
     val colors = LocalOscellionColors.current
     val context = LocalContext.current
@@ -246,7 +247,8 @@ fun FlashFeedScreen(
                         flashVm = flashVm,
                         commentVm = commentVm,
                         onRemixRequested = onRemixRequested,
-                        onNavigateToFlashPicker = onNavigateToFlashPicker
+                        onNavigateToFlashPicker = onNavigateToFlashPicker,
+                        onRemixVideo = onRemixVideo
                     )
                 }
             }
@@ -408,7 +410,8 @@ private fun FlashVideoItem(
     flashVm: FlashViewModel,
     commentVm: com.chroma.studio.viewmodel.FlashCommentViewModel,
     onRemixRequested: (Uri, String, String) -> Unit,
-    onNavigateToFlashPicker: () -> Unit = {}
+    onNavigateToFlashPicker: () -> Unit = {},
+    onRemixVideo: ((FlashVideo) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -712,19 +715,23 @@ private fun FlashVideoItem(
                     tint = Color.White,
                     label = formatCount(video.remixCount),
                     onClick = {
-                        android.widget.Toast.makeText(context, "Preparing for Remix...", android.widget.Toast.LENGTH_SHORT).show()
-                        flashVm.downloadVideoForRemix(
-                            context = context,
-                            videoUrl = video.videoUrl,
-                            onProgress = { },
-                            onComplete = { uri ->
-                                if (uri != null) {
-                                    onRemixRequested(uri, video.id, video.authorUsername)
-                                } else {
-                                    android.widget.Toast.makeText(context, "Failed to download video.", android.widget.Toast.LENGTH_SHORT).show()
+                        if (onRemixVideo != null) {
+                            onRemixVideo(video)
+                        } else {
+                            android.widget.Toast.makeText(context, "Preparing for Remix...", android.widget.Toast.LENGTH_SHORT).show()
+                            flashVm.downloadVideoForRemix(
+                                context = context,
+                                videoUrl = video.videoUrl,
+                                onProgress = { },
+                                onComplete = { uri ->
+                                    if (uri != null) {
+                                        onRemixRequested(uri, video.id, video.authorUsername)
+                                    } else {
+                                        android.widget.Toast.makeText(context, "Failed to download video.", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
                                 }
-                            }
-                        )
+                            )
+                        }
                     }
                 )
             }

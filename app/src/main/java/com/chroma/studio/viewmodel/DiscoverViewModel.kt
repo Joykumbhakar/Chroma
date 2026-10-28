@@ -308,6 +308,39 @@ class DiscoverViewModel : ViewModel() {
         )
     }
 
+    fun repostWithRemix(
+        originalPost: DiscoverPost,
+        remixTitle: String,
+        remixDescription: String,
+        onSuccess: ((DiscoverPost) -> Unit)? = null,
+        onError: ((String) -> Unit)? = null
+    ) {
+        viewModelScope.launch {
+            try {
+                val remixedPost = repository.repostWithRemix(
+                    originalPost = originalPost,
+                    remixTitle = remixTitle,
+                    remixDescription = remixDescription
+                )
+                addOptimisticPost(remixedPost)
+                val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                if (!currentUid.isNullOrBlank()) {
+                    _works.value = _works.value.map {
+                        if (it.id == originalPost.id && !it.remixedBy.contains(currentUid)) {
+                            it.copy(
+                                remixCount = it.remixCount + 1,
+                                remixedBy = (it.remixedBy + currentUid).distinct()
+                            )
+                        } else it
+                    }
+                }
+                onSuccess?.invoke(remixedPost)
+            } catch (e: Exception) {
+                onError?.invoke(e.message ?: "Failed to repost remix")
+            }
+        }
+    }
+
     fun trackRemix(workId: String) {
         val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
         val currentWork = _works.value.firstOrNull { it.id == workId }

@@ -3104,6 +3104,83 @@ private fun FeedPostMetadata(
             }
         }
 
+        // Quoted Post Card (Twitter / Facebook Quote Style)
+        if (!work.remixedFromAuthorUsername.isNullOrEmpty()) {
+            val quoteShape = RoundedCornerShape(10.dp)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(quoteShape)
+                    .background(if (colors.isDark) Color(0xFF1E1E22) else Color(0xFFF4F4F7))
+                    .border(
+                        0.5.dp,
+                        if (colors.isDark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f),
+                        quoteShape
+                    )
+                    .clickable {
+                        if (!work.remixedFromAuthorId.isNullOrEmpty()) {
+                            onAuthorClick?.invoke(work.remixedFromAuthorId)
+                        }
+                    }
+                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF007AFF).copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Lucide.HeartHandshake,
+                        contentDescription = "Remix",
+                        tint = Color(0xFF007AFF),
+                        modifier = Modifier.size(13.dp)
+                    )
+                }
+
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "Remixed from",
+                            fontSize = 11.sp,
+                            color = colors.textMuted
+                        )
+                        Text(
+                            text = "@${work.remixedFromAuthorUsername}",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF007AFF)
+                        )
+                        if (work.remixedFromAuthorVerified) {
+                            VerifiedBadge(size = 11.dp)
+                        }
+                    }
+                    if (!work.remixedFromAuthorDisplayName.isNullOrBlank()) {
+                        Text(
+                            text = work.remixedFromAuthorDisplayName,
+                            fontSize = 11.sp,
+                            color = colors.textMuted,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                Icon(
+                    imageVector = Lucide.ChevronRight,
+                    contentDescription = null,
+                    tint = colors.textMuted,
+                    modifier = Modifier.size(14.dp)
+                )
+            }
+        }
+
         // Tags, Mentions, Trending (Clean reference inline text style without capsules or pill borders)
         val trendingLabel = work.trendingTag ?: if (work.tags.any { it.contains("trend", ignoreCase = true) }) "Trending" else null
         val hasTagsOrMentions = work.tags.isNotEmpty() || work.mentions.isNotEmpty() || trendingLabel != null

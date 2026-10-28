@@ -75,6 +75,7 @@ class HomeActivity : ComponentActivity() {
     private val vm: HomeViewModel by viewModels()
     private val flashVm: FlashViewModel by viewModels()
     private val commentVm: com.chroma.studio.viewmodel.FlashCommentViewModel by viewModels()
+    private val discoverVm: com.chroma.studio.viewmodel.DiscoverViewModel by viewModels()
 
     private val requestPermissionLauncher = registerForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
@@ -339,8 +340,18 @@ class HomeActivity : ComponentActivity() {
                 var flashDurationPerSlide by remember { androidx.compose.runtime.mutableLongStateOf(3000L) }
                 var flashRemixPostId by remember { mutableStateOf<String?>(null) }
                 var flashRemixAuthorUsername by remember { mutableStateOf<String?>(null) }
+                var remixTargetPost by remember { mutableStateOf<DiscoverPost?>(null) }
 
                 val onRemixCommunityPost: (DiscoverPost) -> Unit = { work ->
+                    val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                    if (currentUid.isNullOrBlank()) {
+                        navController.navigate("login")
+                    } else {
+                        remixTargetPost = work
+                    }
+                }
+
+                val legacyOnRemixCommunityPost: (DiscoverPost) -> Unit = { work ->
                     val videoUrl = extractVideoUrlFromPost(work)
                     val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
                     if (!currentUid.isNullOrBlank()) {
@@ -1323,6 +1334,15 @@ class HomeActivity : ComponentActivity() {
                                 flashRemixAuthorUsername = authorUsername
                                 navController.navigate("flash_video_editor")
                             },
+                            onRemixVideo = { video ->
+                                val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                                if (currentUid.isNullOrBlank()) {
+                                    navController.navigate("login")
+                                } else {
+                                    val post = com.chroma.studio.data.DiscoverRepository.getInstance().mapFlashToDiscoverPost(video)
+                                    remixTargetPost = post
+                                }
+                            },
                             onRequireLogin = { navController.navigate("login") }
                         )
                     }
@@ -1927,6 +1947,20 @@ class HomeActivity : ComponentActivity() {
                         )
                     }
                 }
+            }
+            if (remixTargetPost != null) {
+                com.chroma.studio.ui.components.RemixQuoteRepostSheet(
+                    post = remixTargetPost!!,
+                    onDismiss = { remixTargetPost = null },
+                    onRepostSuccess = { remixedPost ->
+                        remixTargetPost = null
+                        discoverVm.addOptimisticPost(remixedPost)
+                        if (remixedPost.postType == "video" || !remixedPost.videoUrl.isNullOrBlank()) {
+                            flashVm.ensureFlashInFeed(remixedPost.id, remixedPost)
+                        }
+                        com.chroma.studio.ui.components.ToastManager.showToast("Remix reposted to community!")
+                    }
+                )
             }
             com.chroma.studio.ui.components.ChromaToastHost()
             com.chroma.studio.ui.components.IosDynamicIslandHost(isNotchMode = false)

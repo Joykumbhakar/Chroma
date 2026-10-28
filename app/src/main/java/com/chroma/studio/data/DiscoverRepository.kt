@@ -40,7 +40,7 @@ class DiscoverRepository {
     private val usersCollection = db.collection("users")
     private val usernamesCollection = db.collection("usernames")
 
-    private fun mapFlashToDiscoverPost(fv: com.chroma.studio.model.FlashVideo, docId: String = ""): DiscoverPost {
+    fun mapFlashToDiscoverPost(fv: com.chroma.studio.model.FlashVideo, docId: String = ""): DiscoverPost {
         return DiscoverPost(
             id = docId.ifBlank { fv.id },
             creatorId = fv.creatorId,
@@ -147,6 +147,96 @@ class DiscoverRepository {
         if (!work.remixedFromPostId.isNullOrEmpty()) {
             incrementRemixCount(work.remixedFromPostId, user.uid)
         }
+    }
+
+    suspend fun repostWithRemix(
+        originalPost: DiscoverPost,
+        remixTitle: String,
+        remixDescription: String,
+        tags: List<String> = emptyList(),
+        mentions: List<String> = emptyList()
+    ): DiscoverPost {
+        val user = auth.currentUser ?: throw Exception("User not authenticated")
+        val userProfile = getUserProfile(user.uid) ?: throw Exception("User profile not found")
+
+        val newWorkId = collection.document().id
+        val remixedPost = DiscoverPost(
+            id = newWorkId,
+            title = remixTitle.ifBlank { "Remix: ${originalPost.title.ifBlank { "Creation" }}" },
+            description = remixDescription,
+            postType = originalPost.postType,
+            jsonUrl = originalPost.jsonUrl,
+            imageUrl = originalPost.imageUrl,
+            imageUrls = originalPost.imageUrls,
+            workUrls = originalPost.workUrls,
+            videoUrl = originalPost.videoUrl,
+            thumbnailUrl = originalPost.thumbnailUrl,
+            aspectRatio = originalPost.aspectRatio,
+            tags = if (tags.isNotEmpty()) tags else originalPost.tags,
+            mentions = mentions,
+            creatorId = user.uid,
+            authorUsername = userProfile.username,
+            authorDisplayName = userProfile.displayName,
+            authorAvatarUrl = userProfile.avatarUrl,
+            authorVerified = userProfile.verified,
+            timestamp = System.currentTimeMillis(),
+            likesCount = 0,
+            likedBy = emptyList(),
+            remixCount = 0,
+            remixedBy = emptyList(),
+            shareCount = 0,
+            sharedBy = emptyList(),
+            saveCount = 0,
+            savedBy = emptyList(),
+            commentsCount = 0,
+            commentCount = 0,
+            remixedFromPostId = originalPost.id,
+            remixedFromAuthorId = originalPost.creatorId,
+            remixedFromAuthorUsername = originalPost.authorUsername,
+            remixedFromAuthorDisplayName = originalPost.authorDisplayName,
+            remixedFromAuthorAvatar = originalPost.authorAvatarUrl,
+            remixedFromAuthorVerified = originalPost.authorVerified
+        )
+
+        collection.document(newWorkId).set(remixedPost).await()
+
+        if (originalPost.postType == "video" || !originalPost.videoUrl.isNullOrBlank()) {
+            try {
+                val flashDoc = db.collection("flash").document(newWorkId)
+                val flashVideo = com.chroma.studio.model.FlashVideo(
+                    id = newWorkId,
+                    creatorId = user.uid,
+                    authorUsername = userProfile.username,
+                    authorDisplayName = userProfile.displayName,
+                    authorAvatarUrl = userProfile.avatarUrl,
+                    authorVerified = userProfile.verified,
+                    videoUrl = originalPost.videoUrl ?: "",
+                    thumbnailUrl = originalPost.thumbnailUrl ?: originalPost.imageUrl ?: "",
+                    caption = "${remixTitle.ifBlank { "Remix" }}: $remixDescription".trim(),
+                    hashtags = if (tags.isNotEmpty()) tags else originalPost.tags,
+                    mentions = mentions,
+                    likesCount = 0,
+                    likedBy = emptyList(),
+                    commentCount = 0,
+                    remixCount = 0,
+                    remixedBy = emptyList(),
+                    shareCount = 0,
+                    sharedBy = emptyList(),
+                    saveCount = 0,
+                    savedBy = emptyList(),
+                    remixedFromPostId = originalPost.id,
+                    remixedFromAuthorUsername = originalPost.authorUsername,
+                    timestamp = System.currentTimeMillis()
+                )
+                flashDoc.set(flashVideo).await()
+            } catch (e: Exception) {
+                Log.w("DiscoverRepository", "Flash video mirror write skipped: ${e.message}")
+            }
+        }
+
+        incrementRemixCount(originalPost.id, user.uid)
+
+        return remixedPost
     }
 
     suspend fun uploadImagePost(
