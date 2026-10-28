@@ -206,11 +206,17 @@ fun LiveVoiceBubblePreview(
 
                     Spacer(Modifier.width(6.dp))
 
+                    val speedPreviewShape = RoundedCornerShape(9999.dp)
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
+                            .clip(speedPreviewShape)
                             .background(if (isOutgoing) Color.White.copy(alpha = 0.22f) else colors.surfaceSecondary)
-                            .padding(horizontal = 5.dp, vertical = 1.5.dp),
+                            .border(
+                                0.5.dp,
+                                if (isOutgoing) Color.White.copy(alpha = 0.45f) else colors.iosBlue.copy(alpha = 0.25f),
+                                speedPreviewShape
+                            )
+                            .padding(horizontal = 7.dp, vertical = 2.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(

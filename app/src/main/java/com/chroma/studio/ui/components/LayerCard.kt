@@ -374,9 +374,9 @@ fun LayerCard(
                         // Info banner matching HTML "Preview Canvas active: Drag handles..."
                         Row(
                             Modifier.fillMaxWidth()
-                                .clip(RoundedCornerShape(6.dp))
+                                .clip(RoundedCornerShape(12.dp))
                                 .background(colors.primary.copy(alpha = 0.1f))
-                                .border(1.dp, colors.primary.copy(alpha = 0.2f), RoundedCornerShape(6.dp))
+                                .border(1.dp, colors.primary.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
                                 .padding(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -597,9 +597,9 @@ private fun ElementsAndColorsEditor(
                 Box(
                     modifier = Modifier
                         .size(28.dp)
-                        .clip(RoundedCornerShape(6.dp))
+                        .clip(CircleShape)
                         .background(layer.blobBgColor.copy(alpha = 1f))
-                        .border(1.dp, colors.glassBorder, RoundedCornerShape(6.dp))
+                        .border(1.dp, colors.glassBorder, CircleShape)
                         .clickable { showBgColorPicker = !showBgColorPicker }
                 )
 

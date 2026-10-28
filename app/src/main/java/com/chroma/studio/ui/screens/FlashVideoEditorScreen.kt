@@ -558,18 +558,20 @@ fun FlashVideoEditorScreen(
                 ) {
                     if (isOverOneMinute) {
                         // ── Strict Constraint: > 1 min videos NEVER show Next/Share! ONLY show "Save in Gallery" ──
+                        val savePillShape = RoundedCornerShape(9999.dp)
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(savePillShape)
                                 .background(
                                     Brush.horizontalGradient(
                                         listOf(Color(0xFF34C759), Color(0xFF30D158))
                                     )
                                 )
+                                .border(1.dp, com.chroma.studio.ui.components.LiquidGlassTokens.AppleSpecularGlassBorder, savePillShape)
                                 .clickable(enabled = !isSavingToGallery) {
                                     performSaveToGallery()
                                 }
-                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                                .padding(horizontal = 14.dp, vertical = 7.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             if (isSavingToGallery) {
@@ -596,27 +598,28 @@ fun FlashVideoEditorScreen(
                         }
                     } else {
                         // ── Under 1 min: Normal Draft & Next buttons ──
+                        val draftPillShape = RoundedCornerShape(9999.dp)
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(draftPillShape)
                                 .background(colors.glassBgHover)
-                                .border(0.5.dp, colors.glassBorder, RoundedCornerShape(8.dp))
+                                .border(0.5.dp, colors.glassBorder, draftPillShape)
+                                .border(0.5.dp, com.chroma.studio.ui.components.LiquidGlassTokens.SurfaceSpecularGlassBorder, draftPillShape)
                                 .clickable {
                                     onSaveDraft(trimStartMs, trimEndMs, selectedFilter.name, brightness, contrast, saturation, hue)
                                 }
-                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                                .padding(horizontal = 14.dp, vertical = 7.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text("Draft", color = colors.textMuted, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                         }
+                        val nextPillShape = RoundedCornerShape(9999.dp)
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(
-                                    Brush.horizontalGradient(
-                                        listOf(Color(0xFF007AFF), Color(0xFF5856D6))
-                                    )
-                                )
+                                .clip(nextPillShape)
+                                .background(com.chroma.studio.ui.components.LiquidGlassTokens.AppleSystemBlue)
+                                .border(0.5.dp, Color(0x8C0051D5), nextPillShape)
+                                .border(1.dp, com.chroma.studio.ui.components.LiquidGlassTokens.AppleSpecularGlassBorder, nextPillShape)
                                 .clickable {
                                     val gradedThumbnail = thumbnail?.let { raw ->
                                         val isDefault = selectedFilter.name == "None" && brightness == 0f && contrast == 1f && saturation == 1f && hue == 0f
@@ -814,11 +817,11 @@ fun FlashVideoEditorScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                         modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
+                            .clip(RoundedCornerShape(9999.dp))
                             .background(Color(0xFFFF9500).copy(alpha = 0.15f))
-                            .border(0.5.dp, Color(0xFFFF9500).copy(alpha = 0.3f), RoundedCornerShape(6.dp))
+                            .border(0.5.dp, Color(0xFFFF9500).copy(alpha = 0.35f), RoundedCornerShape(9999.dp))
                             .clickable { showDurationWarningPopup = true }
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
                     ) {
                         Icon(
                             imageVector = Lucide.TriangleAlert,
@@ -850,15 +853,21 @@ fun FlashVideoEditorScreen(
         ) {
             listOf("Filters", "Adjust").forEachIndexed { index, label ->
                 val selected = activeTab == index
+                val pillTabShape = RoundedCornerShape(9999.dp)
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(if (selected) Color.White.copy(alpha = 0.15f) else Color.Transparent)
+                        .clip(pillTabShape)
+                        .background(if (selected) Color.White.copy(alpha = 0.18f) else Color.Transparent)
                         .border(
                             width = 0.5.dp,
-                            color = if (selected) Color.White.copy(alpha = 0.25f) else Color.Transparent,
-                            shape = RoundedCornerShape(8.dp)
+                            color = if (selected) Color.White.copy(alpha = 0.35f) else Color.Transparent,
+                            shape = pillTabShape
+                        )
+                        .border(
+                            width = 0.5.dp,
+                            brush = if (selected) com.chroma.studio.ui.components.LiquidGlassTokens.SurfaceSpecularGlassBorder else SolidColor(Color.Transparent),
+                            shape = pillTabShape
                         )
                         .clickable { activeTab = index }
                         .padding(vertical = 10.dp),
@@ -1198,17 +1207,19 @@ private fun AdjustSlider(
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
                             modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
+                                .clip(RoundedCornerShape(9999.dp))
                                 .clickable { onValueChange(defaultValue) }
-                                .padding(horizontal = 4.dp, vertical = 2.dp)
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
                 }
+                val valPillShape = RoundedCornerShape(9999.dp)
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
+                        .clip(valPillShape)
                         .background(if (isModified) Color(0x26007AFF) else Color(0x14FFFFFF))
-                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                        .border(0.5.dp, if (isModified) Color(0x55007AFF) else Color(0x1AFFFFFF), valPillShape)
+                        .padding(horizontal = 9.dp, vertical = 2.5.dp)
                 ) {
                     Text(
                         text = String.format(Locale.US, format, value),

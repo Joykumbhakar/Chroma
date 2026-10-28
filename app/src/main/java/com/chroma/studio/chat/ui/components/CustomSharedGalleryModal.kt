@@ -601,7 +601,7 @@ fun CustomSharedGalleryModal(
                                     Box(
                                         modifier = Modifier
                                             .aspectRatio(1f)
-                                            .clip(RoundedCornerShape(6.dp))
+                                            .clip(RoundedCornerShape(12.dp))
                                             .background(colors.surfaceSecondary)
                                             .clickable {
                                                 if (isSelectionMode) {
@@ -671,9 +671,9 @@ fun CustomSharedGalleryModal(
                                                     .align(Alignment.TopEnd)
                                                     .padding(6.dp)
                                                     .size(22.dp)
-                                                    .clip(RoundedCornerShape(6.dp))
-                                                    .background(if (isSelected) colors.iosBlue else Color.Black.copy(alpha = 0.45f))
-                                                    .border(1.5.dp, Color.White, RoundedCornerShape(6.dp)),
+                                                    .clip(CircleShape)
+                                                    .background(if (isSelected) com.chroma.studio.ui.components.LiquidGlassTokens.AppleSystemBlue else Color.Black.copy(alpha = 0.45f))
+                                                    .border(1.5.dp, Color.White, CircleShape),
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 if (isSelected) {
@@ -866,9 +866,9 @@ fun CustomSharedGalleryModal(
                                             Box(
                                                 modifier = Modifier
                                                     .size(24.dp)
-                                                    .clip(RoundedCornerShape(6.dp))
-                                                    .background(if (isSelected) colors.iosBlue else Color.Transparent)
-                                                    .border(1.5.dp, if (isSelected) colors.iosBlue else colors.borderSubtle, RoundedCornerShape(6.dp)),
+                                                    .clip(CircleShape)
+                                                    .background(if (isSelected) com.chroma.studio.ui.components.LiquidGlassTokens.AppleSystemBlue else Color.Transparent)
+                                                    .border(1.5.dp, if (isSelected) com.chroma.studio.ui.components.LiquidGlassTokens.AppleSystemBlue else colors.borderSubtle, CircleShape),
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 if (isSelected) LucideCheck(tint = Color.White, size = 14.dp)
@@ -988,9 +988,9 @@ fun CustomSharedGalleryModal(
                                             Box(
                                                 modifier = Modifier
                                                     .size(24.dp)
-                                                    .clip(RoundedCornerShape(6.dp))
-                                                    .background(if (isSelected) colors.iosBlue else Color.Transparent)
-                                                    .border(1.5.dp, if (isSelected) colors.iosBlue else colors.borderSubtle, RoundedCornerShape(6.dp)),
+                                                    .clip(CircleShape)
+                                                    .background(if (isSelected) com.chroma.studio.ui.components.LiquidGlassTokens.AppleSystemBlue else Color.Transparent)
+                                                    .border(1.5.dp, if (isSelected) com.chroma.studio.ui.components.LiquidGlassTokens.AppleSystemBlue else colors.borderSubtle, CircleShape),
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 if (isSelected) LucideCheck(tint = Color.White, size = 14.dp)

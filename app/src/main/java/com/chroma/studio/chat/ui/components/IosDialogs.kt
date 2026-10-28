@@ -1006,18 +1006,12 @@ fun IosInputDialog(
 
                                 .fillMaxWidth()
 
-                                .clip(RoundedCornerShape(6.dp))
-
+                                .clip(RoundedCornerShape(12.dp))
                                 .background(if (colors.isLight) Color.White else Color(0xFF1C1C1E))
-
                                 .border(
-
                                     0.5.dp,
-
                                     if (colors.isLight) Color(0x33000000) else Color(0x33FFFFFF),
-
-                                    RoundedCornerShape(6.dp)
-
+                                    RoundedCornerShape(12.dp)
                                 )
 
                                 .padding(horizontal = 8.dp, vertical = 6.dp)
@@ -3504,9 +3498,10 @@ fun IosPollDetailsModal(
                                     if (isWinner) {
                                         Box(
                                             modifier = Modifier
-                                                .clip(RoundedCornerShape(6.dp))
+                                                .clip(RoundedCornerShape(9999.dp))
                                                 .background(Color(0xFF34C759).copy(alpha = 0.2f))
-                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                                .border(0.5.dp, Color(0xFF34C759).copy(alpha = 0.45f), RoundedCornerShape(9999.dp))
+                                                .padding(horizontal = 7.dp, vertical = 2.dp)
                                         ) {
                                             Text(
                                                 text = "WINNER",

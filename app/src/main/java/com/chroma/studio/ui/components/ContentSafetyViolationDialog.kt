@@ -144,9 +144,10 @@ fun ContentSafetyViolationDialog(
                             }
                             Box(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
+                                    .clip(RoundedCornerShape(9999.dp))
                                     .background(Color(0xFFEF4444).copy(alpha = 0.15f))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    .border(0.5.dp, Color(0xFFEF4444).copy(alpha = 0.35f), RoundedCornerShape(9999.dp))
+                                    .padding(horizontal = 8.dp, vertical = 2.5.dp)
                             ) {
                                 Text(
                                     text = "${(violation.confidence * 100).toInt()}% Match",

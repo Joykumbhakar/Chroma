@@ -363,14 +363,14 @@ fun UserProfileBioDetailsSection(
 
             Box(
                 modifier = Modifier
-                    .size(26.dp)
-                    .clip(RoundedCornerShape(6.dp))
+                    .size(28.dp)
+                    .clip(CircleShape)
                     .background(colors.glassBgHover.copy(alpha = 0.6f))
-                    .border(0.75.dp, colors.glassBorder, RoundedCornerShape(6.dp))
+                    .border(0.75.dp, colors.glassBorder, CircleShape)
                     .clickable { onShowShareCard() },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Lucide.QrCode, contentDescription = "Show Pass", tint = Color(0xFF007AFF), modifier = Modifier.size(14.dp))
+                Icon(Lucide.QrCode, contentDescription = "Show Pass", tint = com.chroma.studio.ui.components.LiquidGlassTokens.AppleSystemBlue, modifier = Modifier.size(15.dp))
             }
         }
 

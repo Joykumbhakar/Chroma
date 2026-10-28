@@ -215,8 +215,9 @@ fun IosCoverBannerPickerModal(
                                             .size(20.dp)
                                             .align(Alignment.TopEnd)
                                             .offset(x = (-6).dp, y = 6.dp)
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(colors.iosBlue),
+                                            .clip(CircleShape)
+                                            .background(com.chroma.studio.ui.components.LiquidGlassTokens.AppleSystemBlue)
+                                            .border(1.dp, Color.White, CircleShape),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         LucideCheck(tint = Color.White, size = 12.dp)
@@ -1120,9 +1121,10 @@ private fun ContactInfoMembersSection(
                         if (member.role.contains("Admin", ignoreCase = true) || member.role.contains("Owner", ignoreCase = true)) {
                             Box(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
+                                    .clip(RoundedCornerShape(9999.dp))
                                     .background(colors.iosBlueSubtle)
-                                    .padding(horizontal = 7.dp, vertical = 2.5.dp)
+                                    .border(0.5.dp, colors.iosBlue.copy(alpha = 0.25f), RoundedCornerShape(9999.dp))
+                                    .padding(horizontal = 8.dp, vertical = 2.5.dp)
                             ) {
                                 Text(
                                     text = if (member.role.contains("Owner", ignoreCase = true)) "Owner" else "Admin",
@@ -1306,12 +1308,12 @@ private fun ContactInfoSharedContentSection(
             )
             Row(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(6.dp))
+                    .clip(RoundedCornerShape(9999.dp))
                     .clickable {
                         SoundManager.playReaction()
                         onSeeAll(mediaTab)
                     }
-                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                    .padding(horizontal = 8.dp, vertical = 3.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(2.dp)
             ) {
@@ -3285,9 +3287,9 @@ fun WallpaperPickerModal(
                 Box(
                     modifier = Modifier
                         .size(30.dp)
-                        .clip(RoundedCornerShape(6.dp))
+                        .clip(CircleShape)
                         .background(if (colors.isLight) Color(0xFFF1F5F9) else Color(0xFF334155))
-                        .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(6.dp))
+                        .border(0.5.dp, colors.borderSubtle, CircleShape)
                         .clickable { onClose() },
                     contentAlignment = Alignment.Center
                 ) {
@@ -3297,29 +3299,34 @@ fun WallpaperPickerModal(
 
             Spacer(Modifier.height(14.dp))
 
-            // Category Filter Tabs (Sharp rectangles, NO PILL SHAPE)
+            // Category Filter Tabs (Apple Liquid Glass Pills)
             LazyRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(categories) { cat ->
                     val isSelected = selectedCategory == cat
+                    val pillShape = RoundedCornerShape(9999.dp)
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(if (isSelected) colors.iosBlue else if (colors.isLight) Color(0xFFF1F5F9) else Color(0xFF1E293B))
-                            .border(
-                                width = 0.5.dp,
-                                color = if (isSelected) colors.iosBlue else colors.borderSubtle,
-                                shape = RoundedCornerShape(6.dp)
+                            .clip(pillShape)
+                            .background(if (isSelected) com.chroma.studio.ui.components.LiquidGlassTokens.AppleSystemBlue else if (colors.isLight) Color(0xFFF1F5F9) else Color(0xFF1E293B))
+                            .then(
+                                if (isSelected) {
+                                    Modifier
+                                        .border(0.5.dp, Color(0x8C0051D5), pillShape)
+                                        .border(1.dp, com.chroma.studio.ui.components.LiquidGlassTokens.AppleSpecularGlassBorder, pillShape)
+                                } else {
+                                    Modifier.border(0.5.dp, colors.borderSubtle, pillShape)
+                                }
                             )
                             .clickable { selectedCategory = cat }
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                            .padding(horizontal = 14.dp, vertical = 6.dp)
                     ) {
                         Text(
                             text = cat,
                             fontSize = 12.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
                             color = if (isSelected) Color.White else colors.textDark
                         )
                     }
@@ -3442,7 +3449,7 @@ fun WallpaperPickerModal(
                             .border(
                                 width = if (isSelected) 1.5.dp else 0.5.dp,
                                 color = if (isSelected) colors.iosBlue else colors.borderSubtle,
-                                shape = RoundedCornerShape(8.dp)
+                                shape = RoundedCornerShape(14.dp)
                             )
                             .clickable { selectedWallpaper = wp }
                             .padding(6.dp)
@@ -3452,8 +3459,8 @@ fun WallpaperPickerModal(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(74.dp)
-                                .clip(RoundedCornerShape(6.dp))
-                                .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(6.dp))
+                                .clip(RoundedCornerShape(12.dp))
+                                .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(12.dp))
                         ) {
                             AsyncImage(
                                 model = wp.drawableRes,
@@ -3469,9 +3476,9 @@ fun WallpaperPickerModal(
                                         .align(Alignment.TopEnd)
                                         .padding(4.dp)
                                         .size(20.dp)
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(colors.iosBlue)
-                                        .border(0.5.dp, Color.White.copy(alpha = 0.5f), RoundedCornerShape(4.dp)),
+                                        .clip(CircleShape)
+                                        .background(com.chroma.studio.ui.components.LiquidGlassTokens.AppleSystemBlue)
+                                        .border(1.dp, Color.White, CircleShape),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     PhosphorGreenCheck(size = 12.dp)
@@ -3739,22 +3746,27 @@ fun AppearanceSettingsModal(
                             ) {
                                 items(bubbleCategories) { cat ->
                                     val isSelected = bubbleCategoryFilter.equals(cat, ignoreCase = true)
+                                    val pillShape = RoundedCornerShape(9999.dp)
                                     Box(
                                         modifier = Modifier
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(if (isSelected) colors.iosBlue else (if (colors.isLight) Color(0xFFF1F5F9) else Color(0xFF1E293B)))
-                                            .border(
-                                                0.5.dp,
-                                                if (isSelected) colors.iosBlue else colors.borderSubtle,
-                                                RoundedCornerShape(6.dp)
+                                            .clip(pillShape)
+                                            .background(if (isSelected) com.chroma.studio.ui.components.LiquidGlassTokens.AppleSystemBlue else (if (colors.isLight) Color(0xFFF1F5F9) else Color(0xFF1E293B)))
+                                            .then(
+                                                if (isSelected) {
+                                                    Modifier
+                                                        .border(0.5.dp, Color(0x8C0051D5), pillShape)
+                                                        .border(1.dp, com.chroma.studio.ui.components.LiquidGlassTokens.AppleSpecularGlassBorder, pillShape)
+                                                } else {
+                                                    Modifier.border(0.5.dp, colors.borderSubtle, pillShape)
+                                                }
                                             )
                                             .clickable { bubbleCategoryFilter = cat }
-                                            .padding(horizontal = 10.dp, vertical = 5.dp)
+                                            .padding(horizontal = 12.dp, vertical = 5.dp)
                                     ) {
                                         Text(
                                             text = cat,
                                             fontSize = 11.5.sp,
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
                                             color = if (isSelected) Color.White else colors.textMuted
                                         )
                                     }
@@ -4341,9 +4353,10 @@ fun AppearanceSettingsModal(
                                                     rotationX = replayRotationX.value
                                                     transformOrigin = TransformOrigin(0.9f, 0.5f)
                                                 }
-                                                .clip(RoundedCornerShape(6.dp))
-                                                .background(colors.iosBlue)
-                                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                                                .clip(RoundedCornerShape(18.dp))
+                                                .background(com.chroma.studio.ui.components.LiquidGlassTokens.AppleSystemBlue)
+                                                .border(1.dp, com.chroma.studio.ui.components.LiquidGlassTokens.AppleSpecularGlassBorder, RoundedCornerShape(18.dp))
+                                                .padding(horizontal = 14.dp, vertical = 7.dp)
                                         ) {
                                             Text(
                                                 text = "Pop-up animation preview ✨",
@@ -4355,11 +4368,12 @@ fun AppearanceSettingsModal(
 
                                         Box(
                                             modifier = Modifier
-                                                .clip(RoundedCornerShape(6.dp))
+                                                .clip(RoundedCornerShape(9999.dp))
                                                 .background(colors.cardBg)
-                                                .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(6.dp))
+                                                .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(9999.dp))
+                                                .border(0.5.dp, com.chroma.studio.ui.components.LiquidGlassTokens.SurfaceSpecularGlassBorder, RoundedCornerShape(9999.dp))
                                                 .clickable { triggerReplay++ }
-                                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                                                .padding(horizontal = 12.dp, vertical = 6.dp),
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Text("Replay 🔁", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = colors.iosBlue)

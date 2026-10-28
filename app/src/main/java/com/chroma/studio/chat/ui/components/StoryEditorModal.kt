@@ -506,15 +506,15 @@ fun StoryEditorModal(
                         Box(
                             modifier = Modifier
                                 .size(26.dp)
-                                .clip(RoundedCornerShape(6.dp))
+                                .clip(CircleShape)
                                 .background(
                                     when (highlightMode) {
                                         TextHighlightMode.SOLID_WHITE -> Color.White
-                                        TextHighlightMode.ACCENT_BLUE -> colors.iosBlue
+                                        TextHighlightMode.ACCENT_BLUE -> com.chroma.studio.ui.components.LiquidGlassTokens.AppleSystemBlue
                                         else -> Color.Black.copy(alpha = 0.70f)
                                     }
                                 )
-                                .border(1.dp, Color.White, RoundedCornerShape(6.dp)),
+                                .border(1.dp, Color.White, CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(

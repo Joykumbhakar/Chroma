@@ -1439,16 +1439,19 @@ fun IosDynamicIslandHost(
                                 }
                                 if (event.actionLabel != null) {
                                     Spacer(Modifier.width(6.dp))
+                                    val islandActionShape = RoundedCornerShape(9999.dp)
                                     Box(
                                         modifier = Modifier
                                             .height(24.dp)
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(Color(0xFF007AFF))
+                                            .clip(islandActionShape)
+                                            .background(com.chroma.studio.ui.components.LiquidGlassTokens.AppleSystemBlue)
+                                            .border(0.5.dp, Color(0x8C0051D5), islandActionShape)
+                                            .border(1.dp, com.chroma.studio.ui.components.LiquidGlassTokens.AppleSpecularGlassBorder, islandActionShape)
                                             .clickable {
                                                 event.onAction?.invoke()
                                                 dismissIsland()
                                             }
-                                            .padding(horizontal = 8.dp),
+                                            .padding(horizontal = 10.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(event.actionLabel, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = InterFontFamily)

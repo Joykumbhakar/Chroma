@@ -1830,17 +1830,17 @@ fun AppleDetailTile(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(7.dp),
         modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(9999.dp))
             .background(colors.bg.copy(alpha = 0.5f))
-            .border(0.5.dp, colors.glassBorder.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
-            .padding(horizontal = 8.dp, vertical = 5.dp)
+            .border(0.5.dp, colors.glassBorder.copy(alpha = 0.5f), RoundedCornerShape(9999.dp))
+            .padding(horizontal = 9.dp, vertical = 5.dp)
     ) {
         Box(
             modifier = Modifier
                 .size(22.dp)
-                .clip(RoundedCornerShape(6.dp))
+                .clip(CircleShape)
                 .background(Brush.linearGradient(iconGradient))
-                .border(0.5.dp, Color.White.copy(alpha = 0.35f), RoundedCornerShape(6.dp)),
+                .border(0.5.dp, Color.White.copy(alpha = 0.35f), CircleShape),
             contentAlignment = Alignment.Center
         ) {
             if (iconRes != null) {
@@ -2108,9 +2108,10 @@ fun ProfileFlashCard(
             if (isOwner) {
                 Box(
                     modifier = Modifier
-                        .size(26.dp)
-                        .clip(RoundedCornerShape(6.dp))
+                        .size(28.dp)
+                        .clip(CircleShape)
                         .background(Color.Black.copy(alpha = 0.4f))
+                        .border(0.5.dp, Color.White.copy(alpha = 0.2f), CircleShape)
                         .clickable { showMenu = true },
                     contentAlignment = Alignment.Center
                 ) {

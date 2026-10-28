@@ -2,6 +2,7 @@ package com.chroma.studio.chat.ui.components
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -698,12 +699,12 @@ private fun MessageSelectionBox(
             modifier = Modifier
                 .padding(end = 10.dp)
                 .size(22.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(if (isSelected) colors.iosBlue else Color.Transparent)
+                .clip(CircleShape)
+                .background(if (isSelected) com.chroma.studio.ui.components.LiquidGlassTokens.AppleSystemBlue else Color.Transparent)
                 .border(
                     width = if (isSelected) 0.dp else 1.5.dp,
                     color = if (isSelected) Color.Transparent else colors.textMuted.copy(alpha = 0.5f),
-                    shape = RoundedCornerShape(6.dp)
+                    shape = CircleShape
                 )
                 .clickable { onToggleSelect() },
             contentAlignment = Alignment.Center
@@ -1967,18 +1968,24 @@ fun VoiceNotePlayer(
 
                 Spacer(Modifier.width(6.dp))
 
-                // Speed Indicator Pill
+                // Speed Indicator Pill (Apple 9999.dp Pill with Glass Border)
+                val speedPillShape = RoundedCornerShape(9999.dp)
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
+                        .clip(speedPillShape)
                         .background(if (isOutgoing) Color.White.copy(alpha = 0.22f) else colors.surfaceSecondary)
+                        .border(
+                            0.5.dp,
+                            if (isOutgoing) Color.White.copy(alpha = 0.45f) else colors.iosBlue.copy(alpha = 0.25f),
+                            speedPillShape
+                        )
                         .clickable(
                             interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                             indication = null
                         ) {
                             AudioPlayerManager.cycleSpeed()
                         }
-                        .padding(horizontal = 5.dp, vertical = 1.5.dp),
+                        .padding(horizontal = 7.dp, vertical = 2.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -2289,12 +2296,13 @@ fun PollCard(
                                     )
                                     if (isWinner) {
                                         Surface(
-                                            shape = RoundedCornerShape(6.dp),
-                                            color = Color(0xFF34C759).copy(alpha = if (isOutgoing) 0.35f else 0.16f)
+                                            shape = RoundedCornerShape(9999.dp),
+                                            color = Color(0xFF34C759).copy(alpha = if (isOutgoing) 0.35f else 0.16f),
+                                            border = BorderStroke(0.5.dp, Color(0xFF34C759).copy(alpha = 0.5f))
                                         ) {
                                             Row(
                                                 verticalAlignment = Alignment.CenterVertically,
-                                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
                                             ) {
                                                 Text(
                                                     text = "🏆 WINNER",
@@ -2415,9 +2423,11 @@ fun PollCard(
             ) {
                 // Retract Vote Button
                 if (hasVoted && !poll.isClosed && onRetractVote != null) {
+                    val pillShape = RoundedCornerShape(9999.dp)
                     Surface(
-                        shape = RoundedCornerShape(8.dp),
+                        shape = pillShape,
                         color = if (isOutgoing) Color.White.copy(alpha = 0.18f) else Color(0xFFFF3B30).copy(alpha = 0.10f),
+                        border = BorderStroke(0.5.dp, if (isOutgoing) Color.White.copy(alpha = 0.35f) else Color(0xFFFF3B30).copy(alpha = 0.3f)),
                         modifier = Modifier.clickable {
                             SoundManager.playReaction()
                             onRetractVote()
@@ -2426,7 +2436,7 @@ fun PollCard(
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.5.dp)
                         ) {
                             Text(
                                 text = "Retract",
@@ -2440,9 +2450,11 @@ fun PollCard(
 
                 // End Poll Button (for poll creator if poll is open)
                 if (isOutgoing && !poll.isClosed && onClosePoll != null) {
+                    val pillShape = RoundedCornerShape(9999.dp)
                     Surface(
-                        shape = RoundedCornerShape(8.dp),
+                        shape = pillShape,
                         color = if (isOutgoing) Color.White.copy(alpha = 0.18f) else colors.surfaceSecondary,
+                        border = BorderStroke(0.5.dp, if (isOutgoing) Color.White.copy(alpha = 0.35f) else colors.borderSubtle),
                         modifier = Modifier.clickable {
                             SoundManager.playReaction()
                             showEndPollConfirmDialog = true
@@ -2451,7 +2463,7 @@ fun PollCard(
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.5.dp)
                         ) {
                             Text(
                                 text = "End Poll",
@@ -2463,10 +2475,12 @@ fun PollCard(
                     }
                 }
 
-                // "View Votes" Apple Rounded Button
+                // "View Votes" Apple Specular Glass Pill Button
+                val viewVotesShape = RoundedCornerShape(9999.dp)
                 Surface(
-                    shape = RoundedCornerShape(8.dp),
+                    shape = viewVotesShape,
                     color = if (isOutgoing) Color.White.copy(alpha = 0.22f) else colors.iosBlue.copy(alpha = 0.12f),
+                    border = BorderStroke(0.5.dp, if (isOutgoing) Color.White.copy(alpha = 0.45f) else colors.iosBlue.copy(alpha = 0.3f)),
                     modifier = Modifier.clickable(enabled = onViewVotes != null) {
                         SoundManager.playReaction()
                         onViewVotes?.invoke()
@@ -2475,7 +2489,7 @@ fun PollCard(
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
+                        modifier = Modifier.padding(horizontal = 11.dp, vertical = 4.5.dp)
                     ) {
                         Text(
                             text = "View Votes",

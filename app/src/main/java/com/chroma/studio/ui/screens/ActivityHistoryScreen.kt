@@ -255,9 +255,10 @@ fun ActivityHistoryScreen(
                             if (count > 0) {
                                 Box(
                                     modifier = Modifier
-                                        .clip(RoundedCornerShape(6.dp))
+                                        .clip(RoundedCornerShape(9999.dp))
                                         .background(if (isSelected) Color(0xFF007AFF).copy(alpha = 0.15f) else colors.glassBorder.copy(alpha = 0.3f))
-                                        .padding(horizontal = 5.dp, vertical = 1.dp),
+                                        .border(0.5.dp, if (isSelected) Color(0xFF007AFF).copy(alpha = 0.3f) else Color.Transparent, RoundedCornerShape(9999.dp))
+                                        .padding(horizontal = 7.dp, vertical = 1.5.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(

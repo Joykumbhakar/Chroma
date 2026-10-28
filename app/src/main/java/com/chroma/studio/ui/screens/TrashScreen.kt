@@ -418,8 +418,8 @@ fun TrashCard(
     val baseScale by animateFloatAsState(if (isSelected) 0.95f else 1f, label = "baseScale")
     val scale = baseScale * deleteScale
     
-    val cardCorner = RoundedCornerShape(12.dp)
-    val checkCorner = RoundedCornerShape(6.dp)
+    val cardCorner = RoundedCornerShape(14.dp)
+    val checkCorner = CircleShape
 
     val borderWidth = if (isSelected) 2.dp else 0.75.dp
     val borderColor = if (isSelected) colors.primary else colors.glassBorder

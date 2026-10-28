@@ -854,9 +854,10 @@ private fun StepGroupDetails(
 
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
+                        .clip(RoundedCornerShape(9999.dp))
                         .background(colors.iosBlueSubtle)
-                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                        .border(0.5.dp, colors.iosBlue.copy(alpha = 0.25f), RoundedCornerShape(9999.dp))
+                        .padding(horizontal = 9.dp, vertical = 3.dp)
                 ) {
                     Text(
                         text = "Admin",

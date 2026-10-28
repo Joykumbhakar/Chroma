@@ -45,7 +45,10 @@ object LiquidGlassTokens {
     val CanvasBg = Color(0xFFF4F7FB)
     val SurfaceCard = Color(0xFFFFFFFF)
     val BorderFlat = Color(0xFFDFE8F3)
-    val AccentBlue = Color(0xFF0A84FF)
+    val AccentBlue = Color(0xFF007AFF)
+    val AppleSystemBlue = Color(0xFF007AFF)
+    val AppleSystemBlueActive = Color(0xFF0066D6)
+    val AppleSystemBlueHover = Color(0xFF0071EB)
     val TextPrimary = Color(0xFF0F172A)
     val TextSecondary = Color(0xFF64748B)
 
@@ -57,13 +60,28 @@ object LiquidGlassTokens {
         )
     )
 
-    val PrimarySpecularBorder = Brush.linearGradient(
-        0.00f to Color(0xEBFFFFFF),
-        0.50f to Color(0xA67CC4FF),
-        1.00f to Color(0xD9E0F2FE),
+    // Exact Apple Precision Specular Glass Border (168deg multi-angle specular rim)
+    val AppleSpecularGlassBorder = Brush.linearGradient(
+        0.00f to Color(1f, 1f, 1f, 0.95f),
+        0.24f to Color(1f, 1f, 1f, 0.52f),
+        0.50f to Color(1f, 1f, 1f, 0.14f),
+        0.76f to Color(0.745f, 0.902f, 1f, 0.32f),
+        1.00f to Color(1f, 1f, 1f, 0.78f),
         start = Offset.Zero,
-        end = Offset.Infinite
+        end = Offset(120f, 480f)
     )
+
+    val SurfaceSpecularGlassBorder = Brush.linearGradient(
+        0.00f to Color(1f, 1f, 1f, 0.85f),
+        0.24f to Color(1f, 1f, 1f, 0.45f),
+        0.50f to Color(1f, 1f, 1f, 0.12f),
+        0.76f to Color(1f, 1f, 1f, 0.28f),
+        1.00f to Color(1f, 1f, 1f, 0.70f),
+        start = Offset.Zero,
+        end = Offset(120f, 480f)
+    )
+
+    val PrimarySpecularBorder = AppleSpecularGlassBorder
 
     val SecondaryWhiteGradient = Brush.verticalGradient(
         listOf(
@@ -109,7 +127,9 @@ fun LiquidGlassCard(
 
 /**
  * Liquid Glass Primary Button (btn-primary)
- * Full 9999.dp Pill, Blue gradient (#4DA6FF -> #0A84FF -> #0051D5), specular glass border sheen.
+ * Apple Flat System Blue (#007AFF) core + Precision Specular Glass Rim (Composite 1px mask)
+ * 100% Flat Cupertino Blue core with zero surface gradient.
+ * Full 9999.dp Pill, 0.5px hairline contour, active scale(0.97f) + active background #0066D6.
  */
 @Composable
 fun LiquidGlassPrimaryButton(
@@ -119,17 +139,45 @@ fun LiquidGlassPrimaryButton(
     isSmall: Boolean = false,
     content: @Composable RowScope.() -> Unit
 ) {
-    val height = if (isSmall) 32.dp else 42.dp
-    val horizontalPadding = if (isSmall) 14.dp else 22.dp
+    val height = if (isSmall) 32.dp else 40.dp
+    val horizontalPadding = if (isSmall) 14.dp else 20.dp
     val shape = RoundedCornerShape(LiquidGlassTokens.PillCornerRadius)
+
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.97f else 1f,
+        animationSpec = tween(160, easing = CubicBezierEasing(0.22f, 1f, 0.36f, 1f)),
+        label = "btnScale"
+    )
+
+    val bgColor by animateColorAsState(
+        targetValue = when {
+            !enabled -> Color(0xFF94A3B8)
+            isPressed -> LiquidGlassTokens.AppleSystemBlueActive
+            else -> LiquidGlassTokens.AppleSystemBlue
+        },
+        animationSpec = tween(160),
+        label = "btnBgColor"
+    )
 
     Box(
         modifier = modifier
+            .scale(scale)
             .defaultMinSize(minHeight = height)
             .clip(shape)
-            .background(if (enabled) LiquidGlassTokens.PrimaryBlueGradient else Brush.verticalGradient(listOf(Color(0xFF94A3B8), Color(0xFF64748B))))
-            .border(1.5.dp, if (enabled) LiquidGlassTokens.PrimarySpecularBorder else Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.2f), Color.Transparent)), shape)
-            .clickable(enabled = enabled, onClick = onClick)
+            .background(bgColor)
+            // Crisp 0.5px outer contour
+            .border(0.5.dp, if (enabled) Color(0x8C0051D5) else Color.Transparent, shape)
+            // 1.0px Optical Specular Glass Rim
+            .border(1.dp, if (enabled) LiquidGlassTokens.AppleSpecularGlassBorder else Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.2f), Color.Transparent)), shape)
+            .clickable(
+                enabled = enabled,
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
             .padding(horizontal = horizontalPadding),
         contentAlignment = Alignment.Center
     ) {
@@ -185,7 +233,7 @@ fun LiquidGlassPrimaryButton(
 
 /**
  * Liquid Glass Secondary Button (btn-secondary)
- * Full 9999.dp Pill, Pure white gradient surface, thin solid black border, text & icon Color.Black.
+ * Full 9999.dp Pill, Pure white surface, specular glass border, active scale(0.97f).
  */
 @Composable
 fun LiquidGlassSecondaryButton(
@@ -195,17 +243,33 @@ fun LiquidGlassSecondaryButton(
     isSmall: Boolean = false,
     content: @Composable RowScope.() -> Unit
 ) {
-    val height = if (isSmall) 32.dp else 42.dp
-    val horizontalPadding = if (isSmall) 14.dp else 22.dp
+    val height = if (isSmall) 32.dp else 40.dp
+    val horizontalPadding = if (isSmall) 14.dp else 20.dp
     val shape = RoundedCornerShape(LiquidGlassTokens.PillCornerRadius)
+
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.97f else 1f,
+        animationSpec = tween(160, easing = CubicBezierEasing(0.22f, 1f, 0.36f, 1f)),
+        label = "secBtnScale"
+    )
 
     Box(
         modifier = modifier
+            .scale(scale)
             .defaultMinSize(minHeight = height)
             .clip(shape)
             .background(if (enabled) LiquidGlassTokens.SecondaryWhiteGradient else Brush.verticalGradient(listOf(Color(0xFFF1F5F9), Color(0xFFE2E8F0))))
-            .border(1.dp, if (enabled) LiquidGlassTokens.SecondarySpecularBorder else Brush.verticalGradient(listOf(Color(0xFFCBD5E1), Color(0xFF94A3B8))), shape)
-            .clickable(enabled = enabled, onClick = onClick)
+            .border(1.dp, if (enabled) LiquidGlassTokens.SurfaceSpecularGlassBorder else Brush.verticalGradient(listOf(Color(0xFFCBD5E1), Color(0xFF94A3B8))), shape)
+            .border(0.5.dp, Color.Black.copy(alpha = 0.08f), shape)
+            .clickable(
+                enabled = enabled,
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
             .padding(horizontal = horizontalPadding),
         contentAlignment = Alignment.Center
     ) {
@@ -217,6 +281,106 @@ fun LiquidGlassSecondaryButton(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 content()
+            }
+        }
+    }
+}
+
+/**
+ * Liquid Glass Pill Chip (.liquid-glass-chip)
+ * Apple pill shape (9999.dp) with specular glass border.
+ * When selected: pure Flat Apple System Blue (#007AFF) core + 1px Specular Glass Border + scale feedback.
+ * When unselected: frosted subtle surface + 0.5px crisp glass rim.
+ */
+@Composable
+fun LiquidGlassPillChip(
+    text: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    leadingIcon: ImageVector? = null,
+    trailingText: String? = null,
+    isSmall: Boolean = false,
+    activeColor: Color = LiquidGlassTokens.AppleSystemBlue
+) {
+    val shape = RoundedCornerShape(LiquidGlassTokens.PillCornerRadius)
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.96f else 1f,
+        animationSpec = tween(140, easing = CubicBezierEasing(0.22f, 1f, 0.36f, 1f)),
+        label = "chipScale"
+    )
+
+    val isDark = isSystemInDarkTheme()
+    val unselectedBg = if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9)
+    val unselectedBorder = if (isDark) Color(0x33FFFFFF) else Color(0x18000000)
+
+    val bgColor by animateColorAsState(
+        targetValue = if (isSelected) activeColor else unselectedBg,
+        animationSpec = tween(180),
+        label = "chipBg"
+    )
+
+    val textColor by animateColorAsState(
+        targetValue = if (isSelected) Color.White else (if (isDark) Color(0xFFE2E8F0) else Color(0xFF334155)),
+        animationSpec = tween(180),
+        label = "chipText"
+    )
+
+    Box(
+        modifier = modifier
+            .scale(scale)
+            .clip(shape)
+            .background(bgColor)
+            .then(
+                if (isSelected) {
+                    Modifier
+                        .border(0.5.dp, Color(0x8C0051D5), shape)
+                        .border(1.dp, LiquidGlassTokens.AppleSpecularGlassBorder, shape)
+                } else {
+                    Modifier
+                        .border(0.5.dp, unselectedBorder, shape)
+                        .border(0.5.dp, LiquidGlassTokens.SurfaceSpecularGlassBorder, shape)
+                }
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
+            .padding(
+                horizontal = if (isSmall) 10.dp else 14.dp,
+                vertical = if (isSmall) 4.5.dp else 6.5.dp
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            if (leadingIcon != null) {
+                Icon(
+                    imageVector = leadingIcon,
+                    contentDescription = null,
+                    tint = textColor,
+                    modifier = Modifier.size(if (isSmall) 12.dp else 14.dp)
+                )
+            }
+            Text(
+                text = text,
+                color = textColor,
+                fontSize = if (isSmall) 11.5.sp else 12.5.sp,
+                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium
+            )
+            if (trailingText != null) {
+                Text(
+                    text = trailingText,
+                    color = textColor.copy(alpha = 0.75f),
+                    fontSize = if (isSmall) 10.sp else 11.sp,
+                    fontWeight = FontWeight.Normal
+                )
             }
         }
     }

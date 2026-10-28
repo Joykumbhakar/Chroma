@@ -632,12 +632,12 @@ fun HomeScreen(
                         Spacer(Modifier.width(8.dp))
                         Box(
                             modifier = Modifier
-                                .size(24.dp)
-                                .clip(RoundedCornerShape(6.dp))
+                                .size(26.dp)
+                                .clip(CircleShape)
                                 .background(heroIconBg),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Lucide.ChevronRight, null, tint = heroTextColor, modifier = Modifier.size(14.dp))
+                            Icon(Lucide.ChevronRight, null, tint = heroTextColor, modifier = Modifier.size(15.dp))
                         }
                     }
 
@@ -1825,10 +1825,10 @@ fun WorkCard(
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
+                                    .clip(RoundedCornerShape(9999.dp))
                                     .background(colors.glassBgHover.copy(alpha = 0.7f))
-                                    .border(0.5.dp, colors.glassBorder, RoundedCornerShape(6.dp))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    .border(0.5.dp, colors.glassBorder, RoundedCornerShape(9999.dp))
+                                    .padding(horizontal = 8.dp, vertical = 2.5.dp)
                             ) {
                                 Text(
                                     text = work.canvasShape.replaceFirstChar { it.uppercase() },
