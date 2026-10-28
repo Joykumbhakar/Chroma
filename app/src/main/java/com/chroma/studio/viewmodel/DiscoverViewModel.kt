@@ -144,9 +144,10 @@ class DiscoverViewModel : ViewModel() {
         viewModelScope.launch {
             _isTrendingLoading.value = true
             try {
-                val remoteTrending = repository.getTrendingWorks(5)
-                val pendingOptimistic = _works.value.filter { it.id.startsWith("temp_") }
-                val combined = (pendingOptimistic + remoteTrending).distinctBy { it.id }
+                val remoteTrending = repository.getTrendingWorks(30)
+                val localQualifying = _works.value.filter { it.likesCount > 100 && it.effectiveCommentsCount >= 5 }
+                val combined = (localQualifying + remoteTrending).distinctBy { it.id }
+                    .filter { it.likesCount > 100 && it.effectiveCommentsCount >= 5 }
                     .sortedByDescending { it.likesCount }
                 _trendingWorks.value = combined
             } catch (e: Exception) {
@@ -227,15 +228,10 @@ class DiscoverViewModel : ViewModel() {
                         )
                     } else it
                 }
-                _trendingWorks.value = _trendingWorks.value.map {
-                    if (it.id == workId) {
-                        val newLikedBy = if (nextLiked) (it.likedBy + uid).distinct() else (it.likedBy - uid)
-                        it.copy(
-                            likesCount = maxOf(0, it.likesCount + if (nextLiked) 1 else -1),
-                            likedBy = newLikedBy
-                        )
-                    } else it
-                }
+                val updatedTrending = (_trendingWorks.value + _works.value).distinctBy { it.id }
+                    .filter { it.likesCount > 100 && it.effectiveCommentsCount >= 5 }
+                    .sortedByDescending { it.likesCount }
+                _trendingWorks.value = updatedTrending
                 if (!nextLiked) {
                     _likedWorks.value = _likedWorks.value.filter { it.id != workId }
                 }

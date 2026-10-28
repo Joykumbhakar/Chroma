@@ -52,6 +52,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -346,10 +347,20 @@ fun DiscoverScreen(
     var showCommunityGuidelines by remember { mutableStateOf(false) }
 
     // Community Feed: All real creations, filtered dynamically by search query, tab, and sort order
+    val qualifyingMasterworks = remember(trendingWorks, works) {
+        (trendingWorks + works.filter { it.likesCount > 100 && it.effectiveCommentsCount >= 5 })
+            .distinctBy { it.id }
+            .filter { it.likesCount > 100 && it.effectiveCommentsCount >= 5 }
+            .sortedByDescending { it.likesCount }
+    }
+
     val filteredWorks = remember(works, searchQuery, selectedFeedTab, selectedSortOrder, trendingWorks, followingUserIds, savedWorkIds) {
         val baseList = when (selectedFeedTab) {
             CommunityFeedTab.ALL -> works
-            CommunityFeedTab.TRENDING -> if (trendingWorks.isNotEmpty()) trendingWorks else works.sortedByDescending { it.likesCount }
+            CommunityFeedTab.TRENDING -> {
+                val list = if (trendingWorks.isNotEmpty()) trendingWorks else works
+                list.filter { it.likesCount > 100 && it.effectiveCommentsCount >= 5 }.sortedByDescending { it.likesCount }
+            }
             CommunityFeedTab.FLASH -> works.filter { isVideoPost(it) || it.postType == "video" || it.aspectRatio.trim() == "9:16" }
             CommunityFeedTab.FOLLOWING -> works.filter { followingUserIds.contains(it.creatorId) }
             CommunityFeedTab.SAVED -> works.filter { savedWorkIds.contains(it.id) }
@@ -623,10 +634,10 @@ fun DiscoverScreen(
                     }
 
                     // ── NEW FEATURE 2: TRENDING MASTERWORKS SPOTLIGHT REEL ──
-                    if ((selectedFeedTab == CommunityFeedTab.ALL || selectedFeedTab == CommunityFeedTab.TRENDING) && trendingWorks.isNotEmpty() && searchQuery.isBlank()) {
+                    if ((selectedFeedTab == CommunityFeedTab.ALL || selectedFeedTab == CommunityFeedTab.TRENDING) && qualifyingMasterworks.isNotEmpty() && searchQuery.isBlank()) {
                         item(key = "trending_spotlight_reel") {
                             CommunityTrendingSpotlightReel(
-                                trendingWorks = trendingWorks,
+                                trendingWorks = qualifyingMasterworks,
                                 repository = repository,
                                 onWorkClick = { work ->
                                     onAuthorClick(work.creatorId, work.id)
@@ -644,7 +655,7 @@ fun DiscoverScreen(
                                 selectedFeedTab == CommunityFeedTab.FOLLOWING -> "You are not following any creators yet. Explore the community feed to discover and follow creative artists!"
                                 selectedFeedTab == CommunityFeedTab.SAVED -> "No bookmarked creations. Tap the bookmark icon on any post to save it to your private studio collection."
                                 selectedFeedTab == CommunityFeedTab.FLASH -> "No Flash video creations found. Be the first to publish a cinematic video!"
-                                selectedFeedTab == CommunityFeedTab.TRENDING -> "No trending creations right now. Refresh the feed or share your masterwork!"
+                                selectedFeedTab == CommunityFeedTab.TRENDING -> "No trending creations right now. Works require over 100 likes and 5 comments to qualify as a Trending Masterwork!"
                                 else -> "Be the first to share an inspiring creation!"
                             }
                             AppleEmptyTabState(
@@ -951,6 +962,7 @@ fun DiscoverScreen(
 @Composable
 fun TrendingCard(
     work: DiscoverPost,
+    rankIndex: Int = 0,
     repository: WorkRepository,
     onClick: () -> Unit = {}
 ) {
@@ -967,22 +979,19 @@ fun TrendingCard(
         }
     }
 
-    val cardShape = RoundedCornerShape(24.dp)
+    val cardShape = RoundedCornerShape(14.dp)
 
     Box(
         modifier = Modifier
-            .width(104.dp)
-            .aspectRatio(9f / 16f)
-            .shadow(
-                elevation = 4.dp,
-                shape = cardShape,
-                clip = false,
-                ambientColor = Color.Black.copy(alpha = 0.25f),
-                spotColor = Color.Black.copy(alpha = 0.35f)
-            )
+            .width(96.dp)
+            .height(138.dp)
             .clip(cardShape)
-            .background(colors.glassBg)
-            .border(0.5.dp, colors.glassBorder.copy(alpha = 0.4f), cardShape)
+            .background(if (colors.isDark) Color(0xFF1C1C1E) else Color(0xFFF2F2F7))
+            .border(
+                width = 0.5.dp,
+                color = if (colors.isDark) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.08f),
+                shape = cardShape
+            )
             .clickable { onClick() }
     ) {
         val isVideo = isVideoPost(work)
@@ -1022,55 +1031,124 @@ fun TrendingCard(
             )
         }
 
-        // Subtle bottom faded shadow scrim
+        // Top specular hairline highlight
         Box(
             modifier = Modifier
+                .align(Alignment.TopCenter)
                 .fillMaxWidth()
-                .fillMaxHeight(0.65f)
-                .align(Alignment.BottomCenter)
+                .height(0.75.dp)
                 .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
+                    Brush.horizontalGradient(
+                        listOf(
                             Color.Transparent,
-                            Color.Black.copy(alpha = 0.35f),
-                            Color.Black.copy(alpha = 0.85f)
+                            Color.White.copy(alpha = 0.45f),
+                            Color.Transparent
                         )
                     )
                 )
         )
 
-        // Bottom Info: ONLY Like Count and Title
+        // Top Rank Badge
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.5.dp),
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(5.5.dp)
+                .clip(RoundedCornerShape(5.dp))
+                .background(Color.Black.copy(alpha = 0.55f))
+                .border(0.5.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(5.dp))
+                .padding(horizontal = 4.dp, vertical = 2.dp)
+        ) {
+            Icon(
+                imageVector = Lucide.Flame,
+                contentDescription = null,
+                tint = Color(0xFFFF9500),
+                modifier = Modifier.size(9.dp)
+            )
+            Text(
+                text = "#${rankIndex + 1}",
+                fontSize = 8.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+        }
+
+        // Bottom Scrim & Compact Metrics
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.62f)
+                .align(Alignment.BottomCenter)
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            Color.Black.copy(alpha = 0.45f),
+                            Color.Black.copy(alpha = 0.88f)
+                        )
+                    )
+                )
+        )
+
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(horizontal = 10.dp, vertical = 11.dp)
+                .padding(horizontal = 7.dp, vertical = 7.dp),
+            verticalArrangement = Arrangement.spacedBy(2.5.dp)
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(3.5.dp)
-            ) {
-                Icon(
-                    imageVector = ChromaIcons.HeartFilled,
-                    contentDescription = null,
-                    tint = Color(0xFFFF2D55),
-                    modifier = Modifier.size(11.dp)
-                )
-                Text(
-                    text = "${work.likesCount}",
-                    color = Color.White,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            Spacer(Modifier.height(2.dp))
             Text(
-                text = work.title.ifEmpty { "Untitled" },
+                text = work.title.ifEmpty { "Masterwork" },
                 color = Color.White,
-                fontSize = 11.5.sp,
+                fontSize = 10.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+
+            // Compact Stats Row: Likes (> 100) & Comments (5+)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                // Likes
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Icon(
+                        imageVector = ChromaIcons.HeartFilled,
+                        contentDescription = null,
+                        tint = Color(0xFFFF2D55),
+                        modifier = Modifier.size(9.dp)
+                    )
+                    Text(
+                        text = "${work.likesCount}",
+                        color = Color.White,
+                        fontSize = 8.5.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                // Comments
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Icon(
+                        imageVector = Lucide.MessageCircle,
+                        contentDescription = null,
+                        tint = Color(0xFF38BDF8),
+                        modifier = Modifier.size(9.dp)
+                    )
+                    Text(
+                        text = "${work.effectiveCommentsCount}",
+                        color = Color.White.copy(alpha = 0.95f),
+                        fontSize = 8.5.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
         }
     }
 }
@@ -1256,8 +1334,8 @@ fun CommunityTrendingSpotlightReel(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(if (colors.isDark) Color(0xFF16161A) else Color.White)
-            .padding(vertical = 10.dp)
+            .background(if (colors.isDark) Color(0xFF141416) else Color.White)
+            .padding(vertical = 8.dp)
     ) {
         Row(
             modifier = Modifier
@@ -1270,24 +1348,52 @@ fun CommunityTrendingSpotlightReel(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Icon(
-                    imageVector = Lucide.Flame,
-                    contentDescription = null,
-                    tint = Color(0xFFFF9500),
-                    modifier = Modifier.size(16.dp)
-                )
+                Box(
+                    modifier = Modifier
+                        .size(20.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color(0xFFFF9500).copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Lucide.Flame,
+                        contentDescription = null,
+                        tint = Color(0xFFFF9500),
+                        modifier = Modifier.size(12.dp)
+                    )
+                }
                 Text(
                     text = "TRENDING MASTERWORKS",
                     fontSize = 11.5.sp,
                     fontWeight = FontWeight.Bold,
                     color = colors.textMain,
-                    letterSpacing = 0.5.sp
+                    letterSpacing = 0.6.sp
                 )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(100.dp))
+                        .background(if (colors.isDark) Color.White.copy(alpha = 0.10f) else Color.Black.copy(alpha = 0.05f))
+                        .border(
+                            0.5.dp,
+                            if (colors.isDark) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.08f),
+                            RoundedCornerShape(100.dp)
+                        )
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = "100+ ♥ • 5+ 💬",
+                        fontSize = 7.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = colors.textMuted
+                    )
+                }
             }
+
             Text(
-                text = "${trendingWorks.size} drops",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium,
+                text = "${trendingWorks.size} ${if (trendingWorks.size == 1) "drop" else "drops"}",
+                fontSize = 10.5.sp,
+                fontWeight = FontWeight.SemiBold,
                 color = colors.textMuted
             )
         }
@@ -1296,11 +1402,12 @@ fun CommunityTrendingSpotlightReel(
 
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(5.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(trendingWorks, key = { "trend_${it.id}" }) { work ->
+            itemsIndexed(trendingWorks, key = { _, work -> "trend_${work.id}" }) { index, work ->
                 TrendingCard(
                     work = work,
+                    rankIndex = index,
                     repository = repository,
                     onClick = { onWorkClick(work) }
                 )

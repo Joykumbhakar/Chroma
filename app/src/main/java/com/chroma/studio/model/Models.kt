@@ -91,6 +91,8 @@ data class DiscoverPost(
     val sharedBy: List<String> = emptyList(),
     val saveCount: Int = 0,
     val savedBy: List<String> = emptyList(),
+    val commentsCount: Int = 0,
+    val commentCount: Int = 0,
     val jsonUrl: String = "",
     val imageUrl: String? = null,
     val imageUrls: List<String> = emptyList(),
@@ -124,7 +126,15 @@ data class DiscoverPost(
     @get:com.google.firebase.firestore.PropertyName("archived")
     @set:com.google.firebase.firestore.PropertyName("archived")
     var isArchived: Boolean = false
-)
+) {
+    @get:com.google.firebase.firestore.Exclude
+    val effectiveCommentsCount: Int
+        get() = maxOf(commentsCount, commentCount)
+
+    @get:com.google.firebase.firestore.Exclude
+    val isTrendingMasterwork: Boolean
+        get() = likesCount > 100 && effectiveCommentsCount >= 5
+}
 
 data class CreatorPostDraft(
     val id: String = java.util.UUID.randomUUID().toString(),

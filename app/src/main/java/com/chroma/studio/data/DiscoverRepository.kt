@@ -64,6 +64,8 @@ class DiscoverRepository {
             sharedBy = fv.sharedBy,
             saveCount = fv.saveCount,
             savedBy = fv.savedBy,
+            commentsCount = fv.commentCount,
+            commentCount = fv.commentCount,
             remixedFromPostId = fv.remixedFromPostId,
             remixedFromAuthorUsername = fv.remixedFromAuthorUsername,
             timestamp = fv.timestamp,
@@ -1105,7 +1107,7 @@ class DiscoverRepository {
     }
 
     // ── Trending Posts ─────────────────────────────────────────────────────────
-    suspend fun getTrendingWorks(limit: Long = 5): List<DiscoverPost> {
+    suspend fun getTrendingWorks(limit: Long = 30): List<DiscoverPost> {
         return try {
             val snapshot = collection
                 .orderBy("likesCount", Query.Direction.DESCENDING)
@@ -1113,10 +1115,14 @@ class DiscoverRepository {
                 .get()
                 .await()
             val posts = snapshot.documents.mapNotNull { doc ->
-                doc.toObject(DiscoverPost::class.java)?.copy(
-                    id = if (doc.id.isNotBlank()) doc.id else (doc.toObject(DiscoverPost::class.java)?.id ?: "")
+                val p = doc.toObject(DiscoverPost::class.java)
+                val cCount = (doc.getLong("commentsCount") ?: doc.getLong("commentCount") ?: p?.commentsCount?.toLong() ?: 0L).toInt()
+                p?.copy(
+                    id = if (doc.id.isNotBlank()) doc.id else (p.id),
+                    commentsCount = cCount,
+                    commentCount = cCount
                 )
-            }.filter { !it.isArchived }
+            }.filter { !it.isArchived && it.likesCount > 100 && it.effectiveCommentsCount >= 5 }
 
             val flashes = try {
                 val fSnap = db.collection("flash_videos")
@@ -1126,7 +1132,10 @@ class DiscoverRepository {
                     .await()
                 fSnap.documents.mapNotNull { doc ->
                     val fv = doc.toObject(com.chroma.studio.model.FlashVideo::class.java)
-                    if (fv != null && !fv.isArchived) mapFlashToDiscoverPost(fv, doc.id) else null
+                    if (fv != null && !fv.isArchived) {
+                        val mapped = mapFlashToDiscoverPost(fv, doc.id)
+                        if (mapped.likesCount > 100 && mapped.effectiveCommentsCount >= 5) mapped else null
+                    } else null
                 }
             } catch (_: Exception) {
                 emptyList()
@@ -1134,6 +1143,7 @@ class DiscoverRepository {
 
             (posts + flashes)
                 .distinctBy { it.id }
+                .filter { it.likesCount > 100 && it.effectiveCommentsCount >= 5 }
                 .sortedByDescending { it.likesCount }
                 .take(limit.toInt())
         } catch (e: Exception) {
