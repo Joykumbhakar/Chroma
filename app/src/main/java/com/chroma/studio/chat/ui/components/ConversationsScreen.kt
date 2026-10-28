@@ -7,6 +7,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import kotlin.math.roundToInt
@@ -95,6 +96,7 @@ fun ConversationsScreen(
     onMuteChatToggle: (ChatConversation) -> Unit = {},
     onReadChatToggle: (ChatConversation) -> Unit = {},
     onLockChatToggle: (ChatConversation) -> Unit = {},
+    onLockMultipleChatsToggle: (List<String>) -> Unit = {},
     onArchiveChat: (ChatConversation) -> Unit = {},
     onClearChatHistory: (ChatConversation) -> Unit = {},
     onExportChat: (ChatConversation) -> Unit = {},
@@ -113,9 +115,11 @@ fun ConversationsScreen(
     var isSelectionMode by remember { mutableStateOf(false) }
     var isSearchExpanded by remember { mutableStateOf(false) }
     val selectedChatIds = remember { mutableStateListOf<String>() }
+    val context = LocalContext.current
     var chatPendingDelete by remember { mutableStateOf<ChatConversation?>(null) }
     var storyPendingDelete by remember { mutableStateOf<Story?>(null) }
     var showDeleteSelectedChatsDialog by remember { mutableStateOf(false) }
+    var showBiometricLockConfirmationDialog by remember { mutableStateOf(false) }
 
     val totalUnread = remember(chats) { chats.sumOf { it.unreadCount } }
 
@@ -179,7 +183,7 @@ fun ConversationsScreen(
                         )
 
                         Text(
-                            text = if (selectedChatIds.size == filteredChats.size) "Deselect" else "Select All",
+                            text = if (selectedChatIds.size >= filteredChats.size.coerceAtMost(5) && selectedChatIds.isNotEmpty()) "Deselect" else "Select All",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Normal,
                             color = colors.iosBlue,
@@ -189,24 +193,53 @@ fun ConversationsScreen(
                                     indication = null
                                 ) {
                                     SoundManager.playReaction()
-                                    if (selectedChatIds.size == filteredChats.size) {
+                                    if (selectedChatIds.size >= filteredChats.size.coerceAtMost(5) && selectedChatIds.isNotEmpty()) {
                                         selectedChatIds.clear()
                                     } else {
                                         selectedChatIds.clear()
-                                        selectedChatIds.addAll(filteredChats.map { it.id })
+                                        val toTake = filteredChats.take(5).map { it.id }
+                                        selectedChatIds.addAll(toTake)
+                                        if (filteredChats.size > 5) {
+                                            android.widget.Toast.makeText(
+                                                context,
+                                                "Selected top 5 chats (maximum limit is 5)",
+                                                android.widget.Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
                                     }
                                 }
                                 .padding(vertical = 4.dp)
                         )
                     } else {
-                        // "Chats" Title moved UP to top left
-                        Text(
-                            text = "Chats",
-                            fontSize = 30.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = colors.textDark,
-                            letterSpacing = (-0.5).sp
-                        )
+                        // "Chats" Title and Edit button
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Text(
+                                text = "Chats",
+                                fontSize = 30.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = colors.textDark,
+                                letterSpacing = (-0.5).sp
+                            )
+
+                            Text(
+                                text = "Edit",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Normal,
+                                color = colors.iosBlue,
+                                modifier = Modifier
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null
+                                    ) {
+                                        SoundManager.playReaction()
+                                        isSelectionMode = true
+                                    }
+                                    .padding(vertical = 4.dp, horizontal = 2.dp)
+                            )
+                        }
 
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -396,7 +429,32 @@ fun ConversationsScreen(
                         isSelectionMode = false
                         selectedChatIds.clear()
                     }) {
-                        Text("Pin", color = colors.iosBlue, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                        Text("Pin", color = colors.iosBlue, fontSize = 14.5.sp, fontWeight = FontWeight.Medium)
+                    }
+
+                    // Biometric Chat Lock Option
+                    val allSelectedLocked = selectedChatIds.isNotEmpty() && selectedChatIds.all { it in lockedChatIds }
+                    TextButton(onClick = {
+                        SoundManager.playReaction()
+                        if (selectedChatIds.isEmpty()) return@TextButton
+                        if (selectedChatIds.size > 5) {
+                            android.widget.Toast.makeText(context, "Select up to 5 chats", android.widget.Toast.LENGTH_SHORT).show()
+                            return@TextButton
+                        }
+                        showBiometricLockConfirmationDialog = true
+                    }) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            LucideLock(tint = colors.iosBlue, size = 15.dp)
+                            Text(
+                                text = if (allSelectedLocked) "Unlock" else "Lock",
+                                color = colors.iosBlue,
+                                fontSize = 14.5.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
 
                     // Archive
@@ -408,7 +466,7 @@ fun ConversationsScreen(
                         isSelectionMode = false
                         selectedChatIds.clear()
                     }) {
-                        Text("Archive", color = colors.iosBlue, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                        Text("Archive", color = colors.iosBlue, fontSize = 14.5.sp, fontWeight = FontWeight.Medium)
                     }
 
                     // Delete
@@ -663,7 +721,15 @@ fun ConversationsScreen(
                                 if (selectedChatIds.contains(chat.id)) {
                                     selectedChatIds.remove(chat.id)
                                 } else {
-                                    selectedChatIds.add(chat.id)
+                                    if (selectedChatIds.size >= 5) {
+                                        android.widget.Toast.makeText(
+                                            context,
+                                            "Maximum 5 chats can be selected for lock",
+                                            android.widget.Toast.LENGTH_SHORT
+                                        ).show()
+                                    } else {
+                                        selectedChatIds.add(chat.id)
+                                    }
                                 }
                             },
                             onClick = {
@@ -691,6 +757,7 @@ fun ConversationsScreen(
             IosConversationContextMenuModal(
                 chat = chat,
                 isPinned = chat.id in pinnedChatIds,
+                isLocked = chat.id in lockedChatIds,
                 onDismiss = { selectedChatForContextMenu = null },
                 onSelect = {
                     isSelectionMode = true
@@ -771,6 +838,42 @@ fun ConversationsScreen(
                     )
                 ),
                 onDismiss = { showDeleteSelectedChatsDialog = false }
+            )
+        }
+
+        if (showBiometricLockConfirmationDialog) {
+            val count = selectedChatIds.size
+            val allSelectedLocked = selectedChatIds.isNotEmpty() && selectedChatIds.all { it in lockedChatIds }
+            val title = if (allSelectedLocked) "Unlock with Biometrics?" else "Biometric Chat Lock"
+            val message = if (allSelectedLocked) {
+                "Are you sure you want to remove biometric lock from ${if (count == 1) "this conversation" else "$count selected conversations"}?"
+            } else {
+                "Are you sure you want to lock ${if (count == 1) "this conversation" else "$count selected conversations"} with Biometrics? You will need your biometric authentication to access them."
+            }
+            val confirmText = if (allSelectedLocked) "Unlock" else "Lock Chats"
+
+            IosAlertDialog(
+                title = title,
+                message = message,
+                actions = listOf(
+                    IosAlertAction(
+                        title = "Cancel",
+                        isCancel = true,
+                        onClick = { showBiometricLockConfirmationDialog = false }
+                    ),
+                    IosAlertAction(
+                        title = confirmText,
+                        isDestructive = false,
+                        onClick = {
+                            showBiometricLockConfirmationDialog = false
+                            val toLock = selectedChatIds.toList()
+                            isSelectionMode = false
+                            selectedChatIds.clear()
+                            onLockMultipleChatsToggle(toLock)
+                        }
+                    )
+                ),
+                onDismiss = { showBiometricLockConfirmationDialog = false }
             )
         }
 
@@ -1398,7 +1501,7 @@ private fun IosConversationListRow(
                             VerifiedBadge(size = 15.dp)
                         }
                         if (isLocked) {
-                            LucideLock(tint = colors.textMuted, size = 12.dp)
+                            LucideLock(tint = colors.iosBlue, size = 13.dp)
                         }
                         if (isPinned) {
                             LucidePin(tint = colors.iosBlue, size = 12.dp)
@@ -1415,12 +1518,12 @@ private fun IosConversationListRow(
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         if (isLocked) {
-                            LucideLock(tint = colors.textMuted.copy(alpha = 0.8f), size = 13.dp)
+                            LucideLock(tint = colors.iosBlue, size = 13.dp)
                             Text(
                                 text = "Locked conversation",
                                 fontSize = 14.sp,
                                 fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                                color = colors.textMuted.copy(alpha = 0.8f),
+                                color = colors.textMuted.copy(alpha = 0.85f),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )

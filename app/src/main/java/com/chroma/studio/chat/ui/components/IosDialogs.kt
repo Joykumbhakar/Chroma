@@ -1676,6 +1676,8 @@ fun IosConversationContextMenuModal(
 
     isPinned: Boolean = false,
 
+    isLocked: Boolean = false,
+
     onDismiss: () -> Unit,
 
     onSelect: () -> Unit = {},
@@ -1940,9 +1942,9 @@ fun IosConversationContextMenuModal(
 
                         ContextMenuItemRow(
 
-                            title = "Lock with Biometrics",
+                            title = if (isLocked) "Remove Biometric Lock" else "Lock with Biometrics",
 
-                            icon = { LucideLock(tint = colors.textDark, size = 18.dp) },
+                            icon = { LucideLock(tint = if (isLocked) colors.iosBlue else colors.textDark, size = 18.dp) },
 
                             onClick = { onLockToggle(); onDismiss() }
 

@@ -880,7 +880,14 @@ private fun ChatScreenContent(
     var selectedMessageForInfo by remember { mutableStateOf<ChatMessage?>(null) }
 
     var messageToForward by remember { mutableStateOf<ChatMessage?>(null) }
-    var lockedChatIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    val chatSecurityPrefs = remember {
+        context.getSharedPreferences("chroma_chat_security_prefs", android.content.Context.MODE_PRIVATE)
+    }
+    var lockedChatIds by remember {
+        mutableStateOf<Set<String>>(
+            chatSecurityPrefs.getStringSet("locked_chat_ids", emptySet())?.toSet() ?: emptySet()
+        )
+    }
     var unlockedChatSessionIds by remember { mutableStateOf<Set<String>>(emptySet()) }
 
     var activePollForDetails by remember { mutableStateOf<PollData?>(null) }
@@ -1811,7 +1818,7 @@ private fun ChatScreenContent(
             isFullCallModalOpen -> isFullCallModalOpen = false
 
             isInsideChat -> {
-
+                unlockedChatSessionIds = unlockedChatSessionIds - activeChatId
                 isInsideChat = false
 
                 if (chatViewModel != null) {
@@ -1910,25 +1917,7 @@ private fun ChatScreenContent(
                         }
                     }
 
-                    if (chatId in lockedChatIds) {
-                        val activity = context as? android.app.Activity
-                        val targetChat = chats.find { it.id == chatId }
-                        if (activity != null) {
-                            com.chroma.studio.chat.util.BiometricHelper.authenticate(
-                                activity = activity,
-                                title = "Locked Chat",
-                                subtitle = "Authenticate to open ${targetChat?.name ?: "conversation"}",
-                                onSuccess = openChatAction,
-                                onError = {
-                                    showToast("Authentication required to view locked chat")
-                                }
-                            )
-                        } else {
-                            openChatAction()
-                        }
-                    } else {
-                        openChatAction()
-                    }
+                    openChatAction()
                 },
 
             onStoryClick = { story ->
@@ -2035,7 +2024,9 @@ private fun ChatScreenContent(
                             title = "Unlock ${chat.name}",
                             subtitle = "Verify identity to remove biometric lock",
                             onSuccess = {
-                                lockedChatIds = lockedChatIds - chat.id
+                                val next = lockedChatIds - chat.id
+                                lockedChatIds = next
+                                chatSecurityPrefs.edit().putStringSet("locked_chat_ids", next).apply()
                                 showToast("Biometric lock removed from ${chat.name}")
                             },
                             onError = { err ->
@@ -2043,7 +2034,9 @@ private fun ChatScreenContent(
                             }
                         )
                     } else {
-                        lockedChatIds = lockedChatIds - chat.id
+                        val next = lockedChatIds - chat.id
+                        lockedChatIds = next
+                        chatSecurityPrefs.edit().putStringSet("locked_chat_ids", next).apply()
                         showToast("Biometric lock removed")
                     }
                 } else {
@@ -2053,7 +2046,9 @@ private fun ChatScreenContent(
                             title = "Lock ${chat.name}",
                             subtitle = "Confirm Face ID or fingerprint to lock chat",
                             onSuccess = {
-                                lockedChatIds = lockedChatIds + chat.id
+                                val next = lockedChatIds + chat.id
+                                lockedChatIds = next
+                                chatSecurityPrefs.edit().putStringSet("locked_chat_ids", next).apply()
                                 showToast("${chat.name} locked with Biometrics")
                             },
                             onError = { err ->
@@ -2061,8 +2056,61 @@ private fun ChatScreenContent(
                             }
                         )
                     } else {
-                        lockedChatIds = lockedChatIds + chat.id
+                        val next = lockedChatIds + chat.id
+                        lockedChatIds = next
+                        chatSecurityPrefs.edit().putStringSet("locked_chat_ids", next).apply()
                         showToast("${chat.name} locked")
+                    }
+                }
+            },
+
+            onLockMultipleChatsToggle = { chatIds ->
+                if (chatIds.isEmpty()) return@ConversationsScreen
+                val activity = context as? android.app.Activity
+                val allLocked = chatIds.all { it in lockedChatIds }
+                if (allLocked) {
+                    if (activity != null) {
+                        com.chroma.studio.chat.util.BiometricHelper.authenticate(
+                            activity = activity,
+                            title = "Unlock Chats",
+                            subtitle = "Verify biometric identity to remove chat lock",
+                            onSuccess = {
+                                val next = lockedChatIds - chatIds.toSet()
+                                lockedChatIds = next
+                                chatSecurityPrefs.edit().putStringSet("locked_chat_ids", next).apply()
+                                showToast("Biometric lock removed from selected chats")
+                            },
+                            onError = { err ->
+                                showToast("Authentication failed: $err")
+                            }
+                        )
+                    } else {
+                        val next = lockedChatIds - chatIds.toSet()
+                        lockedChatIds = next
+                        chatSecurityPrefs.edit().putStringSet("locked_chat_ids", next).apply()
+                        showToast("Biometric lock removed")
+                    }
+                } else {
+                    if (activity != null) {
+                        com.chroma.studio.chat.util.BiometricHelper.authenticate(
+                            activity = activity,
+                            title = "Biometric Chat Lock",
+                            subtitle = "Confirm Face ID or fingerprint to lock selected chats",
+                            onSuccess = {
+                                val next = lockedChatIds + chatIds.toSet()
+                                lockedChatIds = next
+                                chatSecurityPrefs.edit().putStringSet("locked_chat_ids", next).apply()
+                                showToast("${chatIds.size} chat(s) locked with Biometrics")
+                            },
+                            onError = { err ->
+                                showToast("Could not lock chats: $err")
+                            }
+                        )
+                    } else {
+                        val next = lockedChatIds + chatIds.toSet()
+                        lockedChatIds = next
+                        chatSecurityPrefs.edit().putStringSet("locked_chat_ids", next).apply()
+                        showToast("${chatIds.size} chat(s) locked")
                     }
                 }
             },
@@ -2778,12 +2826,162 @@ private fun ChatScreenContent(
                     // 2. Chat Messages Stream with Privacy Blur Shield when Locked
                     val isCurrentChatLocked = activeChatId in lockedChatIds && activeChatId !in unlockedChatSessionIds
 
+                    LaunchedEffect(activeChatId, isCurrentChatLocked) {
+                        if (isCurrentChatLocked) {
+                            kotlinx.coroutines.delay(180)
+                            val activity = context as? android.app.Activity
+                            if (activity != null) {
+                                com.chroma.studio.chat.util.BiometricHelper.authenticate(
+                                    activity = activity,
+                                    title = "Unlock ${activeChat.name}",
+                                    subtitle = "Verify identity to unveil locked conversation",
+                                    onSuccess = {
+                                        unlockedChatSessionIds = unlockedChatSessionIds + activeChatId
+                                        showToast("Chat unlocked")
+                                    },
+                                    onError = {
+                                        // Stays safely protected behind thick blur shield
+                                    }
+                                )
+                            }
+                        }
+                    }
+
                     Box(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth()
                     ) {
-                        ActiveChatMessageStream(
+                        if (isCurrentChatLocked) {
+                            // Thick Blur Privacy Shield: completely covers the screen, zero messages rendered
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(if (colors.isLight) Color(0xFDF2F2F7) else Color(0xFD0B0B0E))
+                                    .clickable(
+                                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                        indication = null
+                                    ) {},
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 32.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(76.dp)
+                                            .clip(CircleShape)
+                                            .background(if (colors.isLight) Color.White.copy(alpha = 0.9f) else Color(0xFF1C1C1E).copy(alpha = 0.9f))
+                                            .border(1.dp, colors.iosBlue.copy(alpha = 0.35f), CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        LucideLock(tint = colors.iosBlue, size = 34.dp)
+                                    }
+
+                                    Spacer(modifier = Modifier.height(18.dp))
+
+                                    Text(
+                                        text = "Chat Locked",
+                                        fontSize = 22.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = colors.textDark,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                        letterSpacing = (-0.3).sp
+                                    )
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    Text(
+                                        text = "This conversation is secured with Biometrics.\nAuthenticate with Face ID or fingerprint to unveil messages.",
+                                        fontSize = 14.5.sp,
+                                        fontWeight = FontWeight.Normal,
+                                        color = colors.textMuted,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                        lineHeight = 21.sp
+                                    )
+
+                                    Spacer(modifier = Modifier.height(28.dp))
+
+                                    // Unlock Chat Button (Rounded Pill Button)
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth(0.68f)
+                                            .height(48.dp)
+                                            .clip(CircleShape)
+                                            .background(colors.iosBlue)
+                                            .clickable {
+                                                SoundManager.playReaction()
+                                                val activity = context as? android.app.Activity
+                                                if (activity != null) {
+                                                    com.chroma.studio.chat.util.BiometricHelper.authenticate(
+                                                        activity = activity,
+                                                        title = "Unlock ${activeChat.name}",
+                                                        subtitle = "Authenticate to unveil conversation",
+                                                        onSuccess = {
+                                                            unlockedChatSessionIds = unlockedChatSessionIds + activeChatId
+                                                            showToast("Chat unlocked")
+                                                        },
+                                                        onError = {
+                                                            showToast("Authentication required")
+                                                        }
+                                                    )
+                                                }
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            LucideLock(tint = Color.White, size = 18.dp)
+                                            Text(
+                                                text = "Unlock Chat",
+                                                color = Color.White,
+                                                fontSize = 16.sp,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(14.dp))
+
+                                    // Back to Chats Button (Rounded Pill Button - Safe Skip & Return)
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth(0.68f)
+                                            .height(44.dp)
+                                            .clip(CircleShape)
+                                            .background(if (colors.isLight) Color(0xFFE5E5EA) else Color(0xFF2C2C2E))
+                                            .clickable {
+                                                SoundManager.playReaction()
+                                                unlockedChatSessionIds = unlockedChatSessionIds - activeChatId
+                                                isInsideChat = false
+                                                if (chatViewModel != null) {
+                                                    chatViewModel.setTypingStatus(false)
+                                                    chatViewModel.setRecordingStatus(false)
+                                                    chatViewModel.closeChat()
+                                                }
+                                                if (effectiveRoomId != null) {
+                                                    onNavigateBack?.invoke() ?: onBack?.invoke()
+                                                }
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "Back to Chats",
+                                            color = colors.textDark,
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                }
+                            }
+                        } else {
+                            ActiveChatMessageStream(
                         modifier = Modifier.fillMaxSize(),
                         listState = listState,
                         activeChat = activeChat,
@@ -2860,95 +3058,8 @@ private fun ChatScreenContent(
                             visibleMessageCount = count
                         }
                     )
-
-                    // Privacy Blur Shield Overlay: completely masks messages until unlocked
-                    if (isCurrentChatLocked) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(if (colors.isLight) Color(0xF4F2F2F7) else Color(0xF60D0D0E))
-                                .clickable(
-                                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                                    indication = null
-                                ) {},
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 32.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(68.dp)
-                                        .clip(RoundedCornerShape(16.dp))
-                                        .background(if (colors.isLight) Color.White else Color(0xFF1C1C1E))
-                                        .border(1.dp, if (colors.isLight) Color(0x18000000) else Color(0x28FFFFFF), RoundedCornerShape(16.dp)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    LucideLock(tint = colors.iosBlue, size = 30.dp)
-                                }
-
-                                Spacer(modifier = Modifier.height(18.dp))
-
-                                Text(
-                                    text = "Chat Locked",
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = colors.textDark,
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                )
-
-                                Spacer(modifier = Modifier.height(6.dp))
-
-                                Text(
-                                    text = "This conversation is secured with Biometrics.\nAuthenticate with Face ID or fingerprint to unveil messages.",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Normal,
-                                    color = colors.textMuted,
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                    lineHeight = 20.sp
-                                )
-
-                                Spacer(modifier = Modifier.height(24.dp))
-
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(colors.iosBlue)
-                                        .clickable {
-                                            val activity = context as? android.app.Activity
-                                            if (activity != null) {
-                                                com.chroma.studio.chat.util.BiometricHelper.authenticate(
-                                                    activity = activity,
-                                                    title = "Unlock ${activeChat.name}",
-                                                    subtitle = "Authenticate to unveil conversation",
-                                                    onSuccess = {
-                                                        unlockedChatSessionIds = unlockedChatSessionIds + activeChatId
-                                                        showToast("Chat unlocked")
-                                                    },
-                                                    onError = { err ->
-                                                        showToast("Authentication required")
-                                                    }
-                                                )
-                                            }
-                                        }
-                                        .padding(horizontal = 24.dp, vertical = 12.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = "Unlock Chat",
-                                        color = Color.White,
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                }
-                            }
                         }
                     }
-                }
 
                 // 3. Bottom Frosted Input Bar / Batch Selection Actions Bar
                 if (!isCurrentChatLocked) {
