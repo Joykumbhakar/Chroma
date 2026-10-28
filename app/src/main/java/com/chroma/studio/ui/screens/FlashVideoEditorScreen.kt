@@ -274,8 +274,8 @@ fun FlashVideoEditorScreen(
                 } else {
                     ToastManager.showToast("Saved to device!")
                 }
-            } catch (e: Exception) {
-                ToastManager.showToast("Could not save to gallery")
+            } catch (e: Throwable) {
+                ToastManager.showToast("Could not save to gallery: ${e.localizedMessage ?: "Unknown error"}")
             } finally {
                 isSavingToGallery = false
             }

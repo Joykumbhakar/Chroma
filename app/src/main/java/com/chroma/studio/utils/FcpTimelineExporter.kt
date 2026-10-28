@@ -83,19 +83,20 @@ object FcpTimelineExporter {
         val visibleLayers = textLayers.filter { it.isVisible && (it.primaryText.isNotBlank() || it.scriptText.isNotBlank()) }
         if (visibleLayers.isEmpty()) return null
 
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
+        return try {
+            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bitmap)
 
-        // Baseline scale factor relative to standard 360dp preview viewport
-        val scale = width / 360f
+            // Baseline scale factor relative to standard 360dp preview viewport
+            val scale = width / 360f
 
-        visibleLayers.forEach { layer ->
-            canvas.save()
+            visibleLayers.forEach { layer ->
+                canvas.save()
 
-            val cx = width / 2f + (layer.offsetX * scale)
-            val cy = height / 2f + (layer.offsetY * scale)
-            canvas.translate(cx, cy)
-            canvas.rotate(layer.rotationDeg)
+                val cx = width / 2f + (layer.offsetX * scale)
+                val cy = height / 2f + (layer.offsetY * scale)
+                canvas.translate(cx, cy)
+                canvas.rotate(layer.rotationDeg)
 
             val alphaInt = ((layer.opacity.coerceIn(0f, 1f)) * 255).toInt()
             val primaryTf = getTypeface(context, layer.primaryFontAsset)
@@ -435,8 +436,12 @@ object FcpTimelineExporter {
             canvas.restore()
         }
 
-        return bitmap
+        bitmap
+    } catch (t: Throwable) {
+        Log.e(TAG, "renderTextLayersToBitmap failed or out of memory", t)
+        null
     }
+}
 
     @Volatile
     private var isCancelled = false
@@ -917,13 +922,13 @@ object FcpTimelineExporter {
                             vFilter.append(String.format(Locale.US, ",noise=c0s=45:c1s=35:allf=t:enable='gte(t,%.3f)',hue=H='PI*sin(20*t)':enable='gte(t,%.3f)',eq=contrast=1.40:brightness=0.08:enable='gte(t,%.3f)',colorbalance=rs=0.18:bs=-0.15:enable='gte(t,%.3f)'", fadeStart, fadeStart, fadeStart, fadeStart))
                         }
                         FcpTransitionType.ZOOM_IN -> {
-                            vFilter.append(String.format(Locale.US, ",scale=w='iw*(1+1.8*(t-%.3f)/%.3f)':h='ih*(1+1.8*(t-%.3f)/%.3f)':eval=frame,crop=w=%d:h=%d,boxblur=8:enable='gte(t,%.3f)',fade=t=out:st=%.3f:d=%.3f:c=black", fadeStart, halfTrans, fadeStart, halfTrans, finalW, finalH, fadeStart, fadeStart, halfTrans))
+                            vFilter.append(String.format(Locale.US, ",scale=w='iw*(1+1.8*(t-%.3f)/%.3f)':h='ih*(1+1.8*(t-%.3f)/%.3f)':eval=frame,crop=w=%d:h=%d,avgblur=sizeX=8:enable='gte(t,%.3f)',fade=t=out:st=%.3f:d=%.3f:c=black", fadeStart, halfTrans, fadeStart, halfTrans, finalW, finalH, fadeStart, fadeStart, halfTrans))
                         }
                         FcpTransitionType.ZOOM_OUT -> {
                             vFilter.append(String.format(Locale.US, ",scale=w='max(2,iw*(1-0.65*(t-%.3f)/%.3f))':h='max(2,ih*(1-0.65*(t-%.3f)/%.3f))':eval=frame,pad=%d:%d:'(%d-iw)/2':'(%d-ih)/2':black,fade=t=out:st=%.3f:d=%.3f:c=black", fadeStart, halfTrans, fadeStart, halfTrans, finalW, finalH, finalW, finalH, fadeStart, halfTrans))
                         }
                         FcpTransitionType.WHIP_SPIN -> {
-                            vFilter.append(String.format(Locale.US, ",rotate='2*PI*(t-%.3f)/%.3f':ow=iw:oh=ih:c=black:enable='gte(t,%.3f)',boxblur=10:enable='gte(t,%.3f)',scale=w='iw*(1+0.45*(t-%.3f)/%.3f)':h='ih*(1+0.45*(t-%.3f)/%.3f)':eval=frame,crop=w=%d:h=%d,fade=t=out:st=%.3f:d=%.3f:c=black", fadeStart, halfTrans, fadeStart, fadeStart, fadeStart, halfTrans, fadeStart, halfTrans, finalW, finalH, fadeStart, halfTrans))
+                            vFilter.append(String.format(Locale.US, ",rotate='2*PI*(t-%.3f)/%.3f':ow=iw:oh=ih:c=black:enable='gte(t,%.3f)',avgblur=sizeX=10:enable='gte(t,%.3f)',scale=w='iw*(1+0.45*(t-%.3f)/%.3f)':h='ih*(1+0.45*(t-%.3f)/%.3f)':eval=frame,crop=w=%d:h=%d,fade=t=out:st=%.3f:d=%.3f:c=black", fadeStart, halfTrans, fadeStart, fadeStart, fadeStart, halfTrans, fadeStart, halfTrans, finalW, finalH, fadeStart, halfTrans))
                         }
                         FcpTransitionType.WIPE_HORIZONTAL -> {
                             vFilter.append(String.format(Locale.US, ",crop=w='max(2,%d*(1-(t-%.3f)/%.3f))':h=%d:x=0:y=0,pad=%d:%d:0:0:black", finalW, fadeStart, halfTrans, finalH, finalW, finalH))
@@ -938,7 +943,7 @@ object FcpTimelineExporter {
                             vFilter.append(String.format(Locale.US, ",crop=w='max(2,%d*(1-(t-%.3f)/%.3f))':h=%d:x='%d*0.5*(t-%.3f)/%.3f':y=0,pad=%d:%d:'(%d-iw)/2':0:black", finalW, fadeStart, halfTrans, finalH, finalW, fadeStart, halfTrans, finalW, finalH, finalW))
                         }
                         FcpTransitionType.VENETIAN_BLINDS -> {
-                            vFilter.append(String.format(Locale.US, ",crop=w=%d:h='max(2,%d*(1-(t-%.3f)/%.3f))':x=0:y=0,pad=%d:%d:0:0:black,boxblur=4:enable='gte(t,%.3f)'", finalW, finalH, fadeStart, halfTrans, finalW, finalH, fadeStart))
+                            vFilter.append(String.format(Locale.US, ",crop=w=%d:h='max(2,%d*(1-(t-%.3f)/%.3f))':x=0:y=0,pad=%d:%d:0:0:black,avgblur=sizeX=4:enable='gte(t,%.3f)'", finalW, finalH, fadeStart, halfTrans, finalW, finalH, fadeStart))
                         }
                         FcpTransitionType.CIRCLE_IRIS -> {
                             vFilter.append(String.format(Locale.US, ",vignette=angle='max(0.01,(PI/2.0)*(1-(t-%.3f)/%.3f))':x0='w/2':y0='h/2':enable='gte(t,%.3f)'", fadeStart, halfTrans, fadeStart))
@@ -956,7 +961,7 @@ object FcpTimelineExporter {
                             vFilter.append(String.format(Locale.US, ",scale=w='max(2,%d*cos((PI/2)*(t-%.3f)/%.3f))':h=%d:eval=frame,pad=%d:%d:'(%d-iw)/2':0:black,eq=brightness='-0.12*(t-%.3f)/%.3f':enable='gte(t,%.3f)'", finalW, fadeStart, halfTrans, finalH, finalW, finalH, finalW, fadeStart, halfTrans, fadeStart))
                         }
                         FcpTransitionType.PAGE_FLIP_3D -> {
-                            vFilter.append(String.format(Locale.US, ",scale=w='max(2,%d*cos((PI/2)*(t-%.3f)/%.3f)*(1-0.12*(t-%.3f)/%.3f))':h='%d*(1-0.12*(t-%.3f)/%.3f)':eval=frame,pad=%d:%d:'(%d-iw)/2':'(%d-ih)/2':black,boxblur=4:enable='gte(t,%.3f)'", finalW, fadeStart, halfTrans, fadeStart, halfTrans, finalH, fadeStart, halfTrans, finalW, finalH, finalW, finalH, fadeStart))
+                            vFilter.append(String.format(Locale.US, ",scale=w='max(2,%d*cos((PI/2)*(t-%.3f)/%.3f)*(1-0.12*(t-%.3f)/%.3f))':h='%d*(1-0.12*(t-%.3f)/%.3f)':eval=frame,pad=%d:%d:'(%d-iw)/2':'(%d-ih)/2':black,avgblur=sizeX=4:enable='gte(t,%.3f)'", finalW, fadeStart, halfTrans, fadeStart, halfTrans, finalH, fadeStart, halfTrans, finalW, finalH, finalW, finalH, fadeStart))
                         }
                         FcpTransitionType.WIPE_LEFT -> {
                             vFilter.append(String.format(Locale.US, ",fade=t=out:st=%.3f:d=%.3f:c=black", fadeStart, halfTrans))
@@ -987,13 +992,13 @@ object FcpTimelineExporter {
                             vFilter.append(String.format(Locale.US, ",noise=c0s=45:c1s=35:allf=t:enable='lte(t,%.3f)',hue=H='-PI*sin(20*t)':enable='lte(t,%.3f)',eq=contrast=1.40:brightness=0.08:enable='lte(t,%.3f)',colorbalance=rs=-0.15:bs=0.18:enable='lte(t,%.3f)'", prevHalfTrans, prevHalfTrans, prevHalfTrans, prevHalfTrans))
                         }
                         FcpTransitionType.ZOOM_IN -> {
-                            vFilter.append(String.format(Locale.US, ",scale=w='iw*(1.8-0.8*t/%.3f)':h='ih*(1.8-0.8*t/%.3f)':eval=frame,crop=w=%d:h=%d,boxblur=10:enable='lte(t,%.3f)',fade=t=in:st=0:d=%.3f:c=black", prevHalfTrans, prevHalfTrans, finalW, finalH, prevHalfTrans, prevHalfTrans))
+                            vFilter.append(String.format(Locale.US, ",scale=w='iw*(1.8-0.8*t/%.3f)':h='ih*(1.8-0.8*t/%.3f)':eval=frame,crop=w=%d:h=%d,avgblur=sizeX=10:enable='lte(t,%.3f)',fade=t=in:st=0:d=%.3f:c=black", prevHalfTrans, prevHalfTrans, finalW, finalH, prevHalfTrans, prevHalfTrans))
                         }
                         FcpTransitionType.ZOOM_OUT -> {
                             vFilter.append(String.format(Locale.US, ",scale=w='iw*(1.75-0.75*t/%.3f)':h='ih*(1.75-0.75*t/%.3f)':eval=frame,crop=w=%d:h=%d,fade=t=in:st=0:d=%.3f:c=black", prevHalfTrans, prevHalfTrans, finalW, finalH, prevHalfTrans))
                         }
                         FcpTransitionType.WHIP_SPIN -> {
-                            vFilter.append(String.format(Locale.US, ",rotate='-2*PI*(1-t/%.3f)':ow=iw:oh=ih:c=black:enable='lte(t,%.3f)',boxblur=10:enable='lte(t,%.3f)',scale=w='iw*(1.45-0.45*t/%.3f)':h='ih*(1.45-0.45*t/%.3f)':eval=frame,crop=w=%d:h=%d,fade=t=in:st=0:d=%.3f:c=black", prevHalfTrans, prevHalfTrans, prevHalfTrans, prevHalfTrans, prevHalfTrans, finalW, finalH, prevHalfTrans))
+                            vFilter.append(String.format(Locale.US, ",rotate='-2*PI*(1-t/%.3f)':ow=iw:oh=ih:c=black:enable='lte(t,%.3f)',avgblur=sizeX=10:enable='lte(t,%.3f)',scale=w='iw*(1.45-0.45*t/%.3f)':h='ih*(1.45-0.45*t/%.3f)':eval=frame,crop=w=%d:h=%d,fade=t=in:st=0:d=%.3f:c=black", prevHalfTrans, prevHalfTrans, prevHalfTrans, prevHalfTrans, prevHalfTrans, finalW, finalH, prevHalfTrans))
                         }
                         FcpTransitionType.WIPE_HORIZONTAL -> {
                             vFilter.append(String.format(Locale.US, ",crop=w='max(2,%d*t/%.3f)':h=%d:x=0:y=0,pad=%d:%d:0:0:black", finalW, prevHalfTrans, finalH, finalW, finalH))
@@ -1026,7 +1031,7 @@ object FcpTimelineExporter {
                             vFilter.append(String.format(Locale.US, ",scale=w='max(2,%d*sin((PI/2)*t/%.3f))':h=%d:eval=frame,pad=%d:%d:'(%d-iw)/2':0:black,eq=brightness='-0.12*(1-t/%.3f)':enable='lte(t,%.3f)'", finalW, prevHalfTrans, finalH, finalW, finalH, finalW, prevHalfTrans, prevHalfTrans))
                         }
                         FcpTransitionType.PAGE_FLIP_3D -> {
-                            vFilter.append(String.format(Locale.US, ",scale=w='max(2,%d*sin((PI/2)*t/%.3f)*(0.88+0.12*t/%.3f))':h='%d*(0.88+0.12*t/%.3f)':eval=frame,pad=%d:%d:'(%d-iw)/2':'(%d-ih)/2':black,boxblur=4:enable='lte(t,%.3f)'", finalW, prevHalfTrans, prevHalfTrans, finalH, prevHalfTrans, finalW, finalH, finalW, finalH, prevHalfTrans))
+                            vFilter.append(String.format(Locale.US, ",scale=w='max(2,%d*sin((PI/2)*t/%.3f)*(0.88+0.12*t/%.3f))':h='%d*(0.88+0.12*t/%.3f)':eval=frame,pad=%d:%d:'(%d-iw)/2':'(%d-ih)/2':black,avgblur=sizeX=4:enable='lte(t,%.3f)'", finalW, prevHalfTrans, prevHalfTrans, finalH, prevHalfTrans, finalW, finalH, finalW, finalH, prevHalfTrans))
                         }
                         FcpTransitionType.PARALLAX -> {
                             vFilter.append(String.format(Locale.US, ",scale=w='iw*(0.90+0.10*t/%.3f)':h='ih*(0.90+0.10*t/%.3f)':eval=frame,crop=w=%d:h=%d,fade=t=in:st=0:d=%.3f:c=black", prevHalfTrans, prevHalfTrans, finalW, finalH, prevHalfTrans))
@@ -1117,7 +1122,9 @@ object FcpTimelineExporter {
             if (customAudioInputIndex != null && customAudio != null) {
                 val vol = customAudio.volume.coerceIn(0f, 1f)
                 val muteOrig = customAudio.muteOriginalVideo
-                val loopFilter = if (customAudio.loopAudio) "aloop=loop=-1:size=2147483647," else ""
+                // Safe integer aloop sample allocation: size=2147483647 reference benchmark; allocate proportional to timeline to prevent 8.5GB OOM Linux process termination
+                val safeLoopSamples = ((totalTimelineDurationSec + 5f) * 44100).toInt().coerceIn(44100, 26_460_000)
+                val loopFilter = if (customAudio.loopAudio) "aloop=loop=-1:size=$safeLoopSamples," else ""
 
                 if (muteOrig) {
                     filterGraph.append(String.format(Locale.US, "[$customAudioInputIndex:a]aformat=sample_rates=44100:channel_layouts=stereo,${loopFilter}atrim=start=0:end=%.3f,asetpts=PTS-STARTPTS,volume=%.3f,apad[a_custom];", totalTimelineDurationSec, vol))
@@ -1152,7 +1159,9 @@ object FcpTimelineExporter {
                 else -> Triple("8M", "12M", "16M")
             }
 
-            RxFFmpegInvoke.getInstance().setDebug(true)
+            try {
+                RxFFmpegInvoke.getInstance().setDebug(true)
+            } catch (_: Throwable) {}
             var lastLoggedProgress = -1
             var ffmpegErrorMsg: String? = null
 
@@ -1181,50 +1190,26 @@ object FcpTimelineExporter {
                 }
             }
 
-            fun buildEncodingArgs(useHardwareCodec: Boolean): Array<String> {
+            fun buildEncodingArgs(preset: String = "ultrafast", crf: String = "23"): Array<String> {
                 val args = mutableListOf<String>()
                 args.addAll(cmdArgs)
-                args.add("-filter_complex")
-                args.add(finalGraph)
-                args.add("-map")
-                args.add(finalVideoStream)
-                args.add("-map")
-                args.add(finalAudioStream)
-                args.add("-t")
-                args.add(String.format(Locale.US, "%.3f", totalTimelineDurationSec))
-
-                if (useHardwareCodec) {
-                    // Android Hardware MediaCodec Acceleration (GPU/VPU ASIC)
-                    args.add("-c:v")
-                    args.add("h264_mediacodec")
-                    args.add("-b:v")
-                    args.add(targetBitrate)
-                    args.add("-maxrate")
-                    args.add(maxBitrate)
-                    args.add("-bufsize")
-                    args.add(bufSize)
-                    args.add("-pix_fmt")
-                    args.add("yuv420p")
-                } else {
-                    // Multi-threaded CPU libx264 optimized for mobile ARM
-                    args.add("-c:v")
-                    args.add("libx264")
-                    args.add("-preset")
-                    args.add("veryfast")
-                    args.add("-tune")
-                    args.add("zerolatency")
-                    args.add("-crf")
-                    args.add("25")
-                    args.add("-maxrate")
-                    args.add(maxBitrate)
-                    args.add("-bufsize")
-                    args.add(bufSize)
-                    args.add("-threads")
-                    args.add(numCores.toString())
-                    args.add("-pix_fmt")
-                    args.add("yuv420p")
-                }
-
+                // Multi-threaded CPU libx264 optimized for mobile ARM (zero latency, high throughput)
+                args.add("-c:v")
+                args.add("libx264")
+                args.add("-preset")
+                args.add(preset)
+                args.add("-tune")
+                args.add("zerolatency")
+                args.add("-crf")
+                args.add(crf)
+                args.add("-maxrate")
+                args.add(maxBitrate)
+                args.add("-bufsize")
+                args.add(bufSize)
+                args.add("-threads")
+                args.add(numCores.toString())
+                args.add("-pix_fmt")
+                args.add("yuv420p")
                 args.add("-c:a")
                 args.add("aac")
                 args.add("-b:a")
@@ -1240,22 +1225,33 @@ object FcpTimelineExporter {
                 return@withContext null
             }
 
-            onProgress(0.40f, "⚡ Rendering with Hardware Acceleration...")
-            val hwCmd = buildEncodingArgs(useHardwareCodec = true)
-            Log.d(TAG, "Executing Hardware FFmpeg (${hwCmd.size} args): ${hwCmd.joinToString(" ")}")
-            var returnCode = RxFFmpegInvoke.getInstance().runCommand(hwCmd, listener)
-            Log.d(TAG, "Hardware FFmpeg returned code: $returnCode (ErrorMsg: $ffmpegErrorMsg)")
+            try { outputFile.delete() } catch (_: Throwable) {}
+            onProgress(0.40f, "⚡ Rendering video timeline...")
+            val primaryCmd = buildEncodingArgs(preset = "ultrafast", crf = "23")
+            Log.d(TAG, "Executing FFmpeg (${primaryCmd.size} args): ${primaryCmd.joinToString(" ")}")
+            var returnCode = try {
+                RxFFmpegInvoke.getInstance().runCommand(primaryCmd, listener)
+            } catch (t: Throwable) {
+                Log.e(TAG, "RxFFmpeg primary invocation crashed", t)
+                -1
+            }
+            Log.d(TAG, "Primary FFmpeg returned code: $returnCode (ErrorMsg: $ffmpegErrorMsg)")
 
-            // If hardware encoder fails or format is unsupported on device, fallback to multi-threaded CPU libx264
+            // If primary preset fails or format unsupported, retry with safe compatibility preset
             if ((returnCode != 0 || !outputFile.exists() || outputFile.length() == 0L) && !isCancelled && isActive) {
-                Log.w(TAG, "Hardware MediaCodec returned $returnCode ($ffmpegErrorMsg). Falling back to multi-core libx264...")
-                onProgress(0.42f, "Rendering video (Multi-threaded CPU)...")
+                Log.w(TAG, "Primary FFmpeg returned $returnCode ($ffmpegErrorMsg). Retrying with compatibility encoding...")
+                onProgress(0.42f, "Rendering video (Compatibility mode)...")
                 try { outputFile.delete() } catch (_: Throwable) {}
                 ffmpegErrorMsg = null
-                val swCmd = buildEncodingArgs(useHardwareCodec = false)
-                Log.d(TAG, "Executing Software FFmpeg (${swCmd.size} args): ${swCmd.joinToString(" ")}")
-                returnCode = RxFFmpegInvoke.getInstance().runCommand(swCmd, listener)
-                Log.d(TAG, "Software FFmpeg returned code: $returnCode (ErrorMsg: $ffmpegErrorMsg)")
+                val fallbackCmd = buildEncodingArgs(preset = "veryfast", crf = "26")
+                Log.d(TAG, "Executing Fallback FFmpeg (${fallbackCmd.size} args): ${fallbackCmd.joinToString(" ")}")
+                returnCode = try {
+                    RxFFmpegInvoke.getInstance().runCommand(fallbackCmd, listener)
+                } catch (t: Throwable) {
+                    Log.e(TAG, "RxFFmpeg fallback invocation crashed", t)
+                    -1
+                }
+                Log.d(TAG, "Fallback FFmpeg returned code: $returnCode (ErrorMsg: $ffmpegErrorMsg)")
             }
 
             if (isCancelled || !isActive) {
@@ -1267,10 +1263,24 @@ object FcpTimelineExporter {
                 onProgress(0.95f, "Finishing up export...")
                 Log.i(TAG, "Export succeeded! Size: ${outputFile.length()} bytes, path: ${outputFile.absolutePath}")
                 return@withContext outputFile
-            } else {
-                Log.w(TAG, "FFmpeg render returned $returnCode or output file empty (error: $ffmpegErrorMsg); attempting fallback")
             }
-        } catch (e: Exception) {
+
+            // Native fallback: Try direct hardware muxing if FFmpeg failed
+            if (!isCancelled && isActive) {
+                Log.w(TAG, "FFmpeg render returned $returnCode or output file empty (error: $ffmpegErrorMsg); attempting native hardware muxer fallback")
+                onProgress(0.60f, "Using hardware direct muxer...")
+                try {
+                    outputFile.delete()
+                    val success = VideoProcessor.concatVideoClips(context, clips, outputFile)
+                    if (success && outputFile.exists() && outputFile.length() > 0L) {
+                        onProgress(0.90f, "Render complete!")
+                        return@withContext outputFile
+                    }
+                } catch (e: Throwable) {
+                    Log.e(TAG, "Native fallback failed", e)
+                }
+            }
+        } catch (e: Throwable) {
             Log.e(TAG, "exportTimeline encountered exception", e)
         } finally {
             try { overlayPngFile?.delete() } catch (_: Throwable) {}
@@ -1288,18 +1298,6 @@ object FcpTimelineExporter {
         if (isCancelled || !isActive) {
             try { outputFile.delete() } catch (_: Throwable) {}
             return@withContext null
-        }
-
-        // Native fallback if FFmpeg fails:
-        onProgress(0.60f, "Using hardware direct muxer...")
-        try {
-            val success = VideoProcessor.concatVideoClips(context, clips, outputFile)
-            if (success && outputFile.exists() && outputFile.length() > 0L) {
-                onProgress(0.90f, "Render complete!")
-                return@withContext outputFile
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Native fallback failed", e)
         }
 
         outputFile.delete()

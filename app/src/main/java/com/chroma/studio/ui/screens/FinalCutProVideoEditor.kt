@@ -1435,8 +1435,10 @@ fun FinalCutProVideoEditorScreen(
                     res = res,
                     fps = fps,
                     onProgress = { p, stage ->
-                        exportProgress = p
-                        exportStageText = stage
+                        scope.launch(Dispatchers.Main) {
+                            exportProgress = p
+                            exportStageText = stage
+                        }
                     }
                 )
 
@@ -1457,7 +1459,7 @@ fun FinalCutProVideoEditorScreen(
                         ExportHelper.saveVideoToGallery(context, exportedFile, galleryTitle)
                     }
                     // Clean up temporary cache file once saved
-                    try { exportedFile.delete() } catch (_: Exception) {}
+                    try { exportedFile.delete() } catch (_: Throwable) {}
 
                     exportProgress = 1.0f
                     delay(150L)
@@ -1476,7 +1478,7 @@ fun FinalCutProVideoEditorScreen(
                                         addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                                     }
                                     context.startActivity(viewIntent)
-                                } catch (e: Exception) {
+                                } catch (e: Throwable) {
                                     android.util.Log.w("FinalCutProVideoEditor", "Could not open saved video intent", e)
                                 }
                             }
@@ -1514,7 +1516,7 @@ fun FinalCutProVideoEditorScreen(
                 isExporting = false
                 exportProgress = 0f
                 showExportSheet = false
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 isExporting = false
                 showExportSheet = false
                 ToastManager.showToast("Export error: ${e.localizedMessage ?: "Unknown error"}")

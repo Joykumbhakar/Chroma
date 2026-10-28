@@ -463,6 +463,7 @@ object VideoProcessor {
 
         var muxer: MediaMuxer? = null
         try {
+            try { outputFile.delete() } catch (_: Throwable) {}
             muxer = MediaMuxer(outputFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
             var videoMuxTrack = -1
             var audioMuxTrack = -1
@@ -482,9 +483,9 @@ object VideoProcessor {
                         }
                     }
                     if (videoMuxTrack >= 0) break
-                } catch (_: Exception) {
+                } catch (_: Throwable) {
                 } finally {
-                    extractor.release()
+                    try { extractor.release() } catch (_: Throwable) {}
                 }
             }
 
@@ -499,6 +500,7 @@ object VideoProcessor {
             val bufferInfo = MediaCodec.BufferInfo()
             var globalVideoTimeOffsetUs = 0L
             var globalAudioTimeOffsetUs = 0L
+            var totalSamplesWritten = 0
 
             var hasClipErrors = false
             for (clip in clips) {
@@ -538,6 +540,7 @@ object VideoProcessor {
                                 bufferInfo.presentationTimeUs = globalVideoTimeOffsetUs + relativeTime
                                 bufferInfo.flags = extractor.sampleFlags
                                 muxer.writeSampleData(videoMuxTrack, buffer, bufferInfo)
+                                totalSamplesWritten++
                                 lastSampleUs = relativeTime
                             }
                             extractor.advance()
@@ -566,6 +569,7 @@ object VideoProcessor {
                                 bufferInfo.presentationTimeUs = globalAudioTimeOffsetUs + relativeTime
                                 bufferInfo.flags = extractor.sampleFlags
                                 muxer.writeSampleData(audioMuxTrack, buffer, bufferInfo)
+                                totalSamplesWritten++
                                 lastAudioSampleUs = relativeTime
                             }
                             extractor.advance()
@@ -573,21 +577,23 @@ object VideoProcessor {
                         extractor.unselectTrack(audioTrackIdx)
                         globalAudioTimeOffsetUs += (lastAudioSampleUs + 23_000L).coerceAtLeast(clipDurationUs)
                     }
-                } catch (e: Exception) {
+                } catch (e: Throwable) {
                     hasClipErrors = true
                     Log.e(TAG, "concatVideoClips failed on clip ${clip.id}", e)
                 } finally {
-                    extractor.release()
+                    try { extractor.release() } catch (_: Throwable) {}
                 }
             }
 
-            muxer.stop()
-            !hasClipErrors && outputFile.exists() && outputFile.length() > 0L
-        } catch (e: Exception) {
+            if (totalSamplesWritten > 0) {
+                try { muxer.stop() } catch (_: Throwable) {}
+            }
+            !hasClipErrors && totalSamplesWritten > 0 && outputFile.exists() && outputFile.length() > 0L
+        } catch (e: Throwable) {
             Log.e(TAG, "concatVideoClips muxer error", e)
             false
         } finally {
-            try { muxer?.release() } catch (_: Exception) {}
+            try { muxer?.release() } catch (_: Throwable) {}
         }
     }
 }
