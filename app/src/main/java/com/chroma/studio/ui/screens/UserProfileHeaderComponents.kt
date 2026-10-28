@@ -700,36 +700,27 @@ fun UserProfileBioDetailsSection(
         }
     }
 
-    // 6. Social Links Uiverse Squircle Dock
+    // 6. Social Links Uiverse Squircle Dock (Clean backgroundless row)
     val profileLinks = profile?.socialLinks ?: emptyMap()
     if (profileLinks.isNotEmpty()) {
-        Spacer(Modifier.height(8.dp))
-        Surface(
-            shape = RoundedCornerShape(18.dp),
-            color = if (colors.isDark) Color(0x33000000) else Color(0x0C000000),
-            border = BorderStroke(
-                1.dp,
-                if (colors.isDark) Color(0x1FFFFFFF) else Color(0x10000000)
-            )
+        Spacer(Modifier.height(6.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(7.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                profileLinks.forEach { (platform, url) ->
-                    ProfileSquircleSocialButton(
-                        platform = platform,
-                        onClick = {
-                            try {
-                                val targetUri = if (!url.startsWith("http://") && !url.startsWith("https://")) "https://$url" else url
-                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(targetUri)))
-                            } catch (_: Exception) {
-                                ToastManager.showToast("Could not open link")
-                            }
+            profileLinks.forEach { (platform, url) ->
+                ProfileSquircleSocialButton(
+                    platform = platform,
+                    onClick = {
+                        try {
+                            val targetUri = if (!url.startsWith("http://") && !url.startsWith("https://")) "https://$url" else url
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(targetUri)))
+                        } catch (_: Exception) {
+                            ToastManager.showToast("Could not open link")
                         }
-                    )
-                }
+                    }
+                )
             }
         }
     }
@@ -882,21 +873,21 @@ fun ProfileSquircleSocialButton(
         )
     }
 
-    val shape = RoundedCornerShape(13.dp)
+    val shape = RoundedCornerShape(9.5.dp)
 
     Box(
         modifier = Modifier
             .scale(scale)
-            .size(42.dp)
+            .size(32.dp)
             .shadow(
-                elevation = if (isPressed) 2.dp else 5.dp,
+                elevation = if (isPressed) 1.dp else 3.5.dp,
                 shape = shape,
                 ambientColor = Color.Black.copy(alpha = 0.15f),
                 spotColor = Color.Black.copy(alpha = 0.35f)
             )
             .clip(shape)
             .background(gradient)
-            .border(1.dp, borderColor, shape)
+            .border(0.75.dp, borderColor, shape)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -908,7 +899,7 @@ fun ProfileSquircleSocialButton(
             imageVector = icon,
             contentDescription = platform,
             tint = Color.White,
-            modifier = Modifier.size(20.dp)
+            modifier = Modifier.size(16.dp)
         )
     }
 }
