@@ -280,6 +280,7 @@ class ChatViewModel : ViewModel() {
             _localMessages.value = emptyList()
         }
         _activeRoomId.value = roomId
+        com.chroma.studio.ui.components.DynamicIslandManager.currentlyActiveRoomId = roomId
 
         // Observe participant presence in real-time
         val currentFirebaseUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
@@ -911,9 +912,14 @@ class ChatViewModel : ViewModel() {
 
     fun closeChat() {
         _activeRoomId.value = null
+        com.chroma.studio.ui.components.DynamicIslandManager.currentlyActiveRoomId = null
         messagesJob?.cancel()
         _serverMessages.value = emptyList()
         _localMessages.value = emptyList()
+    }
+
+    fun markRoomAsRead(roomId: String) {
+        markMultipleAsRead(listOf(roomId))
     }
 
 

@@ -489,12 +489,12 @@ class HomeActivity : ComponentActivity() {
                                             val currentRoute = currentBackStack?.destination?.route
                                             val routeRoomId = currentBackStack?.arguments?.getString("roomId")
                                             val isViewingInChatRoute = (currentRoute == "chat/{roomId}" || currentRoute?.startsWith("chat/") == true) &&
-                                                (routeRoomId == room.id || chatVm.activeRoomId.value == room.id)
+                                                (routeRoomId == room.id || chatVm.activeRoomId.value == room.id || com.chroma.studio.ui.components.DynamicIslandManager.currentlyActiveRoomId == room.id)
                                             val isViewingInChatTab = (currentRoute == "main" || currentRoute == null) &&
                                                 pagerState.currentPage == 3 &&
                                                 isInsideChatTab &&
-                                                chatVm.activeRoomId.value == room.id
-                                            val isUserViewingThisRoom = isViewingInChatRoute || isViewingInChatTab
+                                                (chatVm.activeRoomId.value == room.id || com.chroma.studio.ui.components.DynamicIslandManager.currentlyActiveRoomId == room.id)
+                                            val isUserViewingThisRoom = isViewingInChatRoute || isViewingInChatTab || (com.chroma.studio.ui.components.DynamicIslandManager.currentlyActiveRoomId == room.id)
 
                                             if (!isUserViewingThisRoom && room.lastSender != currentAuthUid) {
                                                 val senderId: String? = room.lastSender
@@ -506,6 +506,8 @@ class HomeActivity : ComponentActivity() {
                                                     messageText = room.lastMessage,
                                                     avatarUrl = senderProfile?.avatarUrl ?: "",
                                                     onReply = { reply -> chatVm.sendMessageToRoom(room.id, reply) },
+                                                    onMarkAsRead = { chatVm.markRoomAsRead(room.id) },
+                                                    onQuickReact = { emoji -> chatVm.sendMessageToRoom(room.id, emoji) },
                                                     onClick = {
                                                         if (currentRoute == "chat/{roomId}" || currentRoute?.startsWith("chat/") == true) {
                                                             navController.popBackStack()

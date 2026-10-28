@@ -409,33 +409,28 @@ private fun ChatScreenContent(
 
 
     LaunchedEffect(effectiveRoomId) {
-
         if (!effectiveRoomId.isNullOrBlank()) {
-
             activeChatId = effectiveRoomId
-
             isInsideChat = true
-
             chatViewModel?.openChat(effectiveRoomId)
-
         }
-
     }
 
-
+    LaunchedEffect(isInsideChat, activeChatId) {
+        if (isInsideChat && !activeChatId.isNullOrBlank()) {
+            com.chroma.studio.ui.components.DynamicIslandManager.currentlyActiveRoomId = activeChatId
+        } else {
+            com.chroma.studio.ui.components.DynamicIslandManager.currentlyActiveRoomId = null
+        }
+    }
 
     DisposableEffect(effectiveRoomId) {
-
         onDispose {
-
             if (effectiveRoomId != null) {
-
                 chatViewModel?.closeChat()
-
             }
-
+            com.chroma.studio.ui.components.DynamicIslandManager.currentlyActiveRoomId = null
         }
-
     }
 
 

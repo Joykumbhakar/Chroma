@@ -1266,7 +1266,7 @@ fun IosDynamicIslandHost(
         val islandHeight by animateDpAsState(
             targetValue = if (isExpanded) {
                 when (event) {
-                    is DynamicIslandEvent.ChatMessage -> 138.dp
+                    is DynamicIslandEvent.ChatMessage -> 180.dp
                     is DynamicIslandEvent.Follow -> 72.dp
                     is DynamicIslandEvent.Like -> 68.dp
                     is DynamicIslandEvent.RemixOrDownload -> 68.dp
@@ -1561,6 +1561,7 @@ fun IosDynamicIslandHost(
                                 modifier = Modifier.fillMaxSize(),
                                 verticalArrangement = Arrangement.SpaceBetween
                             ) {
+                                // 1. Header: Avatar + Sender Name + Time + Dismiss X
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically
@@ -1570,13 +1571,13 @@ fun IosDynamicIslandHost(
                                             model = ImageRequest.Builder(context).data(event.avatarUrl).crossfade(true).build(),
                                             contentDescription = null,
                                             contentScale = ContentScale.Crop,
-                                            modifier = Modifier.size(38.dp).clip(CircleShape)
+                                            modifier = Modifier.size(34.dp).clip(CircleShape)
                                         )
                                     } else {
-                                        Icon(Lucide.MessageSquare, null, tint = Color(0xFF34C759), modifier = Modifier.size(28.dp))
+                                        Icon(Lucide.MessageSquare, null, tint = Color(0xFF34C759), modifier = Modifier.size(24.dp))
                                     }
 
-                                    Spacer(Modifier.width(10.dp))
+                                    Spacer(Modifier.width(9.dp))
 
                                     Column(modifier = Modifier.weight(1f)) {
                                         Row(
@@ -1587,7 +1588,7 @@ fun IosDynamicIslandHost(
                                             Text(
                                                 text = event.senderName,
                                                 color = Color.White,
-                                                fontSize = 15.sp,
+                                                fontSize = 14.5.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 fontFamily = InterFontFamily,
                                                 maxLines = 1,
@@ -1596,26 +1597,26 @@ fun IosDynamicIslandHost(
                                             Text(
                                                 text = event.timeText,
                                                 color = Color(0xFF8E8E93),
-                                                fontSize = 12.sp,
+                                                fontSize = 11.5.sp,
                                                 fontFamily = InterFontFamily
                                             )
                                         }
                                         Text(
                                             text = event.messageText,
-                                            color = Color(0xFFD1D1D6),
-                                            fontSize = 13.sp,
+                                            color = Color(0xFFE2E8F0),
+                                            fontSize = 12.5.sp,
                                             fontFamily = InterFontFamily,
-                                            maxLines = 1,
+                                            maxLines = 2,
                                             overflow = TextOverflow.Ellipsis
                                         )
                                     }
 
                                     Spacer(Modifier.width(8.dp))
 
-                                    // Direct close icon without circular container
+                                    // Close button
                                     Icon(
                                         Lucide.X,
-                                        contentDescription = "Close",
+                                        contentDescription = "Dismiss",
                                         tint = Color.White.copy(alpha = 0.70f),
                                         modifier = Modifier
                                             .size(20.dp)
@@ -1623,18 +1624,52 @@ fun IosDynamicIslandHost(
                                     )
                                 }
 
+                                // 2. Quick Emoji Reactions (Instant reply without leaving current screen)
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
+                                    listOf("👍", "❤️", "😂", "🔥", "🙌").forEach { emoji ->
+                                        val emojiPillShape = RoundedCornerShape(9999.dp)
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .height(28.dp)
+                                                .clip(emojiPillShape)
+                                                .background(Color(0xFF2C2C2E).copy(alpha = 0.85f))
+                                                .border(0.5.dp, Color.White.copy(alpha = 0.18f), emojiPillShape)
+                                                .clickable {
+                                                    try { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Throwable) {}
+                                                    if (event.onQuickReact != null) {
+                                                        event.onQuickReact.invoke(emoji)
+                                                    } else {
+                                                        event.onReply?.invoke(emoji)
+                                                    }
+                                                    dismissIsland()
+                                                },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(text = emoji, fontSize = 14.sp)
+                                        }
+                                    }
+                                }
+
+                                // 3. Quick Action Row: Inline Reply TextField + Actions
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    val replyPillShape = RoundedCornerShape(9999.dp)
                                     Box(
                                         modifier = Modifier
                                             .weight(1f)
-                                            .height(36.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(Color(0xFF2C2C2E))
-                                            .padding(horizontal = 14.dp),
+                                            .height(34.dp)
+                                            .clip(replyPillShape)
+                                            .background(Color(0xFF242426))
+                                            .border(0.5.dp, Color.White.copy(alpha = 0.15f), replyPillShape)
+                                            .padding(horizontal = 12.dp),
                                         contentAlignment = Alignment.CenterStart
                                     ) {
                                         BasicTextField(
@@ -1642,7 +1677,7 @@ fun IosDynamicIslandHost(
                                             onValueChange = { replyText = it },
                                             textStyle = TextStyle(
                                                 color = Color.White,
-                                                fontSize = 13.5.sp,
+                                                fontSize = 12.5.sp,
                                                 fontFamily = InterFontFamily
                                             ),
                                             singleLine = true,
@@ -1650,10 +1685,12 @@ fun IosDynamicIslandHost(
                                             decorationBox = { innerTextField ->
                                                 if (replyText.isEmpty()) {
                                                     Text(
-                                                        text = "Reply...",
+                                                        text = "Reply to ${event.senderName}...",
                                                         color = Color(0xFF8E8E93),
-                                                        fontSize = 13.5.sp,
-                                                        fontFamily = InterFontFamily
+                                                        fontSize = 12.sp,
+                                                        fontFamily = InterFontFamily,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
                                                     )
                                                 }
                                                 innerTextField()
@@ -1661,30 +1698,84 @@ fun IosDynamicIslandHost(
                                         )
                                     }
 
-                                    Box(
-                                        modifier = Modifier
-                                            .height(36.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(Color(0xFF007AFF))
-                                            .clickable {
-                                                if (replyText.isNotBlank()) {
+                                    if (replyText.isNotBlank()) {
+                                        // Send button with AppleSpecularGlassBorder
+                                        val sendPillShape = RoundedCornerShape(9999.dp)
+                                        Box(
+                                            modifier = Modifier
+                                                .height(34.dp)
+                                                .clip(sendPillShape)
+                                                .background(com.chroma.studio.ui.components.LiquidGlassTokens.AppleSystemBlue)
+                                                .border(0.5.dp, Color(0x8C0051D5), sendPillShape)
+                                                .border(1.dp, com.chroma.studio.ui.components.LiquidGlassTokens.AppleSpecularGlassBorder, sendPillShape)
+                                                .clickable {
                                                     event.onReply?.invoke(replyText)
                                                     replyText = ""
-                                                } else {
-                                                    event.onClick?.invoke()
+                                                    dismissIsland()
                                                 }
-                                                dismissIsland()
+                                                .padding(horizontal = 14.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = "Send",
+                                                color = Color.White,
+                                                fontSize = 12.5.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                fontFamily = InterFontFamily
+                                            )
+                                        }
+                                    } else {
+                                        // "Mark Read" pill
+                                        if (event.onMarkAsRead != null) {
+                                            val markReadShape = RoundedCornerShape(9999.dp)
+                                            Box(
+                                                modifier = Modifier
+                                                    .height(34.dp)
+                                                    .clip(markReadShape)
+                                                    .background(Color(0xFF2C2C2E))
+                                                    .border(0.5.dp, Color.White.copy(alpha = 0.18f), markReadShape)
+                                                    .clickable {
+                                                        try { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Throwable) {}
+                                                        event.onMarkAsRead.invoke()
+                                                        dismissIsland()
+                                                    }
+                                                    .padding(horizontal = 10.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    text = "Read",
+                                                    color = Color(0xFFD1D1D6),
+                                                    fontSize = 11.5.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    fontFamily = InterFontFamily
+                                                )
                                             }
-                                            .padding(horizontal = 14.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = if (replyText.isNotBlank()) "Send" else "Open",
-                                            color = Color.White,
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            fontFamily = InterFontFamily
-                                        )
+                                        }
+
+                                        // "Open" chat button
+                                        val openPillShape = RoundedCornerShape(9999.dp)
+                                        Box(
+                                            modifier = Modifier
+                                                .height(34.dp)
+                                                .clip(openPillShape)
+                                                .background(com.chroma.studio.ui.components.LiquidGlassTokens.AppleSystemBlue)
+                                                .border(0.5.dp, Color(0x8C0051D5), openPillShape)
+                                                .border(1.dp, com.chroma.studio.ui.components.LiquidGlassTokens.AppleSpecularGlassBorder, openPillShape)
+                                                .clickable {
+                                                    event.onClick?.invoke()
+                                                    dismissIsland()
+                                                }
+                                                .padding(horizontal = 12.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = "Open",
+                                                color = Color.White,
+                                                fontSize = 12.5.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                fontFamily = InterFontFamily
+                                            )
+                                        }
                                     }
                                 }
                             }

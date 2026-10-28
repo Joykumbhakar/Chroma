@@ -18,6 +18,8 @@ sealed class DynamicIslandEvent {
         val avatarUrl: String = "",
         val timeText: String = "now",
         val onReply: ((String) -> Unit)? = null,
+        val onMarkAsRead: (() -> Unit)? = null,
+        val onQuickReact: ((String) -> Unit)? = null,
         val onClick: (() -> Unit)? = null
     ) : DynamicIslandEvent()
 
@@ -61,10 +63,14 @@ sealed class DynamicIslandEvent {
 object DynamicIslandManager {
     var isSuppressed by mutableStateOf(false)
 
+    // The chat room ID currently active and visible to user (null when browsing Discover, Feed, Home, etc.)
+    var currentlyActiveRoomId: String? by mutableStateOf(null)
+
     private val _events = MutableSharedFlow<DynamicIslandEvent>(extraBufferCapacity = 10)
     val events = _events.asSharedFlow()
 
     fun post(event: DynamicIslandEvent) {
+        if (isSuppressed) return
         _events.tryEmit(event)
     }
 
@@ -75,8 +81,15 @@ object DynamicIslandManager {
         avatarUrl: String = "",
         timeText: String = "now",
         onReply: ((String) -> Unit)? = null,
+        onMarkAsRead: (() -> Unit)? = null,
+        onQuickReact: ((String) -> Unit)? = null,
         onClick: (() -> Unit)? = null
     ) {
+        // Strict requirement: DO NOT show Dynamic Island if user is already inside this specific chat!
+        if (roomId.isNotBlank() && currentlyActiveRoomId == roomId) {
+            return
+        }
+
         post(
             DynamicIslandEvent.ChatMessage(
                 roomId = roomId,
@@ -85,6 +98,8 @@ object DynamicIslandManager {
                 avatarUrl = avatarUrl,
                 timeText = timeText,
                 onReply = onReply,
+                onMarkAsRead = onMarkAsRead,
+                onQuickReact = onQuickReact,
                 onClick = onClick
             )
         )
