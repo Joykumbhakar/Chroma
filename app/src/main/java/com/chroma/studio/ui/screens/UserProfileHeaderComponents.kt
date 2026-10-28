@@ -75,6 +75,7 @@ fun UserProfileHeroSection(
     onPostsClick: (() -> Unit)? = null
 ) {
     val colors = LocalOscellionColors.current
+    val heroHazeState = remember { HazeState() }
     val presetBannerRes = remember(profile?.bannerUrl) { getBannerPresetDrawableRes(profile?.bannerUrl) }
 
     Box(
@@ -88,6 +89,7 @@ fun UserProfileHeroSection(
                 .fillMaxWidth()
                 .height(148.dp)
                 .clip(RoundedCornerShape(bottomStart = 22.dp, bottomEnd = 22.dp))
+                .haze(heroHazeState)
                 .background(
                     Brush.linearGradient(
                         listOf(Color(0xFF007AFF), Color(0xFF0A84FF), Color(0xFF32ADE6))
@@ -136,7 +138,7 @@ fun UserProfileHeroSection(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(start = 16.dp, end = 16.dp)
-                .padding(top = 106.dp),
+                .padding(top = 80.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -228,20 +230,20 @@ fun UserProfileHeroSection(
                 }
             }
 
-            // 3. Stats Card — High-Contrast Apple Frosted Inset Card
-            // Vertically aligned with avatar; 100% legible across all light/dark themes and banner images
+            // 3. Stats Card — Pure Only Blur Background Card
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .padding(start = 14.dp)
                     .clip(RoundedCornerShape(16.dp))
-                    .background(
-                        if (colors.isDark) Color(0x902C2C2E) else Color(0xE8FFFFFF)
-                    )
-                    .border(
-                        0.5.dp,
-                        if (colors.isDark) Color.White.copy(alpha = 0.14f) else Color.Black.copy(alpha = 0.08f),
-                        RoundedCornerShape(16.dp)
+                    .hazeChild(
+                        state = heroHazeState,
+                        shape = RoundedCornerShape(16.dp),
+                        style = HazeDefaults.style(
+                            tint = Color.Transparent,
+                            blurRadius = 24.dp,
+                            noiseFactor = 0f
+                        )
                     )
             ) {
                 Row(
@@ -266,16 +268,28 @@ fun UserProfileHeroSection(
                     ) {
                         Text(
                             text = formatCount(worksCount),
-                            color = colors.textMain,
+                            color = Color.White,
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = (-0.02).em
+                            letterSpacing = (-0.02).em,
+                            style = TextStyle(
+                                shadow = androidx.compose.ui.graphics.Shadow(
+                                    color = Color.Black.copy(alpha = 0.35f),
+                                    blurRadius = 4f
+                                )
+                            )
                         )
                         Text(
                             text = "Posts",
-                            color = Color(0xFF8E8E93),
+                            color = Color.White.copy(alpha = 0.85f),
                             fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.Medium,
+                            style = TextStyle(
+                                shadow = androidx.compose.ui.graphics.Shadow(
+                                    color = Color.Black.copy(alpha = 0.30f),
+                                    blurRadius = 3f
+                                )
+                            )
                         )
                     }
 
@@ -284,9 +298,7 @@ fun UserProfileHeroSection(
                         modifier = Modifier
                             .height(20.dp)
                             .width(0.5.dp)
-                            .background(
-                                if (colors.isDark) Color.White.copy(alpha = 0.16f) else Color.Black.copy(alpha = 0.10f)
-                            )
+                            .background(Color.White.copy(alpha = 0.25f))
                     )
 
                     // Followers Count
@@ -305,16 +317,28 @@ fun UserProfileHeroSection(
                     ) {
                         Text(
                             text = formatCount(profile?.followersCount ?: 0),
-                            color = colors.textMain,
+                            color = Color.White,
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = (-0.02).em
+                            letterSpacing = (-0.02).em,
+                            style = TextStyle(
+                                shadow = androidx.compose.ui.graphics.Shadow(
+                                    color = Color.Black.copy(alpha = 0.35f),
+                                    blurRadius = 4f
+                                )
+                            )
                         )
                         Text(
                             text = "Followers",
-                            color = Color(0xFF8E8E93),
+                            color = Color.White.copy(alpha = 0.85f),
                             fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.Medium,
+                            style = TextStyle(
+                                shadow = androidx.compose.ui.graphics.Shadow(
+                                    color = Color.Black.copy(alpha = 0.30f),
+                                    blurRadius = 3f
+                                )
+                            )
                         )
                     }
 
@@ -323,9 +347,7 @@ fun UserProfileHeroSection(
                         modifier = Modifier
                             .height(20.dp)
                             .width(0.5.dp)
-                            .background(
-                                if (colors.isDark) Color.White.copy(alpha = 0.16f) else Color.Black.copy(alpha = 0.10f)
-                            )
+                            .background(Color.White.copy(alpha = 0.25f))
                     )
 
                     // Following Count
@@ -344,16 +366,28 @@ fun UserProfileHeroSection(
                     ) {
                         Text(
                             text = formatCount(profile?.followingCount ?: 0),
-                            color = colors.textMain,
+                            color = Color.White,
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = (-0.02).em
+                            letterSpacing = (-0.02).em,
+                            style = TextStyle(
+                                shadow = androidx.compose.ui.graphics.Shadow(
+                                    color = Color.Black.copy(alpha = 0.35f),
+                                    blurRadius = 4f
+                                )
+                            )
                         )
                         Text(
                             text = "Following",
-                            color = Color(0xFF8E8E93),
+                            color = Color.White.copy(alpha = 0.85f),
                             fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.Medium,
+                            style = TextStyle(
+                                shadow = androidx.compose.ui.graphics.Shadow(
+                                    color = Color.Black.copy(alpha = 0.30f),
+                                    blurRadius = 3f
+                                )
+                            )
                         )
                     }
                 }
