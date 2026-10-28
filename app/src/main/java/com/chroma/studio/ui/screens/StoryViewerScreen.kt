@@ -2,7 +2,13 @@ package com.chroma.studio.ui.screens
 
 import com.chroma.studio.ui.components.VerifiedBadge
 
-import androidx.compose.animation.*
+import androidx.compose.animation.* 
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
+
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -65,6 +71,241 @@ import kotlinx.coroutines.withContext
 
 private val StoryViewerJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; isLenient = true; coerceInputValues = true }
 
+
+data class FlatStoryItem(
+    val group: UserStoryGroup,
+    val story: Story,
+    val groupIndex: Int,
+    val indexInGroup: Int,
+    val totalInGroup: Int
+)
+
+@Composable
+private fun StorySlideContent(
+    story: Story,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color.Black)
+    ) {
+        val media = story.mediaUrl
+        val isTextStory = media.startsWith("text:") || media.startsWith("markdown://")
+        val textBody = when {
+            media.startsWith("text:") -> media.removePrefix("text:")
+            media.startsWith("markdown://") -> media.removePrefix("markdown://")
+            else -> ""
+        }
+
+        if (isTextStory) {
+            val formatState = try {
+                if (story.textFormat.isNotBlank() && story.textFormat != "{}") {
+                    StoryViewerJson.decodeFromString<StatusFormatState>(story.textFormat)
+                } else {
+                    StatusFormatState()
+                }
+            } catch (e: Exception) {
+                StatusFormatState()
+            }
+
+            val gradientTheme = StoryGradientThemes.find { it.id == formatState.gradientPreset }
+            val backgroundBrush = if (gradientTheme != null && formatState.gradientPreset != "None") {
+                Brush.verticalGradient(gradientTheme.colors)
+            } else {
+                val solidBg = try { Color(android.graphics.Color.parseColor(if (story.backgroundColor.isNotBlank()) story.backgroundColor else formatState.backgroundColorHex)) } catch (e: Exception) { Color(0xFF1F1C2C) }
+                Brush.verticalGradient(listOf(solidBg, solidBg))
+            }
+
+            val textColor = try { Color(android.graphics.Color.parseColor(formatState.textColorHex)) } catch (e: Exception) { Color.White }
+            val highlightColor = if (formatState.isHighlight) {
+                try { Color(android.graphics.Color.parseColor(formatState.highlightColorHex)).copy(alpha = 0.35f) } catch (e: Exception) { textColor.copy(alpha = 0.25f) }
+            } else Color.Transparent
+
+            val font = when (formatState.fontFamily) {
+                "Serif" -> androidx.compose.ui.text.font.FontFamily.Serif
+                "Mono" -> com.chroma.studio.ui.theme.MonoFontFamily
+                "Cursive" -> androidx.compose.ui.text.font.FontFamily.Cursive
+                else -> com.chroma.studio.ui.theme.InterFontFamily
+            }
+
+            val align = when (formatState.textAlign) {
+                "left" -> androidx.compose.ui.text.style.TextAlign.Left
+                "right" -> androidx.compose.ui.text.style.TextAlign.Right
+                else -> androidx.compose.ui.text.style.TextAlign.Center
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(backgroundBrush)
+                    .padding(horizontal = 24.dp, vertical = 64.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(Color.Black.copy(alpha = 0.25f))
+                        .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(24.dp))
+                        .padding(24.dp),
+                    horizontalAlignment = if (formatState.textAlign == "left") Alignment.Start else if (formatState.textAlign == "right") Alignment.End else Alignment.CenterHorizontally
+                ) {
+                    // Category Tag Badge
+                    if (formatState.tag.isNotBlank()) {
+                        val catItem = StoryCategories.find { it.name.equals(formatState.tag, ignoreCase = true) }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color.White.copy(alpha = 0.2f))
+                                .padding(horizontal = 9.dp, vertical = 4.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.5.dp)) {
+                                if (catItem != null) {
+                                    Icon(
+                                        imageVector = catItem.icon,
+                                        contentDescription = null,
+                                        tint = textColor,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                }
+                                Text(
+                                    text = formatState.tag,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = textColor
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(12.dp))
+                    }
+
+                    // Title if present
+                    if (formatState.title.isNotBlank()) {
+                        Text(
+                            text = formatState.title,
+                            style = TextStyle(
+                                fontFamily = font,
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = textColor,
+                                textAlign = align
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(textColor.copy(alpha = 0.15f)))
+                        Spacer(Modifier.height(12.dp))
+                    }
+
+                    // Body Content / Quote
+                    if (story.textContent.isNotBlank()) {
+                        val bodyOnly = if (formatState.title.isNotBlank() && story.textContent.startsWith("# ")) {
+                            story.textContent.substringAfter("\n\n").ifBlank { story.textContent }
+                        } else {
+                            story.textContent
+                        }
+
+                        if (formatState.isQuote) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(textColor.copy(alpha = 0.08f))
+                                    .border(2.dp, Brush.verticalGradient(listOf(Color(0xFF007AFF), Color(0xFFFF2D55))), RoundedCornerShape(14.dp))
+                                    .padding(14.dp),
+                                verticalAlignment = Alignment.Top
+                            ) {
+                                Text("“", fontSize = 28.sp, fontWeight = FontWeight.Black, color = textColor)
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    text = bodyOnly,
+                                    style = TextStyle(
+                                        fontFamily = font,
+                                        fontSize = if (formatState.headingLevel == 2) 22.sp else 16.sp,
+                                        fontWeight = if (formatState.isBold) FontWeight.Bold else FontWeight.Normal,
+                                        fontStyle = FontStyle.Italic,
+                                        color = textColor,
+                                        textAlign = align
+                                    ),
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        } else {
+                            Text(
+                                text = bodyOnly,
+                                style = TextStyle(
+                                    fontFamily = font,
+                                    fontSize = if (formatState.headingLevel == 2) 24.sp else if (formatState.headingLevel == 3) 19.sp else 16.sp,
+                                    fontWeight = if (formatState.isBold) FontWeight.Bold else FontWeight.Normal,
+                                    fontStyle = if (formatState.isItalic) FontStyle.Italic else FontStyle.Normal,
+                                    textDecoration = if (formatState.isUnderline) TextDecoration.Underline else TextDecoration.None,
+                                    color = textColor,
+                                    textAlign = align,
+                                    background = highlightColor,
+                                    lineHeight = if (formatState.headingLevel == 2) 32.sp else 23.sp,
+                                    drawStyle = if (formatState.isStroke) Stroke(
+                                        miter = 8f,
+                                        width = 2.5f,
+                                        join = StrokeJoin.Round
+                                    ) else androidx.compose.ui.graphics.drawscope.Fill
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    } else {
+                        MarkdownText(
+                            markdown = textBody,
+                            defaultColor = Color.White,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    // Mood pill at bottom
+                    if (formatState.mood.isNotBlank()) {
+                        val moodItem = StoryMoods.find { it.name.equals(formatState.mood, ignoreCase = true) }
+                        Spacer(Modifier.height(12.dp))
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color.Black.copy(alpha = 0.3f))
+                                .padding(horizontal = 9.dp, vertical = 4.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.5.dp)) {
+                                if (moodItem != null) {
+                                    Icon(
+                                        imageVector = moodItem.icon,
+                                        contentDescription = null,
+                                        tint = textColor.copy(alpha = 0.9f),
+                                        modifier = Modifier.size(11.5.dp)
+                                    )
+                                }
+                                Text(
+                                    text = formatState.mood,
+                                    fontSize = 11.sp,
+                                    color = textColor.copy(alpha = 0.9f)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(media)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = "Story Media",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Fit
+            )
+        }
+    }
+}
+
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun StoryViewerScreen(
     storyGroups: List<UserStoryGroup>,
@@ -95,8 +336,38 @@ fun StoryViewerScreen(
         }
     }
 
-    var currentGroupIndex by remember { mutableIntStateOf(if (initialGroupIndex < 0) 0 else initialGroupIndex.coerceIn(0, maxOf(0, allGroups.size - 1))) }
-    var currentStoryIndex by remember { mutableIntStateOf(0) }
+    val allFlatStories = remember(allGroups) {
+        allGroups.flatMapIndexed { groupIdx, group ->
+            group.stories.mapIndexed { storyIdx, story ->
+                FlatStoryItem(
+                    group = group,
+                    story = story,
+                    groupIndex = groupIdx,
+                    indexInGroup = storyIdx,
+                    totalInGroup = group.stories.size
+                )
+            }
+        }
+    }
+
+    if (allFlatStories.isEmpty()) {
+        LaunchedEffect(Unit) {
+            onClose()
+        }
+        return
+    }
+
+    val initialPageIndex = remember(allFlatStories) {
+        val targetGroup = if (initialGroupIndex < 0) 0 else initialGroupIndex.coerceIn(0, maxOf(0, allGroups.size - 1))
+        val idx = allFlatStories.indexOfFirst { it.groupIndex == targetGroup }
+        if (idx >= 0) idx else 0
+    }
+
+    val pagerState = rememberPagerState(
+        initialPage = initialPageIndex,
+        pageCount = { allFlatStories.size }
+    )
+
     var isPaused by remember { mutableStateOf(false) }
     var showViewers by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -108,31 +379,35 @@ fun StoryViewerScreen(
     val scope = rememberCoroutineScope()
     val storyDurationMs = 5000L
 
-    val currentGroup = allGroups.getOrNull(currentGroupIndex)
+    val currentStoryItem = allFlatStories.getOrNull(pagerState.currentPage)
+    val currentGroup = currentStoryItem?.group
+    val currentStory = currentStoryItem?.story
+    val currentStoryIndexInGroup = currentStoryItem?.indexInGroup ?: 0
     val storiesForCurrentGroup = currentGroup?.stories ?: emptyList()
-    val currentStory = storiesForCurrentGroup.getOrNull(currentStoryIndex)
     val isOwner = currentStory != null && (currentStory.userId == currentUserId || currentGroup?.userId == currentUserId)
     val isLiked = currentStory != null && likedStoryIds.contains(currentStory.id)
 
-    val progress = remember(currentStoryIndex, currentGroupIndex) { Animatable(0f) }
-    val effectivePaused = isPaused || showViewers || showDeleteConfirm || showOnlyFriendsSheet || showOnlyFriendsInfoDialog
+    val isScrollInProgress = pagerState.isScrollInProgress
+    val effectivePaused = isPaused || isScrollInProgress || showViewers || showDeleteConfirm || showOnlyFriendsSheet || showOnlyFriendsInfoDialog
 
-    LaunchedEffect(currentStoryIndex, currentGroupIndex, effectivePaused, storiesForCurrentGroup.size) {
-        if (!effectivePaused && storiesForCurrentGroup.isNotEmpty()) {
+    val progress = remember(pagerState.currentPage) { Animatable(0f) }
+
+    LaunchedEffect(pagerState.currentPage, effectivePaused) {
+        if (!effectivePaused && allFlatStories.isNotEmpty()) {
             progress.snapTo(0f)
             progress.animateTo(
                 targetValue = 1f,
                 animationSpec = tween(durationMillis = storyDurationMs.toInt(), easing = LinearEasing)
             )
-            goNextStory(
-                currentStoryIndex = currentStoryIndex,
-                currentGroupIndex = currentGroupIndex,
-                storiesInGroup = storiesForCurrentGroup.size,
-                totalGroups = allGroups.size,
-                onStoryChange = { currentStoryIndex = it },
-                onGroupChange = { currentGroupIndex = it; currentStoryIndex = 0 },
-                onClose = onClose
-            )
+            // Auto advance with smooth 3D animation
+            if (pagerState.currentPage < allFlatStories.size - 1) {
+                pagerState.animateScrollToPage(
+                    page = pagerState.currentPage + 1,
+                    animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing)
+                )
+            } else {
+                onClose()
+            }
         }
     }
 
@@ -174,260 +449,105 @@ fun StoryViewerScreen(
                 .fillMaxSize()
                 .background(Color.Black)
         ) {
-            // ── Story Content ─────────────────────────────────────────────────────────
-            if (currentStory != null) {
-                val media = currentStory.mediaUrl
-                val isTextStory = media.startsWith("text:") || media.startsWith("markdown://")
-                val textBody = when {
-                    media.startsWith("text:") -> media.removePrefix("text:")
-                    media.startsWith("markdown://") -> media.removePrefix("markdown://")
-                    else -> ""
-                }
+            // ── 3D Smooth Story Pager ──────────────────────────────────────────────────
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize()
+            ) { page ->
+                val storyItem = allFlatStories.getOrNull(page) ?: return@HorizontalPager
+                val density = LocalDensity.current.density
 
-                if (isTextStory) {
-                    val formatState = try {
-                        if (currentStory.textFormat.isNotBlank() && currentStory.textFormat != "{}") {
-                            StoryViewerJson.decodeFromString<StatusFormatState>(currentStory.textFormat)
-                        } else {
-                            StatusFormatState()
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            val offsetFromCurrent = (page - pagerState.currentPage) - pagerState.currentPageOffsetFraction
+                            cameraDistance = 20f * density
+
+                            when {
+                                offsetFromCurrent < -1f || offsetFromCurrent > 1f -> {
+                                    alpha = 0f
+                                }
+                                offsetFromCurrent < 0f -> {
+                                    // Moving left / turning away around right edge
+                                    transformOrigin = TransformOrigin(pivotFractionX = 1f, pivotFractionY = 0.5f)
+                                    val clamped = offsetFromCurrent.coerceIn(-1f, 0f)
+                                    rotationY = 90f * clamped
+                                    val scale = 1f + (0.08f * clamped)
+                                    scaleX = scale
+                                    scaleY = scale
+                                    alpha = 1f + (0.2f * clamped)
+                                }
+                                offsetFromCurrent > 0f -> {
+                                    // Moving in from right / turning in around left edge
+                                    transformOrigin = TransformOrigin(pivotFractionX = 0f, pivotFractionY = 0.5f)
+                                    val clamped = offsetFromCurrent.coerceIn(0f, 1f)
+                                    rotationY = 90f * clamped
+                                    val scale = 1f - (0.08f * clamped)
+                                    scaleX = scale
+                                    scaleY = scale
+                                    alpha = 1f - (0.2f * clamped)
+                                }
+                                else -> {
+                                    transformOrigin = TransformOrigin(0.5f, 0.5f)
+                                    rotationY = 0f
+                                    scaleX = 1f
+                                    scaleY = 1f
+                                    alpha = 1f
+                                }
+                            }
                         }
-                    } catch (e: Exception) {
-                        StatusFormatState()
-                    }
+                        .pointerInput(page, allFlatStories.size) {
+                            detectTapGestures(
+                                onPress = {
+                                    isPaused = true
+                                    tryAwaitRelease()
+                                    isPaused = false
+                                },
+                                onTap = { offset ->
+                                    if (showViewers || showDeleteConfirm || showOnlyFriendsSheet || showOnlyFriendsInfoDialog) return@detectTapGestures
+                                    val totalWidth = size.width
+                                    if (offset.x < totalWidth * 0.33f) {
+                                        // Previous slide with smooth 3D animation
+                                        scope.launch {
+                                            if (pagerState.currentPage > 0) {
+                                                pagerState.animateScrollToPage(
+                                                    page = pagerState.currentPage - 1,
+                                                    animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing)
+                                                )
+                                            }
+                                        }
+                                    } else {
+                                        // Next slide with smooth 3D animation
+                                        scope.launch {
+                                            if (pagerState.currentPage < allFlatStories.size - 1) {
+                                                pagerState.animateScrollToPage(
+                                                    page = pagerState.currentPage + 1,
+                                                    animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing)
+                                                )
+                                            } else {
+                                                onClose()
+                                            }
+                                        }
+                                    }
+                                }
+                            )
+                        }
+                ) {
+                    StorySlideContent(story = storyItem.story)
 
-                    val gradientTheme = StoryGradientThemes.find { it.id == formatState.gradientPreset }
-                    val backgroundBrush = if (gradientTheme != null && formatState.gradientPreset != "None") {
-                        Brush.verticalGradient(gradientTheme.colors)
-                    } else {
-                        val solidBg = try { Color(android.graphics.Color.parseColor(if (currentStory.backgroundColor.isNotBlank()) currentStory.backgroundColor else formatState.backgroundColorHex)) } catch (e: Exception) { Color(0xFF1F1C2C) }
-                        Brush.verticalGradient(listOf(solidBg, solidBg))
-                    }
-
-                    val textColor = try { Color(android.graphics.Color.parseColor(formatState.textColorHex)) } catch (e: Exception) { Color.White }
-                    val highlightColor = if (formatState.isHighlight) {
-                        try { Color(android.graphics.Color.parseColor(formatState.highlightColorHex)).copy(alpha = 0.35f) } catch (e: Exception) { textColor.copy(alpha = 0.25f) }
-                    } else Color.Transparent
-
-                    val font = when (formatState.fontFamily) {
-                        "Serif" -> androidx.compose.ui.text.font.FontFamily.Serif
-                        "Mono" -> com.chroma.studio.ui.theme.MonoFontFamily
-                        "Cursive" -> androidx.compose.ui.text.font.FontFamily.Cursive
-                        else -> com.chroma.studio.ui.theme.InterFontFamily
-                    }
-
-                    val align = when (formatState.textAlign) {
-                        "left" -> androidx.compose.ui.text.style.TextAlign.Left
-                        "right" -> androidx.compose.ui.text.style.TextAlign.Right
-                        else -> androidx.compose.ui.text.style.TextAlign.Center
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(backgroundBrush)
-                            .padding(horizontal = 24.dp, vertical = 64.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
+                    // Dynamic 3D lighting shadow overlay during cube rotation
+                    val offsetFromCurrent = (page - pagerState.currentPage) - pagerState.currentPageOffsetFraction
+                    val shadowAlpha = (kotlin.math.abs(offsetFromCurrent) * 0.45f).coerceIn(0f, 0.5f)
+                    if (shadowAlpha > 0.01f) {
+                        Box(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(24.dp))
-                                .background(Color.Black.copy(alpha = 0.25f))
-                                .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(24.dp))
-                                .padding(24.dp),
-                            horizontalAlignment = if (formatState.textAlign == "left") Alignment.Start else if (formatState.textAlign == "right") Alignment.End else Alignment.CenterHorizontally
-                        ) {
-                            // Category Tag Badge
-                            if (formatState.tag.isNotBlank()) {
-                                val catItem = StoryCategories.find { it.name.equals(formatState.tag, ignoreCase = true) }
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(Color.White.copy(alpha = 0.2f))
-                                        .padding(horizontal = 9.dp, vertical = 4.dp)
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.5.dp)) {
-                                        if (catItem != null) {
-                                            Icon(
-                                                imageVector = catItem.icon,
-                                                contentDescription = null,
-                                                tint = textColor,
-                                                modifier = Modifier.size(12.dp)
-                                            )
-                                        }
-                                        Text(
-                                            text = formatState.tag,
-                                            fontSize = 11.5.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = textColor
-                                        )
-                                    }
-                                }
-                                Spacer(Modifier.height(12.dp))
-                            }
-
-                            // Title if present
-                            if (formatState.title.isNotBlank()) {
-                                Text(
-                                    text = formatState.title,
-                                    style = TextStyle(
-                                        fontFamily = font,
-                                        fontSize = 24.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = textColor,
-                                        textAlign = align
-                                    ),
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                                Spacer(Modifier.height(10.dp))
-                                Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(textColor.copy(alpha = 0.15f)))
-                                Spacer(Modifier.height(12.dp))
-                            }
-
-                            // Body Content / Quote
-                            if (currentStory.textContent.isNotBlank()) {
-                                val bodyOnly = if (formatState.title.isNotBlank() && currentStory.textContent.startsWith("# ")) {
-                                    currentStory.textContent.substringAfter("\n\n").ifBlank { currentStory.textContent }
-                                } else {
-                                    currentStory.textContent
-                                }
-
-                                if (formatState.isQuote) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(14.dp))
-                                            .background(textColor.copy(alpha = 0.08f))
-                                            .border(2.dp, Brush.verticalGradient(listOf(Color(0xFF007AFF), Color(0xFFFF2D55))), RoundedCornerShape(14.dp))
-                                            .padding(14.dp),
-                                        verticalAlignment = Alignment.Top
-                                    ) {
-                                        Text("“", fontSize = 28.sp, fontWeight = FontWeight.Black, color = textColor)
-                                        Spacer(Modifier.width(6.dp))
-                                        Text(
-                                            text = bodyOnly,
-                                            style = TextStyle(
-                                                fontFamily = font,
-                                                fontSize = if (formatState.headingLevel == 2) 22.sp else 16.sp,
-                                                fontWeight = if (formatState.isBold) FontWeight.Bold else FontWeight.Normal,
-                                                fontStyle = FontStyle.Italic,
-                                                color = textColor,
-                                                textAlign = align
-                                            ),
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                    }
-                                } else {
-                                    Text(
-                                        text = bodyOnly,
-                                        style = TextStyle(
-                                            fontFamily = font,
-                                            fontSize = if (formatState.headingLevel == 2) 24.sp else if (formatState.headingLevel == 3) 19.sp else 16.sp,
-                                            fontWeight = if (formatState.isBold) FontWeight.Bold else FontWeight.Normal,
-                                            fontStyle = if (formatState.isItalic) FontStyle.Italic else FontStyle.Normal,
-                                            textDecoration = if (formatState.isUnderline) TextDecoration.Underline else TextDecoration.None,
-                                            color = textColor,
-                                            textAlign = align,
-                                            background = highlightColor,
-                                            lineHeight = if (formatState.headingLevel == 2) 32.sp else 23.sp,
-                                            drawStyle = if (formatState.isStroke) Stroke(
-                                                miter = 8f,
-                                                width = 2.5f,
-                                                join = StrokeJoin.Round
-                                            ) else androidx.compose.ui.graphics.drawscope.Fill
-                                        ),
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-                                }
-                            } else {
-                                // Fallback to legacy markdown if textContent is empty but mediaUrl had markdown
-                                MarkdownText(
-                                    markdown = textBody,
-                                    defaultColor = Color.White,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
-
-                            // Mood pill at bottom
-                            if (formatState.mood.isNotBlank()) {
-                                val moodItem = StoryMoods.find { it.name.equals(formatState.mood, ignoreCase = true) }
-                                Spacer(Modifier.height(12.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(Color.Black.copy(alpha = 0.3f))
-                                        .padding(horizontal = 9.dp, vertical = 4.dp)
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.5.dp)) {
-                                        if (moodItem != null) {
-                                            Icon(
-                                                imageVector = moodItem.icon,
-                                                contentDescription = null,
-                                                tint = textColor.copy(alpha = 0.9f),
-                                                modifier = Modifier.size(11.5.dp)
-                                            )
-                                        }
-                                        Text(
-                                            text = formatState.mood,
-                                            fontSize = 11.sp,
-                                            color = textColor.copy(alpha = 0.9f)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(media)
-                            .crossfade(true)
-                            .build(),
-                        contentDescription = "Story Media",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Fit
-                    )
-                }
-            }
-
-            // ── Touch / Gestures Overlay
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .pointerInput(currentStoryIndex, currentGroupIndex, storiesForCurrentGroup.size) {
-                        detectTapGestures(
-                            onTap = { offset ->
-                                if (showViewers || showDeleteConfirm) return@detectTapGestures
-                                val totalWidth = size.width
-                                if (offset.x < totalWidth * 0.33f) {
-                                    if (currentStoryIndex > 0) {
-                                        currentStoryIndex--
-                                    } else if (currentGroupIndex > 0) {
-                                        currentGroupIndex--
-                                        val prevCount = allGroups.getOrNull(currentGroupIndex)?.stories?.size ?: 1
-                                        currentStoryIndex = maxOf(0, prevCount - 1)
-                                    }
-                                } else {
-                                    goNextStory(
-                                        currentStoryIndex = currentStoryIndex,
-                                        currentGroupIndex = currentGroupIndex,
-                                        storiesInGroup = storiesForCurrentGroup.size,
-                                        totalGroups = allGroups.size,
-                                        onStoryChange = { currentStoryIndex = it },
-                                        onGroupChange = { currentGroupIndex = it; currentStoryIndex = 0 },
-                                        onClose = onClose
-                                    )
-                                }
-                            },
-                            onPress = {
-                                isPaused = true
-                                tryAwaitRelease()
-                                isPaused = false
-                            }
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = shadowAlpha))
                         )
                     }
-            )
+                }
+            }
 
             // ── Top Bar ───────────────────────────────────────────────────────────────
             Column(
@@ -445,8 +565,8 @@ fun StoryViewerScreen(
                 ) {
                     storiesForCurrentGroup.forEachIndexed { index, _ ->
                         val segmentProgress = when {
-                            index < currentStoryIndex -> 1f
-                            index == currentStoryIndex -> progress.value
+                            index < currentStoryIndexInGroup -> 1f
+                            index == currentStoryIndexInGroup -> progress.value
                             else -> 0f
                         }
                         Box(
