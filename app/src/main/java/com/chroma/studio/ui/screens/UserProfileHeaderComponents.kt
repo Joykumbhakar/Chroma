@@ -48,6 +48,10 @@ import coil.request.ImageRequest
 import com.chroma.studio.R
 import com.chroma.studio.model.UserProfile
 import com.chroma.studio.model.UserStoryGroup
+import dev.chrisbanes.haze.HazeDefaults
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.haze
+import dev.chrisbanes.haze.hazeChild
 import com.chroma.studio.ui.components.*
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.chroma.studio.viewmodel.StoryViewModel
@@ -68,6 +72,7 @@ fun UserProfileHeroSection(
     onPostsClick: (() -> Unit)? = null
 ) {
     val colors = LocalOscellionColors.current
+    val heroHazeState = remember { HazeState() }
     val presetBannerRes = remember(profile?.bannerUrl) { getBannerPresetDrawableRes(profile?.bannerUrl) }
 
     Box(modifier = Modifier.fillMaxWidth()) {
@@ -75,8 +80,9 @@ fun UserProfileHeroSection(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(125.dp)
+                .height(145.dp)
                 .clip(RoundedCornerShape(bottomStart = 20.dp, bottomEnd = 20.dp))
+                .haze(heroHazeState)
                 .background(
                     Brush.linearGradient(
                         listOf(Color(0xFF007AFF), Color(0xFF0A84FF), Color(0xFF32ADE6))
@@ -111,9 +117,9 @@ fun UserProfileHeroSection(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 80.dp, start = 16.dp, end = 16.dp),
+                .padding(top = 74.dp, start = 16.dp, end = 16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Bottom
+            verticalAlignment = Alignment.CenterVertically
         ) {
             // Elevated Apple Glass Avatar
             Box(contentAlignment = Alignment.Center) {
@@ -197,17 +203,31 @@ fun UserProfileHeroSection(
                 }
             }
 
-            // Top Stats beside Avatar in Apple Frosted Glass Container
-            Surface(
+            // Top Stats beside Avatar in Pure Blur Apple Glass Container
+            Box(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(start = 12.dp, bottom = 4.dp),
-                shape = RoundedCornerShape(18.dp),
-                color = if (colors.isDark) Color(0x18FFFFFF) else Color(0x08000000),
-                border = BorderStroke(
-                    0.75.dp,
-                    if (colors.isDark) Color(0x24FFFFFF) else Color(0x10000000)
-                )
+                    .padding(start = 12.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .hazeChild(
+                        state = heroHazeState,
+                        shape = RoundedCornerShape(18.dp),
+                        style = HazeDefaults.style(
+                            tint = Color.Transparent,
+                            blurRadius = 24.dp,
+                            noiseFactor = 0f
+                        )
+                    )
+                    .border(
+                        0.75.dp,
+                        Brush.verticalGradient(
+                            listOf(
+                                Color.White.copy(alpha = 0.40f),
+                                Color.White.copy(alpha = 0.12f)
+                            )
+                        ),
+                        RoundedCornerShape(18.dp)
+                    )
             ) {
                 Row(
                     modifier = Modifier
@@ -231,16 +251,28 @@ fun UserProfileHeroSection(
                     ) {
                         Text(
                             text = formatCount(worksCount),
-                            color = colors.textMain,
+                            color = Color.White,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = (-0.02).em
+                            letterSpacing = (-0.02).em,
+                            style = TextStyle(
+                                shadow = androidx.compose.ui.graphics.Shadow(
+                                    color = Color.Black.copy(alpha = 0.35f),
+                                    blurRadius = 4f
+                                )
+                            )
                         )
                         Text(
                             text = "Posts",
-                            color = Color(0xFF8E8E93),
+                            color = Color.White.copy(alpha = 0.85f),
                             fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.Medium,
+                            style = TextStyle(
+                                shadow = androidx.compose.ui.graphics.Shadow(
+                                    color = Color.Black.copy(alpha = 0.30f),
+                                    blurRadius = 3f
+                                )
+                            )
                         )
                     }
 
@@ -249,7 +281,7 @@ fun UserProfileHeroSection(
                         modifier = Modifier
                             .height(20.dp)
                             .width(0.5.dp)
-                            .background(if (colors.isDark) Color(0x28FFFFFF) else Color(0x16000000))
+                            .background(Color.White.copy(alpha = 0.25f))
                     )
 
                     // Followers Count
@@ -268,16 +300,28 @@ fun UserProfileHeroSection(
                     ) {
                         Text(
                             text = formatCount(profile?.followersCount ?: 0),
-                            color = colors.textMain,
+                            color = Color.White,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = (-0.02).em
+                            letterSpacing = (-0.02).em,
+                            style = TextStyle(
+                                shadow = androidx.compose.ui.graphics.Shadow(
+                                    color = Color.Black.copy(alpha = 0.35f),
+                                    blurRadius = 4f
+                                )
+                            )
                         )
                         Text(
                             text = "Followers",
-                            color = Color(0xFF8E8E93),
+                            color = Color.White.copy(alpha = 0.85f),
                             fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.Medium,
+                            style = TextStyle(
+                                shadow = androidx.compose.ui.graphics.Shadow(
+                                    color = Color.Black.copy(alpha = 0.30f),
+                                    blurRadius = 3f
+                                )
+                            )
                         )
                     }
 
@@ -286,7 +330,7 @@ fun UserProfileHeroSection(
                         modifier = Modifier
                             .height(20.dp)
                             .width(0.5.dp)
-                            .background(if (colors.isDark) Color(0x28FFFFFF) else Color(0x16000000))
+                            .background(Color.White.copy(alpha = 0.25f))
                     )
 
                     // Following Count
@@ -305,16 +349,28 @@ fun UserProfileHeroSection(
                     ) {
                         Text(
                             text = formatCount(profile?.followingCount ?: 0),
-                            color = colors.textMain,
+                            color = Color.White,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = (-0.02).em
+                            letterSpacing = (-0.02).em,
+                            style = TextStyle(
+                                shadow = androidx.compose.ui.graphics.Shadow(
+                                    color = Color.Black.copy(alpha = 0.35f),
+                                    blurRadius = 4f
+                                )
+                            )
                         )
                         Text(
                             text = "Following",
-                            color = Color(0xFF8E8E93),
+                            color = Color.White.copy(alpha = 0.85f),
                             fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.Medium,
+                            style = TextStyle(
+                                shadow = androidx.compose.ui.graphics.Shadow(
+                                    color = Color.Black.copy(alpha = 0.30f),
+                                    blurRadius = 3f
+                                )
+                            )
                         )
                     }
                 }
