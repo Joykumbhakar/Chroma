@@ -36,6 +36,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.chroma.studio.R
 import com.chroma.studio.ui.components.OscellionAppIcon
+import com.chroma.studio.ui.components.GhostFibers
+import com.chroma.studio.ui.components.GhostFibersConfig
 
 val TheSignatureFont = FontFamily(Font(R.font.thesignature))
 
@@ -85,7 +87,40 @@ fun WelcomeScreen(
     }
 
     Box(Modifier.fillMaxSize().background(ObColors.Abyss)) {
-        SunsetArtwork(Modifier.fillMaxSize())
+        // GhostFibers animated background (React Bits port)
+        GhostFibers(
+            modifier = Modifier.fillMaxSize(),
+            config = GhostFibersConfig(
+                glowColor = androidx.compose.ui.graphics.Color(0xFF001FFF),
+                lineColor = androidx.compose.ui.graphics.Color(0xFF0070FF),
+                secondaryColor = androidx.compose.ui.graphics.Color(0xFF0038FF),
+                layers = 3,
+                twist = 1.2f,
+                threads = 72,
+                depthOfField = 0.85f,
+                particles = 0.5f,
+                sparkle = 0.5f,
+                glow = 0.8f,
+                brightness = 1f,
+                intro = true
+            )
+        )
+        // Protective scrims — keep text and buttons readable over the fiber animation
+        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+            drawRect(
+                androidx.compose.ui.graphics.Brush.verticalGradient(
+                    0.0f to androidx.compose.ui.graphics.Color(0xCC010414),
+                    0.38f to androidx.compose.ui.graphics.Color.Transparent
+                )
+            )
+            drawRect(
+                androidx.compose.ui.graphics.Brush.verticalGradient(
+                    0.55f to androidx.compose.ui.graphics.Color.Transparent,
+                    0.75f to androidx.compose.ui.graphics.Color(0xCC040722),
+                    1.0f to androidx.compose.ui.graphics.Color(0xF2040722)
+                )
+            )
+        }
         Column(
             Modifier
                 .fillMaxSize()
