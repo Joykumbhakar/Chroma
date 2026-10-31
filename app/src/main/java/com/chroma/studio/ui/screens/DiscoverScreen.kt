@@ -400,7 +400,7 @@ fun DiscoverScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(colors.bg)) {
+    Box(modifier = Modifier.fillMaxSize().background(if (colors.isDark) Color(0xFF000000) else Color(0xFFF8FAFC))) {
         BackHandler(enabled = isSearchExpanded) {
             isSearchExpanded = false
             searchQuery = ""
@@ -424,37 +424,57 @@ fun DiscoverScreen(
             showStoryViewer = false
         }
 
+        val collapseProgress by remember {
+            derivedStateOf {
+                if (listState.firstVisibleItemIndex > 0) 1f
+                else (listState.firstVisibleItemScrollOffset / 280f).coerceIn(0f, 1f)
+            }
+        }
+
+        val infiniteTransition = rememberInfiniteTransition(label = "refreshSpin")
+        val spinningRotation by infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(650, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "spinningRotation"
+        )
+        val isFeedRefreshing = isRefreshing || refreshProgressAnim.value > 0f
+        val refreshRotation = if (isFeedRefreshing) spinningRotation else 0f
+
+        val headerSubtitle = remember(selectedFeedTab) {
+            when (selectedFeedTab) {
+                CommunityFeedTab.ALL -> "Discover fresh creations & stories • Latest feed"
+                CommunityFeedTab.FOLLOWING -> "Updates & masterworks from creators you follow"
+                CommunityFeedTab.SAVED -> "Your private collection of saved creations"
+                CommunityFeedTab.FLASH -> "Cinematic vertical video creations & remixes"
+                CommunityFeedTab.TRENDING -> "Top masterworks and viral creative drops"
+            }
+        }
+
         Column(modifier = Modifier.fillMaxSize()) {
-            // 1. Creator Feed Header (No App Logo, Only + Icon, Heart/Notification Icon, Refresh Icon, and Smooth Expanding Search Bar)
-            CreatorFeedHeader(
-                selectedFeedTab = selectedFeedTab,
-                onSelectFeedTab = { tab ->
-                    selectedFeedTab = tab
-                    coroutineScope.launch { listState.animateScrollToItem(0) }
-                },
+            // 1. Samsung One UI 7 Collapsing Community Header with Mesh Gradient
+            CommunityOneUiHeader(
+                title = "Community",
+                subtitle = headerSubtitle,
+                collapseProgress = collapseProgress,
                 isSearchExpanded = isSearchExpanded,
                 searchQuery = searchQuery,
+                onSearchQueryChange = { searchQuery = it },
+                onToggleSearchExpand = { isSearchExpanded = it },
                 isPlusMenuOpen = showCreateMenu,
-                hasUnreadNotifications = hasUnreadNotifications,
-                isRefreshing = isRefreshing || refreshProgressAnim.value > 0f,
-                hasPendingNewDrops = hasPendingNewDrops,
-                refreshProgress = refreshProgressAnim.value,
                 onTogglePlusMenu = { showCreateMenu = !showCreateMenu },
+                hasUnreadNotifications = hasUnreadNotifications,
                 onToggleNotificationDrawer = {
                     showCreateMenu = false
                     hasUnreadNotifications = false
                     onNavigateToNotifications()
                 },
+                isRefreshing = isFeedRefreshing,
+                refreshRotation = refreshRotation,
                 onRefreshFeed = { triggerFeedRefresh() },
-                onExpandSearch = {
-                    showCreateMenu = false
-                    isSearchExpanded = true
-                },
-                onCollapseSearch = {
-                    isSearchExpanded = false
-                    searchQuery = ""
-                },
-                onSearchQueryChange = { searchQuery = it },
                 createMenuContent = {
                     PlusCreatePopoverMenu(
                         expanded = showCreateMenu,
@@ -493,7 +513,24 @@ fun DiscoverScreen(
             if (isLoading) {
                 LazyColumn(modifier = Modifier.fillMaxSize(), userScrollEnabled = false) {
                     item {
-                        StoriesSection(stories = emptyList(), isLoading = true)
+                        CommunityStoriesCard(
+                            stories = emptyList(),
+                            isLoading = true,
+                            hasMyStory = false,
+                            myStoryAvatarUrl = "",
+                            myStoryGender = null,
+                            myStoriesList = emptyList(),
+                            isUploading = false,
+                            onMyStoryClick = {},
+                            onAddStoryClick = {},
+                            onStoryClick = {}
+                        )
+                    }
+                    item {
+                        CommunityCategoryPills(
+                            selectedTab = selectedFeedTab,
+                            onSelectTab = {}
+                        )
                     }
                     if (uploadTask != null && uploadTask?.status != UploadStatus.IDLE) {
                         item(key = "loading_upload_progress_banner") {
@@ -512,57 +549,46 @@ fun DiscoverScreen(
             } else {
                 LazyColumn(
                     state = listState,
-                    contentPadding = PaddingValues(top = 4.dp, bottom = 120.dp),
+                    contentPadding = PaddingValues(top = 4.dp, bottom = 140.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    // Stories Section (@Composable fun StoriesSection in DiscoverScreen.kt)
+                    // Unified High-Fidelity Stories Section in 26dp Squircle Card
                     item(key = "stories") {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(if (colors.isDark) Color(0xFF16161A) else Color.White)
-                                .padding(top = 4.dp)
-                        ) {
-
-                            StoriesSection(
-                                stories = stories,
-                                isLoading = false,
-                                hasMyStory = myStories.isNotEmpty(),
-                                myStoryAvatarUrl = myProfile?.avatarUrl ?: "",
-                                myStoryGender = myProfile?.gender,
-                                myStoriesList = myStories,
-                                isUploading = isUploadingStory,
-                                onMyStoryClick = {
-                                    if (myStories.isNotEmpty()) {
-                                        storyViewerInitialIndex = -1
-                                        showStoryViewer = true
-                                    } else {
-                                        showStoryCreationSheet = true
-                                    }
-                                },
-                                onAddStoryClick = {
-                                    showStoryCreationSheet = true
-                                },
-                                onStoryClick = { groupIndex ->
-                                    storyViewerInitialIndex = groupIndex
+                        CommunityStoriesCard(
+                            stories = stories,
+                            isLoading = false,
+                            hasMyStory = myStories.isNotEmpty(),
+                            myStoryAvatarUrl = myProfile?.avatarUrl ?: "",
+                            myStoryGender = myProfile?.gender,
+                            myStoriesList = myStories,
+                            isUploading = isUploadingStory,
+                            onMyStoryClick = {
+                                if (myStories.isNotEmpty()) {
+                                    storyViewerInitialIndex = -1
                                     showStoryViewer = true
+                                } else {
+                                    showStoryCreationSheet = true
                                 }
-                            )
-
-                            if (isUploadingStory) {
-                                LiquidGlassProgressBar(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(3.dp)
-                                        .padding(horizontal = 16.dp, vertical = 2.dp)
-                                )
+                            },
+                            onAddStoryClick = {
+                                showStoryCreationSheet = true
+                            },
+                            onStoryClick = { groupIndex ->
+                                storyViewerInitialIndex = groupIndex
+                                showStoryViewer = true
                             }
-                            HorizontalDivider(
-                                color = colors.glassBorder,
-                                thickness = 0.5.dp,
-                                modifier = Modifier.padding(top = 6.dp)
-                            )
-                        }
+                        )
+                    }
+
+                    // Samsung One UI Category Filter Pills
+                    item(key = "category_filter_pills") {
+                        CommunityCategoryPills(
+                            selectedTab = selectedFeedTab,
+                            onSelectTab = { tab ->
+                                selectedFeedTab = tab
+                                coroutineScope.launch { listState.animateScrollToItem(0) }
+                            }
+                        )
                     }
 
                     // ── INSTAGRAM-STYLE FLASH VIDEO / POST UPLOAD PROGRESS BANNER ──
@@ -582,60 +608,7 @@ fun DiscoverScreen(
                         }
                     }
 
-                    // ── Active Feed Filter Indicator (When not in default Latest view) ──
-                    if (selectedFeedTab != CommunityFeedTab.ALL) {
-                        item(key = "active_feed_filter_badge") {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = selectedFeedTab.icon,
-                                        contentDescription = null,
-                                        tint = Color(0xFF007AFF),
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Text(
-                                        text = "Showing: ${selectedFeedTab.label}",
-                                        color = colors.textMain,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                }
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .clickable { selectedFeedTab = CommunityFeedTab.ALL }
-                                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                                ) {
-                                    Text(
-                                        text = "Show All",
-                                        color = Color(0xFF007AFF),
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                    Spacer(Modifier.width(2.dp))
-                                    Icon(
-                                        imageVector = Lucide.X,
-                                        contentDescription = "Clear",
-                                        tint = Color(0xFF007AFF),
-                                        modifier = Modifier.size(13.dp)
-                                    )
-                                }
-                            }
-                            HorizontalDivider(color = colors.glassBorder.copy(alpha = 0.5f), thickness = 0.5.dp)
-                        }
-                    }
-
-                    // ── NEW FEATURE 2: TRENDING MASTERWORKS SPOTLIGHT REEL ──
+// ── NEW FEATURE 2: TRENDING MASTERWORKS SPOTLIGHT REEL ──
                     if ((selectedFeedTab == CommunityFeedTab.ALL || selectedFeedTab == CommunityFeedTab.TRENDING) && qualifyingMasterworks.isNotEmpty() && searchQuery.isBlank()) {
                         item(key = "trending_spotlight_reel") {
                             CommunityTrendingSpotlightReel(
@@ -655,25 +628,15 @@ fun DiscoverScreen(
                     // Feed Posts List
                     if (filteredWorks.isEmpty()) {
                         item(key = "empty_state") {
-                            val photoState = rememberAppleGraphicAnimationState()
-                            val emptySubtitle = when {
-                                searchQuery.isNotBlank() -> "Try searching for a different creator or keyword."
-                                selectedFeedTab == CommunityFeedTab.FOLLOWING -> "You are not following any creators yet. Explore the community feed to discover and follow creative artists!"
-                                selectedFeedTab == CommunityFeedTab.SAVED -> "No bookmarked creations. Tap the bookmark icon on any post to save it to your private studio collection."
-                                selectedFeedTab == CommunityFeedTab.FLASH -> "No Flash video creations found. Be the first to publish a cinematic video!"
-                                selectedFeedTab == CommunityFeedTab.TRENDING -> "No trending creations right now. Works require over 100 likes and 5 comments to qualify as a Trending Masterwork!"
-                                else -> "Be the first to share an inspiring creation!"
-                            }
-                            AppleEmptyTabState(
-                                graphic = {
-                                    ApplePhotosGraphic(
-                                        modifier = Modifier.size(140.dp),
-                                        state = photoState,
-                                        enableClickToAnimate = true
-                                    )
-                                },
-                                title = if (selectedFeedTab == CommunityFeedTab.SAVED) "No Saved Creations" else if (selectedFeedTab == CommunityFeedTab.FOLLOWING) "No Followed Creators" else "No Posts Found",
-                                subtitle = emptySubtitle
+                            CommunityInteractiveEmptyState(
+                                selectedTab = selectedFeedTab,
+                                searchQuery = searchQuery,
+                                onCreatePostClick = { onCreatePost() },
+                                onRefreshClick = { triggerFeedRefresh() },
+                                onTopicClick = { topic ->
+                                    searchQuery = topic
+                                    isSearchExpanded = true
+                                }
                             )
                         }
                     } else {
