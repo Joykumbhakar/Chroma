@@ -114,6 +114,51 @@ private val OneUiPillLight = Color(0xFFE5E5EA)
 private val OneUiPillDark = Color(0xFF2C2C2E)
 
 /**
+ * Apple-style Specular Glass Rim Border Brush.
+ * Simulates top-left light catch and subtle bottom-right refraction across dark and light surfaces.
+ */
+@Composable
+fun rememberAppleStyleBorderBrush(
+    isDark: Boolean,
+    isFocused: Boolean = false,
+    accentColor: Color = OneUiBlueLight
+): Brush = remember(isDark, isFocused, accentColor) {
+    if (isFocused) {
+        Brush.linearGradient(
+            colors = listOf(
+                accentColor.copy(alpha = 0.95f),
+                Color.White.copy(alpha = if (isDark) 0.55f else 0.90f),
+                accentColor.copy(alpha = 0.70f)
+            ),
+            start = Offset(0f, 0f),
+            end = Offset(900f, 900f)
+        )
+    } else if (isDark) {
+        Brush.linearGradient(
+            colors = listOf(
+                Color.White.copy(alpha = 0.28f),
+                Color.White.copy(alpha = 0.08f),
+                Color.White.copy(alpha = 0.03f),
+                Color.White.copy(alpha = 0.16f)
+            ),
+            start = Offset(0f, 0f),
+            end = Offset(800f, 800f)
+        )
+    } else {
+        Brush.linearGradient(
+            colors = listOf(
+                Color.White.copy(alpha = 0.95f),
+                Color.Black.copy(alpha = 0.07f),
+                Color.Black.copy(alpha = 0.12f),
+                Color.White.copy(alpha = 0.75f)
+            ),
+            start = Offset(0f, 0f),
+            end = Offset(800f, 800f)
+        )
+    }
+}
+
+/**
  * Authentic Samsung One UI 7.0 Galaxy AI Dual-Star Sparkle Vector Icon.
  * Rendered using the official Galaxy AI SVG path geometry with subtle continuous breathing animation.
  */
@@ -229,8 +274,7 @@ fun GalaxyAiSearchButton(
             .size(34.dp)
             .clip(CircleShape)
             .background(bgBrush)
-            .border(1.dp, borderColor, CircleShape)
-            .clickable(onClick = onClick),
+                        .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Canvas(modifier = Modifier.size(17.dp)) {
@@ -343,9 +387,9 @@ fun GalaxyAiAuroraSearchBar(
     Box(
         modifier = modifier
             .fillMaxWidth()
+            .shadow(4.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.06f), spotColor = Color.Black.copy(alpha = 0.08f))
             .clip(CircleShape)
-            .background(shellGradient)
-            .padding(2.dp)
+            .background(innerBgGradient)
     ) {
         Row(
             modifier = Modifier
@@ -353,7 +397,6 @@ fun GalaxyAiAuroraSearchBar(
                 .height(46.dp)
                 .clip(CircleShape)
                 .background(innerBgGradient)
-                .border(1.dp, innerRimBrush, CircleShape)
                 .padding(start = 14.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -431,11 +474,11 @@ fun GalaxyAiAuroraSearchBar(
 }
 
 /**
- * Standard One UI Search Bar Pill Component.
- * Follows Samsung One UI Search Bar anatomy:
- * - 46.dp pill container (#E5E5EA light / #2C2C2E dark, morphing to card surface with #0381FE focus ring)
+ * Standard One UI Search Bar Pill Component with Apple-Style Specular Glass Rim.
+ * Features:
+ * - 48.dp tactile pill container with subtle spring focus scale (1.012x)
  * - Leading back arrow when in focused search mode, or magnifying glass icon
- * - Instant clear ('X') button when query is non-empty
+ * - Instant clear ('X') button when query is non-empty, or quick '✦ AI' mode chip
  */
 @Composable
 fun OneUiSearchBarPill(
@@ -449,23 +492,30 @@ fun OneUiSearchBarPill(
     placeholder: String = "Search artworks, styles, creators...",
     focusRequester: FocusRequester? = null,
     onFocusChange: ((Boolean) -> Unit)? = null,
+    onQuickAiToggle: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var hasFocus by remember { mutableStateOf(false) }
 
+    val pillScale by animateFloatAsState(
+        targetValue = if (hasFocus) 1.012f else 1f,
+        animationSpec = spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMediumLow),
+        label = "pillScale"
+    )
+
     val pillBgColor by animateColorAsState(
         targetValue = when {
-            hasFocus || isFocusedMode -> if (isDark) OneUiCardDark else OneUiCardLight
-            else -> if (isDark) OneUiPillDark else OneUiPillLight
+            hasFocus || isFocusedMode -> if (isDark) Color(0xFF222226) else OneUiCardLight
+            else -> if (isDark) Color(0xFF1E1E22) else Color(0xFFEBEBF0)
         },
         animationSpec = tween(200),
         label = "pillBg"
     )
 
-    val borderColor by animateColorAsState(
-        targetValue = if (hasFocus) accentColor else Color.Transparent,
-        animationSpec = tween(200),
-        label = "pillBorder"
+    val applePillBorderBrush = rememberAppleStyleBorderBrush(
+        isDark = isDark,
+        isFocused = hasFocus,
+        accentColor = accentColor
     )
 
     val textColor = if (isDark) Color(0xFFF2F2F7) else Color(0xFF1C1C1E)
@@ -474,11 +524,20 @@ fun OneUiSearchBarPill(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(46.dp)
+            .height(48.dp)
+            .graphicsLayer {
+                scaleX = pillScale
+                scaleY = pillScale
+            }
+            .shadow(
+                elevation = if (hasFocus) 12.dp else 4.dp,
+                shape = CircleShape,
+                ambientColor = if (hasFocus) accentColor.copy(alpha = 0.24f) else Color.Black.copy(alpha = 0.08f),
+                spotColor = if (hasFocus) accentColor.copy(alpha = 0.30f) else Color.Black.copy(alpha = 0.12f)
+            )
             .clip(CircleShape)
             .background(pillBgColor)
-            .border(1.5.dp, borderColor, CircleShape)
-            .padding(horizontal = 14.dp),
+            .padding(start = 14.dp, end = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
@@ -487,6 +546,7 @@ fun OneUiSearchBarPill(
                 modifier = Modifier
                     .size(28.dp)
                     .clip(CircleShape)
+                    .background(if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f))
                     .clickable { onExitFocusMode() },
                 contentAlignment = Alignment.Center
             ) {
@@ -494,14 +554,14 @@ fun OneUiSearchBarPill(
                     imageVector = Lucide.ChevronLeft,
                     contentDescription = "Back",
                     tint = textColor,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(18.dp)
                 )
             }
         } else {
             Icon(
                 imageVector = Lucide.Search,
                 contentDescription = "Search",
-                tint = hintColor,
+                tint = if (hasFocus) accentColor else hintColor,
                 modifier = Modifier.size(18.dp)
             )
         }
@@ -516,7 +576,7 @@ fun OneUiSearchBarPill(
                 Text(
                     text = placeholder,
                     color = hintColor,
-                    fontSize = 15.5.sp,
+                    fontSize = 15.sp,
                     fontWeight = FontWeight.Normal,
                     fontFamily = InterFontFamily,
                     maxLines = 1,
@@ -530,8 +590,8 @@ fun OneUiSearchBarPill(
                 singleLine = true,
                 textStyle = TextStyle(
                     color = textColor,
-                    fontSize = 15.5.sp,
-                    fontWeight = FontWeight.Normal,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
                     fontFamily = InterFontFamily
                 ),
                 cursorBrush = SolidColor(accentColor),
@@ -550,7 +610,7 @@ fun OneUiSearchBarPill(
         if (query.isNotEmpty()) {
             Box(
                 modifier = Modifier
-                    .size(24.dp)
+                    .size(26.dp)
                     .clip(CircleShape)
                     .background(if (isDark) Color.White.copy(alpha = 0.16f) else Color.Black.copy(alpha = 0.10f))
                     .clickable { onQueryChange("") },
@@ -561,6 +621,33 @@ fun OneUiSearchBarPill(
                     contentDescription = "Clear query",
                     tint = textColor,
                     modifier = Modifier.size(13.dp)
+                )
+            }
+        } else if (onQuickAiToggle != null) {
+            // Subtle Apple/One UI AI Mode Switch Pill inside Search Bar
+            Row(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(
+                        Brush.linearGradient(
+                            listOf(
+                                accentColor.copy(alpha = 0.16f),
+                                Color(0xFFA855F7).copy(alpha = 0.16f)
+                            )
+                        )
+                    )
+                                        .clickable { onQuickAiToggle() }
+                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                GalaxyAiSparkleIcon(size = 13.dp)
+                Text(
+                    text = "✦",
+                    color = textColor,
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = InterFontFamily
                 )
             }
         }
@@ -982,7 +1069,7 @@ fun SearchScreen(
     // One UI Colors
     val screenBgColor = if (!isDark) OneUiSurfaceLight else OneUiSurfaceDark
     val cardBgColor = if (!isDark) OneUiCardLight else OneUiCardDark
-    val cardBorderColor = if (!isDark) Color.Black.copy(alpha = 0.04f) else Color.White.copy(alpha = 0.07f)
+    val appleBorderBrush = rememberAppleStyleBorderBrush(isDark = isDark)
     val dividerColor = if (!isDark) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.08f)
     val textDark = if (!isDark) Color(0xFF1C1C1E) else Color(0xFFF2F2F7)
     val textMuted = if (!isDark) Color(0xFF6C6C70) else Color(0xFF98989D)
@@ -1069,6 +1156,31 @@ fun SearchScreen(
                                 scaleY = scale
                             }
                     ) {
+                        // Ambient Glassmorphic Studio Capsule Badge above Extended Title
+                        Row(
+                            modifier = Modifier
+                                .graphicsLayer { alpha = subtitleAlpha }
+                                .padding(bottom = 8.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (isDark) Color.White.copy(alpha = 0.07f)
+                                    else Color.Black.copy(alpha = 0.045f)
+                                )
+                                                                .padding(horizontal = 11.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            GalaxyAiSparkleIcon(size = 12.dp)
+                            Text(
+                                text = if (isSearchActive) "STUDIO DISCOVERY" else "CHROMA STUDIO • ONE UI 7",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.8.sp,
+                                color = activeAccent,
+                                fontFamily = InterFontFamily
+                            )
+                        }
+
                         // [2] Extended Centered Title (Auto-resizing + Ellipsis fallback)
                         Text(
                             text = resolvedHeaderTitle,
@@ -1112,7 +1224,7 @@ fun SearchScreen(
                                     modifier = Modifier
                                         .clip(CircleShape)
                                         .background(activeAccent)
-                                        .clickable {
+                                                                                .clickable {
                                             selectedCategory = if (selectedCategory == "Trending") "All" else "Trending"
                                         }
                                         .padding(horizontal = 14.dp, vertical = 6.dp),
@@ -1132,7 +1244,7 @@ fun SearchScreen(
                                     modifier = Modifier
                                         .clip(CircleShape)
                                         .background(if (isDark) Color.White.copy(alpha = 0.10f) else Color.Black.copy(alpha = 0.06f))
-                                        .clickable {
+                                                                                .clickable {
                                             val orders = OneUiSortOrder.entries
                                             val nextSort = orders[(orders.indexOf(sortOrder) + 1) % orders.size]
                                             sortOrder = nextSort
@@ -1319,7 +1431,7 @@ fun SearchScreen(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(14.dp))
                                     .background(if (!isDark) Color.Black.copy(0.06f) else Color.White.copy(0.10f))
-                                    .clickable { cycleGradientStyle() }
+                                                                        .clickable { cycleGradientStyle() }
                                     .padding(horizontal = 9.dp, vertical = 5.dp),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -1513,6 +1625,10 @@ fun SearchScreen(
                             focusRequester = searchFocusRequester,
                             onFocusChange = { focused ->
                                 isSearchFieldFocused = focused
+                            },
+                            onQuickAiToggle = {
+                                useGalaxyAiSearchBar = true
+                                prefs.edit().putBoolean("oneui_search_galaxy_ai_bar", true).apply()
                             }
                         )
                     }
@@ -1529,7 +1645,7 @@ fun SearchScreen(
             }
 
             // ── 5. Main Staggered Grid Content (One UI 26.dp Squircle Containers) ──
-                        LazyVerticalStaggeredGrid(
+            LazyVerticalStaggeredGrid(
                 state = gridState,
                 columns = StaggeredGridCells.Fixed(2),
                 contentPadding = PaddingValues(top = 6.dp, bottom = 120.dp, start = 14.dp, end = 14.dp),
@@ -1540,12 +1656,12 @@ fun SearchScreen(
                     .weight(1f)
             ) {
                 if (isSearchActive) {
-                    // ── Search Mode: Scope Bar (All / Creators / Artworks / Tags) ──
+                    // ── 5A. In Search Mode: One UI Scope Filter Pills ────────
                     item(span = StaggeredGridItemSpan.FullLine) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 4.dp),
+                                .padding(vertical = 2.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             SearchScope.entries.forEach { scope ->
@@ -1553,18 +1669,13 @@ fun SearchScreen(
                                 Box(
                                     modifier = Modifier
                                         .weight(1f)
-                                        .height(34.dp)
-                                        .clip(RoundedCornerShape(17.dp))
+                                        .height(36.dp)
+                                        .clip(CircleShape)
                                         .background(
                                             if (isSelected) activeAccent
                                             else cardBgColor
                                         )
-                                        .border(
-                                            1.dp,
-                                            if (isSelected) Color.Transparent else cardBorderColor,
-                                            RoundedCornerShape(17.dp)
-                                        )
-                                        .clickable { selectedScope = scope },
+                                                                                .clickable { selectedScope = scope },
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
@@ -1579,16 +1690,15 @@ fun SearchScreen(
                         }
                     }
 
+                    // ── Search Mode: Recent Searches & Suggested Prompts (One UI 26.dp Squircle Card) ──
                     if (searchQuery.isBlank()) {
-                        // ── Search Mode: Recent Searches & Suggested Prompts (One UI 26.dp Squircle Card) ──
                         item(span = StaggeredGridItemSpan.FullLine) {
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(26.dp))
                                     .background(cardBgColor)
-                                    .border(1.dp, cardBorderColor, RoundedCornerShape(26.dp))
-                                    .padding(16.dp)
+                                                                        .padding(16.dp)
                             ) {
                                 if (searchHistory.isNotEmpty()) {
                                     Row(
@@ -1670,8 +1780,7 @@ fun SearchScreen(
                                             modifier = Modifier
                                                 .clip(CircleShape)
                                                 .background(activeAccent.copy(alpha = 0.10f))
-                                                .border(1.dp, activeAccent.copy(alpha = 0.22f), CircleShape)
-                                                .clickable { searchQuery = suggestion }
+                                                                                                .clickable { searchQuery = suggestion }
                                                 .padding(horizontal = 12.dp, vertical = 6.dp),
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(5.dp)
@@ -1694,185 +1803,182 @@ fun SearchScreen(
                                 }
                             }
                         }
-                    } else {
-                        // ── Search Mode: Query Active ────────────────────────────
-                        // Creators Section
-                        if (selectedScope == SearchScope.ALL || selectedScope == SearchScope.CREATORS) {
-                            if (isSearchingUsers) {
-                                item(span = StaggeredGridItemSpan.FullLine) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(vertical = 16.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        CircularProgressIndicator(
-                                            color = activeAccent,
-                                            modifier = Modifier.size(24.dp),
-                                            strokeWidth = 2.dp
+                    }
+
+                    // ── Search Mode: Creators Section ────────────────────────
+                    if (selectedScope == SearchScope.ALL || selectedScope == SearchScope.CREATORS) {
+                        if (isSearchingUsers) {
+                            item(span = StaggeredGridItemSpan.FullLine) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 16.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator(
+                                        color = activeAccent,
+                                        modifier = Modifier.size(24.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                }
+                            }
+                        } else if (userResults.isNotEmpty()) {
+                            item(span = StaggeredGridItemSpan.FullLine) {
+                                Text(
+                                    text = "Creators (${userResults.size})",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = textMuted,
+                                    fontFamily = InterFontFamily,
+                                    modifier = Modifier.padding(start = 6.dp, top = 6.dp, bottom = 2.dp)
+                                )
+                            }
+                            items(
+                                items = userResults,
+                                key = { "search_user_${it.uid}" },
+                                span = { StaggeredGridItemSpan.FullLine }
+                            ) { user ->
+                                CreatorSearchResultCard(
+                                    user = user,
+                                    searchQuery = searchQuery,
+                                    colors = colors,
+                                    accentColor = activeAccent,
+                                    onClick = { handleUserClick(user) }
+                                )
+                            }
+                        } else if (selectedScope == SearchScope.CREATORS && !isSearchingUsers && searchQuery.isNotBlank()) {
+                            item(span = StaggeredGridItemSpan.FullLine) {
+                                val emptyState = rememberAppleGraphicAnimationState()
+                                AppleEmptyTabState(
+                                    graphic = {
+                                        AppleHeartHandshakeGraphic(
+                                            modifier = Modifier.size(140.dp),
+                                            state = emptyState,
+                                            enableClickToAnimate = true
                                         )
-                                    }
-                                }
-                            } else if (userResults.isNotEmpty()) {
-                                item(span = StaggeredGridItemSpan.FullLine) {
-                                    Text(
-                                        text = "Creators (${userResults.size})",
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = textMuted,
-                                        fontFamily = InterFontFamily,
-                                        modifier = Modifier.padding(start = 6.dp, top = 6.dp, bottom = 2.dp)
-                                    )
-                                }
-                                items(
-                                    items = userResults,
-                                    key = { "search_user_${it.uid}" },
-                                    span = { StaggeredGridItemSpan.FullLine }
-                                ) { user ->
-                                    CreatorSearchResultCard(
-                                        user = user,
-                                        searchQuery = searchQuery,
-                                        colors = colors,
-                                        accentColor = activeAccent,
-                                        onClick = { handleUserClick(user) }
-                                    )
-                                }
-                            } else if (selectedScope == SearchScope.CREATORS && !isSearchingUsers && searchQuery.isNotBlank()) {
-                                item(span = StaggeredGridItemSpan.FullLine) {
-                                    val emptyState = rememberAppleGraphicAnimationState()
-                                    AppleEmptyTabState(
-                                        graphic = {
-                                            AppleHeartHandshakeGraphic(
-                                                modifier = Modifier.size(140.dp),
-                                                state = emptyState,
-                                                enableClickToAnimate = true
-                                            )
-                                        },
-                                        title = "No Creators Found",
-                                        subtitle = "No creator matched \"$searchQuery\""
-                                    )
-                                }
+                                    },
+                                    title = "No Creators Found",
+                                    subtitle = "No creator matched \"$searchQuery\""
+                                )
                             }
                         }
+                    }
 
-                        // Matching Tags Section
-                        if ((selectedScope == SearchScope.ALL || selectedScope == SearchScope.TAGS) && matchingTags.isNotEmpty()) {
-                            item(span = StaggeredGridItemSpan.FullLine) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(26.dp))
-                                        .background(cardBgColor)
-                                        .border(1.dp, cardBorderColor, RoundedCornerShape(26.dp))
-                                        .padding(16.dp)
-                                ) {
-                                    Text(
-                                        text = "Tags & Topics",
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = textMuted,
-                                        fontFamily = InterFontFamily
-                                    )
-                                    Spacer(Modifier.height(10.dp))
-                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        items(matchingTags) { tag ->
-                                            val cleanTag = tag.removePrefix("#")
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(CircleShape)
-                                                    .background(activeAccent.copy(alpha = 0.12f))
-                                                    .border(1.dp, activeAccent.copy(alpha = 0.25f), CircleShape)
-                                                    .clickable { searchQuery = cleanTag }
-                                                    .padding(horizontal = 14.dp, vertical = 7.dp)
-                                            ) {
-                                                Text(
-                                                    text = rememberHighlightedText("#$cleanTag", searchQuery, activeAccent),
-                                                    color = activeAccent,
-                                                    fontSize = 13.sp,
-                                                    fontWeight = FontWeight.SemiBold,
-                                                    fontFamily = InterFontFamily
-                                                )
-                                            }
+                    // ── Search Mode: Matching Tags (One UI Squircle Card) ────
+                    if ((selectedScope == SearchScope.ALL || selectedScope == SearchScope.TAGS) && matchingTags.isNotEmpty()) {
+                        item(span = StaggeredGridItemSpan.FullLine) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(26.dp))
+                                    .background(cardBgColor)
+                                                                        .padding(16.dp)
+                            ) {
+                                Text(
+                                    text = "Tags & Topics",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = textMuted,
+                                    fontFamily = InterFontFamily
+                                )
+                                Spacer(Modifier.height(10.dp))
+                                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    items(matchingTags) { tag ->
+                                        val cleanTag = tag.removePrefix("#")
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(CircleShape)
+                                                .background(activeAccent.copy(alpha = 0.12f))
+                                                                                                .clickable { searchQuery = cleanTag }
+                                                .padding(horizontal = 14.dp, vertical = 7.dp)
+                                        ) {
+                                            Text(
+                                                text = rememberHighlightedText("#$cleanTag", searchQuery, activeAccent),
+                                                color = activeAccent,
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                fontFamily = InterFontFamily
+                                            )
                                         }
                                     }
                                 }
                             }
                         }
+                    }
 
-                        // Artworks Section
-                        if (selectedScope == SearchScope.ALL || selectedScope == SearchScope.ARTWORKS) {
-                            item(span = StaggeredGridItemSpan.FullLine) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 6.dp, vertical = 4.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "Artworks (${filteredArtworks.size})",
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = textMuted,
-                                        fontFamily = InterFontFamily
-                                    )
-                                }
+                    // ── Search Mode: Artworks Header & Grid ──────────────────
+                    if (selectedScope == SearchScope.ALL || selectedScope == SearchScope.ARTWORKS) {
+                        item(span = StaggeredGridItemSpan.FullLine) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 6.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Artworks (${filteredArtworks.size})",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = textMuted,
+                                    fontFamily = InterFontFamily
+                                )
                             }
+                        }
 
-                            if (filteredArtworks.isEmpty() && !isSearchingUsers && userResults.isEmpty() && selectedScope == SearchScope.ALL && searchQuery.isNotBlank()) {
-                                item(span = StaggeredGridItemSpan.FullLine) {
-                                    val emptyState = rememberAppleGraphicAnimationState()
-                                    AppleEmptyTabState(
-                                        graphic = {
-                                            AppleTrendingFireGraphic(
-                                                modifier = Modifier.size(140.dp),
-                                                state = emptyState,
-                                                enableClickToAnimate = true
-                                            )
-                                        },
-                                        title = "No Results Found",
-                                        subtitle = "We couldn't find anything matching \"$searchQuery\""
-                                    )
+                        if (filteredArtworks.isEmpty() && !isSearchingUsers && userResults.isEmpty() && selectedScope == SearchScope.ALL && searchQuery.isNotBlank()) {
+                            item(span = StaggeredGridItemSpan.FullLine) {
+                                val emptyState = rememberAppleGraphicAnimationState()
+                                AppleEmptyTabState(
+                                    graphic = {
+                                        AppleTrendingFireGraphic(
+                                            modifier = Modifier.size(140.dp),
+                                            state = emptyState,
+                                            enableClickToAnimate = true
+                                        )
+                                    },
+                                    title = "No Results Found",
+                                    subtitle = "We couldn't find anything matching \"$searchQuery\""
+                                )
+                            }
+                        } else if (filteredArtworks.isEmpty() && selectedScope == SearchScope.ARTWORKS && searchQuery.isNotBlank()) {
+                            item(span = StaggeredGridItemSpan.FullLine) {
+                                val emptyState = rememberAppleGraphicAnimationState()
+                                AppleEmptyTabState(
+                                    graphic = {
+                                        AppleTrendingFireGraphic(
+                                            modifier = Modifier.size(140.dp),
+                                            state = emptyState,
+                                            enableClickToAnimate = true
+                                        )
+                                    },
+                                    title = "No Artworks Found",
+                                    subtitle = "Try searching for different keywords or styles."
+                                )
+                            }
+                        } else {
+                            items(filteredArtworks, key = { "search_art_${it.id}" }) { work ->
+                                val aspectRatio = when (work.id.hashCode() % 3) {
+                                    0 -> 0.78f
+                                    1 -> 0.90f
+                                    else -> 1.0f
                                 }
-                            } else if (filteredArtworks.isEmpty() && selectedScope == SearchScope.ARTWORKS && searchQuery.isNotBlank()) {
-                                item(span = StaggeredGridItemSpan.FullLine) {
-                                    val emptyState = rememberAppleGraphicAnimationState()
-                                    AppleEmptyTabState(
-                                        graphic = {
-                                            AppleTrendingFireGraphic(
-                                                modifier = Modifier.size(140.dp),
-                                                state = emptyState,
-                                                enableClickToAnimate = true
-                                            )
-                                        },
-                                        title = "No Artworks Found",
-                                        subtitle = "Try searching for different keywords or styles."
-                                    )
-                                }
-                            } else {
-                                items(filteredArtworks, key = { "search_art_${it.id}" }) { work ->
-                                    val aspectRatio = when (work.id.hashCode() % 3) {
-                                        0 -> 0.78f
-                                        1 -> 0.90f
-                                        else -> 1.0f
-                                    }
-                                    val isLiked = likedWorkIds.contains(work.id)
-                                    ExploreWorkGridCard(
-                                        work = work,
-                                        aspectRatio = aspectRatio,
-                                        repository = repository,
-                                        isLiked = isLiked,
-                                        searchQuery = searchQuery,
-                                        accentColor = activeAccent,
-                                        onClick = { selectedPreviewPost = work },
-                                        onDoubleTapLike = {
-                                            val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
-                                            if (!uid.isNullOrBlank()) {
-                                                discoverVm.toggleLike(work.id, uid)
-                                            }
+                                val isLiked = likedWorkIds.contains(work.id)
+                                ExploreWorkGridCard(
+                                    work = work,
+                                    aspectRatio = aspectRatio,
+                                    repository = repository,
+                                    isLiked = isLiked,
+                                    searchQuery = searchQuery,
+                                    accentColor = activeAccent,
+                                    onClick = { selectedPreviewPost = work },
+                                    onDoubleTapLike = {
+                                        val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                                        if (!uid.isNullOrBlank()) {
+                                            discoverVm.toggleLike(work.id, uid)
                                         }
-                                    )
-                                }
+                                    }
+                                )
                             }
                         }
                     }
@@ -1892,12 +1998,7 @@ fun SearchScreen(
                                             if (isSelected) activeAccent
                                             else cardBgColor
                                         )
-                                        .border(
-                                            1.dp,
-                                            if (isSelected) Color.Transparent else cardBorderColor,
-                                            CircleShape
-                                        )
-                                        .clickable { selectedCategory = filter }
+                                                                                .clickable { selectedCategory = filter }
                                         .padding(horizontal = 15.dp, vertical = 7.5.dp)
                                 ) {
                                     Row(
@@ -1953,8 +2054,7 @@ fun SearchScreen(
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(26.dp))
                                     .background(cardBgColor)
-                                    .border(1.dp, cardBorderColor, RoundedCornerShape(26.dp))
-                                    .padding(16.dp)
+                                                                        .padding(16.dp)
                             ) {
                                 Text(
                                     text = "Trending Tags",
@@ -1985,7 +2085,7 @@ fun SearchScreen(
                         }
                     }
 
-                    // ── Explore Mode: Creations Header ────────────────────────
+                    // ── Explore Mode: Creations Header with Inline Sort Pill ──
                     item(span = StaggeredGridItemSpan.FullLine) {
                         Row(
                             modifier = Modifier
@@ -2009,12 +2109,38 @@ fun SearchScreen(
                                     fontFamily = InterFontFamily
                                 )
                             }
-                            Text(
-                                text = "${filteredArtworks.size} items",
-                                fontSize = 12.5.sp,
-                                color = textMuted,
-                                fontFamily = InterFontFamily
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(CircleShape)
+                                        .background(cardBgColor)
+                                                                                .clickable {
+                                            val orders = OneUiSortOrder.entries
+                                            val nextSort = orders[(orders.indexOf(sortOrder) + 1) % orders.size]
+                                            sortOrder = nextSort
+                                            prefs.edit().putString("oneui_search_sort_order", nextSort.name).apply()
+                                        }
+                                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = sortOrder.label,
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = activeAccent,
+                                        fontFamily = InterFontFamily
+                                    )
+                                }
+                                Text(
+                                    text = "${filteredArtworks.size} items",
+                                    fontSize = 12.5.sp,
+                                    color = textMuted,
+                                    fontFamily = InterFontFamily
+                                )
+                            }
                         }
                     }
 
@@ -2075,6 +2201,7 @@ fun SearchScreen(
                 }
             }
         }
+
         // ── Artwork Quick Look & Action Sheet Modal ────────────────────────────
         if (selectedPreviewPost != null) {
             val post = selectedPreviewPost!!
@@ -2121,18 +2248,14 @@ private fun CreatorSearchResultCard(
     onClick: () -> Unit
 ) {
     val isDark = colors.isDark
+    val appleBorderBrush = rememberAppleStyleBorderBrush(isDark = isDark)
     val displayName = user.displayName.ifBlank { user.username }
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(26.dp))
             .background(if (isDark) OneUiCardDark else OneUiCardLight)
-            .border(
-                1.dp,
-                if (isDark) Color.White.copy(alpha = 0.07f) else Color.Black.copy(alpha = 0.04f),
-                RoundedCornerShape(26.dp)
-            )
-            .clickable { onClick() }
+                        .clickable { onClick() }
             .padding(15.dp)
     ) {
         Row(
@@ -2213,17 +2336,43 @@ private fun SpotlightCreatorBanner(
     onClick: () -> Unit
 ) {
     val isDark = colors.isDark
+    val appleBorderBrush = rememberAppleStyleBorderBrush(isDark = isDark)
+    val bannerBgBrush = remember(isDark, accentColor) {
+        if (isDark) {
+            Brush.linearGradient(
+                colors = listOf(
+                    Color(0xFF1F222B),
+                    Color(0xFF181920),
+                    accentColor.copy(alpha = 0.14f)
+                ),
+                start = Offset(0f, 0f),
+                end = Offset(900f, 350f)
+            )
+        } else {
+            Brush.linearGradient(
+                colors = listOf(
+                    Color(0xFFFFFFFF),
+                    Color(0xFFF6F9FF),
+                    accentColor.copy(alpha = 0.08f)
+                ),
+                start = Offset(0f, 0f),
+                end = Offset(900f, 350f)
+            )
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(26.dp))
-            .background(if (isDark) OneUiCardDark else OneUiCardLight)
-            .border(
-                1.dp,
-                if (isDark) Color.White.copy(alpha = 0.07f) else Color.Black.copy(alpha = 0.04f),
-                RoundedCornerShape(26.dp)
+            .shadow(
+                elevation = 8.dp,
+                shape = RoundedCornerShape(26.dp),
+                ambientColor = accentColor.copy(alpha = 0.12f),
+                spotColor = accentColor.copy(alpha = 0.16f)
             )
-            .clickable { onClick() }
+            .clip(RoundedCornerShape(26.dp))
+            .background(bannerBgBrush)
+                        .clickable { onClick() }
             .padding(16.dp)
     ) {
         Row(
@@ -2233,49 +2382,72 @@ private fun SpotlightCreatorBanner(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(13.dp),
                 modifier = Modifier.weight(1f)
             ) {
-                IosAvatarView(
-                    name = post.authorDisplayName,
-                    avatarUrl = post.authorAvatarUrl,
-                    size = 46.dp
-                )
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(CircleShape)
+                        .background(
+                            Brush.linearGradient(
+                                listOf(Color(0xFFFF9500), Color(0xFFFF2D55), accentColor)
+                            )
+                        )
+                        .padding(2.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    IosAvatarView(
+                        name = post.authorDisplayName,
+                        avatarUrl = post.authorAvatarUrl,
+                        size = 48.dp
+                    )
+                }
 
                 Column {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0xFFFF9500).copy(alpha = 0.15f))
-                            .padding(horizontal = 7.dp, vertical = 2.dp)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Text(
-                            text = "FEATURED CREATOR",
-                            color = Color(0xFFFF9500),
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontFamily = InterFontFamily
-                        )
+                        Box(
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(Color(0xFFFF9500).copy(alpha = 0.16f))
+                                                                .padding(horizontal = 8.dp, vertical = 2.5.dp)
+                        ) {
+                            Text(
+                                text = "✦ FEATURED CREATOR",
+                                color = Color(0xFFFF9500),
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                letterSpacing = 0.4.sp,
+                                fontFamily = InterFontFamily
+                            )
+                        }
                     }
-                    Spacer(Modifier.height(3.dp))
+                    Spacer(Modifier.height(4.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = post.authorDisplayName.ifBlank { post.authorUsername },
                             color = colors.textMain,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp,
-                            fontFamily = InterFontFamily
+                            fontSize = 15.5.sp,
+                            fontFamily = InterFontFamily,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         if (post.authorVerified) {
                             Spacer(Modifier.width(4.dp))
-                            VerifiedBadge(size = 13.dp)
+                            VerifiedBadge(size = 14.dp)
                         }
                     }
                     Text(
-                        text = "@${post.authorUsername}",
+                        text = "@${post.authorUsername} • ${post.title.ifBlank { "Studio Masterwork" }}",
                         color = Color(0xFF8E8E93),
                         fontSize = 12.sp,
-                        fontFamily = InterFontFamily
+                        fontFamily = InterFontFamily,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -2284,12 +2456,12 @@ private fun SpotlightCreatorBanner(
                 modifier = Modifier
                     .clip(CircleShape)
                     .background(accentColor)
-                    .clickable { onClick() }
-                    .padding(horizontal = 15.dp, vertical = 7.dp),
+                                        .clickable { onClick() }
+                    .padding(horizontal = 15.dp, vertical = 7.5.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "View",
+                    text = "Studio",
                     color = Color.White,
                     fontSize = 12.5.sp,
                     fontWeight = FontWeight.Bold,
@@ -2816,8 +2988,7 @@ fun ExploreQuickLookSheet(
                                     .weight(1f)
                                     .clip(statPillShape)
                                     .background(if (colors.isDark) Color(0xFF1E2330) else Color(0xFFF8FAFC))
-                                    .border(statBorder, statPillShape)
-                                    .padding(vertical = 8.dp),
+                                                                        .padding(vertical = 8.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Row(
@@ -2845,8 +3016,7 @@ fun ExploreQuickLookSheet(
                                     .weight(1f)
                                     .clip(statPillShape)
                                     .background(if (colors.isDark) Color(0xFF1E2330) else Color(0xFFF8FAFC))
-                                    .border(statBorder, statPillShape)
-                                    .padding(vertical = 8.dp),
+                                                                        .padding(vertical = 8.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Row(
@@ -2874,8 +3044,7 @@ fun ExploreQuickLookSheet(
                                     .weight(1f)
                                     .clip(statPillShape)
                                     .background(if (colors.isDark) Color(0xFF1E2330) else Color(0xFFF8FAFC))
-                                    .border(statBorder, statPillShape)
-                                    .padding(vertical = 8.dp),
+                                                                        .padding(vertical = 8.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Row(
@@ -3137,6 +3306,7 @@ fun ExploreWorkGridCard(
 ) {
     val colors = LocalOscellionColors.current
     val isDark = colors.isDark
+    val appleBorderBrush = rememberAppleStyleBorderBrush(isDark = isDark)
     val haptic = LocalHapticFeedback.current
     val doubleTapLikeState = rememberDoubleTapLikeState()
     var localIsLiked by remember(work.id, isLiked) { mutableStateOf(isLiked) }
@@ -3160,22 +3330,23 @@ fun ExploreWorkGridCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(22.dp))
-            .background(if (isDark) OneUiCardDark else OneUiCardLight)
-            .border(
-                1.dp,
-                if (isDark) Color.White.copy(alpha = 0.06f) else Color.Black.copy(alpha = 0.04f),
-                RoundedCornerShape(22.dp)
+            .shadow(
+                elevation = 6.dp,
+                shape = RoundedCornerShape(24.dp),
+                ambientColor = Color.Black.copy(alpha = if (isDark) 0.35f else 0.06f),
+                spotColor = Color.Black.copy(alpha = if (isDark) 0.45f else 0.09f)
             )
-            .padding(6.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .background(if (isDark) OneUiCardDark else OneUiCardLight)
+                        .padding(7.dp)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(aspectRatio)
-                .clip(RoundedCornerShape(17.dp))
+                .clip(RoundedCornerShape(18.dp))
                 .background(if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA))
-                .pointerInput(work.id) {
+                                .pointerInput(work.id) {
                     detectTapGestures(
                         onTap = { onClick() },
                         onDoubleTap = { offset ->
@@ -3224,6 +3395,46 @@ fun ExploreWorkGridCard(
                 }
             }
 
+            // Subtle Bottom Scrim for Contrast
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .align(Alignment.BottomCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.42f))
+                        )
+                    )
+            )
+
+            // Top-Left Floating Glassmorphic Category / Trending Badge
+            val badgeLabel = remember(work.isTrendingMasterwork, work.likesCount, work.tags) {
+                when {
+                    work.isTrendingMasterwork || work.likesCount > 120 -> "Trending"
+                    work.tags.isNotEmpty() -> "#${work.tags.first().removePrefix("#")}"
+                    else -> null
+                }
+            }
+            if (badgeLabel != null) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(8.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.48f))
+                                                .padding(horizontal = 8.dp, vertical = 3.5.dp)
+                ) {
+                    Text(
+                        text = badgeLabel,
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = InterFontFamily
+                    )
+                }
+            }
+
             FlatDoubleTapHeartOverlay(
                 state = doubleTapLikeState,
                 modifier = Modifier.fillMaxSize(),
@@ -3231,23 +3442,23 @@ fun ExploreWorkGridCard(
             )
         }
 
-        Spacer(Modifier.height(7.dp))
+        Spacer(Modifier.height(8.dp))
 
         Text(
             text = rememberHighlightedText(work.title.ifBlank { "Creation" }, searchQuery, accentColor),
             color = colors.textMain,
             fontSize = 13.5.sp,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = FontWeight.Bold,
             fontFamily = InterFontFamily,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 4.dp)
+            modifier = Modifier.padding(horizontal = 5.dp)
         )
 
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 4.dp, vertical = 2.dp),
+                .padding(horizontal = 5.dp, vertical = 3.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -3264,6 +3475,14 @@ fun ExploreWorkGridCard(
             val effectiveLikes = (work.likesCount + localLikesCountDelta).coerceAtLeast(0)
             if (effectiveLikes > 0) {
                 Row(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(
+                            if (localIsLiked) Color(0xFFFF2D55).copy(alpha = 0.14f)
+                            else if (isDark) Color.White.copy(alpha = 0.06f)
+                            else Color.Black.copy(alpha = 0.04f)
+                        )
+                        .padding(horizontal = 7.dp, vertical = 2.5.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
@@ -3271,14 +3490,14 @@ fun ExploreWorkGridCard(
                         imageVector = Lucide.Heart,
                         contentDescription = null,
                         tint = if (localIsLiked) Color(0xFFFF2D55) else Color(0xFF8E8E93),
-                        modifier = Modifier.size(11.dp)
+                        modifier = Modifier.size(10.5.dp)
                     )
                     Text(
                         text = effectiveLikes.toString(),
                         color = if (localIsLiked) Color(0xFFFF2D55) else Color(0xFF8E8E93),
-                        fontSize = 11.sp,
+                        fontSize = 10.5.sp,
                         fontFamily = InterFontFamily,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
             }
