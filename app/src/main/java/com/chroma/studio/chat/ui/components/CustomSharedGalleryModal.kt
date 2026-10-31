@@ -1069,7 +1069,7 @@ fun CustomSharedGalleryModal(
                             modifier = Modifier
                                 .clickable {
                                     SoundManager.playReaction()
-                                    val targetItem = selectedItemsList.first()
+                                    val targetItem = selectedItemsList.firstOrNull() ?: return@clickable
                                     onReplyPrivately(targetItem.senderName, targetItem)
                                     onToast("Replying privately to ${targetItem.senderName}")
                                     selectedItemIds.clear()

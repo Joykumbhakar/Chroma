@@ -1,4 +1,4 @@
-﻿package com.chroma.studio.chat
+package com.chroma.studio.chat
 
 import com.chroma.studio.R
 
@@ -942,7 +942,7 @@ private fun ChatScreenContent(
 
         // Suppress toasts for routine actions (sends, likes, reactions) to keep the experience calm and clean
 
-        if (msg == "Message sent" || msg == "Liked" || msg.startsWith("Reacted") || msg.startsWith("Photo sent") || msg.startsWith("Voice note sent") || msg.startsWith("Voice recording canceled") || msg.startsWith("Interactive poll posted")) {
+        if (msg == "Message sent" || msg == "Liked" || msg.startsWith("Reacted") || msg.startsWith("Photo sent") || msg.startsWith("Voice note sent") || msg.startsWith("Voice recording canceled") || msg.startsWith("Interactive poll posted") || msg.startsWith("Replying to") || msg.contains("Reply", ignoreCase = true)) {
 
             return
 
@@ -1855,7 +1855,251 @@ private fun ChatScreenContent(
 
         // 1. Root Screen: Standalone Apple iOS Conversations & Stories Screen
 
+                // 1. Root Screen: Samsung One UI Collapsing Header with Expanded Gradient
         if (effectiveRoomId == null) {
+            val chatUiPrefs = remember { context.getSharedPreferences("chat_ui_preferences", android.content.Context.MODE_PRIVATE) }
+            var useOneUiHeaderMode by remember {
+                mutableStateOf(chatUiPrefs.getBoolean("one_ui_header_mode", true))
+            }
+            var oneUiGradientStyle by remember {
+                val savedName = chatUiPrefs.getString("one_ui_gradient_style", OneUiGradientStyle.GALAXY_AI.name)
+                mutableStateOf(try { OneUiGradientStyle.valueOf(savedName ?: "GALAXY_AI") } catch (_: Exception) { OneUiGradientStyle.GALAXY_AI })
+            }
+
+            val handleLockMultipleChats: (List<String>) -> Unit = { chatIds ->
+                if (chatIds.isNotEmpty()) {
+                    val activity = context as? android.app.Activity
+                    val allLocked = chatIds.all { it in lockedChatIds }
+                    if (allLocked) {
+                        if (activity != null) {
+                            com.chroma.studio.chat.util.BiometricHelper.authenticate(
+                                activity = activity,
+                                title = "Unlock Chats",
+                                subtitle = "Verify biometric identity to remove chat lock",
+                                onSuccess = {
+                                    val next = lockedChatIds - chatIds.toSet()
+                                    lockedChatIds = next
+                                    chatSecurityPrefs.edit().putStringSet("locked_chat_ids", next).apply()
+                                    showToast("Biometric lock removed from selected chats")
+                                },
+                                onError = { _ -> }
+                            )
+                        } else {
+                            val next = lockedChatIds - chatIds.toSet()
+                            lockedChatIds = next
+                            chatSecurityPrefs.edit().putStringSet("locked_chat_ids", next).apply()
+                            showToast("Biometric lock removed")
+                        }
+                    } else {
+                        if (activity != null) {
+                            com.chroma.studio.chat.util.BiometricHelper.authenticate(
+                                activity = activity,
+                                title = "Biometric Chat Lock",
+                                subtitle = "Confirm Face ID or fingerprint to lock selected chats",
+                                onSuccess = {
+                                    val next = lockedChatIds + chatIds.toSet()
+                                    lockedChatIds = next
+                                    chatSecurityPrefs.edit().putStringSet("locked_chat_ids", next).apply()
+                                    showToast("${chatIds.size} chat(s) locked with Biometrics")
+                                },
+                                onError = { _ -> }
+                            )
+                        } else {
+                            val next = lockedChatIds + chatIds.toSet()
+                            lockedChatIds = next
+                            chatSecurityPrefs.edit().putStringSet("locked_chat_ids", next).apply()
+                            showToast("${chatIds.size} chat(s) locked")
+                        }
+                    }
+                }
+            }
+
+            if (useOneUiHeaderMode) {
+                OneUiCollapsingConversationsScreen(
+                    title = "Messages",
+                    currentUser = currentUser,
+                    stories = stories,
+                    storyGroups = storyGroups,
+                    hasMyStory = myStories.isNotEmpty(),
+                    chats = chats,
+                    activeTab = activeTab,
+                    onTabSelected = { activeTab = it },
+                    searchQuery = sidebarSearchQuery,
+                    onSearchQueryChanged = { sidebarSearchQuery = it },
+                    gradientStyle = oneUiGradientStyle,
+                    onCycleGradientStyle = {
+                        val styles = OneUiGradientStyle.entries
+                        val next = styles[(styles.indexOf(oneUiGradientStyle) + 1) % styles.size]
+                        oneUiGradientStyle = next
+                        chatUiPrefs.edit().putString("one_ui_gradient_style", next.name).apply()
+                        SoundManager.playReaction()
+                    },
+                    onSwitchToClassicLayout = {
+                        useOneUiHeaderMode = false
+                        chatUiPrefs.edit().putBoolean("one_ui_header_mode", false).apply()
+                        showToast("Switched to Classic Messages layout")
+                    },
+                    onMyStoryClick = {
+                        if (myStories.isNotEmpty()) {
+                            storyViewerInitialIndex = -1
+                            showStoryViewer = true
+                        } else {
+                            showStoryCreationSheet = true
+                        }
+                    },
+                    onAddStoryClick = { showStoryCreationSheet = true },
+                    onStoryClick = { story ->
+                        val idx = storyGroups.indexOfFirst { it.userId == story.authorId }
+                        storyViewerInitialIndex = if (idx >= 0) idx else 0
+                        showStoryViewer = true
+                    },
+                    onStoryGroupClick = { groupIdx ->
+                        storyViewerInitialIndex = groupIdx
+                        showStoryViewer = true
+                    },
+                    onChatSelected = { chatId ->
+                        val openChatAction = {
+                            activeChatId = chatId
+                            chats = chats.map { if (it.id == chatId) it.copy(unreadCount = 0) else it }
+                            isInitialScrollDone = false
+                            isInsideChat = true
+                            chatViewModel?.openChat(chatId)
+                            val targetRoom = recentRooms.find { it.id == chatId }
+                            if (targetRoom != null && !targetRoom.isGroup) {
+                                val targetUid = targetRoom.participants.firstOrNull { it != currentUid }
+                                if (targetUid != null) {
+                                    chatViewModel?.observeUserOnlineStatus(targetUid)
+                                }
+                            }
+                        }
+                        openChatAction()
+                    },
+                    onNewMessageClick = { isNewMessageModalOpen = true },
+                    onCreateGroupClick = { isCreateGroupModalOpen = true },
+                    onOpenAppearanceSettings = { isAppearanceModalOpen = true },
+                    onUserProfileClick = {
+                        if (onNavigateToUserProfile != null) {
+                            onNavigateToUserProfile.invoke(currentUser.id)
+                        } else if (onNavigateToProfile != null) {
+                            onNavigateToProfile.invoke(currentUser.id)
+                        } else {
+                            isProfileSettingsOpen = true
+                        }
+                    },
+                    onStartCall = { chat, callType ->
+                        activeChatId = chat.id
+                        activeCallType = callType
+                        isCallBannerActive = true
+                        isFullCallModalOpen = true
+                        SoundManager.playRing()
+                    },
+                    lockedChatIds = lockedChatIds,
+                    pinnedChatIds = pinnedChatIds,
+                    onPinChatToggle = { chat ->
+                        val isPinned = chat.id in pinnedChatIds
+                        pinnedChatIds = if (isPinned) pinnedChatIds - chat.id else pinnedChatIds + chat.id
+                        chatViewModel?.toggleFavorite(chat.id, !isPinned)
+                        showToast(if (isPinned) "Chat unpinned" else "Chat pinned to top")
+                    },
+                    onMuteChatToggle = { chat ->
+                        val nextMuted = !chat.isMuted
+                        chats = chats.map { if (it.id == chat.id) it.copy(isMuted = nextMuted) else it }
+                        chatViewModel?.muteChat(chat.id, nextMuted)
+                        showToast(if (nextMuted) "Notifications muted" else "Notifications unmuted")
+                    },
+                    onReadChatToggle = { chat ->
+                        val wasUnread = chat.unreadCount > 0
+                        chats = chats.map { if (it.id == chat.id) it.copy(unreadCount = if (wasUnread) 0 else 1) else it }
+                        if (wasUnread) {
+                            chatViewModel?.markMultipleAsRead(listOf(chat.id))
+                        }
+                        showToast(if (wasUnread) "Marked as read" else "Marked as unread")
+                    },
+                    onLockChatToggle = { chat ->
+                        val isCurrentlyLocked = chat.id in lockedChatIds
+                        val activity = context as? android.app.Activity
+                        if (isCurrentlyLocked) {
+                            if (activity != null) {
+                                com.chroma.studio.chat.util.BiometricHelper.authenticate(
+                                    activity = activity,
+                                    title = "Unlock ${chat.name}",
+                                    subtitle = "Verify identity to remove biometric lock",
+                                    onSuccess = {
+                                        val next = lockedChatIds - chat.id
+                                        lockedChatIds = next
+                                        chatSecurityPrefs.edit().putStringSet("locked_chat_ids", next).apply()
+                                        showToast("Biometric lock removed from ${chat.name}")
+                                    },
+                                    onError = {}
+                                )
+                            } else {
+                                val next = lockedChatIds - chat.id
+                                lockedChatIds = next
+                                chatSecurityPrefs.edit().putStringSet("locked_chat_ids", next).apply()
+                                showToast("Biometric lock removed")
+                            }
+                        } else {
+                            if (activity != null) {
+                                com.chroma.studio.chat.util.BiometricHelper.authenticate(
+                                    activity = activity,
+                                    title = "Lock ${chat.name}",
+                                    subtitle = "Confirm Face ID or fingerprint to lock chat",
+                                    onSuccess = {
+                                        val next = lockedChatIds + chat.id
+                                        lockedChatIds = next
+                                        chatSecurityPrefs.edit().putStringSet("locked_chat_ids", next).apply()
+                                        showToast("${chat.name} locked with Biometrics")
+                                    },
+                                    onError = {}
+                                )
+                            } else {
+                                val next = lockedChatIds + chat.id
+                                lockedChatIds = next
+                                chatSecurityPrefs.edit().putStringSet("locked_chat_ids", next).apply()
+                                showToast("${chat.name} locked")
+                            }
+                        }
+                    },
+                    onLockMultipleChatsToggle = handleLockMultipleChats,
+                    onArchiveChat = { chat ->
+                        chats = chats.filter { it.id != chat.id }
+                        chatViewModel?.archiveChat(chat.id, true)
+                        showToast("Chat archived")
+                    },
+                    onClearChatHistory = { chat ->
+                        chats = chats.map { if (it.id == chat.id) it.copy(messages = emptyList()) else it }
+                        chatViewModel?.clearChatHistory(chat.id)
+                        showToast("Chat history cleared")
+                    },
+                    onExportChat = { chat ->
+                        try {
+                            val transcript = buildString {
+                                appendLine("--- ChromaStudio Chat Transcript: ${chat.name} ---")
+                                appendLine("Exported: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date())}")
+                                appendLine()
+                                chat.messages.forEach { m ->
+                                    appendLine("[${m.time}] ${m.senderName}: ${m.text}")
+                                }
+                            }
+                            val sendIntent = android.content.Intent().apply {
+                                action = android.content.Intent.ACTION_SEND
+                                putExtra(android.content.Intent.EXTRA_TEXT, transcript)
+                                type = "text/plain"
+                            }
+                            context.startActivity(android.content.Intent.createChooser(sendIntent, "Export chat with ${chat.name}"))
+                            showToast("Exporting transcript for ${chat.name}")
+                        } catch (e: Exception) {
+                            showToast("Exported transcript for ${chat.name}")
+                        }
+                    },
+                    onDeleteChat = { chat ->
+                        chats = chats.filter { it.id != chat.id }
+                        chatViewModel?.deleteChat(chat.id)
+                        showToast("Chat deleted")
+                    }
+                )
+            } else {
+
 
             ConversationsScreen(
 
@@ -2066,56 +2310,7 @@ private fun ChatScreenContent(
                 }
             },
 
-            onLockMultipleChatsToggle = { chatIds ->
-                if (chatIds.isEmpty()) return@ConversationsScreen
-                val activity = context as? android.app.Activity
-                val allLocked = chatIds.all { it in lockedChatIds }
-                if (allLocked) {
-                    if (activity != null) {
-                        com.chroma.studio.chat.util.BiometricHelper.authenticate(
-                            activity = activity,
-                            title = "Unlock Chats",
-                            subtitle = "Verify biometric identity to remove chat lock",
-                            onSuccess = {
-                                val next = lockedChatIds - chatIds.toSet()
-                                lockedChatIds = next
-                                chatSecurityPrefs.edit().putStringSet("locked_chat_ids", next).apply()
-                                showToast("Biometric lock removed from selected chats")
-                            },
-                            onError = { _ ->
-                                // User cancelled or biometric unavailable -- lock remains, do nothing
-                            }
-                        )
-                    } else {
-                        val next = lockedChatIds - chatIds.toSet()
-                        lockedChatIds = next
-                        chatSecurityPrefs.edit().putStringSet("locked_chat_ids", next).apply()
-                        showToast("Biometric lock removed")
-                    }
-                } else {
-                    if (activity != null) {
-                        com.chroma.studio.chat.util.BiometricHelper.authenticate(
-                            activity = activity,
-                            title = "Biometric Chat Lock",
-                            subtitle = "Confirm Face ID or fingerprint to lock selected chats",
-                            onSuccess = {
-                                val next = lockedChatIds + chatIds.toSet()
-                                lockedChatIds = next
-                                chatSecurityPrefs.edit().putStringSet("locked_chat_ids", next).apply()
-                                showToast("${chatIds.size} chat(s) locked with Biometrics")
-                            },
-                            onError = { _ ->
-                                // User cancelled -- do nothing
-                            }
-                        )
-                    } else {
-                        val next = lockedChatIds + chatIds.toSet()
-                        lockedChatIds = next
-                        chatSecurityPrefs.edit().putStringSet("locked_chat_ids", next).apply()
-                        showToast("${chatIds.size} chat(s) locked")
-                    }
-                }
-            },
+            onLockMultipleChatsToggle = handleLockMultipleChats,
 
             onArchiveChat = { chat ->
 
@@ -2213,7 +2408,7 @@ private fun ChatScreenContent(
 
             },
 
-            onShareStory = { story ->
+            onShareStory = { story: Story ->
 
                 try {
 
@@ -2231,13 +2426,17 @@ private fun ChatScreenContent(
 
                 }
 
-            }
+            },
 
+            onSwitchToOneUiLayout = {
+                useOneUiHeaderMode = true
+                chatUiPrefs.edit().putBoolean("one_ui_header_mode", true).apply()
+                showToast("Switched to Samsung One UI Header")
+            }
         )
 
+            }
         }
-
-
 
         // 1.5 Fullscreen Apple iOS Profile & Settings Screen (Native iOS Slide Transition)
 
@@ -2898,7 +3097,7 @@ private fun ChatScreenContent(
                                 messageId = msg.id,
                                 mediaType = msg.mediaType
                             )
-                            showToast("Replying to ${msg.senderName}")
+                            // Reply banner shown in input bar, suppress toast
                         },
                         onStartEdit = { msg ->
                             editingMessageId = msg.id
@@ -3752,7 +3951,7 @@ private fun ChatScreenContent(
 
                 },
 
-                onReplySend = { authorId, replyMsg ->
+                onReplySend = { authorId, replyMsg, _, _ ->
 
                     if (chatViewModel != null && authorId.isNotBlank() && authorId != currentUid) {
 
@@ -5256,7 +5455,7 @@ private fun ChatScreenContent(
 
                     )
 
-                    showToast("Replying to ${msg.senderName}")
+                    // Reply banner shown in input bar, suppress toast
 
                 },
 

@@ -46,11 +46,13 @@ fun StoriesSection(
     myStoriesList: List<Story> = emptyList(),
     isUploading: Boolean = false,
     contentPadding: PaddingValues = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+    gapColor: Color? = null,
     onMyStoryClick: (() -> Unit)? = null,
     onStoryClick: ((groupIndex: Int) -> Unit)? = null
 ) {
     val colors = LocalOscellionColors.current
     val isDark = colors.isDark
+    val effectiveGapColor = gapColor ?: (if (isDark) Color(0xFF161A22) else Color.White)
 
     val infiniteTransition = rememberInfiniteTransition(label = "story_skeleton")
     val skeletonAlpha by infiniteTransition.animateFloat(
@@ -136,7 +138,7 @@ fun StoriesSection(
                             showAddBadge = true,
                             gender = myStoryGender,
                             isDark = isDark,
-                            gapColor = colors.bg,
+                            gapColor = effectiveGapColor,
                             onAddBadgeClick = { onAddStoryClick() }
                         )
 
@@ -224,7 +226,7 @@ fun StoriesSection(
                         showAddBadge = false,
                         gender = profile.gender,
                         isDark = isDark,
-                        gapColor = colors.bg
+                        gapColor = effectiveGapColor
                     )
 
                     Spacer(modifier = Modifier.height(5.dp))

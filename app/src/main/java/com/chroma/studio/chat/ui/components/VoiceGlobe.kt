@@ -7,11 +7,10 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,23 +19,28 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.vector.path
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chroma.studio.chat.data.VoiceGlobeStyleType
 import com.chroma.studio.chat.sound.SoundManager
 import com.chroma.studio.chat.ui.theme.LocalChatColors
-import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.*
-import kotlin.math.PI
+import kotlinx.coroutines.launch
 import kotlin.math.cos
 import kotlin.math.sin
+
+// ============================================================================
+// 1. PALETTE DEFINITIONS & THEME MAPPER
+// ============================================================================
 
 /**
  * Palette configuration for 3D Optical Liquid Glass Voice Bubble.
@@ -54,7 +58,16 @@ data class OpticalVoiceGlobePalette(
     val c4Inner: Color,
     val c4Outer: Color,
     val causticColor: Color,
-    val waveColor: Color
+    val waveColor: Color,
+    val specularGlassHighlight: Color = Color(0x40FFFFFF),
+    val chromaticRimColors: List<Color> = listOf(
+        Color(0xD9FFFFFF),
+        Color(0x9938BDF8),
+        Color(0x80818CF8),
+        Color(0x73C084FC),
+        Color(0x9938BDF8),
+        Color(0xD9FFFFFF)
+    )
 )
 
 fun getOpticalVoiceGlobePalette(globeStyle: VoiceGlobeStyleType, isDark: Boolean): OpticalVoiceGlobePalette {
@@ -238,16 +251,21 @@ fun getOpticalVoiceGlobePalette(globeStyle: VoiceGlobeStyleType, isDark: Boolean
     }
 }
 
+// ============================================================================
+// 2. MAIN VOICE BUBBLE CARD (With Apple visionOS Specular Rim & 3D Touch Tilt)
+// ============================================================================
+
 /**
- * 100% Native Jetpack Compose 3D Liquid Glass Voice Bubble Card.
- * Replaces the old WebView implementation to guarantee zero lag, zero crashes,
- * and buttery smooth 60fps animations across all Android devices.
+ * 100% Native Jetpack Compose Optical 3D Liquid Glass Voice Bubble Card.
+ * Replicates the Apple VisionOS design with interactive 3D parallax tilt,
+ * voice-reactive acoustic resonance, specular glass reflections, and smooth spring physics.
  */
 @Composable
 fun VoiceRecorderCard(
     recordingDurationSec: Int,
     statusText: String = "Listening...",
     globeStyle: VoiceGlobeStyleType = VoiceGlobeStyleType.ORIGINAL_BLUE,
+    voiceAmplitude: Float = 0f,
     onCancel: () -> Unit,
     onTranscribe: () -> Unit,
     onSend: () -> Unit,
@@ -256,203 +274,120 @@ fun VoiceRecorderCard(
     val colors = LocalChatColors.current
     val isDark = !colors.isLight
     val palette = remember(globeStyle, isDark) { getOpticalVoiceGlobePalette(globeStyle, isDark) }
+    val cardShape = RoundedCornerShape(40.dp)
+    val coroutineScope = rememberCoroutineScope()
 
-    Surface(
+    // 3D Interactive Tilt Parallax when touching and dragging across the voice card
+    val tiltX = remember { Animatable(0f) }
+    val tiltY = remember { Animatable(0f) }
+
+    Box(
         modifier = modifier
-            .size(width = 304.dp, height = 312.dp),
-        shape = RoundedCornerShape(40.dp),
-        color = if (isDark) Color(0xF51C1C1E) else Color(0xF5FFFFFF),
-        border = BorderStroke(
-            width = 1.dp,
-            color = if (isDark) Color.White.copy(alpha = 0.12f) else Color(0x1F0F172A)
-        )
+            .size(width = 304.dp, height = 312.dp)
+            .graphicsLayer {
+                rotationY = tiltX.value * 7f
+                rotationX = -tiltY.value * 7f
+                cameraDistance = 16f * density
+            }
+            .shadow(
+                elevation = 28.dp,
+                shape = cardShape,
+                ambientColor = if (isDark) Color(0xA6000000) else Color(0x2E0F172A),
+                spotColor = if (isDark) palette.accentColor.copy(alpha = 0.28f) else palette.accentColor.copy(alpha = 0.20f)
+            )
+            .clip(cardShape)
+            .background(if (isDark) Color(0xF20F172A) else Color(0xF5FFFFFF))
+            // Apple visionOS dual-tone specular glass border
+            .border(
+                width = 1.2.dp,
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        if (isDark) Color(0x33FFFFFF) else Color(0x66FFFFFF),
+                        if (isDark) Color(0x14FFFFFF) else Color(0x140F172A),
+                        palette.accentColor.copy(alpha = 0.20f)
+                    ),
+                    start = Offset(0f, 0f),
+                    end = Offset(600f, 600f)
+                ),
+                shape = cardShape
+            )
+            .pointerInput(Unit) {
+                detectDragGestures(
+                    onDragEnd = {
+                        coroutineScope.launch { tiltX.animateTo(0f, spring(dampingRatio = 0.55f, stiffness = 300f)) }
+                        coroutineScope.launch { tiltY.animateTo(0f, spring(dampingRatio = 0.55f, stiffness = 300f)) }
+                    },
+                    onDragCancel = {
+                        coroutineScope.launch { tiltX.animateTo(0f, spring()) }
+                        coroutineScope.launch { tiltY.animateTo(0f, spring()) }
+                    },
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        val nextX = (tiltX.value + dragAmount.x / 120f).coerceIn(-1f, 1f)
+                        val nextY = (tiltY.value + dragAmount.y / 120f).coerceIn(-1f, 1f)
+                        coroutineScope.launch { tiltX.snapTo(nextX) }
+                        coroutineScope.launch { tiltY.snapTo(nextY) }
+                    }
+                )
+            }
+            .padding(20.dp)
     ) {
-        Box(
+        // Center 3D Liquid Glass Voice Globe (250dp container centered at 48% Y)
+        LiquidGlassVoiceOrb(
+            palette = palette,
+            voiceAmplitude = voiceAmplitude,
+            parallaxOffset = Offset(tiltX.value, tiltY.value),
+            modifier = Modifier
+                .size(250.dp)
+                .align(Alignment.Center)
+                .offset(y = (-4).dp)
+        )
+
+        // Overlay Column for Header Status Pill & Action Buttons
+        Column(
             modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // Center 3D Liquid Glass Orb & Expanding Sonar Waves
-            LiquidGlassVoiceOrb(
+            // Top Status Badge (Blinking Dot + Shimmering Text + Monospace Timer)
+            VoiceHeaderBadge(
                 palette = palette,
-                modifier = Modifier
-                    .size(240.dp)
-                    .offset(y = (-4).dp)
+                statusText = statusText,
+                elapsedSeconds = recordingDurationSec,
+                isDark = isDark
             )
 
-            // Foreground Header & Action Controls
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.SpaceBetween
-            ) {
-                // Top Status Badge (Blinking Dot + Shimmering Text + Monospace Timer)
-                VoiceHeaderBadge(
-                    palette = palette,
-                    statusText = statusText,
-                    elapsedSeconds = recordingDurationSec,
-                    isDark = isDark
-                )
-
-                // Bottom Action Buttons: Cancel, Text (Transcribe), Send
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Cancel Button
-                    VoiceActionPillButton(
-                        text = "Cancel",
-                        icon = Lucide.X,
-                        contentColor = colors.textMuted,
-                        backgroundColor = if (isDark) Color(0xFF1E293B) else Color(0x2494A3B8),
-                        onClick = {
-                            SoundManager.playReaction()
-                            onCancel()
-                        }
-                    )
-
-                    // Transcribe ("Text") Button
-                    VoiceActionPillButton(
-                        text = "Text",
-                        icon = Lucide.Type,
-                        contentColor = palette.accentColor,
-                        backgroundColor = palette.accentColor.copy(alpha = 0.12f),
-                        onClick = {
-                            SoundManager.playReaction()
-                            onTranscribe()
-                        }
-                    )
-
-                    // Send Button
-                    VoiceActionPillButton(
-                        text = "Send",
-                        icon = Lucide.Send,
-                        contentColor = Color.White,
-                        backgroundColor = palette.accentColor,
-                        hasShadow = false,
-                        onClick = {
-                            SoundManager.playSend()
-                            onSend()
-                        }
-                    )
-                }
-            }
+            // Bottom Action Buttons: Cancel | Text | Send
+            VoiceActionsRow(
+                palette = palette,
+                isDark = isDark,
+                onCancel = onCancel,
+                onTranscribe = onTranscribe,
+                onSend = onSend
+            )
         }
     }
 }
 
-/**
- * Top Recording Status Pill with blinking recording dot, shimmering status title, and timer badge.
- */
-@Composable
-fun VoiceHeaderBadge(
-    palette: OpticalVoiceGlobePalette,
-    statusText: String,
-    elapsedSeconds: Int,
-    isDark: Boolean
-) {
-    val infiniteTransition = rememberInfiniteTransition(label = "headerAnimations")
-
-    // Blinking recording dot animation (@keyframes recBlink)
-    val dotProgress by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(600, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "recBlink"
-    )
-    val dotAlpha = 1f - (dotProgress * 0.65f)
-    val dotScale = 1f - (dotProgress * 0.18f)
-
-    // Shimmering status title animation (@keyframes text-light)
-    val shimmerOffset by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 800f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(3800, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "shimmerText"
-    )
-
-    val formattedTime = remember(elapsedSeconds) {
-        val mins = elapsedSeconds / 60
-        val secs = (elapsedSeconds % 60).toString().padStart(2, '0')
-        "$mins:$secs"
-    }
-
-    val primaryTextColor = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A)
-
-    Row(
-        modifier = Modifier
-            .background(Color.Transparent)
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        // Blinking Blue Dot (.voice-rec-dot)
-        Box(
-            modifier = Modifier
-                .size(7.dp)
-                .scale(dotScale)
-                .graphicsLayer { alpha = dotAlpha }
-                .background(palette.accentColor, CircleShape)
-        )
-
-        // Shimmering Status Text (.voice-status-title)
-        val shimmerBrush = Brush.linearGradient(
-            colorStops = arrayOf(
-                0.00f to primaryTextColor,
-                0.35f to primaryTextColor,
-                0.45f to palette.accentColor,
-                0.50f to Color.White,
-                0.55f to palette.accentColor,
-                0.65f to primaryTextColor,
-                1.00f to primaryTextColor
-            ),
-            start = Offset(shimmerOffset - 400f, 0f),
-            end = Offset(shimmerOffset, 120f),
-            tileMode = TileMode.Repeated
-        )
-
-        Text(
-            text = statusText,
-            style = TextStyle(
-                brush = shimmerBrush,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = (-0.15).sp
-            )
-        )
-
-        // Timer Badge (.voice-timer-badge)
-        Text(
-            text = formattedTime,
-            color = palette.accentColor,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            fontFamily = FontFamily.Default,
-            modifier = Modifier.padding(horizontal = 2.dp)
-        )
-    }
-}
+// ============================================================================
+// 3. OPTICAL 3D LIQUID GLASS GLOBE (Optics & Physics Engine)
+// ============================================================================
 
 /**
  * 3D Optical Liquid Glass Sphere:
- * - Dual expanding sonar wave rings (`::before`, `::after`)
- * - Breathing outer scale (`@keyframes circle1`)
- * - 4 rotating & morphing internal plasma gradients (`.c1`, `.c2`, `.c3`, `.c4`)
- * - Specular 3D inner glass lens highlight (`.glass`)
+ * - Dual expanding sonar wave rings with voice boost
+ * - Breathing outer scale coupled with voice amplitude
+ * - 4 rotating & morphing internal plasma gradients
+ * - Apple VisionOS specular 3D inner glass lens highlight with touch parallax
+ * - Refracted counter-bounce caustic exit
  * - Caustic bottom rim glow + crisp top white glass rim reflection
- * - Center 5-bar voice equalizer (`.orb-eq`)
+ * - Center 5-bar voice equalizer with formant sensitivity weights
  */
 @Composable
 fun LiquidGlassVoiceOrb(
     palette: OpticalVoiceGlobePalette,
+    voiceAmplitude: Float = 0f,
+    parallaxOffset: Offset = Offset.Zero,
     modifier: Modifier = Modifier
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "orbPhysics")
@@ -468,18 +403,19 @@ fun LiquidGlassVoiceOrb(
         label = "circle1Breathing"
     )
 
+    val effectiveSphereScale = (orbBreathingScale + voiceAmplitude * 0.065f)
+
     // Wave Ring 1 (2.1s infinite)
+    val sonarEasing = CubicBezierEasing(0.16f, 1.0f, 0.3f, 1.0f)
     val wave1Progress by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(2100, easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)),
+            animation = tween(durationMillis = 2100, easing = sonarEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "wave1"
     )
-
-    // Wave Ring 2 (delayed phase by 0.333f ~ 0.7s)
     val wave2Progress = (wave1Progress + 0.333f) % 1.0f
 
     // 4 Plasma Blobs continuous rotation phases (@keyframes ai1, ai2, ai3, ai4)
@@ -509,293 +445,708 @@ fun LiquidGlassVoiceOrb(
     )
 
     Box(
-        modifier = modifier.scale(orbBreathingScale),
+        modifier = modifier.scale(effectiveSphereScale),
         contentAlignment = Alignment.Center
     ) {
-        // 1. Expanding Sonar Wave Rings (.ai::before, .ai::after)
         Canvas(modifier = Modifier.fillMaxSize()) {
-            val baseRadius = (size.minDimension * 0.52f) / 2f
+            val canvasSize = size.minDimension
+            val center = Offset(size.width / 2f, size.height / 2f)
 
-            listOf(wave1Progress, wave2Progress).forEach { progress ->
-                val currentScale = 0.98f + (1.56f - 0.98f) * progress
-                val currentAlpha = (1f - progress) * 0.85f
-                val ringRadius = baseRadius * currentScale
+            val coreDiameter = canvasSize * 0.50f
+            val coreRadius = coreDiameter / 2f
 
-                // Soft outer glow
-                drawCircle(
-                    color = palette.waveColor.copy(alpha = currentAlpha * 0.25f),
-                    radius = ringRadius,
-                    style = Stroke(width = 8.dp.toPx())
-                )
-                // Crisp 1.5dp ring border
-                drawCircle(
-                    color = palette.waveColor.copy(alpha = currentAlpha * 0.42f),
-                    radius = ringRadius,
-                    style = Stroke(width = 1.5.dp.toPx())
-                )
+            // 3D Parallax offsets
+            val parallaxPx = 10.dp.toPx()
+            val coreParallax = Offset(
+                x = -parallaxOffset.x * parallaxPx * 0.65f,
+                y = -parallaxOffset.y * parallaxPx * 0.65f
+            )
+            val specularParallax = Offset(
+                x = parallaxOffset.x * parallaxPx * 1.15f,
+                y = parallaxOffset.y * parallaxPx * 1.15f
+            )
+
+            // ----------------------------------------------------------------
+            // A. DUAL SONAR WAVE RINGS (.ai::before, .ai::after)
+            // ----------------------------------------------------------------
+            val baseWaveRadius = (canvasSize * 0.52f) / 2f
+            drawSonarWaveRing(
+                center = center,
+                baseRadius = baseWaveRadius,
+                progress = wave1Progress,
+                waveColor = palette.waveColor,
+                voiceBoost = voiceAmplitude
+            )
+            drawSonarWaveRing(
+                center = center,
+                baseRadius = baseWaveRadius,
+                progress = wave2Progress,
+                waveColor = palette.waveColor,
+                voiceBoost = voiceAmplitude
+            )
+
+            // ----------------------------------------------------------------
+            // B. SOFT AMBIENT CAUSTIC GLOW UNDER THE SPHERE
+            // ----------------------------------------------------------------
+            val glowRadius = coreRadius * (1.36f + voiceAmplitude * 0.18f)
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        palette.accentColor.copy(alpha = 0.35f + voiceAmplitude * 0.20f),
+                        palette.causticColor.copy(alpha = 0.14f + voiceAmplitude * 0.10f),
+                        Color.Transparent
+                    ),
+                    center = Offset(center.x, center.y + 12.dp.toPx()),
+                    radius = glowRadius
+                ),
+                radius = glowRadius,
+                center = Offset(center.x, center.y + 12.dp.toPx())
+            )
+
+            // ----------------------------------------------------------------
+            // C. SPHERE CORE & ORBITING LIQUID BLOBS (.ai .container)
+            // ----------------------------------------------------------------
+            val spherePath = Path().apply {
+                addOval(Rect(center = center, radius = coreRadius))
             }
-        }
 
-        // 2. Main 120.dp Core Orb Container (.ai .container + .ai .glass)
-        Box(
-            modifier = Modifier
-                .size(120.dp)
-                .clip(CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val radius = size.minDimension / 2f
-                val center = Offset(size.width / 2f, size.height / 2f)
-
-                // A. Base Core Radial Gradient (--orb-core at 30% 25%)
-                val focalOffset = Offset(size.width * 0.30f, size.height * 0.25f)
+            clipPath(spherePath) {
+                // 1. Base Core Radial Gradient at (30%, 25%) shifted by 3D parallax
+                val coreFocalOffset = Offset(
+                    x = (center.x - coreRadius) + coreDiameter * 0.30f + coreParallax.x,
+                    y = (center.y - coreRadius) + coreDiameter * 0.25f + coreParallax.y
+                )
                 drawCircle(
                     brush = Brush.radialGradient(
                         colorStops = palette.orbCoreStops.toTypedArray(),
-                        center = focalOffset,
-                        radius = radius * 1.55f
+                        center = coreFocalOffset,
+                        radius = coreDiameter * 0.95f
                     ),
-                    radius = radius,
+                    radius = coreRadius,
                     center = center
                 )
 
-                // Helper to draw the 4 animated liquid plasma blobs (.c1, .c2, .c3, .c4)
-                fun drawPlasmaBlob(
-                    phase: Float,
-                    startAngleDeg: Float,
-                    orbitFactor: Float,
-                    baseDiameterRatio: Float,
-                    scales: FloatArray,
-                    alphas: FloatArray,
-                    innerColor: Color,
-                    outerColor: Color
-                ) {
-                    val angleRad = ((startAngleDeg + phase * 360f) * PI / 180.0).toFloat()
-                    val scale = interpolateKeyframe(phase, scales)
-                    val alpha = interpolateKeyframe(phase, alphas)
-                    val blobRadius = (size.minDimension * baseDiameterRatio * 0.5f) * scale
-                    val orbitDist = blobRadius * orbitFactor
+                // 2. Orbiting Liquid Blobs (c4, c1, c2, c3)
+                val unitScale = (canvasSize / 250f) * (1f + voiceAmplitude * 0.16f)
+                val orbitCenter = center + coreParallax * 0.5f
 
-                    val blobCenter = Offset(
-                        x = center.x + cos(angleRad) * orbitDist,
-                        y = center.y + sin(angleRad) * orbitDist
-                    )
-
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                innerColor.copy(alpha = alpha),
-                                outerColor.copy(alpha = alpha * 0.65f),
-                                Color.Transparent
-                            ),
-                            center = blobCenter,
-                            radius = blobRadius.coerceAtLeast(1f)
-                        ),
-                        radius = blobRadius.coerceAtLeast(1f),
-                        center = blobCenter
-                    )
-                }
-
-                // .c4 Deep Base Plasma
-                drawPlasmaBlob(
+                // Blob c4: Deep Base Plasma
+                val c4State = evaluateKeyframes(
                     phase = phase4,
                     startAngleDeg = 270f,
-                    orbitFactor = 0.40f,
-                    baseDiameterRatio = 1.28f,
-                    scales = floatArrayOf(1.0f, 0.8f, 1.5f, 0.95f, 1.0f),
-                    alphas = floatArrayOf(0.95f, 0.65f, 0.6f, 0.9f, 0.95f),
+                    translateFraction = 0.40f,
+                    scales = floatArrayOf(1.00f, 0.80f, 1.50f, 0.95f, 1.00f),
+                    alphas = floatArrayOf(0.95f, 0.65f, 0.60f, 0.90f, 0.95f)
+                )
+                drawBlurredOrbitalBlob(
+                    sphereCenter = orbitCenter,
+                    baseDiameter = 160f * unitScale,
+                    state = c4State,
                     innerColor = palette.c4Inner,
                     outerColor = palette.c4Outer
                 )
 
-                // .c1 Vibrant Main Accent Plasma
-                drawPlasmaBlob(
+                // Blob c1: Vibrant Main Accent Plasma
+                val c1State = evaluateKeyframes(
                     phase = phase1,
                     startAngleDeg = 0f,
-                    orbitFactor = 0.45f,
-                    baseDiameterRatio = 1.36f,
-                    scales = floatArrayOf(0.95f, 1.65f, 0.8f, 1.3f, 0.95f),
-                    alphas = floatArrayOf(0.5f, 1.0f, 0.55f, 1.0f, 0.5f),
+                    translateFraction = 0.45f,
+                    scales = floatArrayOf(0.95f, 1.65f, 0.80f, 1.30f, 0.95f),
+                    alphas = floatArrayOf(0.50f, 1.00f, 0.55f, 1.00f, 0.50f)
+                )
+                drawBlurredOrbitalBlob(
+                    sphereCenter = orbitCenter,
+                    baseDiameter = 170f * unitScale,
+                    state = c1State,
                     innerColor = palette.c1Inner,
                     outerColor = palette.c1Outer
                 )
 
-                // .c2 Bright White/Ice Highlight Plasma
-                drawPlasmaBlob(
+                // Blob c2: Bright Highlight Plasma
+                val c2State = evaluateKeyframes(
                     phase = phase2,
                     startAngleDeg = 90f,
-                    orbitFactor = 0.42f,
-                    baseDiameterRatio = 0.76f,
+                    translateFraction = 0.42f,
                     scales = floatArrayOf(0.65f, 1.55f, 1.05f, 0.85f, 0.65f),
-                    alphas = floatArrayOf(0.9f, 0.35f, 0.8f, 0.4f, 0.9f),
+                    alphas = floatArrayOf(0.90f, 0.35f, 0.80f, 0.40f, 0.90f)
+                )
+                drawBlurredOrbitalBlob(
+                    sphereCenter = orbitCenter,
+                    baseDiameter = 95f * unitScale,
+                    state = c2State,
                     innerColor = palette.c2Inner,
                     outerColor = palette.c2Outer
                 )
 
-                // .c3 Glow Plasma
-                drawPlasmaBlob(
+                // Blob c3: Glow Plasma
+                val c3State = evaluateKeyframes(
                     phase = phase3,
                     startAngleDeg = 180f,
-                    orbitFactor = 0.44f,
-                    baseDiameterRatio = 1.12f,
-                    scales = floatArrayOf(0.85f, 1.45f, 0.7f, 1.3f, 0.85f),
-                    alphas = floatArrayOf(0.85f, 0.6f, 0.5f, 0.85f, 0.85f),
+                    translateFraction = 0.44f,
+                    scales = floatArrayOf(0.85f, 1.45f, 0.70f, 1.30f, 0.85f),
+                    alphas = floatArrayOf(0.85f, 0.60f, 0.50f, 0.85f, 0.85f)
+                )
+                drawBlurredOrbitalBlob(
+                    sphereCenter = orbitCenter,
+                    baseDiameter = 140f * unitScale,
+                    state = c3State,
                     innerColor = palette.c3Inner,
                     outerColor = palette.c3Outer
                 )
 
-                // B. Optical 3D Glass Lens Specular Highlight (.ai .glass)
-                val specularCenter = Offset(size.width * 0.32f, size.height * 0.24f)
+                // 3. Subsurface Iridescent Violet-Cyan Glow
+                if (voiceAmplitude > 0.08f) {
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Color(0xFFA855F7).copy(alpha = 0.28f * voiceAmplitude),
+                                Color(0xFF38BDF8).copy(alpha = 0.18f * voiceAmplitude),
+                                Color.Transparent
+                            ),
+                            center = center,
+                            radius = coreRadius * 0.75f
+                        ),
+                        radius = coreRadius * 0.75f,
+                        center = center,
+                        blendMode = BlendMode.Plus
+                    )
+                }
+
+                // 4. Inner Deep Vignette
                 drawCircle(
                     brush = Brush.radialGradient(
                         colorStops = arrayOf(
-                            0.00f to Color.White.copy(alpha = 0.88f),
-                            0.55f to Color.White.copy(alpha = 0.14f),
-                            0.75f to Color.Transparent
+                            0.00f to Color.Transparent,
+                            0.72f to Color.Transparent,
+                            1.00f to Color(0x5900328C)
                         ),
-                        center = specularCenter,
-                        radius = 62.dp.toPx()
+                        center = center,
+                        radius = coreRadius
                     ),
-                    radius = radius,
+                    radius = coreRadius,
                     center = center
-                )
-
-                // C. Bottom Caustic Rim Glow
-                drawCircle(
-                    brush = Brush.verticalGradient(
-                        colorStops = arrayOf(
-                            0.0f to Color.Transparent,
-                            0.65f to Color.Transparent,
-                            1.0f to palette.causticColor.copy(alpha = 0.48f)
-                        )
-                    ),
-                    radius = radius,
-                    center = center
-                )
-
-                // D. Crisp Top White Glass Rim Reflection
-                drawCircle(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            Color.White.copy(alpha = 0.85f),
-                            Color.White.copy(alpha = 0.25f),
-                            palette.causticColor.copy(alpha = 0.35f)
-                        )
-                    ),
-                    radius = radius - 1.dp.toPx(),
-                    center = center,
-                    style = Stroke(width = 2.dp.toPx())
                 )
             }
 
-            // 3. Center 5-Bar Animated Voice Equalizer (.orb-eq)
-            OrbEqualizerBars()
+            // ----------------------------------------------------------------
+            // D. OPTICAL 3D GLASS SHELL (.ai .glass)
+            // ----------------------------------------------------------------
+            val glassRadius = coreRadius + 2.dp.toPx()
+            val glassDiameter = glassRadius * 2f
+            val glassPath = Path().apply {
+                addOval(Rect(center = center, radius = glassRadius))
+            }
+
+            clipPath(glassPath) {
+                // 1. Primary Optical Specular Reflection at (32%, 24%)
+                val specularCenter = Offset(
+                    x = (center.x - glassRadius) + glassDiameter * 0.32f + specularParallax.x,
+                    y = (center.y - glassRadius) + glassDiameter * 0.24f + specularParallax.y
+                )
+                val specularRadius = 62.dp.toPx() * 0.78f
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colorStops = arrayOf(
+                            0.00f to Color(0xE0FFFFFF),
+                            0.55f to Color(0x1FFFFFFF),
+                            0.78f to Color.Transparent,
+                            1.00f to Color.Transparent
+                        ),
+                        center = specularCenter,
+                        radius = specularRadius
+                    ),
+                    radius = glassRadius,
+                    center = center
+                )
+
+                // 2. Secondary Counter-Bounce Caustic at (72%, 78%)
+                val counterBounceCenter = Offset(
+                    x = (center.x - glassRadius) + glassDiameter * 0.72f - specularParallax.x * 0.6f,
+                    y = (center.y - glassRadius) + glassDiameter * 0.78f - specularParallax.y * 0.6f
+                )
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colorStops = arrayOf(
+                            0.00f to Color(0x59BAE6FD),
+                            0.45f to Color(0x1F38BDF8),
+                            1.00f to Color.Transparent
+                        ),
+                        center = counterBounceCenter,
+                        radius = glassRadius * 0.52f
+                    ),
+                    radius = glassRadius,
+                    center = center
+                )
+
+                // 3. Bottom Caustic Rim Glow
+                val bottomCausticCenter = Offset(
+                    x = center.x,
+                    y = center.y + glassRadius * 0.78f
+                )
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colorStops = arrayOf(
+                            0.00f to palette.causticColor.copy(alpha = 0.42f),
+                            0.55f to palette.causticColor.copy(alpha = 0.15f),
+                            1.00f to Color.Transparent
+                        ),
+                        center = bottomCausticCenter,
+                        radius = glassRadius * 0.85f
+                    ),
+                    radius = glassRadius,
+                    center = center
+                )
+
+                // 4. Top Inner White Rim Reflection
+                drawCircle(
+                    brush = Brush.linearGradient(
+                        colorStops = arrayOf(
+                            0.00f to Color(0xEBFFFFFF),
+                            0.22f to Color(0x47FFFFFF),
+                            0.50f to Color(0x1A818CF8),
+                            0.82f to palette.causticColor.copy(alpha = 0.35f),
+                            1.00f to palette.causticColor.copy(alpha = 0.55f)
+                        ),
+                        start = Offset(center.x + specularParallax.x * 0.4f, center.y - glassRadius),
+                        end = Offset(center.x - specularParallax.x * 0.4f, center.y + glassRadius)
+                    ),
+                    radius = glassRadius - 1.2.dp.toPx(),
+                    center = center,
+                    style = Stroke(width = 2.4.dp.toPx())
+                )
+            }
         }
+
+        // Center 5-Bar Voice Equalizer
+        OrbEqualizerBars(voiceAmplitude = voiceAmplitude)
     }
 }
 
-/**
- * 5-bar responsive voice equalizer pulsing inside the liquid orb.
- */
+// ============================================================================
+// 4. 5-BAR VOICE-REACTIVE EQUALIZER (.orb-eq)
+// ============================================================================
+
 @Composable
-fun OrbEqualizerBars() {
-    val baseHeights = remember { listOf(9.dp, 18.dp, 24.dp, 15.dp, 10.dp) }
-    val delays = remember { listOf(0, 150, 300, 120, 250) }
-    val infiniteTransition = rememberInfiniteTransition(label = "orbEq")
+fun OrbEqualizerBars(voiceAmplitude: Float = 0f) {
+    val barSpecs = remember {
+        listOf(
+            Triple(9.dp, 0, 0.65f),
+            Triple(18.dp, 150, 0.90f),
+            Triple(24.dp, 300, 1.15f),
+            Triple(15.dp, 120, 0.85f),
+            Triple(10.dp, 250, 0.60f)
+        )
+    }
+
+    val infiniteTransition = rememberInfiniteTransition(label = "orbEqPulse")
 
     Row(
-        modifier = Modifier.height(28.dp),
+        modifier = Modifier.height(30.dp),
         horizontalArrangement = Arrangement.spacedBy(3.5.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        baseHeights.forEachIndexed { index, baseHeight ->
-            val scaleY by infiniteTransition.animateFloat(
-                initialValue = 0.45f,
-                targetValue = 1.15f,
+        barSpecs.forEachIndexed { index, (baseHeight, delayMs, formantWeight) ->
+            val progress by infiniteTransition.animateFloat(
+                initialValue = 0f,
+                targetValue = 1f,
                 animationSpec = infiniteRepeatable(
                     animation = tween(
                         durationMillis = 850,
-                        delayMillis = delays[index],
+                        delayMillis = delayMs,
                         easing = FastOutSlowInEasing
                     ),
                     repeatMode = RepeatMode.Reverse
                 ),
-                label = "eqBar$index"
+                label = "eqBar_$index"
             )
-            val alpha = 0.7f + ((scaleY - 0.45f) / 0.7f) * 0.3f
+
+            val baseScaleY = lerpFloat(0.45f, 1.15f, progress)
+            val voiceScaleBoost = voiceAmplitude * formantWeight * 0.32f
+            val finalScaleY = (baseScaleY + voiceScaleBoost).coerceIn(0.38f, 1.38f)
+            val alpha = lerpFloat(0.75f, 1.00f, progress)
 
             Box(
                 modifier = Modifier
                     .width(3.dp)
-                    .height(baseHeight)
-                    .graphicsLayer {
-                        this.scaleY = scaleY
-                        this.alpha = alpha.coerceIn(0.65f, 1f)
-                    }
-                    .shadow(4.dp, CircleShape, ambientColor = Color.White, spotColor = Color.White)
-                    .background(Color.White.copy(alpha = 0.94f), CircleShape)
+                    .height(baseHeight * finalScaleY)
+                    .shadow(
+                        elevation = 5.dp,
+                        shape = CircleShape,
+                        ambientColor = Color.White,
+                        spotColor = Color.White
+                    )
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.94f * alpha))
             )
         }
     }
 }
 
-/**
- * Pill button for bottom actions (Cancel, Text, Send).
- */
+// ============================================================================
+// 5. TOP STATUS BADGE (Blinking Dot + Shimmer Text + Monospace Timer)
+// ============================================================================
+
 @Composable
-fun VoiceActionPillButton(
-    text: String,
-    icon: ImageVector,
-    contentColor: Color,
-    backgroundColor: Color,
-    hasShadow: Boolean = false,
-    shadowColor: Color = Color.Transparent,
-    onClick: () -> Unit
+fun VoiceHeaderBadge(
+    palette: OpticalVoiceGlobePalette,
+    statusText: String,
+    elapsedSeconds: Int,
+    isDark: Boolean
 ) {
+    val infiniteTransition = rememberInfiniteTransition(label = "headerStatusAnim")
+
+    val recBlinkProgress by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 600, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "recBlink"
+    )
+    val dotAlpha = lerpFloat(1f, 0.35f, recBlinkProgress)
+    val dotScale = lerpFloat(1f, 0.82f, recBlinkProgress)
+
+    val shimmerOffset by infiniteTransition.animateFloat(
+        initialValue = -220f,
+        targetValue = 420f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 3800, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "shimmerText"
+    )
+
+    val formattedTimer = remember(elapsedSeconds) {
+        val mins = elapsedSeconds / 60
+        val secs = (elapsedSeconds % 60).toString().padStart(2, '0')
+        "$mins:$secs"
+    }
+
     Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(backgroundColor)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 7.dp),
+            .clip(CircleShape)
+            .background(if (isDark) Color(0x1F94A3B8) else Color(0x1494A3B8))
+            .border(
+                1.dp,
+                if (isDark) Color.White.copy(alpha = 0.08f) else Color(0x120F172A),
+                CircleShape
+            )
+            .padding(horizontal = 12.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(5.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = text,
-            tint = contentColor,
-            modifier = Modifier.size(14.dp)
+        // Blinking Recording Dot
+        Box(
+            modifier = Modifier
+                .size(7.dp)
+                .scale(dotScale)
+                .shadow(
+                    elevation = 6.dp,
+                    shape = CircleShape,
+                    ambientColor = palette.accentColor,
+                    spotColor = palette.accentColor
+                )
+                .clip(CircleShape)
+                .background(palette.accentColor.copy(alpha = dotAlpha))
         )
+
+        // Shimmering Status Title
+        val primaryTextColor = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A)
+        val shimmerBrush = Brush.linearGradient(
+            colorStops = arrayOf(
+                0.00f to primaryTextColor,
+                0.32f to primaryTextColor,
+                0.45f to palette.accentColor,
+                0.50f to Color(0xFF38BDF8),
+                0.55f to palette.accentColor,
+                0.68f to primaryTextColor,
+                1.00f to primaryTextColor
+            ),
+            start = Offset(shimmerOffset, 0f),
+            end = Offset(shimmerOffset + 260f, 140f)
+        )
+
         Text(
-            text = text,
-            color = contentColor,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold
+            text = statusText,
+            style = TextStyle(
+                brush = shimmerBrush,
+                fontSize = 14.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = (-0.15).sp
+            )
+        )
+
+        // Tabular Timer Badge
+        Box(
+            modifier = Modifier
+                .clip(CircleShape)
+                .background(palette.accentColor.copy(alpha = 0.12f))
+                .padding(horizontal = 7.dp, vertical = 1.5.dp)
+        ) {
+            Text(
+                text = formattedTimer,
+                color = palette.accentColor,
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                fontFamily = FontFamily.Monospace
+            )
+        }
+    }
+}
+
+// ============================================================================
+// 6. BOTTOM ACTION BUTTONS (Cancel | Text | Send)
+// ============================================================================
+
+@Composable
+fun VoiceActionsRow(
+    palette: OpticalVoiceGlobePalette,
+    isDark: Boolean,
+    onCancel: () -> Unit,
+    onTranscribe: () -> Unit,
+    onSend: () -> Unit
+) {
+    val colors = LocalChatColors.current
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // 1. Cancel Button
+        Row(
+            modifier = Modifier
+                .clip(CircleShape)
+                .background(if (isDark) Color(0x1FFFFFFF) else Color(0x1494A3B8))
+                .clickable {
+                    SoundManager.playReaction()
+                    onCancel()
+                }
+                .padding(horizontal = 12.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            CloseIconCanvas(color = colors.textMuted, size = 10.dp)
+            Text(
+                text = "Cancel",
+                color = colors.textMuted,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+
+        // 2. Text (Transcribe) Button
+        Row(
+            modifier = Modifier
+                .clip(CircleShape)
+                .background(palette.accentColor.copy(alpha = 0.12f))
+                .clickable {
+                    SoundManager.playReaction()
+                    onTranscribe()
+                }
+                .padding(horizontal = 12.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = "Aa",
+                color = palette.accentColor,
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.ExtraBold
+            )
+            Text(
+                text = "Text",
+                color = palette.accentColor,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+
+        // 3. Send Button
+        Row(
+            modifier = Modifier
+                .shadow(
+                    elevation = 6.dp,
+                    shape = CircleShape,
+                    ambientColor = palette.accentColor.copy(alpha = 0.35f),
+                    spotColor = palette.accentColor.copy(alpha = 0.45f)
+                )
+                .clip(CircleShape)
+                .background(palette.accentColor)
+                .clickable {
+                    SoundManager.playSend()
+                    onSend()
+                }
+                .padding(horizontal = 14.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            PaperPlaneRightIconCanvas(color = Color.White, size = 11.dp)
+            Text(
+                text = "Send",
+                color = Color.White,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+    }
+}
+
+// ============================================================================
+// 7. MATHEMATICAL & RENDERING HELPERS
+// ============================================================================
+
+data class OrbitalBlobState(
+    val angleDegrees: Float,
+    val translateFraction: Float,
+    val scale: Float,
+    val alpha: Float
+)
+
+fun evaluateKeyframes(
+    phase: Float,
+    startAngleDeg: Float,
+    translateFraction: Float,
+    scales: FloatArray,
+    alphas: FloatArray
+): OrbitalBlobState {
+    val clamped = phase.coerceIn(0f, 1f)
+    val segmentFloat = clamped * 4f
+    val index = segmentFloat.toInt().coerceIn(0, 3)
+    val localFraction = segmentFloat - index
+
+    val interpolatedScale = lerpFloat(scales[index], scales[index + 1], localFraction)
+    val interpolatedAlpha = lerpFloat(alphas[index], alphas[index + 1], localFraction)
+    val currentAngle = startAngleDeg + (clamped * 360f)
+
+    return OrbitalBlobState(
+        angleDegrees = currentAngle,
+        translateFraction = translateFraction,
+        scale = interpolatedScale,
+        alpha = interpolatedAlpha
+    )
+}
+
+fun lerpFloat(start: Float, stop: Float, fraction: Float): Float {
+    return start + (stop - start) * fraction
+}
+
+fun DrawScope.drawSonarWaveRing(
+    center: Offset,
+    baseRadius: Float,
+    progress: Float,
+    waveColor: Color,
+    voiceBoost: Float = 0f
+) {
+    val maxScale = 1.56f + (voiceBoost * 0.12f)
+    val scale = lerpFloat(0.98f, maxScale, progress)
+    val alpha = lerpFloat(0.85f, 0f, progress).coerceIn(0f, 1f)
+    val currentRadius = baseRadius * scale
+
+    // Soft outer glow
+    drawCircle(
+        color = waveColor.copy(alpha = (0.16f + voiceBoost * 0.08f) * alpha),
+        radius = currentRadius,
+        center = center,
+        style = Stroke(width = 6.dp.toPx())
+    )
+
+    // Crisp 1.5dp sonar border
+    drawCircle(
+        color = waveColor.copy(alpha = (0.38f + voiceBoost * 0.12f) * alpha),
+        radius = currentRadius,
+        center = center,
+        style = Stroke(width = 1.5.dp.toPx())
+    )
+}
+
+fun DrawScope.drawBlurredOrbitalBlob(
+    sphereCenter: Offset,
+    baseDiameter: Float,
+    state: OrbitalBlobState,
+    innerColor: Color,
+    outerColor: Color
+) {
+    val angleRad = Math.toRadians(state.angleDegrees.toDouble())
+    val translateDist = baseDiameter * state.translateFraction
+    val blobCenter = Offset(
+        x = sphereCenter.x + (cos(angleRad) * translateDist).toFloat(),
+        y = sphereCenter.y + (sin(angleRad) * translateDist).toFloat()
+    )
+
+    val scaledRadius = (baseDiameter / 2f) * state.scale
+    val blurFeatherRadius = scaledRadius + 7.dp.toPx()
+
+    if (blurFeatherRadius <= 1f || state.alpha <= 0.01f) return
+
+    drawCircle(
+        brush = Brush.radialGradient(
+            colorStops = arrayOf(
+                0.00f to innerColor.copy(alpha = innerColor.alpha * state.alpha),
+                0.55f to outerColor.copy(alpha = outerColor.alpha * state.alpha * 0.88f),
+                0.84f to outerColor.copy(alpha = outerColor.alpha * state.alpha * 0.35f),
+                1.00f to Color.Transparent
+            ),
+            center = blobCenter,
+            radius = blurFeatherRadius
+        ),
+        radius = blurFeatherRadius,
+        center = blobCenter
+    )
+}
+
+// ============================================================================
+// 8. VECTOR CANVAS ICONS (Lightweight, zero dependency)
+// ============================================================================
+
+@Composable
+fun CloseIconCanvas(color: Color, size: Dp) {
+    Canvas(modifier = Modifier.size(size)) {
+        val stroke = 1.8.dp.toPx()
+        drawLine(
+            color = color,
+            start = Offset(0f, 0f),
+            end = Offset(this.size.width, this.size.height),
+            strokeWidth = stroke,
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = color,
+            start = Offset(this.size.width, 0f),
+            end = Offset(0f, this.size.height),
+            strokeWidth = stroke,
+            cap = StrokeCap.Round
         )
     }
 }
 
-/**
- * Linearly interpolates a keyframe array to replicate CSS `@keyframes ai1..ai4`.
- */
-private fun interpolateKeyframe(phase: Float, values: FloatArray): Float {
-    val scaled = (phase.coerceIn(0f, 1f) * (values.size - 1))
-    val index = scaled.toInt().coerceAtMost(values.size - 2)
-    val fraction = scaled - index
-    return values[index] + (values[index + 1] - values[index]) * fraction
+@Composable
+fun PaperPlaneRightIconCanvas(color: Color, size: Dp) {
+    Canvas(modifier = Modifier.size(size)) {
+        val w = this.size.width
+        val h = this.size.height
+        val path = Path().apply {
+            moveTo(w * 0.1f, h * 0.15f)
+            lineTo(w * 0.92f, h * 0.5f)
+            lineTo(w * 0.1f, h * 0.85f)
+            lineTo(w * 0.28f, h * 0.5f)
+            close()
+        }
+        drawPath(
+            path = path,
+            color = color,
+            style = Stroke(width = 1.5.dp.toPx(), join = StrokeJoin.Round)
+        )
+    }
 }
 
+// ============================================================================
+// 9. BACKWARD COMPATIBILITY STUBS & ALIASES
+// ============================================================================
 
-
-/**
- * Animated recording indicator dot with blinking glow (matching .voice-rec-dot).
- */
 @Composable
-fun VoiceRecDot(
-    color: Color,
-    modifier: Modifier = Modifier
-) {
+fun VoiceRecDot(color: Color, modifier: Modifier = Modifier) {
     val transition = rememberInfiniteTransition(label = "VoiceRecDot")
     val alpha by transition.animateFloat(
         initialValue = 1f,
@@ -825,17 +1176,11 @@ fun VoiceRecDot(
     )
 }
 
-/**
- * Legacy alias for BlinkingDot.
- */
 @Composable
 fun BlinkingDot(color: Color, modifier: Modifier = Modifier) {
     VoiceRecDot(color = color, modifier = modifier)
 }
 
-/**
- * Legacy Bridge compatibility stub.
- */
 class VoiceGlobeBridge(
     private val onCancelCallback: () -> Unit = {},
     private val onTranscribeCallback: () -> Unit = {},

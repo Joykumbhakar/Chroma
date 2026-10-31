@@ -50,7 +50,7 @@ class ChromaViewModel : ViewModel() {
         )
     )
 
-    var activeLayerId by mutableStateOf(layers.first().id)
+    var activeLayerId by mutableStateOf(layers.firstOrNull()?.id ?: "")
         private set
 
     // "Card" / "Circle" / "Full" / "Text" — matches the mobile shape pills (#m-shape-*)
@@ -347,7 +347,7 @@ class ChromaViewModel : ViewModel() {
         if (layers.size <= 1) return // JS keeps at least one layer
         saveHistory()
         layers.removeAll { it.id == id }
-        if (activeLayerId == id) activeLayerId = layers.first().id
+        if (activeLayerId == id) activeLayerId = layers.firstOrNull()?.id ?: ""
     }
 
     /**
@@ -525,14 +525,14 @@ class ChromaViewModel : ViewModel() {
             )
         }
         replaceAllLayers(newLayers)
-        activeLayerId = newLayers.first().id
+        activeLayerId = newLayers.firstOrNull()?.id ?: ""
     }
     
     fun setLayersFromAI(newLayers: List<GradientLayer>) {
         if (newLayers.isEmpty()) return
         saveHistory()
         replaceAllLayers(newLayers)
-        activeLayerId = newLayers.first().id
+        activeLayerId = newLayers.firstOrNull()?.id ?: ""
     }
 
     private fun randomColor() = Color(
@@ -557,7 +557,7 @@ class ChromaViewModel : ViewModel() {
         }
         
         val newLayer = GradientLayer(
-            name = "AI: ${prompt.take(10)}",
+            name = "Creation: ${prompt.take(10)}",
             type = LayerType.AURORA,
             stops = colors.mapIndexed { i, c ->
                 ColorStop(color = c, position = if (colors.size <= 1) 0f else i * 100f / (colors.size - 1))

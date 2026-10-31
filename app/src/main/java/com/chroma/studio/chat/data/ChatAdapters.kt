@@ -204,6 +204,7 @@ object ChatAdapters {
 
         val mappedMediaType = when {
             isPoll -> "poll"
+            msg.messageType.equals("story_reply", ignoreCase = true) || msg.storyThumbnailUrl != null || msg.storyId != null -> "story_reply"
             msg.messageType.equals("audio", ignoreCase = true) || msg.messageType.equals("voice", ignoreCase = true) -> "voice"
             msg.messageType.equals("image", ignoreCase = true) -> "image"
             msg.messageType.equals("video", ignoreCase = true) -> "video"
@@ -269,7 +270,9 @@ object ChatAdapters {
             userReaction = myReaction,
             replyTo = replyToQuote,
             isEdited = msg.isEdited,
-            isForwarded = msg.isForwarded
+            isForwarded = msg.isForwarded,
+            storyId = msg.storyId,
+            storyThumbnailUrl = msg.storyThumbnailUrl
         )
     }
 
@@ -305,25 +308,48 @@ object ChatAdapters {
         val unread = room.unreadCount[currentUid] ?: 0
 
         val otherTyping = typingMap.filterKeys { it != currentUid }
-        val activeUid = otherTyping.keys.firstOrNull()
-        val activeActivity = if (activeUid != null) otherTyping[activeUid] else null
-        val activeUserProfile = if (activeUid != null) userProfiles[activeUid] else null
-        val activeUserName = if (activeUserProfile != null) {
-            activeUserProfile.displayName.takeIf { it.isNotBlank() }
-                ?: activeUserProfile.username.takeIf { it.isNotBlank() }
-                ?: "Someone"
-        } else "Someone"
+        val statusText = if (otherTyping.isNotEmpty()) {
+            if (room.isGroup) {
+                val recordingUsers = otherTyping.filterValues { it == "recording" }.keys
+                val typingUsers = otherTyping.filterValues { it == "typing" }.keys
 
-        val statusText = when {
-            activeActivity == "recording" -> {
-                if (room.isGroup) "$activeUserName is recording audio..." else "recording audio..."
+                when {
+                    recordingUsers.isNotEmpty() && typingUsers.isEmpty() -> {
+                        val names = recordingUsers.map { uid ->
+                            val prof = userProfiles[uid]
+                            prof?.displayName?.takeIf { it.isNotBlank() } ?: prof?.username?.takeIf { it.isNotBlank() } ?: "Someone"
+                        }
+                        if (names.size == 1) "${names[0]} is recording audio..."
+                        else "${names.size} people are recording audio..."
+                    }
+                    typingUsers.isNotEmpty() && recordingUsers.isEmpty() -> {
+                        val names = typingUsers.map { uid ->
+                            val prof = userProfiles[uid]
+                            prof?.displayName?.takeIf { it.isNotBlank() } ?: prof?.username?.takeIf { it.isNotBlank() } ?: "Someone"
+                        }
+                        when (names.size) {
+                            1 -> "${names[0]} is typing..."
+                            2 -> "${names[0]} and ${names[1]} are typing..."
+                            else -> "${names.size} people are typing..."
+                        }
+                    }
+                    else -> {
+                        "${otherTyping.size} people are active..."
+                    }
+                }
+            } else {
+                val firstActivity = otherTyping.values.firstOrNull()
+                if (firstActivity == "recording") "recording audio..." else "typing..."
             }
-            activeActivity == "typing" -> {
-                if (room.isGroup) "$activeUserName is typing..." else "typing..."
+        } else {
+            when {
+                isOnline -> if (room.isGroup) "${room.participants.size} members" else "online"
+                !room.isGroup && lastSeenTime != null && lastSeenTime > 0 -> {
+                    com.chroma.studio.data.OnlineStatusManager.formatWhatsAppLastSeen(lastSeenTime)
+                }
+                room.isGroup -> "${room.participants.size} members"
+                else -> "Offline"
             }
-            isOnline -> "Online"
-            lastSeenTime != null && lastSeenTime > 0 -> "Last seen ${formatSmartTimestamp(lastSeenTime)}"
-            else -> if (room.isGroup) "${room.participants.size} members" else "Offline"
         }
 
         val membersList = if (room.isGroup) {
@@ -342,10 +368,11 @@ object ChatAdapters {
         } else if (room.lastMessage.isNotBlank() || room.lastMessageTime > 0L) {
             val lastSenderProf = if (room.lastSender != null) userProfiles[room.lastSender] else null
             val senderName = if (room.lastSender == currentUid) "You" else (lastSenderProf?.displayName ?: lastSenderProf?.username ?: chatName)
+            val hasUnreadRecord = otherUid != null && room.unreadCount.containsKey(otherUid)
             val otherUnread = if (otherUid != null) room.unreadCount[otherUid] ?: 0 else 0
             val computedStatus = when {
                 room.lastSender != currentUid -> "delivered"
-                otherUnread == 0 -> "read"
+                hasUnreadRecord && otherUnread == 0 -> "read"
                 isOnline -> "delivered"
                 else -> "sent"
             }

@@ -4,6 +4,9 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.CAMERA" />
@@ -91,9 +94,13 @@
 
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="fcm_default_channel" />
+            android:value="chat_notifications_heads_up" />
 
-        <receiver android:name=".ChatNotificationReceiver" android:exported="false" />
+        <receiver android:name=".ChatNotificationReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="com.chroma.studio.TEST_HEADS_UP" />
+            </intent-filter>
+        </receiver>
 
         <!-- FileProvider for camera photo capture -->
         <provider

@@ -733,32 +733,13 @@ private fun PassCardLiveOverlay(
                                 .clip(androidx.compose.foundation.shape.CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
-                            val presetRes = remember(profile.avatarUrl) { getAvatarPresetDrawableRes(profile.avatarUrl) }
-                            val defaultAvatarRes = remember(profile.gender) { getDefaultAvatarDrawableRes(profile.gender) }
-                            val resolvedDrawable = presetRes ?: if (profile.avatarUrl.isBlank()) defaultAvatarRes else null
-
-                            if (resolvedDrawable != null) {
-                                androidx.compose.foundation.Image(
-                                    painter = androidx.compose.ui.res.painterResource(id = resolvedDrawable),
-                                    contentDescription = "Avatar",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                                )
-                            } else if (profile.avatarUrl.isNotBlank()) {
-                                coil.compose.AsyncImage(
-                                    model = profile.avatarUrl,
-                                    contentDescription = "Avatar",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                                )
-                            } else {
-                                androidx.compose.foundation.Image(
-                                    painter = androidx.compose.ui.res.painterResource(id = R.drawable.default_avatar_apple),
-                                    contentDescription = "Avatar",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                                )
-                            }
+                            com.chroma.studio.ui.components.IosAvatarView(
+                                name = profile.displayName.ifBlank { profile.username },
+                                avatarUrl = profile.avatarUrl,
+                                size = 36.dp,
+                                gender = profile.gender,
+                                modifier = Modifier.fillMaxSize()
+                            )
                         }
 
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {

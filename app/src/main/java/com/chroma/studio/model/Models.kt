@@ -33,6 +33,8 @@ data class UserProfile(
     val dateOfBirth: Any? = null,
     val interests: List<String> = emptyList(),
     val gender: String = "",
+    val statusEmoji: String? = null,
+    val statusText: String? = null,
     val agreedToTermsAt: Long? = null,
     
     // Account Center Preferences
@@ -212,7 +214,9 @@ data class ChatMessage(
     val isEdited: Boolean = false,
     val deletedFor: List<String> = emptyList(), // User IDs who have deleted this message for themselves
     val isPollClosed: Boolean = false,
-    val isForwarded: Boolean = false
+    val isForwarded: Boolean = false,
+    val storyId: String? = null,
+    val storyThumbnailUrl: String? = null
 )
 
 @kotlinx.serialization.Serializable

@@ -1,4 +1,6 @@
 package com.chroma.studio.ui.screens
+import com.chroma.studio.ui.components.ProfileCropTarget
+import com.chroma.studio.ui.components.ProfileMediaEditorModal
 
 
 import android.Manifest
@@ -51,6 +53,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.chroma.studio.ui.components.IosAvatarView
 import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
 import coil.compose.rememberAsyncImagePainter
@@ -223,66 +226,30 @@ fun ProfileIdentityScreen(
     }
 
 
-    // Banner and Avatar Upload Launchers
+    // Banner and Avatar Upload Launchers (Powered by Supabase Storage with Cache-Busting & Multi-Bucket Resolution)
+    var pendingEditorUri by remember { mutableStateOf<Uri?>(null) }
+    var pendingEditorTarget by remember { mutableStateOf(ProfileCropTarget.AVATAR) }
+
     val bannerGalleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
-            selectedBannerUri = uri
-            coroutineScope.launch {
-                isUploadingBanner = true
-                val bytes = com.chroma.studio.utils.ImageUtils.compressBannerForSupabase(context, uri)
-                val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
-                if (bytes != null && uid != null) {
-                    val url = uploadBannerToSupabase(uid, bytes)
-                    if (url != null) {
-                        bannerUrl = url
-                        Toast.makeText(context, "Banner uploaded", Toast.LENGTH_SHORT).show()
-                    }
-                }
-                isUploadingBanner = false
-            }
+            pendingEditorUri = uri
+            pendingEditorTarget = ProfileCropTarget.BANNER
         }
     }
-
 
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
-            selectedAvatarUri = uri
-            coroutineScope.launch {
-                isUploadingAvatar = true
-                val bytes = com.chroma.studio.utils.compressImageToUnder50KB(context, uri)
-                val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
-                if (bytes != null && uid != null) {
-                    val url = uploadAvatarToSupabase(uid, bytes)
-                    if (url != null) {
-                        avatarUrl = url
-                        Toast.makeText(context, "Avatar uploaded", Toast.LENGTH_SHORT).show()
-                    }
-                }
-                isUploadingAvatar = false
-            }
+            pendingEditorUri = uri
+            pendingEditorTarget = ProfileCropTarget.AVATAR
         }
     }
-
 
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
         if (success && cameraImageUri != null) {
-            selectedAvatarUri = cameraImageUri
-            coroutineScope.launch {
-                isUploadingAvatar = true
-                val bytes = com.chroma.studio.utils.compressImageToUnder50KB(context, cameraImageUri!!)
-                val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
-                if (bytes != null && uid != null) {
-                    val url = uploadAvatarToSupabase(uid, bytes)
-                    if (url != null) {
-                        avatarUrl = url
-                        Toast.makeText(context, "Avatar captured and saved", Toast.LENGTH_SHORT).show()
-                    }
-                }
-                isUploadingAvatar = false
-            }
+            pendingEditorUri = cameraImageUri
+            pendingEditorTarget = ProfileCropTarget.AVATAR
         }
     }
-
 
     val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
         if (isGranted) {
@@ -651,7 +618,7 @@ fun ProfileIdentityScreen(
                         // User Identity Text Column
                         Column(
                             modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(3.dp)
+                            verticalArrangement = Arrangement.spacedBy((-1).dp)
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -661,6 +628,7 @@ fun ProfileIdentityScreen(
                                     text = displayName.ifBlank { "Your Name" },
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 19.sp,
+                                    lineHeight = 21.sp,
                                     color = if (isDark) Color.White else Color(0xFF000000),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
@@ -677,6 +645,7 @@ fun ProfileIdentityScreen(
                             Text(
                                 text = "@${username.ifBlank { "handle" }}",
                                 fontSize = 13.5.sp,
+                                lineHeight = 15.5.sp,
                                 color = Color(0xFF8E8E93),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
@@ -735,12 +704,14 @@ fun ProfileIdentityScreen(
                     ) {
                         if (selectedAvatarUri != null) {
                             AsyncImage(selectedAvatarUri, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                        } else if (presetRes != null) {
-                            Image(painterResource(id = presetRes), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                        } else if (avatarUrl.isNotBlank()) {
-                            AsyncImage(avatarUrl, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                         } else {
-                            Image(painterResource(id = getDefaultAvatarDrawableRes(gender)), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                            IosAvatarView(
+                                name = displayName,
+                                avatarUrl = avatarUrl,
+                                size = 86.dp,
+                                gender = gender,
+                                modifier = Modifier.fillMaxSize()
+                            )
                         }
 
                         if (isUploadingAvatar) {
@@ -1259,7 +1230,7 @@ fun ProfileIdentityScreen(
                                 "Creativity & Art", "UI/UX Design", "Coding & Tech", "Vlogging",
                                 "Photography", "Music & Audio", "Video Editing", "Writing",
                                 "Gaming", "Health & Fitness", "Lifestyle", "Finance",
-                                "Education", "3D Design", "AI & ML"
+                                "Education", "3D Design", "Machine Learning"
                             )
 
 
@@ -1441,6 +1412,52 @@ fun ProfileIdentityScreen(
         }
     }
 
+
+    // ── PROFILE MEDIA CROP & TRANSFORM EDITOR MODAL ───────────────────────────
+    if (pendingEditorUri != null) {
+        ProfileMediaEditorModal(
+            imageUri = pendingEditorUri!!,
+            target = pendingEditorTarget,
+            onDismiss = { pendingEditorUri = null },
+            onCropSuccess = { croppedUri ->
+                val targetMode = pendingEditorTarget
+                pendingEditorUri = null
+                if (targetMode == ProfileCropTarget.AVATAR) {
+                    selectedAvatarUri = croppedUri
+                    coroutineScope.launch {
+                        isUploadingAvatar = true
+                        val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                        if (uid != null) {
+                            val url = com.chroma.studio.data.SupabaseMediaStorage.uploadAvatarFromUri(context, uid, croppedUri)
+                            if (url != null) {
+                                avatarUrl = url
+                                Toast.makeText(context, "Avatar updated successfully", Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(context, "Failed to upload avatar", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                        isUploadingAvatar = false
+                    }
+                } else {
+                    selectedBannerUri = croppedUri
+                    coroutineScope.launch {
+                        isUploadingBanner = true
+                        val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                        if (uid != null) {
+                            val url = com.chroma.studio.data.SupabaseMediaStorage.uploadBannerFromUri(context, uid, croppedUri)
+                            if (url != null) {
+                                bannerUrl = url
+                                Toast.makeText(context, "Banner updated successfully", Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(context, "Failed to upload banner", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                        isUploadingBanner = false
+                    }
+                }
+            }
+        )
+    }
 
     // ── AVATAR PICKER SHEET ──────────────────────────────────────────────────
     if (showAvatarDialog) {
@@ -1737,14 +1754,5 @@ fun AppleSettingsTextFieldRow(
 
 
 suspend fun uploadBannerToSupabase(uid: String, imageBytes: ByteArray): String? {
-    return try {
-        val compressedBytes = com.chroma.studio.utils.ImageUtils.compressAvatarBytesForSupabase(imageBytes) ?: imageBytes
-        val bucket = SupabaseClient.client.storage["banner"]
-        val path = "$uid/banner.jpg"
-        bucket.upload(path, compressedBytes, upsert = true)
-        bucket.publicUrl(path)
-    } catch (e: Exception) {
-        android.util.Log.e("BannerUpload", "Upload failed", e)
-        null
-    }
+    return com.chroma.studio.data.SupabaseMediaStorage.uploadBannerBytes(uid, imageBytes)
 }

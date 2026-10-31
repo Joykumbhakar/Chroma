@@ -378,6 +378,22 @@ fun FlashPhotoEditorScreen(
     val previewUri = remember(photoUris, previewIndex) { photoUris.getOrNull(previewIndex) }
     val isSlideshow = photoUris.size > 1
 
+    // UNIVERSAL REAL EDITOR DELEGATION: Render ChromaPhotoEditorScreen directly
+    if (previewUri != null && previewUri != Uri.EMPTY) {
+        ChromaPhotoEditorScreen(
+            photoUri = previewUri,
+            onExportSuccess = { savedUri ->
+                val updated = photoUris.toMutableList().apply {
+                    if (previewIndex in indices) this[previewIndex] = savedUri else add(savedUri)
+                }
+                onExportUris(updated)
+                onNext("Studio", null, 3000L)
+            },
+            onBack = onBack
+        )
+        return
+    }
+
     // Undo / Redo Stacks
     val undoStack = remember { mutableStateListOf<StudioPhotoSnapshot>() }
     val redoStack = remember { mutableStateListOf<StudioPhotoSnapshot>() }
@@ -2097,11 +2113,23 @@ private suspend fun renderStudioPhotoBitmap(
     var original: Bitmap? = null
     var finalOutput: Bitmap? = null
     try {
+        fun openUriStream(u: Uri): java.io.InputStream? {
+            return try {
+                if (u.scheme == "http" || u.scheme == "https") {
+                    java.net.URL(u.toString()).openStream()
+                } else {
+                    context.contentResolver.openInputStream(u)
+                }
+            } catch (_: Exception) {
+                null
+            }
+        }
+
         // Pass 1: Measure bounds only
         val boundsOptions = android.graphics.BitmapFactory.Options().apply {
             inJustDecodeBounds = true
         }
-        context.contentResolver.openInputStream(uri)?.use { stream ->
+        openUriStream(uri)?.use { stream ->
             android.graphics.BitmapFactory.decodeStream(stream, null, boundsOptions)
         }
 
@@ -2121,7 +2149,7 @@ private suspend fun renderStudioPhotoBitmap(
             this.inSampleSize = inSampleSize
             inPreferredConfig = Bitmap.Config.ARGB_8888
         }
-        original = context.contentResolver.openInputStream(uri)?.use { stream ->
+        original = openUriStream(uri)?.use { stream ->
             android.graphics.BitmapFactory.decodeStream(stream, null, decodeOptions)
         } ?: return@withContext null
 

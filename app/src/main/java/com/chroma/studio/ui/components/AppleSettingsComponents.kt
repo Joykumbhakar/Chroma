@@ -424,57 +424,12 @@ fun AppleSettingsProfileHeaderCard(
             modifier = Modifier.weight(1f).padding(end = 8.dp)
         ) {
             // Apple Style Avatar
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(CircleShape)
-                    .background(
-                        Brush.linearGradient(
-                            listOf(Color(0xFF007AFF), Color(0xFF0051D5))
-                        )
-                    )
-                    .border(0.5.dp, Color.White.copy(alpha = 0.35f), CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                val pRes = presetRes
-                val dRes = defaultRes
-                if (pRes != null) {
-                    androidx.compose.foundation.Image(
-                        painter = androidx.compose.ui.res.painterResource(id = pRes),
-                        contentDescription = displayName,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                } else if (!avatarUrl.isNullOrBlank() && !isPreset) {
-                    AsyncImage(
-                        model = avatarUrl,
-                        contentDescription = displayName,
-                        modifier = Modifier.fillMaxSize().clip(CircleShape),
-                        contentScale = ContentScale.Crop
-                    )
-                } else if (dRes != 0) {
-                    androidx.compose.foundation.Image(
-                        painter = androidx.compose.ui.res.painterResource(id = dRes),
-                        contentDescription = displayName,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
-                    val initials = displayName.trim().split(" ")
-                        .filter { it.isNotBlank() }
-                        .take(2)
-                        .mapNotNull { it.firstOrNull()?.uppercaseChar() }
-                        .joinToString("")
-                        .ifBlank { "O" }
-
-                    Text(
-                        text = initials,
-                        color = Color.White,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
+            IosAvatarView(
+                name = displayName,
+                avatarUrl = avatarUrl.orEmpty(),
+                size = 56.dp,
+                gender = gender
+            )
 
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(

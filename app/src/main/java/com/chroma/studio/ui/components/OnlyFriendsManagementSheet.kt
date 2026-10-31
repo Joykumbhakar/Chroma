@@ -383,11 +383,15 @@ private fun OnlyFriendUserRow(
                 gender = user.gender
             )
 
-            Column(modifier = Modifier.weight(1f)) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy((-2).dp)
+            ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = user.displayName.ifBlank { user.username.ifBlank { "User" } },
                         fontSize = 14.sp,
+                        lineHeight = 16.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = colors.textMain,
                         maxLines = 1,
@@ -402,6 +406,7 @@ private fun OnlyFriendUserRow(
                     Text(
                         text = "@${user.username}",
                         fontSize = 12.sp,
+                        lineHeight = 14.sp,
                         color = colors.textMuted,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis

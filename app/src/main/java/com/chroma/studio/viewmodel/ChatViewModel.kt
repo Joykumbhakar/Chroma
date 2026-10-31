@@ -6,6 +6,7 @@ import com.chroma.studio.data.ChatRepository
 import com.chroma.studio.model.ChatMessage
 import com.chroma.studio.model.ChatRoom
 import com.chroma.studio.model.UserProfile
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -14,6 +15,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
 import com.google.firebase.database.DataSnapshot
@@ -281,6 +283,7 @@ class ChatViewModel : ViewModel() {
         }
         _activeRoomId.value = roomId
         com.chroma.studio.ui.components.DynamicIslandManager.currentlyActiveRoomId = roomId
+        observeRoomTyping(roomId)
 
         // Observe participant presence in real-time
         val currentFirebaseUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
@@ -294,6 +297,7 @@ class ChatViewModel : ViewModel() {
         if (otherUid != null) {
             observeUserOnlineStatus(otherUid)
         }
+        com.chroma.studio.ChatStateManager.setActiveChat(recipientId = otherUid, roomId = roomId)
 
         // 1. INSTANT OFFLINE PRE-LOAD (Telegram / WhatsApp technique):
         // First check in-memory L1 cache (0ms synchronous)
@@ -416,6 +420,16 @@ class ChatViewModel : ViewModel() {
         messagesJob = viewModelScope.launch {
             repository.observeMessages(roomId, messageLimit).collect { msgs ->
                 _serverMessages.value = msgs
+                // Auto-mark incoming messages as read when user is actively viewing this room
+                val currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                if (currentUserId != null && _activeRoomId.value == roomId) {
+                    val hasUnreadFromOther = msgs.any { it.senderId != currentUserId && !it.isRead }
+                    if (hasUnreadFromOther) {
+                        launch(Dispatchers.IO) {
+                            repository.markAsRead(roomId)
+                        }
+                    }
+                }
                 // Asynchronously save to local offline cache so next open is instant
                 if (msgs.isNotEmpty()) {
                     try {
@@ -432,21 +446,52 @@ class ChatViewModel : ViewModel() {
         }
     }
 
-    fun sendMessage(text: String, workId: String? = null, replyToMessageId: String? = null) {
+    fun sendMessage(
+        text: String,
+        workId: String? = null,
+        replyToMessageId: String? = null,
+        storyId: String? = null,
+        storyThumbnailUrl: String? = null
+    ) {
         val roomId = _activeRoomId.value ?: return
-        sendMessageToRoom(roomId, text, workId, replyToMessageId)
+        sendMessageToRoom(roomId, text, workId, replyToMessageId, storyId, storyThumbnailUrl)
     }
 
-    fun sendMessageToRoom(roomId: String, text: String, workId: String? = null, replyToMessageId: String? = null) {
+    fun sendStoryReply(
+        roomId: String,
+        text: String,
+        storyId: String?,
+        storyThumbnailUrl: String?
+    ) {
+        sendMessageToRoom(
+            roomId = roomId,
+            text = text,
+            storyId = storyId,
+            storyThumbnailUrl = storyThumbnailUrl
+        )
+    }
+
+    fun sendMessageToRoom(
+        roomId: String,
+        text: String,
+        workId: String? = null,
+        replyToMessageId: String? = null,
+        storyId: String? = null,
+        storyThumbnailUrl: String? = null
+    ) {
         val currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
-        if (text.isBlank() && workId == null) return
+        if (text.isBlank() && workId == null && storyThumbnailUrl == null) return
 
         if (_activeRoomId.value == roomId) {
             setTypingStatus(false)
         }
         val msgId = java.util.UUID.randomUUID().toString()
         val timestamp = System.currentTimeMillis()
-        val resolvedMessageType = if (text.startsWith("[POLL]:")) "poll" else "text"
+        val resolvedMessageType = when {
+            storyThumbnailUrl != null || storyId != null -> "story_reply"
+            text.startsWith("[POLL]:") -> "poll"
+            else -> "text"
+        }
         val pendingMsg = ChatMessage(
             id = msgId,
             senderId = currentUserId,
@@ -455,7 +500,9 @@ class ChatViewModel : ViewModel() {
             isPending = true,
             workId = workId,
             replyToMessageId = replyToMessageId,
-            messageType = resolvedMessageType
+            messageType = resolvedMessageType,
+            storyId = storyId,
+            storyThumbnailUrl = storyThumbnailUrl
         )
         // Add to local immediately if this room is actively open
         if (_activeRoomId.value == roomId) {
@@ -478,13 +525,26 @@ class ChatViewModel : ViewModel() {
         val index = currentChats.indexOfFirst { it.id == roomId }
         if (index != -1) {
             val chat = currentChats.removeAt(index)
-            val previewText = if (workId != null) "Shared a work" else text
+            val previewText = when {
+                storyThumbnailUrl != null || storyId != null -> "Replied to story: $text"
+                workId != null -> "Shared a work"
+                else -> text
+            }
             currentChats.add(0, chat.copy(lastMessage = previewText, lastMessageTime = timestamp))
             _recentChats.value = currentChats
         }
 
         viewModelScope.launch {
-            val success = repository.sendMessage(roomId, text, workId = workId, preGeneratedId = msgId, replyToMessageId = replyToMessageId, messageType = resolvedMessageType)
+            val success = repository.sendMessage(
+                roomId = roomId,
+                text = text,
+                workId = workId,
+                preGeneratedId = msgId,
+                replyToMessageId = replyToMessageId,
+                messageType = resolvedMessageType,
+                storyId = storyId,
+                storyThumbnailUrl = storyThumbnailUrl
+            )
             if (!success && _activeRoomId.value == roomId) {
                 // Mark as failed
                 _localMessages.value = _localMessages.value.map {
@@ -585,30 +645,62 @@ class ChatViewModel : ViewModel() {
     }
 
     private var typingDebounceJob: kotlinx.coroutines.Job? = null
+    private var lastTypingSendTime: Long = 0L
+    private var recordingHeartbeatJob: kotlinx.coroutines.Job? = null
+    private var currentActivityStatus: String? = null
 
+    /**
+     * WhatsApp-grade typing indicator:
+     * - Throttles network writes with a 2500ms heartbeat while user is actively typing.
+     * - Resets a 3500ms inactivity timer that automatically clears status if user pauses.
+     * - Immediately clears status when input becomes blank or message is dispatched.
+     */
     fun setTypingStatus(isTyping: Boolean) {
+        val now = System.currentTimeMillis()
         if (isTyping) {
-            setChatActivity("typing")
+            if (currentActivityStatus != "typing" || (now - lastTypingSendTime > 2000L)) {
+                lastTypingSendTime = now
+                setChatActivity("typing", force = true)
+            }
             typingDebounceJob?.cancel()
             typingDebounceJob = viewModelScope.launch {
-                kotlinx.coroutines.delay(3500)
+                kotlinx.coroutines.delay(3000) // Exactly 3 seconds of silence -> clear
+                lastTypingSendTime = 0L
                 setChatActivity(null)
             }
         } else {
             typingDebounceJob?.cancel()
+            lastTypingSendTime = 0L
             setChatActivity(null)
         }
     }
 
+    /**
+     * WhatsApp-grade recording indicator:
+     * - Immediately dispatches "recording" status upon mic activation.
+     * - Maintains an active 2500ms heartbeat to prevent receiver TTL expiration during long voice notes.
+     * - Immediately cancels and removes status upon send, release, or cancel.
+     */
     fun setRecordingStatus(isRecording: Boolean) {
         typingDebounceJob?.cancel()
-        setChatActivity(if (isRecording) "recording" else null)
+        recordingHeartbeatJob?.cancel()
+        lastTypingSendTime = 0L
+
+        if (isRecording) {
+            setChatActivity("recording", force = true)
+            recordingHeartbeatJob = viewModelScope.launch {
+                while (isActive) {
+                    kotlinx.coroutines.delay(2000) // Re-write every 2s, well within 3.5s TTL
+                    setChatActivity("recording", force = true)
+                }
+            }
+        } else {
+            setChatActivity(null)
+        }
     }
 
-    private var currentActivityStatus: String? = null
-
-    fun setChatActivity(activity: String?) {
-        if (currentActivityStatus == activity) return
+    fun setChatActivity(activity: String?, force: Boolean = false) {
+        if (!force && currentActivityStatus == activity) return
         currentActivityStatus = activity
         val roomId = _activeRoomId.value ?: return
         viewModelScope.launch {
@@ -913,6 +1005,7 @@ class ChatViewModel : ViewModel() {
     fun closeChat() {
         _activeRoomId.value = null
         com.chroma.studio.ui.components.DynamicIslandManager.currentlyActiveRoomId = null
+        com.chroma.studio.ChatStateManager.clearActiveChat()
         messagesJob?.cancel()
         _serverMessages.value = emptyList()
         _localMessages.value = emptyList()
@@ -1065,6 +1158,12 @@ class ChatViewModel : ViewModel() {
         }
     }
 
+    fun markAsRead(roomId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.markAsRead(roomId)
+        }
+    }
+
     fun markMultipleAsRead(roomIds: List<String>) {
         val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser ?: return
         val currentChats = _recentChats.value.toMutableList()
@@ -1213,7 +1312,7 @@ class ChatViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 val mediaUrl = message.imageUrl ?: message.mediaUrl
-                val msgType = message.messageType ?: if (mediaUrl != null) "image" else "text"
+                val msgType = if (message.messageType.isNotBlank()) message.messageType else if (mediaUrl != null) "image" else "text"
                 repository.sendMessage(
                     roomId = targetRoomId,
                     text = message.text,
@@ -1239,12 +1338,19 @@ class ChatViewModel : ViewModel() {
         }
         presenceListeners.clear()
 
+        // Clean up active jobs and listeners
+        typingDebounceJob?.cancel()
+        recordingHeartbeatJob?.cancel()
+        statusTtlMonitorJob?.cancel()
+
         // Clean up all per-room typing listeners
         val db = com.chroma.studio.data.OnlineStatusManager.getDatabase()
         for ((roomId, listener) in typingListeners) {
             db.getReference("status/$roomId").removeEventListener(listener)
         }
         typingListeners.clear()
+        receivedActivityTimestamps.clear()
+
         // Clear own activity status on exit
         val activeRoom = _activeRoomId.value
         val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
@@ -1253,52 +1359,98 @@ class ChatViewModel : ViewModel() {
         }
     }
 
-    private var typingJob: kotlinx.coroutines.Job? = null
+    private var statusTtlMonitorJob: kotlinx.coroutines.Job? = null
+    private val receivedActivityTimestamps = java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.ConcurrentHashMap<String, Long>>()
     private val typingListeners = mutableMapOf<String, com.google.firebase.database.ValueEventListener>()
 
+    private fun startStatusTtlMonitor() {
+        if (statusTtlMonitorJob != null) return
+        statusTtlMonitorJob = viewModelScope.launch {
+            while (isActive) {
+                kotlinx.coroutines.delay(2000)
+                val now = System.currentTimeMillis()
+                var changed = false
+                val currentMap = _typingStatuses.value.toMutableMap()
+
+                for ((roomId, roomActivities) in currentMap.toList()) {
+                    val roomTimestamps = receivedActivityTimestamps[roomId] ?: continue
+                    val filtered = roomActivities.filter { (uid, _) ->
+                        val lastSeen = roomTimestamps[uid] ?: 0L
+                        (now - lastSeen) <= 3500L // Expire stale indicators after 3.5s
+                    }
+                    if (filtered.size != roomActivities.size) {
+                        changed = true
+                        if (filtered.isNotEmpty()) {
+                            currentMap[roomId] = filtered
+                        } else {
+                            currentMap.remove(roomId)
+                        }
+                    }
+                }
+                if (changed) {
+                    _typingStatuses.value = currentMap
+                }
+            }
+        }
+    }
+
+    fun observeRoomTyping(roomId: String) {
+        startStatusTtlMonitor()
+        if (typingListeners.containsKey(roomId)) return
+        if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser == null) return
+        val db = com.chroma.studio.data.OnlineStatusManager.getDatabase()
+        val roomRef = db.getReference("status/$roomId")
+        val listener = object : com.google.firebase.database.ValueEventListener {
+            override fun onDataChange(snapshot: com.google.firebase.database.DataSnapshot) {
+                val activityMap = mutableMapOf<String, String>()
+                val now = System.currentTimeMillis()
+                val roomTimestamps = receivedActivityTimestamps.getOrPut(roomId) { java.util.concurrent.ConcurrentHashMap() }
+
+                for (userSnapshot in snapshot.children) {
+                    val userId = userSnapshot.key ?: continue
+                    val status = userSnapshot.getValue(String::class.java)
+                    if (status != null) {
+                        activityMap[userId] = status
+                        roomTimestamps[userId] = now
+                    } else {
+                        roomTimestamps.remove(userId)
+                    }
+                }
+                _typingStatuses.value = if (activityMap.isNotEmpty()) {
+                    _typingStatuses.value + (roomId to activityMap)
+                } else {
+                    _typingStatuses.value - roomId
+                }
+            }
+
+            override fun onCancelled(error: com.google.firebase.database.DatabaseError) {
+                android.util.Log.d("ChatViewModel", "Typing status cancelled for $roomId: ${error.message}")
+            }
+        }
+        roomRef.addValueEventListener(listener)
+        typingListeners[roomId] = listener
+    }
+
     private fun observeTypingStatuses(chats: List<ChatRoom>) {
+        startStatusTtlMonitor()
         val db = com.chroma.studio.data.OnlineStatusManager.getDatabase()
         val currentRoomIds = chats.map { it.id }.toSet()
 
-        // Remove listeners for rooms we're no longer in
-        val removedRooms = typingListeners.keys - currentRoomIds
+        // Remove listeners for rooms we're no longer in, keeping active room alive
+        val activeId = _activeRoomId.value
+        val removedRooms = typingListeners.keys.filter { it !in currentRoomIds && it != activeId }
         for (roomId in removedRooms) {
             typingListeners.remove(roomId)?.let {
                 db.getReference("status/$roomId").removeEventListener(it)
             }
-            // Clear from status map
+            receivedActivityTimestamps.remove(roomId)
             _typingStatuses.value = _typingStatuses.value - roomId
         }
 
-        // Add listeners for new rooms
+        // Add listeners for current rooms
         if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser == null) return
         for (roomId in currentRoomIds) {
-            if (typingListeners.containsKey(roomId)) continue
-
-            val roomRef = db.getReference("status/$roomId")
-            val listener = object : com.google.firebase.database.ValueEventListener {
-                override fun onDataChange(snapshot: com.google.firebase.database.DataSnapshot) {
-                    val activityMap = mutableMapOf<String, String>()
-                    for (userSnapshot in snapshot.children) {
-                        val userId = userSnapshot.key ?: continue
-                        val status = userSnapshot.getValue(String::class.java)
-                        if (status != null) {
-                            activityMap[userId] = status
-                        }
-                    }
-                    _typingStatuses.value = if (activityMap.isNotEmpty()) {
-                        _typingStatuses.value + (roomId to activityMap)
-                    } else {
-                        _typingStatuses.value - roomId
-                    }
-                }
-
-                override fun onCancelled(error: com.google.firebase.database.DatabaseError) {
-                    android.util.Log.d("ChatViewModel", "Typing status cancelled for $roomId: ${error.message}")
-                }
-            }
-            roomRef.addValueEventListener(listener)
-            typingListeners[roomId] = listener
+            observeRoomTyping(roomId)
         }
     }
 

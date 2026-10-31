@@ -386,13 +386,14 @@ fun ContactInfoDrawer(
                             .size(112.dp)
                             .shadow(4.dp, CircleShape)
                     ) {
-                        AsyncImage(
-                            model = currentDisplayAvatar,
-                            contentDescription = chat.name,
+                        com.chroma.studio.ui.components.IosAvatarView(
+                            name = chat.name,
+                            avatarUrl = currentDisplayAvatar,
+                            size = 112.dp,
+                            isGroup = isGroup,
                             modifier = Modifier
                                 .fillMaxSize()
                                 .clip(CircleShape)
-                                .background(Color.White)
                                 .border(3.5.dp, colors.appBg, CircleShape)
                                 .clickable {
                                     if (isGroup) {
@@ -401,8 +402,7 @@ fun ContactInfoDrawer(
                                     } else {
                                         onImageClick(chat.avatar)
                                     }
-                                },
-                            contentScale = ContentScale.Crop
+                                }
                         )
 
                         if (isGroup) {
@@ -1096,14 +1096,10 @@ private fun ContactInfoMembersSection(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        AsyncImage(
-                            model = member.avatar,
-                            contentDescription = member.name,
-                            modifier = Modifier
-                                .size(38.dp)
-                                .clip(CircleShape)
-                                .border(0.5.dp, colors.borderSubtle, CircleShape),
-                            contentScale = ContentScale.Crop
+                        com.chroma.studio.ui.components.IosAvatarView(
+                            name = member.name,
+                            avatarUrl = member.avatar,
+                            size = 38.dp
                         )
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
@@ -2217,14 +2213,10 @@ private fun UserStoryPageView(
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Box(modifier = Modifier.size(40.dp)) {
-                            AsyncImage(
-                                model = userGroup.avatar,
-                                contentDescription = userGroup.authorName,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .clip(CircleShape)
-                                    .border(1.5.dp, Color.White.copy(alpha = 0.85f), CircleShape),
-                                contentScale = ContentScale.Crop
+                            com.chroma.studio.ui.components.IosAvatarView(
+                                name = userGroup.authorName,
+                                avatarUrl = userGroup.avatar,
+                                size = 40.dp
                             )
                         }
                         Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
@@ -2592,14 +2584,11 @@ fun FullCallModal(
                     modifier = Modifier.size(130.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    AsyncImage(
-                        model = chat.avatar,
-                        contentDescription = chat.name,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(CircleShape)
-                            .border(1.dp, Color.White.copy(alpha = 0.3f), CircleShape),
-                        contentScale = ContentScale.Crop
+                    com.chroma.studio.ui.components.IosAvatarView(
+                        name = chat.name,
+                        avatarUrl = chat.avatar,
+                        size = 130.dp,
+                        isOnline = chat.online
                     )
                 }
             }
@@ -3465,7 +3454,7 @@ fun WallpaperPickerModal(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Text("Crisp and luxury! 👌", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Medium)
-                        MessageStatusTick(status = "read", isOutgoing = true, readTint = Color(0xFF38BDF8), size = 12.dp)
+                        MessageStatusTick(status = "read", isOutgoing = true, readTint = Color(0xFF53BDEB), size = 12.dp)
                     }
                 }
 

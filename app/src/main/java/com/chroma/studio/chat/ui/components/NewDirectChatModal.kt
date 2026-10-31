@@ -351,34 +351,17 @@ fun NewDirectChatModal(
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
                                 // Contact Avatar with Online Dot
-                                Box(modifier = Modifier.size(46.dp)) {
-                                    AsyncImage(
-                                        model = contact.avatar,
-                                        contentDescription = contact.name,
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .clip(CircleShape)
-                                            .border(0.5.dp, colors.borderSubtle, CircleShape),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                    if (contact.status == "Online") {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(11.dp)
-                                                .align(Alignment.BottomEnd)
-                                                .offset(x = (-1).dp, y = (-1).dp)
-                                                .background(colors.appBg, CircleShape)
-                                                .padding(1.5.dp)
-                                                .clip(CircleShape)
-                                                .background(colors.success)
-                                        )
-                                    }
-                                }
+                                com.chroma.studio.ui.components.IosAvatarView(
+                                    name = contact.name,
+                                    avatarUrl = contact.avatar,
+                                    size = 46.dp,
+                                    isOnline = contact.status == "Online"
+                                )
 
                                 // User Details
                                 Column(
                                     modifier = Modifier.weight(1f),
-                                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                                    verticalArrangement = Arrangement.spacedBy((-2).dp)
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
@@ -387,6 +370,7 @@ fun NewDirectChatModal(
                                         Text(
                                             text = contact.name,
                                             fontSize = 16.sp,
+                                            lineHeight = 18.sp,
                                             fontWeight = FontWeight.Medium,
                                             color = colors.textDark,
                                             maxLines = 1,
@@ -400,6 +384,7 @@ fun NewDirectChatModal(
                                     Text(
                                         text = contact.role,
                                         fontSize = 13.5.sp,
+                                        lineHeight = 15.sp,
                                         color = colors.textMuted,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis

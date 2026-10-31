@@ -1,4 +1,4 @@
-﻿import java.util.Properties
+import java.util.Properties
 import java.io.FileInputStream
 
 plugins {
@@ -6,7 +6,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.gms.google-services")
-    kotlin("plugin.serialization") version "1.9.20" // Replace with actual kotlin version if different
+    kotlin("plugin.serialization")
 }
 
 
@@ -48,6 +48,17 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            signingConfig = signingConfigs.getByName("debug")
+        }
     }
 
     androidResources {

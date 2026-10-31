@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import com.chroma.studio.ui.theme.StoryFonts
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -106,10 +107,14 @@ fun StoryEditorModal(
     var storyPoll by remember { mutableStateOf<PollData?>(null) }
     var isAddingSticker by remember { mutableStateOf(false) }
 
-    // Typography & Formatting State
+    // Typography & Formatting State with assets/fonts/
     var fontIndex by remember { mutableIntStateOf(0) }
-    val fontFamilies = listOf(FontFamily.Default, FontFamily.Serif, FontFamily.Monospace, FontFamily.Cursive)
-    val fontNames = listOf("Classic", "Serif", "Code", "Script")
+    val fontFamilies = remember(context) {
+        StoryFonts.items.map { StoryFonts.getFontFamily(context, it.id) }
+    }
+    val fontNames = remember {
+        StoryFonts.items.map { it.displayName }
+    }
     var highlightMode by remember { mutableStateOf(TextHighlightMode.NONE) }
     var textAlign by remember { mutableStateOf(TextAlign.Center) }
 
@@ -860,8 +865,9 @@ fun StoryEditorModal(
                         storyViewModel.uploadStory(context, selectedPhotoUri!!)
                     } else if (storyViewModel != null && (finalCaption.isNotBlank() || finalImage != null)) {
                         val chosenGradient = gradients[selectedGradientIndex]
-                        val bgColorHex = String.format("#%08X", (0xFFFFFFFF and chosenGradient.colors.first().value.toLong()))
-                        val textFormatJson = "{\"fontIndex\":$fontIndex,\"textAlign\":\"${textAlign}\",\"highlightMode\":\"${highlightMode.name}\"}"
+                        val bgColorHex = String.format("#%08X", (0xFFFFFFFF and (chosenGradient.colors.firstOrNull()?.value?.toLong() ?: 0xFF000000L)))
+                        val chosenFontId = StoryFonts.items.getOrNull(fontIndex)?.id ?: "Sans"
+                        val textFormatJson = "{\"fontFamily\":\"$chosenFontId\",\"fontIndex\":$fontIndex,\"textAlign\":\"${textAlign}\",\"highlightMode\":\"${highlightMode.name}\"}" 
                         storyViewModel.publishTextStory(
                             textContent = finalCaption,
                             textFormat = textFormatJson,

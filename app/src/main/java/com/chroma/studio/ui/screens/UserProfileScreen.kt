@@ -6,10 +6,12 @@
 
 package com.chroma.studio.ui.screens
 import android.graphics.Bitmap
-import com.canhub.cropper.CropImageView
-import com.canhub.cropper.CropImageOptions
-import com.canhub.cropper.CropImageContractOptions
-import com.canhub.cropper.CropImageContract
+import com.chroma.studio.ui.components.OneUiSettingsGroup
+import com.chroma.studio.ui.components.OneUiSettingsNavRow
+import com.chroma.studio.ui.components.OneUiIconBadge
+import com.chroma.studio.ui.theme.InterFontFamily
+import com.chroma.studio.ui.components.ProfileCropTarget
+import com.chroma.studio.ui.components.ProfileMediaEditorModal
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -26,6 +28,7 @@ import com.chroma.studio.ui.components.AppleFlashGraphic
 import com.chroma.studio.ui.components.AppleRemixGraphic
 import com.chroma.studio.ui.components.AppleHeartHandshakeGraphic
 import com.chroma.studio.ui.components.AppleLockGraphic
+import com.chroma.studio.ui.components.AppleSavedWorksGraphic
 import com.chroma.studio.ui.components.rememberAppleGraphicAnimationState
 import com.chroma.studio.ui.components.AiWaveSphereVector
 // Apple HIG 3D Empty States
@@ -54,6 +57,7 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -74,6 +78,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import com.chroma.studio.ui.components.IosAvatarView
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -228,58 +233,29 @@ fun UserProfileScreen(
     var savedWorks by remember { mutableStateOf<List<DiscoverPost>>(emptyList()) }
     var isSavedLoading by remember { mutableStateOf(false) }
     var isUploadingBanner by remember { mutableStateOf(false) }
+    var isUploadingAvatar by remember { mutableStateOf(false) }
 
-    val cropBannerLauncher = rememberLauncherForActivityResult(com.canhub.cropper.CropImageContract()) { result ->
-        if (result.isSuccessful && result.uriContent != null) {
-            val croppedUri = result.uriContent!!
-            scope.launch {
-                try {
-                    isUploadingBanner = true
-                    val bytes = com.chroma.studio.utils.compressImageToUnder50KB(context, croppedUri)
-                    val uid = currentUserId
-                    if (bytes != null && uid != null) {
-                        val url = uploadBannerToSupabase(uid, bytes)
-                        if (url != null) {
-                            com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                                .collection("users")
-                                .document(uid)
-                                .update("bannerUrl", url)
-                                .await()
-                            profile = profile?.copy(bannerUrl = url)
-                            ToastManager.showToast("Banner updated successfully")
-                        } else {
-                            ToastManager.showToast("Failed to upload banner image")
-                        }
-                    }
-                } catch (e: Exception) {
-                    ToastManager.showToast("Error updating banner: ")
-                } finally {
-                    isUploadingBanner = false
-                    showBannerLibrarySheet = false
-                }
-            }
-        }
-    }
+    var pendingEditorUri by remember { mutableStateOf<Uri?>(null) }
+    var pendingEditorTarget by remember { mutableStateOf(ProfileCropTarget.AVATAR) }
 
     val bannerGalleryLauncher = rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.GetContent()
     ) { uri ->
         if (uri != null) {
-            cropBannerLauncher.launch(
-                com.canhub.cropper.CropImageContractOptions(
-                    uri = uri,
-                    cropImageOptions = com.canhub.cropper.CropImageOptions(
-                        guidelines = com.canhub.cropper.CropImageView.Guidelines.ON,
-                        fixAspectRatio = true,
-                        aspectRatioX = 3,
-                        aspectRatioY = 1,
-                        outputCompressFormat = android.graphics.Bitmap.CompressFormat.JPEG,
-                        outputCompressQuality = 90
-                    )
-                )
-            )
+            pendingEditorUri = uri
+            pendingEditorTarget = ProfileCropTarget.BANNER
         }
     }
+
+    val avatarGalleryLauncher = rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            pendingEditorUri = uri
+            pendingEditorTarget = ProfileCropTarget.AVATAR
+        }
+    }
+
 
     LaunchedEffect(userId) {
         launch {
@@ -357,10 +333,14 @@ fun UserProfileScreen(
     val remixWorks = remember(works) { works.filter { it.remixedFromPostId != null } }
     val profileTabIcons = if (isCurrentUser) listOf(Lucide.LayoutGrid, Lucide.Image, Lucide.Zap, Lucide.HeartHandshake, Lucide.Bookmark) else listOf(Lucide.LayoutGrid, Lucide.Image, Lucide.Zap, Lucide.HeartHandshake)
 
-    val isScrolled by remember {
+    val scrollProgress by remember {
         derivedStateOf {
-            gridState.firstVisibleItemIndex > 0 || gridState.firstVisibleItemScrollOffset > 80
+            if (gridState.firstVisibleItemIndex > 0) 1f
+            else (gridState.firstVisibleItemScrollOffset.toFloat() / 140f).coerceIn(0f, 1f)
         }
+    }
+    val isScrolled by remember {
+        derivedStateOf { scrollProgress > 0.45f }
     }
 
     val filteredStories = remember(allStoryGroups, userId) { allStoryGroups.filter { it.userId == userId } }
@@ -624,8 +604,15 @@ fun UserProfileScreen(
                         }
                     } else if (savedWorks.isEmpty()) {
                         item(span = { GridItemSpan(maxLineSpan) }) {
+                            val savedGraphicState = rememberAppleGraphicAnimationState()
                             AppleEmptyTabState(
-                                icon = Lucide.Bookmark,
+                                graphic = {
+                                    AppleSavedWorksGraphic(
+                                        modifier = Modifier.size(150.dp),
+                                        state = savedGraphicState,
+                                        enableClickToAnimate = true
+                                    )
+                                },
                                 title = "No Saved Works",
                                 subtitle = "Works and posts you bookmark will appear here."
                             )
@@ -646,69 +633,89 @@ fun UserProfileScreen(
         }
     }
 
-    // Top Translucent Frosted Glass Navigation Bar
+    // Samsung One UI 7.0 Translucent Navigation Bar
     val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val isSysDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val topBarBg = if (isSysDark) Color(0xFF000000).copy(alpha = (scrollProgress * 0.94f).coerceIn(0f, 0.96f))
+                   else Color(0xFFF2F4F7).copy(alpha = (scrollProgress * 0.96f).coerceIn(0f, 0.98f))
+    val topBarBorder = if (isSysDark) Color(0xFF1F2430).copy(alpha = scrollProgress)
+                       else Color(0xFFE2E8F0).copy(alpha = scrollProgress)
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .align(Alignment.TopCenter)
-            .background(
-                if (isScrolled) colors.bg else Color.Transparent
-            )
-            .border(
-                width = if (isScrolled) 0.5.dp else 0.dp,
-                color = if (isScrolled) colors.glassBorder else Color.Transparent
-            )
-            .padding(top = statusBarTop + 6.dp, bottom = 8.dp, start = 12.dp, end = 12.dp)
+            .background(topBarBg)
+            .border(width = 0.5.dp, color = topBarBorder)
+            .padding(top = statusBarTop + 4.dp, bottom = 8.dp, start = 14.dp, end = 14.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            val topIconBg = if (isScrolled) Color.Transparent else Color.Black.copy(alpha = 0.22f)
+            val topIconBg = Color.Black.copy(alpha = 0.22f * (1f - scrollProgress))
 
             // Back button
             if (showBackButton) {
                 Box(
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(38.dp)
                         .clip(CircleShape)
                         .background(topIconBg)
-                        .clickable { onBack() },
+                        .clickable {
+                            com.chroma.studio.chat.sound.SoundManager.playReaction()
+                            onBack()
+                        },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         Lucide.ChevronLeft,
                         contentDescription = "Back",
-                        tint = if (isScrolled) colors.textMain else Color.White,
-                        modifier = Modifier.size(20.dp)
+                        tint = if (scrollProgress > 0.4f) (if (isSysDark) Color.White else Color(0xFF0F172A)) else Color.White,
+                        modifier = Modifier.size(22.dp)
                     )
                 }
             } else {
-                Spacer(Modifier.size(36.dp))
+                Spacer(Modifier.size(38.dp))
             }
 
-            // Collapsed title when scrolled
-            AnimatedVisibility(
-                visible = isScrolled,
-                enter = fadeIn(),
-                exit = fadeOut()
+            // Collapsed title when scrolled (smooth One UI typography slide & fade)
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 8.dp),
+                contentAlignment = Alignment.Center
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = profile?.displayName ?: "",
-                        color = colors.textMain,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp,
-                        maxLines = 1
-                    )
-                    Text(
-                        text = "@${profile?.username ?: ""}",
-                        color = Color(0xFF8E8E93),
-                        fontSize = 11.sp,
-                        maxLines = 1
-                    )
+                if (scrollProgress > 0.08f) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy((-1).dp),
+                        modifier = Modifier.graphicsLayer {
+                            alpha = ((scrollProgress - 0.2f) / 0.8f).coerceIn(0f, 1f)
+                            translationY = (1f - scrollProgress) * 8f
+                        }
+                    ) {
+                        Text(
+                            text = profile?.displayName ?: "",
+                            color = if (isSysDark) Color.White else Color(0xFF0F172A),
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 15.5.sp,
+                            fontFamily = InterFontFamily,
+                            lineHeight = 18.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "@${profile?.username ?: ""}",
+                            color = if (isSysDark) Color(0xFF94A3B8) else Color(0xFF64748B),
+                            fontSize = 11.5.sp,
+                            fontFamily = InterFontFamily,
+                            lineHeight = 14.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
 
@@ -717,23 +724,16 @@ fun UserProfileScreen(
                 if (isCurrentUser) {
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(38.dp)
                             .clip(CircleShape)
                             .background(topIconBg)
-                            .clickable { showBannerLibrarySheet = true },
+                            .clickable {
+                                com.chroma.studio.chat.sound.SoundManager.playReaction()
+                                showBannerLibrarySheet = true
+                            },
                         contentAlignment = Alignment.Center
                     ) {
                         if (!isScrolled) {
-                            // Soft ambient shadow
-                            Icon(
-                                Lucide.Pencil,
-                                contentDescription = null,
-                                tint = Color.Black.copy(alpha = 0.20f),
-                                modifier = Modifier
-                                    .size(17.dp)
-                                    .offset(x = 0.dp, y = 1.25.dp)
-                            )
-                            // Crisp key shadow
                             Icon(
                                 Lucide.Pencil,
                                 contentDescription = null,
@@ -746,30 +746,23 @@ fun UserProfileScreen(
                         Icon(
                             Lucide.Pencil,
                             contentDescription = "Edit Banner",
-                            tint = if (isScrolled) colors.textMain else Color.White,
+                            tint = if (isScrolled) (if (isSysDark) Color.White else Color(0xFF0F172A)) else Color.White,
                             modifier = Modifier.size(17.dp)
                         )
                     }
 
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(38.dp)
                             .clip(CircleShape)
                             .background(topIconBg)
-                            .clickable { showSettingsBottomSheet = true },
+                            .clickable {
+                                com.chroma.studio.chat.sound.SoundManager.playReaction()
+                                showSettingsBottomSheet = true
+                            },
                         contentAlignment = Alignment.Center
                     ) {
                         if (!isScrolled) {
-                            // Soft ambient shadow
-                            Icon(
-                                Lucide.Settings,
-                                contentDescription = null,
-                                tint = Color.Black.copy(alpha = 0.20f),
-                                modifier = Modifier
-                                    .size(17.dp)
-                                    .offset(x = 0.dp, y = 1.25.dp)
-                            )
-                            // Crisp key shadow
                             Icon(
                                 Lucide.Settings,
                                 contentDescription = null,
@@ -782,39 +775,45 @@ fun UserProfileScreen(
                         Icon(
                             Lucide.Settings,
                             contentDescription = "Settings",
-                            tint = if (isScrolled) colors.textMain else Color.White,
+                            tint = if (isScrolled) (if (isSysDark) Color.White else Color(0xFF0F172A)) else Color.White,
                             modifier = Modifier.size(17.dp)
                         )
                     }
                 } else {
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(38.dp)
                             .clip(CircleShape)
                             .background(topIconBg)
-                            .clickable { showShareCardModal = true },
+                            .clickable {
+                                com.chroma.studio.chat.sound.SoundManager.playReaction()
+                                showShareCardModal = true
+                            },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             Lucide.Share2,
                             contentDescription = "Share Card",
-                            tint = if (isScrolled) colors.textMain else Color.White,
+                            tint = if (isScrolled) (if (isSysDark) Color.White else Color(0xFF0F172A)) else Color.White,
                             modifier = Modifier.size(17.dp)
                         )
                     }
 
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(38.dp)
                             .clip(CircleShape)
                             .background(topIconBg)
-                            .clickable { showOtherUserOptionsSheet = true },
+                            .clickable {
+                                com.chroma.studio.chat.sound.SoundManager.playReaction()
+                                showOtherUserOptionsSheet = true
+                            },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             Lucide.EllipsisVertical,
                             contentDescription = "More Options",
-                            tint = if (isScrolled) colors.textMain else Color.White,
+                            tint = if (isScrolled) (if (isSysDark) Color.White else Color(0xFF0F172A)) else Color.White,
                             modifier = Modifier.size(17.dp)
                         )
                     }
@@ -929,6 +928,71 @@ fun UserProfileScreen(
         }
     }
 
+    // Profile Media Crop & Transform Editor Modal
+    if (pendingEditorUri != null) {
+        ProfileMediaEditorModal(
+            imageUri = pendingEditorUri!!,
+            target = pendingEditorTarget,
+            onDismiss = { pendingEditorUri = null },
+            onCropSuccess = { croppedUri ->
+                val targetMode = pendingEditorTarget
+                pendingEditorUri = null
+                if (targetMode == ProfileCropTarget.AVATAR) {
+                    scope.launch {
+                        try {
+                            isUploadingAvatar = true
+                            val uid = currentUserId
+                            if (uid != null) {
+                                val url = com.chroma.studio.data.SupabaseMediaStorage.uploadAvatarFromUri(context, uid, croppedUri)
+                                if (url != null) {
+                                    com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                        .collection("users")
+                                        .document(uid)
+                                        .update("avatarUrl", url)
+                                        .await()
+                                    profile = profile?.copy(avatarUrl = url)
+                                    ToastManager.showToast("Avatar updated successfully")
+                                } else {
+                                    ToastManager.showToast("Failed to upload avatar")
+                                }
+                            }
+                        } catch (e: Exception) {
+                            ToastManager.showToast("Error updating avatar: ${e.message ?: "Failed"}")
+                        } finally {
+                            isUploadingAvatar = false
+                        }
+                    }
+                } else {
+                    scope.launch {
+                        try {
+                            isUploadingBanner = true
+                            val uid = currentUserId
+                            if (uid != null) {
+                                val url = com.chroma.studio.data.SupabaseMediaStorage.uploadBannerFromUri(context, uid, croppedUri)
+                                if (url != null) {
+                                    com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                        .collection("users")
+                                        .document(uid)
+                                        .update("bannerUrl", url)
+                                        .await()
+                                    profile = profile?.copy(bannerUrl = url)
+                                    ToastManager.showToast("Banner updated successfully")
+                                } else {
+                                    ToastManager.showToast("Failed to upload banner image")
+                                }
+                            }
+                        } catch (e: Exception) {
+                            ToastManager.showToast("Error updating banner: ${e.message ?: "Failed"}")
+                        } finally {
+                            isUploadingBanner = false
+                            showBannerLibrarySheet = false
+                        }
+                    }
+                }
+            }
+        )
+    }
+
     // Avatar Fullscreen Preview Overlay
     AnimatedVisibility(
         visible = showAvatarOverlay,
@@ -943,13 +1007,13 @@ fun UserProfileScreen(
                 .clickable { showAvatarOverlay = false },
             contentAlignment = Alignment.Center
         ) {
-            val presetRes = remember(profile?.avatarUrl) { getAvatarPresetDrawableRes(profile?.avatarUrl) }
-            val defaultAvatarRes = remember(profile?.gender) { getDefaultAvatarDrawableRes(profile?.gender) }
-            val resolvedDrawable = presetRes ?: if (profile?.avatarUrl.isNullOrBlank()) defaultAvatarRes else null
+            val cleanAvatar = profile?.avatarUrl.orEmpty().trim()
+            val presetRes = remember(cleanAvatar) { getAvatarPresetDrawableRes(cleanAvatar) }
+            val isCustomPhoto = cleanAvatar.isNotBlank() && !cleanAvatar.contains("default_avatar") && presetRes == null
 
-            if (resolvedDrawable != null) {
+            if (presetRes != null) {
                 Image(
-                    painter = painterResource(id = resolvedDrawable),
+                    painter = painterResource(id = presetRes),
                     contentDescription = "Full Avatar",
                     modifier = Modifier
                         .fillMaxWidth(0.85f)
@@ -957,9 +1021,9 @@ fun UserProfileScreen(
                         .clip(CircleShape),
                     contentScale = ContentScale.Crop
                 )
-            } else if (!profile?.avatarUrl.isNullOrBlank()) {
+            } else if (isCustomPhoto) {
                 AsyncImage(
-                    model = profile?.avatarUrl,
+                    model = cleanAvatar,
                     contentDescription = "Full Avatar",
                     modifier = Modifier
                         .fillMaxWidth()
@@ -967,14 +1031,14 @@ fun UserProfileScreen(
                     contentScale = ContentScale.Fit
                 )
             } else {
-                Image(
-                    painter = painterResource(id = R.drawable.default_avatar_apple),
-                    contentDescription = "Full Avatar",
+                IosAvatarView(
+                    name = profile?.displayName ?: profile?.username ?: "",
+                    avatarUrl = "",
+                    size = 280.dp,
+                    gender = profile?.gender,
                     modifier = Modifier
-                        .fillMaxWidth(0.85f)
+                        .fillMaxWidth(0.75f)
                         .aspectRatio(1f)
-                        .clip(CircleShape),
-                    contentScale = ContentScale.Crop
                 )
             }
 
@@ -985,6 +1049,29 @@ fun UserProfileScreen(
                     .padding(top = statusBarTop + 8.dp, start = 8.dp)
             ) {
                 Icon(Lucide.ArrowLeft, contentDescription = "Close", tint = Color.White)
+            }
+
+            if (isCurrentUser) {
+                ChromaPillButton(
+                    onClick = {
+                        showAvatarOverlay = false
+                        avatarGalleryLauncher.launch("image/*")
+                    },
+                    variant = ChromaPillVariant.Blue,
+                    enabled = !isUploadingAvatar,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 54.dp)
+                ) {
+                    Icon(Lucide.Camera, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = if (isUploadingAvatar) "Updating..." else "Change Avatar Photo",
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp
+                    )
+                }
             }
         }
     }
@@ -1150,11 +1237,12 @@ fun UserProfileScreen(
         )
     }
 
-    // Apple Settings Bottom Sheet
+    // Samsung One UI 7.0 Settings Bottom Sheet
     if (showSettingsBottomSheet) {
+        val isDark = androidx.compose.foundation.isSystemInDarkTheme()
         ModalBottomSheet(
             onDismissRequest = { showSettingsBottomSheet = false },
-            containerColor = if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFF141416) else Color(0xFFF2F2F7),
+            containerColor = if (isDark) Color(0xFF0F1117) else Color(0xFFF2F4F7),
             dragHandle = { BottomSheetDefaults.DragHandle() },
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
         ) {
@@ -1162,7 +1250,8 @@ fun UserProfileScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .padding(bottom = 28.dp),
+                    .padding(bottom = 28.dp)
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Row(
@@ -1172,73 +1261,82 @@ fun UserProfileScreen(
                 ) {
                     Text(
                         "Options & Settings",
-                        color = colors.textMain,
+                        color = if (isDark) Color.White else Color(0xFF0F172A),
                         fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = InterFontFamily
                     )
                     IconButton(
                         onClick = { showSettingsBottomSheet = false },
                         modifier = Modifier.size(32.dp)
                     ) {
-                        Icon(Lucide.X, contentDescription = "Close", tint = colors.textMain, modifier = Modifier.size(16.dp))
+                        Icon(Lucide.X, contentDescription = "Close", tint = if (isDark) Color.White else Color(0xFF0F172A), modifier = Modifier.size(18.dp))
                     }
                 }
 
-                AppleSettingsGroup {
-                    AppleSettingNavRow(
+                OneUiSettingsGroup(title = "Account & Identity") {
+                    OneUiSettingsNavRow(
                         title = "Account Settings",
                         subtitle = "Manage privacy, security & alerts",
                         icon = Lucide.UserCog,
+                        iconColor = Color(0xFF2563EB),
                         onClick = {
                             showSettingsBottomSheet = false
                             onNavigateToSettings()
                         }
                     )
-                    AppleSettingDivider()
-                    AppleSettingNavRow(
+                    HorizontalDivider(color = if (isDark) Color(0xFF1F2430) else Color(0xFFE2E8F0), thickness = 0.5.dp)
+                    OneUiSettingsNavRow(
                         title = "Edit Identity & Avatar",
                         subtitle = "Change name, avatars, and bio",
                         icon = Lucide.UserCheck,
+                        iconColor = Color(0xFF6366F1),
                         onClick = {
                             showSettingsBottomSheet = false
                             onNavigateToEditProfile()
                         }
                     )
-                    AppleSettingDivider()
-                    AppleSettingNavRow(
+                    HorizontalDivider(color = if (isDark) Color(0xFF1F2430) else Color(0xFFE2E8F0), thickness = 0.5.dp)
+                    OneUiSettingsNavRow(
                         title = "Profile Pass Card",
                         subtitle = "Share your scannable digital card",
                         icon = Lucide.QrCode,
+                        iconColor = Color(0xFF10B981),
                         onClick = {
                             showSettingsBottomSheet = false
                             showShareCardModal = true
                         }
                     )
-                    AppleSettingDivider()
-                    AppleSettingNavRow(
+                    HorizontalDivider(color = if (isDark) Color(0xFF1F2430) else Color(0xFFE2E8F0), thickness = 0.5.dp)
+                    OneUiSettingsNavRow(
                         title = "Only Friend List",
                         subtitle = "Manage close friends (${storyVm.onlyFriendsIds.collectAsState().value.size})",
                         icon = Lucide.Star,
+                        iconColor = Color(0xFFF59E0B),
                         onClick = {
                             showSettingsBottomSheet = false
                             showOnlyFriendsManagementSheet = true
                         }
                     )
-                    AppleSettingDivider()
-                    AppleSettingNavRow(
+                    HorizontalDivider(color = if (isDark) Color(0xFF1F2430) else Color(0xFFE2E8F0), thickness = 0.5.dp)
+                    OneUiSettingsNavRow(
                         title = "Saved Collection",
                         subtitle = "View bookmarked creations",
                         icon = Lucide.Bookmark,
+                        iconColor = Color(0xFF8B5CF6),
                         onClick = {
                             showSettingsBottomSheet = false
                             selectedTabIndex = 4
                         }
                     )
-                    AppleSettingDivider()
-                    AppleSettingNavRow(
+                }
+
+                OneUiSettingsGroup(title = "Share & Connect") {
+                    OneUiSettingsNavRow(
                         title = "Share Profile",
                         subtitle = "Share your profile link with others",
                         icon = Lucide.Share2,
+                        iconColor = Color(0xFF06B6D4),
                         onClick = {
                             showSettingsBottomSheet = false
                             val shareIntent = Intent(Intent.ACTION_SEND).apply {
@@ -1248,11 +1346,12 @@ fun UserProfileScreen(
                             context.startActivity(Intent.createChooser(shareIntent, "Share Profile"))
                         }
                     )
-                    AppleSettingDivider()
-                    AppleSettingNavRow(
+                    HorizontalDivider(color = if (isDark) Color(0xFF1F2430) else Color(0xFFE2E8F0), thickness = 0.5.dp)
+                    OneUiSettingsNavRow(
                         title = "Copy Profile Link",
                         subtitle = "oscellion.vercel.app/u/${profile?.username ?: ""}",
                         icon = Lucide.Copy,
+                        iconColor = Color(0xFF64748B),
                         onClick = {
                             showSettingsBottomSheet = false
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -1260,11 +1359,14 @@ fun UserProfileScreen(
                             ToastManager.showToast("Profile link copied")
                         }
                     )
-                    AppleSettingDivider()
-                    AppleSettingNavRow(
+                }
+
+                OneUiSettingsGroup(title = "Session") {
+                    OneUiSettingsNavRow(
                         title = "Sign Out",
                         subtitle = "Log out from this device",
                         icon = Lucide.LogOut,
+                        iconColor = Color(0xFFEF4444),
                         isDestructive = true,
                         showChevron = false,
                         onClick = {
@@ -1277,36 +1379,76 @@ fun UserProfileScreen(
         }
     }
 
-    // Sign Out Confirmation Dialog
+    // Samsung One UI 7.0 Sign Out Confirmation Dialog
     if (showSignOutConfirm) {
-        IosAlertDialog(
-            title = "Sign Out",
-            message = "Are you sure you want to log out from this device?",
-            confirmText = "Sign Out",
-            onConfirm = {
-                showSignOutConfirm = false
-                if (onLogout != null) {
-                    onLogout()
-                } else {
-                    onRequireLogin()
-                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                        try {
-                            com.google.firebase.auth.FirebaseAuth.getInstance().signOut()
-                        } catch (_: Exception) {}
-                    }
+        val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+        AlertDialog(
+            onDismissRequest = { showSignOutConfirm = false },
+            shape = RoundedCornerShape(26.dp),
+            containerColor = if (isDark) Color(0xFF12141A) else Color.White,
+            tonalElevation = 6.dp,
+            icon = {
+                OneUiIconBadge(
+                    icon = Lucide.LogOut,
+                    iconColor = Color(0xFFEF4444)
+                )
+            },
+            title = {
+                Text(
+                    text = "Sign Out",
+                    fontFamily = InterFontFamily,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 20.sp,
+                    color = if (isDark) Color.White else Color(0xFF0F172A)
+                )
+            },
+            text = {
+                Text(
+                    text = "Are you sure you want to log out from this device?",
+                    fontFamily = InterFontFamily,
+                    fontSize = 14.sp,
+                    color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showSignOutConfirm = false
+                        if (onLogout != null) {
+                            onLogout()
+                        } else {
+                            onRequireLogin()
+                            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                try {
+                                    com.google.firebase.auth.FirebaseAuth.getInstance().signOut()
+                                } catch (_: Exception) {}
+                            }
+                        }
+                    },
+                    shape = RoundedCornerShape(999.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444))
+                ) {
+                    Text("Sign Out", fontFamily = InterFontFamily, fontWeight = FontWeight.SemiBold)
                 }
             },
-            dismissText = "Cancel",
-            onDismiss = { showSignOutConfirm = false },
-            isDestructive = true
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { showSignOutConfirm = false },
+                    shape = RoundedCornerShape(999.dp),
+                    border = BorderStroke(1.dp, if (isDark) Color(0xFF2E384D) else Color(0xFFCBD5E1))
+                ) {
+                    Text("Cancel", fontFamily = InterFontFamily, color = if (isDark) Color.White else Color(0xFF0F172A))
+                }
+            }
         )
     }
 
-    // Other User Options Bottom Sheet (3-Dots Action Menu)
+    // Samsung One UI 7.0 Other User Options Bottom Sheet
     if (showOtherUserOptionsSheet) {
+        val isDark = androidx.compose.foundation.isSystemInDarkTheme()
         ModalBottomSheet(
             onDismissRequest = { showOtherUserOptionsSheet = false },
-            containerColor = if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFF141416) else Color(0xFFF2F2F7),
+            containerColor = if (isDark) Color(0xFF0F1117) else Color(0xFFF2F4F7),
             dragHandle = { BottomSheetDefaults.DragHandle() },
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
         ) {
@@ -1324,23 +1466,25 @@ fun UserProfileScreen(
                 ) {
                     Text(
                         "Profile Options",
-                        color = colors.textMain,
+                        color = if (isDark) Color.White else Color(0xFF0F172A),
                         fontSize = 19.sp,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = InterFontFamily
                     )
                     IconButton(
                         onClick = { showOtherUserOptionsSheet = false },
                         modifier = Modifier.size(32.dp)
                     ) {
-                        Icon(Lucide.X, contentDescription = "Close", tint = colors.textMain, modifier = Modifier.size(16.dp))
+                        Icon(Lucide.X, contentDescription = "Close", tint = if (isDark) Color.White else Color(0xFF0F172A), modifier = Modifier.size(18.dp))
                     }
                 }
 
-                AppleSettingsGroup {
-                    AppleSettingNavRow(
+                OneUiSettingsGroup(title = "Actions") {
+                    OneUiSettingsNavRow(
                         title = "Share Profile",
                         subtitle = "Share @${profile?.username ?: ""} with others",
                         icon = Lucide.Share2,
+                        iconColor = Color(0xFF2563EB),
                         onClick = {
                             showOtherUserOptionsSheet = false
                             val shareIntent = Intent(Intent.ACTION_SEND).apply {
@@ -1350,11 +1494,12 @@ fun UserProfileScreen(
                             context.startActivity(Intent.createChooser(shareIntent, "Share Profile"))
                         }
                     )
-                    AppleSettingDivider()
-                    AppleSettingNavRow(
+                    HorizontalDivider(color = if (isDark) Color(0xFF1F2430) else Color(0xFFE2E8F0), thickness = 0.5.dp)
+                    OneUiSettingsNavRow(
                         title = "Copy Profile Link",
                         subtitle = "oscellion.vercel.app/u/${profile?.username ?: ""}",
                         icon = Lucide.Copy,
+                        iconColor = Color(0xFF64748B),
                         onClick = {
                             showOtherUserOptionsSheet = false
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -1362,31 +1507,34 @@ fun UserProfileScreen(
                             ToastManager.showToast("Profile link copied")
                         }
                     )
-                    AppleSettingDivider()
-                    AppleSettingNavRow(
+                    HorizontalDivider(color = if (isDark) Color(0xFF1F2430) else Color(0xFFE2E8F0), thickness = 0.5.dp)
+                    OneUiSettingsNavRow(
                         title = "Profile Pass Card",
                         subtitle = "View scannable digital card",
                         icon = Lucide.QrCode,
+                        iconColor = Color(0xFF10B981),
                         onClick = {
                             showOtherUserOptionsSheet = false
                             showShareCardModal = true
                         }
                     )
-                    AppleSettingDivider()
-                    AppleSettingNavRow(
+                    HorizontalDivider(color = if (isDark) Color(0xFF1F2430) else Color(0xFFE2E8F0), thickness = 0.5.dp)
+                    OneUiSettingsNavRow(
                         title = "Direct Message",
                         subtitle = "Open conversation with @${profile?.username ?: ""}",
                         icon = Lucide.MessageSquare,
+                        iconColor = Color(0xFF06B6D4),
                         onClick = {
                             showOtherUserOptionsSheet = false
                             onNavigateToChat?.invoke(userId)
                         }
                     )
-                    AppleSettingDivider()
-                    AppleSettingNavRow(
+                    HorizontalDivider(color = if (isDark) Color(0xFF1F2430) else Color(0xFFE2E8F0), thickness = 0.5.dp)
+                    OneUiSettingsNavRow(
                         title = if (isMutedStories) "Unmute Stories" else "Mute Stories",
                         subtitle = if (isMutedStories) "Show stories in feed" else "Hide stories from feed",
                         icon = if (isMutedStories) Lucide.Bell else Lucide.BellOff,
+                        iconColor = Color(0xFFF59E0B),
                         onClick = {
                             showOtherUserOptionsSheet = false
                             isMutedStories = !isMutedStories
@@ -1395,22 +1543,24 @@ fun UserProfileScreen(
                     )
                 }
 
-                AppleSettingsGroup {
-                    AppleSettingNavRow(
+                OneUiSettingsGroup(title = "Safety & Reporting") {
+                    OneUiSettingsNavRow(
                         title = "Block User",
                         subtitle = "Prevent @${profile?.username ?: ""} from contacting you",
                         icon = Lucide.Ban,
+                        iconColor = Color(0xFFEF4444),
                         isDestructive = true,
                         onClick = {
                             showOtherUserOptionsSheet = false
                             showBlockConfirmDialog = true
                         }
                     )
-                    AppleSettingDivider()
-                    AppleSettingNavRow(
+                    HorizontalDivider(color = if (isDark) Color(0xFF1F2430) else Color(0xFFE2E8F0), thickness = 0.5.dp)
+                    OneUiSettingsNavRow(
                         title = "Report Account",
                         subtitle = "Report spam, abuse, or safety violation",
                         icon = Lucide.Flag,
+                        iconColor = Color(0xFFEF4444),
                         isDestructive = true,
                         onClick = {
                             showOtherUserOptionsSheet = false
@@ -1422,37 +1572,77 @@ fun UserProfileScreen(
         }
     }
 
-    // Block User Confirmation Dialog
+    // Samsung One UI 7.0 Block Confirmation Dialog
     if (showBlockConfirmDialog) {
-        IosAlertDialog(
-            title = "Block @${profile?.username ?: "User"}?",
-            message = "They will not be able to message you or view your profile and posts. They will not be notified that you blocked them.",
-            confirmText = "Block",
-            onConfirm = {
-                showBlockConfirmDialog = false
-                val uid = currentUserId ?: return@IosAlertDialog
-                scope.launch {
-                    try {
-                        FirebaseFirestore.getInstance().collection("users").document(uid)
-                            .update("blockedUserIds", FieldValue.arrayUnion(userId)).await()
-                        ToastManager.showToast("@${profile?.username ?: ""} has been blocked")
-                        isFollowing = false
-                    } catch (e: Exception) {
-                        ToastManager.showToast("Failed to block user")
-                    }
+        val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+        AlertDialog(
+            onDismissRequest = { showBlockConfirmDialog = false },
+            shape = RoundedCornerShape(26.dp),
+            containerColor = if (isDark) Color(0xFF12141A) else Color.White,
+            tonalElevation = 6.dp,
+            icon = {
+                OneUiIconBadge(
+                    icon = Lucide.Ban,
+                    iconColor = Color(0xFFEF4444)
+                )
+            },
+            title = {
+                Text(
+                    text = "Block @${profile?.username ?: "User"}?",
+                    fontFamily = InterFontFamily,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 20.sp,
+                    color = if (isDark) Color.White else Color(0xFF0F172A)
+                )
+            },
+            text = {
+                Text(
+                    text = "They will not be able to message you or view your profile and posts. They will not be notified that you blocked them.",
+                    fontFamily = InterFontFamily,
+                    fontSize = 14.sp,
+                    color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showBlockConfirmDialog = false
+                        val uid = currentUserId ?: return@Button
+                        scope.launch {
+                            try {
+                                FirebaseFirestore.getInstance().collection("users").document(uid)
+                                    .update("blockedUserIds", FieldValue.arrayUnion(userId)).await()
+                                ToastManager.showToast("@${profile?.username ?: ""} has been blocked")
+                                isFollowing = false
+                            } catch (e: Exception) {
+                                ToastManager.showToast("Failed to block user")
+                            }
+                        }
+                    },
+                    shape = RoundedCornerShape(999.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444))
+                ) {
+                    Text("Block", fontFamily = InterFontFamily, fontWeight = FontWeight.SemiBold)
                 }
             },
-            dismissText = "Cancel",
-            onDismiss = { showBlockConfirmDialog = false },
-            isDestructive = true
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { showBlockConfirmDialog = false },
+                    shape = RoundedCornerShape(999.dp),
+                    border = BorderStroke(1.dp, if (isDark) Color(0xFF2E384D) else Color(0xFFCBD5E1))
+                ) {
+                    Text("Cancel", fontFamily = InterFontFamily, color = if (isDark) Color.White else Color(0xFF0F172A))
+                }
+            }
         )
     }
 
-    // Report User Bottom Sheet
+    // Samsung One UI 7.0 Report User Bottom Sheet
     if (showReportUserSheet) {
+        val isDark = androidx.compose.foundation.isSystemInDarkTheme()
         ModalBottomSheet(
             onDismissRequest = { showReportUserSheet = false },
-            containerColor = if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFF141416) else Color(0xFFF2F2F7),
+            containerColor = if (isDark) Color(0xFF0F1117) else Color(0xFFF2F2F7),
             dragHandle = { BottomSheetDefaults.DragHandle() },
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
         ) {
@@ -1471,21 +1661,23 @@ fun UserProfileScreen(
                     Column {
                         Text(
                             "Report @${profile?.username ?: ""}",
-                            color = colors.textMain,
+                            color = if (isDark) Color.White else Color(0xFF0F172A),
                             fontSize = 19.sp,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.SemiBold,
+                            fontFamily = InterFontFamily
                         )
                         Text(
                             "Why are you reporting this account?",
-                            color = Color(0xFF8E8E93),
-                            fontSize = 12.sp
+                            color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
+                            fontSize = 12.sp,
+                            fontFamily = InterFontFamily
                         )
                     }
                     IconButton(
                         onClick = { showReportUserSheet = false },
                         modifier = Modifier.size(32.dp)
                     ) {
-                        Icon(Lucide.X, contentDescription = "Close", tint = colors.textMain, modifier = Modifier.size(16.dp))
+                        Icon(Lucide.X, contentDescription = "Close", tint = if (isDark) Color.White else Color(0xFF0F172A), modifier = Modifier.size(18.dp))
                     }
                 }
 
@@ -1497,7 +1689,7 @@ fun UserProfileScreen(
                     "Violence or Dangerous Activity"
                 )
 
-                AppleSettingsGroup {
+                OneUiSettingsGroup(title = "Report Reason") {
                     reportReasons.forEachIndexed { idx, reason ->
                         val isSelected = selectedReportReason == reason
                         Row(
@@ -1510,21 +1702,27 @@ fun UserProfileScreen(
                         ) {
                             Text(
                                 text = reason,
-                                color = colors.textMain,
+                                color = if (isDark) Color.White else Color(0xFF0F172A),
                                 fontSize = 14.sp,
-                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                fontFamily = InterFontFamily
                             )
-                            if (isSelected) {
-                                Icon(Lucide.Check, contentDescription = "Selected", tint = Color(0xFF007AFF), modifier = Modifier.size(17.dp))
-                            }
+                            RadioButton(
+                                selected = isSelected,
+                                onClick = { selectedReportReason = reason },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = Color(0xFF2563EB),
+                                    unselectedColor = if (isDark) Color(0xFF475569) else Color(0xFF94A3B8)
+                                )
+                            )
                         }
                         if (idx < reportReasons.lastIndex) {
-                            AppleSettingDivider()
+                            HorizontalDivider(color = if (isDark) Color(0xFF1F2430) else Color(0xFFE2E8F0), thickness = 0.5.dp)
                         }
                     }
                 }
 
-                ChromaPillButton(
+                Button(
                     onClick = {
                         showReportUserSheet = false
                         val uid = currentUserId ?: "anonymous"
@@ -1546,10 +1744,11 @@ fun UserProfileScreen(
                             }
                         }
                     },
-                    variant = ChromaPillVariant.Rose,
-                    modifier = Modifier.fillMaxWidth().height(42.dp)
+                    shape = RoundedCornerShape(999.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444)),
+                    modifier = Modifier.fillMaxWidth().height(48.dp)
                 ) {
-                    Text("Submit Report", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text("Submit Report", color = Color.White, fontFamily = InterFontFamily, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp)
                 }
             }
         }
@@ -1786,19 +1985,8 @@ fun UserProfileScreen(
                                             .clickable {
                                                 val uid = currentUserId ?: return@clickable
                                                 val workImg = work.imageUrl ?: return@clickable
-                                                cropBannerLauncher.launch(
-                                                    com.canhub.cropper.CropImageContractOptions(
-                                                        uri = Uri.parse(workImg),
-                                                        cropImageOptions = com.canhub.cropper.CropImageOptions(
-                                                            guidelines = com.canhub.cropper.CropImageView.Guidelines.ON,
-                                                            fixAspectRatio = true,
-                                                            aspectRatioX = 3,
-                                                            aspectRatioY = 1,
-                                                            outputCompressFormat = android.graphics.Bitmap.CompressFormat.JPEG,
-                                                            outputCompressQuality = 90
-                                                        )
-                                                    )
-                                                )
+                                                 pendingEditorUri = Uri.parse(workImg)
+                                                 pendingEditorTarget = ProfileCropTarget.BANNER
                                             }
                                     ) {
                                         Box(modifier = Modifier.fillMaxWidth().height(60.dp)) {

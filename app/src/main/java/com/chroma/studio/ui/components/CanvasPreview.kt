@@ -343,9 +343,10 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawChromaLayer(
                 rotate(degrees = layer.angle - 90f, pivot = Offset(w * (layer.centerX / 100f), h * (layer.centerY / 100f)))
             }) {
                 // For seamless sweeping, we append the first color to the end if not specified at 1f
+                val firstStop = stops.firstOrNull()
                 val lastStop = stops.lastOrNull()
-                val sweepStops = if (lastStop != null && lastStop.first < 0.99f) {
-                    stops.toTypedArray() + arrayOf(1f to stops.first().second)
+                val sweepStops = if (lastStop != null && firstStop != null && lastStop.first < 0.99f) {
+                    stops.toTypedArray() + arrayOf(1f to firstStop.second)
                 } else stopPairs
                 
                 val brush = Brush.sweepGradient(colorStops = sweepStops, center = Offset(w * (layer.centerX / 100f), h * (layer.centerY / 100f)))

@@ -1,15 +1,14 @@
 package com.chroma.studio.ui.screens
 
-import com.chroma.studio.ui.components.VerifiedBadge
-
 import android.content.Context
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -21,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
@@ -33,24 +33,23 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.chroma.studio.chat.sound.SoundManager
-import com.chroma.studio.ui.components.AppleFlashGraphic
-import com.chroma.studio.ui.components.AppleSwitch
-import com.chroma.studio.ui.components.rememberAppleGraphicAnimationState
-import com.chroma.studio.ui.graphics3d.Apple3DGraphicIcon
-import com.chroma.studio.ui.graphics3d.Apple3DGraphicId
+import com.chroma.studio.chat.ui.components.OneUiGradientStyle
+import com.chroma.studio.ui.components.OneUiIconBadge
+import com.chroma.studio.ui.components.OneUiSettingsGroup
+import com.chroma.studio.ui.components.VerifiedBadge
+import com.chroma.studio.ui.theme.InterFontFamily
 import com.chroma.studio.ui.theme.LocalOscellionColors
-import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.*
 import kotlinx.coroutines.launch
 
 /**
  * Flagship Chroma Studio Post-Onboarding Personalization Wizard.
- * Features:
- * - 3-Step Guided Setup: Aesthetic & Theme -> Privacy & Collaboration -> Curated Inspiration
- * - Dynamic Live Studio Canvas preview that updates in real-time with selected accent tint
- * - 100% Theme-accurate glassmorphic styling (zero white-on-white contrast bugs)
- * - Tactile Apple-grade micro-interactions with smooth spring feedback and audio cues
- * - Curated creators discovery with instant follow toggles and fallback resilience
+ * Fully redesigned following Samsung One UI 7.0 design principles:
+ * - One UI 7.0 Viewing Area with light 34.sp typography
+ * - Smooth 26.dp squircle group containers (OneUiSettingsGroup)
+ * - One UI Pill segmented progress bar and Galaxy accent options
+ * - Native One UI Material 3 switches and tactile feedback
+ * - Interactive Studio Canvas monitor and curated creator network
  */
 @Composable
 fun PostOnboardingScreen(
@@ -59,21 +58,23 @@ fun PostOnboardingScreen(
     onToggleDarkMode: ((Boolean) -> Unit)? = null
 ) {
     val context = LocalContext.current
+    val isSysDark = isSystemInDarkTheme()
     val colors = LocalOscellionColors.current
     val prefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
     val scope = rememberCoroutineScope()
 
-    // ── Wizard Step State (0: Aesthetic, 1: Privacy, 2: Community) ───
+    // Wizard Step State (0: Studio Identity, 1: Privacy & Presence, 2: Creative Network)
     var currentStep by remember { mutableIntStateOf(0) }
+    val totalSteps = 3
 
-    // ── Studio Accent Palettes ───────────────────────────────────────
+    // Studio Accent Palettes (One UI & Galaxy Colors)
     val accentColors = remember {
         listOf(
-            StudioAccentOption(Color(0xFF0A84FF), "Electric Blue", "Cupertino & Precision", "Clean, focused, and crisp"),
-            StudioAccentOption(Color(0xFF6366F1), "Studio Indigo", "Creative Flow", "Modern, deep, and ambient"),
-            StudioAccentOption(Color(0xFF10B981), "Emerald Mint", "Organic Balance", "Fresh, energetic, and vivid"),
-            StudioAccentOption(Color(0xFFF59E0B), "Solar Amber", "Cinematic Warmth", "Luminous, golden, and bold"),
-            StudioAccentOption(Color(0xFFF43F5E), "Neon Rose", "Cinematic Drama", "Punchy, expressive, and radiant")
+            StudioAccentOption(Color(0xFF2563EB), "Galaxy Blue", "Galaxy Signature", "Vivid, focused, and futuristic"),
+            StudioAccentOption(Color(0xFF6366F1), "One UI Indigo", "Fluid Flow", "Modern, ambient, and deep"),
+            StudioAccentOption(Color(0xFF10B981), "Phantom Mint", "Natural Balance", "Crisp, organic, and energetic"),
+            StudioAccentOption(Color(0xFFF59E0B), "Amber Glow", "Cinematic Warmth", "Luminous, golden, and bold"),
+            StudioAccentOption(Color(0xFFF43F5E), "Ruby Rose", "Expressive Hue", "Vibrant, dynamic, and punchy")
         )
     }
     var selectedAccentIndex by remember {
@@ -81,16 +82,16 @@ fun PostOnboardingScreen(
     }
     val activeAccent = accentColors[selectedAccentIndex].color
 
-    // ── Theme State ──────────────────────────────────────────────────
+    // Theme Mode State
     var isDarkMode by remember { mutableStateOf(prefs.getBoolean("is_dark_mode", colors.isDark)) }
 
-    // ── Real-Time & Privacy Preferences ──────────────────────────────
+    // Privacy & Presence States
     var isPresenceEnabled by remember { mutableStateOf(prefs.getBoolean("show_online_status", true)) }
     var isReadReceiptsEnabled by remember { mutableStateOf(prefs.getBoolean("read_receipts_enabled", true)) }
     var isTypingBroadcastEnabled by remember { mutableStateOf(prefs.getBoolean("typing_indicator_enabled", true)) }
     var isNotificationsEnabled by remember { mutableStateOf(prefs.getBoolean("push_notifications_dm", true)) }
 
-    // ── Creative Disciplines / Topics ────────────────────────────────
+    // Topics of Interest
     val creativeTopics = remember {
         listOf(
             "Color Grading",
@@ -100,12 +101,14 @@ fun PostOnboardingScreen(
             "3D & VFX",
             "Typography",
             "Analog 35mm",
-            "Generative Art"
+            "Generative Art",
+            "Portrait Lighting",
+            "Spatial Audio"
         )
     }
     val selectedTopics = remember { mutableStateListOf("Color Grading", "Cinematic Reels", "Motion Graphics") }
 
-    // ── Recommended Creators Discovery ───────────────────────────────
+    // Curated Creators
     val discoverRepo = remember { com.chroma.studio.data.DiscoverRepository() }
     var featuredCreators by remember { mutableStateOf<List<FeaturedCreatorItem>>(emptyList()) }
     val followedCreatorIds = remember { mutableStateListOf<String>() }
@@ -131,7 +134,7 @@ fun PostOnboardingScreen(
         }
     }
 
-    // Helper to persist preferences and finish
+    // Persist and Finish
     fun savePreferencesAndFinish() {
         SoundManager.playReaction()
         val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
@@ -159,33 +162,37 @@ fun PostOnboardingScreen(
         onFinish()
     }
 
+    val screenBg = if (isDarkMode) Color(0xFF000000) else Color(0xFFF2F4F7)
+
     Scaffold(
-        containerColor = colors.bg,
+        containerColor = screenBg,
         topBar = {
-            OnboardingTopBar(
+            OneUiOnboardingTopBar(
                 currentStep = currentStep,
-                totalSteps = 3,
+                totalSteps = totalSteps,
                 activeAccent = activeAccent,
-                onStepSelected = { targetStep ->
-                    if (targetStep != currentStep) {
-                        SoundManager.playReaction()
-                        currentStep = targetStep
-                    }
-                },
+                isDark = isDarkMode,
                 onBack = {
                     if (currentStep > 0) {
                         SoundManager.playReaction()
                         currentStep--
                     }
                 },
-                onSkip = { savePreferencesAndFinish() }
+                onSkip = { savePreferencesAndFinish() },
+                onStepSelected = { target ->
+                    if (target != currentStep) {
+                        SoundManager.playReaction()
+                        currentStep = target
+                    }
+                }
             )
         },
         bottomBar = {
-            OnboardingBottomBar(
+            OneUiOnboardingBottomBar(
                 currentStep = currentStep,
-                totalSteps = 3,
+                totalSteps = totalSteps,
                 activeAccent = activeAccent,
+                isDark = isDarkMode,
                 onBack = {
                     if (currentStep > 0) {
                         SoundManager.playReaction()
@@ -194,7 +201,7 @@ fun PostOnboardingScreen(
                 },
                 onNext = {
                     SoundManager.playReaction()
-                    if (currentStep < 2) {
+                    if (currentStep < totalSteps - 1) {
                         currentStep++
                     } else {
                         savePreferencesAndFinish()
@@ -208,20 +215,20 @@ fun PostOnboardingScreen(
             targetState = currentStep,
             transitionSpec = {
                 if (targetState > initialState) {
-                    (slideInHorizontally { width -> width / 2 } + fadeIn(animationSpec = tween(280)))
-                        .togetherWith(slideOutHorizontally { width -> -width / 2 } + fadeOut(animationSpec = tween(240)))
+                    (slideInHorizontally(tween(320)) { width -> width / 3 } + fadeIn(tween(300)))
+                        .togetherWith(slideOutHorizontally(tween(300)) { width -> -width / 3 } + fadeOut(tween(200)))
                 } else {
-                    (slideInHorizontally { width -> -width / 2 } + fadeIn(animationSpec = tween(280)))
-                        .togetherWith(slideOutHorizontally { width -> width / 2 } + fadeOut(animationSpec = tween(240)))
+                    (slideInHorizontally(tween(320)) { width -> -width / 3 } + fadeIn(tween(300)))
+                        .togetherWith(slideOutHorizontally(tween(300)) { width -> width / 3 } + fadeOut(tween(200)))
                 }
             },
-            label = "onboarding_step_content",
+            label = "one_ui_onboarding_content",
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
         ) { step ->
             when (step) {
-                0 -> AestheticStepContent(
+                0 -> OneUiAestheticStep(
                     accentColors = accentColors,
                     selectedIndex = selectedAccentIndex,
                     activeAccent = activeAccent,
@@ -238,8 +245,9 @@ fun PostOnboardingScreen(
                     }
                 )
 
-                1 -> PrivacyStepContent(
+                1 -> OneUiPrivacyStep(
                     activeAccent = activeAccent,
+                    isDarkMode = isDarkMode,
                     isPresenceEnabled = isPresenceEnabled,
                     onPresenceChange = { isPresenceEnabled = it },
                     isReadReceiptsEnabled = isReadReceiptsEnabled,
@@ -250,8 +258,9 @@ fun PostOnboardingScreen(
                     onNotificationsChange = { isNotificationsEnabled = it }
                 )
 
-                2 -> CommunityStepContent(
+                2 -> OneUiCommunityStep(
                     activeAccent = activeAccent,
+                    isDarkMode = isDarkMode,
                     topics = creativeTopics,
                     selectedTopics = selectedTopics,
                     onToggleTopic = { topic ->
@@ -273,11 +282,11 @@ fun PostOnboardingScreen(
 }
 
 // ============================================================================
-// STEP 1: WORKSPACE AESTHETIC & THEME
+// STEP 1: ONE UI WORKSPACE AESTHETIC & THEME
 // ============================================================================
 
 @Composable
-private fun AestheticStepContent(
+private fun OneUiAestheticStep(
     accentColors: List<StudioAccentOption>,
     selectedIndex: Int,
     activeAccent: Color,
@@ -285,605 +294,190 @@ private fun AestheticStepContent(
     onSelectAccent: (Int) -> Unit,
     onToggleDarkMode: (Boolean) -> Unit
 ) {
-    val colors = LocalOscellionColors.current
     val scrollState = rememberScrollState()
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .padding(horizontal = 22.dp, vertical = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Step Eyebrow & Title
-        OnboardingHeaderBadge(
-            icon = Lucide.Palette,
-            accentColor = activeAccent,
-            text = "STUDIO IDENTITY"
-        )
-
-        Spacer(Modifier.height(14.dp))
-
-        Text(
-            text = "Define Your Aesthetic",
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Bold,
-            color = colors.textMain,
-            textAlign = TextAlign.Center,
-            letterSpacing = (-0.6).sp
-        )
-
-        Spacer(Modifier.height(6.dp))
-
-        Text(
-            text = "Pick your signature studio accent and display theme. Timelines, audio meters, waveforms, and tools adapt in real-time.",
-            fontSize = 14.5.sp,
-            lineHeight = 21.sp,
-            color = colors.textMuted,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 12.dp)
-        )
-
-        Spacer(Modifier.height(24.dp))
-
-        // ── Interactive Live Mini Studio Mockup ──
-        LiveStudioPreviewCard(
+        // One UI 7.0 Viewing Area
+        OneUiStepViewingArea(
+            title = "Studio Identity",
+            subtitle = "Personalize your workspace accent, theme, and 4K studio pipeline.",
             activeAccent = activeAccent,
-            isDarkMode = isDarkMode
+            isDark = isDarkMode
         )
 
-        Spacer(Modifier.height(14.dp))
-
-        // ── Pro Video Engine Hardware Pipeline Card ──
-        ProVideoEngineBannerCard(
-            activeAccent = activeAccent
-        )
-
-        Spacer(Modifier.height(24.dp))
-
-        // ── Accent Color Swatches ──
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "SIGNATURE ACCENT",
-                fontSize = 11.5.sp,
-                fontWeight = FontWeight.Bold,
-                color = colors.textMuted,
-                letterSpacing = 1.sp
-            )
-
-            Text(
-                text = accentColors[selectedIndex].title,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = activeAccent
+        // Live Studio Monitor Card (One UI 26dp Squircle)
+        OneUiSettingsGroup(title = "Live Studio Monitor") {
+            OneUiLiveStudioCanvas(
+                activeAccent = activeAccent,
+                isDarkMode = isDarkMode
             )
         }
 
-        Spacer(Modifier.height(12.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            accentColors.forEachIndexed { index, option ->
-                val isSelected = index == selectedIndex
-                val animatedScale by animateFloatAsState(
-                    targetValue = if (isSelected) 1.08f else 1f,
-                    animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f),
-                    label = "swatch_scale"
-                )
-
-                Surface(
-                    onClick = { onSelectAccent(index) },
-                    shape = RoundedCornerShape(10.dp),
-                    color = colors.glassBg,
-                    border = BorderStroke(
-                        width = if (isSelected) 2.5.dp else 1.dp,
-                        color = if (isSelected) option.color else colors.glassBorder
-                    ),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(68.dp)
-                ) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        // Colored Core
-                        Box(
-                            modifier = Modifier
-                                .size(if (isSelected) 34.dp else 30.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(
-                                    Brush.linearGradient(
-                                        colors = listOf(
-                                            option.color,
-                                            option.color.copy(alpha = 0.8f)
-                                        )
-                                    )
-                                )
-                                .shadow(
-                                    elevation = if (isSelected) 8.dp else 2.dp,
-                                    shape = RoundedCornerShape(10.dp),
-                                    spotColor = option.color
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (isSelected) {
-                                Icon(
-                                    imageVector = Lucide.Check,
-                                    contentDescription = "Selected",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(17.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        Spacer(Modifier.height(24.dp))
-
-        // ── Studio Theme Mode (Dark / Light) ──
-        Text(
-            text = "WORKSPACE APPEARANCE",
-            fontSize = 11.5.sp,
-            fontWeight = FontWeight.Bold,
-            color = colors.textMuted,
-            letterSpacing = 1.sp,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(Modifier.height(12.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // Dark Mode Card
-            ThemeSelectionCard(
-                title = "Obsidian Dark",
-                subtitle = "Deep cinema contrast",
-                icon = Lucide.Moon,
-                isSelected = isDarkMode,
-                accentColor = activeAccent,
-                onClick = { onToggleDarkMode(true) },
-                modifier = Modifier.weight(1f)
-            )
-
-            // Light Mode Card
-            ThemeSelectionCard(
-                title = "Pure Light",
-                subtitle = "Crisp gallery canvas",
-                icon = Lucide.Sun,
-                isSelected = !isDarkMode,
-                accentColor = activeAccent,
-                onClick = { onToggleDarkMode(false) },
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-        Spacer(Modifier.height(28.dp))
-    }
-}
-
-/**
- * Interactive Live Mini Studio Preview Card.
- * Renders an animated miniature Chroma Studio workspace reflecting the chosen accent color,
- * featuring an articulated AppleFlashGraphic director clapperboard and 35mm filmstrip reel styling.
- */
-@Composable
-private fun LiveStudioPreviewCard(
-    activeAccent: Color,
-    isDarkMode: Boolean
-) {
-    val colors = LocalOscellionColors.current
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse_preview")
-    val pulseAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.4f,
-        targetValue = 0.85f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulse_alpha"
-    )
-
-    Surface(
-        shape = RoundedCornerShape(10.dp),
-        color = colors.glassBg,
-        border = BorderStroke(1.dp, colors.glassBorder),
-        shadowElevation = 0.dp,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(210.dp)
-    ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            // Ambient Radial Accent Glow
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.radialGradient(
-                            colors = listOf(
-                                activeAccent.copy(alpha = if (isDarkMode) 0.16f else 0.10f),
-                                Color.Transparent
-                            )
-                        )
-                    )
-            )
-
+        // Signature Accent Options (One UI 26dp Squircle)
+        OneUiSettingsGroup(title = "Signature Accent") {
             Column(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(14.dp)
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Top Mini Header
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(activeAccent)
-                        )
-                        Text(
-                            text = "CHROMA TIMELINE 4K",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = colors.textMain,
-                            letterSpacing = 0.8.sp
-                        )
+                accentColors.forEachIndexed { index, option ->
+                    val isSelected = index == selectedIndex
+                    val itemBg = if (isSelected) {
+                        option.color.copy(alpha = if (isDarkMode) 0.16f else 0.10f)
+                    } else {
+                        if (isDarkMode) Color(0xFF161A22) else Color.White
+                    }
+                    val itemBorder = if (isSelected) {
+                        option.color.copy(alpha = 0.55f)
+                    } else {
+                        if (isDarkMode) Color(0xFF232A38) else Color.Transparent
                     }
 
-                    // Mini Badges
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = activeAccent.copy(alpha = 0.14f),
-                            border = BorderStroke(0.5.dp, activeAccent.copy(alpha = 0.4f))
-                        ) {
-                            Text(
-                                text = "PRORES 422",
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = activeAccent,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = activeAccent,
-                            modifier = Modifier.height(20.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 7.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(3.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Lucide.Share2,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(10.dp)
-                                )
-                                Text(
-                                    text = "Export",
-                                    fontSize = 9.5.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(8.dp))
-
-                // Mini Viewport Preview Screen with Articulated Clapperboard & Reel Notches
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(
-                            Brush.linearGradient(
-                                colors = listOf(
-                                    activeAccent.copy(alpha = 0.20f),
-                                    colors.glassBgHover
-                                )
-                            )
-                        )
-                        .border(1.dp, colors.glassBorder, RoundedCornerShape(12.dp))
-                ) {
-                    // 35mm Filmstrip Reel Perforation Notches (Top & Bottom)
-                    FilmstripNotches(
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .fillMaxWidth()
-                            .padding(horizontal = 10.dp, vertical = 4.dp),
-                        color = colors.glassBorder
-                    )
-                    FilmstripNotches(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .padding(horizontal = 10.dp, vertical = 4.dp),
-                        color = colors.glassBorder
-                    )
-
                     Row(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(itemBg)
+                            .border(1.dp, itemBorder, RoundedCornerShape(18.dp))
+                            .clickable { onSelectAccent(index) }
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        // Articulated Director Clapperboard Graphic
-                        val clapperState = rememberAppleGraphicAnimationState()
-                        AppleFlashGraphic(
-                            modifier = Modifier.size(62.dp),
-                            state = clapperState,
-                            enableClickToAnimate = true
-                        )
-
-                        // Studio Video Monitor Overlay HUD
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(2.dp),
-                            horizontalAlignment = Alignment.End
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.weight(1f)
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(6.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(0xFFFF3B30))
-                                )
-                                Text(
-                                    text = "REC • 4K DCI",
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = colors.textMain,
-                                    letterSpacing = 0.5.sp
-                                )
-                            }
-                            Text(
-                                text = "00:00:18:24 • 24 FPS",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = activeAccent
-                            )
-                            Text(
-                                text = "SCENE 01 • TAKE 04",
-                                fontSize = 9.sp,
-                                color = colors.textMuted
-                            )
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(8.dp))
-
-                // Mini Multi-Track Timeline with Playhead
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(34.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(colors.bg)
-                        .padding(horizontal = 6.dp),
-                    contentAlignment = Alignment.CenterStart
-                ) {
-                    // Video Track Block
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth(0.85f)
-                            .height(14.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(activeAccent.copy(alpha = 0.28f))
-                            .border(1.dp, activeAccent.copy(alpha = 0.7f), RoundedCornerShape(4.dp))
-                            .align(Alignment.TopStart),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .width(3.dp)
-                                .background(activeAccent)
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            text = "CLIP_A001.MOV",
-                            fontSize = 8.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = activeAccent
-                        )
-                    }
-
-                    // Audio Waveform Track
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth(0.92f)
-                            .height(10.dp)
-                            .align(Alignment.BottomStart),
-                        horizontalArrangement = Arrangement.spacedBy(2.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        val heights = listOf(0.4f, 0.9f, 0.6f, 0.3f, 0.7f, 1f, 0.5f, 0.8f, 0.4f, 0.9f, 0.7f, 0.5f, 0.8f, 1f, 0.6f)
-                        heights.forEach { h ->
                             Box(
                                 modifier = Modifier
-                                    .width(2.5.dp)
-                                    .fillMaxHeight(h)
-                                    .clip(RoundedCornerShape(1.dp))
-                                    .background(activeAccent.copy(alpha = pulseAlpha))
-                            )
-                        }
-                    }
+                                    .size(36.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(
+                                        Brush.linearGradient(
+                                            listOf(option.color, option.color.copy(alpha = 0.8f))
+                                        )
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = Lucide.Check,
+                                        contentDescription = "Selected",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
 
-                    // Glowing Animated Playhead Line
-                    Box(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .width(2.dp)
-                            .offset(x = 90.dp)
-                            .background(activeAccent)
-                    )
+                            Column {
+                                Text(
+                                    text = option.title,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (isDarkMode) Color.White else Color(0xFF0F172A),
+                                    fontFamily = InterFontFamily
+                                )
+                                Text(
+                                    text = "${option.subtitle} • ${option.mood}",
+                                    fontSize = 12.sp,
+                                    color = if (isDarkMode) Color(0xFF94A3B8) else Color(0xFF64748B),
+                                    fontFamily = InterFontFamily,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
+                        RadioButton(
+                            selected = isSelected,
+                            onClick = { onSelectAccent(index) },
+                            colors = RadioButtonDefaults.colors(
+                                selectedColor = option.color,
+                                unselectedColor = if (isDarkMode) Color(0xFF475569) else Color(0xFF94A3B8)
+                            )
+                        )
+                    }
                 }
             }
         }
-    }
-}
 
-/**
- * 35mm Filmstrip Reel Perforation Notches.
- */
-@Composable
-private fun FilmstripNotches(
-    modifier: Modifier = Modifier,
-    color: Color
-) {
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        repeat(12) {
-            Box(
+        // Workspace Appearance (Dark / Light)
+        OneUiSettingsGroup(title = "Appearance") {
+            Row(
                 modifier = Modifier
-                    .size(width = 6.dp, height = 2.5.dp)
-                    .clip(RoundedCornerShape(1.dp))
-                    .background(color.copy(alpha = 0.45f))
-            )
-        }
-    }
-}
-
-/**
- * Pro Video Engine Hardware Pipeline Card showcasing ChromaStudio's video prowess.
- */
-@Composable
-private fun ProVideoEngineBannerCard(
-    activeAccent: Color,
-    modifier: Modifier = Modifier
-) {
-    val colors = LocalOscellionColors.current
-
-    Surface(
-        shape = RoundedCornerShape(10.dp),
-        color = colors.glassBg,
-        border = BorderStroke(1.dp, colors.glassBorder),
-        modifier = modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(46.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(activeAccent.copy(alpha = 0.12f))
-                    .border(1.dp, activeAccent.copy(alpha = 0.35f), RoundedCornerShape(12.dp)),
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Apple3DGraphicIcon(
-                    id = Apple3DGraphicId.FLASH_VIDEO,
-                    modifier = Modifier.size(36.dp)
+                // Dark Mode Card
+                OneUiThemeOptionCard(
+                    title = "Dark Mode",
+                    subtitle = "AMOLED Cinema",
+                    icon = Lucide.Moon,
+                    isSelected = isDarkMode,
+                    activeAccent = activeAccent,
+                    isDark = isDarkMode,
+                    onClick = { onToggleDarkMode(true) },
+                    modifier = Modifier.weight(1f)
                 )
-            }
 
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "CHROMA HARDWARE VIDEO PIPELINE",
-                    fontSize = 10.5.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = activeAccent,
-                    letterSpacing = 0.8.sp
+                // Light Mode Card
+                OneUiThemeOptionCard(
+                    title = "Light Mode",
+                    subtitle = "Crisp Canvas",
+                    icon = Lucide.Sun,
+                    isSelected = !isDarkMode,
+                    activeAccent = activeAccent,
+                    isDark = isDarkMode,
+                    onClick = { onToggleDarkMode(false) },
+                    modifier = Modifier.weight(1f)
                 )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = "Dual-Exo 4K Timeline & ProRes 422",
-                    fontSize = 14.5.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = colors.textMain
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = "25 cinematic video transitions rendered with 10-bit color accuracy and live audio tempo sync.",
-                    fontSize = 12.sp,
-                    lineHeight = 16.sp,
-                    color = colors.textMuted
-                )
-                Spacer(Modifier.height(6.dp))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    listOf("4K 60FPS", "10-bit HDR", "ProRes 422 HQ").forEach { badge ->
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = colors.bg,
-                            border = BorderStroke(0.5.dp, colors.glassBorder)
-                        ) {
-                            Text(
-                                text = badge,
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = colors.textMuted,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-                    }
-                }
             }
         }
+
+        Spacer(Modifier.height(24.dp))
     }
 }
 
+/**
+ * Samsung One UI 7.0 Theme Option Selection Card
+ */
 @Composable
-private fun ThemeSelectionCard(
+private fun OneUiThemeOptionCard(
     title: String,
     subtitle: String,
     icon: ImageVector,
     isSelected: Boolean,
-    accentColor: Color,
+    activeAccent: Color,
+    isDark: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val colors = LocalOscellionColors.current
+    val cardBg = if (isSelected) {
+        activeAccent.copy(alpha = if (isDark) 0.16f else 0.10f)
+    } else {
+        if (isDark) Color(0xFF161A22) else Color(0xFFF8FAFC)
+    }
+    val cardBorder = if (isSelected) {
+        activeAccent.copy(alpha = 0.55f)
+    } else {
+        if (isDark) Color(0xFF232A38) else Color(0xFFE2E8F0)
+    }
 
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(10.dp),
-        color = colors.glassBg,
-        border = BorderStroke(
-            width = if (isSelected) 2.dp else 1.dp,
-            color = if (isSelected) accentColor else colors.glassBorder
-        ),
-        modifier = modifier.height(84.dp)
+        shape = RoundedCornerShape(18.dp),
+        color = cardBg,
+        border = BorderStroke(1.dp, cardBorder),
+        modifier = modifier.height(86.dp)
     ) {
         Row(
             modifier = Modifier
@@ -892,50 +486,207 @@ private fun ThemeSelectionCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(RoundedCornerShape(11.dp))
-                    .background(if (isSelected) accentColor.copy(alpha = 0.16f) else colors.bg)
-                    .border(
-                        1.dp,
-                        if (isSelected) accentColor.copy(alpha = 0.4f) else colors.glassBorder,
-                        RoundedCornerShape(11.dp)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = title,
-                    tint = if (isSelected) accentColor else colors.textMuted,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
+            OneUiIconBadge(
+                icon = icon,
+                iconColor = if (isSelected) activeAccent else (if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B))
+            )
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
                     fontSize = 14.5.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = colors.textMain
+                    color = if (isDark) Color.White else Color(0xFF0F172A),
+                    fontFamily = InterFontFamily
                 )
                 Text(
                     text = subtitle,
-                    fontSize = 12.sp,
-                    color = colors.textMuted
+                    fontSize = 11.5.sp,
+                    color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
+                    fontFamily = InterFontFamily
                 )
             }
         }
     }
 }
 
+/**
+ * Interactive Live Studio Canvas Monitor styled for Samsung One UI 7.0.
+ */
+@Composable
+private fun OneUiLiveStudioCanvas(
+    activeAccent: Color,
+    isDarkMode: Boolean
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "audio_anim")
+    val wave1 by infiniteTransition.animateFloat(
+        initialValue = 0.25f,
+        targetValue = 0.95f,
+        animationSpec = infiniteRepeatable(tween(750, easing = LinearEasing), RepeatMode.Reverse),
+        label = "w1"
+    )
+    val wave2 by infiniteTransition.animateFloat(
+        initialValue = 0.65f,
+        targetValue = 0.30f,
+        animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Reverse),
+        label = "w2"
+    )
+    val wave3 by infiniteTransition.animateFloat(
+        initialValue = 0.15f,
+        targetValue = 0.85f,
+        animationSpec = infiniteRepeatable(tween(650, easing = LinearEasing), RepeatMode.Reverse),
+        label = "w3"
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        // Monitor Viewport
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(130.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(if (isDarkMode) Color(0xFF0A0D14) else Color(0xFF0F172A))
+                .border(1.dp, activeAccent.copy(alpha = 0.25f), RoundedCornerShape(18.dp))
+                .padding(12.dp)
+        ) {
+            // Top HUD
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFFEF4444))
+                    )
+                    Text(
+                        text = "REC • 4K DCI 60FPS",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        letterSpacing = 0.5.sp,
+                        fontFamily = InterFontFamily
+                    )
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(999.dp),
+                    color = activeAccent.copy(alpha = 0.22f),
+                    border = BorderStroke(0.5.dp, activeAccent.copy(alpha = 0.55f))
+                ) {
+                    Text(
+                        text = "PRORES 422 HQ",
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = activeAccent,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                        fontFamily = InterFontFamily
+                    )
+                }
+            }
+
+            // Center Waveform & Timecode
+            Column(
+                modifier = Modifier.align(Alignment.Center),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = "00:00:18:24",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Light,
+                    color = Color.White,
+                    letterSpacing = 1.sp,
+                    fontFamily = InterFontFamily
+                )
+
+                // Animated Audio Bars
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val bars = listOf(wave1, wave2, wave3, wave1 * 0.7f, wave2 * 1.1f, wave3 * 0.8f, wave1 * 0.9f)
+                    bars.forEach { hRatio ->
+                        Box(
+                            modifier = Modifier
+                                .width(3.dp)
+                                .height((hRatio.coerceIn(0.15f, 1f) * 22).dp)
+                                .clip(RoundedCornerShape(999.dp))
+                                .background(activeAccent)
+                        )
+                    }
+                }
+            }
+
+            // Bottom Badges
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomStart),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Timeline Master",
+                    fontSize = 10.sp,
+                    color = Color(0xFF94A3B8),
+                    fontFamily = InterFontFamily
+                )
+                Text(
+                    text = "24-bit / 48kHz Stereo",
+                    fontSize = 10.sp,
+                    color = activeAccent,
+                    fontFamily = InterFontFamily
+                )
+            }
+        }
+
+        // Hardware Specs Strip
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            listOf("10-bit HDR", "Dual-Exo 4K", "Audio Tempo Sync").forEach { badge ->
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (isDarkMode) Color(0xFF161A22) else Color(0xFFF1F5F9),
+                    border = BorderStroke(1.dp, if (isDarkMode) Color(0xFF232A38) else Color(0xFFE2E8F0)),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = badge,
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (isDarkMode) Color(0xFFCBD5E1) else Color(0xFF475569),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(vertical = 7.dp),
+                        fontFamily = InterFontFamily
+                    )
+                }
+            }
+        }
+    }
+}
+
 // ============================================================================
-// STEP 2: REAL-TIME PRESENCE & PRIVACY
+// STEP 2: ONE UI COLLABORATION & PRIVACY
 // ============================================================================
 
 @Composable
-private fun PrivacyStepContent(
+private fun OneUiPrivacyStep(
     activeAccent: Color,
+    isDarkMode: Boolean,
     isPresenceEnabled: Boolean,
     onPresenceChange: (Boolean) -> Unit,
     isReadReceiptsEnabled: Boolean,
@@ -945,111 +696,86 @@ private fun PrivacyStepContent(
     isNotificationsEnabled: Boolean,
     onNotificationsChange: (Boolean) -> Unit
 ) {
-    val colors = LocalOscellionColors.current
     val scrollState = rememberScrollState()
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .padding(horizontal = 22.dp, vertical = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Step Eyebrow & Title
-        OnboardingHeaderBadge(
-            icon = Lucide.Shield,
-            accentColor = activeAccent,
-            text = "COLLABORATION & PRIVACY"
+        // One UI Viewing Area
+        OneUiStepViewingArea(
+            title = "Collaboration",
+            subtitle = "Manage real-time presence, chat receipts, and hardware security.",
+            activeAccent = activeAccent,
+            isDark = isDarkMode
         )
 
-        Spacer(Modifier.height(14.dp))
+        // Real-Time Switches Group (One UI 26dp Squircle)
+        OneUiSettingsGroup(title = "Real-Time Collaboration") {
+            OneUiSwitchRow(
+                title = "Live Creative Presence",
+                subtitle = "Show collaborators when you are active and editing in Studio",
+                icon = Lucide.Globe,
+                activeAccent = activeAccent,
+                isDark = isDarkMode,
+                checked = isPresenceEnabled,
+                onCheckedChange = {
+                    SoundManager.playReaction()
+                    onPresenceChange(it)
+                }
+            )
 
-        Text(
-            text = "Presence & Security",
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Bold,
-            color = colors.textMain,
-            textAlign = TextAlign.Center,
-            letterSpacing = (-0.6).sp
-        )
+            HorizontalDivider(color = if (isDarkMode) Color(0xFF1F2430) else Color(0xFFE2E8F0), thickness = 0.5.dp)
 
-        Spacer(Modifier.height(6.dp))
+            OneUiSwitchRow(
+                title = "Read & Delivery Receipts",
+                subtitle = "Display sent, delivered, and seen marks in direct chats",
+                icon = Lucide.CheckCheck,
+                activeAccent = activeAccent,
+                isDark = isDarkMode,
+                checked = isReadReceiptsEnabled,
+                onCheckedChange = {
+                    SoundManager.playReaction()
+                    onReadReceiptsChange(it)
+                }
+            )
 
-        Text(
-            text = "Fine-tune how you collaborate with peers. Activity updates synchronize instantly across low-latency Firebase channels.",
-            fontSize = 14.5.sp,
-            lineHeight = 21.sp,
-            color = colors.textMuted,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 12.dp)
-        )
+            HorizontalDivider(color = if (isDarkMode) Color(0xFF1F2430) else Color(0xFFE2E8F0), thickness = 0.5.dp)
 
-        Spacer(Modifier.height(26.dp))
+            OneUiSwitchRow(
+                title = "Voice & Typing Broadcast",
+                subtitle = "Broadcast real-time recording waveform and typing state",
+                icon = Lucide.Mic,
+                activeAccent = activeAccent,
+                isDark = isDarkMode,
+                checked = isTypingBroadcastEnabled,
+                onCheckedChange = {
+                    SoundManager.playReaction()
+                    onTypingChange(it)
+                }
+            )
 
-        // ── 4 Dedicated Clean Switch Cards (Zero White-on-White Bugs) ──
-        StudioToggleCard(
-            title = "Live Creative Presence",
-            subtitle = "Show collaborators when you are active and editing in Studio",
-            graphicId = Apple3DGraphicId.NETWORK_GLOBE,
-            accentColor = activeAccent,
-            checked = isPresenceEnabled,
-            onCheckedChange = {
-                SoundManager.playReaction()
-                onPresenceChange(it)
-            }
-        )
+            HorizontalDivider(color = if (isDarkMode) Color(0xFF1F2430) else Color(0xFFE2E8F0), thickness = 0.5.dp)
 
-        Spacer(Modifier.height(12.dp))
+            OneUiSwitchRow(
+                title = "Push Notifications",
+                subtitle = "Instant alerts for mentions, direct messages, and project drops",
+                icon = Lucide.Bell,
+                activeAccent = activeAccent,
+                isDark = isDarkMode,
+                checked = isNotificationsEnabled,
+                onCheckedChange = {
+                    SoundManager.playReaction()
+                    onNotificationsChange(it)
+                }
+            )
+        }
 
-        StudioToggleCard(
-            title = "Read & Delivery Receipts",
-            subtitle = "Display sent, delivered, and seen marks in direct chats",
-            graphicId = Apple3DGraphicId.CHAT_BUBBLE,
-            accentColor = activeAccent,
-            checked = isReadReceiptsEnabled,
-            onCheckedChange = {
-                SoundManager.playReaction()
-                onReadReceiptsChange(it)
-            }
-        )
-
-        Spacer(Modifier.height(12.dp))
-
-        StudioToggleCard(
-            title = "Voice & Typing Broadcast",
-            subtitle = "Broadcast real-time recording waveform and typing state",
-            graphicId = Apple3DGraphicId.STUDIO_MIC,
-            accentColor = activeAccent,
-            checked = isTypingBroadcastEnabled,
-            onCheckedChange = {
-                SoundManager.playReaction()
-                onTypingChange(it)
-            }
-        )
-
-        Spacer(Modifier.height(12.dp))
-
-        StudioToggleCard(
-            title = "Smart Push Notifications",
-            subtitle = "Alerts for mentions, direct messages, and creator project drops",
-            graphicId = Apple3DGraphicId.SPATIAL_BELL,
-            accentColor = activeAccent,
-            checked = isNotificationsEnabled,
-            onCheckedChange = {
-                SoundManager.playReaction()
-                onNotificationsChange(it)
-            }
-        )
-
-        Spacer(Modifier.height(16.dp))
-
-        // ── Hardware Encryption Chip ──
-        Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = colors.glassBg,
-            border = BorderStroke(1.dp, colors.success.copy(alpha = 0.35f)),
-            modifier = Modifier.fillMaxWidth()
-        ) {
+        // Hardware Security Group
+        OneUiSettingsGroup(title = "Hardware Security") {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1057,19 +783,10 @@ private fun PrivacyStepContent(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(42.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(colors.success.copy(alpha = 0.14f))
-                        .border(1.dp, colors.success.copy(alpha = 0.35f), RoundedCornerShape(12.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Apple3DGraphicIcon(
-                        id = Apple3DGraphicId.PROTECTION_SHIELD,
-                        modifier = Modifier.size(34.dp)
-                    )
-                }
+                OneUiIconBadge(
+                    icon = Lucide.ShieldCheck,
+                    iconColor = Color(0xFF10B981)
+                )
 
                 Column(modifier = Modifier.weight(1f)) {
                     Row(
@@ -1078,44 +795,36 @@ private fun PrivacyStepContent(
                     ) {
                         Text(
                             text = "Android Keystore Encryption",
-                            fontSize = 14.5.sp,
+                            fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = colors.textMain
+                            color = if (isDarkMode) Color.White else Color(0xFF0F172A),
+                            fontFamily = InterFontFamily
                         )
                         Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = colors.success.copy(alpha = 0.15f),
-                            border = BorderStroke(0.5.dp, colors.success.copy(alpha = 0.4f))
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFF10B981).copy(alpha = 0.15f)
                         ) {
                             Text(
                                 text = "ENCLAVE",
-                                fontSize = 8.5.sp,
+                                fontSize = 9.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = colors.success,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                color = Color(0xFF10B981),
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                                fontFamily = InterFontFamily
                             )
                         }
                     }
-                    Spacer(Modifier.height(2.dp))
                     Text(
-                        text = "Drafts, API tokens, and local cache are secured with hardware-isolated cryptography.",
+                        text = "Local drafts, API keys, and cache are hardware-isolated with Knox-grade protection.",
                         fontSize = 12.sp,
-                        lineHeight = 16.sp,
-                        color = colors.textMuted
+                        color = if (isDarkMode) Color(0xFF94A3B8) else Color(0xFF64748B),
+                        fontFamily = InterFontFamily
                     )
                 }
             }
-        }
 
-        Spacer(Modifier.height(12.dp))
+            HorizontalDivider(color = if (isDarkMode) Color(0xFF1F2430) else Color(0xFFE2E8F0), thickness = 0.5.dp)
 
-        // ── Sandboxed Video Scratch Storage Card ──
-        Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = colors.glassBg,
-            border = BorderStroke(1.dp, colors.glassBorder),
-            modifier = Modifier.fillMaxWidth()
-        ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1123,142 +832,105 @@ private fun PrivacyStepContent(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(42.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(activeAccent.copy(alpha = 0.12f))
-                        .border(1.dp, activeAccent.copy(alpha = 0.35f), RoundedCornerShape(12.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Apple3DGraphicIcon(
-                        id = Apple3DGraphicId.NVME_DRIVE,
-                        modifier = Modifier.size(32.dp)
-                    )
-                }
+                OneUiIconBadge(
+                    icon = Lucide.HardDrive,
+                    iconColor = activeAccent
+                )
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Private Video Scratch Storage",
-                        fontSize = 14.5.sp,
+                        text = "Sandboxed Studio Scratchpad",
+                        fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = colors.textMain
+                        color = if (isDarkMode) Color.White else Color(0xFF0F172A),
+                        fontFamily = InterFontFamily
                     )
-                    Spacer(Modifier.height(2.dp))
                     Text(
-                        text = "Timeline video frames, audio waveforms, and temporary export buffers remain strictly on-device in sandboxed cache.",
+                        text = "Timeline video cache, frames, and audio waveforms remain strictly on-device.",
                         fontSize = 12.sp,
-                        lineHeight = 16.sp,
-                        color = colors.textMuted
+                        color = if (isDarkMode) Color(0xFF94A3B8) else Color(0xFF64748B),
+                        fontFamily = InterFontFamily
                     )
                 }
             }
         }
 
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(24.dp))
     }
 }
 
+/**
+ * Samsung One UI Settings Switch Row
+ */
 @Composable
-private fun StudioToggleCard(
+private fun OneUiSwitchRow(
     title: String,
     subtitle: String,
-    graphicId: Apple3DGraphicId? = null,
-    icon: ImageVector? = null,
-    accentColor: Color,
+    icon: ImageVector,
+    activeAccent: Color,
+    isDark: Boolean,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {
-    val colors = LocalOscellionColors.current
-
-    Surface(
-        onClick = { onCheckedChange(!checked) },
-        shape = RoundedCornerShape(10.dp),
-        color = colors.glassBg,
-        border = BorderStroke(1.dp, colors.glassBorder),
-        modifier = Modifier.fillMaxWidth()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onCheckedChange(!checked) }
+            .padding(horizontal = 16.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
+                .weight(1f)
+                .padding(end = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(end = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(42.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(
-                            Brush.linearGradient(
-                                colors = listOf(
-                                    accentColor.copy(alpha = 0.16f),
-                                    accentColor.copy(alpha = 0.06f)
-                                )
-                            )
-                        )
-                        .border(
-                            1.dp,
-                            accentColor.copy(alpha = 0.3f),
-                            RoundedCornerShape(12.dp)
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (graphicId != null) {
-                        Apple3DGraphicIcon(
-                            id = graphicId,
-                            modifier = Modifier.size(32.dp)
-                        )
-                    } else if (icon != null) {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = title,
-                            tint = accentColor,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = title,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = colors.textMain
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = subtitle,
-                        fontSize = 12.5.sp,
-                        lineHeight = 16.sp,
-                        color = colors.textMuted
-                    )
-                }
-            }
-
-            AppleSwitch(
-                checked = checked,
-                onCheckedChange = onCheckedChange,
-                activeTrackColor = accentColor
+            OneUiIconBadge(
+                icon = icon,
+                iconColor = activeAccent
             )
+
+            Column {
+                Text(
+                    text = title,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (isDark) Color.White else Color(0xFF0F172A),
+                    fontFamily = InterFontFamily
+                )
+                Text(
+                    text = subtitle,
+                    fontSize = 12.sp,
+                    color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
+                    fontFamily = InterFontFamily
+                )
+            }
         }
+
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.White,
+                checkedTrackColor = activeAccent,
+                uncheckedThumbColor = Color.White,
+                uncheckedTrackColor = if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1),
+                uncheckedBorderColor = Color.Transparent
+            )
+        )
     }
 }
 
 // ============================================================================
-// STEP 3: DISCOVER & CREATIVE NETWORK
+// STEP 3: ONE UI CURATED COMMUNITY & NETWORK
 // ============================================================================
 
 @Composable
-private fun CommunityStepContent(
+private fun OneUiCommunityStep(
     activeAccent: Color,
+    isDarkMode: Boolean,
     topics: List<String>,
     selectedTopics: List<String>,
     onToggleTopic: (String) -> Unit,
@@ -1266,158 +938,109 @@ private fun CommunityStepContent(
     followedIds: List<String>,
     onToggleFollow: (String) -> Unit
 ) {
-    val colors = LocalOscellionColors.current
     val scrollState = rememberScrollState()
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .padding(horizontal = 22.dp, vertical = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Step Eyebrow & Title
-        OnboardingHeaderBadge(
-            icon = Lucide.Sparkles,
-            accentColor = activeAccent,
-            text = "CURATED INSPIRATION"
+        // One UI Viewing Area
+        OneUiStepViewingArea(
+            title = "Creative Network",
+            subtitle = "Pick your artistic disciplines and follow featured visual creators.",
+            activeAccent = activeAccent,
+            isDark = isDarkMode
         )
 
-        Spacer(Modifier.height(14.dp))
+        // Creative Interests (One UI 26dp Squircle)
+        OneUiSettingsGroup(title = "Creative Topics") {
+            @OptIn(ExperimentalLayoutApi::class)
+            FlowRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                topics.forEach { topic ->
+                    val isSelected = topic in selectedTopics
+                    val chipBg = if (isSelected) {
+                        activeAccent.copy(alpha = if (isDarkMode) 0.18f else 0.12f)
+                    } else {
+                        if (isDarkMode) Color(0xFF161A22) else Color(0xFFF1F5F9)
+                    }
+                    val chipBorder = if (isSelected) {
+                        activeAccent
+                    } else {
+                        if (isDarkMode) Color(0xFF232A38) else Color(0xFFE2E8F0)
+                    }
 
-        Text(
-            text = "Curate Your Network",
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Bold,
-            color = colors.textMain,
-            textAlign = TextAlign.Center,
-            letterSpacing = (-0.6).sp
-        )
-
-        Spacer(Modifier.height(6.dp))
-
-        Text(
-            text = "Select your creative interests and connect with visual artists across the Chroma community.",
-            fontSize = 14.5.sp,
-            lineHeight = 21.sp,
-            color = colors.textMuted,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 12.dp)
-        )
-
-        Spacer(Modifier.height(20.dp))
-
-        // ── Featured Director Clapperboard & Reel Spotlight ──
-        FeaturedDirectorShowcaseBanner(activeAccent = activeAccent)
-
-        Spacer(Modifier.height(22.dp))
-
-        // ── Creative Disciplines Topic Tags ──
-        Text(
-            text = "CREATIVE INTERESTS",
-            fontSize = 11.5.sp,
-            fontWeight = FontWeight.Bold,
-            color = colors.textMuted,
-            letterSpacing = 1.sp,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(Modifier.height(12.dp))
-
-        @OptIn(ExperimentalLayoutApi::class)
-        FlowRow(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            topics.forEach { topic ->
-                val isSelected = topic in selectedTopics
-                Surface(
-                    onClick = { onToggleTopic(topic) },
-                    shape = RoundedCornerShape(10.dp),
-                    color = if (isSelected) activeAccent.copy(alpha = 0.12f) else colors.glassBg,
-                    border = BorderStroke(
-                        width = 0.5.dp,
-                        color = if (isSelected) activeAccent.copy(alpha = 0.70f) else colors.glassBorder
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 13.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    Surface(
+                        onClick = { onToggleTopic(topic) },
+                        shape = RoundedCornerShape(14.dp),
+                        color = chipBg,
+                        border = BorderStroke(1.dp, chipBorder)
                     ) {
-                        Text(
-                            text = topic,
-                            fontSize = 13.sp,
-                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-                            color = if (isSelected) activeAccent else colors.textMain
-                        )
-                        if (isSelected) {
-                            Icon(
-                                imageVector = Lucide.Check,
-                                contentDescription = null,
-                                tint = activeAccent,
-                                modifier = Modifier.size(12.dp)
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = topic,
+                                fontSize = 13.sp,
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                color = if (isSelected) activeAccent else (if (isDarkMode) Color.White else Color(0xFF0F172A)),
+                                fontFamily = InterFontFamily
                             )
+                            if (isSelected) {
+                                Icon(
+                                    imageVector = Lucide.Check,
+                                    contentDescription = null,
+                                    tint = activeAccent,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                            }
                         }
                     }
                 }
             }
         }
 
-        Spacer(Modifier.height(24.dp))
+        // Featured Artists (One UI 26dp Squircle)
+        OneUiSettingsGroup(title = "Featured Artists") {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                val avatarGradients = remember {
+                    listOf(
+                        listOf(Color(0xFF2563EB), Color(0xFF6366F1)),
+                        listOf(Color(0xFF6366F1), Color(0xFFA855F7)),
+                        listOf(Color(0xFF06B6D4), Color(0xFF10B981)),
+                        listOf(Color(0xFFF59E0B), Color(0xFFEF4444))
+                    )
+                }
 
-        // ── Suggested Creators List ──
-        Text(
-            text = "FEATURED CREATORS",
-            fontSize = 11.5.sp,
-            fontWeight = FontWeight.Bold,
-            color = colors.textMuted,
-            letterSpacing = 1.1.sp,
-            modifier = Modifier.fillMaxWidth()
-        )
+                creators.forEachIndexed { index, creator ->
+                    val isFollowed = creator.id in followedIds
 
-        Spacer(Modifier.height(12.dp))
-
-        val avatarGradients = remember {
-            listOf(
-                listOf(Color(0xFF007AFF), Color(0xFF5856D6)),
-                listOf(Color(0xFF5856D6), Color(0xFFAF52DE)),
-                listOf(Color(0xFF30B0C7), Color(0xFF34C759)),
-                listOf(Color(0xFFFF9500), Color(0xFFFF2D55))
-            )
-        }
-
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            creators.forEachIndexed { index, creator ->
-                val isFollowed = creator.id in followedIds
-
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = colors.glassBg,
-                    border = BorderStroke(0.5.dp, colors.glassBorder),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        // Apple-grade Squircle Avatar
+                        // Squircle Avatar (One UI 14dp)
                         if (creator.avatarUrl.isNotBlank()) {
                             AsyncImage(
                                 model = creator.avatarUrl,
                                 contentDescription = creator.name,
                                 modifier = Modifier
                                     .size(44.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .border(0.5.dp, colors.glassBorder, RoundedCornerShape(12.dp))
-                                    .background(colors.bg),
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .border(1.dp, if (isDarkMode) Color(0xFF232A38) else Color(0xFFE2E8F0), RoundedCornerShape(14.dp)),
                                 contentScale = androidx.compose.ui.layout.ContentScale.Crop
                             )
                         } else {
@@ -1425,102 +1048,60 @@ private fun CommunityStepContent(
                             Box(
                                 modifier = Modifier
                                     .size(44.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(Brush.linearGradient(grad))
-                                    .border(0.5.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(12.dp)),
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(Brush.linearGradient(grad)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
                                     text = creator.name.take(1).uppercase(),
                                     fontSize = 17.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color.White
+                                    color = Color.White,
+                                    fontFamily = InterFontFamily
                                 )
                             }
                         }
 
-                        // Creator Name, Handle & Tagline
+                        // Creator Info
                         Column(modifier = Modifier.weight(1f)) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 Text(
                                     text = creator.name,
                                     fontSize = 14.5.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = colors.textMain,
+                                    color = if (isDarkMode) Color.White else Color(0xFF0F172A),
                                     maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    overflow = TextOverflow.Ellipsis,
+                                    fontFamily = InterFontFamily
                                 )
                                 VerifiedBadge(size = 13.dp)
                             }
-
                             Text(
                                 text = "${creator.handle} • ${creator.tagline}",
                                 fontSize = 12.sp,
-                                color = colors.textMuted,
+                                color = if (isDarkMode) Color(0xFF94A3B8) else Color(0xFF64748B),
                                 maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                overflow = TextOverflow.Ellipsis,
+                                fontFamily = InterFontFamily
                             )
-
-                            Spacer(Modifier.height(4.dp))
-
-                            // Mini Video Reel Chip
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = activeAccent.copy(alpha = 0.08f),
-                                border = BorderStroke(0.5.dp, activeAccent.copy(alpha = 0.25f))
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Lucide.Film,
-                                        contentDescription = null,
-                                        tint = activeAccent,
-                                        modifier = Modifier.size(10.dp)
-                                    )
-                                    Text(
-                                        text = "${creator.featuredReelTitle} • ${creator.reelDuration}",
-                                        fontSize = 10.5.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = activeAccent,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                            }
                         }
 
-                        // Follow Action Button (Apple HIG Style)
-                        val btnBg by animateColorAsState(
-                            targetValue = if (isFollowed) colors.glassBg else activeAccent,
-                            animationSpec = tween(180),
-                            label = "btnBg"
-                        )
-                        val btnTextColor = if (isFollowed) colors.textMain else Color.White
-
+                        // One UI Follow Pill Button
                         Surface(
                             onClick = { onToggleFollow(creator.id) },
-                            shape = CircleShape,
-                            color = btnBg,
-                            border = if (isFollowed) {
-                                BorderStroke(0.5.dp, colors.glassBorder)
+                            shape = RoundedCornerShape(999.dp),
+                            color = if (isFollowed) {
+                                if (isDarkMode) Color(0xFF1E2430) else Color.White
                             } else {
-                                BorderStroke(
-                                    0.5.dp,
-                                    Brush.verticalGradient(
-                                        listOf(Color.White.copy(alpha = 0.38f), Color.White.copy(alpha = 0.12f))
-                                    )
-                                )
+                                activeAccent
                             },
                             modifier = Modifier.height(32.dp)
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 12.dp),
+                                modifier = Modifier.padding(horizontal = 14.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
@@ -1528,7 +1109,7 @@ private fun CommunityStepContent(
                                     Icon(
                                         imageVector = Lucide.Check,
                                         contentDescription = null,
-                                        tint = activeAccent,
+                                        tint = if (isDarkMode) Color.White else Color(0xFF0F172A),
                                         modifier = Modifier.size(12.dp)
                                     )
                                 }
@@ -1536,64 +1117,112 @@ private fun CommunityStepContent(
                                     text = if (isFollowed) "Following" else "Follow",
                                     fontSize = 12.5.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = btnTextColor
+                                    color = if (isFollowed) {
+                                        if (isDarkMode) Color.White else Color(0xFF0F172A)
+                                    } else {
+                                        Color.White
+                                    },
+                                    fontFamily = InterFontFamily
                                 )
                             }
                         }
+                    }
+
+                    if (index < creators.lastIndex) {
+                        HorizontalDivider(
+                            color = if (isDarkMode) Color(0xFF1F2430) else Color(0xFFE2E8F0),
+                            thickness = 0.5.dp,
+                            modifier = Modifier.padding(start = 72.dp)
+                        )
                     }
                 }
             }
         }
 
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(24.dp))
     }
 }
 
 // ============================================================================
-// TOP & BOTTOM BARS WITH SAFE INSETS & LABELED CAPSULES
+// ONE UI STEP VIEWING AREA (LIGHT 34SP TYPOGRAPHY)
 // ============================================================================
 
 @Composable
-private fun OnboardingTopBar(
+private fun OneUiStepViewingArea(
+    title: String,
+    subtitle: String,
+    activeAccent: Color,
+    isDark: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 14.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = title,
+                fontSize = 34.sp,
+                fontWeight = FontWeight.Light,
+                color = if (isDark) Color.White else Color(0xFF0F172A),
+                letterSpacing = (-0.5).sp,
+                fontFamily = InterFontFamily
+            )
+
+            Text(
+                text = subtitle,
+                fontSize = 13.5.sp,
+                fontWeight = FontWeight.Normal,
+                color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
+                fontFamily = InterFontFamily,
+                lineHeight = 19.sp
+            )
+        }
+    }
+}
+
+// ============================================================================
+// ONE UI TOP & BOTTOM NAVIGATION BARS
+// ============================================================================
+
+@Composable
+private fun OneUiOnboardingTopBar(
     currentStep: Int,
     totalSteps: Int,
     activeAccent: Color,
-    onStepSelected: (Int) -> Unit,
+    isDark: Boolean,
     onBack: () -> Unit,
-    onSkip: () -> Unit
+    onSkip: () -> Unit,
+    onStepSelected: (Int) -> Unit
 ) {
-    val colors = LocalOscellionColors.current
-
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(horizontal = 20.dp, vertical = 8.dp),
+            .padding(horizontal = 16.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // Minimalist Navigation Bar
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // Left Action / Back Button or Logo
+            // Left Action / Back Button
             if (currentStep > 0) {
-                Surface(
+                IconButton(
                     onClick = onBack,
-                    shape = RoundedCornerShape(10.dp),
-                    color = colors.glassBg,
-                    border = BorderStroke(0.5.dp, colors.glassBorder),
-                    modifier = Modifier.size(36.dp)
+                    modifier = Modifier.size(38.dp)
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Lucide.ChevronLeft,
-                            contentDescription = "Back",
-                            tint = colors.textMain,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
+                    Icon(
+                        imageVector = Lucide.ChevronLeft,
+                        contentDescription = "Back",
+                        tint = if (isDark) Color.White else Color(0xFF0F172A),
+                        modifier = Modifier.size(22.dp)
+                    )
                 }
             } else {
                 Row(
@@ -1603,12 +1232,12 @@ private fun OnboardingTopBar(
                     Box(
                         modifier = Modifier
                             .size(28.dp)
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(9.dp))
                             .background(activeAccent),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Lucide.Film,
+                            imageVector = Lucide.Sparkles,
                             contentDescription = null,
                             tint = Color.White,
                             modifier = Modifier.size(15.dp)
@@ -1618,21 +1247,23 @@ private fun OnboardingTopBar(
                         text = "CHROMA STUDIO",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
-                        color = colors.textMain,
-                        letterSpacing = 1.sp
+                        color = if (isDark) Color.White else Color(0xFF0F172A),
+                        letterSpacing = 0.8.sp,
+                        fontFamily = InterFontFamily
                     )
                 }
             }
 
-            // Step Indicator Text in Center (Clean, non-pill)
+            // Step Indicator Text
             Text(
-                text = "${currentStep + 1} of $totalSteps",
+                text = "Step ${currentStep + 1} of $totalSteps",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = colors.textMuted
+                color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
+                fontFamily = InterFontFamily
             )
 
-            // Right "Skip" Action
+            // Right Skip Action
             TextButton(
                 onClick = onSkip,
                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
@@ -1641,12 +1272,13 @@ private fun OnboardingTopBar(
                     text = "Skip",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
-                    color = colors.textMuted
+                    color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
+                    fontFamily = InterFontFamily
                 )
             }
         }
 
-        // Minimalist Segmented Progress Bar (Apple / Instagram Stories style)
+        // Segmented Pill Progress Indicator (Samsung One UI 7.0 style)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -1654,19 +1286,14 @@ private fun OnboardingTopBar(
         ) {
             for (i in 0 until totalSteps) {
                 val isCompletedOrActive = i <= currentStep
-                val progressAlpha by animateFloatAsState(
-                    targetValue = if (isCompletedOrActive) 1f else 0.22f,
-                    animationSpec = tween(260),
-                    label = "step_prog_$i"
-                )
-                val barColor = if (isCompletedOrActive) activeAccent else colors.glassBorder
+                val barColor = if (isCompletedOrActive) activeAccent else (if (isDark) Color(0xFF1E2430) else Color(0xFFE2E8F0))
 
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .height(3.5.dp)
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(barColor.copy(alpha = progressAlpha))
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(barColor)
                         .clickable(enabled = i < currentStep) {
                             onStepSelected(i)
                         }
@@ -1677,199 +1304,96 @@ private fun OnboardingTopBar(
 }
 
 @Composable
-private fun OnboardingBottomBar(
+private fun OneUiOnboardingBottomBar(
     currentStep: Int,
     totalSteps: Int,
     activeAccent: Color,
+    isDark: Boolean,
     onBack: () -> Unit,
     onNext: () -> Unit
 ) {
-    val colors = LocalOscellionColors.current
     val isLastStep = currentStep == totalSteps - 1
-    val nextStepNames = listOf("Privacy & Presence", "Curated Community", "Launch Studio")
+    val nextStepNames = listOf("Collaboration", "Creative Network", "Launch Studio")
     val nextLabel = nextStepNames.getOrElse(currentStep) { "Continue" }
 
+    val barBg = if (isDark) Color(0xFF000000).copy(alpha = 0.95f) else Color(0xFFF2F4F7).copy(alpha = 0.96f)
+
     Surface(
-        color = colors.glassBg.copy(alpha = 0.96f),
-        border = BorderStroke(0.5.dp, colors.glassBorder),
+        color = barBg,
         modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 14.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                if (currentStep > 0) {
-                    Surface(
-                        onClick = onBack,
-                        shape = CircleShape,
-                        color = colors.glassBg,
-                        border = BorderStroke(0.5.dp, colors.glassBorder),
-                        modifier = Modifier
-                            .weight(0.30f)
-                            .height(48.dp)
-                    ) {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Lucide.ChevronLeft,
-                                    contentDescription = null,
-                                    tint = colors.textMain,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Text(
-                                    text = "Back",
-                                    fontSize = 14.5.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = colors.textMain
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Primary Next / Launch CTA Button (Apple HIG Specular Border)
-                Surface(
-                    onClick = onNext,
-                    shape = CircleShape,
-                    color = activeAccent,
-                    border = BorderStroke(
-                        0.5.dp,
-                        Brush.verticalGradient(
-                            listOf(Color.White.copy(alpha = 0.40f), Color.White.copy(alpha = 0.12f))
-                        )
-                    ),
-                    shadowElevation = 0.dp,
-                    modifier = Modifier
-                        .weight(if (currentStep > 0) 0.70f else 1f)
-                        .height(48.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                Brush.linearGradient(
-                                    colors = listOf(
-                                        activeAccent,
-                                        activeAccent.copy(alpha = 0.88f)
-                                    )
-                                )
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Text(
-                                text = if (isLastStep) "Launch Studio Workspace" else "Next: $nextLabel",
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color.White,
-                                letterSpacing = (-0.2).sp
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Icon(
-                                imageVector = if (isLastStep) Lucide.Rocket else Lucide.ArrowRight,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-/**
- * Community Reel Spotlight Banner showcasing director reels.
- */
-@Composable
-private fun FeaturedDirectorShowcaseBanner(
-    activeAccent: Color,
-    modifier: Modifier = Modifier
-) {
-    val colors = LocalOscellionColors.current
-    val clapperState = rememberAppleGraphicAnimationState()
-
-    Surface(
-        shape = RoundedCornerShape(14.dp),
-        color = colors.glassBg,
-        border = BorderStroke(0.5.dp, colors.glassBorder),
-        modifier = modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            AppleFlashGraphic(
-                modifier = Modifier.size(54.dp),
-                state = clapperState,
-                enableClickToAnimate = true
-            )
+            if (currentStep > 0) {
+                Surface(
+                    onClick = onBack,
+                    shape = RoundedCornerShape(26.dp),
+                    color = if (isDark) Color(0xFF161A22) else Color(0xFFE2E8F0),
+                    modifier = Modifier
+                        .weight(0.32f)
+                        .height(50.dp)
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        Text(
+                            text = "Back",
+                            fontSize = 14.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (isDark) Color.White else Color(0xFF0F172A),
+                            fontFamily = InterFontFamily
+                        )
+                    }
+                }
+            }
 
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "SPOTLIGHT",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = activeAccent,
-                    letterSpacing = 1.sp
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = "Trending Director Reels & LUTs",
-                    fontSize = 14.5.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = colors.textMain
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = "Connect with cinema colorists and visual directors sharing ProRes presets and open timeline clips.",
-                    fontSize = 12.sp,
-                    lineHeight = 16.sp,
-                    color = colors.textMuted
-                )
+            // Primary Next CTA Button (Samsung One UI 26dp Squircle)
+            Surface(
+                onClick = onNext,
+                shape = RoundedCornerShape(26.dp),
+                color = activeAccent,
+                modifier = Modifier
+                    .weight(if (currentStep > 0) 0.68f else 1f)
+                    .height(50.dp)
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = if (isLastStep) "Launch Studio Workspace" else "Next: $nextLabel",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White,
+                            fontFamily = InterFontFamily
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Icon(
+                            imageVector = if (isLastStep) Lucide.Rocket else Lucide.ArrowRight,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
             }
         }
     }
 }
 
-@Composable
-private fun OnboardingHeaderBadge(
-    icon: ImageVector? = null,
-    accentColor: Color,
-    text: String
-) {
-    // Professional clean uppercase eyebrow (No Pill Capsule, No Icon, Clean Letter Spacing)
-    Text(
-        text = text,
-        fontSize = 11.5.sp,
-        fontWeight = FontWeight.Bold,
-        color = accentColor,
-        letterSpacing = 1.2.sp
-    )
-}
-
 // ============================================================================
-// DATA MODELS & DEFAULT FALLBACK CREATORS
+// DATA MODELS & DEFAULT CREATORS
 // ============================================================================
 
 private data class StudioAccentOption(
@@ -1894,7 +1418,7 @@ private val defaultCuratedCreators = listOf(
         id = "creator_elena",
         name = "Elena Rostova",
         handle = "@elena_color",
-        tagline = "Cinema Colorist • ARRI & DaVinci LUTs",
+        tagline = "Cinema Colorist • DaVinci & ARRI 35mm LUTs",
         avatarUrl = "",
         featuredReelTitle = "Teal & Orange ARRI 35mm LUT",
         reelDuration = "0:45"

@@ -35,6 +35,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.chroma.studio.ui.components.IosAvatarView
 import coil.compose.AsyncImage
 import com.chroma.studio.model.UserProfile
 import com.chroma.studio.viewmodel.DiscoverViewModel
@@ -141,34 +142,25 @@ fun UserListScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             // Avatar
-                            Box(
-                                modifier = Modifier
-                                    .size(50.dp)
-                                    .clip(CircleShape)
-                                    .background(colors.glassBgHover.copy(alpha=0.5f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (!user.avatarUrl.isNullOrBlank()) {
-                                    AsyncImage(
-                                        model = user.avatarUrl,
-                                        contentDescription = "Avatar",
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                } else {
-                                    Icon(Lucide.User, contentDescription = null, tint = Color(0xFF3B82F6), modifier = Modifier.size(24.dp))
-                                }
-                            }
+                            IosAvatarView(
+                                name = user.displayName,
+                                avatarUrl = user.avatarUrl.orEmpty(),
+                                size = 50.dp
+                            )
 
                             Spacer(modifier = Modifier.width(12.dp))
 
                             // Name & Username
-                            Column(modifier = Modifier.weight(1f)) {
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy((-2).dp)
+                            ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
                                         text = user.displayName,
                                         color = colors.textMain,
                                         fontSize = 16.sp,
+                                        lineHeight = 18.sp,
                                         fontWeight = FontWeight.Bold,
                                         maxLines = 1,
                                         modifier = Modifier.weight(1f, fill = false)
@@ -182,6 +174,7 @@ fun UserListScreen(
                                     text = "@${user.username}",
                                     color = colors.textMuted,
                                     fontSize = 13.sp,
+                                    lineHeight = 15.sp,
                                     maxLines = 1
                                 )
                             }

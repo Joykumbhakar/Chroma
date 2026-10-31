@@ -403,12 +403,14 @@ enum class ChromaPillVariant {
 }
 
 object ChromaPillColors {
-    val BlueBorder = Brush.verticalGradient(
+    val BlueBorder = Brush.linearGradient(
         listOf(
             Color(0xFFFFFFFF).copy(alpha = 0.95f),
-            Color(0xFFBAE6FD).copy(alpha = 0.65f),
-            Color(0xFF0051D5).copy(alpha = 0.5f)
-        )
+            Color(0xFF7CC4FF).copy(alpha = 0.65f),
+            Color(0xFFE0F2FE).copy(alpha = 0.85f)
+        ),
+        start = androidx.compose.ui.geometry.Offset.Zero,
+        end = androidx.compose.ui.geometry.Offset.Infinite
     )
     val BlueBody = Brush.verticalGradient(
         listOf(
@@ -418,7 +420,15 @@ object ChromaPillColors {
         )
     )
 
-    val SecondaryBorder = SolidColor(Color.Black)
+    val SecondaryBorder = Brush.linearGradient(
+        listOf(
+            Color.White,
+            Color(0xFF0A84FF).copy(alpha = 0.28f),
+            Color(0xFF93C5FD).copy(alpha = 0.55f)
+        ),
+        start = androidx.compose.ui.geometry.Offset.Zero,
+        end = androidx.compose.ui.geometry.Offset.Infinite
+    )
     val SecondaryBody = Brush.verticalGradient(
         listOf(
             Color(0xFFFFFFFF),
@@ -427,27 +437,69 @@ object ChromaPillColors {
         )
     )
 
-    val PurpleBorder = Brush.verticalGradient(listOf(Color(0xFFD8B4FE), Color(0xFF6B21A8)))
+    val PurpleBorder = Brush.linearGradient(
+        listOf(
+            Color.White.copy(alpha = 0.92f),
+            Color(0xFFD8B4FE).copy(alpha = 0.65f),
+            Color(0xFFF3E8FF).copy(alpha = 0.85f)
+        ),
+        start = androidx.compose.ui.geometry.Offset.Zero,
+        end = androidx.compose.ui.geometry.Offset.Infinite
+    )
     val PurpleBody = Brush.verticalGradient(listOf(Color(0xFFA855F7), Color(0xFF7C3AED), Color(0xFF581C87)))
 
-    val EmeraldBorder = Brush.verticalGradient(listOf(Color(0xFF6EE7B7), Color(0xFF047857)))
+    val EmeraldBorder = Brush.linearGradient(
+        listOf(
+            Color.White.copy(alpha = 0.92f),
+            Color(0xFF6EE7B7).copy(alpha = 0.65f),
+            Color(0xFFD1FAE5).copy(alpha = 0.85f)
+        ),
+        start = androidx.compose.ui.geometry.Offset.Zero,
+        end = androidx.compose.ui.geometry.Offset.Infinite
+    )
     val EmeraldBody = Brush.verticalGradient(listOf(Color(0xFF34D399), Color(0xFF059669), Color(0xFF065F46)))
 
-    val AmberBorder = Brush.verticalGradient(listOf(Color(0xFFFED7AA), Color(0xFFC2410C)))
+    val AmberBorder = Brush.linearGradient(
+        listOf(
+            Color.White.copy(alpha = 0.92f),
+            Color(0xFFFED7AA).copy(alpha = 0.65f),
+            Color(0xFFFEF3C7).copy(alpha = 0.85f)
+        ),
+        start = androidx.compose.ui.geometry.Offset.Zero,
+        end = androidx.compose.ui.geometry.Offset.Infinite
+    )
     val AmberBody = Brush.verticalGradient(listOf(Color(0xFFFB923C), Color(0xFFEA580C), Color(0xFF9A3412)))
 
-    val RoseBorder = Brush.verticalGradient(listOf(Color(0xFFFDA4AF), Color(0xFF9F1239)))
+    val RoseBorder = Brush.linearGradient(
+        listOf(
+            Color.White.copy(alpha = 0.92f),
+            Color(0xFFFDA4AF).copy(alpha = 0.65f),
+            Color(0xFFFFE4E6).copy(alpha = 0.85f)
+        ),
+        start = androidx.compose.ui.geometry.Offset.Zero,
+        end = androidx.compose.ui.geometry.Offset.Infinite
+    )
     val RoseBody = Brush.verticalGradient(listOf(Color(0xFFFB7185), Color(0xFFE11D48), Color(0xFF881337)))
 
-    val CyanBorder = Brush.verticalGradient(listOf(Color(0xFF7DD3FC), Color(0xFF0369A1)))
+    val CyanBorder = Brush.linearGradient(
+        listOf(
+            Color.White.copy(alpha = 0.92f),
+            Color(0xFF7DD3FC).copy(alpha = 0.65f),
+            Color(0xFFE0F2FE).copy(alpha = 0.85f)
+        ),
+        start = androidx.compose.ui.geometry.Offset.Zero,
+        end = androidx.compose.ui.geometry.Offset.Infinite
+    )
     val CyanBody = Brush.verticalGradient(listOf(Color(0xFF38BDF8), Color(0xFF0284C7), Color(0xFF0C4A6E)))
 
-    val DarkGlassBorder = Brush.verticalGradient(
+    val DarkGlassBorder = Brush.linearGradient(
         listOf(
-            Color(0xFFFFFFFF).copy(alpha = 0.5f),
-            Color(0xFFDFE8F3).copy(alpha = 0.3f),
-            Color(0xFF64748B).copy(alpha = 0.2f)
-        )
+            Color.White.copy(alpha = 0.70f),
+            Color(0xFF94A3B8).copy(alpha = 0.25f),
+            Color.White.copy(alpha = 0.50f)
+        ),
+        start = androidx.compose.ui.geometry.Offset.Zero,
+        end = androidx.compose.ui.geometry.Offset.Infinite
     )
     val DarkGlassBody = Brush.verticalGradient(
         listOf(

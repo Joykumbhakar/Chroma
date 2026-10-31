@@ -50,37 +50,63 @@ object AudioPlayerManager {
 
         try {
             val player = MediaPlayer()
-            if (filePathOrUri.startsWith("http://") || filePathOrUri.startsWith("https://")) {
+            player.setOnErrorListener { _, what, extra ->
+                Log.e(TAG, "MediaPlayer error: what=$what, extra=$extra")
+                stop()
+                true
+            }
+            player.setOnCompletionListener {
+                stop()
+            }
+
+            mediaPlayer = player
+            _currentPlayingId.value = id
+
+            val isRemote = filePathOrUri.startsWith("http://") || filePathOrUri.startsWith("https://")
+            if (isRemote) {
                 player.setDataSource(filePathOrUri)
+                player.setOnPreparedListener { mp ->
+                    if (_currentPlayingId.value == id) {
+                        applySpeed(mp, _playbackSpeed.value)
+                        mp.start()
+                        _isPlaying.value = true
+                        _totalDurationMs.value = mp.duration.coerceAtLeast(1)
+                        _currentPositionMs.value = 0
+                        _playbackProgress.value = 0f
+                        startProgressTracker()
+                    } else {
+                        try { mp.release() } catch (_: Exception) {}
+                    }
+                }
+                player.prepareAsync()
             } else if (filePathOrUri.startsWith("content://")) {
                 player.setDataSource(context, Uri.parse(filePathOrUri))
+                player.prepare()
+                applySpeed(player, _playbackSpeed.value)
+                player.start()
+                _isPlaying.value = true
+                _totalDurationMs.value = player.duration.coerceAtLeast(1)
+                _currentPositionMs.value = 0
+                _playbackProgress.value = 0f
+                startProgressTracker()
             } else {
                 val file = File(filePathOrUri)
                 if (file.exists()) {
                     player.setDataSource(file.absolutePath)
+                    player.prepare()
+                    applySpeed(player, _playbackSpeed.value)
+                    player.start()
+                    _isPlaying.value = true
+                    _totalDurationMs.value = player.duration.coerceAtLeast(1)
+                    _currentPositionMs.value = 0
+                    _playbackProgress.value = 0f
+                    startProgressTracker()
                 } else {
                     Log.w(TAG, "Audio file does not exist: $filePathOrUri")
                     stop()
                     return
                 }
             }
-
-            player.prepare()
-            applySpeed(player, _playbackSpeed.value)
-            player.start()
-
-            mediaPlayer = player
-            _currentPlayingId.value = id
-            _isPlaying.value = true
-            _totalDurationMs.value = player.duration.coerceAtLeast(1)
-            _currentPositionMs.value = 0
-            _playbackProgress.value = 0f
-
-            player.setOnCompletionListener {
-                stop()
-            }
-
-            startProgressTracker()
         } catch (e: Exception) {
             Log.e(TAG, "Failed to play audio: ${e.message}", e)
             stop()

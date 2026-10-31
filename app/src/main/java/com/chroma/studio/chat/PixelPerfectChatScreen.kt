@@ -166,7 +166,7 @@ fun PixelPerfectChatScreen(
                     timestamp = "10:26 AM"
                 ),
                 ChatMessage(
-                    text = "That's great! I'm also working on the home automation project with Jasica AI.",
+                    text = "That's great! I'm also working on the home automation project with Jasica.",
                     direction = MessageDirection.INCOMING,
                     timestamp = "10:28 AM"
                 ),

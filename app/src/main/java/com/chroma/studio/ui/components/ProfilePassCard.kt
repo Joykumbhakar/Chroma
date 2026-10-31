@@ -465,39 +465,17 @@ fun ProfilePassCardView(
                                 ),
                             contentAlignment = Alignment.Center
                         ) {
-                            val presetRes = remember(profile.avatarUrl) { getAvatarPresetDrawableRes(profile.avatarUrl) }
-                            val defaultAvatarRes = remember(profile.gender) { getDefaultAvatarDrawableRes(profile.gender) }
-                            val resolvedDrawable = presetRes ?: if (profile.avatarUrl.isBlank()) defaultAvatarRes else null
-
-                            if (resolvedDrawable != null) {
-                                Image(
-                                    painter = painterResource(id = resolvedDrawable),
-                                    contentDescription = "Avatar",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
-                            } else if (profile.avatarUrl.isNotBlank()) {
-                                AsyncImage(
-                                    model = ImageRequest.Builder(context)
-                                        .data(profile.avatarUrl)
-                                        .crossfade(true)
-                                        .build(),
-                                    contentDescription = "Avatar",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
-                            } else {
-                                Image(
-                                    painter = painterResource(id = R.drawable.default_avatar_apple),
-                                    contentDescription = "Avatar",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
-                            }
+                            IosAvatarView(
+                                name = profile.displayName.ifBlank { profile.username },
+                                avatarUrl = profile.avatarUrl,
+                                size = 62.dp,
+                                gender = profile.gender,
+                                modifier = Modifier.fillMaxSize()
+                            )
                         }
 
                         // Display Name & Username
-                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy((-2).dp)) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -506,6 +484,7 @@ fun ProfilePassCardView(
                                     text = profile.displayName.ifBlank { "Creator" },
                                     color = primaryTextColor,
                                     fontSize = 17.sp,
+                                    lineHeight = 19.sp,
                                     fontWeight = FontWeight.Bold,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
@@ -519,6 +498,7 @@ fun ProfilePassCardView(
                                 text = "@${profile.username.ifBlank { "creator" }}",
                                 color = secondaryTextColor,
                                 fontSize = 12.5.sp,
+                                lineHeight = 14.5.sp,
                                 fontWeight = FontWeight.Medium,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
@@ -848,8 +828,8 @@ private suspend fun savePassCardImageToGallery(
                 }
             }
             PassBackgroundMode.GRADIENT_MAKER -> {
-                val startColor = customization.gradientColors.first().toArgb()
-                val endColor = customization.gradientColors.last().toArgb()
+                val startColor = customization.gradientColors.firstOrNull()?.toArgb() ?: 0xFF4F46E5.toInt()
+                val endColor = customization.gradientColors.lastOrNull()?.toArgb() ?: 0xFF818CF8.toInt()
                 val bgPaint = Paint().apply {
                     isAntiAlias = true
                     shader = LinearGradient(0f, 0f, width.toFloat(), height.toFloat(), startColor, endColor, Shader.TileMode.CLAMP)

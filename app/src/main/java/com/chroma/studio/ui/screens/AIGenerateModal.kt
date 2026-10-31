@@ -121,7 +121,7 @@ fun AIGenerateModal(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        "AI Gradient Generator",
+                        "Smart Gradient Generator",
                         style = MaterialTheme.typography.titleLarge,
                         color = colors.textMain,
                         fontWeight = FontWeight.Bold
@@ -239,7 +239,7 @@ fun AIGenerateModal(
                     } else {
                         AiWaveSphereIcon(modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Generate AI Gradient", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("Generate Smart Gradient", color = Color.White, fontWeight = FontWeight.Bold)
                     }
                 }
                 

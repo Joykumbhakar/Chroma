@@ -1,4 +1,7 @@
 package com.chroma.studio.ui.screens
+import com.chroma.studio.ui.components.OneUiViewingArea
+import com.chroma.studio.ui.components.OneUiStickyTopBar
+import com.chroma.studio.ui.components.rememberOneUiGradientStyle
 import com.chroma.studio.ui.components.GlassIconButton
 
 import androidx.compose.foundation.background
@@ -52,6 +55,7 @@ fun BackgroundsScreen(
     onResetToDefault: () -> Unit = {}
 ) {
     val colors = LocalOscellionColors.current
+    val (gradientStyle, cycleGradient) = rememberOneUiGradientStyle()
     val backgroundWorks = remember(works) { works.filter { it.isHomeBackground } }
 
     var workToConfirm by remember { mutableStateOf<ChromaWork?>(null) }
@@ -59,19 +63,24 @@ fun BackgroundsScreen(
 
     Scaffold(
         topBar = {
-            com.chroma.studio.ui.components.ChromaScreenHeader(
-                title = "Oscellion",
-                badgeText = "Backgrounds",
-                showBackButton = true,
+            OneUiStickyTopBar(
+                title = "Wallpapers",
                 onBack = onBack,
+                gradientStyle = gradientStyle,
+                onCycleGradient = cycleGradient,
                 actions = {
                     if (isCustomBackgroundActive) {
-                        ChromaHeaderActionButton(
-                            icon = Lucide.RotateCcw,
-                            contentDescription = "Reset to Default Background",
-                            tint = colors.textMuted,
-                            onClick = { showResetDialog = true }
-                        )
+                        IconButton(
+                            onClick = { showResetDialog = true },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Lucide.RotateCcw,
+                                contentDescription = "Reset to Default Background",
+                                tint = colors.textMuted,
+                                modifier = Modifier.size(19.dp)
+                            )
+                        }
                     }
                 }
             )
@@ -85,21 +94,26 @@ fun BackgroundsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier.padding(padding).fillMaxSize()
         ) {
-            // Section Header
+            // Section Header & One UI Viewing Area
             item(span = { GridItemSpan(maxLineSpan) }) {
-                Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OneUiViewingArea(
+                        title = "Wallpapers",
+                        subtitle = if (isCustomBackgroundActive) "Custom wallpaper active on Home" else "Default dynamic gradient active",
+                        gradientStyle = gradientStyle,
+                        onCycleGradient = cycleGradient,
+                        height = 145.dp
+                    )
                     Text(
-                        text = "WALLPAPERS",
+                        text = "SELECT A DESIGN TO SET AS YOUR DYNAMIC HOME SCREEN BACKGROUND",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = colors.textMuted.copy(alpha = 0.8f),
-                        letterSpacing = 0.8.sp
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = "Select a design to set as your dynamic Home screen background.",
-                        fontSize = 13.sp,
-                        color = colors.textMuted
+                        letterSpacing = 0.8.sp,
+                        modifier = Modifier.padding(horizontal = 4.dp)
                     )
                 }
             }
@@ -289,11 +303,11 @@ private fun DefaultBackgroundCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(22.dp))
+            .clip(RoundedCornerShape(24.dp))
             .border(
                 width = if (isActive) 2.dp else 1.dp,
                 color = if (isActive) colors.primary else colors.glassBorder,
-                shape = RoundedCornerShape(22.dp)
+                shape = RoundedCornerShape(24.dp)
             )
             .background(colors.glassBg)
             .clickable(onClick = onClick)
@@ -390,11 +404,11 @@ private fun BackgroundCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(22.dp))
+            .clip(RoundedCornerShape(24.dp))
             .border(
                 width = if (isActive) 2.dp else 1.dp,
                 color = if (isActive) colors.primary else colors.glassBorder,
-                shape = RoundedCornerShape(22.dp)
+                shape = RoundedCornerShape(24.dp)
             )
             .background(colors.glassBg)
             .clickable(onClick = onClick)

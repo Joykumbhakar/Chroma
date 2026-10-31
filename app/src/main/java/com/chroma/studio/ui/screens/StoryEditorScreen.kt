@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -47,7 +48,8 @@ import com.chroma.studio.ui.components.AiWaveSphereVector
 import com.chroma.studio.ui.components.OnlyFriendsManagementSheet
 import com.chroma.studio.ui.theme.InterFontFamily
 import com.chroma.studio.ui.theme.LocalOscellionColors
-import com.chroma.studio.ui.theme.MonoFontFamily
+import com.chroma.studio.ui.theme.StoryFonts
+import com.chroma.studio.ui.theme.StoryFontItem
 import com.chroma.studio.viewmodel.StoryViewModel
 import com.composables.icons.lucide.*
 import com.google.firebase.auth.FirebaseAuth
@@ -264,11 +266,9 @@ fun StoryEditorScreen(
         }
     }
 
-    val selectedFont = when (selectedFontFamilyName) {
-        "Serif" -> FontFamily.Serif
-        "Mono" -> MonoFontFamily
-        "Cursive" -> FontFamily.Cursive
-        else -> InterFontFamily
+    val context = LocalContext.current
+    val selectedFont = remember(context, selectedFontFamilyName) {
+        StoryFonts.getFontFamily(context, selectedFontFamilyName)
     }
 
     val selectedTextAlign = when (textAlign) {
@@ -342,7 +342,7 @@ fun StoryEditorScreen(
                 isHighlight = isHighlight,
                 headingLevel = headingLevel,
                 textColorHex = textColorHex,
-                backgroundColorHex = if (isCustomSolidBg) customBgColorHex else String.format("#%08X", (0xFFFFFFFF and currentGradient.colors.first().value.toLong())),
+                backgroundColorHex = if (isCustomSolidBg) customBgColorHex else String.format("#%08X", (0xFFFFFFFF and (currentGradient.colors.firstOrNull()?.value?.toLong() ?: 0xFF000000L))),
                 title = headlineText.trim(),
                 tag = selectedCategory,
                 mood = selectedMood,
@@ -907,10 +907,10 @@ fun StoryEditorScreen(
 
                             VerticalLineDivider()
 
-                            // Font Picker Chips
-                            listOf("Sans" to "Inter", "Serif" to "Serif", "Mono" to "Mono", "Cursive" to "Script").forEach { (key, display) ->
-                                ToolbarCleanChip(label = display, isSelected = selectedFontFamilyName == key) {
-                                    selectedFontFamilyName = key
+                            // Custom Assets Font Picker Chips
+                            StoryFonts.items.forEach { item ->
+                                ToolbarCleanChip(label = item.displayName, isSelected = selectedFontFamilyName == item.id) {
+                                    selectedFontFamilyName = item.id
                                 }
                             }
                         }

@@ -262,36 +262,13 @@ private fun ConnectedAvatarCircle(
             .border(2.dp, borderColor, CircleShape),
         contentAlignment = Alignment.Center
     ) {
-        if (user.avatarUrl.isNotBlank()) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(user.avatarUrl)
-                    .crossfade(true)
-                    .build(),
-                contentDescription = user.name,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(CircleShape)
-            )
-        } else {
-            // Distinct initials fallback with brand gradient/color
-            val bgColor = remember(user.name) { getInitialsColor(user.name) }
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(bgColor),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = user.initials.ifBlank { user.name.take(1).uppercase() },
-                    color = Color.White,
-                    fontSize = (size.value * 0.38f).sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = (-0.5).sp
-                )
-            }
-        }
+        IosAvatarView(
+            name = user.name,
+            avatarUrl = user.avatarUrl,
+            size = size,
+            isOnline = false,
+            modifier = Modifier.fillMaxSize()
+        )
     }
 }
 
@@ -377,49 +354,12 @@ private fun ConnectedUsersDropdownCard(
                         .padding(horizontal = 14.dp, vertical = 7.5.dp)
                 ) {
                     // Avatar with online status indicator
-                    Box(modifier = Modifier.size(34.dp)) {
-                        if (user.avatarUrl.isNotBlank()) {
-                            AsyncImage(
-                                model = ImageRequest.Builder(LocalContext.current)
-                                    .data(user.avatarUrl)
-                                    .crossfade(true)
-                                    .build(),
-                                contentDescription = user.name,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .clip(CircleShape)
-                            )
-                        } else {
-                            val bgColor = remember(user.name) { getInitialsColor(user.name) }
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .clip(CircleShape)
-                                    .background(bgColor),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = user.initials.ifBlank { user.name.take(1).uppercase() },
-                                    color = Color.White,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-
-                        // Green online status dot (matching design reference)
-                        if (user.isOnline) {
-                            Box(
-                                modifier = Modifier
-                                    .size(9.5.dp)
-                                    .align(Alignment.BottomEnd)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFF34C759))
-                                    .border(1.5.dp, cardBg, CircleShape)
-                            )
-                        }
-                    }
+                    IosAvatarView(
+                        name = user.name,
+                        avatarUrl = user.avatarUrl,
+                        size = 34.dp,
+                        isOnline = user.isOnline
+                    )
 
                     Spacer(Modifier.width(12.dp))
 

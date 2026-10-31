@@ -3,6 +3,7 @@ package com.chroma.studio.ui.screens
 import com.chroma.studio.ui.components.ChromaPillButton
 import com.chroma.studio.ui.components.ChromaPillVariant
 import com.chroma.studio.ui.components.GlassButton
+import com.chroma.studio.ui.components.OscellionAppIcon
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -73,19 +74,10 @@ fun WelcomeBanner(onDismiss: () -> Unit) {
                     Box(
                         modifier = Modifier
                             .size(76.dp)
-                            .scale(scale)
-                            .background(
-                                color = if (colors.isDark) Color(0xFF0A0A0A) else Color(0xFFF2F2F7),
-                                shape = RoundedCornerShape(22.dp)
-                            )
-                            .border(1.dp, colors.glassBorder, RoundedCornerShape(22.dp)),
+                            .scale(scale),
                         contentAlignment = Alignment.Center
                     ) {
-                        com.chroma.studio.ui.components.OscellionLogo(
-                            size = 46.dp,
-                            outerColor = colors.textMain,
-                            innerColor = Color(0xFF007AFF)
-                        )
+                        OscellionAppIcon(size = 76.dp)
                     }
 
                     Spacer(modifier = Modifier.height(24.dp))

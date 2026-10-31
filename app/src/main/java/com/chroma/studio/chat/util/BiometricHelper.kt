@@ -140,3 +140,16 @@ object BiometricHelper {
         }
     }
 }
+
+/**
+ * Traverses context wrappers to find the hosting [android.app.Activity].
+ * Prevents issues where Compose wraps context in ContextThemeWrapper.
+ */
+fun Context.findActivity(): android.app.Activity? {
+    var ctx = this
+    while (ctx is android.content.ContextWrapper) {
+        if (ctx is android.app.Activity) return ctx
+        ctx = ctx.baseContext
+    }
+    return null
+}

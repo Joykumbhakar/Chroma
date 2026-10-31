@@ -39,8 +39,8 @@ import kotlinx.coroutines.launch
 
 /**
  * Apple iOS / macOS Unified Appearance Settings Screen.
- * Uses AppleSettingsHeader, AppleSettingsGroup, AppleSettingNavRow,
- * AppleSettingToggleRow, AppleSettingSliderRow, and AppleSettingDivider
+ * Uses AppleSettingsHeader, OneUiSettingsGroup, OneUiSettingsNavRow,
+ * OneUiSettingsToggleRow, OneUiSettingsSliderRow, and OneUiSettingsDivider
  * to provide 100% parity with AccountCenterScreen (Main Settings).
  */
 enum class AppearanceSubScreen {
@@ -277,12 +277,12 @@ fun LiveBubblePreviewCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(26.dp))
             .background(if (isDark) Color(0xFF1C1C1E) else Color.White)
             .border(
                 width = 1.dp,
                 color = if (isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFDFE8F3),
-                shape = RoundedCornerShape(18.dp)
+                shape = RoundedCornerShape(26.dp)
             )
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -512,13 +512,17 @@ fun MainAppearanceSections(
     onNavigateToSubScreen: (AppearanceSubScreen) -> Unit,
     onToggleAppearance: () -> Unit,
     onAccentCycle: () -> Unit,
-    onResetDefaults: () -> Unit
+    onResetDefaults: () -> Unit,
+    gradientStyle: OneUiGradientStyle = OneUiGradientStyle.GALAXY_AI,
+    onCycleGradient: () -> Unit = {}
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 40.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
+
+
         // Live Preview Top Card
         item {
             LiveBubblePreviewCard(
@@ -530,8 +534,8 @@ fun MainAppearanceSections(
 
         // Section 1: Chat Styling
         item {
-            AppleSettingsGroup(header = "Chat Styling") {
-                AppleSettingNavRow(
+            OneUiSettingsGroup(header = "Chat Styling") {
+                OneUiSettingsNavRow(
                     title = "Bubble Styles",
                     subtitle = "${currentBubbleStyle.title} • ${currentBubbleStyle.category}",
                     icon = Lucide.MessageCircle,
@@ -541,8 +545,8 @@ fun MainAppearanceSections(
                         onNavigateToSubScreen(AppearanceSubScreen.BUBBLE_STYLES)
                     }
                 )
-                AppleSettingDivider()
-                AppleSettingNavRow(
+                OneUiSettingsDivider()
+                OneUiSettingsNavRow(
                     title = "Corners & Geometry",
                     subtitle = if (currentCustomCorners.customEnabled) "Custom (${currentCustomCorners.topStart.toInt()}dp)" else "Preset defaults",
                     icon = Lucide.SlidersHorizontal,
@@ -552,8 +556,8 @@ fun MainAppearanceSections(
                         onNavigateToSubScreen(AppearanceSubScreen.CORNER_GEOMETRY)
                     }
                 )
-                AppleSettingDivider()
-                AppleSettingNavRow(
+                OneUiSettingsDivider()
+                OneUiSettingsNavRow(
                     title = "Animations & Physics",
                     subtitle = currentAnimationStyle.title,
                     icon = Lucide.Sparkles,
@@ -563,8 +567,8 @@ fun MainAppearanceSections(
                         onNavigateToSubScreen(AppearanceSubScreen.ANIMATIONS)
                     }
                 )
-                AppleSettingDivider()
-                AppleSettingNavRow(
+                OneUiSettingsDivider()
+                OneUiSettingsNavRow(
                     title = "Voice Globe Style",
                     subtitle = currentGlobeStyle.title,
                     icon = Lucide.Mic,
@@ -579,8 +583,8 @@ fun MainAppearanceSections(
 
         // Section 2: Theme & Display
         item {
-            AppleSettingsGroup(header = "Theme & Display") {
-                AppleSettingNavRow(
+            OneUiSettingsGroup(header = "Theme & Display") {
+                OneUiSettingsNavRow(
                     title = "Wallpapers & Themes",
                     subtitle = "Backgrounds, accents & dark mode",
                     icon = Lucide.Image,
@@ -590,8 +594,8 @@ fun MainAppearanceSections(
                         onNavigateToSubScreen(AppearanceSubScreen.THEME_WALLPAPERS)
                     }
                 )
-                AppleSettingDivider()
-                AppleSettingToggleRow(
+                OneUiSettingsDivider()
+                OneUiSettingsToggleRow(
                     title = "Dark Appearance",
                     subtitle = if (colors.isLight) "Light Mode active" else "Dark Mode active",
                     icon = Lucide.Moon,
@@ -599,8 +603,8 @@ fun MainAppearanceSections(
                     checked = !colors.isLight,
                     onCheckedChange = { onToggleAppearance() }
                 )
-                AppleSettingDivider()
-                AppleSettingNavRow(
+                OneUiSettingsDivider()
+                OneUiSettingsNavRow(
                     title = "Accent Color",
                     subtitle = accentColor.title,
                     valueText = accentColor.title,
@@ -617,8 +621,8 @@ fun MainAppearanceSections(
 
         // Section 3: Reset & Maintenance
         item {
-            AppleSettingsGroup(header = "Reset & Maintenance") {
-                AppleSettingNavRow(
+            OneUiSettingsGroup(header = "Reset & Maintenance") {
+                OneUiSettingsNavRow(
                     title = "Reset Appearance Defaults",
                     subtitle = "Restore system theme and classic bubbles",
                     icon = Lucide.RotateCcw,
@@ -665,7 +669,7 @@ fun BubbleStylesSubScreen(
 
         // Category Filter Chips
         item {
-            AppleSettingsGroup(header = "Category Filter") {
+            OneUiSettingsGroup(header = "Category Filter") {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -704,7 +708,7 @@ fun BubbleStylesSubScreen(
 
         // Available Styles List
         item {
-            AppleSettingsGroup(header = "Available Styles (${filtered.size})") {
+            OneUiSettingsGroup(header = "Available Styles (${filtered.size})") {
                 filtered.forEachIndexed { idx, style ->
                     val isSelected = style == currentBubbleStyle
                     val outV = resolveBubbleVisual(style, isOutgoing = true, isConsecutive = false, colors = colors, customCorners = customCorners)
@@ -723,7 +727,7 @@ fun BubbleStylesSubScreen(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            AppleIconBadge(icon = Lucide.MessageCircle, iconColor = Color(0xFF0A84FF))
+                            OneUiIconBadge(icon = Lucide.MessageCircle, iconColor = Color(0xFF0A84FF))
                             Spacer(Modifier.width(13.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
@@ -781,7 +785,7 @@ fun BubbleStylesSubScreen(
                         }
                     }
                     if (idx < filtered.size - 1) {
-                        AppleSettingDivider(paddingStart = 50.dp)
+                        OneUiSettingsDivider(paddingStart = 50.dp)
                     }
                 }
             }
@@ -814,8 +818,8 @@ fun CornerGeometrySubScreen(
         }
 
         item {
-            AppleSettingsGroup(header = "General Geometry") {
-                AppleSettingToggleRow(
+            OneUiSettingsGroup(header = "General Geometry") {
+                OneUiSettingsToggleRow(
                     title = "Enable Custom Corners",
                     subtitle = if (currentCustomCorners.customEnabled) "Custom parameters active" else "Using preset style geometry",
                     icon = Lucide.Square,
@@ -831,8 +835,8 @@ fun CornerGeometrySubScreen(
 
         if (currentCustomCorners.customEnabled) {
             item {
-                AppleSettingsGroup(header = "Radii & Taper") {
-                    AppleSettingSliderRow(
+                OneUiSettingsGroup(header = "Radii & Taper") {
+                    OneUiSettingsSliderRow(
                         title = "Top Radius",
                         valueText = "${currentCustomCorners.topStart.toInt()} dp",
                         icon = Lucide.CornerLeftUp,
@@ -841,8 +845,8 @@ fun CornerGeometrySubScreen(
                         onValueChange = { onUpdateCustomCorners(currentCustomCorners.copy(topStart = it, topEnd = it)) },
                         valueRange = 0f..40f
                     )
-                    AppleSettingDivider()
-                    AppleSettingSliderRow(
+                    OneUiSettingsDivider()
+                    OneUiSettingsSliderRow(
                         title = "Bottom Radius",
                         valueText = "${currentCustomCorners.bottomStart.toInt()} dp",
                         icon = Lucide.CornerLeftDown,
@@ -851,8 +855,8 @@ fun CornerGeometrySubScreen(
                         onValueChange = { onUpdateCustomCorners(currentCustomCorners.copy(bottomStart = it)) },
                         valueRange = 0f..40f
                     )
-                    AppleSettingDivider()
-                    AppleSettingSliderRow(
+                    OneUiSettingsDivider()
+                    OneUiSettingsSliderRow(
                         title = "Pointy Corner Depth",
                         valueText = "${currentCustomCorners.bottomEnd.toInt()} dp",
                         icon = Lucide.Play,
@@ -861,8 +865,8 @@ fun CornerGeometrySubScreen(
                         onValueChange = { onUpdateCustomCorners(currentCustomCorners.copy(bottomEnd = it)) },
                         valueRange = 0f..20f
                     )
-                    AppleSettingDivider()
-                    AppleSettingToggleRow(
+                    OneUiSettingsDivider()
+                    OneUiSettingsToggleRow(
                         title = "Apply To Both Sides",
                         subtitle = if (currentCustomCorners.applyToBoth) "Both incoming & outgoing" else "Outgoing only",
                         icon = Lucide.ArrowLeftRight,
@@ -873,8 +877,8 @@ fun CornerGeometrySubScreen(
                             onUpdateCustomCorners(currentCustomCorners.copy(applyToBoth = it))
                         }
                     )
-                    AppleSettingDivider()
-                    AppleSettingNavRow(
+                    OneUiSettingsDivider()
+                    OneUiSettingsNavRow(
                         title = "Reset Corner Defaults",
                         subtitle = "Restore 10dp radius, 3dp pointy notch",
                         icon = Lucide.RotateCcw,
@@ -889,10 +893,10 @@ fun CornerGeometrySubScreen(
             }
 
             item {
-                AppleSettingsGroup(header = "Pointy Corner Shape") {
+                OneUiSettingsGroup(header = "Pointy Corner Shape") {
                     PointyCornerStyle.values().forEachIndexed { idx, style ->
                         val isSelected = style == currentCustomCorners.pointyCornerStyle
-                        AppleSettingNavRow(
+                        OneUiSettingsNavRow(
                             title = style.title,
                             subtitle = style.description,
                             icon = Lucide.Share2,
@@ -906,7 +910,7 @@ fun CornerGeometrySubScreen(
                             }
                         )
                         if (idx < PointyCornerStyle.values().size - 1) {
-                            AppleSettingDivider()
+                            OneUiSettingsDivider()
                         }
                     }
                 }
@@ -952,10 +956,10 @@ fun AnimationsSubScreen(
         }
 
         item {
-            AppleSettingsGroup(header = "Bubble Entrance Animations") {
+            OneUiSettingsGroup(header = "Bubble Entrance Animations") {
                 BubbleAnimationStyle.values().forEachIndexed { idx, anim ->
                     val isSelected = anim == currentAnimationStyle
-                    AppleSettingNavRow(
+                    OneUiSettingsNavRow(
                         title = anim.title,
                         subtitle = anim.description,
                         icon = Lucide.Zap,
@@ -971,7 +975,7 @@ fun AnimationsSubScreen(
                         }
                     )
                     if (idx < BubbleAnimationStyle.values().size - 1) {
-                        AppleSettingDivider()
+                        OneUiSettingsDivider()
                     }
                 }
             }
@@ -997,7 +1001,7 @@ fun VoiceGlobeSubScreen(
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
         item {
-            AppleSettingsGroup(header = "3D Liquid Voice Bubble Preview") {
+            OneUiSettingsGroup(header = "3D Liquid Voice Bubble Preview") {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1018,10 +1022,10 @@ fun VoiceGlobeSubScreen(
         }
 
         item {
-            AppleSettingsGroup(header = "Voice Globe Styles (${VoiceGlobeStyleType.values().size})") {
+            OneUiSettingsGroup(header = "Voice Globe Styles (${VoiceGlobeStyleType.values().size})") {
                 VoiceGlobeStyleType.values().forEachIndexed { idx, globe ->
                     val isSelected = globe == currentGlobeStyle
-                    AppleSettingNavRow(
+                    OneUiSettingsNavRow(
                         title = globe.title,
                         subtitle = globe.description,
                         icon = Lucide.Activity,
@@ -1036,7 +1040,7 @@ fun VoiceGlobeSubScreen(
                         }
                     )
                     if (idx < VoiceGlobeStyleType.values().size - 1) {
-                        AppleSettingDivider()
+                        OneUiSettingsDivider()
                     }
                 }
             }
@@ -1062,8 +1066,8 @@ fun ThemeWallpapersSubScreen(
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
         item {
-            AppleSettingsGroup(header = "Chat Wallpapers") {
-                AppleSettingNavRow(
+            OneUiSettingsGroup(header = "Chat Wallpapers") {
+                OneUiSettingsNavRow(
                     title = "Choose Chat Wallpaper",
                     subtitle = "Gallery images or gradient presets",
                     icon = Lucide.FolderPlus,
@@ -1077,8 +1081,8 @@ fun ThemeWallpapersSubScreen(
         }
 
         item {
-            AppleSettingsGroup(header = "Appearance Mode") {
-                AppleSettingToggleRow(
+            OneUiSettingsGroup(header = "Appearance Mode") {
+                OneUiSettingsToggleRow(
                     title = "Dark Appearance",
                     subtitle = if (colors.isLight) "Light Mode active" else "Dark Mode active",
                     icon = Lucide.Moon,
@@ -1090,8 +1094,8 @@ fun ThemeWallpapersSubScreen(
         }
 
         item {
-            AppleSettingsGroup(header = "Accent Color Presets") {
-                AppleSettingNavRow(
+            OneUiSettingsGroup(header = "Accent Color Presets") {
+                OneUiSettingsNavRow(
                     title = "Current Accent",
                     subtitle = "${accentColor.title} — tap to cycle",
                     icon = Lucide.Palette,
@@ -1137,36 +1141,85 @@ fun AppearanceSettingsScreen(
         currentSubScreen = AppearanceSubScreen.MAIN
     }
 
-    val screenBg = if (isDark) Color(0xFF000000) else Color(0xFFF4F7FB)
+    val (oneUiGradient, cycleOneUiGradient) = rememberOneUiGradientStyle()
 
-    Scaffold(
+    val screenTitle = when (currentSubScreen) {
+        AppearanceSubScreen.MAIN -> "Appearance"
+        AppearanceSubScreen.BUBBLE_STYLES -> "Bubble Styles"
+        AppearanceSubScreen.CORNER_GEOMETRY -> "Corners & Geometry"
+        AppearanceSubScreen.ANIMATIONS -> "Animations"
+        AppearanceSubScreen.VOICE_GLOBE -> "Voice Globe"
+        AppearanceSubScreen.THEME_WALLPAPERS -> "Wallpapers & Themes"
+    }
+
+    val screenSubtitle = when (currentSubScreen) {
+        AppearanceSubScreen.MAIN -> "Customise chat bubbles, geometry and themes"
+        AppearanceSubScreen.BUBBLE_STYLES -> "Choose bubble shape, outlines and styles"
+        AppearanceSubScreen.CORNER_GEOMETRY -> "Fine-tune corner radius and physics"
+        AppearanceSubScreen.ANIMATIONS -> "Motion curves and message physics"
+        AppearanceSubScreen.VOICE_GLOBE -> "Select your voice dynamic orb theme"
+        AppearanceSubScreen.THEME_WALLPAPERS -> "Backgrounds, accents & dark mode"
+    }
+
+    OneUiCollapsingHeaderLayout(
+        title = screenTitle,
+        subtitle = screenSubtitle,
         modifier = modifier.fillMaxSize(),
-        containerColor = screenBg,
-        topBar = {
-            AppleSettingsHeader(
-                title = when (currentSubScreen) {
-                    AppearanceSubScreen.MAIN -> "Appearance"
-                    AppearanceSubScreen.BUBBLE_STYLES -> "Bubble Styles"
-                    AppearanceSubScreen.CORNER_GEOMETRY -> "Corners & Geometry"
-                    AppearanceSubScreen.ANIMATIONS -> "Animations"
-                    AppearanceSubScreen.VOICE_GLOBE -> "Voice Globe"
-                    AppearanceSubScreen.THEME_WALLPAPERS -> "Wallpapers & Theme"
-                },
-                useMacSettingsIcon = currentSubScreen == AppearanceSubScreen.MAIN,
-                icon = if (currentSubScreen != AppearanceSubScreen.MAIN) Lucide.ChevronLeft else null,
-                onBackClick = if (currentSubScreen != AppearanceSubScreen.MAIN) {
-                    { currentSubScreen = AppearanceSubScreen.MAIN }
-                } else null,
-                doneText = "Done",
-                onDoneClick = onClose
-            )
+        onBack = if (currentSubScreen != AppearanceSubScreen.MAIN) {
+            { currentSubScreen = AppearanceSubScreen.MAIN }
+        } else onClose,
+        headerActions = { compactTitleAlpha ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(if (!isDark) Color.Black.copy(0.06f) else Color.White.copy(0.10f))
+                        .clickable { cycleOneUiGradient() }
+                        .padding(horizontal = 9.dp, vertical = 5.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(7.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (oneUiGradient == OneUiGradientStyle.SOLID) Color(0xFF007AFF)
+                                    else oneUiGradient.orbColor
+                                )
+                        )
+                        Text(
+                            text = oneUiGradient.label,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (!isDark) Color(0xFF0A0A0C) else Color(0xFFF2F2F7)
+                        )
+                    }
+                }
+
+                Text(
+                    text = "Done",
+                    fontSize = 14.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (oneUiGradient == OneUiGradientStyle.SOLID) Color(0xFF007AFF) else oneUiGradient.primaryColor,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable {
+                            SoundManager.playReaction()
+                            onClose()
+                        }
+                        .padding(horizontal = 8.dp, vertical = 6.dp)
+                )
+            }
         }
-    ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
+    ) { collapseProgress ->
+        Box(modifier = Modifier.fillMaxSize()) {
             AnimatedContent(
                 targetState = currentSubScreen,
                 transitionSpec = {
@@ -1196,7 +1249,9 @@ fun AppearanceSettingsScreen(
                             onSelectGlobeStyle(VoiceGlobeStyleType.ORIGINAL_BLUE)
                             onSelectAnimationStyle(BubbleAnimationStyle.POP_ZOOM)
                             onUpdateCustomCorners(CustomCornerConfig())
-                        }
+                        },
+                        gradientStyle = oneUiGradient,
+                        onCycleGradient = cycleOneUiGradient
                     )
                     AppearanceSubScreen.BUBBLE_STYLES -> BubbleStylesSubScreen(
                         currentBubbleStyle = currentBubbleStyle,
@@ -1235,7 +1290,6 @@ fun AppearanceSettingsScreen(
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // 🍏  DYNAMIC ISLAND VOICE ORB
 // ─────────────────────────────────────────────────────────────────────────────
 

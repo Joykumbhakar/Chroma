@@ -22,6 +22,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
@@ -525,15 +526,24 @@ fun ActiveChatMessageStream(
                 )
             }
 
-            // Realtime Typing & Recording Activity Indicators
+            // Realtime Typing & Recording Activity Indicators (Remote users only)
             val activeRoomTyping = typingStatuses[activeChat.id] ?: emptyMap()
             val otherTypingUsers = activeRoomTyping.filterKeys { it != currentUid }
             val isRemoteRecording = otherTypingUsers.values.any { it == "recording" }
             val isRemoteTyping = otherTypingUsers.values.any { it == "typing" }
-            val shouldShowActivityBubble = isTyping || isRemoteTyping || isRemoteRecording
+            val shouldShowActivityBubble = isRemoteTyping || isRemoteRecording
 
-            if (shouldShowActivityBubble) {
-                item {
+            item {
+                AnimatedVisibility(
+                    visible = shouldShowActivityBubble,
+                    enter = expandVertically(
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        )
+                    ) + fadeIn(tween(180)),
+                    exit = shrinkVertically(tween(150)) + fadeOut(tween(120))
+                ) {
                     Row(
                         verticalAlignment = Alignment.Bottom,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -550,7 +560,7 @@ fun ActiveChatMessageStream(
                         )
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(18.dp))
+                                .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 4.dp))
                                 .background(colors.bubbleGray)
                                 .padding(horizontal = 14.dp, vertical = 10.dp)
                         ) {
@@ -559,36 +569,99 @@ fun ActiveChatMessageStream(
                                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    LucideMic(tint = colors.iosBlue, size = 14.dp)
+                                    val infMic = rememberInfiniteTransition(label = "bubbleMicPulse")
+                                    val micAlpha by infMic.animateFloat(
+                                        initialValue = 0.45f,
+                                        targetValue = 1f,
+                                        animationSpec = infiniteRepeatable(
+                                            animation = tween(550, easing = LinearEasing),
+                                            repeatMode = RepeatMode.Reverse
+                                        ),
+                                        label = "micAlpha"
+                                    )
+                                    LucideMic(tint = colors.success.copy(alpha = micAlpha), size = 14.dp)
+
+                                    // Live animated 4-bar audio equalizer
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(2.5.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.height(13.dp)
+                                    ) {
+                                        val speeds = listOf(360, 480, 420, 540)
+                                        val delays = listOf(0, 110, 220, 140)
+                                        repeat(4) { bIdx ->
+                                            val infBar = rememberInfiniteTransition(label = "recBar$bIdx")
+                                            val barH by infBar.animateFloat(
+                                                initialValue = 3f,
+                                                targetValue = 12f,
+                                                animationSpec = infiniteRepeatable(
+                                                    animation = tween(speeds[bIdx], delayMillis = delays[bIdx], easing = FastOutSlowInEasing),
+                                                    repeatMode = RepeatMode.Reverse
+                                                ),
+                                                label = "recBarH$bIdx"
+                                            )
+                                            Box(
+                                                modifier = Modifier
+                                                    .width(2.5.dp)
+                                                    .height(barH.dp)
+                                                    .background(colors.success, RoundedCornerShape(1.dp))
+                                            )
+                                        }
+                                    }
+
                                     Text(
                                         text = "Recording audio...",
                                         fontSize = 13.sp,
-                                        color = colors.iosBlue,
+                                        color = colors.success,
                                         fontWeight = FontWeight.Medium
                                     )
                                 }
                             } else {
                                 Row(
-                                    horizontalArrangement = Arrangement.spacedBy(5.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                    horizontalArrangement = Arrangement.spacedBy(4.5.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 2.dp, vertical = 2.dp)
                                 ) {
                                     repeat(3) { index ->
                                         val infiniteTransition = rememberInfiniteTransition(label = "dot$index")
                                         val dy by infiniteTransition.animateFloat(
                                             initialValue = 0f,
-                                            targetValue = -5f,
+                                            targetValue = -4.5f,
                                             animationSpec = infiniteRepeatable(
-                                                animation = tween(420, delayMillis = index * 140, easing = FastOutSlowInEasing),
+                                                animation = tween(450, delayMillis = index * 140, easing = FastOutSlowInEasing),
                                                 repeatMode = RepeatMode.Reverse
                                             ),
                                             label = "typingBounce"
+                                        )
+                                        val dotAlpha by infiniteTransition.animateFloat(
+                                            initialValue = 0.45f,
+                                            targetValue = 1.0f,
+                                            animationSpec = infiniteRepeatable(
+                                                animation = tween(450, delayMillis = index * 140, easing = FastOutSlowInEasing),
+                                                repeatMode = RepeatMode.Reverse
+                                            ),
+                                            label = "typingAlpha"
+                                        )
+                                        val dotScale by infiniteTransition.animateFloat(
+                                            initialValue = 0.85f,
+                                            targetValue = 1.15f,
+                                            animationSpec = infiniteRepeatable(
+                                                animation = tween(450, delayMillis = index * 140, easing = FastOutSlowInEasing),
+                                                repeatMode = RepeatMode.Reverse
+                                            ),
+                                            label = "typingScale"
                                         )
                                         Box(
                                             modifier = Modifier
                                                 .size(6.dp)
                                                 .offset(y = dy.dp)
+                                                .graphicsLayer {
+                                                    scaleX = dotScale
+                                                    scaleY = dotScale
+                                                    alpha = dotAlpha
+                                                }
                                                 .background(
-                                                    colors.textMuted.copy(alpha = 0.6f),
+                                                    colors.textMuted.copy(alpha = 0.75f),
                                                     CircleShape
                                                 )
                                         )

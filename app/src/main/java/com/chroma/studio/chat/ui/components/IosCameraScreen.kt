@@ -10,6 +10,9 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
+import androidx.compose.foundation.layout.PaddingValues
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Build
@@ -65,6 +68,14 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.graphics.StrokeCap
+import kotlin.math.ln
+import kotlin.math.exp
+import kotlin.math.sin
+import kotlin.math.cos
+import kotlin.math.PI
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -103,38 +114,198 @@ enum class ProAspectRatio(val title: String, val ratioNumerator: Float, val rati
     RATIO_1_1("1:1", 1f, 1f)
 }
 
-enum class ProCameraFilter(val displayName: String, val colorMatrix: ColorMatrix?) {
-    STANDARD("Standard", null),
-    VIVID("Vivid", ColorMatrix(floatArrayOf(
-        1.22f, 0f, 0f, 0f, -8f,
-        0f, 1.22f, 0f, 0f, -8f,
-        0f, 0f, 1.22f, 0f, -8f,
-        0f, 0f, 0f, 1f, 0f
-    ))),
-    WARM("Warm", ColorMatrix(floatArrayOf(
-        1.15f, 0f, 0f, 0f, 14f,
-        0f, 1.05f, 0f, 0f, 6f,
-        0f, 0f, 0.90f, 0f, -14f,
-        0f, 0f, 0f, 1f, 0f
-    ))),
-    COOL("Cool", ColorMatrix(floatArrayOf(
-        0.90f, 0f, 0f, 0f, -10f,
-        0f, 1.05f, 0f, 0f, 4f,
-        0f, 0f, 1.22f, 0f, 18f,
-        0f, 0f, 0f, 1f, 0f
-    ))),
-    DRAMATIC_NOIR("Noir", ColorMatrix(floatArrayOf(
-        0.33f, 0.59f, 0.11f, 0f, -10f,
-        0.33f, 0.59f, 0.11f, 0f, -10f,
-        0.33f, 0.59f, 0.11f, 0f, -10f,
-        0f, 0f, 0f, 1f, 0f
-    ))),
-    SILVERTONE("Silver", ColorMatrix(floatArrayOf(
-        0.30f, 0.55f, 0.15f, 0f, 22f,
-        0.30f, 0.55f, 0.15f, 0f, 22f,
-        0.30f, 0.55f, 0.15f, 0f, 28f,
-        0f, 0f, 0f, 1f, 0f
-    )))
+enum class FilterCategory(val title: String) {
+    BEAUTY("Beauty"),
+    STYLES("Styles")
+}
+
+enum class ProCameraFilter(
+    val displayName: String,
+    val category: FilterCategory,
+    val colorMatrixValues: FloatArray?,
+    val beautyGlowStrength: Float = 0f,
+    val swatchColor: Color = Color.White,
+    val liveOverlayColor: Color? = null,
+    val liveOverlayAlpha: Float = 0f
+) {
+    // ── BEAUTY FILTERS ──
+    PORCELAIN(
+        displayName = "Porcelain",
+        category = FilterCategory.BEAUTY,
+        colorMatrixValues = floatArrayOf(
+            1.08f, 0f, 0f, 0f, 16f,
+            0f, 1.06f, 0f, 0f, 14f,
+            0f, 0f, 1.04f, 0f, 12f,
+            0f, 0f, 0f, 1f, 0f
+        ),
+        beautyGlowStrength = 0.22f,
+        swatchColor = Color(0xFFFFF0F5),
+        liveOverlayColor = Color(0xFFFFF0F5),
+        liveOverlayAlpha = 0.10f
+    ),
+    ROSY_BLUSH(
+        displayName = "Rosy Blush",
+        category = FilterCategory.BEAUTY,
+        colorMatrixValues = floatArrayOf(
+            1.16f, 0f, 0f, 0f, 18f,
+            0f, 1.04f, 0f, 0f, 6f,
+            0f, 0f, 0.98f, 0f, -4f,
+            0f, 0f, 0f, 1f, 0f
+        ),
+        beautyGlowStrength = 0.25f,
+        swatchColor = Color(0xFFFF8DA1),
+        liveOverlayColor = Color(0xFFFF69B4),
+        liveOverlayAlpha = 0.11f
+    ),
+    GOLDEN_HOUR(
+        displayName = "Golden Glow",
+        category = FilterCategory.BEAUTY,
+        colorMatrixValues = floatArrayOf(
+            1.16f, 0f, 0f, 0f, 22f,
+            0f, 1.08f, 0f, 0f, 10f,
+            0f, 0f, 0.88f, 0f, -16f,
+            0f, 0f, 0f, 1f, 0f
+        ),
+        beautyGlowStrength = 0.26f,
+        swatchColor = Color(0xFFFFD54F),
+        liveOverlayColor = Color(0xFFFFB300),
+        liveOverlayAlpha = 0.12f
+    ),
+    SOFT_SILK(
+        displayName = "Soft Silk",
+        category = FilterCategory.BEAUTY,
+        colorMatrixValues = floatArrayOf(
+            1.06f, 0f, 0f, 0f, 14f,
+            0f, 1.06f, 0f, 0f, 14f,
+            0f, 0f, 1.06f, 0f, 14f,
+            0f, 0f, 0f, 1f, 0f
+        ),
+        beautyGlowStrength = 0.30f,
+        swatchColor = Color(0xFFFCE4EC),
+        liveOverlayColor = Color(0xFFFFEBEE),
+        liveOverlayAlpha = 0.12f
+    ),
+    CRYSTAL_DEW(
+        displayName = "Crystal Dew",
+        category = FilterCategory.BEAUTY,
+        colorMatrixValues = floatArrayOf(
+            1.10f, 0f, 0f, 0f, 10f,
+            0f, 1.12f, 0f, 0f, 12f,
+            0f, 0f, 1.14f, 0f, 16f,
+            0f, 0f, 0f, 1f, 0f
+        ),
+        beautyGlowStrength = 0.18f,
+        swatchColor = Color(0xFFE0F7FA),
+        liveOverlayColor = Color(0xFFE0F7FA),
+        liveOverlayAlpha = 0.09f
+    ),
+    CARAMEL_BRONZE(
+        displayName = "Caramel",
+        category = FilterCategory.BEAUTY,
+        colorMatrixValues = floatArrayOf(
+            1.18f, 0f, 0f, 0f, 24f,
+            0f, 1.06f, 0f, 0f, 8f,
+            0f, 0f, 0.82f, 0f, -22f,
+            0f, 0f, 0f, 1f, 0f
+        ),
+        beautyGlowStrength = 0.24f,
+        swatchColor = Color(0xFFD7CCC8),
+        liveOverlayColor = Color(0xFFFFAB40),
+        liveOverlayAlpha = 0.11f
+    ),
+
+    // ── CLASSIC STYLES ──
+    STANDARD(
+        displayName = "Original",
+        category = FilterCategory.STYLES,
+        colorMatrixValues = null,
+        beautyGlowStrength = 0f,
+        swatchColor = Color.White
+    ),
+    VIVID(
+        displayName = "Vivid",
+        category = FilterCategory.STYLES,
+        colorMatrixValues = floatArrayOf(
+            1.22f, 0f, 0f, 0f, -8f,
+            0f, 1.22f, 0f, 0f, -8f,
+            0f, 0f, 1.22f, 0f, -8f,
+            0f, 0f, 0f, 1f, 0f
+        ),
+        beautyGlowStrength = 0f,
+        swatchColor = Color(0xFFFF5252),
+        liveOverlayColor = Color(0xFFFF3B30),
+        liveOverlayAlpha = 0.06f
+    ),
+    WARM(
+        displayName = "Warm",
+        category = FilterCategory.STYLES,
+        colorMatrixValues = floatArrayOf(
+            1.15f, 0f, 0f, 0f, 14f,
+            0f, 1.05f, 0f, 0f, 6f,
+            0f, 0f, 0.90f, 0f, -14f,
+            0f, 0f, 0f, 1f, 0f
+        ),
+        beautyGlowStrength = 0f,
+        swatchColor = Color(0xFFFFB74D),
+        liveOverlayColor = Color(0xFFFF9500),
+        liveOverlayAlpha = 0.08f
+    ),
+    COOL(
+        displayName = "Cool",
+        category = FilterCategory.STYLES,
+        colorMatrixValues = floatArrayOf(
+            0.90f, 0f, 0f, 0f, -10f,
+            0f, 1.05f, 0f, 0f, 4f,
+            0f, 0f, 1.22f, 0f, 18f,
+            0f, 0f, 0f, 1f, 0f
+        ),
+        beautyGlowStrength = 0f,
+        swatchColor = Color(0xFF64B5F6),
+        liveOverlayColor = Color(0xFF007AFF),
+        liveOverlayAlpha = 0.08f
+    ),
+    DRAMATIC_NOIR(
+        displayName = "Noir",
+        category = FilterCategory.STYLES,
+        colorMatrixValues = floatArrayOf(
+            0.33f, 0.59f, 0.11f, 0f, -10f,
+            0.33f, 0.59f, 0.11f, 0f, -10f,
+            0.33f, 0.59f, 0.11f, 0f, -10f,
+            0f, 0f, 0f, 1f, 0f
+        ),
+        beautyGlowStrength = 0f,
+        swatchColor = Color(0xFF424242)
+    ),
+    SILVERTONE(
+        displayName = "Silver",
+        category = FilterCategory.STYLES,
+        colorMatrixValues = floatArrayOf(
+            0.30f, 0.55f, 0.15f, 0f, 22f,
+            0.30f, 0.55f, 0.15f, 0f, 22f,
+            0.30f, 0.55f, 0.15f, 0f, 28f,
+            0f, 0f, 0f, 1f, 0f
+        ),
+        beautyGlowStrength = 0f,
+        swatchColor = Color(0xFFB0BEC5)
+    );
+
+    val colorMatrix: ColorMatrix?
+        get() = colorMatrixValues?.let { ColorMatrix(it) }
+
+    fun getInterpolatedMatrix(intensity: Float): ColorMatrix? {
+        val base = colorMatrixValues ?: return null
+        val alpha = intensity.coerceIn(0f, 1f)
+        val identity = floatArrayOf(
+            1f, 0f, 0f, 0f, 0f,
+            0f, 1f, 0f, 0f, 0f,
+            0f, 0f, 1f, 0f, 0f,
+            0f, 0f, 0f, 1f, 0f
+        )
+        val result = FloatArray(20) { i ->
+            identity[i] * (1f - alpha) + base[i] * alpha
+        }
+        return ColorMatrix(result)
+    }
 }
 
 /**
@@ -143,11 +314,11 @@ enum class ProCameraFilter(val displayName: String, val colorMatrix: ColorMatrix
  * Advanced & Professional Features Integrated:
  * 1. Dual Photo & Video Capture with CameraX VideoCapture<Recorder>
  * 2. QuickTake: Hold shutter in Photo mode to seamlessly record video
- * 3. Interactive Tap-to-Focus with Vertical Exposure (EV ☀️) Slider
+ * 3. Interactive Tap-to-Focus with Vertical Exposure (EV Sun Icon Slider
  * 4. Long-Press AE / AF Lock with yellow pill indicator banner
  * 5. 3x3 Rule-of-Thirds Grid & Horizon Level indicator
  * 6. Aspect Ratio Switcher (4:3, 16:9, 1:1) with live viewfinder framing
- * 7. 4-State Flash System (Off, Auto, On, Continuous Torch 🔦)
+ * 7. 4-State Flash System (Off, Auto, On, Continuous Torch)
  * 8. Pro Photographic Styles / Live Color Grading Filters (Standard, Vivid, Warm, Cool, Noir, Silver)
  * 9. Multi-Lens Zoom System (.5x, 1x, 2x, 3x, 5x) with smooth dial
  * 10. Front Camera Screen Flash & 3D Spring Camera Switcher
@@ -209,6 +380,8 @@ fun IosCameraScreen(
     var selectedMode by remember { mutableStateOf(IosCameraMode.PHOTO) }
     var aspectRatio by remember { mutableStateOf(ProAspectRatio.RATIO_4_3) }
     var selectedFilter by remember { mutableStateOf(ProCameraFilter.STANDARD) }
+    var selectedCategory by remember { mutableStateOf(FilterCategory.BEAUTY) }
+    var filterIntensity by remember { mutableFloatStateOf(0.80f) }
     var showFilterTray by remember { mutableStateOf(false) }
     var showGrid by remember { mutableStateOf(false) }
     var showLevel by remember { mutableStateOf(false) }
@@ -490,12 +663,14 @@ fun IosCameraScreen(
                 }
         )
 
-        // ── 2. Photographic Style Color Grading Overlay ────────────────────
-        selectedFilter.colorMatrix?.let { matrix ->
+        // ── 2. Photographic Style & Beauty Color Grading Overlay ───────────
+        if (selectedFilter != ProCameraFilter.STANDARD && selectedFilter.liveOverlayColor != null) {
+            val overlayColor = selectedFilter.liveOverlayColor!!
+            val alpha = selectedFilter.liveOverlayAlpha * filterIntensity
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Transparent)
+                    .background(overlayColor.copy(alpha = alpha))
             )
         }
 
@@ -542,7 +717,7 @@ fun IosCameraScreen(
             }
         }
 
-        // ── 5. Tap to Focus with EV Sun Brightness Slider ──────────────────
+        // ── 5. Tap to Focus with EV Sun Icon Slider ──────────────────
         focusPoint?.let { pt ->
             LaunchedEffect(pt, isAeAfLocked) {
                 if (!isAeAfLocked) {
@@ -563,7 +738,7 @@ fun IosCameraScreen(
                         .size(72.dp)
                         .border(1.2.dp, Color(0xFFFFCC00), RoundedCornerShape(2.dp))
                 ) {
-                    // Vertical EV Sun Slider
+                    // Vertical EV Sun Icon Slider
                     Row(
                         modifier = Modifier
                             .align(Alignment.CenterEnd)
@@ -586,9 +761,9 @@ fun IosCameraScreen(
                         Canvas(modifier = Modifier.width(2.dp).height(50.dp)) {
                             drawLine(Color(0xFFFFCC00).copy(alpha = 0.5f), Offset(0f, 0f), Offset(0f, size.height), strokeWidth = 2.dp.toPx())
                         }
-                        Text(
-                            text = "☀️",
-                            fontSize = 14.sp,
+                        CameraSunIcon(
+                            tint = Color(0xFFFFCC00),
+                            size = 15.dp,
                             modifier = Modifier.padding(start = 4.dp)
                         )
                     }
@@ -752,17 +927,12 @@ fun IosCameraScreen(
                             },
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = when (flashMode) {
-                                IosFlashMode.ON -> "⚡"
-                                IosFlashMode.AUTO -> "⚡A"
-                                IosFlashMode.TORCH -> "🔦"
-                                IosFlashMode.OFF -> "⚡"
-                            },
-                            color = if (flashMode != IosFlashMode.OFF) Color.Black else Color.White,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                        when (flashMode) {
+                            IosFlashMode.ON -> CameraFlashOnIcon(tint = Color.Black, size = 18.dp)
+                            IosFlashMode.AUTO -> CameraFlashAutoIcon(tint = Color.Black, size = 18.dp)
+                            IosFlashMode.TORCH -> CameraTorchIcon(tint = Color.Black, size = 18.dp)
+                            IosFlashMode.OFF -> CameraFlashOffIcon(tint = Color.White, size = 18.dp)
+                        }
                     }
 
                     // Aspect Ratio Toggle (4:3, 16:9, 1:1)
@@ -809,12 +979,12 @@ fun IosCameraScreen(
                             },
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = if (showGrid && showLevel) "⌖#" else (if (showGrid) "#" else (if (showLevel) "⌖" else "#")),
-                            color = if (showGrid || showLevel) Color.Black else Color.White,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                        when {
+                            showGrid && showLevel -> CameraGridLevelIcon(tint = Color.Black, size = 18.dp)
+                            showGrid -> CameraGridIcon(tint = Color.Black, size = 18.dp)
+                            showLevel -> CameraLevelIcon(tint = Color.Black, size = 18.dp)
+                            else -> CameraGridIcon(tint = Color.White, size = 18.dp)
+                        }
                     }
 
                     // Photographic Styles / Filters Drawer Toggle
@@ -829,10 +999,17 @@ fun IosCameraScreen(
                             },
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = "🎨",
-                            fontSize = 13.sp
-                        )
+                        if (selectedFilter.category == FilterCategory.BEAUTY && selectedFilter != ProCameraFilter.STANDARD) {
+                            CameraBeautySparkleIcon(
+                                tint = Color.Black,
+                                size = 18.dp
+                            )
+                        } else {
+                            CameraFilterIcon(
+                                tint = if (selectedFilter != ProCameraFilter.STANDARD || showFilterTray) Color.Black else Color.White,
+                                size = 18.dp
+                            )
+                        }
                     }
 
                     // Self-Timer (Off, 3s, 10s)
@@ -851,12 +1028,19 @@ fun IosCameraScreen(
                             },
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = if (timerSeconds > 0) "${timerSeconds}s" else "⏱",
-                            color = if (timerSeconds > 0) Color.Black else Color.White,
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                        if (timerSeconds > 0) {
+                            Text(
+                                text = "${timerSeconds}s",
+                                color = Color.Black,
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        } else {
+                            CameraTimerIcon(
+                                tint = Color.White,
+                                size = 18.dp
+                            )
+                        }
                     }
                 }
 
@@ -874,36 +1058,149 @@ fun IosCameraScreen(
                 .padding(bottom = 14.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Live Filter Styles Pill Tray
+            // Live Filter Styles & Beauty Pill Tray
             AnimatedVisibility(
                 visible = showFilterTray,
                 enter = fadeIn() + expandVertically(),
                 exit = fadeOut() + shrinkVertically()
             ) {
-                LazyRow(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    items(ProCameraFilter.values()) { filter ->
-                        val isSelected = selectedFilter == filter
-                        Surface(
-                            shape = CircleShape,
-                            color = if (isSelected) Color(0xFFFFCC00) else Color.Black.copy(alpha = 0.65f),
-                            border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.25f)),
-                            modifier = Modifier.clickable {
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                selectedFilter = filter
+                    // Category Selector Tabs [ Beauty ] [ Styles ]
+                    Row(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.55f))
+                            .border(0.5.dp, Color.White.copy(alpha = 0.18f), CircleShape)
+                            .padding(3.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        FilterCategory.values().forEach { cat ->
+                            val isCatActive = selectedCategory == cat
+                            Row(
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .background(if (isCatActive) Color(0xFFFFCC00) else Color.Transparent)
+                                    .clickable {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        selectedCategory = cat
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                if (cat == FilterCategory.BEAUTY) {
+                                    CameraBeautySparkleIcon(
+                                        tint = if (isCatActive) Color.Black else Color.White,
+                                        size = 13.dp
+                                    )
+                                } else {
+                                    CameraFilterIcon(
+                                        tint = if (isCatActive) Color.Black else Color.White,
+                                        size = 13.dp
+                                    )
+                                }
+                                Text(
+                                    text = cat.title,
+                                    color = if (isCatActive) Color.Black else Color.White,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = if (isCatActive) FontWeight.Bold else FontWeight.SemiBold
+                                )
                             }
+                        }
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+
+                    // Beauty / Filter Intensity Slider (Visible when any non-standard filter is active)
+                    if (selectedFilter != ProCameraFilter.STANDARD) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             Text(
-                                text = filter.displayName,
-                                color = if (isSelected) Color.Black else Color.White,
-                                fontSize = 11.5.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                text = if (selectedFilter.category == FilterCategory.BEAUTY) "Smooth" else "Strength",
+                                color = Color.White.copy(alpha = 0.75f),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
                             )
+                            Slider(
+                                value = filterIntensity,
+                                onValueChange = { newIntensity ->
+                                    filterIntensity = newIntensity
+                                },
+                                valueRange = 0.2f..1.0f,
+                                modifier = Modifier.weight(1f),
+                                colors = SliderDefaults.colors(
+                                    thumbColor = Color(0xFFFFCC00),
+                                    activeTrackColor = Color(0xFFFFCC00),
+                                    inactiveTrackColor = Color.White.copy(alpha = 0.25f)
+                                )
+                            )
+                            Text(
+                                text = "${(filterIntensity * 100).roundToInt()}%",
+                                color = Color(0xFFFFCC00),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.width(36.dp),
+                                textAlign = TextAlign.End
+                            )
+                        }
+                        Spacer(Modifier.height(6.dp))
+                    }
+
+                    // Filter Chips Row
+                    LazyRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = PaddingValues(horizontal = 4.dp)
+                    ) {
+                        val currentCategoryFilters = ProCameraFilter.values().filter { it.category == selectedCategory }
+                        items(currentCategoryFilters) { filter ->
+                            val isSelected = selectedFilter == filter
+                            Surface(
+                                shape = CircleShape,
+                                color = if (isSelected) Color(0xFFFFCC00) else Color.Black.copy(alpha = 0.65f),
+                                border = androidx.compose.foundation.BorderStroke(
+                                    0.5.dp,
+                                    if (isSelected) Color(0xFFFFCC00) else Color.White.copy(alpha = 0.25f)
+                                ),
+                                modifier = Modifier.clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    selectedFilter = filter
+                                }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    // Swatch dot
+                                    if (filter != ProCameraFilter.STANDARD) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(7.dp)
+                                                .clip(CircleShape)
+                                                .background(filter.swatchColor)
+                                                .border(0.5.dp, Color.Black.copy(alpha = 0.3f), CircleShape)
+                                        )
+                                    }
+                                    Text(
+                                        text = filter.displayName,
+                                        color = if (isSelected) Color.Black else Color.White,
+                                        fontSize = 11.5.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -911,43 +1208,18 @@ fun IosCameraScreen(
 
             Spacer(Modifier.height(8.dp))
 
-            // Multi-Lens Zoom Selector Capsule (.5, 1x, 2, 3, 5)
-            Row(
-                modifier = Modifier
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.55f))
-                    .border(0.5.dp, Color.White.copy(alpha = 0.2f), CircleShape)
-                    .padding(horizontal = 6.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                val zoomLevels = listOf(0.6f, 1f, 2f, 3f, 5f)
-                zoomLevels.forEach { zoom ->
-                    val isSelected = (currentZoomRatio >= zoom - 0.25f && currentZoomRatio < zoom + 0.75f)
-                    val label = if (zoom < 1f) ".6" else if (zoom == 1f) "1x" else "${zoom.toInt()}"
-                    Box(
-                        modifier = Modifier
-                            .size(30.dp)
-                            .clip(CircleShape)
-                            .background(if (isSelected) Color(0xFFFFCC00) else Color.Transparent)
-                            .clickable {
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                val targetZoom = zoom.coerceIn(minZoom, maxZoom)
-                                cameraControl?.setZoomRatio(targetZoom)
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = label,
-                            color = if (isSelected) Color.Black else Color.White,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
+            // Interactive Animated Zoom Circle Slider (.5, 1x, 2, 3, 5) with radial arc dial
+            AnimatedZoomCircleSlider(
+                currentZoom = currentZoomRatio,
+                minZoom = minZoom,
+                maxZoom = maxZoom,
+                onZoomChanged = { targetZoom ->
+                    cameraControl?.setZoomRatio(targetZoom)
+                },
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(10.dp))
 
             // Pro Camera Mode Carousel Strip
             Row(
@@ -1155,13 +1427,357 @@ fun IosCameraScreen(
     }
 }
 
+
+/**
+ * Interactive Animated Zoom Circle Slider for Pro Camera.
+ * 
+ * Features:
+ * 1. Compact Multi-Lens Capsule (.5, 1x, 2, 3, 5) with animated indicator.
+ * 2. Circular Radial Arc Dial: Expands smoothly on drag, viewfinder pinch, or long-press.
+ * 3. Dynamic radial arc tick ruler with major stops and minor tenths ticks.
+ * 4. Center floating loupe badge with glowing yellow accent (#FFCC00) showing real-time zoom readout (e.g. 1.0x, 2.4x).
+ * 5. Logarithmic gesture mapping for smooth natural zoom response across wide and telephoto ranges.
+ * 6. Tactile haptic feedback on increments.
+ * 7. Inactivity timer auto-collapses dial back to compact capsule after 2.5s.
+ */
+@Composable
+fun AnimatedZoomCircleSlider(
+    currentZoom: Float,
+    minZoom: Float,
+    maxZoom: Float,
+    onZoomChanged: (Float) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val haptic = LocalHapticFeedback.current
+    var isExpanded by remember { mutableStateOf(false) }
+    var lastInteractionTime by remember { mutableLongStateOf(0L) }
+    var prevZoomForPinch by remember { mutableFloatStateOf(currentZoom) }
+
+    // Auto-expand dial when zoom changes via viewfinder pinch gesture
+    LaunchedEffect(currentZoom) {
+        if (kotlin.math.abs(currentZoom - prevZoomForPinch) > 0.08f) {
+            isExpanded = true
+            lastInteractionTime = System.currentTimeMillis()
+        }
+        prevZoomForPinch = currentZoom
+    }
+
+    // Auto-collapse back to compact capsule after 2.5 seconds of inactivity
+    LaunchedEffect(isExpanded, lastInteractionTime) {
+        if (isExpanded) {
+            delay(2500)
+            isExpanded = false
+        }
+    }
+
+    // Filter available stops based on device camera hardware bounds
+    val standardStops = remember(minZoom, maxZoom) {
+        val stops = mutableListOf<Float>()
+        if (minZoom <= 0.65f) stops.add(0.5f)
+        stops.add(1f)
+        if (maxZoom >= 1.8f) stops.add(2f)
+        if (maxZoom >= 2.8f) stops.add(3f)
+        if (maxZoom >= 4.5f) stops.add(5f)
+        stops
+    }
+
+    // Tick markers generation for smooth radial dial
+    val tickValues = remember(minZoom, maxZoom) {
+        val list = mutableListOf<Float>()
+        var z = if (minZoom < 0.9f) 0.5f else 1.0f
+        while (z <= maxZoom + 0.05f) {
+            list.add((z * 10f).roundToInt() / 10f)
+            z += if (z < 2f) 0.1f else if (z < 5f) 0.2f else 0.5f
+        }
+        list
+    }
+
+    val textMeasurer = rememberTextMeasurer()
+
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        AnimatedContent(
+            targetState = isExpanded,
+            transitionSpec = {
+                fadeIn(animationSpec = tween(220)) + expandVertically(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) togetherWith
+                fadeOut(animationSpec = tween(180)) + shrinkVertically(animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+            },
+            label = "zoomSliderTransition"
+        ) { expanded ->
+            if (expanded) {
+                // ── EXPANDED RADIAL CIRCLE ARC SLIDER ──────────────────────────────
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(Color.Black.copy(alpha = 0.68f))
+                        .border(0.5.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(24.dp))
+                        .pointerInput(minZoom, maxZoom, currentZoom) {
+                            detectDragGestures(
+                                onDragStart = {
+                                    lastInteractionTime = System.currentTimeMillis()
+                                },
+                                onDragEnd = {
+                                    lastInteractionTime = System.currentTimeMillis()
+                                },
+                                onDrag = { change, dragAmount ->
+                                    change.consume()
+                                    lastInteractionTime = System.currentTimeMillis()
+                                    // Logarithmic sensitivity
+                                    val sensitivity = 360f
+                                    val currentLog = ln(currentZoom.coerceIn(minZoom, maxZoom))
+                                    val logDelta = -dragAmount.x / sensitivity
+                                    val newZoom = exp(currentLog + logDelta).coerceIn(minZoom, maxZoom)
+
+                                    val oldStep = (currentZoom * 10f).roundToInt()
+                                    val newStep = (newZoom * 10f).roundToInt()
+                                    if (oldStep != newStep) {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    }
+                                    onZoomChanged(newZoom)
+                                }
+                            )
+                        }
+                        .padding(top = 10.dp, bottom = 10.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Curved Arc Canvas
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(68.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val w = size.width
+                            val h = size.height
+                            val centerX = w / 2f
+                            val arcRadius = 180.dp.toPx()
+                            val centerY = h + arcRadius - 42.dp.toPx()
+
+                            // Base arc track
+                            val arcBounds = Size(arcRadius * 2f, arcRadius * 2f)
+                            val arcTopLeft = Offset(centerX - arcRadius, centerY - arcRadius)
+                            drawArc(
+                                color = Color.White.copy(alpha = 0.15f),
+                                startAngle = 245f,
+                                sweepAngle = 50f,
+                                useCenter = false,
+                                topLeft = arcTopLeft,
+                                size = arcBounds,
+                                style = Stroke(width = 1.dp.toPx())
+                            )
+
+                            val currentLog = ln(currentZoom.coerceIn(minZoom, maxZoom))
+                            val angularSensitivity = 0.40f // radians per natural log unit
+
+                            // Draw dynamic ticks along the arc
+                            for (tick in tickValues) {
+                                val tickLog = ln(tick)
+                                val theta = (tickLog - currentLog) * angularSensitivity
+
+                                // Render within visible arc angle bounds (+/- 0.42 rad)
+                                if (kotlin.math.abs(theta) < 0.42f) {
+                                    val isMajor = tick in listOf(0.5f, 1f, 2f, 3f, 4f, 5f, 8f, 10f)
+                                    val tickLen = if (isMajor) 15.dp.toPx() else 8.dp.toPx()
+                                    val strokeW = if (isMajor) 2.dp.toPx() else 1.dp.toPx()
+                                    val color = if (isMajor) Color.White.copy(alpha = 0.95f) else Color.White.copy(alpha = 0.42f)
+
+                                    // Position along circle
+                                    val sinT = sin(theta)
+                                    val cosT = cos(theta)
+                                    val xStart = centerX + arcRadius * sinT
+                                    val yStart = centerY - arcRadius * cosT
+                                    val xEnd = centerX + (arcRadius - tickLen) * sinT
+                                    val yEnd = centerY - (arcRadius - tickLen) * cosT
+
+                                    drawLine(
+                                        color = color,
+                                        start = Offset(xStart, yStart),
+                                        end = Offset(xEnd, yEnd),
+                                        strokeWidth = strokeW,
+                                        cap = StrokeCap.Round
+                                    )
+
+                                    // Label major ticks
+                                    if (isMajor && kotlin.math.abs(theta) < 0.36f) {
+                                        val labelText = if (tick < 1f) ".5" else if (tick == 1f) "1x" else "${tick.toInt()}"
+                                        val textResult = textMeasurer.measure(
+                                            text = labelText,
+                                            style = TextStyle(
+                                                color = Color.White.copy(alpha = 0.85f),
+                                                fontSize = 9.5.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        )
+                                        val labelRadius = arcRadius - tickLen - 12.dp.toPx()
+                                        val labelX = centerX + labelRadius * sinT - (textResult.size.width / 2f)
+                                        val labelY = centerY - labelRadius * cosT - (textResult.size.height / 2f)
+                                        drawText(
+                                            textLayoutResult = textResult,
+                                            topLeft = Offset(labelX, labelY)
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Center Reticle Needle (Amber Gold)
+                            val needleLen = 22.dp.toPx()
+                            drawLine(
+                                color = Color(0xFFFFCC00),
+                                start = Offset(centerX, centerY - arcRadius + 4.dp.toPx()),
+                                end = Offset(centerX, centerY - arcRadius - needleLen),
+                                strokeWidth = 2.5.dp.toPx(),
+                                cap = StrokeCap.Round
+                            )
+                            drawCircle(
+                                color = Color(0xFFFFCC00),
+                                radius = 2.5.dp.toPx(),
+                                center = Offset(centerX, centerY - arcRadius + 4.dp.toPx())
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(4.dp))
+
+                    // Center Animated Glowing Loupe Badge (Click to collapse)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(Color.Black.copy(alpha = 0.85f))
+                                .border(1.5.dp, Color(0xFFFFCC00), CircleShape)
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    isExpanded = false
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = String.format(Locale.US, "%.1fx", currentZoom),
+                                color = Color(0xFFFFCC00),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+
+                    // Lens Stops Quick Selector Row
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        standardStops.forEach { stop ->
+                            val isSelected = kotlin.math.abs(currentZoom - stop) < 0.2f
+                            val label = if (stop < 1f) ".5" else if (stop == 1f) "1x" else "${stop.toInt()}"
+                            Surface(
+                                shape = CircleShape,
+                                color = if (isSelected) Color(0xFFFFCC00) else Color.White.copy(alpha = 0.15f),
+                                modifier = Modifier
+                                    .size(30.dp)
+                                    .clickable {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        lastInteractionTime = System.currentTimeMillis()
+                                        onZoomChanged(stop.coerceIn(minZoom, maxZoom))
+                                    }
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = label,
+                                        color = if (isSelected) Color.Black else Color.White,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                // ── COMPACT LENS CAPSULE (DEFAULT) ─────────────────────────────────
+                Row(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.55f))
+                        .border(0.5.dp, Color.White.copy(alpha = 0.2f), CircleShape)
+                        .pointerInput(minZoom, maxZoom, currentZoom) {
+                            detectDragGestures(
+                                onDragStart = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    isExpanded = true
+                                    lastInteractionTime = System.currentTimeMillis()
+                                },
+                                onDrag = { change, dragAmount ->
+                                    change.consume()
+                                    lastInteractionTime = System.currentTimeMillis()
+                                    val sensitivity = 360f
+                                    val currentLog = ln(currentZoom.coerceIn(minZoom, maxZoom))
+                                    val logDelta = -dragAmount.x / sensitivity
+                                    val newZoom = exp(currentLog + logDelta).coerceIn(minZoom, maxZoom)
+                                    onZoomChanged(newZoom)
+                                }
+                            )
+                        }
+                        .padding(horizontal = 6.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    standardStops.forEach { stop ->
+                        val isSelected = kotlin.math.abs(currentZoom - stop) < 0.35f
+                        val label = if (isSelected && kotlin.math.abs(currentZoom - stop) > 0.15f) {
+                            String.format(Locale.US, "%.1f", currentZoom)
+                        } else {
+                            if (stop < 1f) ".5" else if (stop == 1f) "1x" else "${stop.toInt()}"
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(if (isSelected) Color(0xFFFFCC00) else Color.Transparent)
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    if (isSelected) {
+                                        // Tap on current active lens stop expands the full circular radial dial
+                                        isExpanded = true
+                                        lastInteractionTime = System.currentTimeMillis()
+                                    } else {
+                                        onZoomChanged(stop.coerceIn(minZoom, maxZoom))
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = label,
+                                color = if (isSelected) Color.Black else Color.White,
+                                fontSize = if (label.length > 2) 10.sp else 11.5.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 /**
  * Applies filter and aspect ratio crop to still photo bitmap.
  */
 private fun applyPostCaptureFiltersAndAspect(
     photoFile: File,
     aspectRatio: ProAspectRatio,
-    filter: ProCameraFilter
+    filter: ProCameraFilter,
+    intensity: Float = 0.8f
 ) {
     try {
         val originalBitmap = BitmapFactory.decodeFile(photoFile.absolutePath) ?: return
@@ -1176,17 +1792,26 @@ private fun applyPostCaptureFiltersAndAspect(
             originalBitmap
         }
 
-        // 2. Filter Application (if non-standard)
-        val finalBitmap = if (filter.colorMatrix != null) {
-            val result = Bitmap.createBitmap(croppedBitmap.width, croppedBitmap.height, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(result)
-            val paint = Paint()
-            val androidMatrix = android.graphics.ColorMatrix(filter.colorMatrix.values)
-            paint.colorFilter = ColorMatrixColorFilter(androidMatrix)
-            canvas.drawBitmap(croppedBitmap, 0f, 0f, paint)
-            result
+        // 2. Beauty Glow / Skin Smoothing Diffusion Pass
+        val glowStrength = filter.beautyGlowStrength * intensity.coerceIn(0f, 1f)
+        val glowBitmap = if (glowStrength > 0.02f) {
+            applyBeautyGlowDiffusion(croppedBitmap, glowStrength)
         } else {
             croppedBitmap
+        }
+
+        // 3. Color Grading Filter Application with User Intensity
+        val finalMatrix = filter.getInterpolatedMatrix(intensity)
+        val finalBitmap = if (finalMatrix != null) {
+            val result = Bitmap.createBitmap(glowBitmap.width, glowBitmap.height, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(result)
+            val paint = Paint()
+            val androidMatrix = android.graphics.ColorMatrix(finalMatrix.values)
+            paint.colorFilter = ColorMatrixColorFilter(androidMatrix)
+            canvas.drawBitmap(glowBitmap, 0f, 0f, paint)
+            result
+        } else {
+            glowBitmap
         }
 
         // Save back to file
@@ -1195,6 +1820,36 @@ private fun applyPostCaptureFiltersAndAspect(
         }
     } catch (e: Exception) {
         e.printStackTrace()
+    }
+}
+
+/**
+ * Optical Bilinear Diffusion pass for natural, airbrushed skin smoothing.
+ * Softens harsh pores and blemishes while preserving sharp eye/hair details.
+ */
+private fun applyBeautyGlowDiffusion(source: Bitmap, strength: Float): Bitmap {
+    return try {
+        val width = source.width
+        val height = source.height
+        val smallW = (width / 4).coerceAtLeast(64)
+        val smallH = (height / 4).coerceAtLeast(64)
+        val downsampled = Bitmap.createScaledBitmap(source, smallW, smallH, true)
+        val blurred = Bitmap.createScaledBitmap(downsampled, width, height, true)
+        downsampled.recycle()
+
+        val output = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(output)
+        canvas.drawBitmap(source, 0f, 0f, null)
+
+        val paint = Paint().apply {
+            alpha = (strength * 255f).roundToInt().coerceIn(0, 255)
+            xfermode = PorterDuffXfermode(PorterDuff.Mode.SCREEN)
+        }
+        canvas.drawBitmap(blurred, 0f, 0f, paint)
+        blurred.recycle()
+        output
+    } catch (e: Exception) {
+        source
     }
 }
 
@@ -1323,8 +1978,8 @@ fun IosCameraReviewScreen(
                     }
                     .padding(horizontal = 14.dp, vertical = 8.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(text = "💾", fontSize = 13.sp)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    CameraSaveIcon(tint = Color.White, size = 16.dp)
                     Text(text = "Save", color = Color.White, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
                 }
             }

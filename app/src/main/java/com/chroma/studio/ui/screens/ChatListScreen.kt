@@ -41,6 +41,7 @@ import com.chroma.studio.model.ChatRoom
 import com.chroma.studio.model.UserProfile
 import com.chroma.studio.ui.components.AppleStatusBlueGradient
 import com.chroma.studio.ui.components.IosAvatarView
+import com.chroma.studio.ui.components.AppleStatusVibrantGradient
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.chroma.studio.viewmodel.ChatViewModel
 import com.chroma.studio.viewmodel.StoryViewModel
@@ -271,7 +272,7 @@ fun ChatListScreen(
                         Box(
                             modifier = Modifier
                                 .size(48.dp)
-                                .border(2.dp, Brush.linearGradient(listOf(Color(0xFF007AFF), Color(0xFF00C6FF))), CircleShape)
+                                .border(2.dp, Brush.sweepGradient(AppleStatusVibrantGradient), CircleShape)
                                 .padding(2.dp)
                         ) {
                             IosAvatarView(

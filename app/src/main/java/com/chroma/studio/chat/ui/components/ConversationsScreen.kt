@@ -1,5 +1,15 @@
 package com.chroma.studio.chat.ui.components
 
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.foundation.lazy.rememberLazyListState
+import com.chroma.studio.chat.data.HiddenChatSecurityManager
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.alpha
+import androidx.compose.foundation.gestures.detectTapGestures
+
+
 import com.chroma.studio.ui.components.VerifiedBadge
 
 import androidx.compose.animation.*
@@ -72,6 +82,8 @@ import com.chroma.studio.model.UserStoryGroup
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ConversationsScreen(
+    title: String = "Messages",
+    navigationIcon: (@Composable () -> Unit)? = null,
     currentUser: User,
     stories: List<Story> = emptyList(),
     storyGroups: List<UserStoryGroup> = emptyList(),
@@ -105,9 +117,82 @@ fun ConversationsScreen(
     onDeleteStory: (Story) -> Unit = {},
     onMuteStory: (Story) -> Unit = {},
     onShareStory: (Story) -> Unit = {},
+    onSwitchToOneUiLayout: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val colors = LocalChatColors.current
+    val context = LocalContext.current
+
+    // Hidden Chats & PIN Security State
+    var hiddenChatIds by remember { mutableStateOf(HiddenChatSecurityManager.getHiddenChatIds(context)) }
+    var showPinDialog by remember { mutableStateOf(false) }
+    var showVaultModal by remember { mutableStateOf(false) }
+    var isPinResetOrChange by remember { mutableStateOf(false) }
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+
+    val coroutineScope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
+
+    // Samsung One UI Expand/Collapse Header Physics
+    val density = LocalDensity.current
+    val expandedHeaderHeight = 88.dp
+    val maxCollapseOffsetPx = with(density) { expandedHeaderHeight.toPx() }
+    var headerCollapseOffsetPx by remember { mutableFloatStateOf(0f) }
+
+    val nestedScrollConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: androidx.compose.ui.geometry.Offset, source: NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                val delta = available.y
+                if (delta < 0) { // Scrolling up -> collapse header
+                    val newOffset = (headerCollapseOffsetPx + delta).coerceIn(-maxCollapseOffsetPx, 0f)
+                    val consumed = newOffset - headerCollapseOffsetPx
+                    headerCollapseOffsetPx = newOffset
+                    return androidx.compose.ui.geometry.Offset(0f, consumed)
+                } else if (delta > 0 && listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 && headerCollapseOffsetPx < 0f) {
+                    val newOffset = (headerCollapseOffsetPx + delta).coerceIn(-maxCollapseOffsetPx, 0f)
+                    val consumed = newOffset - headerCollapseOffsetPx
+                    headerCollapseOffsetPx = newOffset
+                    return androidx.compose.ui.geometry.Offset(0f, consumed)
+                }
+                return androidx.compose.ui.geometry.Offset.Zero
+            }
+
+            override fun onPostScroll(consumed: androidx.compose.ui.geometry.Offset, available: androidx.compose.ui.geometry.Offset, source: NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                val delta = available.y
+                if (delta > 0) { // Scrolling down -> expand header
+                    val newOffset = (headerCollapseOffsetPx + delta).coerceIn(-maxCollapseOffsetPx, 0f)
+                    val consumedY = newOffset - headerCollapseOffsetPx
+                    headerCollapseOffsetPx = newOffset
+                    return androidx.compose.ui.geometry.Offset(0f, consumedY)
+                }
+                return androidx.compose.ui.geometry.Offset.Zero
+            }
+
+            override suspend fun onPreFling(available: androidx.compose.ui.unit.Velocity): androidx.compose.ui.unit.Velocity {
+                if (headerCollapseOffsetPx < 0f && headerCollapseOffsetPx > -maxCollapseOffsetPx) {
+                    val target = if (available.y > 400f) {
+                        0f
+                    } else if (available.y < -400f) {
+                        -maxCollapseOffsetPx
+                    } else if (headerCollapseOffsetPx > -maxCollapseOffsetPx / 2f) {
+                        0f
+                    } else {
+                        -maxCollapseOffsetPx
+                    }
+                    androidx.compose.animation.core.animate(
+                        initialValue = headerCollapseOffsetPx,
+                        targetValue = target,
+                        animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.85f, stiffness = 450f)
+                    ) { value, _ ->
+                        headerCollapseOffsetPx = value
+                    }
+                    return androidx.compose.ui.unit.Velocity.Zero
+                }
+                return super.onPreFling(available)
+            }
+        }
+    }
+    val collapseFraction = (-headerCollapseOffsetPx / maxCollapseOffsetPx).coerceIn(0f, 1f)
 
     // Context Menu States
     var selectedChatForContextMenu by remember { mutableStateOf<ChatConversation?>(null) }
@@ -115,16 +200,36 @@ fun ConversationsScreen(
     var isSelectionMode by remember { mutableStateOf(false) }
     var isSearchExpanded by remember { mutableStateOf(false) }
     val selectedChatIds = remember { mutableStateListOf<String>() }
-    val context = LocalContext.current
     var chatPendingDelete by remember { mutableStateOf<ChatConversation?>(null) }
     var storyPendingDelete by remember { mutableStateOf<Story?>(null) }
     var showDeleteSelectedChatsDialog by remember { mutableStateOf(false) }
     var showBiometricLockConfirmationDialog by remember { mutableStateOf(false) }
 
-    val totalUnread = remember(chats) { chats.sumOf { it.unreadCount } }
+    // Automatically hide main bottom navigation bar when selection mode or any bottom sheet/option appears
+    val hasBottomOptionsOrModals = isSelectionMode ||
+        selectedChatIds.isNotEmpty() ||
+        selectedChatForContextMenu != null ||
+        selectedStoryForContextMenu != null ||
+        showDeleteSelectedChatsDialog ||
+        showBiometricLockConfirmationDialog ||
+        showVaultModal ||
+        showPinDialog
 
-    val filteredChats = remember(chats, activeTab, searchQuery, pinnedChatIds) {
+    LaunchedEffect(hasBottomOptionsOrModals) {
+        com.chroma.studio.ChatStateManager.setBottomOptionsVisible(hasBottomOptionsOrModals)
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            com.chroma.studio.ChatStateManager.setBottomOptionsVisible(false)
+        }
+    }
+
+    val totalUnread = remember(chats, hiddenChatIds) { chats.filter { it.id !in hiddenChatIds }.sumOf { it.unreadCount } }
+
+    val filteredChats = remember(chats, activeTab, searchQuery, pinnedChatIds, hiddenChatIds) {
         val filtered = chats.filter { c ->
+            if (c.id in hiddenChatIds) return@filter false
             val matchTab = when (activeTab) {
                 "unread" -> c.unreadCount > 0
                 "direct" -> c.type == "direct"
@@ -147,17 +252,21 @@ fun ConversationsScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(colors.appBg)
+                    .background(
+                        colors.appBg.copy(alpha = if (collapseFraction > 0.02f) (0.84f + collapseFraction * 0.14f) else 1f)
+                    )
                     .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp)
             ) {
-                // ── iOS Navigation Bar Row: Edit/Done (Left) & Actions/Count (Right) ────
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (isSelectionMode) {
+                if (isSelectionMode) {
+                    // Pinned Top Bar for Selection Mode
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp)
+                            .padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text(
                             text = "Done",
                             fontSize = 17.sp,
@@ -210,42 +319,59 @@ fun ConversationsScreen(
                                 }
                                 .padding(vertical = 4.dp)
                         )
-                    } else {
-                        // "Chats" Title and Edit button
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Text(
-                                text = "Chats",
-                                fontSize = 30.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = colors.textDark,
-                                letterSpacing = (-0.5).sp
-                            )
+                    }
+                } else {
+                    // ── SAMSUNG ONE UI COLLAPSIBLE & EXPANDABLE HEADER ────────────────
+                    // Smoothly drives height, title position, typography size, and left-alignment beside navigation icon
+                    val totalHeaderHeight = 56.dp + (expandedHeaderHeight * (1f - collapseFraction)).coerceAtLeast(0.dp)
+                    val collapsedX = if (navigationIcon != null) 52.dp else 16.dp
+                    val expandedX = 20.dp
+                    val titleX = expandedX + (collapsedX - expandedX) * collapseFraction
 
-                            Text(
-                                text = "Edit",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Normal,
-                                color = colors.textDark,
+                    val collapsedY = 15.dp
+                    val expandedY = 56.dp + (expandedHeaderHeight * 0.36f)
+                    val titleY = expandedY + (collapsedY - expandedY) * collapseFraction
+
+                    val titleFontSize = (32f + (20f - 32f) * collapseFraction).sp
+                    val titleLetterSpacing = ((-0.8f) + ((-0.2f) - (-0.8f)) * collapseFraction).sp
+                    val titleFontWeight = if (collapseFraction > 0.65f) FontWeight.Bold else FontWeight.ExtraBold
+
+                    val subtitleAlpha = (1f - collapseFraction * 2.2f).coerceIn(0f, 1f)
+
+                    var isHeaderPressed by remember { mutableStateOf(false) }
+                    val headerScale by animateFloatAsState(
+                        targetValue = if (isHeaderPressed && collapseFraction < 0.35f) 0.97f else 1f,
+                        animationSpec = spring(dampingRatio = 0.6f, stiffness = 500f),
+                        label = "headerScale"
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(totalHeaderHeight)
+                    ) {
+                        // 1. Navigation Icon (strictly anchored at TopStart when provided)
+                        if (navigationIcon != null) {
+                            Box(
                                 modifier = Modifier
-                                    .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null
-                                    ) {
-                                        SoundManager.playReaction()
-                                        isSelectionMode = true
-                                    }
-                                    .padding(vertical = 4.dp, horizontal = 2.dp)
-                            )
+                                    .align(Alignment.TopStart)
+                                    .size(width = 48.dp, height = 56.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                navigationIcon()
+                            }
                         }
 
+                        // 2. Action Icons (Anchored at TopEnd) - Clean borderless icons without circle backgrounds
                         Row(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .height(56.dp)
+                                .padding(end = 12.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            // Search Button beside colors palette icon
+                            // Search Button
                             Box(
                                 modifier = Modifier
                                     .size(36.dp)
@@ -258,10 +384,10 @@ fun ConversationsScreen(
                                     },
                                 contentAlignment = Alignment.Center
                             ) {
-                                LucideSearch(tint = colors.textDark, size = 20.dp)
+                                LucideSearch(tint = colors.textDark, size = 21.dp)
                             }
 
-                            // Appearance Theme Button (Palette)
+                            // Theme Palette Button
                             Box(
                                 modifier = Modifier
                                     .size(36.dp)
@@ -274,7 +400,29 @@ fun ConversationsScreen(
                                     },
                                 contentAlignment = Alignment.Center
                             ) {
-                                LucidePalette(tint = colors.textDark, size = 20.dp)
+                                LucidePalette(tint = colors.textDark, size = 21.dp)
+                            }
+
+                            // Selection Mode Edit Button
+                            Box(
+                                modifier = Modifier
+                                    .height(36.dp)
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null
+                                    ) {
+                                        SoundManager.playReaction()
+                                        isSelectionMode = true
+                                    }
+                                    .padding(horizontal = 4.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Edit",
+                                    fontSize = 15.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = colors.iosBlue
+                                )
                             }
 
                             // Compose New Message Button
@@ -290,10 +438,10 @@ fun ConversationsScreen(
                                     },
                                 contentAlignment = Alignment.Center
                             ) {
-                                LucideEdit(tint = colors.textDark, size = 20.dp)
+                                LucideEdit(tint = colors.textDark, size = 21.dp)
                             }
 
-                            // Current User Profile Avatar (Actual Avatar, Zero Letters)
+                            // Current User Profile Avatar
                             Box(
                                 modifier = Modifier
                                     .size(36.dp)
@@ -314,10 +462,118 @@ fun ConversationsScreen(
                                 )
                             }
                         }
+
+                        // 3. Centralized Interpolated Title (reused seamlessly across expanded and collapsed states)
+                        Box(
+                            modifier = Modifier
+                                .offset(x = titleX, y = titleY)
+                                .padding(end = if (collapseFraction > 0.5f) 188.dp else 16.dp)
+                                .graphicsLayer {
+                                    scaleX = headerScale
+                                    scaleY = headerScale
+                                }
+                                .pointerInput(collapseFraction) {
+                                    if (collapseFraction < 0.35f) {
+                                        detectTapGestures(
+                                            onDoubleTap = {
+                                                SoundManager.playReaction()
+                                                onSwitchToOneUiLayout?.invoke()
+                                            },
+                                            onPress = {
+                                                isHeaderPressed = true
+                                                tryAwaitRelease()
+                                                isHeaderPressed = false
+                                            },
+                                            onLongPress = {
+                                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                                showPinDialog = true
+                                            }
+                                        )
+                                    } else {
+                                        detectTapGestures(
+                                            onTap = {
+                                                coroutineScope.launch {
+                                                    listState.animateScrollToItem(0)
+                                                    androidx.compose.animation.core.animate(
+                                                        initialValue = headerCollapseOffsetPx,
+                                                        targetValue = 0f,
+                                                        animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.85f, stiffness = 450f)
+                                                    ) { value, _ ->
+                                                        headerCollapseOffsetPx = value
+                                                    }
+                                                }
+                                            }
+                                        )
+                                    }
+                                }
+                        ) {
+                            Text(
+                                text = title,
+                                fontSize = titleFontSize,
+                                fontWeight = titleFontWeight,
+                                letterSpacing = titleLetterSpacing,
+                                color = colors.textDark,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        // 4. Expanded Subtitle / Status Row (smoothly fades on scroll)
+                        if (subtitleAlpha > 0.02f) {
+                            Row(
+                                modifier = Modifier
+                                    .offset(x = 20.dp, y = expandedY + 40.dp)
+                                    .graphicsLayer { alpha = subtitleAlpha }
+                                    .pointerInput(Unit) {
+                                        detectTapGestures(
+                                            onLongPress = {
+                                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                                showPinDialog = true
+                                            }
+                                        )
+                                    },
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                if (totalUnread > 0) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(Color(0xFF007AFF).copy(alpha = 0.12f))
+                                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                                    ) {
+                                        Text(
+                                            text = "$totalUnread unread",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF007AFF)
+                                        )
+                                    }
+                                }
+
+                                Text(
+                                    text = "${filteredChats.size} conversations",
+                                    fontSize = 13.5.sp,
+                                    color = colors.textMuted,
+                                    fontWeight = FontWeight.Medium
+                                )
+
+                                // Secret Vault Hint
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                    modifier = Modifier.alpha(0.6f)
+                                ) {
+                                    Text("•", fontSize = 12.sp, color = colors.textMuted)
+                                    LucideLock(tint = colors.textMuted, size = 11.dp)
+                                    Text("Vault", fontSize = 11.5.sp, color = colors.textMuted)
+                                }
+                            }
+                        }
                     }
                 }
 
-                // Expandable Search Bar (revealed when search button clicked or query is present)
+                // ── 3. Expandable Search Bar ───────────────────────────────────────────
                 AnimatedVisibility(
                     visible = isSearchExpanded || searchQuery.isNotEmpty(),
                     enter = expandVertically() + fadeIn(),
@@ -326,7 +582,7 @@ fun ConversationsScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 8.dp)
+                            .padding(horizontal = 16.dp, vertical = 6.dp)
                             .height(36.dp)
                             .clip(RoundedCornerShape(10.dp))
                             .background(
@@ -378,111 +634,194 @@ fun ConversationsScreen(
                                             indication = null
                                         ) { onSearchQueryChanged("") }
                                         .padding(horizontal = 6.dp, vertical = 4.dp)
+                                
                                 )
                             }
                         }
                     }
                 }
 
-                // ── Horizontal Rule (hr) divider line after header ────
+                // ── 4. Subtle Hairline Divider (fades in as header collapses) ───────────
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(1.dp)
-                        .background(if (colors.isLight) Color(0xFFE5E5EA) else Color(0xFF2C2C2E))
+                        .height(0.5.dp)
+                        .background(
+                            (if (colors.isLight) Color(0xFFE5E5EA) else Color(0xFF2C2C2E))
+                                .copy(alpha = (collapseFraction * 0.88f).coerceIn(0f, 1f))
+                        )
                 )
             }
         },
         bottomBar = {
             if (isSelectionMode) {
-                Row(
+                Surface(
+                    color = if (colors.isLight) Color(0xFFF9F9F9).copy(alpha = 0.98f) else Color(0xFF1C1C1E).copy(alpha = 0.98f),
+                    tonalElevation = 8.dp,
+                    shadowElevation = 16.dp,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(colors.headerBg)
                         .windowInsetsPadding(WindowInsets.navigationBars)
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Mark as Read / Unread
-                    TextButton(onClick = {
-                        SoundManager.playReaction()
-                        selectedChatIds.forEach { id ->
-                            chats.find { it.id == id }?.let { onReadChatToggle(it) }
-                        }
-                        isSelectionMode = false
-                        selectedChatIds.clear()
-                    }) {
-                        Text("Read", color = colors.iosBlue, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 6.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        val hasSelection = selectedChatIds.isNotEmpty()
 
-                    // Mute / Unmute
-                    TextButton(onClick = {
-                        SoundManager.playReaction()
-                        selectedChatIds.forEach { id ->
-                            chats.find { it.id == id }?.let { onMuteChatToggle(it) }
-                        }
-                        isSelectionMode = false
-                        selectedChatIds.clear()
-                    }) {
-                        Text("Mute", color = colors.iosBlue, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                    }
+                        // 1. Read / Unread Icon Action
+                        val allSelectedRead = hasSelection && selectedChatIds.all { id -> (chats.find { it.id == id }?.unreadCount ?: 0) == 0 }
+                        SelectionActionButton(
+                            icon = {
+                                LucideCheckCheck(
+                                    tint = if (hasSelection) colors.iosBlue else colors.textMuted.copy(alpha = 0.4f),
+                                    size = 19.dp
+                                )
+                            },
+                            label = if (allSelectedRead) "Unread" else "Read",
+                            tint = if (hasSelection) colors.iosBlue else colors.textMuted.copy(alpha = 0.4f),
+                            enabled = hasSelection,
+                            onClick = {
+                                selectedChatIds.forEach { id ->
+                                    chats.find { it.id == id }?.let { onReadChatToggle(it) }
+                                }
+                                isSelectionMode = false
+                                selectedChatIds.clear()
+                            }
+                        )
 
-                    // Pin / Unpin
-                    TextButton(onClick = {
-                        SoundManager.playReaction()
-                        selectedChatIds.forEach { id ->
-                            chats.find { it.id == id }?.let { onPinChatToggle(it) }
-                        }
-                        isSelectionMode = false
-                        selectedChatIds.clear()
-                    }) {
-                        Text("Pin", color = colors.iosBlue, fontSize = 14.5.sp, fontWeight = FontWeight.Medium)
-                    }
+                        // 2. Mute / Unmute Icon Action
+                        val allSelectedMuted = hasSelection && selectedChatIds.all { id -> chats.find { it.id == id }?.isMuted == true }
+                        SelectionActionButton(
+                            icon = {
+                                if (allSelectedMuted) {
+                                    LucideBell(
+                                        tint = if (hasSelection) colors.iosBlue else colors.textMuted.copy(alpha = 0.4f),
+                                        size = 19.dp
+                                    )
+                                } else {
+                                    LucideBellOff(
+                                        tint = if (hasSelection) colors.iosBlue else colors.textMuted.copy(alpha = 0.4f),
+                                        size = 19.dp
+                                    )
+                                }
+                            },
+                            label = if (allSelectedMuted) "Unmute" else "Mute",
+                            tint = if (hasSelection) colors.iosBlue else colors.textMuted.copy(alpha = 0.4f),
+                            enabled = hasSelection,
+                            onClick = {
+                                selectedChatIds.forEach { id ->
+                                    chats.find { it.id == id }?.let { onMuteChatToggle(it) }
+                                }
+                                isSelectionMode = false
+                                selectedChatIds.clear()
+                            }
+                        )
 
-                    // Biometric Chat Lock Option
-                    val allSelectedLocked = selectedChatIds.isNotEmpty() && selectedChatIds.all { it in lockedChatIds }
-                    TextButton(onClick = {
-                        SoundManager.playReaction()
-                        if (selectedChatIds.isEmpty()) return@TextButton
-                        if (selectedChatIds.size > 5) {
-                            android.widget.Toast.makeText(context, "Select up to 5 chats", android.widget.Toast.LENGTH_SHORT).show()
-                            return@TextButton
-                        }
-                        showBiometricLockConfirmationDialog = true
-                    }) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            LucideLock(tint = colors.iosBlue, size = 15.dp)
-                            Text(
-                                text = if (allSelectedLocked) "Unlock" else "Lock",
-                                color = colors.iosBlue,
-                                fontSize = 14.5.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                    }
+                        // 3. Pin / Unpin Icon Action
+                        val allSelectedPinned = hasSelection && selectedChatIds.all { it in pinnedChatIds }
+                        SelectionActionButton(
+                            icon = {
+                                LucidePin(
+                                    tint = if (hasSelection) colors.iosBlue else colors.textMuted.copy(alpha = 0.4f),
+                                    size = 19.dp
+                                )
+                            },
+                            label = if (allSelectedPinned) "Unpin" else "Pin",
+                            tint = if (hasSelection) colors.iosBlue else colors.textMuted.copy(alpha = 0.4f),
+                            enabled = hasSelection,
+                            onClick = {
+                                selectedChatIds.forEach { id ->
+                                    chats.find { it.id == id }?.let { onPinChatToggle(it) }
+                                }
+                                isSelectionMode = false
+                                selectedChatIds.clear()
+                            }
+                        )
 
-                    // Archive
-                    TextButton(onClick = {
-                        SoundManager.playReaction()
-                        selectedChatIds.forEach { id ->
-                            chats.find { it.id == id }?.let { onArchiveChat(it) }
-                        }
-                        isSelectionMode = false
-                        selectedChatIds.clear()
-                    }) {
-                        Text("Archive", color = colors.iosBlue, fontSize = 14.5.sp, fontWeight = FontWeight.Medium)
-                    }
+                        // 4. Biometric Lock / Unlock Icon Action
+                        val allSelectedLocked = hasSelection && selectedChatIds.all { it in lockedChatIds }
+                        SelectionActionButton(
+                            icon = {
+                                LucideLock(
+                                    tint = if (hasSelection) colors.iosBlue else colors.textMuted.copy(alpha = 0.4f),
+                                    size = 19.dp
+                                )
+                            },
+                            label = if (allSelectedLocked) "Unlock" else "Lock",
+                            tint = if (hasSelection) colors.iosBlue else colors.textMuted.copy(alpha = 0.4f),
+                            enabled = hasSelection,
+                            onClick = {
+                                if (selectedChatIds.size > 5) {
+                                    android.widget.Toast.makeText(context, "Select up to 5 chats", android.widget.Toast.LENGTH_SHORT).show()
+                                    return@SelectionActionButton
+                                }
+                                showBiometricLockConfirmationDialog = true
+                            }
+                        )
 
-                    // Delete
-                    TextButton(onClick = {
-                        SoundManager.playReaction()
-                        showDeleteSelectedChatsDialog = true
-                    }) {
-                        Text("Delete", color = Color(0xFFFF3B30), fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        // 5. Hide into Secret Vault Icon Action
+                        SelectionActionButton(
+                            icon = {
+                                LucideEyeOff(
+                                    tint = if (hasSelection) colors.iosBlue else colors.textMuted.copy(alpha = 0.4f),
+                                    size = 19.dp
+                                )
+                            },
+                            label = "Vault",
+                            tint = if (hasSelection) colors.iosBlue else colors.textMuted.copy(alpha = 0.4f),
+                            enabled = hasSelection,
+                            onClick = {
+                                if (!HiddenChatSecurityManager.isPinSet(context)) {
+                                    showPinDialog = true
+                                } else {
+                                    HiddenChatSecurityManager.hideMultipleChats(context, selectedChatIds)
+                                    hiddenChatIds = HiddenChatSecurityManager.getHiddenChatIds(context)
+                                    android.widget.Toast.makeText(context, "${selectedChatIds.size} chats moved to hidden vault 🔒", android.widget.Toast.LENGTH_SHORT).show()
+                                    isSelectionMode = false
+                                    selectedChatIds.clear()
+                                }
+                            }
+                        )
+
+                        // 6. Archive Icon Action
+                        SelectionActionButton(
+                            icon = {
+                                LucideArchive(
+                                    tint = if (hasSelection) colors.iosBlue else colors.textMuted.copy(alpha = 0.4f),
+                                    size = 19.dp
+                                )
+                            },
+                            label = "Archive",
+                            tint = if (hasSelection) colors.iosBlue else colors.textMuted.copy(alpha = 0.4f),
+                            enabled = hasSelection,
+                            onClick = {
+                                selectedChatIds.forEach { id ->
+                                    chats.find { it.id == id }?.let { onArchiveChat(it) }
+                                }
+                                isSelectionMode = false
+                                selectedChatIds.clear()
+                            }
+                        )
+
+                        // 7. Delete (Red destructive Icon Action)
+                        SelectionActionButton(
+                            icon = {
+                                LucideTrash(
+                                    tint = if (hasSelection) Color(0xFFFF3B30) else Color(0xFFFF3B30).copy(alpha = 0.4f),
+                                    size = 19.dp
+                                )
+                            },
+                            label = "Delete",
+                            tint = if (hasSelection) Color(0xFFFF3B30) else Color(0xFFFF3B30).copy(alpha = 0.4f),
+                            enabled = hasSelection,
+                            onClick = {
+                                showDeleteSelectedChatsDialog = true
+                            }
+                        )
                     }
                 }
             }
@@ -490,8 +829,10 @@ fun ConversationsScreen(
         modifier = modifier.fillMaxSize()
     ) { innerPadding ->
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
+                .nestedScroll(nestedScrollConnection)
                 .padding(innerPadding),
             contentPadding = PaddingValues(bottom = 16.dp)
         ) {
@@ -501,6 +842,7 @@ fun ConversationsScreen(
                     stories = storyGroups,
                     isLoading = false,
                     hasMyStory = hasMyStory,
+                    gapColor = colors.appBg,
                     myStoryAvatarUrl = currentUser.avatar,
                     onMyStoryClick = {
                         SoundManager.playReaction()
@@ -533,7 +875,7 @@ fun ConversationsScreen(
                         "calls" to "Calls"
                     ),
                     selectedTab = activeTab,
-                    unreadCount = remember(chats) { chats.count { it.unreadCount > 0 } },
+                    unreadCount = remember(chats, hiddenChatIds) { chats.count { it.id !in hiddenChatIds && it.unreadCount > 0 } },
                     onTabSelected = { tab ->
                         SoundManager.playReaction()
                         onTabSelected(tab)
@@ -775,6 +1117,22 @@ fun ConversationsScreen(
                 onMuteToggle = { onMuteChatToggle(chat) },
                 onReadToggle = { onReadChatToggle(chat) },
                 onLockToggle = { onLockChatToggle(chat) },
+                isSecretHidden = chat.id in hiddenChatIds,
+                onHideToggle = {
+                    if (!HiddenChatSecurityManager.isPinSet(context)) {
+                        showPinDialog = true
+                    } else {
+                        val isCurrentlyHidden = chat.id in hiddenChatIds
+                        if (isCurrentlyHidden) {
+                            HiddenChatSecurityManager.unhideChat(context, chat.id)
+                            android.widget.Toast.makeText(context, "${chat.name} unhidden", android.widget.Toast.LENGTH_SHORT).show()
+                        } else {
+                            HiddenChatSecurityManager.hideChat(context, chat.id)
+                            android.widget.Toast.makeText(context, "${chat.name} hidden & locked 🔒", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                        hiddenChatIds = HiddenChatSecurityManager.getHiddenChatIds(context)
+                    }
+                },
                 onArchive = { onArchiveChat(chat) },
                 onClearHistory = { onClearChatHistory(chat) },
                 onExportChat = { onExportChat(chat) },
@@ -908,6 +1266,46 @@ fun ConversationsScreen(
                 onDismiss = { storyPendingDelete = null }
             )
         }
+
+        // ── HIDDEN CHATS 4-DIGIT PIN AUTHENTICATION DIALOG ──────────────
+        if (showPinDialog) {
+            HiddenChatsPinDialog(
+                isResetOrChange = isPinResetOrChange,
+                onSuccess = {
+                    showPinDialog = false
+                    isPinResetOrChange = false
+                    showVaultModal = true
+                },
+                onDismiss = {
+                    showPinDialog = false
+                    isPinResetOrChange = false
+                }
+            )
+        }
+
+        // ── HIDDEN CHATS SECRET VAULT MODAL ──────────────────────────────
+        if (showVaultModal) {
+            HiddenChatsVaultModal(
+                hiddenChatIds = hiddenChatIds,
+                allChats = chats,
+                onChatSelected = { chatId ->
+                    showVaultModal = false
+                    onChatSelected(chatId)
+                },
+                onUnhideChat = { chat ->
+                    HiddenChatSecurityManager.unhideChat(context, chat.id)
+                    hiddenChatIds = HiddenChatSecurityManager.getHiddenChatIds(context)
+                    android.widget.Toast.makeText(context, "${chat.name} unhidden and restored to main chats", android.widget.Toast.LENGTH_SHORT).show()
+                },
+                onChangePin = {
+                    isPinResetOrChange = true
+                    showPinDialog = true
+                },
+                onDismiss = {
+                    showVaultModal = false
+                }
+            )
+        }
     }
 }
 
@@ -944,73 +1342,13 @@ fun ChatAvatar(
     showOnline: Boolean = false,
     isOnline: Boolean = false
 ) {
-    val colors = LocalChatColors.current
-    val cleanUrl = avatarUrl?.trim().orEmpty()
-    val presetRes = remember(cleanUrl) { getAvatarPresetDrawableRes(cleanUrl) }
-
-    Box(modifier = modifier.size(size)) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clip(CircleShape)
-                .background(colors.surfaceSecondary)
-                .border(0.5.dp, colors.borderSubtle, CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            when {
-                presetRes != null -> {
-                    Image(
-                        painter = painterResource(id = presetRes),
-                        contentDescription = name,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                }
-                cleanUrl.startsWith("android.resource://") -> {
-                    AsyncImage(
-                        model = Uri.parse(cleanUrl),
-                        contentDescription = name,
-                        placeholder = painterResource(id = R.drawable.default_avatar_apple),
-                        error = painterResource(id = R.drawable.default_avatar_apple),
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                }
-                cleanUrl.isNotBlank() -> {
-                    AsyncImage(
-                        model = cleanUrl,
-                        contentDescription = name,
-                        placeholder = painterResource(id = R.drawable.default_avatar_apple),
-                        error = painterResource(id = R.drawable.default_avatar_apple),
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                }
-                else -> {
-                    Image(
-                        painter = painterResource(id = R.drawable.default_avatar_apple),
-                        contentDescription = name,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                }
-            }
-        }
-
-        if (showOnline && isOnline) {
-            val indicatorSize = (size.value * 0.25f).coerceIn(9f, 13f).dp
-            Box(
-                modifier = Modifier
-                    .size(indicatorSize)
-                    .align(Alignment.BottomEnd)
-                    .offset(x = (-1).dp, y = (-1).dp)
-                    .background(colors.appBg, CircleShape)
-                    .padding(1.5.dp)
-                    .clip(CircleShape)
-                    .background(colors.success)
-            )
-        }
-    }
+    com.chroma.studio.ui.components.IosAvatarView(
+        name = name,
+        avatarUrl = avatarUrl.orEmpty(),
+        size = size,
+        isOnline = showOnline && isOnline,
+        modifier = modifier
+    )
 }
 
 /**
@@ -1520,67 +1858,88 @@ private fun IosConversationListRow(
                     val isActivity = chat.statusText.contains("typing", ignoreCase = true) || chat.statusText.contains("recording", ignoreCase = true)
                     val isRecording = chat.statusText.contains("recording", ignoreCase = true)
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        if (isLocked) {
-                            LucideLock(tint = colors.iosBlue, size = 13.dp)
-                            Text(
-                                text = "Locked conversation",
-                                fontSize = 14.sp,
-                                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                                color = colors.textMuted.copy(alpha = 0.85f),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        } else if (isActivity) {
-                            if (isRecording) {
-                                LucideMic(tint = colors.iosBlue, size = 14.dp)
-                            } else {
-                                LucideEdit(tint = colors.iosBlue, size = 13.dp)
-                            }
-                            Text(
-                                text = chat.statusText,
-                                fontSize = 14.5.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = colors.iosBlue,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                lineHeight = 19.sp
-                            )
-                        } else {
-                            // Status Checkmark for Outgoing Messages
-                            if (isOutgoing) {
-                                MessageStatusTick(
-                                    status = lastMsg.status,
-                                    isOutgoing = true,
-                                    normalTint = colors.textMuted,
-                                    readTint = colors.iosBlue,
-                                    pendingTint = colors.textMuted,
-                                    size = 13.dp
+                    AnimatedContent(
+                        targetState = isLocked to (isActivity to chat.statusText),
+                        transitionSpec = {
+                            (slideInVertically(animationSpec = tween(200, easing = FastOutSlowInEasing)) { height -> height / 2 } + fadeIn(tween(200)))
+                                .togetherWith(slideOutVertically(animationSpec = tween(160, easing = FastOutSlowInEasing)) { height -> -height / 2 } + fadeOut(tween(160)))
+                        },
+                        label = "convSnippetTransition"
+                    ) { (locked, activityData) ->
+                        val (active, status) = activityData
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            if (locked) {
+                                LucideLock(tint = colors.iosBlue, size = 13.dp)
+                                Text(
+                                    text = "Locked conversation",
+                                    fontSize = 14.sp,
+                                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                                    color = colors.textMuted.copy(alpha = 0.85f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
-                                Spacer(Modifier.width(2.dp))
-                            }
+                            } else if (active) {
+                                if (isRecording) {
+                                    val infMic = rememberInfiniteTransition(label = "convMicPulse")
+                                    val micAlpha by infMic.animateFloat(
+                                        initialValue = 0.45f,
+                                        targetValue = 1f,
+                                        animationSpec = infiniteRepeatable(
+                                            animation = tween(550, easing = LinearEasing),
+                                            repeatMode = RepeatMode.Reverse
+                                        ),
+                                        label = "convMicAlpha"
+                                    )
+                                    LucideMic(tint = colors.success.copy(alpha = micAlpha), size = 14.dp)
+                                } else {
+                                    LucideEdit(tint = colors.success, size = 13.dp)
+                                }
+                                Text(
+                                    text = status,
+                                    fontSize = 14.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = colors.success,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    lineHeight = 19.sp
+                                )
+                            } else {
+                                // Status Checkmark for Outgoing Messages
+                                if (isOutgoing) {
+                                    MessageStatusTick(
+                                        status = lastMsg.status,
+                                        isOutgoing = true,
+                                        normalTint = Color(0xFF8696A0),
+                                        readTint = Color(0xFF53BDEB),
+                                        pendingTint = Color(0xFF8696A0),
+                                        errorTint = Color(0xFFEF4444),
+                                        size = 13.dp
+                                    )
+                                    Spacer(Modifier.width(2.dp))
+                                }
 
-                            // Media Type Icon
-                            when (lastMsg?.mediaType) {
-                                "voice" -> PhosphorWaveform(tint = if (isUnread) colors.iosBlue else colors.textMuted, size = 14.dp)
-                                "image" -> PhosphorPhotoIcon(tint = if (isUnread) colors.iosBlue else colors.textMuted, size = 14.dp)
-                                "poll" -> PhosphorPollIcon(tint = if (isUnread) colors.iosBlue else colors.textMuted, size = 14.dp)
-                            }
+                                // Media Type Icon
+                                when (lastMsg?.mediaType) {
+                                    "voice" -> PhosphorWaveform(tint = if (isUnread) colors.iosBlue else colors.textMuted, size = 14.dp)
+                                    "image" -> PhosphorPhotoIcon(tint = if (isUnread) colors.iosBlue else colors.textMuted, size = 14.dp)
+                                    "poll" -> PhosphorPollIcon(tint = if (isUnread) colors.iosBlue else colors.textMuted, size = 14.dp)
+                                }
 
-                            Text(
-                                text = (if (chat.type == "group" && lastMsg != null && lastMsg.senderName.isNotEmpty() && !isOutgoing)
-                                           "${lastMsg.senderName.split(" ").firstOrNull() ?: lastMsg.senderName}: " else "") + lastMsgPreview,
-                                fontSize = 14.5.sp,
-                                fontWeight = if (isUnread) FontWeight.Medium else FontWeight.Normal,
-                                color = if (isUnread) colors.textDark else if (lastMsgPreview == "No messages yet") colors.textMuted.copy(alpha = 0.75f) else colors.textMuted,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                                lineHeight = 19.sp
-                            )
+                                Text(
+                                    text = (if (chat.type == "group" && lastMsg != null && lastMsg.senderName.isNotEmpty() && !isOutgoing)
+                                               "${lastMsg.senderName.split(" ").firstOrNull() ?: lastMsg.senderName}: " else "") + lastMsgPreview,
+                                    fontSize = 14.5.sp,
+                                    fontWeight = if (isUnread) FontWeight.Medium else FontWeight.Normal,
+                                    color = if (isUnread) colors.textDark else if (lastMsgPreview == "No messages yet") colors.textMuted.copy(alpha = 0.75f) else colors.textMuted,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    lineHeight = 19.sp
+                                )
+                            }
                         }
                     }
                 }
@@ -1636,5 +1995,50 @@ private fun IosConversationListRow(
                 modifier = Modifier.padding(start = 78.dp)
             )
         }
+
+
+    }
+}
+
+@Composable
+private fun SelectionActionButton(
+    icon: @Composable () -> Unit,
+    label: String,
+    tint: Color,
+    enabled: Boolean = true,
+    onClick: () -> Unit
+) {
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+        modifier = Modifier
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(
+                enabled = enabled,
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) {
+                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                SoundManager.playReaction()
+                onClick()
+            }
+            .padding(horizontal = 4.dp, vertical = 2.dp)
+            .alpha(if (enabled) 1f else 0.38f)
+    ) {
+        Box(
+            modifier = Modifier.size(32.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            icon()
+        }
+        Spacer(Modifier.height(3.dp))
+        Text(
+            text = label,
+            color = tint,
+            fontSize = 10.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1
+        )
     }
 }

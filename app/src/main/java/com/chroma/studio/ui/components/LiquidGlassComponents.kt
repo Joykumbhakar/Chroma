@@ -161,13 +161,16 @@ fun LiquidGlassPrimaryButton(
         label = "btnBgColor"
     )
 
-    // Thin and elegant Apple specular glass border (0.5dp hairline)
+    // Shiny diagonal specular glass border (top-left highlight -> translucent -> bottom-right rim)
     val thinAppleBorder = remember {
-        Brush.verticalGradient(
+        Brush.linearGradient(
             listOf(
-                Color.White.copy(alpha = 0.42f),
-                Color.White.copy(alpha = 0.12f)
-            )
+                Color.White.copy(alpha = 0.92f),
+                Color(0xFF7CC4FF).copy(alpha = 0.45f),
+                Color(0xFFE0F2FE).copy(alpha = 0.85f)
+            ),
+            start = Offset.Zero,
+            end = Offset.Infinite
         )
     }
 
@@ -276,14 +279,26 @@ fun LiquidGlassSecondaryButton(
         else -> if (isDark) Color(0x1CFFFFFF) else Color(0xFFF2F2F7)
     }
 
-    // Thin and elegant Apple secondary border (0.5dp hairline)
+    // Shiny diagonal specular glass border for secondary button
     val thinBorderBrush = if (isDark) {
-        Brush.verticalGradient(
-            listOf(Color.White.copy(alpha = 0.24f), Color.White.copy(alpha = 0.06f))
+        Brush.linearGradient(
+            listOf(
+                Color.White.copy(alpha = 0.85f),
+                Color(0xFF94A3B8).copy(alpha = 0.20f),
+                Color.White.copy(alpha = 0.55f)
+            ),
+            start = Offset.Zero,
+            end = Offset.Infinite
         )
     } else {
-        Brush.verticalGradient(
-            listOf(Color.White.copy(alpha = 0.70f), Color.Black.copy(alpha = 0.08f))
+        Brush.linearGradient(
+            listOf(
+                Color.White.copy(alpha = 0.98f),
+                Color(0xFF0A84FF).copy(alpha = 0.25f),
+                Color(0xFF93C5FD).copy(alpha = 0.65f)
+            ),
+            start = Offset.Zero,
+            end = Offset.Infinite
         )
     }
     val contentColor = if (isDark) Color.White else Color(0xFF1C1C1E)
@@ -1082,12 +1097,19 @@ fun LiquidGlassPollOptionMeter(
  * Liquid Glass Toggle Switch (Component 02)
  * Direct alias to AppleSwitch to guarantee the exact same jelly knob and track everywhere.
  */
+/**
+ * Liquid Glass Toggle Switch (Component 02)
+ * Exact match to CSS:
+ * - 44px x 22px track
+ * - #34C759 checked track with inset shadows
+ * - Liquid Jelly Knob with glossy top curve & ambient light rim
+ */
 @Composable
 fun LiquidGlassToggle(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
-    activeTrackColor: Color = Color(0xFF0A84FF),
+    activeTrackColor: Color = Color(0xFF34C759),
     inactiveTrackColor: Color = if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFF39393D) else Color(0xFFE5E5EA)
 ) {
     AppleSwitch(
@@ -1096,6 +1118,36 @@ fun LiquidGlassToggle(
         modifier = modifier,
         activeTrackColor = activeTrackColor,
         inactiveTrackColor = inactiveTrackColor
+    )
+}
+
+/**
+ * Liquid Jelly Range Slider (Component 01)
+ * Exact match to CSS:
+ * - 6px track height with inset shadow
+ * - #0A84FF active track
+ * - 24x18px Liquid Jelly Knob (stretching to 28px, scale 1.15 on press)
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LiquidGlassSlider(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
+    modifier: Modifier = Modifier,
+    steps: Int = 0,
+    activeColor: Color = Color(0xFF0A84FF),
+    inactiveColor: Color = if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFF39393D) else Color(0xFFE5E5EA),
+    trackHeight: Dp = 6.dp
+) {
+    AppleSlider(
+        value = value,
+        onValueChange = onValueChange,
+        valueRange = valueRange,
+        steps = steps,
+        gradientColors = listOf(activeColor, activeColor),
+        trackHeight = trackHeight,
+        modifier = modifier
     )
 }
 

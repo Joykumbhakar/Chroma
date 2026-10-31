@@ -34,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.chroma.studio.ui.components.IosAvatarView
 import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.AsyncImage
 import com.chroma.studio.model.FlashDraft
@@ -470,7 +471,7 @@ private fun FlashVideoItem(
     var showPlayPauseOverlay by remember { mutableStateOf(false) }
     var showMoreOptionsSheet by remember { mutableStateOf(false) }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
-    val isOwner = auth.currentUser != null && auth.currentUser!!.uid == video.creatorId
+    val isOwner = auth.currentUser?.uid == video.creatorId
     var currentPosition by remember { mutableLongStateOf(0L) }
     var videoDuration by remember { mutableLongStateOf(0L) }
 
@@ -807,36 +808,15 @@ private fun FlashVideoItem(
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 // Circular Avatar
-                Box(
+                IosAvatarView(
+                    name = video.authorDisplayName.ifBlank { video.authorUsername },
+                    avatarUrl = video.authorAvatarUrl,
+                    size = 36.dp,
                     modifier = Modifier
-                        .size(36.dp)
                         .clip(CircleShape)
                         .border(1.5.dp, Color.White, CircleShape)
                         .clickable { onAuthorClick() }
-                ) {
-                    if (video.authorAvatarUrl.isNotBlank()) {
-                        AsyncImage(
-                            model = video.authorAvatarUrl,
-                            contentDescription = "Avatar",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        Box(
-                            Modifier
-                                .fillMaxSize()
-                                .background(Color(0xFF3B82F6)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                video.authorDisplayName.firstOrNull()?.toString() ?: "?",
-                                color = Color.White,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
+                )
 
                 // Username + Verified badge
                 Row(
@@ -862,7 +842,7 @@ private fun FlashVideoItem(
                 }
 
                 // Follow / Following Pill Button
-                if (auth.currentUser == null || auth.currentUser!!.uid != video.creatorId) {
+                if (auth.currentUser?.uid != video.creatorId) {
                     Box(
                         modifier = Modifier
                             .height(28.dp)
@@ -1890,14 +1870,10 @@ fun YouTubeCommentCard(
 
         // 2. Avatar + Comment Body
         Row(modifier = Modifier.fillMaxWidth()) {
-            AsyncImage(
-                model = comment.avatarUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .size(if (isChildReply) 28.dp else 34.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFFE5E7EB))
+            IosAvatarView(
+                name = comment.displayName.ifBlank { comment.username },
+                avatarUrl = comment.avatarUrl,
+                size = if (isChildReply) 28.dp else 34.dp
             )
 
             Spacer(Modifier.width(10.dp))

@@ -133,7 +133,9 @@ data class ChatMessage(
     val userReaction: String? = null,
     val replyTo: ReplyQuote? = null,
     val isEdited: Boolean = false,
-    val isForwarded: Boolean = false
+    val isForwarded: Boolean = false,
+    val storyId: String? = null,
+    val storyThumbnailUrl: String? = null
 )
 
 @Immutable

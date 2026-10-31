@@ -28,14 +28,20 @@ object ImageUtils {
     private const val MAX_BANNER_BYTES = 45_000 // 45 KB target
 
     /**
-     * Aggressively compress a profile avatar from a Uri to under 25KB before uploading to Supabase.
+     * Aggressively compress a profile avatar from a Uri to under 25KB before uploading to Supabase,
+     * applying EXIF orientation correction.
      */
     fun compressAvatarForSupabase(context: Context, uri: Uri): ByteArray? {
         return try {
+            val rotation = getOrientationDegrees(context, uri)
             val inputStream = context.contentResolver.openInputStream(uri) ?: return null
-            val bytes = compressAvatarStream(inputStream)
+            val original = BitmapFactory.decodeStream(inputStream)
             inputStream.close()
-            bytes
+            if (original == null) return null
+
+            val rotated = rotateBitmap(original, rotation)
+            val scaled = scaleBitmap(rotated, MAX_AVATAR_DIMENSION, MAX_AVATAR_DIMENSION, squareCrop = true)
+            compressBitmapUnderLimit(scaled, MAX_AVATAR_BYTES, initialQuality = 80)
         } catch (e: Exception) {
             Log.e("ImageUtils", "Failed to compress avatar from uri", e)
             null
@@ -69,19 +75,49 @@ object ImageUtils {
     }
 
     /**
-     * Aggressively compress a profile banner from a Uri to under 45KB before uploading to Supabase.
+     * Aggressively compress a profile banner from a Uri to under 45KB before uploading to Supabase,
+     * preserving landscape aspect ratio and applying EXIF orientation correction.
      */
     fun compressBannerForSupabase(context: Context, uri: Uri): ByteArray? {
         return try {
+            val rotation = getOrientationDegrees(context, uri)
             val inputStream = context.contentResolver.openInputStream(uri) ?: return null
             val original = BitmapFactory.decodeStream(inputStream)
-            inputStream.close() ?: return null
+            inputStream.close()
             if (original == null) return null
 
-            val scaled = scaleBitmap(original, MAX_BANNER_WIDTH, MAX_BANNER_HEIGHT, squareCrop = false)
+            val rotated = rotateBitmap(original, rotation)
+            val scaled = scaleBitmap(rotated, MAX_BANNER_WIDTH, MAX_BANNER_HEIGHT, squareCrop = false)
             compressBitmapUnderLimit(scaled, MAX_BANNER_BYTES, initialQuality = 82)
         } catch (e: Exception) {
             Log.e("ImageUtils", "Failed to compress banner from uri", e)
+            null
+        }
+    }
+
+    /**
+     * Aggressively compress a profile banner from raw bytes to under 45KB without cropping to square.
+     */
+    fun compressBannerBytesForSupabase(imageBytes: ByteArray): ByteArray? {
+        return try {
+            val original = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size) ?: return null
+            val scaled = scaleBitmap(original, MAX_BANNER_WIDTH, MAX_BANNER_HEIGHT, squareCrop = false)
+            compressBitmapUnderLimit(scaled, MAX_BANNER_BYTES, initialQuality = 82)
+        } catch (e: Exception) {
+            Log.e("ImageUtils", "Failed to compress banner bytes", e)
+            null
+        }
+    }
+
+    /**
+     * Aggressively compress a profile banner Bitmap to under 45KB without cropping to square.
+     */
+    fun compressBannerBitmapForSupabase(bitmap: Bitmap): ByteArray? {
+        return try {
+            val scaled = scaleBitmap(bitmap, MAX_BANNER_WIDTH, MAX_BANNER_HEIGHT, squareCrop = false)
+            compressBitmapUnderLimit(scaled, MAX_BANNER_BYTES, initialQuality = 82)
+        } catch (e: Exception) {
+            Log.e("ImageUtils", "Failed to compress banner bitmap", e)
             null
         }
     }
@@ -224,3 +260,6 @@ object ImageUtils {
 // Backward compatibility extension / helper
 fun compressImageToUnder50KB(context: Context, uri: Uri): ByteArray? =
     ImageUtils.compressAvatarForSupabase(context, uri)
+
+fun compressBannerToUnder50KB(context: Context, uri: Uri): ByteArray? =
+    ImageUtils.compressBannerForSupabase(context, uri)

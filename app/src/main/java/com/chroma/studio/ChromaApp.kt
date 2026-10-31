@@ -1,3 +1,4 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 package com.chroma.studio
 
 import android.app.Application
@@ -72,8 +73,11 @@ class ChromaApp : Application(), ImageLoaderFactory {
         try {
             // Explicitly enable and configure Firestore offline caching
             val firestoreSettings = com.google.firebase.firestore.FirebaseFirestoreSettings.Builder()
-                .setPersistenceEnabled(true)
-                .setCacheSizeBytes(104857600L) // 100 MB cache
+                .setLocalCacheSettings(
+                    com.google.firebase.firestore.PersistentCacheSettings.newBuilder()
+                        .setSizeBytes(104857600L) // 100 MB cache
+                        .build()
+                )
                 .build()
             com.google.firebase.firestore.FirebaseFirestore.getInstance().firestoreSettings = firestoreSettings
         } catch (e: Exception) {
@@ -86,6 +90,22 @@ class ChromaApp : Application(), ImageLoaderFactory {
             Log.w("ChromaApp", "OnlineStatusManager error: ${e.message}")
         }
         
+        try {
+            androidx.lifecycle.ProcessLifecycleOwner.get().lifecycle.addObserver(AppLifecycleObserver())
+        } catch (e: Exception) {
+            Log.e("ChromaApp", "Failed to register AppLifecycleObserver", e)
+        }
+        try {
+            ChatNotificationBuilder.ensureNotificationChannel(this)
+        } catch (e: Exception) {
+            Log.e("ChromaApp", "Failed to create notification channel", e)
+        }
+        try {
+            com.chroma.studio.data.FcmPushSender.init(this)
+            com.chroma.studio.services.ChromaMessagingService.syncTokenForCurrentUser()
+        } catch (e: Exception) {
+            Log.w("ChromaApp", "FCM init or token sync error: ${e.message}")
+        }
         createNotificationChannel()
     }
     

@@ -1,5 +1,8 @@
 package com.chroma.studio.ui.screens
 
+import com.chroma.studio.chat.sound.SoundManager
+
+import com.chroma.studio.ui.components.OneUiCollapsingHeaderLayout
 import android.content.Intent
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -98,111 +101,111 @@ fun ActivityHistoryScreen(
 
     val screenBg = if (isDark) Color(0xFF000000) else Color(0xFFF2F2F7)
 
-    Scaffold(
-        topBar = {
-            ChromaScreenHeader(
-                title = "Your Activity",
-                badgeText = selectedTab.title,
-                showBackButton = true,
-                circularBackButton = false,
-                onBack = onBack,
-                actions = {
-                    // View mode toggle
-                    GlassIconButton(
-                        onClick = { isGridView = !isGridView },
-                        modifier = Modifier.size(34.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (isGridView) Lucide.List else Lucide.LayoutGrid,
-                            contentDescription = if (isGridView) "Feed View" else "Grid View",
-                            tint = colors.textMain,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
+    var wasLoading by remember { mutableStateOf(false) }
+    LaunchedEffect(isLoading) {
+        if (wasLoading && !isLoading) {
+            SoundManager.playRefresh(context)
+        }
+        wasLoading = isLoading
+    }
 
-                    // Native Dropdown Menu ("use menus")
-                    Box {
-                        GlassIconButton(
-                            onClick = { showMenu = true },
-                            modifier = Modifier.size(34.dp)
-                        ) {
+    OneUiCollapsingHeaderLayout(
+        title = "Your Activity",
+        subtitle = "${selectedTab.title} collection (${currentList.size} items)",
+        expandedHeightDp = 130.dp,
+        onBack = onBack,
+        headerActions = { compactTitleAlpha ->
+            // View mode toggle
+            IconButton(
+                onClick = { isGridView = !isGridView },
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    imageVector = if (isGridView) Lucide.List else Lucide.LayoutGrid,
+                    contentDescription = if (isGridView) "Feed View" else "Grid View",
+                    tint = colors.textMain,
+                    modifier = Modifier.size(19.dp)
+                )
+            }
+
+            // Native Dropdown Menu ("use menus")
+            Box {
+                IconButton(
+                    onClick = { showMenu = true },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Lucide.EllipsisVertical,
+                        contentDescription = "Menu",
+                        tint = colors.textMain,
+                        modifier = Modifier.size(19.dp)
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false },
+                    modifier = Modifier
+                        .shadow(16.dp, RoundedCornerShape(20.dp), ambientColor = Color.Black.copy(alpha = 0.25f))
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(colors.glassBg, RoundedCornerShape(20.dp))
+                        .border(0.5.dp, colors.glassBorder, RoundedCornerShape(20.dp))
+                ) {
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = if (isGridView) "Switch to Feed View" else "Switch to Grid View",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = colors.textMain
+                            )
+                        },
+                        leadingIcon = {
                             Icon(
-                                imageVector = Lucide.EllipsisVertical,
-                                contentDescription = "Menu",
+                                imageVector = if (isGridView) Lucide.List else Lucide.LayoutGrid,
+                                contentDescription = null,
                                 tint = colors.textMain,
                                 modifier = Modifier.size(16.dp)
                             )
+                        },
+                        onClick = {
+                            showMenu = false
+                            isGridView = !isGridView
                         }
+                    )
 
-                        DropdownMenu(
-                            expanded = showMenu,
-                            onDismissRequest = { showMenu = false },
-                            modifier = Modifier
-                                .shadow(16.dp, RoundedCornerShape(20.dp), ambientColor = Color.Black.copy(alpha = 0.25f))
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(colors.glassBg, RoundedCornerShape(20.dp))
-                                .border(0.5.dp, colors.glassBorder, RoundedCornerShape(20.dp))
-                        ) {
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        text = if (isGridView) "Switch to Feed View" else "Switch to Grid View",
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = colors.textMain
-                                    )
-                                },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = if (isGridView) Lucide.List else Lucide.LayoutGrid,
-                                        contentDescription = null,
-                                        tint = colors.textMain,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                },
-                                onClick = {
-                                    showMenu = false
-                                    isGridView = !isGridView
-                                }
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = "Refresh Activity",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = colors.textMain
                             )
-
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        text = "Refresh Activity",
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = colors.textMain
-                                    )
-                                },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Lucide.RefreshCw,
-                                        contentDescription = null,
-                                        tint = colors.textMain,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                },
-                                onClick = {
-                                    showMenu = false
-                                    when (selectedTab) {
-                                        ActivityTab.LIKED -> discoverVm.loadLikedWorks(userId)
-                                        ActivityTab.SAVED -> discoverVm.loadSavedWorks(userId)
-                                        ActivityTab.SHARED -> discoverVm.loadSharedWorks(userId)
-                                    }
-                                }
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Lucide.RefreshCw,
+                                contentDescription = null,
+                                tint = colors.textMain,
+                                modifier = Modifier.size(16.dp)
                             )
+                        },
+                        onClick = {
+                            showMenu = false
+                            when (selectedTab) {
+                                ActivityTab.LIKED -> discoverVm.loadLikedWorks(userId)
+                                ActivityTab.SAVED -> discoverVm.loadSavedWorks(userId)
+                                ActivityTab.SHARED -> discoverVm.loadSharedWorks(userId)
+                            }
                         }
-                    }
+                    )
                 }
-            )
-        },
-        containerColor = screenBg
-    ) { padding ->
+            }
+        }
+    ) { collapseProgress ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
+            modifier = Modifier.fillMaxSize()
         ) {
             // Segment Tab Row (Sleek rounded rectangles with text labels)
             Row(

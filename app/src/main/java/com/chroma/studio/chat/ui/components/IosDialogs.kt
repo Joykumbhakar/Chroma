@@ -1677,6 +1677,7 @@ fun IosConversationContextMenuModal(
     isPinned: Boolean = false,
 
     isLocked: Boolean = false,
+    isSecretHidden: Boolean = false,
 
     onDismiss: () -> Unit,
 
@@ -1690,6 +1691,7 @@ fun IosConversationContextMenuModal(
 
     onLockToggle: () -> Unit,
 
+    onHideToggle: (() -> Unit)? = null,
     onArchive: () -> Unit,
 
     onClearHistory: () -> Unit,
@@ -1949,6 +1951,18 @@ fun IosConversationContextMenuModal(
                             onClick = { onLockToggle(); onDismiss() }
 
                         )
+
+                        // Hide & Lock Chat (Secret Vault)
+                        if (onHideToggle != null) {
+                            ContextMenuItemRow(
+                                title = if (isSecretHidden) "Unhide Chat" else "Hide & Lock Chat",
+                                icon = {
+                                    if (isSecretHidden) LucideEye(tint = colors.iosBlue, size = 18.dp)
+                                    else LucideEyeOff(tint = colors.iosBlue, size = 18.dp)
+                                },
+                                onClick = { onHideToggle(); onDismiss() }
+                            )
+                        }
 
                         // Archive
 

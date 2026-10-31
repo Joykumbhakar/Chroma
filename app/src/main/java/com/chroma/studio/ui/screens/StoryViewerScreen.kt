@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -38,6 +39,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import com.chroma.studio.ui.theme.StoryFonts
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -122,11 +124,9 @@ private fun StorySlideContent(
                 try { Color(android.graphics.Color.parseColor(formatState.highlightColorHex)).copy(alpha = 0.35f) } catch (e: Exception) { textColor.copy(alpha = 0.25f) }
             } else Color.Transparent
 
-            val font = when (formatState.fontFamily) {
-                "Serif" -> androidx.compose.ui.text.font.FontFamily.Serif
-                "Mono" -> com.chroma.studio.ui.theme.MonoFontFamily
-                "Cursive" -> androidx.compose.ui.text.font.FontFamily.Cursive
-                else -> com.chroma.studio.ui.theme.InterFontFamily
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val font = remember(context, formatState.fontFamily) {
+                StoryFonts.getFontFamily(context, formatState.fontFamily)
             }
 
             val align = when (formatState.textAlign) {
@@ -317,7 +317,7 @@ fun StoryViewerScreen(
     currentUserProfile: UserProfile? = null,
     onClose: () -> Unit,
     onAuthorClick: (String) -> Unit,
-    onReplySend: ((authorId: String, text: String) -> Unit)? = null
+    onReplySend: ((authorId: String, text: String, storyId: String?, storyThumbnailUrl: String?) -> Unit)? = null
 ) {
     val allGroups = remember(storyGroups, myStories, currentUserId, currentUserProfile, initialGroupIndex) {
         if (initialGroupIndex < 0 && myStories.isNotEmpty()) {
@@ -385,7 +385,12 @@ fun StoryViewerScreen(
     val currentStoryIndexInGroup = currentStoryItem?.indexInGroup ?: 0
     val storiesForCurrentGroup = currentGroup?.stories ?: emptyList()
     val isOwner = currentStory != null && (currentStory.userId == currentUserId || currentGroup?.userId == currentUserId)
-    val isLiked = currentStory != null && likedStoryIds.contains(currentStory.id)
+    val vmLikedStoryIds by storyViewModel.likedStoryIds.collectAsState()
+    val isLiked = currentStory != null && (vmLikedStoryIds.contains(currentStory.id) || likedStoryIds.contains(currentStory.id))
+
+    var doubleTapHeartVisible by remember { mutableStateOf(false) }
+    val doubleTapHeartScale = remember { Animatable(0.2f) }
+    val doubleTapHeartAlpha = remember { Animatable(0f) }
 
     val isScrollInProgress = pagerState.isScrollInProgress
     val effectivePaused = isPaused || isScrollInProgress || showViewers || showDeleteConfirm || showOnlyFriendsSheet || showOnlyFriendsInfoDialog
@@ -504,6 +509,26 @@ fun StoryViewerScreen(
                                     tryAwaitRelease()
                                     isPaused = false
                                 },
+                                onDoubleTap = {
+                                    val currentItem = allFlatStories.getOrNull(page)
+                                    currentItem?.story?.let { story ->
+                                        storyViewModel.forceLike(story.id)
+                                        doubleTapHeartVisible = true
+                                        scope.launch {
+                                            doubleTapHeartScale.snapTo(0.25f)
+                                            doubleTapHeartAlpha.snapTo(1f)
+                                            launch {
+                                                doubleTapHeartScale.animateTo(
+                                                    targetValue = 1.35f,
+                                                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)
+                                                )
+                                            }
+                                            kotlinx.coroutines.delay(450)
+                                            doubleTapHeartAlpha.animateTo(0f, tween(250))
+                                            doubleTapHeartVisible = false
+                                        }
+                                    }
+                                },
                                 onTap = { offset ->
                                     if (showViewers || showDeleteConfirm || showOnlyFriendsSheet || showOnlyFriendsInfoDialog) return@detectTapGestures
                                     val totalWidth = size.width
@@ -535,6 +560,24 @@ fun StoryViewerScreen(
                         }
                 ) {
                     StorySlideContent(story = storyItem.story)
+
+                    // Floating Bursting Heart on Double-Tap
+                    if (doubleTapHeartVisible && pagerState.currentPage == page) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = ChromaIcons.HeartFilled,
+                                contentDescription = null,
+                                tint = Color(0xFFFF2D55),
+                                modifier = Modifier
+                                    .size(105.dp)
+                                    .scale(doubleTapHeartScale.value)
+                                    .alpha(doubleTapHeartAlpha.value)
+                            )
+                        }
+                    }
 
                     // Dynamic 3D lighting shadow overlay during cube rotation
                     val offsetFromCurrent = (page - pagerState.currentPage) - pagerState.currentPageOffsetFraction
@@ -770,6 +813,7 @@ fun StoryViewerScreen(
                                                     val storyId = currentStory?.id ?: ""
                                                     val mediaUrl = currentStory?.mediaUrl
                                                     if (authorId.isNotBlank()) {
+                                                        onReplySend?.invoke(authorId, emoji, storyId, mediaUrl)
                                                         scope.launch {
                                                             NotificationDispatcher.sendNotification(
                                                                 targetUserId = authorId,
@@ -836,7 +880,7 @@ fun StoryViewerScreen(
                                                     val storyId = currentStory?.id ?: ""
                                                     val mediaUrl = currentStory?.mediaUrl
                                                     if (authorId.isNotBlank() && reply.isNotBlank()) {
-                                                        onReplySend?.invoke(authorId, reply)
+                                                        onReplySend?.invoke(authorId, reply, storyId, mediaUrl)
                                                         scope.launch {
                                                             NotificationDispatcher.sendNotification(
                                                                 targetUserId = authorId,
@@ -1087,9 +1131,9 @@ private fun AdminStoryViewersSheet(
                                     size = 38.dp,
                                     gender = profile.gender
                                 )
-                                Column {
-                                    Text(profile.displayName, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                                    Text("@${profile.username}", color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp)
+                                Column(verticalArrangement = Arrangement.spacedBy((-2).dp)) {
+                                    Text(profile.displayName, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, lineHeight = 16.sp)
+                                    Text("@${profile.username}", color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp, lineHeight = 14.sp)
                                 }
                             }
 

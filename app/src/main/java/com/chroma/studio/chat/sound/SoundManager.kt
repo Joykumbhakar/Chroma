@@ -21,7 +21,10 @@ object SoundManager {
     private var dynamicIslandSoundId: Int = 0
     private var messageSentSoundId: Int = 0
     private var messageSent2ndSoundId: Int = 0
+    private var refreshedSoundId: Int = 0
+    private var notificationSoundId: Int = 0
     private var isPoolLoaded = false
+    private var previewPlayer: android.media.MediaPlayer? = null
     private val loadedSoundIds = java.util.Collections.synchronizedSet(mutableSetOf<Int>())
 
     private var lastScrubTimestamp = 0L
@@ -52,6 +55,8 @@ object SoundManager {
             dynamicIslandSoundId = safeLoad(R.raw.dynamic_island_notification)
             messageSentSoundId = safeLoad(R.raw.message_sent_default_audio_sound_effect)
             messageSent2ndSoundId = safeLoad(R.raw.message_sent_default_audio_sound_effect_2nd)
+            refreshedSoundId = safeLoad(R.raw.refreshed_audio)
+            notificationSoundId = safeLoad(R.raw.notification_sound_default)
 
             pool.setOnLoadCompleteListener { _, sampleId, status ->
                 if (status == 0) {
@@ -134,6 +139,67 @@ object SoundManager {
         }
     }
 
+    /**
+     * Plays the crisp refreshed audio cue when user pulls or taps to refresh the feed
+     */
+    fun playRefresh(context: Context? = null) {
+        if (!isSoundsEnabled) return
+        if (soundPool == null && context != null) {
+            init(context)
+        }
+
+        val pool = soundPool
+        if (pool != null && refreshedSoundId != 0 && (isPoolLoaded || loadedSoundIds.contains(refreshedSoundId))) {
+            pool.play(refreshedSoundId, 0.85f, 0.85f, 1, 0, 1.0f)
+        } else if (context != null) {
+            try {
+                val mp = android.media.MediaPlayer.create(context.applicationContext, R.raw.refreshed_audio)
+                mp?.setOnCompletionListener { it.release() }
+                mp?.start()
+            } catch (_: Throwable) {}
+        }
+    }
+
+    /**
+     * Plays an in-app notification chime using the user's selected tone
+     */
+    fun playNotification(context: Context? = null) {
+        if (!isSoundsEnabled) return
+        if (context == null) {
+            val pool = soundPool
+            if (pool != null && notificationSoundId != 0 && isPoolLoaded) {
+                pool.play(notificationSoundId, 0.85f, 0.85f, 1, 0, 1.0f)
+            }
+            return
+        }
+
+        val prefs = context.getSharedPreferences("notification_settings", Context.MODE_PRIVATE)
+        if (!prefs.getBoolean("notif_sounds", true)) return
+
+        val toneId = prefs.getString("selected_notification_sound", "default")
+        val tone = AVAILABLE_NOTIFICATION_TONES.find { it.id == toneId } ?: AVAILABLE_NOTIFICATION_TONES.first()
+        playTonePreview(context, tone.resId)
+    }
+
+    /**
+     * Previews a notification tone from the Notification Sound Pack
+     */
+    fun playTonePreview(context: Context, resId: Int) {
+        try {
+            previewPlayer?.stop()
+            previewPlayer?.release()
+            previewPlayer = null
+
+            val mp = android.media.MediaPlayer.create(context.applicationContext, resId)
+            mp?.setOnCompletionListener {
+                it.release()
+                if (previewPlayer == it) previewPlayer = null
+            }
+            previewPlayer = mp
+            mp?.start()
+        } catch (_: Throwable) {}
+    }
+
     fun playReaction() {
         // Disabled: Keep UI taps and reactions silent
     }
@@ -201,3 +267,30 @@ object SoundManager {
         }
     }
 }
+
+
+/**
+ * Representation of an individual notification sound option from the Notification Sound Pack
+ */
+data class NotificationTone(
+    val id: String,
+    val name: String,
+    val subtitle: String,
+    val resId: Int
+)
+
+val AVAILABLE_NOTIFICATION_TONES = listOf(
+    NotificationTone("default", "Galaxy Crystal", "Default crystal chime", R.raw.notification_sound_default),
+    NotificationTone("chime_pop", "Chime Pop", "Subtle acoustic pop", R.raw.notification_sound2),
+    NotificationTone("breeze", "Breeze", "Soft airy notification", R.raw.notification_sound1),
+    NotificationTone("pulse", "Pulse", "Quick energetic alert", R.raw.notification_sound3),
+    NotificationTone("cosmic", "Cosmic Drop", "Ambient glass tone", R.raw.notification_sound5),
+    NotificationTone("bloom", "Harmonic Bloom", "Resonant melodic chime", R.raw.notification_sound6),
+    NotificationTone("starlight", "Starlight", "High acoustic shimmer", R.raw.notification_sound7),
+    NotificationTone("echo_wave", "Echo Wave", "Modern double wave alert", R.raw.notification_sound8),
+    NotificationTone("velvet", "Velvet Note", "Smooth warm acoustic bell", R.raw.notification_sound9),
+    NotificationTone("crystal_bell", "Crystal Bell", "Clear acoustic chime", R.raw.notification_sound),
+    NotificationTone("celestial", "Celestial Harmony", "Extended harmonic chime", R.raw.notification_sound10),
+    NotificationTone("flute", "Radha Krishna Flute", "Devotional serene flute", R.raw.radha_krishan_flute),
+    NotificationTone("playful", "Playful Melody", "Upbeat whistle tune", R.raw.notification_sound_playful)
+)

@@ -6,6 +6,7 @@ import com.chroma.studio.model.UserProfile
 import com.chroma.studio.model.UserStoryGroup
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.tasks.await
@@ -167,35 +168,29 @@ class StoryRepository {
         }
     }
 
-    /** Toggle like on a story. Returns the new liked state. */
-    suspend fun toggleLike(storyId: String): Boolean {
+    /**
+     * Sets the like state for a story idempotently.
+     * Uses atomic FieldValue operations compatible with offline queuing.
+     * Returns true if the remote write succeeded, false if offline/error.
+     */
+    suspend fun setStoryLike(storyId: String, targetLiked: Boolean): Boolean {
         val uid = auth.currentUser?.uid ?: return false
+        if (storyId.isBlank()) return false
         return try {
             val docRef = storiesCol.document(storyId)
-            val isNowLiked = db.runTransaction { transaction ->
-                val snapshot = transaction.get(docRef)
-                val likedBy = snapshot.get("likedBy") as? List<String> ?: emptyList()
-                val currentLikes = snapshot.getLong("likes") ?: 0L
-                val alreadyLiked = likedBy.contains(uid)
-                
-                if (alreadyLiked) {
-                    transaction.update(
-                        docRef,
-                        "likedBy", FieldValue.arrayRemove(uid),
-                        "likes", maxOf(0, currentLikes - 1)
-                    )
-                    false
-                } else {
-                    transaction.update(
-                        docRef,
-                        "likedBy", FieldValue.arrayUnion(uid),
-                        "likes", currentLikes + 1
-                    )
-                    true
+            if (targetLiked) {
+                val updates = mapOf(
+                    "likedBy" to FieldValue.arrayUnion(uid),
+                    "likes" to FieldValue.increment(1)
+                )
+                try {
+                    docRef.update(updates).await()
+                } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    docRef.set(mapOf("likedBy" to listOf(uid), "likes" to 1), SetOptions.merge()).await()
                 }
-            }.await()
 
-            if (isNowLiked) {
+                // Dispatch notification to story author
                 try {
                     val storyDoc = docRef.get().await()
                     val authorId = storyDoc.getString("userId")
@@ -212,8 +207,38 @@ class StoryRepository {
                 } catch (e: Exception) {
                     Log.w("StoryRepository", "Failed to dispatch story like notification", e)
                 }
+            } else {
+                val updates = mapOf(
+                    "likedBy" to FieldValue.arrayRemove(uid),
+                    "likes" to FieldValue.increment(-1)
+                )
+                try {
+                    docRef.update(updates).await()
+                } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    Log.w("StoryRepository", "unlike update fallback", e)
+                }
             }
-            isNowLiked
+            true
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            Log.e("StoryRepository", "setStoryLike error", e)
+            false
+        }
+    }
+
+    /** Toggle like on a story. Returns the new liked state. */
+    suspend fun toggleLike(storyId: String): Boolean {
+        val uid = auth.currentUser?.uid ?: return false
+        if (storyId.isBlank()) return false
+        return try {
+            val docRef = storiesCol.document(storyId)
+            val snapshot = docRef.get().await()
+            val likedBy = snapshot.get("likedBy") as? List<String> ?: emptyList()
+            val currentlyLiked = likedBy.contains(uid)
+            val targetLiked = !currentlyLiked
+            setStoryLike(storyId, targetLiked)
+            targetLiked
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             false

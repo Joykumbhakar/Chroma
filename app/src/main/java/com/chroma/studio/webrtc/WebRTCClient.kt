@@ -4,9 +4,10 @@ import android.content.Context
 import org.webrtc.*
 
 class WebRTCClient(
-    private val context: Context,
+    context: Context,
     private val observer: PeerConnection.Observer
 ) {
+    private val context = context.applicationContext
     private val rootEglBase: EglBase = EglBase.create()
     val eglBaseContext: EglBase.Context = rootEglBase.eglBaseContext
 

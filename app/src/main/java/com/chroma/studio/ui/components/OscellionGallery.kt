@@ -149,7 +149,7 @@ fun OscellionGalleryLayout(
 
     // Direct native System PhotoPicker fallback (zero permission barrier)
     val systemPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickMultipleVisualMedia(maxSelection)
+        contract = ActivityResultContracts.PickMultipleVisualMedia(maxSelection.coerceAtLeast(2))
     ) { uris: List<Uri> ->
         if (uris.isNotEmpty()) {
             SoundManager.playTap(context)

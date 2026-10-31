@@ -1,5 +1,13 @@
 package com.chroma.studio.ui.screens
 
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.text.TextStyle
+import com.chroma.studio.ui.onboarding.TheSignatureFont
+
 import android.Manifest
 import android.app.Activity
 import android.net.Uri
@@ -22,6 +30,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -33,6 +43,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.chroma.studio.ui.components.IosAvatarView
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.content.PermissionChecker
@@ -46,6 +57,7 @@ import com.chroma.studio.ui.components.GlassTextButton
 import com.chroma.studio.ui.components.OscellionBackground
 import com.chroma.studio.ui.components.OscellionLoadingSpinner
 import com.chroma.studio.ui.components.OscellionLogo
+import com.chroma.studio.ui.components.OscellionAppIcon
 import com.chroma.studio.ui.components.LiquidGlassTokens
 import com.chroma.studio.ui.components.LiquidGlassSecondaryButton
 import com.chroma.studio.ui.components.getDefaultAvatarDrawableRes
@@ -95,16 +107,7 @@ fun checkPasswordStrength(password: String): PasswordStrength = PasswordStrength
 
 // ─── Avatar Upload (Aggressively Compressed < 25KB for Supabase Free Tier) ─────────────────────────
 suspend fun uploadAvatarToSupabase(uid: String, imageBytes: ByteArray): String? {
-    return try {
-        val compressedBytes = ImageUtils.compressAvatarBytesForSupabase(imageBytes) ?: imageBytes
-        val bucket = SupabaseClient.client.storage["avatars"]
-        val path = "$uid/avatar.jpg"
-        bucket.upload(path, compressedBytes, upsert = true)
-        bucket.publicUrl(path)
-    } catch (e: Exception) {
-        Log.e("AvatarUpload", "Upload failed", e)
-        null
-    }
+    return com.chroma.studio.data.SupabaseMediaStorage.uploadAvatarBytes(uid, imageBytes)
 }
 
 enum class AuthStep {
@@ -135,32 +138,35 @@ fun CupertinoTextField(
     enabled: Boolean = true
 ) {
     val colors = LocalOscellionColors.current
+    val isDark = colors.isDark
+
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
         placeholder = { Text(placeholder, color = colors.textMuted.copy(alpha = 0.55f), fontSize = 15.sp) },
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 52.dp),
-        shape = RoundedCornerShape(12.dp),
+            .heightIn(min = 54.dp),
+        shape = RoundedCornerShape(14.dp),
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = colors.primary,
-            unfocusedBorderColor = colors.glassBorder.copy(alpha = 0.7f),
+            unfocusedBorderColor = if (isDark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f),
             errorBorderColor = colors.error,
             focusedTextColor = colors.textMain,
             unfocusedTextColor = colors.textMain,
             disabledTextColor = colors.textMuted,
             cursorColor = colors.primary,
-            focusedContainerColor = Color.Transparent,
-            unfocusedContainerColor = Color.Transparent,
-            errorContainerColor = Color.Transparent
+            focusedContainerColor = if (isDark) Color.White.copy(alpha = 0.06f) else Color.Black.copy(alpha = 0.03f),
+            unfocusedContainerColor = if (isDark) Color.White.copy(alpha = 0.04f) else Color.Black.copy(alpha = 0.02f),
+            errorContainerColor = colors.error.copy(alpha = 0.05f)
         ),
         singleLine = singleLine,
         isError = isError,
         enabled = enabled,
         leadingIcon = leadingIcon,
         trailingIcon = trailingIcon,
-        visualTransformation = visualTransformation
+        visualTransformation = visualTransformation,
+        textStyle = TextStyle(fontSize = 15.5.sp, color = colors.textMain, fontWeight = FontWeight.Normal)
     )
 }
 
@@ -173,21 +179,89 @@ fun CupertinoPrimaryButton(
     containerColor: Color = LocalOscellionColors.current.primary,
     content: @Composable RowScope.() -> Unit
 ) {
-    // Professional clean modern rectangular button (No Pill, No Shadow)
-    val shape = RoundedCornerShape(10.dp)
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.975f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMedium, dampingRatio = Spring.DampingRatioLowBouncy),
+        label = "btnScale"
+    )
+
+    val shape = RoundedCornerShape(15.dp)
+    val buttonGradient = if (enabled && !isLoading) {
+        Brush.linearGradient(
+            colors = listOf(
+                Color(0xFF2F80ED),
+                Color(0xFF007AFF),
+                Color(0xFF0056D6)
+            ),
+            start = Offset(0f, 0f),
+            end = Offset.Infinite
+        )
+    } else {
+        Brush.linearGradient(
+            colors = listOf(
+                Color(0xFF007AFF).copy(alpha = 0.4f),
+                Color(0xFF0056D6).copy(alpha = 0.4f)
+            )
+        )
+    }
+
+    // Shiny specular glass corner gradient (top-left & bottom-right reflections)
+    val shinyGlassBorder = Brush.linearGradient(
+        colors = listOf(
+            Color.White.copy(alpha = 0.85f), // Shiny Top-Left Corner
+            Color.White.copy(alpha = 0.15f),
+            Color.White.copy(alpha = 0.10f),
+            Color.White.copy(alpha = 0.65f)  // Shiny Bottom-Right Corner
+        ),
+        start = Offset(0f, 0f),
+        end = Offset.Infinite
+    )
+
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(48.dp)
-            .clip(shape)
-            .background(
-                if (enabled && !isLoading) Color(0xFF007AFF)
-                else Color(0xFF007AFF).copy(alpha = 0.4f)
+            .height(52.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .shadow(
+                elevation = if (enabled && !isLoading) 10.dp else 0.dp,
+                shape = shape,
+                ambientColor = Color(0xFF007AFF).copy(alpha = 0.25f),
+                spotColor = Color(0xFF007AFF).copy(alpha = 0.40f)
             )
-            .clickable(enabled = enabled && !isLoading, onClick = onClick)
+            .clip(shape)
+            .background(buttonGradient)
+            .border(1.2.dp, shinyGlassBorder, shape)
+            .clickable(
+                enabled = enabled && !isLoading,
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
             .padding(horizontal = 20.dp),
         contentAlignment = Alignment.Center
     ) {
+        // Specular top rim highlight for liquid glass depth
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .align(Alignment.TopCenter)
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(
+                            Color.Transparent,
+                            Color.White.copy(alpha = 0.60f),
+                            Color.Transparent
+                        )
+                    )
+                )
+        )
+
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
@@ -236,25 +310,273 @@ fun CupertinoSecondaryButton(
     content: @Composable RowScope.() -> Unit
 ) {
     val colors = LocalOscellionColors.current
-    val shape = RoundedCornerShape(10.dp)
+    val isDark = colors.isDark
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.975f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMedium, dampingRatio = Spring.DampingRatioLowBouncy),
+        label = "btnSecScale"
+    )
+
+    val shape = RoundedCornerShape(15.dp)
+    val bgGradient = if (isDark) {
+        Brush.linearGradient(
+            listOf(
+                Color(0xFF222630).copy(alpha = 0.88f),
+                Color(0xFF171A22).copy(alpha = 0.94f)
+            )
+        )
+    } else {
+        Brush.linearGradient(
+            listOf(
+                Color(0xFFFFFFFF).copy(alpha = 0.95f),
+                Color(0xFFF3F5FA).copy(alpha = 0.90f)
+            )
+        )
+    }
+
+    // Shiny specular corner gradient (top-left & bottom-right reflections)
+    val shinyGlassBorder = Brush.linearGradient(
+        colors = listOf(
+            if (isDark) Color.White.copy(alpha = 0.65f) else Color.White,
+            if (isDark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f),
+            if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f),
+            if (isDark) Color.White.copy(alpha = 0.50f) else Color.White.copy(alpha = 0.85f)
+        ),
+        start = Offset(0f, 0f),
+        end = Offset.Infinite
+    )
+
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(48.dp)
-            .clip(shape)
-            .background(
-                if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
+            .height(52.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .shadow(
+                elevation = if (isDark) 4.dp else 6.dp,
+                shape = shape,
+                ambientColor = Color.Black.copy(alpha = 0.10f),
+                spotColor = Color.Black.copy(alpha = 0.15f)
             )
-            .clickable(enabled = enabled && !isLoading, onClick = onClick)
+            .clip(shape)
+            .background(bgGradient)
+            .border(1.2.dp, shinyGlassBorder, shape)
+            .clickable(
+                enabled = enabled && !isLoading,
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
             .padding(horizontal = 20.dp),
         contentAlignment = Alignment.Center
     ) {
+        // Specular top edge highlight
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .align(Alignment.TopCenter)
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(
+                            Color.Transparent,
+                            if (isDark) Color.White.copy(alpha = 0.35f) else Color.White.copy(alpha = 0.9f),
+                            Color.Transparent
+                        )
+                    )
+                )
+        )
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
             content = content
         )
+    }
+}
+
+/**
+ * Premium Frosted Glass Feature Pillar Card for Login Presentation.
+ */
+@Composable
+private fun LoginFeatureCard(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    iconGradient: List<Color>,
+    title: String,
+    subtitle: String,
+    modifier: Modifier = Modifier
+) {
+    val colors = LocalOscellionColors.current
+    val isDark = colors.isDark
+
+    val cardBg = if (isDark) {
+        Brush.linearGradient(
+            listOf(
+                Color(0xFF1E2129).copy(alpha = 0.70f),
+                Color(0xFF14161D).copy(alpha = 0.75f)
+            )
+        )
+    } else {
+        Brush.linearGradient(
+            listOf(
+                Color.White.copy(alpha = 0.85f),
+                Color(0xFFF8FAFC).copy(alpha = 0.80f)
+            )
+        )
+    }
+
+    val shinyBorder = Brush.linearGradient(
+        listOf(
+            Color.White.copy(alpha = if (isDark) 0.35f else 0.70f),
+            Color.White.copy(alpha = if (isDark) 0.08f else 0.20f),
+            Color.White.copy(alpha = if (isDark) 0.22f else 0.50f)
+        )
+    )
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(cardBg)
+            .border(1.dp, shinyBorder, RoundedCornerShape(18.dp))
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(42.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(Brush.linearGradient(iconGradient)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 14.5.sp,
+                color = colors.textMain,
+                letterSpacing = (-0.2).sp
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = subtitle,
+                fontSize = 12.5.sp,
+                color = colors.textMuted,
+                lineHeight = 16.sp
+            )
+        }
+    }
+}
+
+/**
+ * Premium Frosted Glass Saved Account Card with Shiny Specular Corner Highlights.
+ */
+@Composable
+private fun LoginSavedAccountCard(
+    account: SavedAccount,
+    onClick: () -> Unit,
+    onRemove: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val colors = LocalOscellionColors.current
+    val isDark = colors.isDark
+
+    val cardBg = if (isDark) {
+        Brush.linearGradient(
+            listOf(
+                Color(0xFF222632).copy(alpha = 0.85f),
+                Color(0xFF171A22).copy(alpha = 0.90f)
+            )
+        )
+    } else {
+        Brush.linearGradient(
+            listOf(
+                Color.White.copy(alpha = 0.95f),
+                Color(0xFFF3F6FB).copy(alpha = 0.90f)
+            )
+        )
+    }
+
+    val shinyBorder = Brush.linearGradient(
+        listOf(
+            Color.White.copy(alpha = if (isDark) 0.45f else 0.85f),
+            Color.White.copy(alpha = if (isDark) 0.10f else 0.20f),
+            Color.White.copy(alpha = if (isDark) 0.30f else 0.60f)
+        )
+    )
+
+    Surface(
+        onClick = onClick,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(72.dp),
+        shape = RoundedCornerShape(18.dp),
+        color = Color.Transparent
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(RoundedCornerShape(18.dp))
+                .background(cardBg)
+                .border(1.dp, shinyBorder, RoundedCornerShape(18.dp))
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IosAvatarView(
+                name = account.displayName.ifBlank { account.username },
+                avatarUrl = account.avatarUrl,
+                size = 46.dp,
+                gender = account.gender
+            )
+
+            Spacer(Modifier.width(14.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = account.displayName,
+                    fontSize = 15.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = colors.textMain,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = "@${account.username}",
+                    fontSize = 13.sp,
+                    color = colors.primary,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
+            }
+
+            IconButton(
+                onClick = onRemove,
+                modifier = Modifier.size(34.dp)
+            ) {
+                Icon(
+                    imageVector = Lucide.X,
+                    contentDescription = "Remove account",
+                    tint = colors.textMuted.copy(alpha = 0.6f),
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
     }
 }
 
@@ -267,6 +589,37 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onCancel: () -> Unit) {
     val colors = LocalOscellionColors.current
     val scope = rememberCoroutineScope()
     var currentStep by remember { mutableStateOf(AuthStep.INITIAL) }
+
+    // Chromatic animated wave gradient for Oscellion typography
+    val infiniteTransition = rememberInfiniteTransition(label = "loginWaveGradient")
+    val wavePhase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 3500, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "loginGradientPhase"
+    )
+    val waveColors = listOf(
+        Color(0xFF38EF7D),
+        Color(0xFF00F2FE),
+        Color(0xFF4FACFE),
+        Color(0xFF9D4EDD),
+        Color(0xFFFF5E7E),
+        Color(0xFFFFAA00),
+        Color(0xFF38EF7D)
+    )
+    val animatedWaveBrush = remember(wavePhase) {
+        val spread = 700f
+        val offset = wavePhase * spread
+        Brush.linearGradient(
+            colors = waveColors,
+            start = Offset(offset, 0f),
+            end = Offset(offset + spread, spread * 0.45f),
+            tileMode = TileMode.Repeated
+        )
+    }
 
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -311,17 +664,16 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onCancel: () -> Unit) {
 
     // Camera setup with runtime permission
     var cameraImageUri by remember { mutableStateOf<Uri?>(null) }
+    var pendingCropUri by remember { mutableStateOf<Uri?>(null) }
 
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
         if (success && cameraImageUri != null) {
-            selectedAvatarUri = cameraImageUri
-            scope.launch { selectedAvatarBytes = compressImageToUnder50KB(context, cameraImageUri!!) }
+            pendingCropUri = cameraImageUri
         }
     }
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
-            selectedAvatarUri = uri
-            scope.launch { selectedAvatarBytes = compressImageToUnder50KB(context, uri) }
+            pendingCropUri = uri
         }
     }
 
@@ -336,6 +688,19 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onCancel: () -> Unit) {
         } else {
             errorMessage = "Camera permission denied. Please enable it in Settings."
         }
+    }
+
+    if (pendingCropUri != null) {
+        com.chroma.studio.ui.components.ProfileMediaEditorModal(
+            imageUri = pendingCropUri!!,
+            target = com.chroma.studio.ui.components.ProfileCropTarget.AVATAR,
+            onDismiss = { pendingCropUri = null },
+            onCropSuccess = { croppedUri ->
+                pendingCropUri = null
+                selectedAvatarUri = croppedUri
+                scope.launch { selectedAvatarBytes = compressImageToUnder50KB(context, croppedUri) }
+            }
+        )
     }
 
     fun launchCamera() {
@@ -436,6 +801,7 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onCancel: () -> Unit) {
                 matchedProfile = profile
                 currentStep = AuthStep.LOGIN_MISSING_AVATAR
             } else {
+                com.chroma.studio.services.ChromaMessagingService.syncTokenForCurrentUser()
                 onLoginSuccess()
             }
         } else {
@@ -578,19 +944,36 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onCancel: () -> Unit) {
                             AuthStep.INITIAL -> {
                                 Spacer(Modifier.height(24.dp))
 
-                                Box(
-                                    modifier = Modifier
-                                        .size(82.dp)
-                                        .clip(RoundedCornerShape(22.dp))
-                                        .background(if (colors.isDark) Color(0xFF0A0A0A) else Color(0xFFF2F2F7))
-                                        .border(1.dp, colors.glassBorder, RoundedCornerShape(22.dp)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    OscellionLogo(
-                                        size = 50.dp,
-                                        outerColor = if (colors.isDark) Color.White else Color(0xFF111827),
-                                        innerColor = Color(0xFF007AFF)
+                                Box(contentAlignment = Alignment.Center) {
+                                    // Ambient Aurora halo bloom behind logo
+                                    Box(
+                                        modifier = Modifier
+                                            .size(160.dp)
+                                            .background(
+                                                Brush.radialGradient(
+                                                    colors = listOf(
+                                                        Color(0xFF007AFF).copy(alpha = if (colors.isDark) 0.35f else 0.20f),
+                                                        Color(0xFFA855F7).copy(alpha = if (colors.isDark) 0.18f else 0.10f),
+                                                        Color.Transparent
+                                                    )
+                                                )
+                                            )
                                     )
+
+                                    // Official 3D Milled Metallic Logo Icon
+                                    Box(
+                                        modifier = Modifier
+                                            .size(86.dp)
+                                            .shadow(
+                                                elevation = 20.dp,
+                                                shape = RoundedCornerShape(24.dp),
+                                                spotColor = Color(0xFF007AFF).copy(alpha = 0.40f)
+                                            )
+                                            .clip(RoundedCornerShape(24.dp)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        OscellionAppIcon(size = 86.dp)
+                                    }
                                 }
 
                                 Spacer(Modifier.height(24.dp))
@@ -615,86 +998,20 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onCancel: () -> Unit) {
 
                                     Spacer(Modifier.height(28.dp))
 
-                                    // Saved Accounts list (Cardless, uniform background, 12dp rounded corners)
+                                    // Saved Accounts list (Glass Frosted Cards)
                                     Column(
                                         modifier = Modifier.fillMaxWidth(),
                                         verticalArrangement = Arrangement.spacedBy(10.dp)
                                     ) {
                                         savedAccounts.forEach { account ->
-                                            val defaultAvatarRes = getDefaultAvatarDrawableRes(account.gender)
-                                            Surface(
+                                            LoginSavedAccountCard(
+                                                account = account,
                                                 onClick = { loginWithGoogle() },
-                                                modifier = Modifier.fillMaxWidth().height(68.dp),
-                                                shape = RoundedCornerShape(12.dp),
-                                                color = colors.primary.copy(alpha = 0.08f),
-                                                border = BorderStroke(1.dp, colors.glassBorder.copy(alpha = 0.75f))
-                                            ) {
-                                                Row(
-                                                    modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp),
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .size(44.dp)
-                                                            .clip(CircleShape)
-                                                            .border(1.dp, colors.primary.copy(alpha = 0.4f), CircleShape),
-                                                        contentAlignment = Alignment.Center
-                                                    ) {
-                                                        if (account.avatarUrl.isNotBlank()) {
-                                                            AsyncImage(
-                                                                model = account.avatarUrl,
-                                                                contentDescription = null,
-                                                                modifier = Modifier.fillMaxSize(),
-                                                                contentScale = ContentScale.Crop
-                                                            )
-                                                        } else if (defaultAvatarRes != null) {
-                                                            Image(
-                                                                painter = painterResource(defaultAvatarRes),
-                                                                contentDescription = null,
-                                                                modifier = Modifier.fillMaxSize(),
-                                                                contentScale = ContentScale.Crop
-                                                            )
-                                                        } else {
-                                                            Icon(Lucide.User, null, tint = colors.textMuted, modifier = Modifier.size(22.dp))
-                                                        }
-                                                    }
-
-                                                    Spacer(Modifier.width(12.dp))
-
-                                                    Column(modifier = Modifier.weight(1f)) {
-                                                        Text(
-                                                            text = account.displayName,
-                                                            fontSize = 15.sp,
-                                                            fontWeight = FontWeight.SemiBold,
-                                                            color = colors.textMain,
-                                                            maxLines = 1,
-                                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                                        )
-                                                        Text(
-                                                            text = "@${account.username}",
-                                                            fontSize = 13.sp,
-                                                            color = colors.textMuted,
-                                                            maxLines = 1,
-                                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                                        )
-                                                    }
-
-                                                    IconButton(
-                                                        onClick = {
-                                                            SavedAccountManager.removeAccount(context, account.uid)
-                                                            savedAccounts = SavedAccountManager.getSavedAccounts(context)
-                                                        },
-                                                        modifier = Modifier.size(32.dp)
-                                                    ) {
-                                                        Icon(
-                                                            imageVector = Lucide.X,
-                                                            contentDescription = "Remove account from device",
-                                                            tint = colors.textMuted.copy(alpha = 0.6f),
-                                                            modifier = Modifier.size(16.dp)
-                                                        )
-                                                    }
+                                                onRemove = {
+                                                    SavedAccountManager.removeAccount(context, account.uid)
+                                                    savedAccounts = SavedAccountManager.getSavedAccounts(context)
                                                 }
-                                            }
+                                            )
                                         }
                                     }
 
@@ -710,6 +1027,25 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onCancel: () -> Unit) {
                                     }
 
                                     Spacer(Modifier.height(28.dp))
+
+                                    CupertinoSecondaryButton(
+                                        onClick = { loginWithGoogle() },
+                                        modifier = Modifier.padding(bottom = 10.dp)
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_apple_logo),
+                                            contentDescription = "Apple",
+                                            modifier = Modifier.size(20.dp),
+                                            tint = if (colors.isDark) Color.White else Color.Black
+                                        )
+                                        Spacer(Modifier.width(10.dp))
+                                        Text(
+                                            text = "Continue with Apple",
+                                            color = colors.textMain,
+                                            fontSize = 15.5.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
 
                                     CupertinoPrimaryButton(
                                         onClick = { loginWithGoogle() },
@@ -743,55 +1079,68 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onCancel: () -> Unit) {
                                         )
                                     }
                                 } else {
-                                    Text(
-                                        text = "Welcome to Oscellion",
-                                        fontSize = 28.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = colors.textMain,
-                                        textAlign = TextAlign.Center,
-                                        letterSpacing = (-0.5).sp
-                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        Text(
+                                            text = "Welcome to ",
+                                            fontSize = 25.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = colors.textMain,
+                                            letterSpacing = (-0.4).sp
+                                        )
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = "Oscellion",
+                                                fontSize = 27.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = colors.textMain,
+                                                letterSpacing = (-0.5).sp
+                                            )
+                                            Text(
+                                                text = ".",
+                                                fontSize = 27.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = Color(0xFF007AFF)
+                                            )
+                                        }
+                                    }
                                     Spacer(Modifier.height(8.dp))
                                     Text(
-                                        text = "Craft high-fidelity gradients, discover artwork, and message with end-to-end encryption.",
-                                        fontSize = 15.sp,
+                                        text = "Craft high-fidelity visual artwork, explore creations, and connect with a community of designers.",
+                                        fontSize = 14.5.sp,
                                         color = colors.textMuted,
                                         textAlign = TextAlign.Center,
-                                        lineHeight = 22.sp,
-                                        modifier = Modifier.padding(horizontal = 16.dp)
+                                        lineHeight = 21.sp,
+                                        modifier = Modifier.padding(horizontal = 20.dp)
                                     )
 
-                                    Spacer(Modifier.height(36.dp))
+                                    Spacer(Modifier.height(30.dp))
 
-                                    // Feature highlights (Cardless, uniform background)
+                                    // Feature highlights (Shiny glass frosted cards)
                                     Column(
-                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                                        verticalArrangement = Arrangement.spacedBy(11.dp)
                                     ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(Lucide.Palette, null, tint = colors.primary, modifier = Modifier.size(22.dp))
-                                            Spacer(Modifier.width(14.dp))
-                                            Column {
-                                                Text("Creative Canvas", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = colors.textMain)
-                                                Text("Multi-layer gradient studio with live rendering", fontSize = 13.sp, color = colors.textMuted)
-                                            }
-                                        }
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(Lucide.Lock, null, tint = colors.primary, modifier = Modifier.size(22.dp))
-                                            Spacer(Modifier.width(14.dp))
-                                            Column {
-                                                Text("Private Messaging", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = colors.textMain)
-                                                Text("End-to-end encrypted chats, audio, and media", fontSize = 13.sp, color = colors.textMuted)
-                                            }
-                                        }
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(Lucide.Zap, null, tint = colors.primary, modifier = Modifier.size(22.dp))
-                                            Spacer(Modifier.width(14.dp))
-                                            Column {
-                                                Text("Instant Realtime", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = colors.textMain)
-                                                Text("Ephemeral thought notes, stories, and feed", fontSize = 13.sp, color = colors.textMuted)
-                                            }
-                                        }
+                                        LoginFeatureCard(
+                                            icon = Lucide.Palette,
+                                            iconGradient = listOf(Color(0xFF2F80ED), Color(0xFF7C3AED)),
+                                            title = "Creative Studio",
+                                            subtitle = "Multi-layer gradient studio with real-time rendering"
+                                        )
+                                        LoginFeatureCard(
+                                            icon = Lucide.Lock,
+                                            iconGradient = listOf(Color(0xFF10B981), Color(0xFF06B6D4)),
+                                            title = "Private Messaging",
+                                            subtitle = "Encrypted direct chats, audio, and media sharing"
+                                        )
+                                        LoginFeatureCard(
+                                            icon = Lucide.Zap,
+                                            iconGradient = listOf(Color(0xFFFF2D55), Color(0xFFA855F7)),
+                                            title = "Instant Stories",
+                                            subtitle = "Share daily status, audio waveforms, and community art"
+                                        )
                                     }
 
                                     if (errorMessage != null) {
@@ -829,7 +1178,7 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onCancel: () -> Unit) {
 
                                 Spacer(Modifier.height(24.dp))
                                 Text(
-                                    text = "By continuing, you agree to Chroma's Terms of Service and Privacy Policy.",
+                                    text = "By continuing, you agree to Oscellion's Terms of Service and Privacy Policy.",
                                     fontSize = 12.sp,
                                     color = colors.textMuted.copy(alpha = 0.7f),
                                     textAlign = TextAlign.Center,
@@ -845,22 +1194,15 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onCancel: () -> Unit) {
                                     Spacer(Modifier.height(24.dp))
                                     Text("Is this your account?", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = colors.textMain, letterSpacing = (-0.5).sp)
                                     Spacer(Modifier.height(8.dp))
-                                    Text("We found an existing Chroma profile linked to your Google account.", color = colors.textMuted, fontSize = 14.sp, textAlign = TextAlign.Center)
+                                    Text("We found an existing Oscellion profile linked to your Google account.", color = colors.textMuted, fontSize = 14.sp, textAlign = TextAlign.Center)
 
                                     Spacer(Modifier.height(32.dp))
-                                    Box(
-                                        modifier = Modifier
-                                            .size(96.dp)
-                                            .clip(CircleShape)
-                                            .border(2.dp, colors.primary.copy(alpha = 0.6f), CircleShape),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        if (profile.avatarUrl.isNotBlank()) {
-                                            AsyncImage(profile.avatarUrl, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                                        } else {
-                                            Icon(Lucide.User, null, tint = colors.textMuted, modifier = Modifier.size(44.dp))
-                                        }
-                                    }
+                                    IosAvatarView(
+                                        name = profile.displayName,
+                                        avatarUrl = profile.avatarUrl,
+                                        size = 96.dp,
+                                        gender = profile.gender
+                                    )
                                     Spacer(Modifier.height(14.dp))
                                     Text(profile.displayName, color = colors.textMain, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                                     Text("@${profile.username}", color = colors.textMuted, fontSize = 15.sp)
@@ -906,6 +1248,7 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onCancel: () -> Unit) {
                                                             .update("avatarUrl", url).await()
                                                     }
                                                 }
+                                                com.chroma.studio.services.ChromaMessagingService.syncTokenForCurrentUser()
                                                 onLoginSuccess()
                                             } finally { isLoading = false }
                                         }
@@ -1316,6 +1659,7 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onCancel: () -> Unit) {
                                                     agreedToTermsAt = System.currentTimeMillis()
                                                 )
                                                 if (success) {
+                                                    com.chroma.studio.services.ChromaMessagingService.syncTokenForCurrentUser()
                                                     onLoginSuccess()
                                                 } else {
                                                     errorMessage = "Failed to create profile. Please try again."
@@ -1332,7 +1676,7 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onCancel: () -> Unit) {
 
                                 Spacer(Modifier.height(14.dp))
                                 Text(
-                                    text = "By creating a profile, you agree to Chroma's Terms of Service and Privacy Policy.",
+                                    text = "By creating a profile, you agree to Oscellion's Terms of Service and Privacy Policy.",
                                     fontSize = 12.sp,
                                     color = colors.textMuted.copy(alpha = 0.6f),
                                     textAlign = TextAlign.Center,
@@ -1379,19 +1723,14 @@ fun CupertinoAvatarPickerStep(
     ) {
         if (selectedUri != null) {
             AsyncImage(selectedUri, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-        } else if (defaultAvatarRes != null) {
-            Image(
-                painter = painterResource(id = defaultAvatarRes),
-                contentDescription = "$gender Avatar",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
         } else {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(Lucide.Camera, null, tint = colors.textMuted.copy(alpha = 0.6f), modifier = Modifier.size(36.dp))
-                Spacer(Modifier.height(4.dp))
-                Text("Add Photo", fontSize = 12.sp, color = colors.textMuted)
-            }
+            IosAvatarView(
+                name = title,
+                avatarUrl = "",
+                size = 136.dp,
+                gender = gender,
+                modifier = Modifier.fillMaxSize()
+            )
         }
 
         Box(

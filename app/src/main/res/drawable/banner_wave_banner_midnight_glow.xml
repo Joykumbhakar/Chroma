@@ -5,7 +5,7 @@
     android:height="400dp"
     android:viewportWidth="1200"
     android:viewportHeight="400">
-    <path android:pathData="M 0,0 L 1200.0,0 L 1200.0,400.0 L 0,400.0 Z" android:fillColor="#F8FAFC">
+    <path android:pathData="M 0,0 L 1200.0,0 L 1200.0,400.0 L 0,400.0 Z" android:fillColor="#080C14">
     </path>
     <path android:pathData="M 0,0 L 1200.0,0 L 1200.0,400.0 L 0,400.0 Z">
     </path>
@@ -83,6 +83,6 @@
             </gradient>
         </aapt:attr>
     </path>
-    <path android:pathData="M -50,230 C 140,230 300,310 520,440" android:strokeWidth="12" android:strokeColor="#FFFFFF" android:strokeLineCap="round">
+    <path android:pathData="M -50,230 C 140,230 300,310 520,440" android:strokeWidth="1.5" android:strokeColor="#26FFFFFF" android:strokeLineCap="round">
     </path>
 </vector>

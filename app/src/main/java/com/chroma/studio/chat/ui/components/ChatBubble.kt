@@ -24,6 +24,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Clock
 import com.composables.icons.lucide.ChartColumn
 import com.composables.icons.lucide.Users
 import com.composables.icons.lucide.Undo2
@@ -66,6 +67,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import com.chroma.studio.chat.sound.SoundManager
 import androidx.compose.ui.text.withStyle
@@ -892,7 +894,7 @@ private fun MessageBubbleCard(
     val animationStyle = config.animationStyle
 
     val isVoiceOnly = message.mediaType == "voice" && message.text.isNullOrEmpty()
-    val isMediaOnly = (message.mediaType in listOf("image", "image_stack", "sticker")) && message.text.isNullOrEmpty() && message.replyTo == null
+    val isMediaOnly = (message.mediaType in listOf("image", "image_stack", "sticker")) && message.text.isNullOrEmpty() && message.replyTo == null && message.storyThumbnailUrl == null && message.storyId == null
     val isPoll = message.mediaType == "poll"
 
     val highlightAnim = remember { Animatable(0f) }
@@ -1332,6 +1334,127 @@ private fun MessageBubbleInnerContent(
             }
         }
 
+        // ── Instagram-Style Story Reply Header & Thumbnail Card ────────────────
+        val isStoryReply = message.storyThumbnailUrl != null || message.mediaType == "story_reply" || message.storyId != null
+        if (isStoryReply) {
+            val storyThumb = message.storyThumbnailUrl ?: ""
+            val headerText = if (isOutgoing) "Replied to their story" else "Replied to your story"
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 6.dp)
+            ) {
+                // Subtle Instagram header label
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    modifier = Modifier.padding(bottom = 6.dp, start = 2.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(14.dp)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.linearGradient(
+                                    listOf(Color(0xFF833AB4), Color(0xFFFD1D1D), Color(0xFFFCB045))
+                                )
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(11.dp)
+                                .clip(CircleShape)
+                                .background(if (isOutgoing) Color(0xFF007AFF) else Color(0xFF262626))
+                        )
+                    }
+                    Text(
+                        text = headerText,
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = if (isOutgoing) Color.White.copy(alpha = 0.88f) else colors.textDark.copy(alpha = 0.70f),
+                        letterSpacing = (-0.2).sp
+                    )
+                }
+
+                // Story Vertical Thumbnail Container (Instagram 9:16 vertical card with rounded corners)
+                Box(
+                    modifier = Modifier
+                        .width(76.dp)
+                        .height(112.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF1E1E1E))
+                        .border(
+                            width = 0.8.dp,
+                            color = if (isOutgoing) Color.White.copy(alpha = 0.35f) else Color.White.copy(alpha = 0.18f),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                ) {
+                    val isTextStory = storyThumb.startsWith("text:") || storyThumb.startsWith("markdown://")
+                    if (isTextStory) {
+                        val textBody = when {
+                            storyThumb.startsWith("text:") -> storyThumb.removePrefix("text:")
+                            storyThumb.startsWith("markdown://") -> storyThumb.removePrefix("markdown://")
+                            else -> ""
+                        }
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.linearGradient(
+                                        listOf(Color(0xFF4A00E0), Color(0xFF8E2DE2))
+                                    )
+                                )
+                                .padding(6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = textBody,
+                                color = Color.White,
+                                fontSize = 8.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 4,
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center,
+                                lineHeight = 11.sp
+                            )
+                        }
+                    } else if (storyThumb.isNotBlank()) {
+                        AsyncImage(
+                            model = storyThumb,
+                            contentDescription = "Story preview thumbnail",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        // Story expired or placeholder
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color(0xFF2C2C2E)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    imageVector = Lucide.Clock,
+                                    contentDescription = null,
+                                    tint = Color.White.copy(alpha = 0.5f),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    text = "Story",
+                                    color = Color.White.copy(alpha = 0.5f),
+                                    fontSize = 9.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // 2. Media Content
         when (message.mediaType) {
             "sticker" -> {
@@ -1410,7 +1533,7 @@ private fun MessageBubbleInnerContent(
                                             status = message.status,
                                             isOutgoing = true,
                                             normalTint = Color.White.copy(alpha = 0.9f),
-                                            readTint = Color(0xFF38BDF8),
+                                            readTint = Color(0xFF53BDEB),
                                             pendingTint = Color.White.copy(alpha = 0.75f),
                                             size = 11.5.dp
                                         )
@@ -1629,8 +1752,11 @@ private fun MessageBubbleInnerContent(
                 )
             }
 
-            val isShortSingleLine = remember(message.text, message.replyTo, message.mediaType) {
+            val isShortSingleLine = remember(message.text, message.replyTo, message.mediaType, message.storyThumbnailUrl) {
                 message.replyTo == null &&
+                message.storyThumbnailUrl == null &&
+                message.storyId == null &&
+                message.mediaType != "story_reply" &&
                 (message.mediaType.isNullOrEmpty() || message.mediaType == "text") &&
                 !message.text.contains('\n') &&
                 message.text.length <= 26 &&
@@ -1671,7 +1797,7 @@ private fun MessageBubbleInnerContent(
                                 status = message.status,
                                 isOutgoing = true,
                                 normalTint = Color.White.copy(alpha = 0.85f),
-                                readTint = Color(0xFF60A5FA),
+                                readTint = Color(0xFF53BDEB),
                                 pendingTint = Color.White.copy(alpha = 0.75f),
                                 size = 11.5.dp
                             )
@@ -1742,7 +1868,7 @@ private fun MessageBubbleInnerContent(
                             status = message.status,
                             isOutgoing = true,
                             normalTint = Color.White.copy(alpha = 0.85f),
-                            readTint = Color(0xFF60A5FA),
+                            readTint = Color(0xFF53BDEB),
                             pendingTint = Color.White.copy(alpha = 0.75f),
                             size = 12.dp
                         )
@@ -1771,7 +1897,7 @@ private fun MessageBubbleInnerContent(
                             status = message.status,
                             isOutgoing = true,
                             normalTint = visual.timeColor,
-                            readTint = Color(0xFF38BDF8),
+                            readTint = Color(0xFF53BDEB),
                             pendingTint = visual.timeColor.copy(alpha = 0.75f),
                             size = 12.dp
                         )
@@ -2062,7 +2188,7 @@ fun VoiceNotePlayer(
                                 status = status,
                                 isOutgoing = true,
                                 normalTint = timeColor,
-                                readTint = Color(0xFF38BDF8),
+                                readTint = Color(0xFF53BDEB),
                                 pendingTint = timeColor.copy(alpha = 0.75f),
                                 size = 11.5.dp
                             )
@@ -3799,7 +3925,7 @@ fun MediaStackGrid(
                                 status = status,
                                 isOutgoing = true,
                                 normalTint = Color.White.copy(alpha = 0.9f),
-                                readTint = Color(0xFF38BDF8),
+                                readTint = Color(0xFF53BDEB),
                                 pendingTint = Color.White.copy(alpha = 0.75f),
                                 size = 11.dp
                             )
@@ -4090,7 +4216,7 @@ fun MediaStackGrid(
                                     status = status,
                                     isOutgoing = true,
                                     normalTint = Color.White.copy(alpha = 0.9f),
-                                    readTint = Color(0xFF38BDF8),
+                                    readTint = Color(0xFF53BDEB),
                                     pendingTint = Color.White.copy(alpha = 0.75f),
                                     size = 11.dp
                                 )
@@ -4336,7 +4462,7 @@ fun MediaStackGrid(
                             status = status,
                             isOutgoing = true,
                             normalTint = Color.White.copy(alpha = 0.9f),
-                            readTint = Color(0xFF38BDF8),
+                            readTint = Color(0xFF53BDEB),
                             pendingTint = Color.White.copy(alpha = 0.75f),
                             size = 11.5.dp
                         )

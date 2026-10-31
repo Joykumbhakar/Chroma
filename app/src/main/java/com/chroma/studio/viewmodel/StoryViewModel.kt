@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.chroma.studio.data.CloudinaryClient
 import com.chroma.studio.data.StoryRepository
+import com.chroma.studio.data.StoryLikeSyncManager
 import com.chroma.studio.model.Story
 import com.chroma.studio.model.UserStoryGroup
 import com.google.firebase.auth.FirebaseAuth
@@ -36,9 +37,8 @@ class StoryViewModel : ViewModel() {
     private val _uploadError = MutableStateFlow<String?>(null)
     val uploadError: StateFlow<String?> = _uploadError.asStateFlow()
 
-    // Liked story IDs (optimistic UI)
-    private val _likedStoryIds = MutableStateFlow<Set<String>>(emptySet())
-    val likedStoryIds: StateFlow<Set<String>> = _likedStoryIds.asStateFlow()
+    // Liked story IDs backed by offline-first StoryLikeSyncManager with LocalStorage Cache
+    val likedStoryIds: StateFlow<Set<String>> = StoryLikeSyncManager.likedStoryIds
 
     // Viewed story IDs (local tracking)
     private val _viewedStoryIds = MutableStateFlow<Set<String>>(emptySet())
@@ -49,6 +49,10 @@ class StoryViewModel : ViewModel() {
     val onlyFriendsIds: StateFlow<List<String>> = _onlyFriendsIds.asStateFlow()
 
     init {
+        val currentUid = auth.currentUser?.uid
+        if (!currentUid.isNullOrBlank()) {
+            StoryLikeSyncManager.initForUser(currentUid)
+        }
         loadStories()
         loadOnlyFriends()
     }
@@ -103,13 +107,10 @@ class StoryViewModel : ViewModel() {
                     repository.fetchRecentPublicStories()
                 }
                 _storyGroups.value = if (currentUid != null) groups.filter { it.userId != currentUid } else groups
-                // Pre-populate liked story IDs
-                val myUid = currentUid ?: return@launch
-                val liked = mutableSetOf<String>()
-                groups.forEach { g ->
-                    g.stories.forEach { s -> if (s.likedBy.contains(myUid)) liked.add(s.id) }
+                // Merge remote stories with LocalStorage cache and pending sync actions
+                if (currentUid != null) {
+                    StoryLikeSyncManager.mergeRemoteStories(groups, currentUid)
                 }
-                _likedStoryIds.value = liked
                 loadMyStories()
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
@@ -265,15 +266,73 @@ class StoryViewModel : ViewModel() {
     }
 
     fun toggleLike(storyId: String) {
-        val isLiked = _likedStoryIds.value.contains(storyId)
-        _likedStoryIds.value = if (isLiked) _likedStoryIds.value - storyId else _likedStoryIds.value + storyId
-        viewModelScope.launch {
-            val result = repository.toggleLike(storyId)
-            // If server result differs from optimistic, revert
-            val optimistic = _likedStoryIds.value.contains(storyId)
-            if (result != optimistic) {
-                _likedStoryIds.value = if (result) _likedStoryIds.value + storyId else _likedStoryIds.value - storyId
+        val currentUid = auth.currentUser?.uid ?: return
+        val nextLiked = StoryLikeSyncManager.toggleLike(storyId, currentUid)
+
+        // Optimistically update _storyGroups immediately
+        _storyGroups.value = _storyGroups.value.map { group ->
+            val updatedStories = group.stories.map { story ->
+                if (story.id == storyId) {
+                    val newLikedBy = if (nextLiked) {
+                        (story.likedBy + currentUid).distinct()
+                    } else {
+                        story.likedBy - currentUid
+                    }
+                    val newLikesCount = if (nextLiked) {
+                        story.likes + 1
+                    } else {
+                        maxOf(0, story.likes - 1)
+                    }
+                    story.copy(likedBy = newLikedBy, likes = newLikesCount)
+                } else story
             }
+            group.copy(stories = updatedStories)
+        }
+
+        // Optimistically update _myStories immediately
+        _myStories.value = _myStories.value.map { story ->
+            if (story.id == storyId) {
+                val newLikedBy = if (nextLiked) {
+                    (story.likedBy + currentUid).distinct()
+                } else {
+                    story.likedBy - currentUid
+                }
+                val newLikesCount = if (nextLiked) {
+                    story.likes + 1
+                } else {
+                    maxOf(0, story.likes - 1)
+                }
+                story.copy(likedBy = newLikedBy, likes = newLikesCount)
+            } else story
+        }
+    }
+
+    fun forceLike(storyId: String) {
+        val currentUid = auth.currentUser?.uid ?: return
+        if (StoryLikeSyncManager.likedStoryIds.value.contains(storyId)) return
+        StoryLikeSyncManager.forceLike(storyId, currentUid)
+
+        _storyGroups.value = _storyGroups.value.map { group ->
+            val updatedStories = group.stories.map { story ->
+                if (story.id == storyId) {
+                    val newLikedBy = (story.likedBy + currentUid).distinct()
+                    story.copy(likedBy = newLikedBy, likes = story.likes + 1)
+                } else story
+            }
+            group.copy(stories = updatedStories)
+        }
+
+        _myStories.value = _myStories.value.map { story ->
+            if (story.id == storyId) {
+                val newLikedBy = (story.likedBy + currentUid).distinct()
+                story.copy(likedBy = newLikedBy, likes = story.likes + 1)
+            } else story
+        }
+    }
+
+    fun syncPendingLikes() {
+        viewModelScope.launch {
+            StoryLikeSyncManager.syncPendingQueue()
         }
     }
 

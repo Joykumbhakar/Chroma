@@ -2740,6 +2740,403 @@ fun AppleRemixGraphic(
 
 
 // ─────────────────────────────────────────────────────────────────────────────
+// 6.5. SAVED WORKS GRAPHICS ICON (Sculpted 3D Folio Frame + Silk Ribbon Bookmark)
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+fun AppleSavedWorksGraphic(
+    modifier: Modifier = Modifier.size(165.dp),
+    state: AppleGraphicAnimationState = rememberAppleGraphicAnimationState(),
+    enableClickToAnimate: Boolean = true,
+    onClick: (() -> Unit)? = null
+) {
+    val scope = rememberCoroutineScope()
+    val progress = state.articulationProgress.value
+
+    val clickModifier = if (enableClickToAnimate) {
+        Modifier.clickable(
+            interactionSource = remember { MutableInteractionSource() },
+            indication = null
+        ) {
+            scope.launch {
+                state.triggerArticulateAnimation()
+                onClick?.invoke()
+            }
+        }
+    } else Modifier
+
+    Canvas(modifier = modifier.then(clickModifier)) {
+        val s = 100f
+        val pearl = Apple3DShaderPalette.pearlBrush(s)
+        val sky = Apple3DShaderPalette.skyBrush(s)
+        val body = Apple3DShaderPalette.bodyBrush(s)
+        val specular = Apple3DShaderPalette.specularStrokeBrush(s)
+        val scaleFactor = size.minDimension / 100f
+
+        withTransform({
+            scale(scaleFactor, scaleFactor, pivot = Offset.Zero)
+            scale(state.squashX.value, state.squashY.value, pivot = Offset(50f, 85f))
+        }) {
+            // 1. Backdrop Folio Gallery Canvas Card (Subtly Tilted with Spring Easing)
+            val cardTilt = -2.5f + 4f * progress
+            withTransform({
+                rotate(degrees = cardTilt, pivot = Offset(48f, 52f))
+                scale(1f + 0.03f * progress, 1f + 0.03f * progress, pivot = Offset(48f, 52f))
+            }) {
+                // Natural Ambient Plinth Drop Shadow directly behind card base
+                val cardShadowPath = Path().apply {
+                    addRoundRect(
+                        RoundRect(
+                            rect = Rect(16f, 18f, 78f, 80f),
+                            cornerRadius = CornerRadius(14f, 14f)
+                        )
+                    )
+                }
+                drawBlurredPathShadow(
+                    path = cardShadowPath,
+                    color = Color(0x35001438),
+                    dx = 0f,
+                    dy = 5f,
+                    blurRadius = 6f
+                )
+                drawBlurredPathShadow(
+                    path = cardShadowPath,
+                    color = Color(0x1A002266),
+                    dx = 0f,
+                    dy = 2f,
+                    blurRadius = 2.5f
+                )
+
+                // Outer Sculpted Squircle Plinth
+                drawSculptedSquircleBase(16f, 18f, 62f, 62f, 14f)
+
+                // Inner Sapphire Gallery Recess
+                drawSapphireRecessRect(21f, 23f, 52f, 52f, 10f)
+
+                // Soft Ambient Depth Shadow inside the top cavity
+                drawRoundRect(
+                    brush = Brush.verticalGradient(
+                        listOf(Color(0x75000D26), Color.Transparent),
+                        startY = 23f,
+                        endY = 33f
+                    ),
+                    topLeft = Offset(21f, 23f),
+                    size = Size(52f, 10f),
+                    cornerRadius = CornerRadius(10f, 10f)
+                )
+
+                // Miniature UI Frosted Capsule Status Bar
+                drawRoundRect(
+                    color = Color.White.copy(alpha = 0.20f),
+                    topLeft = Offset(26f, 27.5f),
+                    size = Size(22f, 3.5f),
+                    cornerRadius = CornerRadius(1.75f, 1.75f)
+                )
+                // Glowing Cyan Status Bead
+                drawCircle(
+                    color = Color(0xFF00E5FF),
+                    radius = 0.9f,
+                    center = Offset(28.5f, 29.25f)
+                )
+                // Sub-Indicator Skeleton Line
+                drawRoundRect(
+                    color = Color.White.copy(alpha = 0.40f),
+                    topLeft = Offset(32f, 28.5f),
+                    size = Size(13f, 1.5f),
+                    cornerRadius = CornerRadius(0.75f, 0.75f)
+                )
+
+                // Curated Stored Artwork Layer Cards
+                // Band 1: Cyan / Apple Blue Gradient (Vector Mesh Layer)
+                drawRoundRect(
+                    brush = Brush.horizontalGradient(
+                        listOf(Color(0xFF00E5FF), Color(0xFF007AFF), Color(0xFF004FD6))
+                    ),
+                    topLeft = Offset(26f, 35f),
+                    size = Size(42f, 7f),
+                    cornerRadius = CornerRadius(3.5f, 3.5f)
+                )
+                drawLine(
+                    color = Color.White.copy(alpha = 0.35f),
+                    start = Offset(28f, 35.5f),
+                    end = Offset(66f, 35.5f),
+                    strokeWidth = 0.7f
+                )
+                drawCircle(color = Color.White.copy(alpha = 0.85f), radius = 1.2f, center = Offset(29.8f, 38.5f))
+                drawRoundRect(
+                    color = Color.White.copy(alpha = 0.45f),
+                    topLeft = Offset(33f, 37.6f),
+                    size = Size(18f, 1.8f),
+                    cornerRadius = CornerRadius(0.9f, 0.9f)
+                )
+
+                // Band 2: Royal Indigo / Amethyst Gradient (Shader Filter Layer)
+                drawRoundRect(
+                    brush = Brush.horizontalGradient(
+                        listOf(Color(0xFF6C5CE7), Color(0xFFAF52DE), Color(0xFFFF2D55))
+                    ),
+                    topLeft = Offset(26f, 45.5f),
+                    size = Size(36f, 7f),
+                    cornerRadius = CornerRadius(3.5f, 3.5f)
+                )
+                drawLine(
+                    color = Color.White.copy(alpha = 0.32f),
+                    start = Offset(28f, 46f),
+                    end = Offset(60f, 46f),
+                    strokeWidth = 0.7f
+                )
+                drawCircle(color = Color.White.copy(alpha = 0.85f), radius = 1.2f, center = Offset(29.8f, 49f))
+                drawRoundRect(
+                    color = Color.White.copy(alpha = 0.45f),
+                    topLeft = Offset(33f, 48.1f),
+                    size = Size(14f, 1.8f),
+                    cornerRadius = CornerRadius(0.9f, 0.9f)
+                )
+
+                // Band 3: Sunset Coral / Amber Gradient (Lighting Accent Layer)
+                drawRoundRect(
+                    brush = Brush.horizontalGradient(
+                        listOf(Color(0xFFFF375F), Color(0xFFFF9500), Color(0xFFFFD60A))
+                    ),
+                    topLeft = Offset(26f, 56f),
+                    size = Size(29f, 7f),
+                    cornerRadius = CornerRadius(3.5f, 3.5f)
+                )
+                drawLine(
+                    color = Color.White.copy(alpha = 0.30f),
+                    start = Offset(28f, 56.5f),
+                    end = Offset(53f, 56.5f),
+                    strokeWidth = 0.7f
+                )
+                drawCircle(color = Color.White.copy(alpha = 0.85f), radius = 1.2f, center = Offset(29.8f, 59.5f))
+                drawRoundRect(
+                    color = Color.White.copy(alpha = 0.45f),
+                    topLeft = Offset(33f, 58.6f),
+                    size = Size(11f, 1.8f),
+                    cornerRadius = CornerRadius(0.9f, 0.9f)
+                )
+
+                // Diagonal Specular Glass Reflection Sheen
+                val glassSheen = Path().apply {
+                    moveTo(21f, 34f)
+                    lineTo(42f, 23f)
+                    lineTo(54f, 23f)
+                    lineTo(21f, 46f)
+                    close()
+                }
+                drawPath(
+                    path = glassSheen,
+                    brush = Brush.linearGradient(
+                        listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.03f), Color.Transparent),
+                        start = Offset(21f, 23f),
+                        end = Offset(54f, 46f)
+                    )
+                )
+
+                // Specular Glass Border Frame Bevel
+                drawRoundRect(
+                    brush = Brush.linearGradient(
+                        listOf(Color.White.copy(alpha = 0.65f), Color(0x3380DCFF), Color(0x100051D5), Color(0x6066D4FF)),
+                        start = Offset(16f, 18f),
+                        end = Offset(78f, 80f)
+                    ),
+                    topLeft = Offset(16f, 18f),
+                    size = Size(62f, 62f),
+                    cornerRadius = CornerRadius(14f, 14f),
+                    style = Stroke(width = 1.4f)
+                )
+            }
+
+            // 2. The Iconic 3D Bookmark Ribbon (Cascading over the Folio Card)
+            val ribbonSway = -3.5f * kotlin.math.sin(progress * Math.PI.toFloat())
+            withTransform({
+                rotate(degrees = ribbonSway, pivot = Offset(62f, 14f))
+                translate(left = 0f, top = 2f * progress)
+            }) {
+                // Top fold shadow under the wrap
+                drawRoundRect(
+                    color = Color(0x60001030),
+                    topLeft = Offset(52f, 14f),
+                    size = Size(20f, 3f),
+                    cornerRadius = CornerRadius(1.5f, 1.5f)
+                )
+
+                // Top folded loop wrapping over edge
+                drawRoundRect(
+                    brush = Brush.verticalGradient(
+                        listOf(Color(0xFF75D8FF), Color(0xFF007AFF), Color(0xFF004AB8)),
+                        startY = 11f,
+                        endY = 17f
+                    ),
+                    topLeft = Offset(52f, 11f),
+                    size = Size(20f, 6.5f),
+                    cornerRadius = CornerRadius(3.25f, 3.25f)
+                )
+                drawRoundRect(
+                    brush = Brush.horizontalGradient(
+                        listOf(Color.White.copy(alpha = 0.85f), Color.White.copy(alpha = 0.2f), Color.White.copy(alpha = 0.6f)),
+                        startX = 52f,
+                        endX = 72f
+                    ),
+                    topLeft = Offset(52f, 11f),
+                    size = Size(20f, 6.5f),
+                    cornerRadius = CornerRadius(3.25f, 3.25f),
+                    style = Stroke(width = 0.9f)
+                )
+
+                // Hardware anchor pin (delicate titanium grommet / stud)
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        listOf(Color.White, Color(0xFFC7C7CC), Color(0xFF636366)),
+                        center = Offset(62f, 14.25f),
+                        radius = 1.6f
+                    ),
+                    radius = 1.6f,
+                    center = Offset(62f, 14.25f)
+                )
+
+                // Main Bookmark Ribbon Path with Swallowtail Peak
+                val ribbonPath = Path().apply {
+                    moveTo(52f, 15f)
+                    lineTo(72f, 15f)
+                    lineTo(72f, 76f)
+                    lineTo(62f, 66f) // Swallowtail notch
+                    lineTo(52f, 76f)
+                    close()
+                }
+
+                // Ribbon Drop Shadow on Folio
+                drawBlurredPathShadow(
+                    path = ribbonPath,
+                    color = Color(0x70001238),
+                    dx = -2.5f,
+                    dy = 3.5f,
+                    blurRadius = 4f
+                )
+
+                // Left Facet (Light-catching face)
+                val leftFacet = Path().apply {
+                    moveTo(52f, 15f)
+                    lineTo(62f, 15f)
+                    lineTo(62f, 66f)
+                    lineTo(52f, 76f)
+                    close()
+                }
+                drawPath(
+                    path = leftFacet,
+                    brush = Brush.linearGradient(
+                        listOf(Color(0xFF42B9FF), Color(0xFF007AFF), Color(0xFF0056CC)),
+                        start = Offset(52f, 15f),
+                        end = Offset(62f, 76f)
+                    )
+                )
+
+                // Right Facet (Shaded face)
+                val rightFacet = Path().apply {
+                    moveTo(62f, 15f)
+                    lineTo(72f, 15f)
+                    lineTo(72f, 76f)
+                    lineTo(62f, 66f)
+                    close()
+                }
+                drawPath(
+                    path = rightFacet,
+                    brush = Brush.linearGradient(
+                        listOf(Color(0xFF0066E0), Color(0xFF004CB8), Color(0xFF002F8C)),
+                        start = Offset(62f, 15f),
+                        end = Offset(72f, 76f)
+                    )
+                )
+
+                // Longitudinal Silk Highlight Stripe
+                val silkSheen = Path().apply {
+                    moveTo(55f, 15f)
+                    lineTo(58f, 15f)
+                    lineTo(58f, 70f)
+                    lineTo(55f, 73f)
+                    close()
+                }
+                drawPath(
+                    path = silkSheen,
+                    brush = Brush.verticalGradient(
+                        listOf(Color.White.copy(alpha = 0.28f), Color.White.copy(alpha = 0.08f), Color.Transparent),
+                        startY = 15f,
+                        endY = 73f
+                    )
+                )
+
+                // Tactile Center Crease
+                drawLine(
+                    brush = Brush.verticalGradient(
+                        listOf(Color.White.copy(alpha = 0.75f), Color.White.copy(alpha = 0.35f)),
+                        startY = 15f,
+                        endY = 66f
+                    ),
+                    start = Offset(61.6f, 15f),
+                    end = Offset(61.6f, 66f),
+                    strokeWidth = 0.8f
+                )
+                drawLine(
+                    color = Color(0x35001238),
+                    start = Offset(62.4f, 15f),
+                    end = Offset(62.4f, 66f),
+                    strokeWidth = 0.8f
+                )
+
+                // Specular Perimeter Bevel
+                drawPath(
+                    path = ribbonPath,
+                    brush = Brush.linearGradient(
+                        listOf(Color.White.copy(alpha = 0.70f), Color(0x6080DCFF), Color(0x300040A0)),
+                        start = Offset(52f, 15f),
+                        end = Offset(72f, 76f)
+                    ),
+                    style = Stroke(width = 0.9f)
+                )
+
+                // Embossed Bookmark Crest Icon Inside Ribbon Body (Subtle Cupertino Insignia)
+                val crestPath = Path().apply {
+                    val cx = 62f
+                    val cy = 38f
+                    moveTo(cx - 3.5f, cy - 4.5f)
+                    lineTo(cx + 3.5f, cy - 4.5f)
+                    lineTo(cx + 3.5f, cy + 4.5f)
+                    lineTo(cx, cy + 2.2f)
+                    lineTo(cx - 3.5f, cy + 4.5f)
+                    close()
+                }
+                drawPath(
+                    path = crestPath,
+                    color = Color.White.copy(alpha = 0.22f),
+                    style = Stroke(width = 0.8f)
+                )
+                drawPath(
+                    path = crestPath,
+                    brush = Brush.verticalGradient(
+                        listOf(Color.White.copy(alpha = 0.15f), Color.Transparent),
+                        startY = 33.5f,
+                        endY = 42.5f
+                    )
+                )
+            }
+        }
+    }
+}
+
+
+@Composable
+fun AppleSavedWorksIcon(
+    modifier: Modifier = Modifier.size(140.dp),
+    onClick: (() -> Unit)? = null
+) {
+    AppleSavedWorksGraphic(
+        modifier = modifier,
+        enableClickToAnimate = true,
+        onClick = onClick
+    )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 7. MESSAGE / CHAT GRAPHICS ICON (Volumetric Chat Bubbles + Floating Speech Crest)
 // ─────────────────────────────────────────────────────────────────────────────
 

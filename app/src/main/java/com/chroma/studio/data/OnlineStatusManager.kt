@@ -6,6 +6,10 @@ import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 object OnlineStatusManager {
     private const val TAG = "OnlineStatusManager"
@@ -99,6 +103,88 @@ object OnlineStatusManager {
         ref.addValueEventListener(listener)
         return { ref.removeEventListener(listener) }
     }
+
+    /**
+     * Explicitly update online/offline presence when app foregrounds or backgrounds.
+     */
+    fun setAppForegrounded(isForeground: Boolean) {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val db = getDatabase()
+        val onlineRef = db.getReference("users/$uid/online")
+        val lastOnlineRef = db.getReference("users/$uid/lastOnline")
+        try {
+            if (isForeground) {
+                onlineRef.setValue(true)
+            } else {
+                onlineRef.setValue(false)
+                lastOnlineRef.setValue(com.google.firebase.database.ServerValue.TIMESTAMP)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to update foreground presence: ${e.message}")
+        }
+    }
+
+    /**
+     * Formats offline timestamps according to exact WhatsApp guidelines:
+     * - < 60s ago: "last seen just now"
+     * - Today: "last seen today at 3:45 PM"
+     * - Yesterday: "last seen yesterday at 11:20 AM"
+     * - 2-6 days: "last seen on Tuesday at 4:15 PM"
+     * - Same year: "last seen 24 Oct at 10:15 AM"
+     * - Diff year: "last seen 15 Aug 2023 at 10:15 AM"
+     */
+    fun formatWhatsAppLastSeen(timestamp: Long?): String {
+        if (timestamp == null || timestamp <= 0L) return "Offline"
+        return try {
+            val now = Calendar.getInstance()
+            val target = Calendar.getInstance().apply { timeInMillis = timestamp }
+            val diffMs = now.timeInMillis - timestamp
+
+            // Handle clock skew between devices/servers (up to 30s into future is considered 'just now')
+            if (diffMs < 60_000L && diffMs >= -30_000L) {
+                return "last seen just now"
+            }
+
+            val is24Hour = try {
+                android.text.format.DateFormat.is24HourFormat(com.chroma.studio.ChromaApp.instance)
+            } catch (_: Exception) {
+                false
+            }
+            val timePattern = if (is24Hour) "HH:mm" else "h:mm a"
+            val timeFormat = SimpleDateFormat(timePattern, Locale.getDefault())
+            val formattedTime = timeFormat.format(Date(timestamp))
+
+            val isToday = now.get(Calendar.YEAR) == target.get(Calendar.YEAR) &&
+                    now.get(Calendar.DAY_OF_YEAR) == target.get(Calendar.DAY_OF_YEAR)
+            if (isToday) {
+                return "last seen today at $formattedTime"
+            }
+
+            val yesterday = (now.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, -1) }
+            val isYesterday = yesterday.get(Calendar.YEAR) == target.get(Calendar.YEAR) &&
+                    yesterday.get(Calendar.DAY_OF_YEAR) == target.get(Calendar.DAY_OF_YEAR)
+            if (isYesterday) {
+                return "last seen yesterday at $formattedTime"
+            }
+
+            val daysDiff = diffMs / (24 * 60 * 60 * 1000L)
+            if (daysDiff in 2..6) {
+                val dayFormat = SimpleDateFormat("EEEE", Locale.getDefault())
+                return "last seen on ${dayFormat.format(Date(timestamp))} at $formattedTime"
+            }
+
+            if (now.get(Calendar.YEAR) == target.get(Calendar.YEAR)) {
+                val dateFormat = SimpleDateFormat("d MMM", Locale.getDefault())
+                return "last seen ${dateFormat.format(Date(timestamp))} at $formattedTime"
+            }
+
+            val fullDateFormat = SimpleDateFormat("d MMM yyyy", Locale.getDefault())
+            "last seen ${fullDateFormat.format(Date(timestamp))} at $formattedTime"
+        } catch (e: Exception) {
+            "Offline"
+        }
+    }
+
 }
 
 data class UserPresence(

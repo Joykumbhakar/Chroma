@@ -403,17 +403,17 @@ object ChromaStudioChecks {
         },
 
         AnalyzerCheck("G-02", CheckDomain.MOCK_FEATURES, CheckSeverity.MEDIUM,
-            "Features: AI Style calls real model",
-            "AI Generate must call Gemini API, not just delay(1200) + show Toast.",
+            "Features: Smart Style calls real model",
+            "Neural Generate must call Gemini API, not just delay(1200) + show Toast.",
             "FlashPhotoEditorScreen.kt:725"
         ) { _ ->
             val src = readFile(projectFile("$srcRoot/ui/screens/FlashPhotoEditorScreen.kt")) ?: return@AnalyzerCheck CheckStatus.SKIPPED to "File not found"
             val hasGeminiCall = src.contains("AIGenerator") || src.contains("gemini") || src.contains("generateContent")
             val hasDelay1200 = src.contains("delay(1200)")
             when {
-                hasGeminiCall -> CheckStatus.PASS to "Gemini API call found in AI Style flow ✓"
-                hasDelay1200 -> CheckStatus.FAIL to "AI Style still uses delay(1200) stub — no model inference"
-                else -> CheckStatus.WARNING to "AI Style changed — verify Gemini integration manually"
+                hasGeminiCall -> CheckStatus.PASS to "Gemini API call found in Smart Style flow ✓"
+                hasDelay1200 -> CheckStatus.FAIL to "Smart Style still uses delay(1200) stub — no model inference"
+                else -> CheckStatus.WARNING to "Smart Style changed — verify Gemini integration manually"
             }
         },
 

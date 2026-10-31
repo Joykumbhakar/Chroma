@@ -350,14 +350,10 @@ fun StoryAnalyticsModal(
                                 ) {
                                     // Contact Avatar with Reaction Pip
                                     Box(modifier = Modifier.size(44.dp)) {
-                                        AsyncImage(
-                                            model = viewer.avatar,
-                                            contentDescription = viewer.name,
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .clip(CircleShape)
-                                                .border(0.5.dp, colors.borderSubtle, CircleShape),
-                                            contentScale = ContentScale.Crop
+                                        com.chroma.studio.ui.components.IosAvatarView(
+                                            name = viewer.name,
+                                            avatarUrl = viewer.avatar,
+                                            size = 44.dp
                                         )
                                         if (viewer.reactedEmoji != null) {
                                             Box(

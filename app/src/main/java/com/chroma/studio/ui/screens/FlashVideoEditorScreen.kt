@@ -270,12 +270,61 @@ fun FlashVideoEditorScreen(
                     )
                 }
                 if (savedUri != null) {
-                    ToastManager.showToast("Saved to Gallery! 🎬")
+                    ToastManager.showToast(
+                        message = "Saved to Gallery! 🎬",
+                        actionLabel = "Share",
+                        onAction = {
+                            ExportHelper.shareVideo(context, savedUri, "Share Video")
+                        }
+                    )
                 } else {
                     ToastManager.showToast("Saved to device!")
                 }
             } catch (e: Throwable) {
                 ToastManager.showToast("Could not save to gallery: ${e.localizedMessage ?: "Unknown error"}")
+            } finally {
+                isSavingToGallery = false
+            }
+        }
+    }
+
+    fun performShareVideo() {
+        if (isSavingToGallery) return
+        isSavingToGallery = true
+        scope.launch {
+            try {
+                ToastManager.showToast("Preparing video for sharing... ⏳")
+                val savedUri = withContext(Dispatchers.IO) {
+                    val shouldTrim = trimStartMs > 100L || (trimEndMs > 0L && durationMs > 0L && trimEndMs < durationMs - 100L)
+                    val fileToSave = if (shouldTrim) {
+                        VideoProcessor.trimVideo(context, videoUri, trimStartMs, trimEndMs)
+                    } else null
+
+                    val finalFile = fileToSave ?: run {
+                        if (videoUri.scheme == "file") {
+                            java.io.File(videoUri.path ?: "")
+                        } else {
+                            val tempFile = java.io.File(context.cacheDir, "gallery_export_${System.currentTimeMillis()}.mp4")
+                            context.contentResolver.openInputStream(videoUri)?.use { input ->
+                                java.io.FileOutputStream(tempFile).use { output -> input.copyTo(output) }
+                            }
+                            tempFile
+                        }
+                    }
+
+                    ExportHelper.saveVideoToGallery(
+                        context = context,
+                        sourceFile = finalFile,
+                        title = "ChromaFlash_${System.currentTimeMillis()}"
+                    )
+                }
+                if (savedUri != null) {
+                    ExportHelper.shareVideo(context, savedUri, "Share Video")
+                } else {
+                    ToastManager.showToast("Failed to prepare video for sharing")
+                }
+            } catch (e: Throwable) {
+                ToastManager.showToast("Share failed: ${e.localizedMessage ?: "Unknown error"}")
             } finally {
                 isSavingToGallery = false
             }
@@ -497,7 +546,39 @@ fun FlashVideoEditorScreen(
 
                         HorizontalDivider(color = Color.White.copy(alpha = 0.12f), thickness = 0.5.dp)
 
-                        // 2. Secondary Action: Save Full Video to Gallery
+                        // 2. Secondary Action: Share Full Video
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(44.dp)
+                                .clickable {
+                                    showDurationWarningPopup = false
+                                    performShareVideo()
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.Share2,
+                                    contentDescription = null,
+                                    tint = Color(0xFF007AFF),
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Text(
+                                    text = "Share Full Video",
+                                    color = Color(0xFF007AFF),
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+
+                        HorizontalDivider(color = Color.White.copy(alpha = 0.12f), thickness = 0.5.dp)
+
+                        // 3. Save Full Video to Gallery
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -564,7 +645,35 @@ fun FlashVideoEditorScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     if (isOverOneMinute) {
-                        // ── Strict Constraint: > 1 min videos NEVER show Next/Share! ONLY show "Save in Gallery" ──
+                        // Share Full Video button
+                        val sharePillShape = RoundedCornerShape(9999.dp)
+                        Box(
+                            modifier = Modifier
+                                .clip(sharePillShape)
+                                .background(colors.glassBgHover)
+                                .border(0.5.dp, colors.glassBorder, sharePillShape)
+                                .border(0.5.dp, com.chroma.studio.ui.components.LiquidGlassTokens.SurfaceSpecularGlassBorder, sharePillShape)
+                                .clickable(enabled = !isSavingToGallery) {
+                                    performShareVideo()
+                                }
+                                .padding(horizontal = 12.dp, vertical = 7.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.Share2,
+                                    contentDescription = "Share",
+                                    tint = colors.textMuted,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Text("Share", color = colors.textMuted, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                            }
+                        }
+
+                        // Save in Gallery button
                         val savePillShape = RoundedCornerShape(9999.dp)
                         Box(
                             modifier = Modifier
@@ -604,6 +713,33 @@ fun FlashVideoEditorScreen(
                             }
                         }
                     } else {
+                        // Quick Share button
+                        val sharePillShape = RoundedCornerShape(9999.dp)
+                        Box(
+                            modifier = Modifier
+                                .clip(sharePillShape)
+                                .background(colors.glassBgHover)
+                                .border(0.5.dp, colors.glassBorder, sharePillShape)
+                                .border(0.5.dp, com.chroma.studio.ui.components.LiquidGlassTokens.SurfaceSpecularGlassBorder, sharePillShape)
+                                .clickable(enabled = !isSavingToGallery) {
+                                    performShareVideo()
+                                }
+                                .padding(horizontal = 10.dp, vertical = 7.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.Share2,
+                                    contentDescription = "Share",
+                                    tint = colors.textMuted,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Text("Share", color = colors.textMuted, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                            }
+                        }
                         // ── Under 1 min: Normal Draft & Next buttons ──
                         val draftPillShape = RoundedCornerShape(9999.dp)
                         Box(

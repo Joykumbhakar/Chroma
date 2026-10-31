@@ -1,5 +1,6 @@
 package com.chroma.studio.ui.screens
 
+import com.chroma.studio.ui.components.OneUiCollapsingHeaderLayout
 import android.content.Context
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
@@ -115,80 +116,35 @@ fun NotificationsSettingsScreen(
         )
     }
 
-    Scaffold(
-        containerColor = colors.bg,
-        topBar = {
+    OneUiCollapsingHeaderLayout(
+        title = "Notifications",
+        subtitle = "Preferences & delivery alerts",
+        expandedHeightDp = 130.dp,
+        onBack = onBack,
+        headerActions = { compactTitleAlpha ->
             Surface(
-                color = colors.bg.copy(alpha = 0.96f),
-                border = BorderStroke(0.5.dp, colors.glassBorder),
-                modifier = Modifier.fillMaxWidth()
+                onClick = { saveAll() },
+                shape = RoundedCornerShape(10.dp),
+                color = if (hasChanges) colors.primary else colors.glassBg,
+                border = BorderStroke(1.dp, if (hasChanges) colors.primary else colors.glassBorder),
+                modifier = Modifier.height(34.dp)
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .statusBarsPadding()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                Box(
+                    modifier = Modifier.padding(horizontal = 14.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Surface(
-                            onClick = onBack,
-                            shape = RoundedCornerShape(12.dp),
-                            color = colors.glassBg,
-                            border = BorderStroke(1.dp, colors.glassBorder),
-                            modifier = Modifier.size(38.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Lucide.ChevronLeft,
-                                    contentDescription = "Back",
-                                    tint = colors.textMain,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-
-                        Text(
-                            text = "Notification Settings",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = colors.textMain,
-                            letterSpacing = (-0.4).sp
-                        )
-                    }
-
-                    // Done / Save Button
-                    Surface(
-                        onClick = { saveAll() },
-                        shape = RoundedCornerShape(10.dp),
-                        color = if (hasChanges) colors.primary else colors.glassBg,
-                        border = BorderStroke(1.dp, if (hasChanges) colors.primary else colors.glassBorder),
-                        modifier = Modifier.height(34.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier.padding(horizontal = 14.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = if (hasChanges) "Save" else "Done",
-                                fontSize = 13.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (hasChanges) Color.White else colors.textMain
-                            )
-                        }
-                    }
+                    Text(
+                        text = if (hasChanges) "Save" else "Done",
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (hasChanges) Color.White else colors.textMain
+                    )
                 }
             }
         }
-    ) { padding ->
+    ) { collapseProgress ->
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
+            modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(horizontal = 18.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(22.dp)
         ) {

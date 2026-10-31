@@ -96,7 +96,7 @@ enum class ActionMenuType(val label: String) {
     POST("Post"),
     VIDEO("Video"),
     STORY("Story"),
-    AI_GENERATOR("AI Generator")
+    AI_GENERATOR("Smart Generator")
 }
 
 /**

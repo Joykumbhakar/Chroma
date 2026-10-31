@@ -75,6 +75,27 @@ object NotificationDispatcher {
                 .set(notification.toMap())
                 .await()
 
+            // Trigger real-time FCM push notification to target device
+            try {
+                val targetUserDoc = db.collection("users").document(targetUserId).get().await()
+                val targetFcmToken = targetUserDoc.getString("fcmToken")
+                if (!targetFcmToken.isNullOrBlank()) {
+                    val pushTitle = if (type == NotificationActionType.MESSAGE) actorName else "$actorName ($actorHandle)"
+                    val pushBody = detailText ?: actionText
+                    FcmPushSender.sendPushNotification(
+                        context = com.chroma.studio.ChromaApp.instance,
+                        targetFcmToken = targetFcmToken,
+                        roomId = targetId ?: "",
+                        senderId = currentUid,
+                        senderName = pushTitle,
+                        messageText = pushBody,
+                        avatarUrl = actorAvatarUrl ?: ""
+                    )
+                }
+            } catch (e: Exception) {
+                Log.w("NotificationDispatcher", "Could not trigger FCM push: ${e.message}")
+            }
+
             true
         } catch (e: Exception) {
             Log.e("NotificationDispatcher", "Failed to dispatch notification to $targetUserId", e)

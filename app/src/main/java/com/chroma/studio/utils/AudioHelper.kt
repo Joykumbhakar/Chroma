@@ -152,7 +152,8 @@ class ChatAudioPlayerManager {
 /**
  * Audio Recorder Manager to handle voice note recording with live waveform amplitudes.
  */
-class ChatAudioRecorderManager(private val context: Context) {
+class ChatAudioRecorderManager(context: Context) {
+    private val context = context.applicationContext
     private var recorder: MediaRecorder? = null
     private var tempAudioFile: File? = null
     private var startTimeMs: Long = 0L

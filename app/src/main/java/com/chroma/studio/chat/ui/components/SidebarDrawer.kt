@@ -85,27 +85,12 @@ fun SidebarDrawer(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 // Avatar with online badge
-                Box(modifier = Modifier.size(38.dp)) {
-                    AsyncImage(
-                        model = currentUser.avatar,
-                        contentDescription = "My profile",
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(CircleShape)
-                            .border(1.5.dp, colors.iosBlue.copy(alpha = 0.5f), CircleShape),
-                        contentScale = ContentScale.Crop
-                    )
-                    Box(
-                        modifier = Modifier
-                            .size(11.dp)
-                            .align(Alignment.BottomEnd)
-                            .offset(x = (-1).dp, y = (-1).dp)
-                            .background(colors.sidebarBg, CircleShape)
-                            .padding(1.5.dp)
-                            .clip(CircleShape)
-                            .background(colors.success)
-                    )
-                }
+                com.chroma.studio.ui.components.IosAvatarView(
+                    name = currentUser.name,
+                    avatarUrl = currentUser.avatar,
+                    size = 38.dp,
+                    isOnline = true
+                )
                 // Name + status
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
@@ -410,14 +395,14 @@ private fun StoryItem(
                     )
                     .padding(2.dp)
             ) {
-                AsyncImage(
-                    model = avatarUrl,
-                    contentDescription = name,
+                com.chroma.studio.ui.components.IosAvatarView(
+                    name = name,
+                    avatarUrl = avatarUrl,
+                    size = 46.dp,
                     modifier = Modifier
                         .fillMaxSize()
                         .clip(CircleShape)
-                        .border(1.5.dp, colors.sidebarBg, CircleShape),
-                    contentScale = ContentScale.Crop
+                        .border(1.5.dp, colors.sidebarBg, CircleShape)
                 )
             }
 
@@ -523,29 +508,12 @@ private fun ChatListRow(
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         // Avatar
-        Box(modifier = Modifier.size(44.dp)) {
-            AsyncImage(
-                model = chat.avatar,
-                contentDescription = chat.name,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(CircleShape)
-                    .border(0.5.dp, colors.borderSubtle, CircleShape),
-                contentScale = ContentScale.Crop
-            )
-            if (chat.online) {
-                Box(
-                    modifier = Modifier
-                        .size(12.dp)
-                        .align(Alignment.BottomEnd)
-                        .offset(x = (-1).dp, y = (-1).dp)
-                        .background(colors.sidebarBg, CircleShape)
-                        .padding(1.5.dp)
-                        .clip(CircleShape)
-                        .background(colors.success)
-                )
-            }
-        }
+        com.chroma.studio.ui.components.IosAvatarView(
+            name = chat.name,
+            avatarUrl = chat.avatar,
+            size = 44.dp,
+            isOnline = chat.online
+        )
 
         // Content
         Column(

@@ -190,17 +190,19 @@ fun IosAvatarView(
     gender: String? = null,
     modifier: Modifier = Modifier
 ) {
-    val gradient = remember(name, avatarUrl) { getAvatarGradient(name.ifBlank { avatarUrl }) }
-    val presetAvatarRes = remember(avatarUrl) { getAvatarPresetDrawableRes(avatarUrl) }
-    val defaultAvatarRes = remember(gender) { getDefaultAvatarDrawableRes(gender) }
-    val resolvedDrawable = presetAvatarRes ?: if (avatarUrl.isBlank()) defaultAvatarRes else null
+    val cleanUrl = remember(avatarUrl) { avatarUrl.trim() }
+    val gradient = remember(name, cleanUrl) { getAvatarGradient(name.ifBlank { cleanUrl }) }
+    val presetAvatarRes = remember(cleanUrl) { getAvatarPresetDrawableRes(cleanUrl) }
+    val isPlaceholder = cleanUrl.isBlank() ||
+        cleanUrl.equals("default", ignoreCase = true) ||
+        cleanUrl.equals("null", ignoreCase = true) ||
+        cleanUrl.contains("default_avatar")
 
     Box(
         modifier = modifier.size(size),
         contentAlignment = Alignment.Center
     ) {
-        // Avatar Base (Image, Preset Vector, Gender Default, or Monogram)
-        if (resolvedDrawable != null) {
+        if (presetAvatarRes != null) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -208,34 +210,54 @@ fun IosAvatarView(
                 contentAlignment = Alignment.Center
             ) {
                 Image(
-                    painter = painterResource(id = resolvedDrawable),
+                    painter = painterResource(id = presetAvatarRes),
                     contentDescription = name.ifBlank { "Avatar" },
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
             }
-        } else if (avatarUrl.isNotBlank()) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(avatarUrl)
-                    .crossfade(true)
-                    .build(),
-                contentDescription = name,
+        } else if (!isPlaceholder) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                // Base background gradient while image loads
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Brush.linearGradient(gradient))
+                )
+
+                // Custom user profile image from URL, Gallery, Camera, or Supabase
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(cleanUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = name,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
+        } else if (isGroup) {
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .clip(CircleShape)
-                    .background(Brush.linearGradient(gradient)),
-                contentScale = ContentScale.Crop
-            )
-        } else if (isGroup) {
-            Icon(
-                imageVector = Lucide.Users,
-                contentDescription = "Group",
-                tint = Color.White.copy(alpha = 0.85f),
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(size * 0.20f)
-            )
+                    .background(Brush.verticalGradient(gradient)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Lucide.Users,
+                    contentDescription = "Group",
+                    tint = Color.White.copy(alpha = 0.85f),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(size * 0.20f)
+                )
+            }
         } else {
             androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize().clip(CircleShape)) {
                 val canvasSize = this.size
@@ -356,7 +378,7 @@ fun getAppleStatusRingBrush(
             if (isDark) listOf(Color(0xFF2C2C2E), Color(0xFF1C1C1E))
             else listOf(Color(0xFFE5E5EA), Color(0xFFF2F2F7))
         )
-        !isSeen && isOnlyFriend -> Brush.sweepGradient(AppleStatusOnlyFriendGradient)
+        // Unified vibrant Aurora sweep gradient for both Public and Only Friend unseen stories across all screens
         !isSeen -> Brush.sweepGradient(AppleStatusVibrantGradient)
         else -> Brush.linearGradient(
             if (isDark) AppleStatusSeenGrayDark

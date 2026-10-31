@@ -338,6 +338,7 @@ fun DiscoverScreen(
             listState.animateScrollToItem(0)
             kotlinx.coroutines.delay(120)
             refreshProgressAnim.snapTo(0f)
+            com.chroma.studio.chat.sound.SoundManager.playRefresh(context)
             showToast("Feed refreshed • Synced latest creations")
         }
     }

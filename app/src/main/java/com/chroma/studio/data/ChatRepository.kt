@@ -93,7 +93,18 @@ class ChatRepository {
         }
     }
 
-    suspend fun sendMessage(roomId: String, text: String, workId: String? = null, imageUrl: String? = null, preGeneratedId: String? = null, messageType: String = "text", durationSeconds: Int? = null, replyToMessageId: String? = null): Boolean {
+    suspend fun sendMessage(
+        roomId: String,
+        text: String,
+        workId: String? = null,
+        imageUrl: String? = null,
+        preGeneratedId: String? = null,
+        messageType: String = "text",
+        durationSeconds: Int? = null,
+        replyToMessageId: String? = null,
+        storyId: String? = null,
+        storyThumbnailUrl: String? = null
+    ): Boolean {
         val currentUser = auth.currentUser ?: return false
         return try {
             val messageId = preGeneratedId ?: java.util.UUID.randomUUID().toString()
@@ -108,7 +119,9 @@ class ChatRepository {
                 isPending = false,
                 messageType = messageType,
                 durationSeconds = durationSeconds,
-                replyToMessageId = replyToMessageId
+                replyToMessageId = replyToMessageId,
+                storyId = storyId,
+                storyThumbnailUrl = storyThumbnailUrl
             )
             
             // Add message to subcollection
@@ -125,7 +138,10 @@ class ChatRepository {
                     for (id in otherUserIds) {
                         updatedUnreadCount[id] = (updatedUnreadCount[id] ?: 0) + 1
                     }
-                    val displayMessage = if (imageUrl != null) "Sent an image" else if (workId != null) "Shared a work" else text
+                    val displayMessage = if (storyThumbnailUrl != null || storyId != null) "Replied to story: $text"
+                                         else if (imageUrl != null) "Sent an image" 
+                                         else if (workId != null) "Shared a work" 
+                                         else text
                     transaction.update(roomRef, "lastMessage", displayMessage)
                     transaction.update(roomRef, "lastMessageTime", message.timestamp)
                     transaction.update(roomRef, "lastSender", currentUser.uid)

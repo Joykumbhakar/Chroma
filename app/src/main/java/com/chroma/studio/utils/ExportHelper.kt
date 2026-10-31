@@ -404,4 +404,54 @@ object ExportHelper {
         }
         return null
     }
+
+    /**
+     * Shares a video URI directly using the Android system share sheet (ACTION_SEND).
+     * Grants temporary read permission to the recipient app (WhatsApp, Instagram, Drive, etc.).
+     */
+    fun shareVideo(
+        context: Context,
+        uri: Uri,
+        title: String = "Share Video"
+    ) {
+        try {
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "video/mp4"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                if (context !is android.app.Activity) {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+            }
+            val chooser = Intent.createChooser(shareIntent, title).apply {
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                if (context !is android.app.Activity) {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+            }
+            context.startActivity(chooser)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to launch video share intent for $uri", e)
+        }
+    }
+
+    /**
+     * Shares a local video file using FileProvider.
+     */
+    fun shareVideoFile(
+        context: Context,
+        file: java.io.File,
+        title: String = "Share Video"
+    ) {
+        try {
+            val contentUri = androidx.core.content.FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.provider",
+                file
+            )
+            shareVideo(context, contentUri, title)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to share video file $file", e)
+        }
+    }
 }

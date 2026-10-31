@@ -253,37 +253,47 @@ fun PhosphorChevronLeft(tint: Color = Color(0xFF0078FE), size: Dp = 24.dp, modif
     }
 }
 
+/**
+ * Clean Single Checkmark (#8696a0)
+ * SVG: <path d="M4.75 12.75L9.5 17.5L19.25 7" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+ */
 @Composable
-fun PhosphorSingleCheck(tint: Color = Color(0xFF34C759), size: Dp = 13.dp, modifier: Modifier = Modifier) {
+fun PhosphorSingleCheck(tint: Color = Color(0xFF8696A0), size: Dp = 13.dp, modifier: Modifier = Modifier) {
     Canvas(modifier = modifier.size(size)) {
         val scale = size.toPx() / 24f
-        val stroke = Stroke(width = 1.35f * density, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        val stroke = Stroke(width = 2.2f * scale, cap = StrokeCap.Round, join = StrokeJoin.Round)
         val path = Path().apply {
-            moveTo(4.5f * scale, 12f * scale)
-            lineTo(9.5f * scale, 17f * scale)
-            lineTo(19.5f * scale, 7f * scale)
+            moveTo(4.75f * scale, 12.75f * scale)
+            lineTo(9.5f * scale, 17.5f * scale)
+            lineTo(19.25f * scale, 7f * scale)
         }
         drawPath(path, color = tint, style = stroke)
     }
 }
 
+/**
+ * Clean Double Checkmark (#8696a0 delivered, #53bdeb read)
+ * SVG:
+ *  <path d="M1.75 12.75L6.5 17.5L16.25 7" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+ *  <path d="M7.75 12.75L12.5 17.5L22.25 7" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+ */
 @Composable
-fun PhosphorDoubleCheck(tint: Color = Color(0xFF34C759), size: Dp = 15.dp, modifier: Modifier = Modifier) {
+fun PhosphorDoubleCheck(tint: Color = Color(0xFF8696A0), size: Dp = 15.5.dp, modifier: Modifier = Modifier) {
     Canvas(modifier = modifier.size(size)) {
         val scale = size.toPx() / 24f
-        val stroke = Stroke(width = 1.35f * density, cap = StrokeCap.Round, join = StrokeJoin.Round)
-        // First / Left check
+        val stroke = Stroke(width = 2.2f * scale, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        // First check
         val path1 = Path().apply {
-            moveTo(2.5f * scale, 12f * scale)
-            lineTo(7.5f * scale, 17f * scale)
-            lineTo(15.5f * scale, 9f * scale)
+            moveTo(1.75f * scale, 12.75f * scale)
+            lineTo(6.5f * scale, 17.5f * scale)
+            lineTo(16.25f * scale, 7f * scale)
         }
         drawPath(path1, color = tint, style = stroke)
-        // Second / Right check (staggered by 6px)
+        // Second check (staggered)
         val path2 = Path().apply {
-            moveTo(8.5f * scale, 12f * scale)
-            lineTo(13.5f * scale, 17f * scale)
-            lineTo(21.5f * scale, 7f * scale)
+            moveTo(7.75f * scale, 12.75f * scale)
+            lineTo(12.5f * scale, 17.5f * scale)
+            lineTo(22.25f * scale, 7f * scale)
         }
         drawPath(path2, color = tint, style = stroke)
     }
@@ -295,72 +305,86 @@ fun PhosphorGreenCheck(size: Dp = 13.dp, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun PhosphorGreenDoubleCheck(size: Dp = 15.dp, modifier: Modifier = Modifier) {
+fun PhosphorGreenDoubleCheck(size: Dp = 15.5.dp, modifier: Modifier = Modifier) {
     PhosphorDoubleCheck(tint = Color(0xFF34C759), size = size, modifier = modifier)
 }
 
+/**
+ * Clean Simplified Timer (#8696a0)
+ * SVG:
+ *  <circle cx="12" cy="12" r="9.25" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" />
+ *  <polyline points="12 6.75 12 12 15.75 13.75" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" />
+ */
 @Composable
-fun PhosphorPendingClock(tint: Color = Color(0xFF8E8E93), size: Dp = 12.dp, modifier: Modifier = Modifier) {
+fun PhosphorPendingClock(tint: Color = Color(0xFF8696A0), size: Dp = 12.dp, modifier: Modifier = Modifier) {
     Canvas(modifier = modifier.size(size)) {
         val scale = size.toPx() / 24f
-        val stroke = Stroke(width = 1.25f * density, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        val stroke = Stroke(width = 2.1f * scale, cap = StrokeCap.Round, join = StrokeJoin.Round)
         drawCircle(
             color = tint,
-            radius = 8f * scale,
+            radius = 9.25f * scale,
             center = Offset(12f * scale, 12f * scale),
             style = stroke
         )
         val path = Path().apply {
-            moveTo(12f * scale, 7f * scale)
+            moveTo(12f * scale, 6.75f * scale)
             lineTo(12f * scale, 12f * scale)
-            lineTo(15.5f * scale, 14f * scale)
+            lineTo(15.75f * scale, 13.75f * scale)
         }
         drawPath(path, color = tint, style = stroke)
     }
 }
 
 /**
- * Modern iOS 18 / WhatsApp / Telegram pixel-perfect status tick for messages.
- * Displays:
- *  - "pending": small clock icon
- *  - "sent": single tick (normal tint)
- *  - "delivered": double tick (normal tint)
- *  - "read" / "seen": double tick with readTint (sky blue / cyan #38BDF8)
+ * Clean Error Circle Cut (#ef4444)
+ * SVG:
+ *  <circle cx="12" cy="12" r="9.25" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" />
+ *  <line x1="12" y1="7.5" x2="12" y2="12.5" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" />
+ *  <circle cx="12" cy="16.5" r="0.85" fill="currentColor" stroke="none" />
  */
 @Composable
-fun PhosphorErrorExclamation(tint: Color = Color(0xFFFF453A), size: Dp = 13.dp, modifier: Modifier = Modifier) {
+fun PhosphorErrorExclamation(tint: Color = Color(0xFFEF4444), size: Dp = 13.dp, modifier: Modifier = Modifier) {
     Canvas(modifier = modifier.size(size)) {
         val scale = size.toPx() / 24f
-        val stroke = Stroke(width = 1.35f * density, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        val stroke = Stroke(width = 2.1f * scale, cap = StrokeCap.Round, join = StrokeJoin.Round)
         drawCircle(
             color = tint,
-            radius = 8.5f * scale,
+            radius = 9.25f * scale,
             center = Offset(12f * scale, 12f * scale),
             style = stroke
         )
         drawLine(
             color = tint,
-            start = Offset(12f * scale, 8f * scale),
+            start = Offset(12f * scale, 7.5f * scale),
             end = Offset(12f * scale, 12.5f * scale),
             strokeWidth = stroke.width,
             cap = stroke.cap
         )
         drawCircle(
             color = tint,
-            radius = 1f * scale,
-            center = Offset(12f * scale, 15.5f * scale)
+            radius = 0.85f * scale,
+            center = Offset(12f * scale, 16.5f * scale)
         )
     }
 }
 
+/**
+ * Clean pixel-perfect status tick for messages matching clean_status_timer_icons.html.
+ * Displays:
+ *  - "pending": Simplified Timer (pendingTint, default #8696a0)
+ *  - "sent": Single Tick (normalTint, default #8696a0)
+ *  - "delivered": Double Tick (normalTint, default #8696a0)
+ *  - "read" / "seen": Double Tick in vibrant cyan-blue (readTint, default #53bdeb)
+ *  - "error" / "failed": Error Circle Cut (errorTint, default #ef4444)
+ */
 @Composable
 fun MessageStatusTick(
     status: String,
     isOutgoing: Boolean = true,
-    normalTint: Color = Color(0xD8FFFFFF),
-    readTint: Color = Color(0xFF38BDF8),
-    pendingTint: Color = Color(0xB3FFFFFF),
-    errorTint: Color = Color(0xFFFF453A),
+    normalTint: Color = Color(0xFF8696A0),
+    readTint: Color = Color(0xFF53BDEB),
+    pendingTint: Color = Color(0xFF8696A0),
+    errorTint: Color = Color(0xFFEF4444),
     size: Dp = 13.dp,
     modifier: Modifier = Modifier
 ) {
@@ -369,7 +393,7 @@ fun MessageStatusTick(
         "pending" -> {
             PhosphorPendingClock(
                 tint = pendingTint,
-                size = (size.value - 1.5f).coerceAtLeast(10f).dp,
+                size = (size.value - 1f).coerceAtLeast(10f).dp,
                 modifier = modifier
             )
         }
@@ -383,21 +407,21 @@ fun MessageStatusTick(
         "delivered" -> {
             PhosphorDoubleCheck(
                 tint = normalTint,
-                size = (size.value + 1.5f).dp,
+                size = (size.value + 2.5f).dp,
                 modifier = modifier
             )
         }
         "read", "seen" -> {
             PhosphorDoubleCheck(
                 tint = readTint,
-                size = (size.value + 1.5f).dp,
+                size = (size.value + 2.5f).dp,
                 modifier = modifier
             )
         }
         "error", "failed" -> {
             PhosphorErrorExclamation(
                 tint = errorTint,
-                size = (size.value + 1f).dp,
+                size = size,
                 modifier = modifier
             )
         }
@@ -936,6 +960,91 @@ fun LucideEye(tint: Color = Color.White, size: Dp = 20.dp, modifier: Modifier = 
         }
         drawPath(path, color = tint, style = stroke)
         drawCircle(color = tint, radius = 3f * scale, center = Offset(12f * scale, 12f * scale), style = stroke)
+    }
+}
+
+// Lucide Eye Off
+@Composable
+fun LucideEyeOff(tint: Color = Color.White, size: Dp = 20.dp, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.size(size)) {
+        val scale = size.toPx() / 24f
+        val stroke = Stroke(width = 1.25f * density, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        
+        val path = Path().apply {
+            moveTo(2f * scale, 12f * scale)
+            cubicTo(5f * scale, 19f * scale, 19f * scale, 19f * scale, 22f * scale, 12f * scale)
+            cubicTo(19f * scale, 5f * scale, 5f * scale, 5f * scale, 2f * scale, 12f * scale)
+            close()
+        }
+        drawPath(path, color = tint, style = stroke)
+        drawCircle(color = tint, radius = 3f * scale, center = Offset(12f * scale, 12f * scale), style = stroke)
+        drawLine(
+            color = tint,
+            start = Offset(3f * scale, 3f * scale),
+            end = Offset(21f * scale, 21f * scale),
+            strokeWidth = stroke.width,
+            cap = StrokeCap.Round
+        )
+    }
+}
+
+// Lucide Key
+@Composable
+fun LucideKey(tint: Color = Color.White, size: Dp = 20.dp, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.size(size)) {
+        val scale = size.toPx() / 24f
+        val stroke = Stroke(width = 1.25f * density, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        drawCircle(color = tint, radius = 4f * scale, center = Offset(7.5f * scale, 16.5f * scale), style = stroke)
+        drawLine(color = tint, start = Offset(10.5f * scale, 13.5f * scale), end = Offset(21f * scale, 3f * scale), strokeWidth = stroke.width, cap = StrokeCap.Round)
+        drawLine(color = tint, start = Offset(18f * scale, 6f * scale), end = Offset(20f * scale, 8f * scale), strokeWidth = stroke.width, cap = StrokeCap.Round)
+        drawLine(color = tint, start = Offset(15f * scale, 9f * scale), end = Offset(17f * scale, 11f * scale), strokeWidth = stroke.width, cap = StrokeCap.Round)
+    }
+}
+
+// Lucide Fingerprint (Biometric Auth)
+@Composable
+fun LucideFingerprint(tint: Color = Color.White, size: Dp = 20.dp, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.size(size)) {
+        val scale = size.toPx() / 24f
+        val stroke = Stroke(width = 1.5f * density, cap = StrokeCap.Round, join = StrokeJoin.Round)
+
+        // Arc 1 - Inner core
+        drawArc(
+            color = tint,
+            startAngle = 180f,
+            sweepAngle = 180f,
+            useCenter = false,
+            topLeft = Offset(10f * scale, 10f * scale),
+            size = androidx.compose.ui.geometry.Size(4f * scale, 5f * scale),
+            style = stroke
+        )
+        drawLine(color = tint, start = Offset(14f * scale, 12.5f * scale), end = Offset(14f * scale, 15f * scale), strokeWidth = stroke.width, cap = StrokeCap.Round)
+
+        // Arc 2 - Mid loop
+        drawArc(
+            color = tint,
+            startAngle = 185f,
+            sweepAngle = 170f,
+            useCenter = false,
+            topLeft = Offset(7f * scale, 7f * scale),
+            size = androidx.compose.ui.geometry.Size(10f * scale, 11f * scale),
+            style = stroke
+        )
+        drawLine(color = tint, start = Offset(7f * scale, 12.5f * scale), end = Offset(7f * scale, 17f * scale), strokeWidth = stroke.width, cap = StrokeCap.Round)
+        drawLine(color = tint, start = Offset(17f * scale, 12.5f * scale), end = Offset(17f * scale, 16f * scale), strokeWidth = stroke.width, cap = StrokeCap.Round)
+
+        // Arc 3 - Outer ridge
+        drawArc(
+            color = tint,
+            startAngle = 190f,
+            sweepAngle = 160f,
+            useCenter = false,
+            topLeft = Offset(4f * scale, 4f * scale),
+            size = androidx.compose.ui.geometry.Size(16f * scale, 17f * scale),
+            style = stroke
+        )
+        drawLine(color = tint, start = Offset(4f * scale, 12.5f * scale), end = Offset(4f * scale, 19f * scale), strokeWidth = stroke.width, cap = StrokeCap.Round)
+        drawLine(color = tint, start = Offset(20f * scale, 12.5f * scale), end = Offset(20f * scale, 18f * scale), strokeWidth = stroke.width, cap = StrokeCap.Round)
     }
 }
 
@@ -1740,3 +1849,221 @@ fun LucideLink(tint: Color = Color(0xFF007AFF), size: Dp = 18.dp, modifier: Modi
 
 
 
+
+// ── Pro Camera Vector Icons (Replacing all emojis and symbols) ─────────────────
+
+@Composable
+fun CameraFlashOffIcon(tint: Color = Color.White, size: Dp = 18.dp, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.size(size)) {
+        val scale = size.toPx() / 24f
+        val stroke = Stroke(width = 1.6f * density, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        val bolt = Path().apply {
+            moveTo(13f * scale, 2f * scale)
+            lineTo(6f * scale, 12f * scale)
+            lineTo(11f * scale, 12f * scale)
+            lineTo(9f * scale, 22f * scale)
+            lineTo(18f * scale, 11f * scale)
+            lineTo(13f * scale, 11f * scale)
+            close()
+        }
+        drawPath(bolt, color = tint, style = stroke)
+        drawLine(
+            color = tint,
+            start = Offset(4f * scale, 4f * scale),
+            end = Offset(20f * scale, 20f * scale),
+            strokeWidth = stroke.width * 1.1f,
+            cap = StrokeCap.Round
+        )
+    }
+}
+
+@Composable
+fun CameraFlashOnIcon(tint: Color = Color(0xFFFFCC00), size: Dp = 18.dp, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.size(size)) {
+        val scale = size.toPx() / 24f
+        val bolt = Path().apply {
+            moveTo(13f * scale, 2f * scale)
+            lineTo(5f * scale, 13f * scale)
+            lineTo(12f * scale, 13f * scale)
+            lineTo(10f * scale, 22f * scale)
+            lineTo(19f * scale, 10f * scale)
+            lineTo(12f * scale, 10f * scale)
+            close()
+        }
+        drawPath(bolt, color = tint)
+    }
+}
+
+@Composable
+fun CameraFlashAutoIcon(tint: Color = Color.White, size: Dp = 18.dp, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.size(size)) {
+        val scale = size.toPx() / 24f
+        val stroke = Stroke(width = 1.4f * density, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        val bolt = Path().apply {
+            moveTo(10f * scale, 3f * scale)
+            lineTo(4f * scale, 12f * scale)
+            lineTo(9f * scale, 12f * scale)
+            lineTo(7f * scale, 20f * scale)
+            lineTo(14f * scale, 10f * scale)
+            lineTo(9.5f * scale, 10f * scale)
+            close()
+        }
+        drawPath(bolt, color = tint, style = stroke)
+        val aPath = Path().apply {
+            moveTo(16f * scale, 19f * scale)
+            lineTo(19f * scale, 10f * scale)
+            lineTo(22f * scale, 19f * scale)
+        }
+        drawPath(aPath, color = tint, style = stroke)
+        drawLine(tint, Offset(17f * scale, 16f * scale), Offset(21f * scale, 16f * scale), strokeWidth = stroke.width)
+    }
+}
+
+@Composable
+fun CameraTorchIcon(tint: Color = Color.White, size: Dp = 18.dp, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.size(size)) {
+        val scale = size.toPx() / 24f
+        val stroke = Stroke(width = 1.5f * density, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        val torch = Path().apply {
+            moveTo(9f * scale, 3f * scale)
+            lineTo(15f * scale, 3f * scale)
+            lineTo(14f * scale, 7f * scale)
+            lineTo(13f * scale, 21f * scale)
+            lineTo(11f * scale, 21f * scale)
+            lineTo(10f * scale, 7f * scale)
+            close()
+        }
+        drawPath(torch, color = tint, style = stroke)
+        drawLine(tint, Offset(10f * scale, 7f * scale), Offset(14f * scale, 7f * scale), strokeWidth = stroke.width)
+        drawLine(tint, Offset(12f * scale, 1f * scale), Offset(12f * scale, 2.5f * scale), strokeWidth = stroke.width)
+        drawLine(tint, Offset(7f * scale, 2f * scale), Offset(8f * scale, 3.5f * scale), strokeWidth = stroke.width)
+        drawLine(tint, Offset(17f * scale, 2f * scale), Offset(16f * scale, 3.5f * scale), strokeWidth = stroke.width)
+    }
+}
+
+@Composable
+fun CameraGridIcon(tint: Color = Color.White, size: Dp = 18.dp, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.size(size)) {
+        val scale = size.toPx() / 24f
+        val stroke = Stroke(width = 1.4f * density, cap = StrokeCap.Round)
+        drawRoundRect(color = tint, topLeft = Offset(3f * scale, 3f * scale), size = Size(18f * scale, 18f * scale), cornerRadius = androidx.compose.ui.geometry.CornerRadius(3f * scale), style = stroke)
+        drawLine(tint, Offset(9f * scale, 3f * scale), Offset(9f * scale, 21f * scale), strokeWidth = stroke.width)
+        drawLine(tint, Offset(15f * scale, 3f * scale), Offset(15f * scale, 21f * scale), strokeWidth = stroke.width)
+        drawLine(tint, Offset(3f * scale, 9f * scale), Offset(21f * scale, 9f * scale), strokeWidth = stroke.width)
+        drawLine(tint, Offset(3f * scale, 15f * scale), Offset(21f * scale, 15f * scale), strokeWidth = stroke.width)
+    }
+}
+
+@Composable
+fun CameraLevelIcon(tint: Color = Color.White, size: Dp = 18.dp, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.size(size)) {
+        val scale = size.toPx() / 24f
+        val stroke = Stroke(width = 1.4f * density, cap = StrokeCap.Round)
+        drawLine(tint, Offset(3f * scale, 12f * scale), Offset(8.5f * scale, 12f * scale), strokeWidth = stroke.width)
+        drawLine(tint, Offset(15.5f * scale, 12f * scale), Offset(21f * scale, 12f * scale), strokeWidth = stroke.width)
+        drawCircle(color = tint, radius = 3.5f * scale, center = Offset(12f * scale, 12f * scale), style = stroke)
+        drawLine(tint, Offset(12f * scale, 3f * scale), Offset(12f * scale, 6.5f * scale), strokeWidth = stroke.width)
+        drawLine(tint, Offset(12f * scale, 17.5f * scale), Offset(12f * scale, 21f * scale), strokeWidth = stroke.width)
+    }
+}
+
+@Composable
+fun CameraGridLevelIcon(tint: Color = Color.White, size: Dp = 18.dp, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.size(size)) {
+        val scale = size.toPx() / 24f
+        val stroke = Stroke(width = 1.25f * density, cap = StrokeCap.Round)
+        drawRoundRect(color = tint, topLeft = Offset(3f * scale, 3f * scale), size = Size(18f * scale, 18f * scale), cornerRadius = androidx.compose.ui.geometry.CornerRadius(3f * scale), style = stroke)
+        drawLine(tint, Offset(9f * scale, 3f * scale), Offset(9f * scale, 21f * scale), strokeWidth = stroke.width)
+        drawLine(tint, Offset(15f * scale, 3f * scale), Offset(15f * scale, 21f * scale), strokeWidth = stroke.width)
+        drawLine(tint, Offset(3f * scale, 9f * scale), Offset(21f * scale, 9f * scale), strokeWidth = stroke.width)
+        drawLine(tint, Offset(3f * scale, 15f * scale), Offset(21f * scale, 15f * scale), strokeWidth = stroke.width)
+        drawCircle(color = tint, radius = 2.5f * scale, center = Offset(12f * scale, 12f * scale))
+    }
+}
+
+@Composable
+fun CameraFilterIcon(tint: Color = Color.White, size: Dp = 18.dp, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.size(size)) {
+        val scale = size.toPx() / 24f
+        val stroke = Stroke(width = 1.4f * density)
+        drawCircle(color = tint, radius = 4.8f * scale, center = Offset(12f * scale, 8.5f * scale), style = stroke)
+        drawCircle(color = tint, radius = 4.8f * scale, center = Offset(8f * scale, 15.5f * scale), style = stroke)
+        drawCircle(color = tint, radius = 4.8f * scale, center = Offset(16f * scale, 15.5f * scale), style = stroke)
+    }
+}
+
+@Composable
+fun CameraTimerIcon(tint: Color = Color.White, size: Dp = 18.dp, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.size(size)) {
+        val scale = size.toPx() / 24f
+        val stroke = Stroke(width = 1.5f * density, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        drawLine(tint, Offset(10f * scale, 2f * scale), Offset(14f * scale, 2f * scale), strokeWidth = stroke.width)
+        drawLine(tint, Offset(12f * scale, 2f * scale), Offset(12f * scale, 4.5f * scale), strokeWidth = stroke.width)
+        drawCircle(color = tint, radius = 7.5f * scale, center = Offset(12f * scale, 13f * scale), style = stroke)
+        drawLine(tint, Offset(12f * scale, 13f * scale), Offset(12f * scale, 9f * scale), strokeWidth = stroke.width)
+        drawLine(tint, Offset(12f * scale, 13f * scale), Offset(15f * scale, 13f * scale), strokeWidth = stroke.width)
+    }
+}
+
+@Composable
+fun CameraSunIcon(tint: Color = Color(0xFFFFCC00), size: Dp = 16.dp, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.size(size)) {
+        val scale = size.toPx() / 24f
+        val stroke = Stroke(width = 1.6f * density, cap = StrokeCap.Round)
+        drawCircle(color = tint, radius = 4.5f * scale, center = Offset(12f * scale, 12f * scale), style = stroke)
+        drawLine(tint, Offset(12f * scale, 2.5f * scale), Offset(12f * scale, 5f * scale), strokeWidth = stroke.width)
+        drawLine(tint, Offset(12f * scale, 19f * scale), Offset(12f * scale, 21.5f * scale), strokeWidth = stroke.width)
+        drawLine(tint, Offset(2.5f * scale, 12f * scale), Offset(5f * scale, 12f * scale), strokeWidth = stroke.width)
+        drawLine(tint, Offset(19f * scale, 12f * scale), Offset(21.5f * scale, 12f * scale), strokeWidth = stroke.width)
+        drawLine(tint, Offset(5.3f * scale, 5.3f * scale), Offset(7.2f * scale, 7.2f * scale), strokeWidth = stroke.width)
+        drawLine(tint, Offset(16.8f * scale, 16.8f * scale), Offset(18.7f * scale, 18.7f * scale), strokeWidth = stroke.width)
+        drawLine(tint, Offset(18.7f * scale, 5.3f * scale), Offset(16.8f * scale, 7.2f * scale), strokeWidth = stroke.width)
+        drawLine(tint, Offset(7.2f * scale, 16.8f * scale), Offset(5.3f * scale, 18.7f * scale), strokeWidth = stroke.width)
+    }
+}
+
+@Composable
+fun CameraSaveIcon(tint: Color = Color.White, size: Dp = 16.dp, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.size(size)) {
+        val scale = size.toPx() / 24f
+        val stroke = Stroke(width = 1.6f * density, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        val tray = Path().apply {
+            moveTo(4f * scale, 15f * scale)
+            lineTo(4f * scale, 20f * scale)
+            lineTo(20f * scale, 20f * scale)
+            lineTo(20f * scale, 15f * scale)
+        }
+        drawPath(tray, color = tint, style = stroke)
+        drawLine(tint, Offset(12f * scale, 4f * scale), Offset(12f * scale, 15f * scale), strokeWidth = stroke.width)
+        drawLine(tint, Offset(8f * scale, 11f * scale), Offset(12f * scale, 15.5f * scale), strokeWidth = stroke.width)
+        drawLine(tint, Offset(16f * scale, 11f * scale), Offset(12f * scale, 15.5f * scale), strokeWidth = stroke.width)
+    }
+}
+
+@Composable
+fun CameraBeautySparkleIcon(tint: Color = Color.White, size: Dp = 16.dp, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.size(size)) {
+        val scale = size.toPx() / 24f
+        val star = Path().apply {
+            moveTo(11f * scale, 2f * scale)
+            cubicTo(11f * scale, 7.5f * scale, 6.5f * scale, 11f * scale, 2f * scale, 11f * scale)
+            cubicTo(6.5f * scale, 11f * scale, 11f * scale, 14.5f * scale, 11f * scale, 20f * scale)
+            cubicTo(11f * scale, 14.5f * scale, 15.5f * scale, 11f * scale, 20f * scale, 11f * scale)
+            cubicTo(15.5f * scale, 11f * scale, 11f * scale, 7.5f * scale, 11f * scale, 2f * scale)
+            close()
+        }
+        drawPath(star, color = tint)
+        val dot = Path().apply {
+            moveTo(19f * scale, 3f * scale)
+            lineTo(19.8f * scale, 5.2f * scale)
+            lineTo(22f * scale, 6f * scale)
+            lineTo(19.8f * scale, 6.8f * scale)
+            lineTo(19f * scale, 9f * scale)
+            lineTo(18.2f * scale, 6.8f * scale)
+            lineTo(16f * scale, 6f * scale)
+            lineTo(18.2f * scale, 5.2f * scale)
+            close()
+        }
+        drawPath(dot, color = tint)
+    }
+}

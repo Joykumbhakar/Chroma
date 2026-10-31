@@ -82,7 +82,8 @@ enum class Apple3DGraphicId(
     WORKS("31", "Studio Artboard & Easel", "Articulated Clamp", "Create New Studio Work?", "Launches a new high-resolution canvas with default layer stack."),
     FLASH_VIDEO("32", "Pro Video Clapperboard", "Hinged Clapper", "Record New Flash Video?", "Opens the camera viewfinder for rapid vertical moment capture."),
     REMIX_NODE("33", "Dual Remix Orbit", "Interlocking Rings", "Start Co-Creation Remix?", "Forks the selected artwork with attribution linked to the original creator."),
-    CHAT_BUBBLE("34", "Cupertino Spatial Chat", "Articulated Bubbles", "Start New Conversation?", "Opens an end-to-end encrypted messaging channel.")
+    CHAT_BUBBLE("34", "Cupertino Spatial Chat", "Articulated Bubbles", "Start New Conversation?", "Opens an end-to-end encrypted messaging channel."),
+    SAVED_WORKS("35", "Saved Works Folio", "3D Ribbon Folio", "Open Saved Works?", "View all bookmarked creations and design blueprints saved to your private collection.")
 }
 
 object AppleHigShaders {
@@ -1250,13 +1251,205 @@ private fun DrawScope.drawApple3DGraphicNormalized(id: Apple3DGraphicId, p: Floa
                 }
                 drawPath(floatBubble, pearl)
                 drawPath(floatBubble, Brush.linearGradient(listOf(Color.White, Color(0xFF80DCFF).copy(alpha = 0.5f)), start = Offset(24f, 15f), end = Offset(92f, 55f)), style = Stroke(1.8f))
-                listOf(44f, 58f, 72f).forEach { dx ->
-                    drawCircle(AppleHigShaders.bodyBrush(s), radius = 3.6f, center = Offset(dx, 35f))
-                    drawCircle(Color.White.copy(alpha = 0.9f), radius = 1.4f, center = Offset(dx - 1f, 34f))
-                }
-            }
-        }
-    }
+                listOf(44f, 58f, 72f).forEach { dx ->
+                    drawCircle(AppleHigShaders.bodyBrush(s), radius = 3.6f, center = Offset(dx, 35f))
+                    drawCircle(Color.White.copy(alpha = 0.9f), radius = 1.4f, center = Offset(dx - 1f, 34f))
+                }
+            }
+        }
+        Apple3DGraphicId.SAVED_WORKS -> {
+            // 1. Studio Floor Ambient Contact Shadow
+            drawOval(
+                brush = Brush.radialGradient(
+                    listOf(AppleHigShaders.PlinthShadow.copy(alpha = 0.55f), Color.Transparent),
+                    center = Offset(50f, 88f),
+                    radius = 36f
+                ),
+                topLeft = Offset(14f, 83.2f),
+                size = Size(72f, 9.6f)
+            )
+
+            // 2. Backdrop Folio Gallery Canvas Card (Subtly Tilted with Spring Easing)
+            val cardTilt = -2.5f + 4f * p
+            withTransform({
+                rotate(degrees = cardTilt, pivot = Offset(48f, 52f))
+                scale(1f + 0.03f * p, 1f + 0.03f * p, pivot = Offset(48f, 52f))
+            }) {
+                // Outer Sculpted Squircle Plinth
+                drawSculptedSquircleBase(16f, 18f, 62f, 62f, 14f)
+
+                // Inner Sapphire Gallery Recess
+                drawSapphireRecessRect(21f, 23f, 52f, 52f, 10f)
+
+                // Miniature UI Status & Title Skeleton
+                drawRoundRect(
+                    color = Color.White.copy(alpha = 0.22f),
+                    topLeft = Offset(26f, 28f),
+                    size = Size(18f, 2.5f),
+                    cornerRadius = CornerRadius(1.25f, 1.25f)
+                )
+
+                // Mini Saved Creative Artwork Layer Bands
+                // Band 1: Cyan / Apple Blue Gradient (Vector Mesh Layer)
+                drawRoundRect(
+                    brush = Brush.horizontalGradient(listOf(Color(0xFF00C7BE), Color(0xFF007AFF))),
+                    topLeft = Offset(26f, 36f),
+                    size = Size(42f, 6.5f),
+                    cornerRadius = CornerRadius(3.25f, 3.25f)
+                )
+
+                // Band 2: Royal Indigo / Amethyst Gradient (Shader Filter Layer)
+                drawRoundRect(
+                    brush = Brush.horizontalGradient(listOf(Color(0xFF5856D6), Color(0xFFAF52DE))),
+                    topLeft = Offset(26f, 46f),
+                    size = Size(35f, 6.5f),
+                    cornerRadius = CornerRadius(3.25f, 3.25f)
+                )
+
+                // Band 3: Sunset Coral / Amber Gradient (Lighting Accent Layer)
+                drawRoundRect(
+                    brush = Brush.horizontalGradient(listOf(Color(0xFFFF2D55), Color(0xFFFF9500))),
+                    topLeft = Offset(26f, 56f),
+                    size = Size(28f, 6.5f),
+                    cornerRadius = CornerRadius(3.25f, 3.25f)
+                )
+
+                // Diagonal Specular Glass Reflection Sheen
+                drawLine(
+                    brush = Brush.linearGradient(
+                        listOf(Color.White.copy(alpha = 0.35f), Color.White.copy(alpha = 0.05f), Color.Transparent),
+                        start = Offset(20f, 22f),
+                        end = Offset(68f, 70f)
+                    ),
+                    start = Offset(22f, 25f),
+                    end = Offset(65f, 68f),
+                    strokeWidth = 1.6f
+                )
+            }
+
+            // 3. The Iconic 3D Bookmark Ribbon (Cascading over the Folio Card)
+            val ribbonSway = -3.5f * kotlin.math.sin(p * Math.PI.toFloat())
+            withTransform({
+                rotate(degrees = ribbonSway, pivot = Offset(62f, 14f))
+                translate(left = 0f, top = 2f * p)
+            }) {
+                // Top folded loop wrapping over edge
+                drawRoundRect(
+                    brush = sky,
+                    topLeft = Offset(52f, 12f),
+                    size = Size(20f, 6f),
+                    cornerRadius = CornerRadius(3f, 3f)
+                )
+                drawRoundRect(
+                    brush = AppleHigShaders.specularStrokeBrush(s),
+                    topLeft = Offset(52f, 12f),
+                    size = Size(20f, 6f),
+                    cornerRadius = CornerRadius(3f, 3f),
+                    style = Stroke(width = 0.8f)
+                )
+
+                // Main Bookmark Ribbon Path with Swallowtail Peak
+                val ribbonPath = Path().apply {
+                    moveTo(52f, 14f)
+                    lineTo(72f, 14f)
+                    lineTo(72f, 76f)
+                    lineTo(62f, 66f)
+                    lineTo(52f, 76f)
+                    close()
+                }
+
+                // Ribbon Drop Shadow on Folio
+                val ribbonShadow = Path().apply {
+                    moveTo(50f, 17.5f)
+                    lineTo(70f, 17.5f)
+                    lineTo(70f, 79.5f)
+                    lineTo(60f, 69.5f)
+                    lineTo(50f, 79.5f)
+                    close()
+                }
+                drawPath(path = ribbonShadow, color = Color(0x55001238))
+
+                // Ribbon Body Fill
+                drawPath(path = ribbonPath, brush = AppleHigShaders.bodyBrush(s))
+
+                // Embossed Tactile Center Seam
+                val creasePath = Path().apply {
+                    moveTo(62f, 15f)
+                    lineTo(62f, 66f)
+                }
+                drawPath(
+                    path = creasePath,
+                    color = Color.White.copy(alpha = 0.38f),
+                    style = Stroke(width = 1.2f, cap = StrokeCap.Round)
+                )
+
+                // Specular Edge Bevel
+                drawPath(
+                    path = ribbonPath,
+                    brush = AppleHigShaders.specularStrokeBrush(s),
+                    style = Stroke(width = 1.1f)
+                )
+            }
+
+            // 4. Radiant Floating Diamond Star (Symbol of Treasured Favorite)
+            val starPulse = 1f + 0.18f * kotlin.math.sin(p * Math.PI.toFloat())
+            val starRotate = 18f * p
+            withTransform({
+                scale(starPulse, starPulse, pivot = Offset(76f, 21f))
+                rotate(degrees = starRotate, pivot = Offset(76f, 21f))
+            }) {
+                // Ethereal Radial Ambient Glow
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        listOf(Color(0xFFFFD60A).copy(alpha = 0.40f), Color(0xFFFF9500).copy(alpha = 0.15f), Color.Transparent),
+                        center = Offset(76f, 21f),
+                        radius = 15f
+                    ),
+                    radius = 15f,
+                    center = Offset(76f, 21f)
+                )
+
+                // 4-Point Diamond Starburst
+                val starPath = Path().apply {
+                    val cx = 76f
+                    val cy = 21f
+                    val outerR = 8.5f
+                    val innerR = 2.6f
+                    moveTo(cx, cy - outerR)
+                    lineTo(cx + innerR, cy - innerR)
+                    lineTo(cx + outerR, cy)
+                    lineTo(cx + innerR, cy + innerR)
+                    lineTo(cx, cy + outerR)
+                    lineTo(cx - innerR, cy + innerR)
+                    lineTo(cx - outerR, cy)
+                    lineTo(cx - innerR, cy - innerR)
+                    close()
+                }
+
+                drawPath(
+                    path = starPath,
+                    brush = Brush.linearGradient(
+                        listOf(Color(0xFFFFF7C2), Color(0xFFFFD60A), Color(0xFFFF9500)),
+                        start = Offset(67.5f, 12.5f),
+                        end = Offset(84.5f, 29.5f)
+                    )
+                )
+
+                drawPath(
+                    path = starPath,
+                    color = Color.White.copy(alpha = 0.85f),
+                    style = Stroke(width = 0.9f)
+                )
+
+                // Central Specular Sparkle Highlight
+                drawCircle(
+                    color = Color.White,
+                    radius = 1.4f,
+                    center = Offset(76f, 21f)
+                )
+            }
+        }
+    }
 }
 
 @Composable

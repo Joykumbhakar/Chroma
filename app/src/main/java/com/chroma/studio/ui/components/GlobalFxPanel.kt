@@ -94,7 +94,7 @@ fun GlobalFxPanel(vm: ChromaViewModel, modifier: Modifier = Modifier) {
                 return@rememberLauncherForActivityResult
             }
             if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser == null) {
-                android.widget.Toast.makeText(context, "Please login to use AI", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(context, "Please login to generate", android.widget.Toast.LENGTH_SHORT).show()
                 return@rememberLauncherForActivityResult
             }
             scope.launch(Dispatchers.IO) {
@@ -148,7 +148,7 @@ fun GlobalFxPanel(vm: ChromaViewModel, modifier: Modifier = Modifier) {
                     Box(modifier = Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color.White.copy(alpha = 0.3f), Color.Transparent)))) // Glossy overlay
                     
                     FxSectionCard(
-                        title = "AI PROMPT-TO-PALETTE",
+                        title = "SMART PROMPT-TO-PALETTE",
                         icon = AiWaveSphereVector,
                         defaultExpanded = true,
                         backgroundColor = Color.Transparent
@@ -176,7 +176,7 @@ fun GlobalFxPanel(vm: ChromaViewModel, modifier: Modifier = Modifier) {
                                         return@GlassButton
                                     }
                                     if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser == null) {
-                                        android.widget.Toast.makeText(context, "Please login to use AI", android.widget.Toast.LENGTH_SHORT).show()
+                                        android.widget.Toast.makeText(context, "Please login to generate", android.widget.Toast.LENGTH_SHORT).show()
                                         return@GlassButton
                                     }
                                     scope.launch(Dispatchers.IO) {

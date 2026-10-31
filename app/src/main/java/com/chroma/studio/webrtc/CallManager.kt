@@ -22,9 +22,10 @@ enum class CallState {
 }
 
 class CallManager(
-    private val context: Context,
+    context: Context,
     private val repository: SupabaseChatRepository
 ) {
+    private val context = context.applicationContext
     private val _callState = MutableStateFlow(CallState.IDLE)
     val callState: StateFlow<CallState> = _callState
 

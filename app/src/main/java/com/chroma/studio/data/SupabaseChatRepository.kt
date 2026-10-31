@@ -214,7 +214,9 @@ class SupabaseChatRepository {
         preGeneratedId: String? = null,
         messageType: String = "text",
         durationSeconds: Int? = null,
-        replyToMessageId: String? = null
+        replyToMessageId: String? = null,
+        storyId: String? = null,
+        storyThumbnailUrl: String? = null
     ): Boolean = withContext(Dispatchers.IO) {
         val currentUser = auth.currentUser ?: return@withContext false
         try {
@@ -238,7 +240,9 @@ class SupabaseChatRepository {
                 iv = finalIv,
                 encryptedAesKeys = finalEncryptedKeys,
                 durationSeconds = durationSeconds,
-                replyToMessageId = replyToMessageId
+                replyToMessageId = replyToMessageId,
+                storyId = storyId,
+                storyThumbnailUrl = storyThumbnailUrl
             )
 
             // 1. Save directly to Firestore subcollection for 100% reliable persistence & realtime listeners
@@ -256,7 +260,9 @@ class SupabaseChatRepository {
                             updatedUnreadCount[participantId] = (updatedUnreadCount[participantId] ?: 0) + 1
                         }
                     }
-                    val displayMessage = if (imageUrl != null) {
+                    val displayMessage = if (storyThumbnailUrl != null || storyId != null) {
+                        "Replied to story: $text"
+                    } else if (imageUrl != null) {
                         if (messageType == "video") "Sent a video" else if (messageType == "audio") "Voice message" else "Sent an image"
                     } else if (workId != null) {
                         "Shared a work"
@@ -346,18 +352,44 @@ class SupabaseChatRepository {
                     .get()
                     .await()
                 val docsToUpdate = unreadMessages.documents.filter { doc ->
-                    val msg = doc.toObject(ChatMessage::class.java)
-                    msg != null && msg.senderId != currentUser.uid
+                    val senderId = doc.getString("senderId")
+                    val isRead = doc.getBoolean("isRead") ?: false
+                    !isRead && senderId != null && senderId != currentUser.uid
                 }
-                docsToUpdate.chunked(450).forEach { chunk ->
-                    val batch = firestore.batch()
-                    for (doc in chunk) {
-                        batch.update(doc.reference, "isRead", true)
+                if (docsToUpdate.isNotEmpty()) {
+                    docsToUpdate.chunked(450).forEach { chunk ->
+                        val batch = firestore.batch()
+                        for (doc in chunk) {
+                            batch.update(doc.reference, "isRead", true)
+                        }
+                        batch.commit().await()
                     }
-                    batch.commit().await()
                 }
             } catch (e: Exception) {
-                // ignore
+                // Fallback check recent messages in case index on isRead is unavailable
+                try {
+                    val recent = roomRef.collection("messages")
+                        .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                        .limit(50)
+                        .get()
+                        .await()
+                    val fallbackDocs = recent.documents.filter { doc ->
+                        val senderId = doc.getString("senderId")
+                        val isRead = doc.getBoolean("isRead") ?: false
+                        !isRead && senderId != null && senderId != currentUser.uid
+                    }
+                    if (fallbackDocs.isNotEmpty()) {
+                        fallbackDocs.chunked(450).forEach { chunk ->
+                            val batch = firestore.batch()
+                            for (doc in chunk) {
+                                batch.update(doc.reference, "isRead", true)
+                            }
+                            batch.commit().await()
+                        }
+                    }
+                } catch (e2: Exception) {
+                    // ignore
+                }
             }
 
 

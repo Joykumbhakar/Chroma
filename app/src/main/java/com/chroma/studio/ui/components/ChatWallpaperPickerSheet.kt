@@ -73,7 +73,7 @@ fun ChatWallpaperPickerSheet(
         onDismissRequest = onDismiss,
         containerColor = sheetBg,
         dragHandle = { BottomSheetDefaults.DragHandle() },
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+        shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
     ) {
         Column(
             modifier = Modifier
@@ -82,21 +82,57 @@ fun ChatWallpaperPickerSheet(
                 .padding(bottom = 36.dp)
                 .verticalScroll(rememberScrollState())
         ) {
-            // Header
+            // One UI Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Studio Appearance & Wallpaper",
-                    color = textPrimary,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = InterFontFamily
-                )
-                IconButton(onClick = onDismiss) {
-                    Icon(Lucide.X, null, tint = textSecondary, modifier = Modifier.size(20.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Surface(
+                        shape = RoundedCornerShape(999.dp),
+                        color = Color(0xFF2563EB).copy(alpha = 0.12f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2563EB).copy(alpha = 0.25f)),
+                        modifier = Modifier.height(22.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF2563EB))
+                            )
+                            Text(
+                                text = "ONE UI 7.0 • WALLPAPERS",
+                                fontSize = 9.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isDark) Color(0xFF93C5FD) else Color(0xFF1D4ED8),
+                                letterSpacing = 0.6.sp
+                            )
+                        }
+                    }
+                    Text(
+                        text = "Chat Wallpapers",
+                        color = textPrimary,
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Light,
+                        fontFamily = InterFontFamily,
+                        letterSpacing = (-0.5).sp
+                    )
+                }
+
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f))
+                ) {
+                    Icon(Lucide.X, null, tint = textPrimary, modifier = Modifier.size(18.dp))
                 }
             }
 

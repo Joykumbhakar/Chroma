@@ -39,10 +39,14 @@ import com.chroma.studio.R
 import com.chroma.studio.chat.data.*
 import com.chroma.studio.chat.sound.SoundManager
 import com.chroma.studio.chat.ui.theme.LocalChatColors
+import com.chroma.studio.ui.components.OscellionAppIcon
 import com.chroma.studio.ui.components.AppleSettingsGraphic
 import com.chroma.studio.ui.components.AppleSwitch
 import com.chroma.studio.ui.components.LiquidGlassPrimaryButton
 import com.chroma.studio.ui.components.LiquidGlassSecondaryButton
+import com.composables.icons.lucide.*
+import com.chroma.studio.ui.components.ProfileCropTarget
+import com.chroma.studio.ui.components.ProfileMediaEditorModal
 import com.chroma.studio.ui.components.rememberAppleGraphicAnimationState
 
 /**
@@ -245,18 +249,20 @@ fun ProfileSettingsScreen(
                         Column(
                             modifier = Modifier
                                 .weight(1f)
-                                .offset(y = (-8).dp)
+                                .offset(y = (-8).dp),
+                            verticalArrangement = Arrangement.spacedBy((-2).dp)
                         ) {
                             Text(
                                 text = currentUser.name,
                                 fontSize = 18.5.sp,
+                                lineHeight = 20.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = colors.textDark
                             )
-                            Spacer(Modifier.height(1.dp))
                             Text(
                                 text = currentUser.username,
                                 fontSize = 13.sp,
+                                lineHeight = 15.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = colors.iosBlue
                             )
@@ -687,6 +693,44 @@ fun EditProfileModal(
     var selectedAvatar by remember { mutableStateOf(currentUser.avatar) }
     var selectedBanner by remember { mutableStateOf(currentUser.banner.ifEmpty { drawableUri(R.drawable.banner_wave_banner_midnight_glow) }) }
 
+    var pendingCropUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    var pendingCropTarget by remember { mutableStateOf(ProfileCropTarget.AVATAR) }
+
+    val bannerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            pendingCropUri = uri
+            pendingCropTarget = ProfileCropTarget.BANNER
+        }
+    }
+
+    val avatarLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            pendingCropUri = uri
+            pendingCropTarget = ProfileCropTarget.AVATAR
+        }
+    }
+
+    if (pendingCropUri != null) {
+        ProfileMediaEditorModal(
+            imageUri = pendingCropUri!!,
+            target = pendingCropTarget,
+            onDismiss = { pendingCropUri = null },
+            onCropSuccess = { croppedUri ->
+                val targetMode = pendingCropTarget
+                pendingCropUri = null
+                if (targetMode == ProfileCropTarget.AVATAR) {
+                    selectedAvatar = croppedUri.toString()
+                } else {
+                    selectedBanner = croppedUri.toString()
+                }
+            }
+        )
+    }
+
     val presetAvatars = remember {
         listOf(
             drawableUri(R.drawable.ic_avatar_corporate_navy),
@@ -807,6 +851,39 @@ fun EditProfileModal(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(horizontal = 2.dp)
                 ) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .width(68.dp)
+                                .height(38.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(colors.surfaceSecondary)
+                                .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(8.dp))
+                                .clickable {
+                                    bannerLauncher.launch("image/*")
+                                    SoundManager.playReaction()
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.Image,
+                                    contentDescription = "Upload Custom Banner",
+                                    tint = colors.iosBlue,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Text(
+                                    text = "Custom",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = colors.iosBlue
+                                )
+                            }
+                        }
+                    }
                     items(presetBanners) { ban ->
                         val isSel = ban == selectedBanner
                         Box(
@@ -850,6 +927,27 @@ fun EditProfileModal(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(horizontal = 2.dp)
                 ) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .background(colors.surfaceSecondary)
+                                .border(0.5.dp, colors.borderSubtle, CircleShape)
+                                .clickable {
+                                    avatarLauncher.launch("image/*")
+                                    SoundManager.playReaction()
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Lucide.Camera,
+                                contentDescription = "Upload Custom Avatar",
+                                tint = colors.iosBlue,
+                                modifier = Modifier.size(17.dp)
+                            )
+                        }
+                    }
                     items(presetAvatars) { av ->
                         val isSel = av == selectedAvatar
                         Box(
@@ -1110,19 +1208,7 @@ fun AboutAppModal(onDismiss: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // App Logo Icon
-            Box(
-                modifier = Modifier
-                    .size(64.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(
-                        Brush.linearGradient(
-                            listOf(colors.iosBlue, Color(0xFF5856D6))
-                        )
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                PhosphorPaperPlaneTilt(tint = Color.White, size = 32.dp)
-            }
+            OscellionAppIcon(size = 64.dp)
 
             Spacer(Modifier.height(14.dp))
 

@@ -84,7 +84,7 @@ val AiWaveSphereVector: ImageVector by lazy {
 @Composable
 fun AiWaveSphereIcon(
     modifier: Modifier = Modifier.size(24.dp),
-    contentDescription: String? = "AI"
+    contentDescription: String? = "Smart Wave Sphere"
 ) {
     Canvas(modifier = modifier) {
         val scale = size.minDimension / 48f

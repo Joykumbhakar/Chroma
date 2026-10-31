@@ -109,22 +109,27 @@ fun ChromaAppBar(
             Row(
                 modifier = Modifier.align(Alignment.Center),
                 verticalAlignment = Alignment.CenterVertically, 
-                horizontalArrangement = Arrangement.Center
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Text(
-                    text = "Chroma",
-                    color = colors.textMain,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 17.sp,
-                    letterSpacing = (-0.4).sp
+                OscellionWebLogo(
+                    modifier = Modifier.size(20.dp),
+                    size = 20.dp
                 )
-                Text(
-                    text = "Studio",
-                    color = colors.primary,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 17.sp,
-                    letterSpacing = (-0.4).sp
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "Oscellion",
+                        color = colors.textMain,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 17.sp,
+                        letterSpacing = (-0.4).sp
+                    )
+                    Text(
+                        text = ".",
+                        color = Color(0xFF007AFF),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 17.sp
+                    )
+                }
             }
 
             // ---- RIGHT CONTROLS ----

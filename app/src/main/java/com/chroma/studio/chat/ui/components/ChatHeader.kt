@@ -211,33 +211,52 @@ fun ChatHeader(
                             val headerStatusText = when {
                                 activeChat.isBlocked -> "Blocked"
                                 isActivity -> activeChat.statusText
-                                activeChat.online -> "Online"
+                                activeChat.online -> "online"
                                 activeChat.statusText.isNotBlank() -> activeChat.statusText
                                 else -> "Offline"
                             }
                             val headerStatusColor = when {
                                 activeChat.isBlocked -> colors.textMuted
-                                isActivity -> colors.iosBlue
+                                isActivity -> colors.success
                                 activeChat.online -> colors.success
                                 else -> colors.textMuted
                             }
 
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(3.dp)
-                            ) {
-                                if (isRecording) {
-                                    LucideMic(tint = colors.iosBlue, size = 11.dp)
+                            AnimatedContent(
+                                targetState = Triple(headerStatusText, headerStatusColor, isRecording),
+                                transitionSpec = {
+                                    (slideInVertically(animationSpec = tween(220, easing = FastOutSlowInEasing)) { height -> height / 2 } + fadeIn(tween(220)))
+                                        .togetherWith(slideOutVertically(animationSpec = tween(180, easing = FastOutSlowInEasing)) { height -> -height / 2 } + fadeOut(tween(180)))
+                                },
+                                label = "headerStatusAnim"
+                            ) { (statusText, statusColor, isRec) ->
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                ) {
+                                    if (isRec) {
+                                        val infMic = rememberInfiniteTransition(label = "headerMicPulse")
+                                        val micAlpha by infMic.animateFloat(
+                                            initialValue = 0.45f,
+                                            targetValue = 1f,
+                                            animationSpec = infiniteRepeatable(
+                                                animation = tween(550, easing = LinearEasing),
+                                                repeatMode = RepeatMode.Reverse
+                                            ),
+                                            label = "micAlpha"
+                                        )
+                                        LucideMic(tint = statusColor.copy(alpha = micAlpha), size = 12.dp)
+                                    }
+                                    Text(
+                                        text = statusText,
+                                        fontSize = 12.sp,
+                                        lineHeight = 14.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        color = statusColor,
+                                        fontWeight = if (activeChat.online || isActivity) FontWeight.Medium else FontWeight.Normal
+                                    )
                                 }
-                                Text(
-                                    text = headerStatusText,
-                                    fontSize = 12.sp,
-                                    lineHeight = 14.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    color = headerStatusColor,
-                                    fontWeight = if (activeChat.online || isActivity) FontWeight.Medium else FontWeight.Normal
-                                )
                             }
                         }
                     }

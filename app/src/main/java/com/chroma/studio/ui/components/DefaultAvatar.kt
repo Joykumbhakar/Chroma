@@ -82,7 +82,14 @@ fun isPresetAvatar(urlOrId: String?): Boolean {
 @DrawableRes
 fun getAvatarPresetDrawableRes(urlOrId: String?): Int? {
     if (urlOrId.isNullOrBlank()) return null
-    return getAvatarPresetById(urlOrId)?.drawableRes
+    val clean = urlOrId.trim()
+    if (clean.contains("android.resource://")) {
+        for (preset in AllAvatarPresets) {
+            if (clean.endsWith("/${preset.drawableRes}")) return preset.drawableRes
+        }
+        if (clean.endsWith("/${com.chroma.studio.R.drawable.default_avatar_apple}")) return null
+    }
+    return getAvatarPresetById(clean)?.drawableRes
 }
 
 /**
@@ -117,47 +124,11 @@ fun DefaultGenderAvatar(
     size: Dp = 52.dp,
     modifier: Modifier = Modifier
 ) {
-    val presetRes = remember(avatarUrlOrPreset) { getAvatarPresetDrawableRes(avatarUrlOrPreset) }
-    val genderRes = remember(gender) { getDefaultAvatarDrawableRes(gender) }
-    val avatarRes = presetRes ?: genderRes
-    val gradient = remember(name) { getAvatarGradient(name) }
-    val initials = remember(name) { getInitials(name) }
-
-    Box(
+    IosAvatarView(
+        name = name,
+        avatarUrl = avatarUrlOrPreset.orEmpty(),
+        size = size,
+        gender = gender,
         modifier = modifier
-            .size(size)
-            .clip(CircleShape)
-            .border(
-                width = 1.dp,
-                brush = Brush.linearGradient(
-                    listOf(Color.White.copy(alpha = 0.6f), Color.White.copy(alpha = 0.1f))
-                ),
-                shape = CircleShape
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        if (avatarRes != null) {
-            Image(
-                painter = painterResource(id = avatarRes),
-                contentDescription = "$gender Avatar",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-        } else {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Brush.linearGradient(gradient)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = initials.ifBlank { "?" },
-                    color = Color.White,
-                    fontSize = (size.value * 0.36f).sp,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
-    }
+    )
 }

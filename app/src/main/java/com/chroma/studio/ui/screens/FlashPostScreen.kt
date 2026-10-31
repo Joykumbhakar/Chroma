@@ -242,6 +242,31 @@ fun FlashPostScreen(
 
     var showThumbnailPicker by remember { mutableStateOf(false) }
 
+    LaunchedEffect(videoUri, mediaType) {
+        if (currentThumbnail == null && mediaType == com.chroma.studio.model.FlashMediaType.VIDEO) {
+            withContext(Dispatchers.IO) {
+                try {
+                    val retriever = android.media.MediaMetadataRetriever()
+                    if (videoUri.scheme == "file") {
+                        retriever.setDataSource(videoUri.path)
+                    } else {
+                        retriever.setDataSource(context, videoUri)
+                    }
+                    val frame = retriever.getFrameAtTime(trimStartMs * 1000L, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                        ?: retriever.getFrameAtTime()
+                    retriever.release()
+                    if (frame != null) {
+                        withContext(Dispatchers.Main) {
+                            currentThumbnail = frame
+                        }
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.w("FlashPostScreen", "Could not extract video thumbnail", e)
+                }
+            }
+        }
+    }
+
 
 
     // Helper to persist draft locally

@@ -33,6 +33,7 @@ fun ChromaScreenHeader(
     title: String,
     badgeText: String? = null,
     badgeColor: Color = Color(0xFF007AFF),
+    showBrandLogo: Boolean = false,
     showBackButton: Boolean = false,
     circularBackButton: Boolean = true,
     onBack: (() -> Unit)? = null,
@@ -82,21 +83,32 @@ fun ChromaScreenHeader(
 
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Text(
-                            text = title,
-                            fontSize = 23.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = colors.textMain,
-                            letterSpacing = (-0.5).sp
-                        )
-                        Text(
-                            text = ".",
-                            fontSize = 23.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = badgeColor
-                        )
+                        if (title.equals("Oscellion", ignoreCase = true) || showBrandLogo) {
+                            OscellionWebLogo(
+                                modifier = Modifier.size(24.dp),
+                                size = 24.dp
+                            )
+                        }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Text(
+                                text = title,
+                                fontSize = 23.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = colors.textMain,
+                                letterSpacing = (-0.5).sp
+                            )
+                            Text(
+                                text = ".",
+                                fontSize = 23.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = badgeColor
+                            )
+                        }
 
                         if (!badgeText.isNullOrBlank()) {
                             Spacer(Modifier.width(4.dp))

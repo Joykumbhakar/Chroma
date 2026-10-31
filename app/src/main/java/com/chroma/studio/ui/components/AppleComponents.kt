@@ -45,44 +45,97 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
+/**
+ * Liquid Jelly Knob Component
+ * Pixel-perfect implementation of the Liquid Jelly Knob with curved glossy reflections,
+ * ambient light rim, inset specular highlights, and elastic press physics.
+ */
 @Composable
 fun LiquidGlassKnob(
     width: androidx.compose.ui.unit.Dp,
     height: androidx.compose.ui.unit.Dp,
-    scale: Float,
-    baseAlpha: Float,
+    scale: Float = 1.0f,
+    baseAlpha: Float = 0.90f,
     hazeState: dev.chrisbanes.haze.HazeState? = null,
     modifier: Modifier = Modifier,
     isToggleKnob: Boolean = false
 ) {
-    val knobShape = RoundedCornerShape(100.dp)
+    val knobShape = RoundedCornerShape(50.dp)
     val isDark = isSystemInDarkTheme()
+
     Box(
         modifier = modifier
             .size(width, height)
-            .scale(scale)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            // Exact CSS box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2), 0 0 0 0.5px rgba(0, 0, 0, 0.1)
+            .shadow(
+                elevation = 2.5.dp,
+                shape = knobShape,
+                ambientColor = Color(0x33000000),
+                spotColor = Color(0x40000000)
+            )
             .clip(knobShape)
             .then(if (hazeState != null) Modifier.hazeChild(state = hazeState, shape = knobShape) else Modifier)
-            .background(Color.White)
+            // Exact background: rgba(255, 255, 255, 0.90) with subtle frosted backdrop
+            .background(Color.White.copy(alpha = baseAlpha))
             .border(
                 0.5.dp,
-                if (isDark) Color.White.copy(alpha = 0.20f) else Color.Black.copy(alpha = 0.08f),
+                if (isDark) Color.White.copy(alpha = 0.25f) else Color.Black.copy(alpha = 0.10f),
                 knobShape
             )
     ) {
-        // Pristine Apple hairline top specular highlight
+        // Top curved glossy reflection (Exact CSS ::before pseudo element)
+        // height: 48%, border-radius: 12px 12px 28px 28px / 10px 10px 6px 6px
+        // background: linear-gradient(to bottom, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.1) 100%)
         Box(
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .padding(horizontal = 2.dp, vertical = 0.5.dp)
+                .padding(top = 1.dp, start = 2.dp, end = 2.dp)
+                .fillMaxWidth()
+                .fillMaxHeight(0.48f)
+                .clip(RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp, bottomStart = 6.dp, bottomEnd = 6.dp))
+                .background(
+                    Brush.verticalGradient(
+                        0.0f to Color(0xF2FFFFFF), // rgba(255, 255, 255, 0.95)
+                        1.0f to Color(0x1AFFFFFF)  // rgba(255, 255, 255, 0.10)
+                    )
+                )
+        )
+
+        // Bottom ambient light rim (Exact CSS ::after pseudo element)
+        // height: 35%, border-radius: 28px 28px 12px 12px / 6px 6px 10px 10px
+        // background: linear-gradient(to top, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0) 100%)
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 1.dp, start = 2.dp, end = 2.dp)
+                .fillMaxWidth()
+                .fillMaxHeight(0.35f)
+                .clip(RoundedCornerShape(bottomStart = 10.dp, bottomEnd = 10.dp, topStart = 6.dp, topEnd = 6.dp))
+                .background(
+                    Brush.verticalGradient(
+                        0.0f to Color.Transparent,
+                        1.0f to Color(0xD9FFFFFF) // rgba(255, 255, 255, 0.85)
+                    )
+                )
+        )
+
+        // Top specular hairline highlight
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(horizontal = 3.dp, vertical = 0.5.dp)
                 .fillMaxWidth()
                 .height(1.dp)
                 .background(
                     Brush.horizontalGradient(
                         listOf(
-                            Color.White.copy(alpha = 0.2f),
-                            Color.White.copy(alpha = 0.85f),
-                            Color.White.copy(alpha = 0.2f)
+                            Color.White.copy(alpha = 0.35f),
+                            Color.White.copy(alpha = 0.95f),
+                            Color.White.copy(alpha = 0.35f)
                         )
                     )
                 )
@@ -90,6 +143,16 @@ fun LiquidGlassKnob(
     }
 }
 
+/**
+ * Liquid Glass Toggle Switch
+ * Exact match to CSS:
+ * - Track: 44px x 22px, border-radius 100px
+ * - Unchecked track: #E5E5EA with inset depth shadows
+ * - Checked track: #34C759 with inset depth shadows
+ * - Knob: 24px x 18px horizontal pill (active: 28px x 18px, scale 1.26)
+ * - Translation: unchecked -> 2px, checked -> 18px (translateX: 16px)
+ * - Press states: unchecked -> -1px, checked -> 15px
+ */
 @Composable
 fun AppleSwitch(
     checked: Boolean,
@@ -101,38 +164,38 @@ fun AppleSwitch(
 ) {
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     var isPressed by remember { mutableStateOf(false) }
-    val isDark = isSystemInDarkTheme()
+
     val trackColor by animateColorAsState(
-        if (checked) activeTrackColor else inactiveTrackColor,
-        animationSpec = androidx.compose.animation.core.tween(250),
+        targetValue = if (checked) activeTrackColor else inactiveTrackColor,
+        animationSpec = androidx.compose.animation.core.tween(350, easing = androidx.compose.animation.core.CubicBezierEasing(0.25f, 1f, 0.5f, 1f)),
         label = "trackColor"
     )
 
-    // Authentic iOS UISwitch proportions:
-    // Track: 46dp width x 26dp height (pill shape)
-    // Knob: 22dp height x 22dp width (when pressed stretches to 26dp with fluid Apple spring)
-    // Inactive: X = 2dp
-    // Active (checked): X = 22dp (46 - 22 - 2)
-    val targetTranslation = when {
-        !checked && isPressed -> 2f
+    // Exact CSS translations & dimensions:
+    // Resting unchecked: X = 2.dp
+    // Resting checked: X = 18.dp (44 - 24 - 2 = 18.dp; translateX: 16px)
+    // Pressed unchecked: X = -1.dp (translateX: -3px), width: 28.dp, scale: 1.26
+    // Pressed checked: X = 15.dp (translateX: 15px), width: 28.dp, scale: 1.26
+    val targetKnobX = when {
+        !checked && isPressed -> (-1f)
         !checked -> 2f
-        checked && isPressed -> 18f
-        else -> 22f
+        checked && isPressed -> 15f
+        else -> 18f
     }
+    val targetKnobW = if (isPressed) 28.dp else 24.dp
+    val targetScale = if (isPressed) 1.26f else 1.0f
 
-    val targetWidth = if (isPressed) 26.dp else 22.dp
+    val jellySpring = androidx.compose.animation.core.spring<Float>(dampingRatio = 0.45f, stiffness = 550f)
+    val jellySpringDp = androidx.compose.animation.core.spring<androidx.compose.ui.unit.Dp>(dampingRatio = 0.45f, stiffness = 550f)
 
-    val jellySpring = androidx.compose.animation.core.spring<Float>(dampingRatio = 0.65f, stiffness = 600f)
-    val jellySpringDp = androidx.compose.animation.core.spring<androidx.compose.ui.unit.Dp>(dampingRatio = 0.65f, stiffness = 600f)
-
-    val thumbTranslationX by animateFloatAsState(targetTranslation, animationSpec = jellySpring, label = "tx")
-    val thumbWidth by animateDpAsState(targetWidth, animationSpec = jellySpringDp, label = "tw")
+    val thumbTranslationX by animateFloatAsState(targetKnobX, animationSpec = jellySpring, label = "tx")
+    val thumbWidth by animateDpAsState(targetKnobW, animationSpec = jellySpringDp, label = "tw")
+    val thumbScale by animateFloatAsState(targetScale, animationSpec = jellySpring, label = "tscale")
 
     Box(
         modifier = modifier
-            .minimumInteractiveComponentSize()
-            .width(46.dp)
-            .height(26.dp)
+            .width(44.dp)
+            .height(22.dp)
             .pointerInput(checked) {
                 detectTapGestures(
                     onPress = {
@@ -147,33 +210,52 @@ fun AppleSwitch(
                 )
             }
     ) {
-        // Track: Clean Apple flat pill, zero shadows
+        // Track: 44x22 rounded pill with inset depth shadows (inset 0 2px 5px rgba(0, 0, 0, 0.15))
         val trackShape = RoundedCornerShape(100.dp)
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .clip(trackShape)
                 .background(trackColor)
-                .border(
-                    0.5.dp,
-                    if (checked) Color(0x1F000000) else if (isDark) Color(0x33FFFFFF) else Color(0x18000000),
-                    trackShape
-                )
-        )
+        ) {
+            // Inset top shadow gradient:
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .background(
+                        Brush.verticalGradient(
+                            0.0f to Color.Black.copy(alpha = if (checked) 0.20f else 0.15f),
+                            1.0f to Color.Transparent
+                        )
+                    )
+            )
+            // Inset bottom subtle rim:
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .height(3.dp)
+                    .background(
+                        Brush.verticalGradient(
+                            0.0f to Color.Transparent,
+                            1.0f to Color.White.copy(alpha = if (checked) 0.12f else 0.08f)
+                        )
+                    )
+            )
+        }
 
-        // Knob: Clean white Apple knob, zero shadows
+        // Liquid Jelly Knob
         Box(
             modifier = Modifier
                 .align(Alignment.CenterStart)
-                .padding(vertical = 2.dp)
-                .offset(x = thumbTranslationX.dp)
-                .size(width = thumbWidth, height = 22.dp)
+                .offset(x = thumbTranslationX.dp, y = 0.dp)
         ) {
             LiquidGlassKnob(
                 width = thumbWidth,
-                height = 22.dp,
-                scale = 1.0f,
-                baseAlpha = 1.0f,
+                height = 18.dp,
+                scale = thumbScale,
+                baseAlpha = 0.90f,
                 isToggleKnob = true,
                 hazeState = hazeState
             )
@@ -181,6 +263,14 @@ fun AppleSwitch(
     }
 }
 
+/**
+ * Settings App Range Slider with Liquid Jelly Knob
+ * Exact match to CSS:
+ * - Track height: 6px, background: linear-gradient(to right, #0a84ff, #e5e5ea)
+ * - Track inset shadow: inset 0 2px 5px rgba(0, 0, 0, 0.15)
+ * - Thumb: 24px x 18px horizontal pill capsule with Liquid Jelly optics
+ * - Active state: width: 28px, transform: scale(1.15)
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppleSlider(
@@ -191,7 +281,7 @@ fun AppleSlider(
     steps: Int = 0,
     hazeState: dev.chrisbanes.haze.HazeState? = null,
     gradientColors: List<Color>? = null,
-    trackHeight: Dp = 4.dp
+    trackHeight: Dp = 6.dp
 ) {
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -206,16 +296,21 @@ fun AppleSlider(
         }
     }
 
-    // Authentic iOS UISlider: 24dp circular white thumb, smooth slight scale on drag
+    // Exact CSS active press state: width: 28px, transform: scale(1.15)
+    val thumbWidth by animateDpAsState(
+        targetValue = if (isInteracting) 28.dp else 24.dp,
+        animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.55f, stiffness = 500f),
+        label = "tsW"
+    )
     val thumbScale by animateFloatAsState(
-        targetValue = if (isInteracting) 1.08f else 1.0f,
-        animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.65f, stiffness = 600f),
-        label = "ts"
+        targetValue = if (isInteracting) 1.15f else 1.0f,
+        animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.55f, stiffness = 500f),
+        label = "tsScale"
     )
 
     val isDark = isSystemInDarkTheme()
     val inactiveTrackColor = if (isDark) Color(0xFF39393D) else Color(0xFFE5E5EA)
-    val activeGrad = gradientColors ?: listOf(Color(0xFF007AFF), Color(0xFF0A84FF))
+    val activeGrad = gradientColors ?: listOf(Color(0xFF0A84FF), Color(0xFF0A84FF))
 
     Slider(
         value = value.coerceIn(valueRange.start, valueRange.endInclusive),
@@ -244,8 +339,21 @@ fun AppleSlider(
                     .height(trackHeight)
                     .clip(trackShape)
                     .background(inactiveTrackColor)
-                    .border(0.5.dp, if (isDark) Color(0x22FFFFFF) else Color(0x10000000), trackShape)
             ) {
+                // Inactive track inset shadow: inset 0 2px 5px rgba(0, 0, 0, 0.15)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                0.0f to Color.Black.copy(alpha = 0.15f),
+                                1.0f to Color.Transparent
+                            )
+                        )
+                )
+
+                // Active track gradient (#0a84ff)
                 if (fraction > 0.001f) {
                     Box(
                         modifier = Modifier
@@ -253,16 +361,29 @@ fun AppleSlider(
                             .fillMaxWidth(fraction)
                             .clip(trackShape)
                             .background(Brush.horizontalGradient(activeGrad))
-                    )
+                    ) {
+                        // Active track inset shadow:
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(3.dp)
+                                .background(
+                                    Brush.verticalGradient(
+                                        0.0f to Color.Black.copy(alpha = 0.15f),
+                                        1.0f to Color.Transparent
+                                    )
+                                )
+                        )
+                    }
                 }
             }
         },
         thumb = {
             LiquidGlassKnob(
-                width = 24.dp,
-                height = 24.dp,
+                width = thumbWidth,
+                height = 18.dp,
                 scale = thumbScale,
-                baseAlpha = 1.0f,
+                baseAlpha = 0.90f,
                 isToggleKnob = false,
                 hazeState = hazeState
             )
@@ -277,74 +398,17 @@ fun AppleJellySlider(
     onValueChange: (Float) -> Unit,
     onValueChangeFinished: (() -> Unit)? = null,
     valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
-    activeColor: Color = Color(0xFF007AFF),
+    activeColor: Color = Color(0xFF0A84FF),
     inactiveColor: Color = Color(0xFFE5E5EA),
     modifier: Modifier = Modifier
 ) {
-    val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val isDragged by interactionSource.collectIsDraggedAsState()
-    val isActive = isPressed || isDragged
-
-    val scale by animateFloatAsState(
-        targetValue = if (isActive) 1.08f else 1.0f,
-        animationSpec = androidx.compose.animation.core.spring(
-            dampingRatio = 0.65f,
-            stiffness = 600f
-        ),
-        label = "sliderThumbScale"
-    )
-
-    Slider(
+    AppleSlider(
         value = value,
         onValueChange = onValueChange,
-        onValueChangeFinished = onValueChangeFinished,
         valueRange = valueRange,
-        interactionSource = interactionSource,
-        modifier = modifier,
-        colors = SliderDefaults.colors(
-            activeTrackColor = Color.Transparent,
-            inactiveTrackColor = Color.Transparent,
-            thumbColor = Color.Transparent
-        ),
-        track = { sliderState ->
-            val fraction = (sliderState.value - sliderState.valueRange.start) / (sliderState.valueRange.endInclusive - sliderState.valueRange.start)
-            val trackShape = RoundedCornerShape(100.dp)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(4.dp)
-                    .clip(trackShape)
-                    .background(inactiveColor)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .fillMaxWidth(fraction = fraction.coerceIn(0f, 1f))
-                        .clip(trackShape)
-                        .background(activeColor)
-                )
-            }
-        },
-        thumb = {
-            val thumbWidth = 24.dp
-            val thumbHeight = 24.dp
-            val isDark = isSystemInDarkTheme()
-            val knobShape = RoundedCornerShape(100.dp)
-            
-            Box(
-                modifier = Modifier
-                    .size(width = thumbWidth, height = thumbHeight)
-                    .scale(scale)
-                    .clip(knobShape)
-                    .background(Color.White)
-                    .border(
-                        width = 0.5.dp, 
-                        color = if (isDark) Color.White.copy(alpha = 0.20f) else Color.Black.copy(alpha = 0.08f), 
-                        shape = knobShape
-                    )
-            )
-        }
+        gradientColors = listOf(activeColor, activeColor),
+        trackHeight = 6.dp,
+        modifier = modifier
     )
 }
 
@@ -1384,16 +1448,11 @@ fun IosDynamicIslandHost(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.weight(1f, fill = false)
                                 ) {
-                                    if (event.avatarUrl.isNotBlank()) {
-                                        AsyncImage(
-                                            model = ImageRequest.Builder(context).data(event.avatarUrl).crossfade(true).build(),
-                                            contentDescription = null,
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier.size(24.dp).clip(CircleShape)
-                                        )
-                                    } else {
-                                        Icon(Lucide.MessageSquare, null, tint = Color(0xFF34C759), modifier = Modifier.size(18.dp))
-                                    }
+                                    IosAvatarView(
+                                        name = event.senderName,
+                                        avatarUrl = event.avatarUrl,
+                                        size = 24.dp
+                                    )
                                     Spacer(Modifier.width(8.dp))
                                     Text(
                                         text = "${event.senderName}: ${event.messageText}",
@@ -1568,16 +1627,11 @@ fun IosDynamicIslandHost(
                                     modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    if (event.avatarUrl.isNotBlank()) {
-                                        AsyncImage(
-                                            model = ImageRequest.Builder(context).data(event.avatarUrl).crossfade(true).build(),
-                                            contentDescription = null,
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier.size(34.dp).clip(CircleShape)
-                                        )
-                                    } else {
-                                        Icon(Lucide.MessageSquare, null, tint = Color(0xFF34C759), modifier = Modifier.size(24.dp))
-                                    }
+                                    IosAvatarView(
+                                        name = event.senderName,
+                                        avatarUrl = event.avatarUrl,
+                                        size = 34.dp
+                                    )
 
                                     Spacer(Modifier.width(9.dp))
 

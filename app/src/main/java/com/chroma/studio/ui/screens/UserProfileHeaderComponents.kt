@@ -1,5 +1,7 @@
 package com.chroma.studio.ui.screens
 
+import com.chroma.studio.ui.components.UserProfileStatusSection
+import com.chroma.studio.ui.components.UserProfileHighlightsSection
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -35,6 +37,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import com.chroma.studio.ui.components.IosAvatarView
+import com.chroma.studio.ui.components.AppleStatusVibrantGradient
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -81,7 +85,7 @@ fun UserProfileHeroSection(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = 4.dp)
+            .padding(bottom = 18.dp)
     ) {
         // 1. Cinematic Banner with subtle bottom corner rounding & top scrim
         Box(
@@ -147,17 +151,17 @@ fun UserProfileHeroSection(
                 modifier = Modifier.size(84.dp),
                 contentAlignment = Alignment.Center
             ) {
-                // Subtle Ambient Drop Shadow behind avatar
-                Box(
-                    modifier = Modifier
-                        .size(80.dp)
-                        .shadow(10.dp, CircleShape, spotColor = Color.Black.copy(alpha = 0.22f))
-                )
-
-                // Avatar Container with Theme Background Separation Mask
+                // Avatar Container with Theme Background Separation Mask & Clean Native Elevation
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
+                        .shadow(
+                            elevation = 6.dp,
+                            shape = CircleShape,
+                            clip = false,
+                            spotColor = Color.Black.copy(alpha = 0.20f),
+                            ambientColor = Color.Black.copy(alpha = 0.10f)
+                        )
                         .clip(CircleShape)
                         .background(colors.bg)
                         .border(
@@ -168,10 +172,6 @@ fun UserProfileHeroSection(
                         .clickable { onAvatarClick() },
                     contentAlignment = Alignment.Center
                 ) {
-                    val presetRes = remember(profile?.avatarUrl) { getAvatarPresetDrawableRes(profile?.avatarUrl) }
-                    val defaultAvatarRes = remember(profile?.gender) { getDefaultAvatarDrawableRes(profile?.gender) }
-                    val resolvedDrawable = presetRes ?: if (profile?.avatarUrl.isNullOrBlank()) defaultAvatarRes else null
-
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -180,7 +180,7 @@ fun UserProfileHeroSection(
                             .border(
                                 width = if (hasActiveStories) 2.5.dp else 0.5.dp,
                                 brush = if (hasActiveStories) {
-                                    Brush.linearGradient(listOf(Color(0xFF007AFF), Color(0xFF00C6FF)))
+                                    Brush.sweepGradient(AppleStatusVibrantGradient)
                                 } else {
                                     Brush.linearGradient(
                                         if (colors.isDark) listOf(Color(0xFF2C2C2E), Color(0xFF1C1C1E))
@@ -190,28 +190,14 @@ fun UserProfileHeroSection(
                                 shape = CircleShape
                             )
                     ) {
-                        if (resolvedDrawable != null) {
-                            Image(
-                                painter = painterResource(id = resolvedDrawable),
-                                contentDescription = "Avatar",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                        } else if (!profile?.avatarUrl.isNullOrBlank()) {
-                            AsyncImage(
-                                model = profile?.avatarUrl,
-                                contentDescription = "Avatar",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                        } else {
-                            Image(
-                                painter = painterResource(id = R.drawable.default_avatar_apple),
-                                contentDescription = "Avatar",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                        }
+                        IosAvatarView(
+                            name = profile?.displayName ?: profile?.username ?: "",
+                            avatarUrl = profile?.avatarUrl.orEmpty(),
+                            size = 78.dp,
+                            gender = profile?.gender,
+                            isOnline = false,
+                            modifier = Modifier.fillMaxSize()
+                        )
                     }
                 }
 
@@ -449,7 +435,7 @@ fun UserProfileBioDetailsSection(
             )
         }
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(14.dp))
 
         // 1. Display Name + Verified Badge + Sleek QR Pass Icon Button
         Row(
@@ -465,6 +451,7 @@ fun UserProfileBioDetailsSection(
                     text = profile?.displayName ?: "Unknown",
                     color = colors.textMain,
                     fontSize = 20.sp,
+                    lineHeight = 22.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = (-0.02).em,
                     maxLines = 1,
@@ -480,8 +467,8 @@ fun UserProfileBioDetailsSection(
             Box(
                 modifier = Modifier
                     .size(32.dp)
-                    .clip(RoundedCornerShape(9.dp))
-                    .background(if (colors.isDark) Color(0x1CFFFFFF) else Color(0xFFF2F2F7))
+                    .clip(CircleShape)
+                    .background(if (colors.isDark) Color(0xFF161A22) else Color.White)
                     .clickable { onShowShareCard() },
                 contentAlignment = Alignment.Center
             ) {
@@ -489,7 +476,7 @@ fun UserProfileBioDetailsSection(
                     Lucide.QrCode,
                     contentDescription = "Show Pass",
                     tint = colors.textMain,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(15.dp)
                 )
             }
         }
@@ -498,7 +485,7 @@ fun UserProfileBioDetailsSection(
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier.padding(top = 2.dp)
+            modifier = Modifier.padding(top = 0.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -555,7 +542,7 @@ fun UserProfileBioDetailsSection(
         // 3. Bio Text with ....Read more
         val bioText = profile?.bio?.trim() ?: ""
         if (bioText.isNotBlank()) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(5.dp))
             val isBioLong = remember(bioText) {
                 bioText.length > 75 || bioText.contains("\n")
             }
@@ -661,7 +648,7 @@ fun UserProfileBioDetailsSection(
         }
 
         if (metadataItems.isNotEmpty()) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(5.dp))
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -670,9 +657,9 @@ fun UserProfileBioDetailsSection(
                 metadataItems.forEach { (icon, text) ->
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (colors.isDark) Color(0x14FFFFFF) else Color(0x08000000))
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(if (colors.isDark) Color(0xFF161A22) else Color.White)
+                            .padding(horizontal = 10.dp, vertical = 5.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -740,9 +727,9 @@ fun UserProfileBioDetailsSection(
                     val tag = if (rawTag.startsWith("#")) rawTag else "#$rawTag"
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(7.dp))
-                            .background(if (colors.isDark) Color(0x10FFFFFF) else Color(0x06000000))
-                            .padding(horizontal = 7.5.dp, vertical = 3.5.dp)
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(if (colors.isDark) Color(0xFF161A22) else Color.White)
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
                     ) {
                         Text(
                             text = tag,
@@ -885,44 +872,37 @@ fun ProfileActionButton(
         label = "profileBtnScale"
     )
 
-    val shape = CircleShape
+    val shape = RoundedCornerShape(22.dp)
     val background = if (isPrimary) {
-        if (isPressed) Color(0xFF0066D6) else Color(0xFF007AFF)
+        if (isPressed) Color(0xFF1D4ED8) else Color(0xFF2563EB)
     } else {
         if (isPressed) {
-            if (colors.isDark) Color(0x28FFFFFF) else Color(0xFFE5E5EA)
+            if (colors.isDark) Color(0xFF232A38) else Color(0xFFF1F5F9)
         } else {
-            if (colors.isDark) Color(0x18FFFFFF) else Color(0xFFF2F2F7)
+            if (colors.isDark) Color(0xFF161A22) else Color.White
         }
     }
 
-    val thinBorderBrush = if (isPrimary) {
-        Brush.verticalGradient(
-            listOf(Color.White.copy(alpha = 0.42f), Color.White.copy(alpha = 0.12f))
-        )
+    val borderStroke = if (isPrimary) {
+        BorderStroke(1.dp, Color(0xFF3B82F6).copy(alpha = 0.5f))
     } else {
-        if (colors.isDark) {
-            Brush.verticalGradient(
-                listOf(Color.White.copy(alpha = 0.24f), Color.White.copy(alpha = 0.06f))
-            )
-        } else {
-            Brush.verticalGradient(
-                listOf(Color.White.copy(alpha = 0.70f), Color.Black.copy(alpha = 0.08f))
-            )
-        }
+        BorderStroke(1.dp, if (colors.isDark) Color(0xFF232A38) else Color.Transparent)
     }
 
     Box(
         modifier = modifier
             .scale(scale)
-            .height(38.dp)
+            .height(40.dp)
             .clip(shape)
             .background(background)
-            .border(0.5.dp, thinBorderBrush, shape)
+            .border(borderStroke.width, borderStroke.brush, shape)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
-                onClick = onClick
+                onClick = {
+                    com.chroma.studio.chat.sound.SoundManager.playReaction()
+                    onClick()
+                }
             ),
         contentAlignment = Alignment.Center
     ) {
@@ -962,7 +942,14 @@ fun UserProfileActionsStoriesSection(
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
     ) {
+        // Dedicated Designed Status Section
+        UserProfileStatusSection(
+            profile = profile,
+            isCurrentUser = isCurrentUser,
+            userId = userId
+        )
         Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(14.dp))
 
         // Action Buttons Row (Apple iOS Squircle Buttons, 12dp radius, border-less!)
         Row(
@@ -1073,7 +1060,7 @@ fun UserProfileActionsStoriesSection(
                     )
                 }
 
-                // Apple Share Icon Button
+                // One UI 7.0 Share Icon Button
                 val shareInteraction = remember { MutableInteractionSource() }
                 val isSharePressed by shareInteraction.collectIsPressedAsState()
                 val shareScale by animateFloatAsState(
@@ -1085,19 +1072,16 @@ fun UserProfileActionsStoriesSection(
                 Box(
                     modifier = Modifier
                         .scale(shareScale)
-                        .size(38.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(if (colors.isDark) Color(0x1CFFFFFF) else Color(0xFFF2F2F7))
-                        .border(
-                            0.5.dp,
-                            if (colors.isDark) Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.24f), Color.White.copy(alpha = 0.06f)))
-                            else Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.70f), Color.Black.copy(alpha = 0.08f))),
-                            RoundedCornerShape(12.dp)
-                        )
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(if (colors.isDark) Color(0xFF161A22) else Color.White)
                         .clickable(
                             interactionSource = shareInteraction,
                             indication = null,
-                            onClick = onShowShareCard
+                            onClick = {
+                                com.chroma.studio.chat.sound.SoundManager.playReaction()
+                                onShowShareCard()
+                            }
                         ),
                     contentAlignment = Alignment.Center
                 ) {
@@ -1105,41 +1089,33 @@ fun UserProfileActionsStoriesSection(
                         imageVector = Lucide.Share2,
                         contentDescription = "Share",
                         tint = colors.textMain,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(17.dp)
                     )
                 }
             }
         }
 
-        // Stories Section
-        LaunchedEffect(userId, isCurrentUser) {
-            if (!isCurrentUser) {
-                storyVm.loadUserStories(userId)
+        // Saved Story Highlights Showcase (Instagram-style)
+        UserProfileHighlightsSection(
+            userId = userId,
+            isCurrentUser = isCurrentUser,
+            onHighlightClick = { hl ->
+                if (onMyStoryClick != null && isCurrentUser) {
+                    onMyStoryClick()
+                } else if (onStoryClick != null && filteredStories.isNotEmpty()) {
+                    onStoryClick(0)
+                }
             }
-        }
-        if (isCurrentUser || filteredStories.isNotEmpty()) {
-            Spacer(Modifier.height(8.dp))
-            StoriesSection(
-                stories = filteredStories,
-                isLoading = false,
-                isCurrentUser = isCurrentUser,
-                hasMyStory = hasMyStory,
-                myStoryAvatarUrl = profile?.avatarUrl ?: "",
-                myStoryGender = profile?.gender,
-                onMyStoryClick = onMyStoryClick,
-                onAddStoryClick = onAddStoryClick,
-                onStoryClick = onStoryClick,
-                contentPadding = PaddingValues(start = 0.dp, end = 0.dp, top = 2.dp, bottom = 4.dp)
-            )
-        }
-
-        Spacer(Modifier.height(6.dp))
-
-        // Modern Instagram-Style Seamless Flat Tab Switcher (Works, Photos, Flash Videos, Remixes)
+        )
+        // Samsung One UI 7.0 Seamless Tab Switcher (Works, Photos, Flash Videos, Remixes)
         ProfileSeamlessTabBar(
             icons = profileTabIcons,
             selectedIndex = selectedTabIndex,
-            onItemSelected = { onTabSelected(it) },
+            onItemSelected = {
+                com.chroma.studio.chat.sound.SoundManager.playReaction()
+                onTabSelected(it)
+            },
+            selectedColor = Color(0xFF2563EB),
             modifier = Modifier.padding(horizontal = 2.dp)
         )
 

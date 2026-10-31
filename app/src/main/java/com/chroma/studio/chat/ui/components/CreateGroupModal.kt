@@ -483,22 +483,16 @@ private fun StepSelectParticipants(
                 )
 
                 // Avatar
-                Box(modifier = Modifier.size(44.dp)) {
-                    AsyncImage(
-                        model = contact.avatar,
-                        contentDescription = contact.name,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(CircleShape)
-                            .border(0.5.dp, colors.borderSubtle, CircleShape),
-                        contentScale = ContentScale.Crop
-                    )
-                }
+                com.chroma.studio.ui.components.IosAvatarView(
+                    name = contact.name,
+                    avatarUrl = contact.avatar,
+                    size = 44.dp
+                )
 
                 // Name & Role Info
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                    verticalArrangement = Arrangement.spacedBy((-2).dp)
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -507,6 +501,7 @@ private fun StepSelectParticipants(
                         Text(
                             text = contact.name,
                             fontSize = 16.sp,
+                            lineHeight = 18.sp,
                             fontWeight = FontWeight.Medium,
                             color = colors.textDark,
                             maxLines = 1,
@@ -519,6 +514,7 @@ private fun StepSelectParticipants(
                     Text(
                         text = contact.role,
                         fontSize = 13.5.sp,
+                        lineHeight = 15.sp,
                         color = colors.textMuted,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -611,11 +607,11 @@ private fun StepGroupDetails(
                             SoundManager.playReaction()
                         }
                 ) {
-                    AsyncImage(
-                        model = selectedAvatar,
-                        contentDescription = "Group Avatar",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
+                    com.chroma.studio.ui.components.IosAvatarView(
+                        name = "Group",
+                        avatarUrl = selectedAvatar,
+                        size = 64.dp,
+                        isGroup = true
                     )
 
                     PhosphorCameraIcon(
@@ -830,13 +826,10 @@ private fun StepGroupDetails(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                AsyncImage(
-                    model = currentUser.avatar,
-                    contentDescription = currentUser.name,
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape),
-                    contentScale = ContentScale.Crop
+                com.chroma.studio.ui.components.IosAvatarView(
+                    name = currentUser.name,
+                    avatarUrl = currentUser.avatar,
+                    size = 40.dp
                 )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -880,13 +873,10 @@ private fun StepGroupDetails(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                AsyncImage(
-                    model = contact.avatar,
-                    contentDescription = contact.name,
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape),
-                    contentScale = ContentScale.Crop
+                com.chroma.studio.ui.components.IosAvatarView(
+                    name = contact.name,
+                    avatarUrl = contact.avatar,
+                    size = 40.dp
                 )
                 Column(modifier = Modifier.weight(1f)) {
                     Row(
@@ -950,14 +940,14 @@ private fun SelectedContactPill(
         modifier = Modifier.width(56.dp)
     ) {
         Box(modifier = Modifier.size(48.dp)) {
-            AsyncImage(
-                model = contact.avatar,
-                contentDescription = contact.name,
+            com.chroma.studio.ui.components.IosAvatarView(
+                name = contact.name,
+                avatarUrl = contact.avatar,
+                size = 48.dp,
                 modifier = Modifier
                     .fillMaxSize()
                     .clip(CircleShape)
-                    .border(1.dp, colors.iosBlue, CircleShape),
-                contentScale = ContentScale.Crop
+                    .border(1.dp, colors.iosBlue, CircleShape)
             )
 
             // Remove 'X' Badge

@@ -116,11 +116,21 @@ class WorkRepository(context: Context) {
         return com.chroma.studio.utils.DataCompressionUtils.compressText(raw)
     }
 
-    /** Deserialize layers from JSON string (supports both compressed and legacy raw JSON). */
+    /** Deserialize layers from JSON string (supports remote URLs, compressed base64, and legacy raw JSON). */
     fun deserializeLayers(json: String): List<GradientLayer> {
+        if (json.isBlank()) return emptyList()
         return try {
-            val decompressed = com.chroma.studio.utils.DataCompressionUtils.decompressText(json)
-            chromaGson.fromJson(decompressed, layerListType) ?: emptyList()
+            val content = if (json.startsWith("http://") || json.startsWith("https://")) {
+                java.net.URL(json).readText()
+            } else {
+                json
+            }
+            val raw = try {
+                com.chroma.studio.utils.DataCompressionUtils.decompressText(content)
+            } catch (_: Throwable) {
+                content
+            }
+            chromaGson.fromJson(raw, layerListType) ?: emptyList()
         } catch (e: Exception) {
             emptyList()
         }
