@@ -69,7 +69,7 @@ fun ChatInputBar(
             .fillMaxWidth()
             .wrapContentHeight()
     ) {
-        // ── Synchronized Rotating Action Menu (Floating 3D Action Nodes over wallpaper) ──
+        // ── Liquid-glass action menu (GlassIcons) floating over the wallpaper ──
         AnimatedVisibility(
             visible = showAttachmentMenu,
             enter = expandVertically(
@@ -91,7 +91,7 @@ fun ChatInputBar(
                     .padding(horizontal = 14.dp, vertical = 6.dp),
                 contentAlignment = Alignment.CenterStart
             ) {
-                SynchronizedRotatingActionNodes(
+                GlassIconsActionMenu(
                     isOpen = showAttachmentMenu,
                     onOptionSelected = { option ->
                         showAttachmentMenu = false
