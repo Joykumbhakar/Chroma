@@ -52,6 +52,10 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -263,6 +267,51 @@ fun DiscoverScreen(
     var hasUnreadNotifications by remember { mutableStateOf(true) }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
 
+    val density = LocalDensity.current
+    val maxCollapsePx = remember(density) { with(density) { 140.dp.toPx() } }
+    var collapseOffsetPx by remember { mutableFloatStateOf(0f) }
+
+    val nestedScrollConnection = remember(maxCollapsePx, listState) {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                val deltaY = available.y
+                // When user scrolls down (finger moves up -> deltaY < 0): collapse extended header first
+                if (deltaY < 0f && collapseOffsetPx < maxCollapsePx) {
+                    val newOffset = (collapseOffsetPx - deltaY).coerceIn(0f, maxCollapsePx)
+                    val consumedY = -(newOffset - collapseOffsetPx)
+                    collapseOffsetPx = newOffset
+                    return Offset(0f, consumedY)
+                }
+                return Offset.Zero
+            }
+
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource
+            ): Offset {
+                val deltaY = available.y
+                // When user scrolls up (finger moves down -> deltaY > 0): expand header when at top of list
+                if (deltaY > 0f && collapseOffsetPx > 0f) {
+                    val isAtTop = listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
+                    if (isAtTop) {
+                        val newOffset = (collapseOffsetPx - deltaY).coerceIn(0f, maxCollapsePx)
+                        val consumedY = -(newOffset - collapseOffsetPx)
+                        collapseOffsetPx = newOffset
+                        return Offset(0f, consumedY)
+                    }
+                }
+                return Offset.Zero
+            }
+        }
+    }
+
+    val collapseProgress by remember {
+        derivedStateOf {
+            if (maxCollapsePx <= 0f) 0f else (collapseOffsetPx / maxCollapsePx).coerceIn(0f, 1f)
+        }
+    }
+
     // Global feed audio mute state (synced across all feed videos)
     var isFeedMuted by rememberSaveable { mutableStateOf(true) }
 
@@ -337,6 +386,7 @@ fun DiscoverScreen(
                 animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing)
             )
             hasPendingNewDrops = false
+            collapseOffsetPx = 0f
             onRefresh()
             listState.animateScrollToItem(0)
             kotlinx.coroutines.delay(120)
@@ -415,6 +465,7 @@ fun DiscoverScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(if (colors.isDark) Color(0xFF0E0E11) else Color(0xFFFFFFFF))
+            .nestedScroll(nestedScrollConnection)
     ) {
         BackHandler(enabled = isSearchExpanded) {
             isSearchExpanded = false
@@ -439,12 +490,7 @@ fun DiscoverScreen(
             showStoryViewer = false
         }
 
-        val collapseProgress by remember {
-            derivedStateOf {
-                if (listState.firstVisibleItemIndex > 0) 1f
-                else (listState.firstVisibleItemScrollOffset / 180f).coerceIn(0f, 1f)
-            }
-        }
+
 
         val headerSubtitle = remember(selectedFeedTab, filteredWorks.size) {
             when (selectedFeedTab) {
@@ -540,16 +586,6 @@ fun DiscoverScreen(
                             onStoryClick = {}
                         )
                     }
-                    item {
-                        CommunityFeedTabBar(
-                            selectedTab = selectedFeedTab,
-                            selectedSort = selectedSortOrder,
-                            savedCount = savedWorkIds.size,
-                            trendingCount = qualifyingMasterworks.size,
-                            onSelectTab = {},
-                            onSelectSort = {}
-                        )
-                    }
                     if (uploadTask != null && uploadTask?.status != UploadStatus.IDLE) {
                         item(key = "loading_upload_progress_banner") {
                             CommunityUploadProgressBanner(
@@ -598,23 +634,6 @@ fun DiscoverScreen(
                         )
                     }
 
-                    // FIX 3: Use the clean Cupertino CommunityFeedTabBar (Text + Icon + Animated 2dp underline + integrated Sort dropdown)
-                    // instead of bulky pills + a second redundant "1 creations / Sort" bar.
-                    item(key = "category_tab_bar") {
-                        CommunityFeedTabBar(
-                            selectedTab = selectedFeedTab,
-                            selectedSort = selectedSortOrder,
-                            savedCount = savedWorkIds.size,
-                            trendingCount = qualifyingMasterworks.size,
-                            onSelectTab = { tab ->
-                                selectedFeedTab = tab
-                                coroutineScope.launch { listState.animateScrollToItem(0) }
-                            },
-                            onSelectSort = { sort ->
-                                selectedSortOrder = sort
-                            }
-                        )
-                    }
 
                     // ── INSTAGRAM-STYLE FLASH VIDEO / POST UPLOAD PROGRESS BANNER ──
                     if (uploadTask != null && uploadTask?.status != UploadStatus.IDLE) {
@@ -1887,7 +1906,7 @@ fun CreatorFeedHeader(
     )
 
     val clampedCollapse = collapseProgress.coerceIn(0f, 1f)
-    val expandedHeight = (88.dp * (1f - clampedCollapse)).coerceAtLeast(0.dp)
+    val expandedHeight = (140.dp * (1f - clampedCollapse)).coerceAtLeast(0.dp)
     val expandedAlpha = (1f - (clampedCollapse * 1.4f)).coerceIn(0f, 1f)
 
     Column(
@@ -1909,19 +1928,19 @@ fun CreatorFeedHeader(
             ) {
                 Text(
                     text = title,
-                    fontSize = 26.sp,
-                    lineHeight = 30.sp,
+                    fontSize = 32.sp,
+                    lineHeight = 36.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = (-0.5).sp,
                     color = colors.textMain,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(modifier = Modifier.height(2.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = subtitle,
-                    fontSize = 11.5.sp,
-                    lineHeight = 14.sp,
+                    fontSize = 12.sp,
+                    lineHeight = 15.sp,
                     fontWeight = FontWeight.Medium,
                     color = colors.textMuted,
                     maxLines = 1,
@@ -4155,17 +4174,35 @@ fun PostOptionsDrawerSheet(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = if (isOwner) "Manage Post" else if (work.authorDisplayName.isNotBlank()) "${work.authorDisplayName} (@${work.authorUsername})" else "@${work.authorUsername.ifBlank { "creator" }}",
-                        fontSize = 15.sp,
+                        fontSize = 15.5.sp,
                         fontWeight = FontWeight.Bold,
                         color = colors.textMain,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                    Spacer(Modifier.height(2.dp))
                     Text(
                         text = if (isOwner) "Your post" else "Post options",
                         fontSize = 11.5.sp,
                         color = if (isOwner) Color(0xFF007AFF) else Color(0xFF8E8E93),
                         fontWeight = if (isOwner) FontWeight.SemiBold else FontWeight.Normal
+                    )
+                }
+
+                // Top Corner "X" Close Button
+                Box(
+                    modifier = Modifier
+                        .size(30.dp)
+                        .clip(CircleShape)
+                        .background(if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f))
+                        .clickable { onDismiss() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Lucide.X,
+                        contentDescription = "Close",
+                        tint = colors.textMuted,
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }
@@ -4317,25 +4354,7 @@ fun PostOptionsDrawerSheet(
                 )
             }
 
-            Spacer(Modifier.height(14.dp))
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(colors.glassBgHover)
-                    .border(0.5.dp, colors.glassBorder, RoundedCornerShape(10.dp))
-                    .clickable { onDismiss() }
-                    .padding(vertical = 12.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "Cancel",
-                    color = colors.textMain,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 14.sp
-                )
-            }
         }
     }
 }
@@ -4355,7 +4374,7 @@ private fun DrawerActionItem(
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
             .clickable { onClick() }
-            .padding(horizontal = 6.dp, vertical = 6.dp),
+            .padding(horizontal = 8.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
@@ -4373,15 +4392,16 @@ private fun DrawerActionItem(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
-                fontSize = 13.sp,
-                lineHeight = 15.sp,
+                fontSize = 13.5.sp,
+                lineHeight = 17.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = if (tint != colors.textMain) tint else colors.textMain
             )
+            Spacer(Modifier.height(2.5.dp))
             Text(
                 text = subtitle,
-                fontSize = 10.5.sp,
-                lineHeight = 12.5.sp,
+                fontSize = 11.sp,
+                lineHeight = 14.sp,
                 color = colors.textMuted,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
