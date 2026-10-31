@@ -1941,6 +1941,18 @@ class HomeActivity : ComponentActivity() {
             com.chroma.studio.ui.components.ChromaToastHost()
             com.chroma.studio.ui.components.IosDynamicIslandHost(isNotchMode = false)
             com.chroma.studio.ui.components.ChromaInAppBrowserHost()
+
+            // ── Native Compose GhostFibers Splash Screen ──
+            var showComposeSplash by remember { mutableStateOf(true) }
+            androidx.compose.animation.AnimatedVisibility(
+                visible = showComposeSplash,
+                enter = androidx.compose.animation.fadeIn(),
+                exit = androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(450))
+            ) {
+                com.chroma.studio.ui.screens.OscellionSplashScreen(
+                    onSplashFinished = { showComposeSplash = false }
+                )
+            }
         }
         } // End OscellionBackground
     }

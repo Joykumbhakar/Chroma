@@ -492,11 +492,23 @@ enum class VoiceGlobeStyleType(
         description = "Ethereal cherry blossom pastel pink and pearl white orb",
         previewGradient = listOf(Color(0xFFFDA4AF), Color(0xFFF43F5E), Color(0xFF881337))
     ),
+    STRANDS(
+        id = "strands",
+        title = "Siri Strands",
+        description = "Apple-inspired flowing chromatic liquid strands with glass orb refraction",
+        previewGradient = listOf(Color(0xFFFF5E7E), Color(0xFF3569FA), Color(0xFF93F1FF))
+    ),
     ELECTRIC_CYAN(
         id = "electric_cyan",
         title = "Aquamarine Prism",
         description = "Electric turquoise and deep arctic ocean cyan liquid orb",
         previewGradient = listOf(Color(0xFF22D3EE), Color(0xFF06B6D4), Color(0xFF164E63))
+    ),
+    CHROMA_BLOB(
+        id = "chroma_blob",
+        title = "Chroma Blob",
+        description = "Morphing chromatic liquid orb with rim glow and halo aura",
+        previewGradient = listOf(Color(0xFFFF50A1), Color(0xFFFF00A7), Color(0xFF004DFF))
     )
 }
 

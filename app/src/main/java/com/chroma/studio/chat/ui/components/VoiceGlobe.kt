@@ -229,6 +229,25 @@ fun getOpticalVoiceGlobePalette(globeStyle: VoiceGlobeStyleType, isDark: Boolean
             causticColor = Color(0xFFFDA4AF),
             waveColor = Color(0xFFF43F5E)
         )
+        VoiceGlobeStyleType.STRANDS -> OpticalVoiceGlobePalette(
+            accentColor = Color(0xFF3569FA),
+            orbCoreStops = listOf(
+                0.00f to Color(0xFF93F1FF),
+                0.38f to Color(0xFF3569FA),
+                0.74f to Color(0xFF193D9B),
+                1.00f to Color(0xFF050B24)
+            ),
+            c1Inner = Color(0xFFFFA24C),
+            c1Outer = Color(0xFFD95B56),
+            c2Inner = Color.White,
+            c2Outer = Color(0xFFFFE0B3),
+            c3Inner = Color(0xFF93F1FF),
+            c3Outer = Color.Transparent,
+            c4Inner = Color(0xFF3569FA),
+            c4Outer = Color(0xFF193D9B),
+            causticColor = Color(0xFF93F1FF),
+            waveColor = Color(0xFF3569FA)
+        )
         VoiceGlobeStyleType.ELECTRIC_CYAN -> OpticalVoiceGlobePalette(
             accentColor = Color(0xFF06B6D4),
             orbCoreStops = listOf(
@@ -247,6 +266,25 @@ fun getOpticalVoiceGlobePalette(globeStyle: VoiceGlobeStyleType, isDark: Boolean
             c4Outer = Color(0xFF164E63),
             causticColor = Color(0xFF22D3EE),
             waveColor = Color(0xFF06B6D4)
+        )
+        VoiceGlobeStyleType.CHROMA_BLOB -> OpticalVoiceGlobePalette(
+            accentColor = Color(0xFFFF00A7),
+            orbCoreStops = listOf(
+                0.00f to Color(0xFFFF50A1),
+                0.38f to Color(0xFFFF00A7),
+                0.74f to Color(0xFF8800CC),
+                1.00f to Color(0xFF004DFF)
+            ),
+            c1Inner = Color(0xFFFF50A1),
+            c1Outer = Color(0xFFFF6700),
+            c2Inner = Color.White,
+            c2Outer = Color(0xFFFFCCE8),
+            c3Inner = Color(0xFFFF00A7),
+            c3Outer = Color.Transparent,
+            c4Inner = Color(0xFF004DFF),
+            c4Outer = Color(0xFF001A99),
+            causticColor = Color(0xFFFF50A1),
+            waveColor = Color(0xFFFF00A7)
         )
     }
 }
@@ -333,15 +371,36 @@ fun VoiceRecorderCard(
             .padding(20.dp)
     ) {
         // Center 3D Liquid Glass Voice Globe (250dp container centered at 48% Y)
-        LiquidGlassVoiceOrb(
-            palette = palette,
-            voiceAmplitude = voiceAmplitude,
-            parallaxOffset = Offset(tiltX.value, tiltY.value),
-            modifier = Modifier
-                .size(250.dp)
-                .align(Alignment.Center)
-                .offset(y = (-4).dp)
-        )
+        if (globeStyle == VoiceGlobeStyleType.STRANDS) {
+            StrandsVoiceGlobe(
+                level = voiceAmplitude,
+                modifier = Modifier
+                    .size(250.dp)
+                    .align(Alignment.Center)
+                    .offset(y = (-4).dp),
+                params = StrandsParams(glassSize = 0.85f, lightMode = !isDark)
+            )
+        } else if (globeStyle == VoiceGlobeStyleType.CHROMA_BLOB) {
+            AIBlobVoiceGlobe(
+                level = voiceAmplitude,
+                listening = true,
+                modifier = Modifier
+                    .size(250.dp)
+                    .align(Alignment.Center)
+                    .offset(y = (-4).dp),
+                params = AIBlobParams()
+            )
+        } else {
+            LiquidGlassVoiceOrb(
+                palette = palette,
+                voiceAmplitude = voiceAmplitude,
+                parallaxOffset = Offset(tiltX.value, tiltY.value),
+                modifier = Modifier
+                    .size(250.dp)
+                    .align(Alignment.Center)
+                    .offset(y = (-4).dp)
+            )
+        }
 
         // Overlay Column for Header Status Pill & Action Buttons
         Column(

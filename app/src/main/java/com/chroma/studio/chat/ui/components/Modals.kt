@@ -4646,7 +4646,9 @@ fun AppearanceSettingsModal(
                                                 VoiceGlobeStyleType.SOLAR_FLARE -> "Solar Flare • Molten Golden Sun"
                                                 VoiceGlobeStyleType.DARK_MATTER -> "Obsidian Core • Quantum Indigo Pulse"
                                                 VoiceGlobeStyleType.ROSE_QUARTZ -> "Sakura Quartz • Ethereal Blossom Glow"
+                                                VoiceGlobeStyleType.STRANDS -> "Siri Strands • Chromatic Liquid Glass"
                                                 VoiceGlobeStyleType.ELECTRIC_CYAN -> "Aquamarine Prism • Arctic Cyan Wave"
+                                                VoiceGlobeStyleType.CHROMA_BLOB -> "Chroma Blob • Morphing Liquid Orb"
                                             },
                                             fontSize = 10.sp,
                                             color = Color.White.copy(alpha = 0.8f),

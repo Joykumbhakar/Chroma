@@ -70,6 +70,7 @@ fun DynamicNotchIsland(
     callAvatarUrl: String = "",
     isRecording: Boolean = false,
     recordingDurationSec: Int = 0,
+    voiceAmplitude: Float? = null,
     globeStyle: com.chroma.studio.chat.data.VoiceGlobeStyleType = com.chroma.studio.chat.data.VoiceGlobeStyleType.ORIGINAL_BLUE,
     onGlobeStyleChange: (com.chroma.studio.chat.data.VoiceGlobeStyleType) -> Unit = {},
     onIslandClick: () -> Unit = {},
@@ -347,6 +348,7 @@ fun DynamicNotchIsland(
                         if (isExpanded) {
                             ExpandedRecordingView(
                                 durationSec = recordingDurationSec,
+                                voiceAmplitude = voiceAmplitude,
                                 globeStyle = globeStyle,
                                 onGlobeStyleChange = onGlobeStyleChange,
                                 onCancel = {
@@ -682,6 +684,7 @@ private fun ExpandedCallView(
 @Composable
 private fun ExpandedRecordingView(
     durationSec: Int,
+    voiceAmplitude: Float?,
     globeStyle: com.chroma.studio.chat.data.VoiceGlobeStyleType,
     onGlobeStyleChange: (com.chroma.studio.chat.data.VoiceGlobeStyleType) -> Unit,
     onCancel: () -> Unit,
@@ -735,6 +738,7 @@ private fun ExpandedRecordingView(
         // 3D Liquid Plasma AI Globe (Matching Deep OLED Black Theme)
         DynamicIslandLiquidGlobe(
             globeStyle = globeStyle,
+            voiceAmplitude = voiceAmplitude,
             size = 115.dp,
             modifier = Modifier.padding(vertical = 2.dp)
         )
@@ -845,12 +849,26 @@ fun getGlobePalette(style: com.chroma.studio.chat.data.VoiceGlobeStyleType): Glo
             blob3 = listOf(Color(0xFFFBCFE8).copy(alpha = 0.7f), Color.Transparent),
             waveColor = Color(0xFFFDA4AF)
         )
+        com.chroma.studio.chat.data.VoiceGlobeStyleType.STRANDS -> GlobePalette(
+            coreColors = listOf(Color(0xFF93F1FF), Color(0xFF3569FA), Color(0xFF193D9B), Color(0xFF050B24)),
+            blob1 = listOf(Color(0xFFFFA24C).copy(alpha = 0.85f), Color(0xFFD95B56).copy(alpha = 0f)),
+            blob2 = listOf(Color(0xFFFFFFFF).copy(alpha = 0.75f), Color(0xFFFFE0B3).copy(alpha = 0f)),
+            blob3 = listOf(Color(0xFF93F1FF).copy(alpha = 0.7f), Color.Transparent),
+            waveColor = Color(0xFF3569FA)
+        )
         com.chroma.studio.chat.data.VoiceGlobeStyleType.ELECTRIC_CYAN -> GlobePalette(
             coreColors = listOf(Color(0xFF38BDF8), Color(0xFF0891B2), Color(0xFF0E7490), Color(0xFF083344)),
             blob1 = listOf(Color(0xFF22D3EE).copy(alpha = 0.85f), Color(0xFF06B6D4).copy(alpha = 0f)),
             blob2 = listOf(Color(0xFFFFFFFF).copy(alpha = 0.75f), Color(0xFFECFEFF).copy(alpha = 0f)),
             blob3 = listOf(Color(0xFF67E8F9).copy(alpha = 0.7f), Color.Transparent),
             waveColor = Color(0xFF22D3EE)
+        )
+        com.chroma.studio.chat.data.VoiceGlobeStyleType.CHROMA_BLOB -> GlobePalette(
+            coreColors = listOf(Color(0xFFFF50A1), Color(0xFFFF00A7), Color(0xFF8800CC), Color(0xFF004DFF)),
+            blob1 = listOf(Color(0xFFFF50A1).copy(alpha = 0.85f), Color(0xFFFF6700).copy(alpha = 0f)),
+            blob2 = listOf(Color(0xFFFFFFFF).copy(alpha = 0.75f), Color(0xFFFFCCE8).copy(alpha = 0f)),
+            blob3 = listOf(Color(0xFFFF00A7).copy(alpha = 0.7f), Color.Transparent),
+            waveColor = Color(0xFFFF50A1)
         )
     }
 }
@@ -864,8 +882,39 @@ fun DynamicIslandLiquidGlobe(
     globeStyle: com.chroma.studio.chat.data.VoiceGlobeStyleType = com.chroma.studio.chat.data.VoiceGlobeStyleType.ORIGINAL_BLUE,
     onClick: () -> Unit = {},
     modifier: Modifier = Modifier,
-    size: Dp = 112.dp
+    size: Dp = 112.dp,
+    voiceAmplitude: Float? = null
 ) {
+    if (globeStyle == com.chroma.studio.chat.data.VoiceGlobeStyleType.STRANDS) {
+        StrandsVoiceGlobe(
+            level = voiceAmplitude,
+            listening = voiceAmplitude == null,   // simulated speech when no mic level is supplied
+            modifier = modifier
+                .size(size)
+                .clickable(
+                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                    indication = null
+                ) { onClick() },
+            params = StrandsParams(glassSize = 1.1f)
+        )
+        return
+    }
+
+    if (globeStyle == com.chroma.studio.chat.data.VoiceGlobeStyleType.CHROMA_BLOB) {
+        AIBlobVoiceGlobe(
+            level = voiceAmplitude,
+            listening = voiceAmplitude == null,
+            modifier = modifier
+                .size(size)
+                .clickable(
+                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                    indication = null
+                ) { onClick() },
+            params = AIBlobParams()
+        )
+        return
+    }
+
     val palette = remember(globeStyle) { getGlobePalette(globeStyle) }
     val infiniteTransition = rememberInfiniteTransition(label = "DynamicIslandGlobe")
 
