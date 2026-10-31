@@ -102,7 +102,7 @@ fun CommunityOneUiHeader(
     val textMuted = if (!isDark) Color(0xFF71717A) else Color(0xFF8E8E93)
     val dividerColor = if (!isDark) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.08f)
 
-    val expandedHeightDp = 100.dp
+    val expandedHeightDp = 88.dp
     val currentExpandedHeightDp = expandedHeightDp * (1f - collapseProgress).coerceIn(0f, 1f)
 
     val largeTitleAlpha = (1f - (collapseProgress / 0.5f)).coerceIn(0f, 1f)
@@ -280,35 +280,8 @@ fun CommunityOneUiHeader(
                                 scaleY = scale
                             }
                     ) {
-                        // Studio Discovery Capsule Badge
-                        Row(
-                            modifier = Modifier
-                                .graphicsLayer { alpha = subtitleAlpha }
-                                .padding(bottom = 6.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    if (isDark) Color.White.copy(alpha = 0.08f)
-                                    else Color.Black.copy(alpha = 0.045f)
-                                )
-                                .padding(horizontal = 11.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp)
-                        ) {
-                            Text(
-                                text = "✦",
-                                fontSize = 11.sp,
-                                color = Color(0xFF007AFF)
-                            )
-                            Text(
-                                text = if (searchQuery.isNotBlank() || isSearchExpanded) "STUDIO DISCOVERY" else "CHROMA STUDIO • ONE UI 7",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 0.8.sp,
-                                color = Color(0xFF007AFF),
-                                fontFamily = InterFontFamily
-                            )
-                        }
 
+                        // Main title
                         Text(
                             text = title,
                             fontSize = 32.sp,
@@ -316,14 +289,16 @@ fun CommunityOneUiHeader(
                             letterSpacing = (-0.5).sp,
                             color = textDark,
                             fontFamily = InterFontFamily,
-                            textAlign = TextAlign.Center
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
 
                         if (subtitle.isNotBlank()) {
                             Spacer(modifier = Modifier.height(3.dp))
                             Text(
                                 text = subtitle,
-                                fontSize = 12.5.sp,
+                                fontSize = 11.5.sp,
                                 fontWeight = FontWeight.Normal,
                                 color = textMuted,
                                 fontFamily = InterFontFamily,

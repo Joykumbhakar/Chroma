@@ -450,11 +450,11 @@ fun DiscoverScreen(
 
         val headerSubtitle = remember(selectedFeedTab) {
             when (selectedFeedTab) {
-                CommunityFeedTab.ALL -> "Discover fresh creations & stories • Latest feed"
-                CommunityFeedTab.FOLLOWING -> "Updates & masterworks from creators you follow"
-                CommunityFeedTab.SAVED -> "Your private collection of saved creations"
-                CommunityFeedTab.FLASH -> "Cinematic vertical video creations & remixes"
-                CommunityFeedTab.TRENDING -> "Top masterworks and viral creative drops"
+                CommunityFeedTab.ALL -> "Latest creations & stories"
+                CommunityFeedTab.FOLLOWING -> "From creators you follow"
+                CommunityFeedTab.SAVED -> "Your saved creations"
+                CommunityFeedTab.FLASH -> "Vertical video creations"
+                CommunityFeedTab.TRENDING -> "Top community creations"
             }
         }
 

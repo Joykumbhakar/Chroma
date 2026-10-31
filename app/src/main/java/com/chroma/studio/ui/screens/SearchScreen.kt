@@ -958,7 +958,7 @@ fun SearchScreen(
     }
 
     // ── One UI Extended App Bar Height & State Persistence ────────────────────
-    val expandedHeightDp: Dp = if (useDynamicTitle) 216.dp else 192.dp
+    val expandedHeightDp: Dp = if (useDynamicTitle) 158.dp else 140.dp
     val maxCollapsePx = remember(density, expandedHeightDp) { with(density) { expandedHeightDp.toPx() } }
 
     // Restore exact collapsed/expanded fraction from SharedPreferences
@@ -1156,30 +1156,7 @@ fun SearchScreen(
                                 scaleY = scale
                             }
                     ) {
-                        // Ambient Glassmorphic Studio Capsule Badge above Extended Title
-                        Row(
-                            modifier = Modifier
-                                .graphicsLayer { alpha = subtitleAlpha }
-                                .padding(bottom = 8.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    if (isDark) Color.White.copy(alpha = 0.07f)
-                                    else Color.Black.copy(alpha = 0.045f)
-                                )
-                                                                .padding(horizontal = 11.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp)
-                        ) {
-                            GalaxyAiSparkleIcon(size = 12.dp)
-                            Text(
-                                text = if (isSearchActive) "STUDIO DISCOVERY" else "CHROMA STUDIO • ONE UI 7",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 0.8.sp,
-                                color = activeAccent,
-                                fontFamily = InterFontFamily
-                            )
-                        }
+
 
                         // [2] Extended Centered Title (Auto-resizing + Ellipsis fallback)
                         Text(
@@ -1193,16 +1170,14 @@ fun SearchScreen(
                             textAlign = TextAlign.Center
                         )
 
-                        Spacer(modifier = Modifier.height(5.dp))
+                        Spacer(modifier = Modifier.height(3.dp))
 
-                        // Subheading beneath the title
+                        // Short clean subheading
                         Text(
-                            text = if (isSearchActive) {
-                                "${userResults.size} creators • ${filteredArtworks.size} artworks • ${matchingTags.size} tags"
-                            } else {
-                                "${filteredArtworks.size} artworks • ${trendingWorks.size} trending now"
-                            },
-                            fontSize = 13.5.sp,
+                            text = if (isSearchActive) "Search creations & creators"
+                                   else if (useDynamicTitle) selectedCategory.lowercase().replaceFirstChar { it.uppercase() } + " creations"
+                                   else "Discover creations & creators",
+                            fontSize = 11.5.sp,
                             fontWeight = FontWeight.Normal,
                             color = textMuted,
                             maxLines = 1,
@@ -1210,59 +1185,6 @@ fun SearchScreen(
                             textAlign = TextAlign.Center,
                             modifier = Modifier.graphicsLayer { alpha = subtitleAlpha }
                         )
-
-                        // Up to 2 Action Buttons below Dynamic Title (One UI Specification)
-                        if (useDynamicTitle) {
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.graphicsLayer { alpha = subtitleAlpha }
-                            ) {
-                                // Dynamic Title Action Button 1
-                                Box(
-                                    modifier = Modifier
-                                        .clip(CircleShape)
-                                        .background(activeAccent)
-                                                                                .clickable {
-                                            selectedCategory = if (selectedCategory == "Trending") "All" else "Trending"
-                                        }
-                                        .padding(horizontal = 14.dp, vertical = 6.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = if (selectedCategory == "Trending") "Show All" else "Trending (${trendingWorks.size})",
-                                        color = Color.White,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontFamily = InterFontFamily
-                                    )
-                                }
-
-                                // Dynamic Title Action Button 2: Cycle Sort Order
-                                Box(
-                                    modifier = Modifier
-                                        .clip(CircleShape)
-                                        .background(if (isDark) Color.White.copy(alpha = 0.10f) else Color.Black.copy(alpha = 0.06f))
-                                                                                .clickable {
-                                            val orders = OneUiSortOrder.entries
-                                            val nextSort = orders[(orders.indexOf(sortOrder) + 1) % orders.size]
-                                            sortOrder = nextSort
-                                            prefs.edit().putString("oneui_search_sort_order", nextSort.name).apply()
-                                        }
-                                        .padding(horizontal = 14.dp, vertical = 6.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = "Sort: ${sortOrder.label}",
-                                        color = textDark,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontFamily = InterFontFamily
-                                    )
-                                }
-                            }
-                        }
                     }
                 }
             }

@@ -281,7 +281,9 @@ fun AppleSlider(
     steps: Int = 0,
     hazeState: dev.chrisbanes.haze.HazeState? = null,
     gradientColors: List<Color>? = null,
-    trackHeight: Dp = 6.dp
+    trackHeight: Dp = 6.dp,
+    onValueChangeFinished: (() -> Unit)? = null,
+    onInteractingChange: ((Boolean) -> Unit)? = null
 ) {
     val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -291,6 +293,7 @@ fun AppleSlider(
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
 
     LaunchedEffect(isInteracting) {
+        onInteractingChange?.invoke(isInteracting)
         if (isInteracting) {
             haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
         }
@@ -315,6 +318,7 @@ fun AppleSlider(
     Slider(
         value = value.coerceIn(valueRange.start, valueRange.endInclusive),
         onValueChange = onValueChange,
+        onValueChangeFinished = onValueChangeFinished,
         valueRange = valueRange,
         steps = steps,
         interactionSource = interactionSource,
