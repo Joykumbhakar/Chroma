@@ -32,6 +32,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -55,6 +56,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -268,12 +270,16 @@ fun DiscoverScreen(
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
 
     val density = LocalDensity.current
-    val maxCollapsePx = remember(density) { with(density) { 140.dp.toPx() } }
+    val maxCollapsePx = remember(density) { with(density) { 195.dp.toPx() } }
     var collapseOffsetPx by remember { mutableFloatStateOf(0f) }
+    var snapJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
     val nestedScrollConnection = remember(maxCollapsePx, listState) {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (source == NestedScrollSource.Drag && snapJob?.isActive == true) {
+                    snapJob?.cancel()
+                }
                 val deltaY = available.y
                 // When user scrolls down (finger moves up -> deltaY < 0): collapse extended header first
                 if (deltaY < 0f && collapseOffsetPx < maxCollapsePx) {
@@ -290,6 +296,9 @@ fun DiscoverScreen(
                 available: Offset,
                 source: NestedScrollSource
             ): Offset {
+                if (source == NestedScrollSource.Drag && snapJob?.isActive == true) {
+                    snapJob?.cancel()
+                }
                 val deltaY = available.y
                 // When user scrolls up (finger moves down -> deltaY > 0): expand header when at top of list
                 if (deltaY > 0f && collapseOffsetPx > 0f) {
@@ -302,6 +311,57 @@ fun DiscoverScreen(
                     }
                 }
                 return Offset.Zero
+            }
+
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                val progress = if (maxCollapsePx <= 0f) 0f else (collapseOffsetPx / maxCollapsePx)
+                // If user flings upward (scrolling feed down) while header is partially open:
+                // Magnetically snap to fully collapsed before list starts scrolling,
+                // ensuring stories smoothly dock right beneath the header and never slide behind it!
+                if (available.y < -300f && progress < 0.99f && progress > 0.05f) {
+                    snapJob?.cancel()
+                    snapJob = coroutineScope.launch {
+                        animate(
+                            initialValue = collapseOffsetPx,
+                            targetValue = maxCollapsePx,
+                            animationSpec = spring(
+                                dampingRatio = 0.85f,
+                                stiffness = Spring.StiffnessMediumLow
+                            )
+                        ) { value, _ ->
+                            collapseOffsetPx = value
+                        }
+                    }
+                    return Velocity(0f, available.y)
+                }
+                return Velocity.Zero
+            }
+
+            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+                val progress = if (maxCollapsePx <= 0f) 0f else (collapseOffsetPx / maxCollapsePx)
+                if (progress > 0.01f && progress < 0.99f) {
+                    val isAtTop = listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
+                    val targetPx = when {
+                        available.y < -250f -> maxCollapsePx
+                        available.y > 250f && isAtTop -> 0f
+                        progress >= 0.45f -> maxCollapsePx
+                        else -> 0f
+                    }
+                    snapJob?.cancel()
+                    snapJob = coroutineScope.launch {
+                        animate(
+                            initialValue = collapseOffsetPx,
+                            targetValue = targetPx,
+                            animationSpec = spring(
+                                dampingRatio = 0.85f,
+                                stiffness = Spring.StiffnessMediumLow
+                            )
+                        ) { value, _ ->
+                            collapseOffsetPx = value
+                        }
+                    }
+                }
+                return Velocity.Zero
             }
         }
     }
@@ -386,6 +446,7 @@ fun DiscoverScreen(
                 animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing)
             )
             hasPendingNewDrops = false
+            snapJob?.cancel()
             collapseOffsetPx = 0f
             onRefresh()
             listState.animateScrollToItem(0)
@@ -571,7 +632,7 @@ fun DiscoverScreen(
             }
 
             if (isLoading) {
-                LazyColumn(modifier = Modifier.fillMaxSize(), userScrollEnabled = false) {
+                LazyColumn(modifier = Modifier.fillMaxSize().clipToBounds(), userScrollEnabled = false) {
                     item {
                         CommunityStoriesCard(
                             stories = emptyList(),
@@ -604,7 +665,7 @@ fun DiscoverScreen(
                 LazyColumn(
                     state = listState,
                     contentPadding = PaddingValues(top = 2.dp, bottom = 110.dp),
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize().clipToBounds()
                 ) {
                     // Unified Stories Section
                     item(key = "stories") {
@@ -1906,8 +1967,8 @@ fun CreatorFeedHeader(
     )
 
     val clampedCollapse = collapseProgress.coerceIn(0f, 1f)
-    val expandedHeight = (140.dp * (1f - clampedCollapse)).coerceAtLeast(0.dp)
-    val expandedAlpha = (1f - (clampedCollapse * 1.4f)).coerceIn(0f, 1f)
+    val expandedHeight = (195.dp * (1f - clampedCollapse)).coerceAtLeast(0.dp)
+    val expandedAlpha = (1f - (clampedCollapse * 1.35f)).coerceIn(0f, 1f)
 
     Column(
         modifier = Modifier
@@ -1922,25 +1983,25 @@ fun CreatorFeedHeader(
                     .fillMaxWidth()
                     .height(expandedHeight)
                     .alpha(expandedAlpha)
-                    .padding(horizontal = 16.dp),
+                    .padding(horizontal = 20.dp),
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
                     text = title,
-                    fontSize = 32.sp,
-                    lineHeight = 36.sp,
+                    fontSize = 36.sp,
+                    lineHeight = 40.sp,
                     fontWeight = FontWeight.Bold,
-                    letterSpacing = (-0.5).sp,
+                    letterSpacing = (-0.6).sp,
                     color = colors.textMain,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = subtitle,
-                    fontSize = 12.sp,
-                    lineHeight = 15.sp,
+                    fontSize = 12.5.sp,
+                    lineHeight = 16.sp,
                     fontWeight = FontWeight.Medium,
                     color = colors.textMuted,
                     maxLines = 1,
