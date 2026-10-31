@@ -280,6 +280,35 @@ fun CommunityOneUiHeader(
                                 scaleY = scale
                             }
                     ) {
+                        // Studio Discovery Capsule Badge
+                        Row(
+                            modifier = Modifier
+                                .graphicsLayer { alpha = subtitleAlpha }
+                                .padding(bottom = 6.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (isDark) Color.White.copy(alpha = 0.08f)
+                                    else Color.Black.copy(alpha = 0.045f)
+                                )
+                                .padding(horizontal = 11.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Text(
+                                text = "✦",
+                                fontSize = 11.sp,
+                                color = Color(0xFF007AFF)
+                            )
+                            Text(
+                                text = if (searchQuery.isNotBlank() || isSearchExpanded) "STUDIO DISCOVERY" else "CHROMA STUDIO • ONE UI 7",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.8.sp,
+                                color = Color(0xFF007AFF),
+                                fontFamily = InterFontFamily
+                            )
+                        }
+
                         Text(
                             text = title,
                             fontSize = 32.sp,
@@ -377,11 +406,9 @@ fun CommunityCategoryPills(
                     .clip(pillShape)
                     .background(if (isSelected) activeColor else cardBgColor)
                     .then(
-                        if (!isSelected) {
-                            Modifier.border(1.dp, cardBorderColor, pillShape)
-                        } else {
-                            Modifier.shadow(4.dp, pillShape, spotColor = activeColor.copy(alpha = 0.4f))
-                        }
+                        if (isSelected) {
+                            Modifier.shadow(4.dp, pillShape, spotColor = activeColor.copy(alpha = 0.35f))
+                        } else Modifier
                     )
                     .clickable(
                         interactionSource = interactionSource,
@@ -447,7 +474,6 @@ fun CommunityStoriesCard(
             .shadow(4.dp, squircleShape, spotColor = Color.Black.copy(alpha = 0.06f))
             .clip(squircleShape)
             .background(cardBgColor)
-            .border(1.dp, cardBorderColor, squircleShape)
             .padding(vertical = 4.dp)
     ) {
         StoriesSection(
@@ -509,7 +535,6 @@ fun CommunityInteractiveEmptyState(
             .shadow(6.dp, squircleShape, spotColor = Color.Black.copy(alpha = 0.06f))
             .clip(squircleShape)
             .background(cardBgColor)
-            .border(1.dp, cardBorderColor, squircleShape)
             .padding(horizontal = 18.dp, vertical = 18.dp),
         contentAlignment = Alignment.Center
     ) {

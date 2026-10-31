@@ -6,6 +6,8 @@
 
 package com.chroma.studio.ui.screens
 
+import com.chroma.studio.ui.theme.InterFontFamily
+
 import com.chroma.studio.ui.components.LiquidGlassProgressBar
 import com.chroma.studio.ui.components.AiWaveSphereIcon
 import com.chroma.studio.ui.components.ApplePhotosGraphic
@@ -371,11 +373,13 @@ fun DiscoverScreen(
         val searchFiltered = if (searchQuery.isBlank()) {
             baseList
         } else {
+            val cleanQ = searchQuery.trim().removePrefix("#").removePrefix("@")
             baseList.filter {
-                it.title.contains(searchQuery, ignoreCase = true) ||
-                it.authorUsername.contains(searchQuery, ignoreCase = true) ||
-                it.authorDisplayName.contains(searchQuery, ignoreCase = true) ||
-                it.tags.any { tag -> tag.contains(searchQuery, ignoreCase = true) }
+                it.title.contains(cleanQ, ignoreCase = true) ||
+                it.description.contains(cleanQ, ignoreCase = true) ||
+                it.authorUsername.contains(cleanQ, ignoreCase = true) ||
+                it.authorDisplayName.contains(cleanQ, ignoreCase = true) ||
+                it.tags.any { tag -> tag.contains(cleanQ, ignoreCase = true) }
             }
         }
 
@@ -582,13 +586,50 @@ fun DiscoverScreen(
 
                     // Samsung One UI Category Filter Pills
                     item(key = "category_filter_pills") {
-                        CommunityCategoryPills(
-                            selectedTab = selectedFeedTab,
-                            onSelectTab = { tab ->
-                                selectedFeedTab = tab
-                                coroutineScope.launch { listState.animateScrollToItem(0) }
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            CommunityCategoryPills(
+                                selectedTab = selectedFeedTab,
+                                onSelectTab = { tab ->
+                                    selectedFeedTab = tab
+                                    coroutineScope.launch { listState.animateScrollToItem(0) }
+                                }
+                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "${filteredWorks.size} creations",
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = if (colors.isDark) Color(0xFF98989D) else Color(0xFF6C6C70),
+                                    fontFamily = InterFontFamily
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .clip(CircleShape)
+                                        .background(if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f))
+                                        .clickable {
+                                            val orders = CommunitySortOrder.entries
+                                            val nextSort = orders[(orders.indexOf(selectedSortOrder) + 1) % orders.size]
+                                            selectedSortOrder = nextSort
+                                        }
+                                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "Sort: ${selectedSortOrder.label}",
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (colors.isDark) Color(0xFFF2F2F7) else Color(0xFF1C1C1E),
+                                        fontFamily = InterFontFamily
+                                    )
+                                }
                             }
-                        )
+                        }
                     }
 
                     // ── INSTAGRAM-STYLE FLASH VIDEO / POST UPLOAD PROGRESS BANNER ──

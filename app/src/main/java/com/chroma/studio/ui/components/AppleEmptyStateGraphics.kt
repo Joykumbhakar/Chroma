@@ -3649,36 +3649,24 @@ fun AppleTrendingFireGraphic(
     val scope = rememberCoroutineScope()
     val scaleX = remember { Animatable(1f) }
     val scaleY = remember { Animatable(1f) }
-    val innerFlameAngle = remember { Animatable(0f) }
-    val innerFlameScale = remember { Animatable(1f) }
-    val sparkShiftY = remember { Animatable(0f) }
 
     fun triggerFireBlaze() {
         scope.launch {
             // Anticipation crouch
             launch { scaleX.animateTo(1.06f, tween(140, easing = FastOutSlowInEasing)) }
             launch { scaleY.animateTo(0.93f, tween(140, easing = FastOutSlowInEasing)) }
-            innerFlameAngle.animateTo(-7f, tween(140))
 
             // Upward Blaze Surge 1
             launch { scaleX.animateTo(0.95f, tween(175)) }
             launch { scaleY.animateTo(1.075f, tween(175)) }
-            launch { innerFlameScale.animateTo(1.12f, tween(175)) }
-            launch { sparkShiftY.animateTo(-26f, tween(175)) }
-            innerFlameAngle.animateTo(6.5f, tween(175))
 
             // Secondary Flicker
             launch { scaleX.animateTo(1.03f, tween(160)) }
             launch { scaleY.animateTo(0.97f, tween(160)) }
-            launch { innerFlameScale.animateTo(0.96f, tween(160)) }
-            innerFlameAngle.animateTo(-4.5f, tween(160))
 
             // Spring settle
             launch { scaleX.animateTo(1f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow)) }
             launch { scaleY.animateTo(1f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow)) }
-            launch { innerFlameScale.animateTo(1f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow)) }
-            launch { sparkShiftY.animateTo(0f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow)) }
-            innerFlameAngle.animateTo(0f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow))
         }
     }
 
@@ -3703,13 +3691,6 @@ fun AppleTrendingFireGraphic(
 
     Canvas(modifier = modifier.then(clickModifier)) {
         val s = size.minDimension / 1000f
-
-        // Warm Crimson-Orange Ambient Floor Glow
-        drawOval(
-            brush = AppleHigFirePalette.fireFloorGlowBrush(500f, 868f, 230f, s),
-            topLeft = Offset(270f * s, 848f * s),
-            size = Size(460f * s, 38f * s)
-        )
 
         withTransform({
             scale(scaleX.value, scaleY.value, pivot = Offset(500f * s, 830f * s))
@@ -3767,64 +3748,6 @@ fun AppleTrendingFireGraphic(
                     brush = AppleHigFirePalette.rubyBevelBrush(395f, 766f, s),
                     style = Stroke(width = 6f * s, join = StrokeJoin.Round)
                 )
-
-                // 3. Elevated 3D Golden-Yellow Inner Flame Core (Cantilevered with Spring Flicker)
-                withTransform({
-                    rotate(innerFlameAngle.value, pivot = Offset(500f * s, 750f * s))
-                    scale(innerFlameScale.value, innerFlameScale.value, pivot = Offset(500f * s, 750f * s))
-                }) {
-                    val innerCorePath = Path().apply {
-                        moveTo(516f * s, 455f * s)
-                        cubicTo(552f * s, 505f * s, 594f * s, 558f * s, 594f * s, 634f * s)
-                        cubicTo(594f * s, 694f * s, 552f * s, 742f * s, 498f * s, 742f * s)
-                        cubicTo(444f * s, 742f * s, 404f * s, 696f * s, 404f * s, 638f * s)
-                        cubicTo(404f * s, 592f * s, 434f * s, 556f * s, 468f * s, 524f * s)
-                        cubicTo(492f * s, 502f * s, 508f * s, 480f * s, 516f * s, 455f * s)
-                        close()
-                    }
-
-                    // Warm Ruby Contact Drop Shadow Under Elevated Inner Flame
-                    drawPath(
-                        path = innerCorePath,
-                        color = Color(0x882B0005),
-                        style = Stroke(width = 14f * s)
-                    )
-
-                    drawPath(
-                        path = innerCorePath,
-                        brush = AppleHigFirePalette.innerCoreFlameBrush(s)
-                    )
-
-                    // White-Hot Inner Core Specular Highlight
-                    drawOval(
-                        color = Color.White.copy(alpha = 0.68f),
-                        topLeft = Offset(468f * s, 575f * s),
-                        size = Size(56f * s, 96f * s)
-                    )
-
-                    drawPath(
-                        path = innerCorePath,
-                        color = Color.White.copy(alpha = 0.88f),
-                        style = Stroke(width = 4f * s, join = StrokeJoin.Round)
-                    )
-                }
-
-                // 4. Rising 3D Solar Spark Orb in Upper Flame Crown
-                withTransform({
-                    translate(top = sparkShiftY.value * s)
-                }) {
-                    val sparkCenter = Offset(516f * s, 322f * s)
-                    drawCircle(
-                        color = Color.White.copy(alpha = 0.85f),
-                        radius = 18f * s,
-                        center = sparkCenter
-                    )
-                    drawCircle(
-                        color = Color(0xFFFFE047).copy(alpha = 0.45f),
-                        radius = 32f * s,
-                        center = sparkCenter
-                    )
-                }
             }
 
             // Outer 1.5px Specular Bevel Contour
