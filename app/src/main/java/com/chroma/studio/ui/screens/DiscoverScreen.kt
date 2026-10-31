@@ -7,7 +7,6 @@
 package com.chroma.studio.ui.screens
 
 import com.chroma.studio.ui.theme.InterFontFamily
-
 import com.chroma.studio.ui.components.LiquidGlassProgressBar
 import com.chroma.studio.ui.components.AiWaveSphereIcon
 import com.chroma.studio.ui.components.ApplePhotosGraphic
@@ -40,6 +39,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.Dp
 import kotlinx.coroutines.delay
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
@@ -141,7 +141,7 @@ private val PopoverBezier = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)
 
 fun getTimeAgo(timestamp: Long): String {
     val now = System.currentTimeMillis()
-    val diff = now - timestamp
+    val diff = (now - timestamp).coerceAtLeast(0L)
 
     val minutes = TimeUnit.MILLISECONDS.toMinutes(diff)
     val hours = TimeUnit.MILLISECONDS.toHours(diff)
@@ -219,13 +219,13 @@ fun DiscoverScreen(
             onRefresh()
         }
     }
+
     var searchQuery by remember { mutableStateOf("") }
     val stories by (storyViewModel?.storyGroups ?: chatViewModel.stories).collectAsState()
     val myStories by (storyViewModel?.myStories ?: kotlinx.coroutines.flow.MutableStateFlow(emptyList())).collectAsState()
     val likedStoryIds by (storyViewModel?.likedStoryIds ?: kotlinx.coroutines.flow.MutableStateFlow(emptySet())).collectAsState()
     val isUploadingStory by (storyViewModel?.isUploading ?: kotlinx.coroutines.flow.MutableStateFlow(false)).collectAsState()
     val trendingWorks by (discoverViewModel?.trendingWorks ?: kotlinx.coroutines.flow.MutableStateFlow(emptyList())).collectAsState()
-    val isTrendingLoading by (discoverViewModel?.isTrendingLoading ?: kotlinx.coroutines.flow.MutableStateFlow(false)).collectAsState()
     val context = LocalContext.current
 
     var showStoryViewer by remember { mutableStateOf(false) }
@@ -237,10 +237,12 @@ fun DiscoverScreen(
     var showShareStoryAudienceSheet by remember { mutableStateOf(false) }
     var showOnlyFriendsManagementSheet by remember { mutableStateOf(false) }
 
-    val shouldHideBottomNav = showStoryViewer || showStoryCreationSheet || showStoryGalleryPicker || showStoryCamera || (editingStoryImageUri != null) || showShareStoryAudienceSheet || showOnlyFriendsManagementSheet
+    val shouldHideBottomNav = showStoryViewer || showStoryCreationSheet || showStoryGalleryPicker ||
+        showStoryCamera || (editingStoryImageUri != null) || showShareStoryAudienceSheet || showOnlyFriendsManagementSheet
     LaunchedEffect(shouldHideBottomNav) {
         onStoryViewerChange?.invoke(shouldHideBottomNav)
     }
+
     var storyViewerInitialIndex by remember { mutableIntStateOf(0) }
     val currentUserId = remember { FirebaseAuth.getInstance().currentUser?.uid ?: "" }
     var myProfile by remember { mutableStateOf<com.chroma.studio.model.UserProfile?>(null) }
@@ -249,12 +251,6 @@ fun DiscoverScreen(
             val repo = DiscoverRepository()
             myProfile = repo.getUserProfile(currentUserId)
         }
-    }
-
-    val mediaPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri: Uri? ->
-        uri?.let { storyViewModel?.uploadStory(context, it) }
     }
 
     var hasPendingNewDrops by remember { mutableStateOf(true) }
@@ -270,8 +266,7 @@ fun DiscoverScreen(
     // Global feed audio mute state (synced across all feed videos)
     var isFeedMuted by rememberSaveable { mutableStateOf(true) }
 
-    // Instagram-style active viewport video detection:
-    // Only ONE video closest to the center with >40% visibility is granted the playback token.
+    // Instagram-style active viewport video detection
     val activePlayingPostId by remember {
         derivedStateOf {
             val layoutInfo = listState.layoutInfo
@@ -288,7 +283,13 @@ fun DiscoverScreen(
 
             for (item in visibleItems) {
                 val key = item.key as? String ?: continue
-                if (key == "stories" || key == "community_upload_progress_banner" || key == "active_feed_filter_badge" || key.startsWith("category_")) {
+                if (
+                    key == "stories" ||
+                    key == "community_upload_progress_banner" ||
+                    key == "active_feed_filter_badge" ||
+                    key == "trending_spotlight_reel" ||
+                    key.startsWith("category_")
+                ) {
                     continue
                 }
 
@@ -350,21 +351,27 @@ fun DiscoverScreen(
     var selectedSortOrder by remember { mutableStateOf(CommunitySortOrder.LATEST) }
     var showCommunityGuidelines by remember { mutableStateOf(false) }
 
-    // Community Feed: All real creations, filtered dynamically by search query, tab, and sort order
+    // FIX 1: Ensure Trending Masterworks reel still populates with top creations when early-stage posts have < 100 likes
     val qualifyingMasterworks = remember(trendingWorks, works) {
-        (trendingWorks + works.filter { it.likesCount > 100 && it.effectiveCommentsCount >= 5 })
+        val strictMasterworks = (trendingWorks + works)
             .distinctBy { it.id }
             .filter { it.likesCount > 100 && it.effectiveCommentsCount >= 5 }
             .sortedByDescending { it.likesCount }
+
+        if (strictMasterworks.isNotEmpty()) {
+            strictMasterworks
+        } else {
+            (trendingWorks + works)
+                .distinctBy { it.id }
+                .sortedByDescending { it.likesCount }
+                .take(8)
+        }
     }
 
-    val filteredWorks = remember(works, searchQuery, selectedFeedTab, selectedSortOrder, trendingWorks, followingUserIds, savedWorkIds) {
+    val filteredWorks = remember(works, searchQuery, selectedFeedTab, selectedSortOrder, qualifyingMasterworks, followingUserIds, savedWorkIds) {
         val baseList = when (selectedFeedTab) {
             CommunityFeedTab.ALL -> works
-            CommunityFeedTab.TRENDING -> {
-                val list = if (trendingWorks.isNotEmpty()) trendingWorks else works
-                list.filter { it.likesCount > 100 && it.effectiveCommentsCount >= 5 }.sortedByDescending { it.likesCount }
-            }
+            CommunityFeedTab.TRENDING -> qualifyingMasterworks
             CommunityFeedTab.FLASH -> works.filter { isVideoPost(it) || it.postType == "video" || it.aspectRatio.trim() == "9:16" }
             CommunityFeedTab.FOLLOWING -> works.filter { followingUserIds.contains(it.creatorId) }
             CommunityFeedTab.SAVED -> works.filter { savedWorkIds.contains(it.id) }
@@ -404,7 +411,11 @@ fun DiscoverScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(if (colors.isDark) Color(0xFF000000) else Color(0xFFF8FAFC))) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(if (colors.isDark) Color(0xFF0E0E11) else Color(0xFFFFFFFF))
+    ) {
         BackHandler(enabled = isSearchExpanded) {
             isSearchExpanded = false
             searchQuery = ""
@@ -431,54 +442,53 @@ fun DiscoverScreen(
         val collapseProgress by remember {
             derivedStateOf {
                 if (listState.firstVisibleItemIndex > 0) 1f
-                else (listState.firstVisibleItemScrollOffset / 280f).coerceIn(0f, 1f)
+                else (listState.firstVisibleItemScrollOffset / 180f).coerceIn(0f, 1f)
             }
         }
 
-        val infiniteTransition = rememberInfiniteTransition(label = "refreshSpin")
-        val spinningRotation by infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 360f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(650, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "spinningRotation"
-        )
-        val isFeedRefreshing = isRefreshing || refreshProgressAnim.value > 0f
-        val refreshRotation = if (isFeedRefreshing) spinningRotation else 0f
-
-        val headerSubtitle = remember(selectedFeedTab) {
+        val headerSubtitle = remember(selectedFeedTab, filteredWorks.size) {
             when (selectedFeedTab) {
-                CommunityFeedTab.ALL -> "Latest creations & stories"
+                CommunityFeedTab.ALL -> "${filteredWorks.size} creations • Latest feed"
                 CommunityFeedTab.FOLLOWING -> "From creators you follow"
-                CommunityFeedTab.SAVED -> "Your saved creations"
-                CommunityFeedTab.FLASH -> "Vertical video creations"
-                CommunityFeedTab.TRENDING -> "Top community creations"
+                CommunityFeedTab.SAVED -> "${filteredWorks.size} saved creations"
+                CommunityFeedTab.FLASH -> "Vertical motion drops"
+                CommunityFeedTab.TRENDING -> "Top community masterworks"
             }
         }
+
+        val isFeedRefreshing = isRefreshing || refreshProgressAnim.value > 0f
 
         Column(modifier = Modifier.fillMaxSize()) {
-            // 1. Samsung One UI 7 Collapsing Community Header with Mesh Gradient
-            CommunityOneUiHeader(
+            // Clean Expanded Header (Main Heading + Small Sub-text ONLY) + Compact Action Bar
+            CreatorFeedHeader(
                 title = "Community",
                 subtitle = headerSubtitle,
                 collapseProgress = collapseProgress,
+                selectedFeedTab = selectedFeedTab,
+                onSelectFeedTab = { tab ->
+                    selectedFeedTab = tab
+                    coroutineScope.launch { listState.animateScrollToItem(0) }
+                },
                 isSearchExpanded = isSearchExpanded,
                 searchQuery = searchQuery,
-                onSearchQueryChange = { searchQuery = it },
-                onToggleSearchExpand = { isSearchExpanded = it },
                 isPlusMenuOpen = showCreateMenu,
-                onTogglePlusMenu = { showCreateMenu = !showCreateMenu },
                 hasUnreadNotifications = hasUnreadNotifications,
+                isRefreshing = isFeedRefreshing,
+                hasPendingNewDrops = hasPendingNewDrops,
+                refreshProgress = refreshProgressAnim.value,
+                onTogglePlusMenu = { showCreateMenu = !showCreateMenu },
                 onToggleNotificationDrawer = {
                     showCreateMenu = false
                     hasUnreadNotifications = false
                     onNavigateToNotifications()
                 },
-                isRefreshing = isFeedRefreshing,
-                refreshRotation = refreshRotation,
                 onRefreshFeed = { triggerFeedRefresh() },
+                onExpandSearch = { isSearchExpanded = true },
+                onCollapseSearch = {
+                    isSearchExpanded = false
+                    searchQuery = ""
+                },
+                onSearchQueryChange = { searchQuery = it },
                 createMenuContent = {
                     PlusCreatePopoverMenu(
                         expanded = showCreateMenu,
@@ -507,10 +517,10 @@ fun DiscoverScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 10.dp),
+                        .padding(vertical = 6.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    OscellionLoadingSpinner(color = Color(0xFF007AFF), modifier = Modifier.size(24.dp))
+                    OscellionLoadingSpinner(color = Color(0xFF007AFF), modifier = Modifier.size(20.dp))
                 }
             }
 
@@ -531,9 +541,13 @@ fun DiscoverScreen(
                         )
                     }
                     item {
-                        CommunityCategoryPills(
+                        CommunityFeedTabBar(
                             selectedTab = selectedFeedTab,
-                            onSelectTab = {}
+                            selectedSort = selectedSortOrder,
+                            savedCount = savedWorkIds.size,
+                            trendingCount = qualifyingMasterworks.size,
+                            onSelectTab = {},
+                            onSelectSort = {}
                         )
                     }
                     if (uploadTask != null && uploadTask?.status != UploadStatus.IDLE) {
@@ -553,10 +567,10 @@ fun DiscoverScreen(
             } else {
                 LazyColumn(
                     state = listState,
-                    contentPadding = PaddingValues(top = 4.dp, bottom = 140.dp),
+                    contentPadding = PaddingValues(top = 2.dp, bottom = 110.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    // Unified High-Fidelity Stories Section in 26dp Squircle Card
+                    // Unified Stories Section
                     item(key = "stories") {
                         CommunityStoriesCard(
                             stories = stories,
@@ -584,52 +598,22 @@ fun DiscoverScreen(
                         )
                     }
 
-                    // Samsung One UI Category Filter Pills
-                    item(key = "category_filter_pills") {
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            CommunityCategoryPills(
-                                selectedTab = selectedFeedTab,
-                                onSelectTab = { tab ->
-                                    selectedFeedTab = tab
-                                    coroutineScope.launch { listState.animateScrollToItem(0) }
-                                }
-                            )
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 6.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "${filteredWorks.size} creations",
-                                    fontSize = 12.5.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = if (colors.isDark) Color(0xFF98989D) else Color(0xFF6C6C70),
-                                    fontFamily = InterFontFamily
-                                )
-                                Box(
-                                    modifier = Modifier
-                                        .clip(CircleShape)
-                                        .background(if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f))
-                                        .clickable {
-                                            val orders = CommunitySortOrder.entries
-                                            val nextSort = orders[(orders.indexOf(selectedSortOrder) + 1) % orders.size]
-                                            selectedSortOrder = nextSort
-                                        }
-                                        .padding(horizontal = 10.dp, vertical = 4.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = "Sort: ${selectedSortOrder.label}",
-                                        fontSize = 11.5.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = if (colors.isDark) Color(0xFFF2F2F7) else Color(0xFF1C1C1E),
-                                        fontFamily = InterFontFamily
-                                    )
-                                }
+                    // FIX 3: Use the clean Cupertino CommunityFeedTabBar (Text + Icon + Animated 2dp underline + integrated Sort dropdown)
+                    // instead of bulky pills + a second redundant "1 creations / Sort" bar.
+                    item(key = "category_tab_bar") {
+                        CommunityFeedTabBar(
+                            selectedTab = selectedFeedTab,
+                            selectedSort = selectedSortOrder,
+                            savedCount = savedWorkIds.size,
+                            trendingCount = qualifyingMasterworks.size,
+                            onSelectTab = { tab ->
+                                selectedFeedTab = tab
+                                coroutineScope.launch { listState.animateScrollToItem(0) }
+                            },
+                            onSelectSort = { sort ->
+                                selectedSortOrder = sort
                             }
-                        }
+                        )
                     }
 
                     // ── INSTAGRAM-STYLE FLASH VIDEO / POST UPLOAD PROGRESS BANNER ──
@@ -644,13 +628,16 @@ fun DiscoverScreen(
                             HorizontalDivider(
                                 color = colors.glassBorder,
                                 thickness = 0.5.dp,
-                                modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
+                                modifier = Modifier.padding(vertical = 2.dp)
                             )
                         }
                     }
 
-// ── NEW FEATURE 2: TRENDING MASTERWORKS SPOTLIGHT REEL ──
-                    if ((selectedFeedTab == CommunityFeedTab.ALL || selectedFeedTab == CommunityFeedTab.TRENDING) && qualifyingMasterworks.isNotEmpty() && searchQuery.isBlank()) {
+                    // ── TRENDING MASTERWORKS SPOTLIGHT REEL ──
+                    if ((selectedFeedTab == CommunityFeedTab.ALL || selectedFeedTab == CommunityFeedTab.TRENDING) &&
+                        qualifyingMasterworks.isNotEmpty() &&
+                        searchQuery.isBlank()
+                    ) {
                         item(key = "trending_spotlight_reel") {
                             CommunityTrendingSpotlightReel(
                                 trendingWorks = qualifyingMasterworks,
@@ -969,7 +956,6 @@ fun DiscoverScreen(
     }
 }
 
-
 @Composable
 fun TrendingCard(
     work: DiscoverPost,
@@ -1125,24 +1111,23 @@ fun TrendingCard(
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(horizontal = 7.dp, vertical = 7.dp),
-            verticalArrangement = Arrangement.spacedBy(2.5.dp)
+                .padding(horizontal = 6.dp, vertical = 5.dp),
+            verticalArrangement = Arrangement.spacedBy(1.dp)
         ) {
             Text(
                 text = work.title.ifEmpty { "Masterwork" },
                 color = Color.White,
-                fontSize = 10.sp,
+                fontSize = 9.5.sp,
+                lineHeight = 11.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
 
-            // Compact Stats Row: Likes (> 100) & Comments (5+)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                // Likes
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(2.dp)
@@ -1161,7 +1146,6 @@ fun TrendingCard(
                     )
                 }
 
-                // Comments
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(2.dp)
@@ -1183,6 +1167,7 @@ fun TrendingCard(
         }
     }
 }
+
 /**
  * Clean Cupertino Category Tabs for Community Feed.
  * Features an animated Hr Line underline indicator beneath the selected category tab,
@@ -1208,16 +1193,15 @@ fun CommunityFeedTabBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 8.dp, bottom = 4.dp),
+                .padding(top = 4.dp, bottom = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Horizontal scrollable clean tab items with animated Hr Line underline
             Row(
                 modifier = Modifier
                     .weight(1f)
                     .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(20.dp),
+                    .padding(horizontal = 14.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 CommunityFeedTab.values().forEach { tab ->
@@ -1231,39 +1215,39 @@ fun CommunityFeedTabBar(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null
                             ) { onSelectTab(tab) }
-                            .padding(vertical = 4.dp)
+                            .padding(vertical = 2.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Icon(
                                 imageVector = tab.icon,
                                 contentDescription = tab.label,
                                 tint = activeColor,
-                                modifier = Modifier.size(15.dp)
+                                modifier = Modifier.size(14.dp)
                             )
                             Text(
                                 text = tab.label,
                                 color = if (isSelected) colors.textMain else colors.textMuted,
-                                fontSize = 13.sp,
+                                fontSize = 12.5.sp,
+                                lineHeight = 14.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                             )
                             if (tab == CommunityFeedTab.SAVED && savedCount > 0) {
                                 Text(
                                     text = "($savedCount)",
                                     color = if (isSelected) Color(0xFF007AFF) else colors.textMuted,
-                                    fontSize = 11.5.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold
                                 )
                             }
                         }
 
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(5.dp))
 
-                        // Animated Hr Underline Indicator (Active Tab)
                         val indicatorWidth by animateDpAsState(
-                            targetValue = if (isSelected) 32.dp else 0.dp,
+                            targetValue = if (isSelected) 28.dp else 0.dp,
                             animationSpec = tween(280, easing = FluidCubicBezier),
                             label = "tabIndicatorWidth"
                         )
@@ -1279,7 +1263,7 @@ fun CommunityFeedTabBar(
 
             // Quick Sort Dropdown Action
             Box(
-                modifier = Modifier.padding(end = 12.dp)
+                modifier = Modifier.padding(end = 10.dp)
             ) {
                 Row(
                     modifier = Modifier
@@ -1287,15 +1271,15 @@ fun CommunityFeedTabBar(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null
                         ) { showSortMenu = true }
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                        .padding(horizontal = 6.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
                     Icon(
                         imageVector = Lucide.ArrowUpDown,
                         contentDescription = "Sort Feed",
                         tint = colors.textMuted,
-                        modifier = Modifier.size(14.dp)
+                        modifier = Modifier.size(13.dp)
                     )
                     Text(
                         text = when (selectedSort) {
@@ -1303,7 +1287,8 @@ fun CommunityFeedTabBar(
                             CommunitySortOrder.TOP_LIKED -> "Liked"
                             CommunitySortOrder.MOST_REMIXED -> "Remixed"
                         },
-                        fontSize = 11.5.sp,
+                        fontSize = 11.sp,
+                        lineHeight = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = colors.textMuted
                     )
@@ -1344,14 +1329,12 @@ fun CommunityFeedTabBar(
             }
         }
 
-        // Full width subtle Hr Line separating tab bar from feed content
         HorizontalDivider(thickness = 0.5.dp, color = colors.glassBorder)
     }
 }
 
 /**
  * Trending Masterworks Spotlight Showcase Reel.
- * Horizontal carousel displaying top community creations with clean rectangular cards and Hr line.
  */
 @Composable
 fun CommunityTrendingSpotlightReel(
@@ -1366,23 +1349,23 @@ fun CommunityTrendingSpotlightReel(
         modifier = Modifier
             .fillMaxWidth()
             .background(if (colors.isDark) Color(0xFF141416) else Color.White)
-            .padding(vertical = 8.dp)
+            .padding(top = 6.dp, bottom = 4.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
+                .padding(horizontal = 14.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
             ) {
                 Box(
                     modifier = Modifier
-                        .size(20.dp)
-                        .clip(RoundedCornerShape(6.dp))
+                        .size(18.dp)
+                        .clip(RoundedCornerShape(5.dp))
                         .background(Color(0xFFFF9500).copy(alpha = 0.15f)),
                     contentAlignment = Alignment.Center
                 ) {
@@ -1390,50 +1373,33 @@ fun CommunityTrendingSpotlightReel(
                         imageVector = Lucide.Flame,
                         contentDescription = null,
                         tint = Color(0xFFFF9500),
-                        modifier = Modifier.size(12.dp)
+                        modifier = Modifier.size(11.dp)
                     )
                 }
                 Text(
-                    text = "TRENDING MASTERWORKS",
-                    fontSize = 11.5.sp,
+                    text = "TRENDING",
+                    fontSize = 11.sp,
+                    lineHeight = 13.sp,
                     fontWeight = FontWeight.Bold,
                     color = colors.textMain,
-                    letterSpacing = 0.6.sp
+                    letterSpacing = 0.5.sp
                 )
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(100.dp))
-                        .background(if (colors.isDark) Color.White.copy(alpha = 0.10f) else Color.Black.copy(alpha = 0.05f))
-                        .border(
-                            0.5.dp,
-                            if (colors.isDark) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.08f),
-                            RoundedCornerShape(100.dp)
-                        )
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = "100+ ♥ • 5+ 💬",
-                        fontSize = 7.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = colors.textMuted
-                    )
-                }
             }
 
             Text(
                 text = "${trendingWorks.size} ${if (trendingWorks.size == 1) "drop" else "drops"}",
                 fontSize = 10.5.sp,
+                lineHeight = 12.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = colors.textMuted
             )
         }
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(5.dp))
 
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            contentPadding = PaddingValues(horizontal = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(7.dp)
         ) {
             itemsIndexed(trendingWorks, key = { _, work -> "trend_${work.id}" }) { index, work ->
                 TrendingCard(
@@ -1445,15 +1411,11 @@ fun CommunityTrendingSpotlightReel(
             }
         }
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(6.dp))
         HorizontalDivider(thickness = 0.5.dp, color = colors.glassBorder)
     }
 }
 
-/**
- * Community Standards & Remix Code Bottom Sheet.
- * Structured with clean Cupertino Hr line dividers between guidelines. Free of pills or double cards.
- */
 @Composable
 fun CommunityGuidelinesSheet(
     onDismiss: () -> Unit
@@ -1532,23 +1494,23 @@ fun CommunityGuidelinesSheet(
             val guidelines = listOf(
                 Triple(
                     Lucide.Sparkles,
-                    "Creative Attribution & Remix Lineage",
-                    "All remixed works preserve automated cryptographic lineage back to original master shaders and asset stems."
+                    "Creative Attribution",
+                    "Remixed works preserve automated lineage back to original shaders."
                 ),
                 Triple(
                     Lucide.Shield,
-                    "Visual Safety & Content Standards",
-                    "Chroma's ML safety scanner ensures real-time compliance with safe community guidelines across all video and art drops."
+                    "Visual Safety",
+                    "Real-time safety compliance across all video and art drops."
                 ),
                 Triple(
                     Lucide.Palette,
-                    "Procedural Shaders & Asset Rights",
-                    "Original creators retain sovereign ownership of their color schemes, curves, and motion parameters."
+                    "Shader & Asset Rights",
+                    "Creators retain ownership of color schemes and motion parameters."
                 ),
                 Triple(
                     Lucide.HeartHandshake,
-                    "Creator Respect & Constructive Feedback",
-                    "We foster a community of visual directors, motion designers, and wallpaper artists built on mutual respect and encouragement."
+                    "Constructive Community",
+                    "Built on mutual respect for visual directors and artists."
                 )
             )
 
@@ -1556,29 +1518,30 @@ fun CommunityGuidelinesSheet(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        .padding(vertical = 7.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.Top
                 ) {
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
                         tint = Color(0xFF007AFF),
-                        modifier = Modifier.size(18.dp).padding(top = 2.dp)
+                        modifier = Modifier.size(16.dp).padding(top = 1.dp)
                     )
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = title,
-                            fontSize = 13.5.sp,
+                            fontSize = 13.sp,
+                            lineHeight = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = colors.textMain
                         )
-                        Spacer(Modifier.height(3.dp))
+                        Spacer(Modifier.height(1.dp))
                         Text(
                             text = desc,
-                            fontSize = 12.sp,
+                            fontSize = 11.5.sp,
                             color = colors.textMuted,
-                            lineHeight = 16.sp
+                            lineHeight = 14.sp
                         )
                     }
                 }
@@ -1587,9 +1550,9 @@ fun CommunityGuidelinesSheet(
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(12.dp))
             HorizontalDivider(thickness = 0.5.dp, color = colors.glassBorder)
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(12.dp))
 
             Box(
                 modifier = Modifier
@@ -1797,17 +1760,13 @@ object LucideComposeIcons {
     }
 }
 
-/**
- * End of Feed Indicator matching exact HTML:
- * SVG circle with sinusoidal wave + "You're all caught up"
- */
 @Composable
 fun EndOfFeedIndicator(modifier: Modifier = Modifier) {
     val colors = LocalOscellionColors.current
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 32.dp, horizontal = 16.dp),
+            .padding(vertical = 20.dp, horizontal = 16.dp),
         contentAlignment = Alignment.Center
     ) {
         Row(
@@ -1862,14 +1821,11 @@ data class CreatorProfileInfo(
     val isFollowing: Boolean = false
 )
 
-/**
- * Creator Feed Header matching exact specification:
- * - No app logo: ONLY + Icon, Bell Notification Icon, Expanding Search Bar
- * - Smooth spring animated expansion of search bar
- * - Left icons slide out smoothly when search bar expands
- */
 @Composable
 fun CreatorFeedHeader(
+    title: String = "Community",
+    subtitle: String = "Fresh creations & stories",
+    collapseProgress: Float = 0f,
     selectedFeedTab: CommunityFeedTab = CommunityFeedTab.ALL,
     onSelectFeedTab: (CommunityFeedTab) -> Unit = {},
     isSearchExpanded: Boolean,
@@ -1902,7 +1858,6 @@ fun CreatorFeedHeader(
         label = "plusRotation"
     )
 
-    // Smooth continuous spinning rotation when refreshing
     val infiniteTransition = rememberInfiniteTransition(label = "refreshSpin")
     val spinningRotation by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -1920,7 +1875,6 @@ fun CreatorFeedHeader(
     )
     val refreshRotation = if (isRefreshing) spinningRotation else idleRotation
 
-    // Left brand heading and action icons fade-out transitions when search expands
     val headerItemsOffset by animateDpAsState(
         targetValue = if (isSearchExpanded) (-40).dp else 0.dp,
         animationSpec = tween(380, easing = FluidCubicBezier),
@@ -1932,17 +1886,56 @@ fun CreatorFeedHeader(
         label = "headerItemsAlpha"
     )
 
+    val clampedCollapse = collapseProgress.coerceIn(0f, 1f)
+    val expandedHeight = (88.dp * (1f - clampedCollapse)).coerceAtLeast(0.dp)
+    val expandedAlpha = (1f - (clampedCollapse * 1.4f)).coerceIn(0f, 1f)
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(colors.glassBg)
+            .background(if (colors.isDark) Color(0xFF16161A) else Color.White)
             .statusBarsPadding()
     ) {
+        // EXPANDED HEADER: Strictly ONE main heading and a small sub-text (Nothing else)
+        if (expandedHeight > 1.dp && !isSearchExpanded) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(expandedHeight)
+                    .alpha(expandedAlpha)
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = title,
+                    fontSize = 26.sp,
+                    lineHeight = 30.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = (-0.5).sp,
+                    color = colors.textMain,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = subtitle,
+                    fontSize = 11.5.sp,
+                    lineHeight = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = colors.textMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        // COMPACT ACTION BAR
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp)
-                .padding(horizontal = 16.dp),
+                .height(48.dp)
+                .padding(horizontal = 14.dp),
             contentAlignment = Alignment.CenterStart
         ) {
             val maxHeaderWidth = maxWidth
@@ -1983,7 +1976,6 @@ fun CreatorFeedHeader(
                         )
                     }
 
-                    // Instagram-Style Feed Switcher Dropdown Menu
                     DropdownMenu(
                         expanded = isFeedMenuOpen,
                         onDismissRequest = { isFeedMenuOpen = false },
@@ -2058,7 +2050,7 @@ fun CreatorFeedHeader(
                 }
             }
 
-            // 2. RIGHT ACTION ICONS: [+] [Heart/Notif] [Refresh] (Slide/fade out when search is expanded)
+            // 2. RIGHT ACTION ICONS: [+] [Heart/Notif] [Refresh]
             Row(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
@@ -2067,7 +2059,6 @@ fun CreatorFeedHeader(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                // 2.1 + ICON (Opens Create Menu with 45° rotation)
                 Box {
                     Box(
                         modifier = Modifier
@@ -2090,7 +2081,6 @@ fun CreatorFeedHeader(
                     createMenuContent()
                 }
 
-                // 2.2 NOTIFICATION / HEART ICON
                 Box(modifier = Modifier.size(36.dp)) {
                     Box(
                         modifier = Modifier
@@ -2120,7 +2110,6 @@ fun CreatorFeedHeader(
                     }
                 }
 
-                // 2.3 REFRESH FEED ICON BUTTON
                 Box(modifier = Modifier.size(36.dp)) {
                     Box(
                         modifier = Modifier
@@ -2153,7 +2142,7 @@ fun CreatorFeedHeader(
                 }
             }
 
-            // 2. SEARCH ICON & SMOOTH EXPANDING SEARCH BAR
+            // 3. SEARCH ICON & SMOOTH EXPANDING SEARCH BAR
             val searchBarWidth by animateDpAsState(
                 targetValue = if (isSearchExpanded) maxHeaderWidth else 36.dp,
                 animationSpec = tween(380, easing = FluidCubicBezier),
@@ -2188,7 +2177,6 @@ fun CreatorFeedHeader(
                     modifier = Modifier.fillMaxSize(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Search Trigger / Leading Icon
                     Box(
                         modifier = Modifier
                             .size(36.dp)
@@ -2206,7 +2194,6 @@ fun CreatorFeedHeader(
                         )
                     }
 
-                    // Expanding Input Field & Close Button
                     if (isSearchExpanded) {
                         val focusRequester = remember { FocusRequester() }
                         val keyboardController = LocalSoftwareKeyboardController.current
@@ -2251,7 +2238,6 @@ fun CreatorFeedHeader(
                             }
                         )
 
-                        // Close (X) / Clear button
                         Box(
                             modifier = Modifier
                                 .size(36.dp)
@@ -2278,7 +2264,6 @@ fun CreatorFeedHeader(
             }
         }
 
-        // Animated Top Feed Refresh Progress Line (Matches #feedRefreshBarContainer)
         if (isRefreshing || refreshProgress > 0f) {
             Box(
                 modifier = Modifier
@@ -2299,13 +2284,6 @@ fun CreatorFeedHeader(
     }
 }
 
-/**
- * + Icon Create Popover Menu with exact 4 options and icons:
- * 1. Post (Photo gallery Lucide icon)
- * 2. Flash (Video Lucide icon)
- * 3. Story (Story circle plus Lucide icon)
- * 4. Work (Painting palette Lucide icon)
- */
 @Composable
 fun PlusCreatePopoverMenu(
     expanded: Boolean,
@@ -2366,10 +2344,6 @@ fun PlusCreatePopoverMenu(
     }
 }
 
-/**
- * Exact Lucide `heart-handshake` vector icon:
- * Four distinct stroke segments representing the clasping hands and outer heart contour.
- */
 @Composable
 fun rememberLucideHeartHandshakeIcon(
     isRemixed: Boolean,
@@ -2386,7 +2360,6 @@ fun rememberLucideHeartHandshakeIcon(
             viewportWidth = 24f,
             viewportHeight = 24f
         ).apply {
-            // Outer Heart Contour Path
             path(
                 fill = heartFillBrush,
                 stroke = SolidColor(strokeColor),
@@ -2404,7 +2377,6 @@ fun rememberLucideHeartHandshakeIcon(
                 lineTo(12f, 21f)
                 close()
             }
-            // Clasping Handshake Inner Path
             path(
                 fill = null,
                 stroke = SolidColor(strokeColor),
@@ -2420,7 +2392,6 @@ fun rememberLucideHeartHandshakeIcon(
                 arcTo(2.82f, 2.82f, 0f, isMoreThanHalf = false, isPositiveArc = true, 17.9f, 9.21f)
                 lineTo(20.86f, 11.87f)
             }
-            // Lower Finger Line 1: m18 15-2-2
             path(
                 fill = null,
                 stroke = SolidColor(strokeColor),
@@ -2431,7 +2402,6 @@ fun rememberLucideHeartHandshakeIcon(
                 moveTo(18f, 15f)
                 lineTo(16f, 13f)
             }
-            // Lower Finger Line 2: m15 18-2-2
             path(
                 fill = null,
                 stroke = SolidColor(strokeColor),
@@ -2446,17 +2416,15 @@ fun rememberLucideHeartHandshakeIcon(
     }
 }
 
-/**
- * Common Scalloped Verified Seal Badge across the app
- */
 @Composable
 fun ScallopedVerifiedBadge(
     modifier: Modifier = Modifier.size(15.dp),
+    size: Dp = 15.dp,
     badgeColor: Color = Color(0xFF007AFF)
 ) {
     VerifiedBadge(
         modifier = modifier,
-        size = 15.dp,
+        size = size,
         badgeColor = badgeColor
     )
 }
@@ -2514,58 +2482,62 @@ private fun FeedPostHeader(
     onOptionsClick: () -> Unit
 ) {
     val colors = LocalOscellionColors.current
+    // Clean fallbacks so displayName or @username are NEVER blank ("@ • 1h ago")
+    val safeDisplayName = displayName.trim().ifBlank {
+        username.trim().removePrefix("@").ifBlank { "Chroma Creator" }
+    }
+    val safeUsername = username.trim().removePrefix("@").ifBlank {
+        safeDisplayName.lowercase().replace(" ", "_")
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 8.dp),
+            .padding(horizontal = 12.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Avatar (Clickable to open creator profile)
         IosAvatarView(
-            name = displayName,
+            name = safeDisplayName,
             avatarUrl = avatarUrl,
-            size = 38.dp,
+            size = 34.dp,
             modifier = Modifier.clickable { onAvatarClick() }
         )
 
-        Spacer(Modifier.width(10.dp))
+        Spacer(Modifier.width(8.dp))
 
-        // Author metadata column
         Column(
             modifier = Modifier
                 .weight(1f)
                 .clickable { onAvatarClick() },
             verticalArrangement = Arrangement.Center
         ) {
-            // Row 1: Name + Scalloped Verified Seal Badge
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(3.dp)
             ) {
                 Text(
-                    text = displayName,
+                    text = safeDisplayName,
                     color = colors.textMain,
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
+                    lineHeight = 15.sp,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 if (verified) {
-                    ScallopedVerifiedBadge(size = 14.dp)
+                    ScallopedVerifiedBadge(size = 13.dp)
                 }
             }
 
-            Spacer(Modifier.height(2.dp))
-
-            // Row 2: @username • time ago • [Remix of @author] • [Follow]
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(3.dp)
             ) {
                 Text(
-                    text = "@$username",
+                    text = "@$safeUsername",
                     color = Color(0xFF8E8E93),
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
+                    lineHeight = 13.sp,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -2574,12 +2546,14 @@ private fun FeedPostHeader(
                 Text(
                     text = "•",
                     color = Color(0xFF8E8E93),
-                    fontSize = 10.sp
+                    fontSize = 9.sp,
+                    lineHeight = 11.sp
                 )
                 Text(
                     text = getTimeAgo(timestamp),
                     color = Color(0xFF8E8E93),
-                    fontSize = 11.5.sp,
+                    fontSize = 11.sp,
+                    lineHeight = 13.sp,
                     fontWeight = FontWeight.Medium
                 )
 
@@ -2587,44 +2561,47 @@ private fun FeedPostHeader(
                     Text(
                         text = "•",
                         color = Color(0xFF8E8E93),
-                        fontSize = 10.sp
+                        fontSize = 9.sp,
+                        lineHeight = 11.sp
                     )
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(3.dp),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
                         modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
+                            .clip(RoundedCornerShape(4.dp))
                             .background(Color(0xFF007AFF).copy(alpha = 0.12f))
                             .clickable { onRemixTagClick() }
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                            .padding(horizontal = 4.dp, vertical = 1.dp)
                     ) {
                         Icon(
                             imageVector = Lucide.Sparkles,
                             contentDescription = "Remix",
                             tint = Color(0xFF007AFF),
-                            modifier = Modifier.size(10.dp)
+                            modifier = Modifier.size(9.dp)
                         )
                         Text(
-                            text = "Remix of @$remixedFromAuthorUsername",
+                            text = "Remix",
                             color = Color(0xFF007AFF),
-                            fontSize = 10.5.sp,
+                            fontSize = 10.sp,
+                            lineHeight = 12.sp,
                             fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            maxLines = 1
                         )
                     }
                 }
 
-                if (!isOwner && username.isNotBlank()) {
+                if (!isOwner) {
                     Text(
                         text = "•",
                         color = Color(0xFF8E8E93),
-                        fontSize = 10.sp
+                        fontSize = 9.sp,
+                        lineHeight = 11.sp
                     )
                     Text(
                         text = if (isFollowingCreator) "Following" else "Follow",
                         color = if (isFollowingCreator) Color(0xFF8E8E93) else Color(0xFF007AFF),
-                        fontSize = 11.5.sp,
+                        fontSize = 11.sp,
+                        lineHeight = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.clickable {
                             onToggleFollowCreator?.invoke()
@@ -2634,13 +2611,12 @@ private fun FeedPostHeader(
             }
         }
 
-        Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(6.dp))
 
-        // 3-Dot Options Button
         Box(
             modifier = Modifier
-                .size(32.dp)
-                .clip(RoundedCornerShape(8.dp))
+                .size(28.dp)
+                .clip(RoundedCornerShape(6.dp))
                 .clickable { onOptionsClick() },
             contentAlignment = Alignment.Center
         ) {
@@ -2648,7 +2624,7 @@ private fun FeedPostHeader(
                 imageVector = LucideComposeIcons.MoreHorizontal,
                 contentDescription = "Options",
                 tint = Color(0xFF8E8E93),
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(16.dp)
             )
         }
     }
@@ -2670,7 +2646,6 @@ private fun FeedPostActionRow(
 ) {
     val colors = LocalOscellionColors.current
 
-    // 1. LIKE
     val initialLiked = isLiked || (!currentUserId.isNullOrBlank() && work.likedBy.contains(currentUserId))
     var locallyLiked by remember(work.id, isLiked, work.likedBy) { mutableStateOf(initialLiked) }
     var localLikesCountDelta by remember(work.id) { mutableIntStateOf(0) }
@@ -2679,7 +2654,6 @@ private fun FeedPostActionRow(
         localLikesCountDelta = 0
     }
 
-    // 2. REMIX
     var locallyRemixed by remember(work.id) {
         mutableStateOf(currentUserId != null && work.remixedBy.contains(currentUserId))
     }
@@ -2691,7 +2665,6 @@ private fun FeedPostActionRow(
         }
     }
 
-    // 3. DOWNLOAD
     var locallyDownloaded by remember(work.id) {
         mutableStateOf(currentUserId != null && work.downloadedBy.contains(currentUserId))
     }
@@ -2703,7 +2676,6 @@ private fun FeedPostActionRow(
         }
     }
 
-    // 4. SAVE
     var locallySaved by remember(work.id) { mutableStateOf(isSaved) }
     var localSaveCountDelta by remember(work.id) { mutableIntStateOf(0) }
     LaunchedEffect(isSaved) {
@@ -2711,7 +2683,6 @@ private fun FeedPostActionRow(
         localSaveCountDelta = 0
     }
 
-    // 5. SHARE
     var locallyShared by remember(work.id) {
         mutableStateOf(currentUserId != null && work.sharedBy.contains(currentUserId))
     }
@@ -2726,24 +2697,22 @@ private fun FeedPostActionRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp),
+            .padding(horizontal = 12.dp, vertical = 2.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Left Action Group: Like, Remix, Download
         Row(
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 1. Like Button
             val effectiveLiked = locallyLiked
             val displayLikesCount = (work.likesCount + localLikesCountDelta).coerceAtLeast(0)
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
-                    .height(36.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .height(30.dp)
+                    .clip(RoundedCornerShape(6.dp))
                     .clickable {
                         val uid = FirebaseAuth.getInstance().currentUser?.uid
                         if (uid.isNullOrBlank()) {
@@ -2759,26 +2728,26 @@ private fun FeedPostActionRow(
                             onLikeClick()
                         }
                     }
-                    .padding(horizontal = 4.dp, vertical = 6.dp)
+                    .padding(horizontal = 3.dp, vertical = 4.dp)
             ) {
                 Icon(
                     imageVector = if (effectiveLiked) ChromaIcons.HeartFilled else Lucide.Heart,
                     contentDescription = if (effectiveLiked) "Liked" else "Like",
                     tint = if (effectiveLiked) Color(0xFFFF2D55) else colors.textMain,
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(20.dp)
                 )
                 if (!work.hideLikesCount && displayLikesCount > 0) {
-                    Spacer(Modifier.width(5.dp))
+                    Spacer(Modifier.width(4.dp))
                     Text(
                         text = "$displayLikesCount",
                         color = if (effectiveLiked) Color(0xFFFF2D55) else colors.textMain,
-                        fontSize = 12.5.sp,
+                        fontSize = 12.sp,
+                        lineHeight = 14.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
             }
 
-            // 2. Remix Button (HeartShape Handshake)
             if (!work.turnOffRemix) {
                 val alreadyRemixed = currentUserId != null && work.remixedBy.contains(currentUserId)
                 val effectiveRemixed = locallyRemixed || alreadyRemixed
@@ -2787,8 +2756,8 @@ private fun FeedPostActionRow(
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
-                        .height(36.dp)
-                        .clip(RoundedCornerShape(8.dp))
+                        .height(30.dp)
+                        .clip(RoundedCornerShape(6.dp))
                         .clickable {
                             val uid = FirebaseAuth.getInstance().currentUser?.uid
                             if (uid.isNullOrBlank()) {
@@ -2802,7 +2771,7 @@ private fun FeedPostActionRow(
                                 else onRemixClick()
                             }
                         }
-                        .padding(horizontal = 4.dp, vertical = 6.dp)
+                        .padding(horizontal = 3.dp, vertical = 4.dp)
                 ) {
                     Icon(
                         imageVector = rememberLucideHeartHandshakeIcon(
@@ -2812,21 +2781,21 @@ private fun FeedPostActionRow(
                         ),
                         contentDescription = "Remix",
                         tint = Color.Unspecified,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                     if (!work.hideRemixesCount && displayRemixCount > 0) {
-                        Spacer(Modifier.width(5.dp))
+                        Spacer(Modifier.width(4.dp))
                         Text(
                             text = "$displayRemixCount",
                             color = if (effectiveRemixed) Color(0xFF007AFF) else colors.textMain.copy(alpha = 0.85f),
-                            fontSize = 12.5.sp,
+                            fontSize = 12.sp,
+                            lineHeight = 14.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
             }
 
-            // 3. Download Button
             val alreadyDownloaded = currentUserId != null && work.downloadedBy.contains(currentUserId)
             val effectiveDownloaded = locallyDownloaded || alreadyDownloaded
             val displayDownloadCount = (work.downloadCount + localDownloadCountDelta).coerceAtLeast(0)
@@ -2834,8 +2803,8 @@ private fun FeedPostActionRow(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
-                    .height(36.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .height(30.dp)
+                    .clip(RoundedCornerShape(6.dp))
                     .clickable {
                         val uid = FirebaseAuth.getInstance().currentUser?.uid
                         if (uid.isNullOrBlank()) {
@@ -2848,40 +2817,39 @@ private fun FeedPostActionRow(
                             onDownloadClick()
                         }
                     }
-                    .padding(horizontal = 4.dp, vertical = 6.dp)
+                    .padding(horizontal = 3.dp, vertical = 4.dp)
             ) {
                 Icon(
                     imageVector = LucideComposeIcons.Download,
                     contentDescription = "Save to Studio",
                     tint = if (effectiveDownloaded) Color(0xFF007AFF) else colors.textMain,
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(20.dp)
                 )
                 if (!work.hideDownloadsCount && displayDownloadCount > 0) {
-                    Spacer(Modifier.width(5.dp))
+                    Spacer(Modifier.width(4.dp))
                     Text(
                         text = "$displayDownloadCount",
                         color = if (effectiveDownloaded) Color(0xFF007AFF) else colors.textMain.copy(alpha = 0.85f),
-                        fontSize = 12.5.sp,
+                        fontSize = 12.sp,
+                        lineHeight = 14.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
             }
         }
 
-        // Right Action Group: Save & Share
         Row(
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 4. Save / Bookmark Button
             val effectiveSaved = locallySaved
             val displaySaveCount = (work.saveCount + localSaveCountDelta).coerceAtLeast(0)
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
-                    .height(36.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .height(30.dp)
+                    .clip(RoundedCornerShape(6.dp))
                     .clickable {
                         val uid = FirebaseAuth.getInstance().currentUser?.uid
                         if (uid.isNullOrBlank()) {
@@ -2897,7 +2865,7 @@ private fun FeedPostActionRow(
                             onSaveClick?.invoke()
                         }
                     }
-                    .padding(horizontal = 4.dp, vertical = 6.dp)
+                    .padding(horizontal = 3.dp, vertical = 4.dp)
             ) {
                 Icon(
                     imageVector = LucideComposeIcons.bookmark(
@@ -2907,20 +2875,20 @@ private fun FeedPostActionRow(
                     ),
                     contentDescription = "Bookmark",
                     tint = Color.Unspecified,
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(20.dp)
                 )
                 if (!work.hideSavesCount && displaySaveCount > 0) {
-                    Spacer(Modifier.width(5.dp))
+                    Spacer(Modifier.width(4.dp))
                     Text(
                         text = "$displaySaveCount",
                         color = if (effectiveSaved) Color(0xFF007AFF) else colors.textMain.copy(alpha = 0.85f),
-                        fontSize = 12.5.sp,
+                        fontSize = 12.sp,
+                        lineHeight = 14.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
             }
 
-            // 5. Share Button
             val alreadyShared = currentUserId != null && work.sharedBy.contains(currentUserId)
             val effectiveShared = locallyShared || alreadyShared
             val displayShareCount = (work.shareCount + localShareCountDelta).coerceAtLeast(0)
@@ -2928,8 +2896,8 @@ private fun FeedPostActionRow(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
-                    .height(36.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .height(30.dp)
+                    .clip(RoundedCornerShape(6.dp))
                     .clickable {
                         val uid = FirebaseAuth.getInstance().currentUser?.uid
                         if (uid.isNullOrBlank()) {
@@ -2942,20 +2910,21 @@ private fun FeedPostActionRow(
                             onShareClick?.invoke()
                         }
                     }
-                    .padding(horizontal = 4.dp, vertical = 6.dp)
+                    .padding(horizontal = 3.dp, vertical = 4.dp)
             ) {
                 Icon(
                     imageVector = Lucide.Share2,
                     contentDescription = "Share",
                     tint = if (effectiveShared) Color(0xFF007AFF) else colors.textMain,
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(20.dp)
                 )
                 if (!work.hideSharesCount && displayShareCount > 0) {
-                    Spacer(Modifier.width(5.dp))
+                    Spacer(Modifier.width(4.dp))
                     Text(
                         text = "$displayShareCount",
                         color = if (effectiveShared) Color(0xFF007AFF) else colors.textMain.copy(alpha = 0.85f),
-                        fontSize = 12.5.sp,
+                        fontSize = 12.sp,
+                        lineHeight = 14.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
@@ -2988,11 +2957,10 @@ private fun FeedPostMetadata(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .padding(bottom = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+            .padding(horizontal = 14.dp)
+            .padding(bottom = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        // Liked By Connected Users Avatar Group
         if (!work.hideLikesCount && (work.likesCount > 0 || likerProfiles.isNotEmpty())) {
             val connectedLikers = remember(likerProfiles) {
                 likerProfiles.map { it.toConnectedUser() }
@@ -3002,8 +2970,8 @@ private fun FeedPostMetadata(
                     users = connectedLikers,
                     totalCount = work.likesCount.coerceAtLeast(connectedLikers.size),
                     maxVisible = 3,
-                    avatarSize = 22.dp,
-                    overlapOffset = 6.dp,
+                    avatarSize = 18.dp,
+                    overlapOffset = 5.dp,
                     prefixText = "Liked by",
                     suffixText = "",
                     showTextSummary = true,
@@ -3013,15 +2981,16 @@ private fun FeedPostMetadata(
                 )
             }
         }
-        // Main Title (Max 2 lines then ... with smooth expand animation)
+
+        // Compact Title (Short 55-char threshold, tight line height)
         if (work.title.isNotBlank()) {
-            val needsTitleExpand = work.title.length > 85
-            val shortTitle = if (needsTitleExpand) work.title.take(85).trim() else work.title
+            val needsTitleExpand = work.title.length > 55
+            val shortTitle = if (needsTitleExpand) work.title.take(55).trim() else work.title
 
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .animateContentSize(animationSpec = tween(380, easing = FluidCubicBezier))
+                    .animateContentSize(animationSpec = tween(320, easing = FluidCubicBezier))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
@@ -3038,33 +3007,32 @@ private fun FeedPostMetadata(
                             withStyle(
                                 SpanStyle(
                                     color = Color(0xFF007AFF),
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.5.sp
+                                    fontWeight = FontWeight.Bold
                                 )
                             ) {
-                                append(" ...")
+                                append("...")
                             }
                         }
                     },
-                    fontSize = 13.5.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     color = colors.textMain,
-                    lineHeight = 18.5.sp,
-                    maxLines = if (isTitleExpanded) Int.MAX_VALUE else 2,
+                    lineHeight = 15.5.sp,
+                    maxLines = if (isTitleExpanded) 3 else 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
         }
 
-        // Description (Max 2 lines then ...more with smooth expand animation)
+        // Compact Description (Short 60-char threshold, tight 14.5sp line height)
         if (work.description.isNotBlank()) {
-            val needsDescExpand = work.description.length > 80
-            val shortDesc = if (needsDescExpand) work.description.take(80).trim() else work.description
+            val needsDescExpand = work.description.length > 60
+            val shortDesc = if (needsDescExpand) work.description.take(60).trim() else work.description
 
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .animateContentSize(animationSpec = tween(380, easing = FluidCubicBezier))
+                    .animateContentSize(animationSpec = tween(320, easing = FluidCubicBezier))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
@@ -3080,11 +3048,11 @@ private fun FeedPostMetadata(
                                 withStyle(
                                     SpanStyle(
                                         color = Color(0xFF007AFF),
-                                        fontSize = 11.5.sp,
+                                        fontSize = 11.sp,
                                         fontWeight = FontWeight.Medium
                                     )
                                 ) {
-                                    append(" (less)")
+                                    append(" less")
                                 }
                             }
                         } else {
@@ -3093,28 +3061,28 @@ private fun FeedPostMetadata(
                                 SpanStyle(
                                     color = Color(0xFF007AFF),
                                     fontWeight = FontWeight.SemiBold,
-                                    fontSize = 11.5.sp
+                                    fontSize = 11.sp
                                 )
                             ) {
                                 append(" ...more")
                             }
                         }
                     },
-                    fontSize = 12.sp,
+                    fontSize = 11.5.sp,
                     color = colors.textMain.copy(alpha = 0.85f),
-                    lineHeight = 16.5.sp,
-                    maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else 2,
+                    lineHeight = 14.5.sp,
+                    maxLines = if (isDescriptionExpanded) 4 else 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
         }
 
-        // Quoted Post Card (Twitter / Facebook Quote Style)
         if (!work.remixedFromAuthorUsername.isNullOrEmpty()) {
-            val quoteShape = RoundedCornerShape(10.dp)
+            val quoteShape = RoundedCornerShape(8.dp)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .padding(top = 2.dp)
                     .clip(quoteShape)
                     .background(if (colors.isDark) Color(0xFF1E1E22) else Color(0xFFF4F4F7))
                     .border(
@@ -3127,53 +3095,39 @@ private fun FeedPostMetadata(
                             onAuthorClick?.invoke(work.remixedFromAuthorId)
                         }
                     }
-                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(24.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF007AFF).copy(alpha = 0.12f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Lucide.HeartHandshake,
-                        contentDescription = "Remix",
-                        tint = Color(0xFF007AFF),
-                        modifier = Modifier.size(13.dp)
-                    )
-                }
+                Icon(
+                    imageVector = Lucide.HeartHandshake,
+                    contentDescription = "Remix",
+                    tint = Color(0xFF007AFF),
+                    modifier = Modifier.size(12.dp)
+                )
 
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Text(
-                            text = "Remixed from",
-                            fontSize = 11.sp,
-                            color = colors.textMuted
-                        )
-                        Text(
-                            text = "@${work.remixedFromAuthorUsername}",
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF007AFF)
-                        )
-                        if (work.remixedFromAuthorVerified) {
-                            VerifiedBadge(size = 11.dp)
-                        }
-                    }
-                    if (!work.remixedFromAuthorDisplayName.isNullOrBlank()) {
-                        Text(
-                            text = work.remixedFromAuthorDisplayName,
-                            fontSize = 11.sp,
-                            color = colors.textMuted,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    Text(
+                        text = "Remixed from",
+                        fontSize = 10.5.sp,
+                        lineHeight = 12.sp,
+                        color = colors.textMuted
+                    )
+                    Text(
+                        text = "@${work.remixedFromAuthorUsername}",
+                        fontSize = 11.sp,
+                        lineHeight = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF007AFF),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (work.remixedFromAuthorVerified) {
+                        VerifiedBadge(size = 10.dp)
                     }
                 }
 
@@ -3181,20 +3135,18 @@ private fun FeedPostMetadata(
                     imageVector = Lucide.ChevronRight,
                     contentDescription = null,
                     tint = colors.textMuted,
-                    modifier = Modifier.size(14.dp)
+                    modifier = Modifier.size(12.dp)
                 )
             }
         }
 
-        // Tags, Mentions, Trending (Clean reference inline text style without capsules or pill borders)
         val trendingLabel = work.trendingTag ?: if (work.tags.any { it.contains("trend", ignoreCase = true) }) "Trending" else null
         val hasTagsOrMentions = work.tags.isNotEmpty() || work.mentions.isNotEmpty() || trendingLabel != null
         if (hasTagsOrMentions) {
-            Spacer(Modifier.height(4.dp))
             FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                modifier = Modifier.fillMaxWidth().padding(top = 1.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(1.dp)
             ) {
                 if (trendingLabel != null) {
                     Row(
@@ -3211,24 +3163,26 @@ private fun FeedPostMetadata(
                             imageVector = LucideComposeIcons.TrendingUp,
                             contentDescription = null,
                             tint = if (colors.isDark) Color(0xFFF59E0B) else Color(0xFFB45309),
-                            modifier = Modifier.size(13.5.dp)
+                            modifier = Modifier.size(12.dp)
                         )
-                        Spacer(Modifier.width(3.5.dp))
+                        Spacer(Modifier.width(2.5.dp))
                         Text(
                             text = trendingLabel,
                             color = if (colors.isDark) Color(0xFFF59E0B) else Color(0xFFB45309),
-                            fontSize = 11.sp,
+                            fontSize = 10.5.sp,
+                            lineHeight = 12.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
                 }
 
-                work.tags.forEach { rawTag ->
+                work.tags.take(4).forEach { rawTag ->
                     val cleanTag = if (rawTag.startsWith("#")) rawTag else "#$rawTag"
                     Text(
                         text = cleanTag,
                         color = Color(0xFF007AFF),
-                        fontSize = 11.5.sp,
+                        fontSize = 11.sp,
+                        lineHeight = 13.sp,
                         fontWeight = FontWeight.Medium,
                         modifier = Modifier.clickable(
                             interactionSource = remember { MutableInteractionSource() },
@@ -3239,12 +3193,13 @@ private fun FeedPostMetadata(
                     )
                 }
 
-                work.mentions.forEach { rawMention ->
+                work.mentions.take(2).forEach { rawMention ->
                     val handle = if (rawMention.startsWith("@")) rawMention else "@$rawMention"
                     Text(
                         text = handle,
                         color = if (colors.isDark) Color(0xFFA1A1AA) else Color(0xFF334155),
-                        fontSize = 11.5.sp,
+                        fontSize = 11.sp,
+                        lineHeight = 13.sp,
                         fontWeight = FontWeight.Medium,
                         modifier = Modifier.clickable(
                             interactionSource = remember { MutableInteractionSource() },
@@ -3280,7 +3235,6 @@ private fun FeedPostModals(
     onRemixWork: ((DiscoverPost) -> Unit)?,
     onUpdateVisibility: ((hideLikes: Boolean, hideShares: Boolean, hideRemixes: Boolean, hideDownloads: Boolean, hideSaves: Boolean) -> Unit)?
 ) {
-    // 3-Dot Options Bottom Sheet (Opens from bottom like bottom drawer, with Normal User & Admin modes)
     if (modalState.showMenu) {
         PostOptionsDrawerSheet(
             work = work,
@@ -3332,7 +3286,6 @@ private fun FeedPostModals(
         )
     }
 
-    // Original Post Inspector Modal/Drawer (Opens when Remixed tag or attribution is clicked)
     if (modalState.showOriginalPostModal) {
         OriginalPostInspectorSheet(
             work = work,
@@ -3342,7 +3295,6 @@ private fun FeedPostModals(
         )
     }
 
-    // Counter Privacy Settings Bottom Sheet
     if (modalState.showVisibilitySettings) {
         PostCountersSettingsSheet(
             work = work,
@@ -3353,7 +3305,6 @@ private fun FeedPostModals(
         )
     }
 
-    // About This Post Dialog
     if (modalState.showAboutDialog) {
         AppleDialog(
             title = "About this Post",
@@ -3368,7 +3319,6 @@ private fun FeedPostModals(
         )
     }
 
-    // Owner Analytics & Telemetry Modal (2x2 Telemetry Grid)
     if (modalState.showAnalyticsModal) {
         OwnerAnalyticsModal(
             work = work,
@@ -3376,7 +3326,6 @@ private fun FeedPostModals(
         )
     }
 
-    // Live Edit Post Modal (Admin Role)
     if (modalState.showEditModal) {
         EditPostModal(
             work = work,
@@ -3390,7 +3339,6 @@ private fun FeedPostModals(
         )
     }
 
-    // Creator Studio Profile Modal
     if (modalState.showCreatorProfileModal) {
         val totalCreatorRemixes = maxOf(work.remixCount, 1)
         val profileInfo = CreatorProfileInfo(
@@ -3400,8 +3348,8 @@ private fun FeedPostModals(
             verified = resolvedVerified,
             avatarUrl = resolvedAvatarUrl.takeIf { it.isNotBlank() },
             initials = (if (resolvedDisplayName.isNotBlank()) resolvedDisplayName else work.authorUsername).take(2).uppercase(),
-            roleTitle = if (work.postType.equals("video", ignoreCase = true) || work.aspectRatio == "9:16") "Motion & Shader Director" else "Multidisciplinary Visual Creator",
-            bio = "Building open-source creative artifacts, zero-radius visual studies, and remixable node graphs on ChromaStudio.",
+            roleTitle = if (work.postType.equals("video", ignoreCase = true) || work.aspectRatio == "9:16") "Motion Director" else "Visual Creator",
+            bio = "Creating procedural shaders and visual studies on ChromaStudio.",
             followers = "${(work.likesCount * 3 + 1200) / 1000}.${((work.likesCount * 3) % 1000) / 100}K",
             following = "342",
             totalRemixes = totalCreatorRemixes,
@@ -3420,7 +3368,6 @@ private fun FeedPostModals(
         )
     }
 
-    // Block User Confirmation Dialog
     if (modalState.showBlockConfirm) {
         AppleDialog(
             title = "Block @${work.authorUsername}?",
@@ -3434,7 +3381,6 @@ private fun FeedPostModals(
         )
     }
 
-    // Delete Confirmation Dialog
     if (modalState.showDeleteConfirm) {
         AppleDialog(
             title = "Delete Post?",
@@ -3503,15 +3449,39 @@ fun FeedPostCard(
 
     var resolvedAvatarUrl by remember(work.id) { mutableStateOf(work.authorAvatarUrl) }
     var resolvedDisplayName by remember(work.id) { mutableStateOf(if (work.authorDisplayName.isNotBlank()) work.authorDisplayName else work.authorUsername) }
+    var resolvedUsername by remember(work.id) { mutableStateOf(work.authorUsername) }
     var resolvedVerified by remember(work.id) { mutableStateOf(work.authorVerified) }
-
+    // FIX 5: Resolve missing displayName OR username OR avatarUrl from Firestore/FirebaseAuth so posts never show "@ • 1h ago"
     LaunchedEffect(work.creatorId) {
-        if (work.authorAvatarUrl.isBlank() && work.creatorId.isNotBlank()) {
+        if ((work.authorAvatarUrl.isBlank() || work.authorDisplayName.isBlank() || work.authorUsername.isBlank()) && work.creatorId.isNotBlank()) {
             try {
                 val doc = FirebaseFirestore.getInstance().collection("users").document(work.creatorId).get().await()
-                resolvedAvatarUrl = doc.getString("avatarUrl") ?: ""
-                resolvedDisplayName = doc.getString("displayName")?.takeIf { it.isNotBlank() } ?: doc.getString("username") ?: work.authorUsername
-                resolvedVerified = doc.getBoolean("verified") ?: false
+                val authUser = FirebaseAuth.getInstance().currentUser
+                val isCurrentAuthUser = authUser != null && authUser.uid == work.creatorId
+
+                val fetchedAvatar = doc.getString("avatarUrl")
+                    ?.takeIf { it.isNotBlank() }
+                    ?: if (isCurrentAuthUser) authUser?.photoUrl?.toString().orEmpty() else ""
+
+                val emailPrefix = if (isCurrentAuthUser) authUser?.email?.substringBefore("@").orEmpty() else ""
+                val fetchedUsername = doc.getString("username")
+                    ?.takeIf { it.isNotBlank() }
+                    ?: emailPrefix
+
+                val fetchedDisplay = doc.getString("displayName")
+                    ?.takeIf { it.isNotBlank() }
+                    ?: if (isCurrentAuthUser) authUser?.displayName.orEmpty() else ""
+
+                if (resolvedAvatarUrl.isBlank() && fetchedAvatar.isNotBlank()) {
+                    resolvedAvatarUrl = fetchedAvatar
+                }
+                if (resolvedUsername.isBlank() && fetchedUsername.isNotBlank()) {
+                    resolvedUsername = fetchedUsername
+                }
+                if (resolvedDisplayName.isBlank()) {
+                    resolvedDisplayName = fetchedDisplay.ifBlank { fetchedUsername.ifBlank { "Chroma Creator" } }
+                }
+                resolvedVerified = doc.getBoolean("verified") ?: resolvedVerified
             } catch (_: Exception) {}
         }
     }
@@ -3522,13 +3492,13 @@ fun FeedPostCard(
         modifier = Modifier
             .fillMaxWidth()
             .background(if (colors.isDark) Color(0xFF16161A) else Color.White)
-            .padding(top = 4.dp)
+            .padding(top = 2.dp)
     ) {
         // 1. POST HEADER
         FeedPostHeader(
             displayName = resolvedDisplayName,
             avatarUrl = resolvedAvatarUrl,
-            username = work.authorUsername,
+            username = resolvedUsername,
             timestamp = work.timestamp,
             verified = resolvedVerified,
             isRemixPost = isRemixPost,
@@ -3565,7 +3535,6 @@ fun FeedPostCard(
                         if (uid.isNullOrBlank()) {
                             onRequireLogin()
                         } else {
-                            // Double tap ALWAYS LIKES and NEVER DISLIKES (User must tap heart button to unlike)
                             if (onForceLike != null) {
                                 onForceLike()
                             } else if (!isLiked) {
@@ -3574,7 +3543,6 @@ fun FeedPostCard(
                         }
                         doubleTapLikeState.trigger(offset)
                         haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                        // silent
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -3598,7 +3566,6 @@ fun FeedPostCard(
                     if (uid.isNullOrBlank()) {
                         onRequireLogin()
                     } else {
-                        // Double tap ALWAYS LIKES and NEVER DISLIKES (User must tap heart button to unlike)
                         if (onForceLike != null) {
                             onForceLike()
                         } else if (!isLiked) {
@@ -3607,8 +3574,6 @@ fun FeedPostCard(
                     }
                     doubleTapLikeState.trigger(offset)
                     haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                    // silent
-                    // silent
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -3639,12 +3604,11 @@ fun FeedPostCard(
             onAuthorClick = onAuthorClick
         )
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(4.dp))
         HorizontalDivider(
             thickness = 0.5.dp,
             color = if (colors.isDark) Color(0xFF24242A) else Color(0xFFE5E5EA)
         )
-        Spacer(Modifier.height(4.dp))
     }
 
     // MODALS & DIALOGS
@@ -3652,7 +3616,7 @@ fun FeedPostCard(
         work = work,
         isOwner = isOwner,
         modalState = modalState,
-        resolvedDisplayName = resolvedDisplayName,
+        resolvedDisplayName = resolvedDisplayName.ifBlank { resolvedUsername.ifBlank { "Chroma Creator" } },
         resolvedAvatarUrl = resolvedAvatarUrl,
         resolvedVerified = resolvedVerified,
         isFollowingCreator = isFollowingCreator,
@@ -3670,11 +3634,6 @@ fun FeedPostCard(
     )
 }
 
-/**
- * Owner Analytics & Telemetry Modal
- * Matches creator_feed_android_ui_jetpack_compose (1).kt and creator_feed_mobile_app_ui.html:
- * 2x2 Telemetry Grid (Total Reach, Remix Forks, Likes & Reactions, Asset Downloads)
- */
 @Composable
 fun OwnerAnalyticsModal(
     work: DiscoverPost,
@@ -3738,7 +3697,6 @@ fun OwnerAnalyticsModal(
                 HorizontalDivider(thickness = 0.5.dp, color = colors.glassBorder)
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // 2x2 Telemetry Grid
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -3827,10 +3785,6 @@ fun OwnerAnalyticsModal(
     }
 }
 
-/**
- * Live Post & Frame Ratio Editor Modal (Admin Role)
- * Allows selecting from 5 permitted aspect ratios (1:1, 4:3, 5:4, 16:9, 9:16), Title, and Description
- */
 @Composable
 fun EditPostModal(
     work: DiscoverPost,
@@ -3950,11 +3904,6 @@ fun EditPostModal(
     }
 }
 
-/**
- * Creator Profile Sheet Modal
- * Displays avatar, verified badge, role title, bio, stats (Followers, Following, Remixes),
- * published studio works preview, and Follow/Following toggle button.
- */
 @Composable
 fun CreatorProfileModal(
     profile: CreatorProfileInfo,
@@ -4196,7 +4145,6 @@ fun PostOptionsDrawerSheet(
                 .navigationBarsPadding()
                 .padding(bottom = 16.dp)
         ) {
-            // Post Context Header
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -4206,7 +4154,7 @@ fun PostOptionsDrawerSheet(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = if (isOwner) "Manage Post" else if (work.authorDisplayName.isNotBlank()) "${work.authorDisplayName} (@${work.authorUsername})" else "@${work.authorUsername}",
+                        text = if (isOwner) "Manage Post" else if (work.authorDisplayName.isNotBlank()) "${work.authorDisplayName} (@${work.authorUsername})" else "@${work.authorUsername.ifBlank { "creator" }}",
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = colors.textMain,
@@ -4225,7 +4173,6 @@ fun PostOptionsDrawerSheet(
             HorizontalDivider(thickness = 0.5.dp, color = colors.glassBorder)
 
             if (!isOwner) {
-                // NORMAL USER OPTIONS:
                 DrawerActionItem(
                     icon = Lucide.Copy,
                     title = "Copy Post Link",
@@ -4298,7 +4245,6 @@ fun PostOptionsDrawerSheet(
                     onClick = onBlockUser
                 )
             } else {
-                // OWNER OPTIONS:
                 DrawerActionItem(
                     icon = Lucide.Copy,
                     title = "Copy Post Link",
@@ -4373,7 +4319,6 @@ fun PostOptionsDrawerSheet(
 
             Spacer(Modifier.height(14.dp))
 
-            // Cancel Button
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -4408,34 +4353,38 @@ private fun DrawerActionItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(10.dp))
             .clickable { onClick() }
-            .padding(horizontal = 6.dp, vertical = 9.dp),
+            .padding(horizontal = 6.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            modifier = Modifier.size(28.dp),
+            modifier = Modifier.size(24.dp),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = title,
                 tint = effectiveTint,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(18.dp)
             )
         }
-        Spacer(Modifier.width(14.dp))
+        Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
-                fontSize = 13.5.sp,
+                fontSize = 13.sp,
+                lineHeight = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = if (tint != colors.textMain) tint else colors.textMain
             )
             Text(
                 text = subtitle,
-                fontSize = 11.sp,
-                color = colors.textMuted
+                fontSize = 10.5.sp,
+                lineHeight = 12.5.sp,
+                color = colors.textMuted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
@@ -4479,7 +4428,6 @@ fun OriginalPostInspectorSheet(
                 .navigationBarsPadding()
                 .padding(bottom = 16.dp)
         ) {
-            // Lineage Banner Header
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -4538,7 +4486,6 @@ fun OriginalPostInspectorSheet(
 
             Spacer(Modifier.height(14.dp))
 
-            // Original Creator Card
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -4597,7 +4544,6 @@ fun OriginalPostInspectorSheet(
 
             Spacer(Modifier.height(14.dp))
 
-            // Provenance context description
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -4614,7 +4560,7 @@ fun OriginalPostInspectorSheet(
                         color = Color(0xFF007AFF)
                     )
                     Text(
-                        text = "This creation was remixed by @${work.authorUsername} using the procedural layer assets and shader parameters from @$origUsername's master artwork.",
+                        text = "This creation was remixed by @${work.authorUsername.ifBlank { "creator" }} using the procedural layer assets and shader parameters from @$origUsername's master artwork.",
                         fontSize = 12.sp,
                         color = colors.textMain.copy(alpha = 0.85f),
                         lineHeight = 16.sp
@@ -4624,7 +4570,6 @@ fun OriginalPostInspectorSheet(
 
             Spacer(Modifier.height(18.dp))
 
-            // Action Buttons
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -4698,7 +4643,7 @@ fun PostCountersSettingsSheet(
                 color = colors.textMuted,
                 modifier = Modifier.padding(top = 2.dp, bottom = 16.dp)
             )
-            
+
             HorizontalDivider(thickness = 0.5.dp, color = colors.glassBorder)
             Spacer(Modifier.height(8.dp))
 
@@ -4763,7 +4708,6 @@ fun PostCountersSettingsSheet(
         }
     }
 }
-
 
 @Composable
 private fun CounterToggleRow(
@@ -4856,12 +4800,6 @@ fun SkeletonPost() {
     }
 }
 
-/**
- * Clean Instagram-style Community Upload Banner.
- * Displays a tiny video thumbnail with real-time upload progress, success confirmation,
- * or failure handling with "Re-Upload" and "View Saved Drafts" actions.
- * Adheres strictly to the brand identity: clean rounded corners (no pills, no capsules, no double cards, hr line dividers).
- */
 @Composable
 fun CommunityUploadProgressBanner(
     task: FlashUploadTask,
@@ -4896,7 +4834,6 @@ fun CommunityUploadProgressBanner(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Tiny Thumbnail (44.dp x 44.dp)
                 Box(
                     modifier = Modifier
                         .size(44.dp)
@@ -4921,7 +4858,6 @@ fun CommunityUploadProgressBanner(
                         )
                     }
 
-                    // Status overlay badge in corner
                     when (task.status) {
                         UploadStatus.SUCCESS -> {
                             Box(
@@ -4959,7 +4895,6 @@ fun CommunityUploadProgressBanner(
 
                 Spacer(Modifier.width(12.dp))
 
-                // Middle: Info and Progress
                 Column(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -4989,7 +4924,6 @@ fun CommunityUploadProgressBanner(
                                 )
                             }
 
-                            // Progress Bar
                             LiquidGlassProgressBar(
                                 progress = task.progress,
                                 modifier = Modifier
@@ -5057,7 +4991,6 @@ fun CommunityUploadProgressBanner(
                 }
             }
 
-            // Failed Action Buttons (Re-Upload / View Saved Drafts)
             if (task.status == UploadStatus.FAILED) {
                 HorizontalDivider(
                     color = if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0),
@@ -5069,7 +5002,6 @@ fun CommunityUploadProgressBanner(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Re-Upload Button
                     Button(
                         onClick = onRetry,
                         modifier = Modifier
@@ -5094,7 +5026,6 @@ fun CommunityUploadProgressBanner(
                         )
                     }
 
-                    // View Saved Drafts Button
                     OutlinedButton(
                         onClick = onViewDrafts,
                         modifier = Modifier
