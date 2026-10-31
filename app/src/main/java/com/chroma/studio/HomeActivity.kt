@@ -163,6 +163,7 @@ class HomeActivity : ComponentActivity() {
         val viewModePref = prefs.getString("view_mode", "GRID") ?: "GRID"
         val initialViewMode = try { com.chroma.studio.ui.screens.ViewMode.valueOf(viewModePref) } catch(e: Exception) { com.chroma.studio.ui.screens.ViewMode.GRID }
         vm.updateDarkMode(isDarkModePref)
+        com.chroma.studio.chat.data.SettingsManager.getInstance(this).isDarkMode = isDarkModePref
 
         setContent {
             OscellionTheme(darkTheme = vm.isDarkMode) {
@@ -903,6 +904,7 @@ class HomeActivity : ComponentActivity() {
                                             val newDark = !vm.isDarkMode
                                             vm.updateDarkMode(newDark)
                                             prefs.edit().putBoolean("is_dark_mode", newDark).apply()
+                                            com.chroma.studio.chat.data.SettingsManager.getInstance(this@HomeActivity).isDarkMode = newDark
                                         },
                                         onViewModeChanged = { newMode ->
                                             prefs.edit().putString("view_mode", newMode.name).apply()
@@ -1416,7 +1418,12 @@ class HomeActivity : ComponentActivity() {
                                 currentGlobeStyle = it
                                 settingsManager.globeStyle = it
                             },
-                            onToggleAppearance = {},
+                            onToggleAppearance = {
+                                    val newDark = !vm.isDarkMode
+                                    vm.updateDarkMode(newDark)
+                                    prefs.edit().putBoolean("is_dark_mode", newDark).apply()
+                                    settingsManager.isDarkMode = newDark
+                                },
                             onAccentCycle = {},
                             onOpenWallpaperPicker = {},
                             onClose = { navController.popBackStack() }

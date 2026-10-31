@@ -418,7 +418,8 @@ fun ChromaOneUiHeaderBackdrop(
     screenBgColor: Color = if (!isDark) Color(0xFFF8FAFC) else Color(0xFF000000),
     modifier: Modifier = Modifier
 ) {
-    if (gradientAlpha <= 0.005f) return
+    // Simple clean header without gradient backdrop
+    return
     val density = LocalDensity.current
 
     Box(

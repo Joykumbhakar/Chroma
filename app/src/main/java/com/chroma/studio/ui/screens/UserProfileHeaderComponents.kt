@@ -94,11 +94,7 @@ fun UserProfileHeroSection(
                 .height(148.dp)
                 .clip(RoundedCornerShape(bottomStart = 22.dp, bottomEnd = 22.dp))
                 .haze(heroHazeState)
-                .background(
-                    Brush.linearGradient(
-                        listOf(Color(0xFF007AFF), Color(0xFF0A84FF), Color(0xFF32ADE6))
-                    )
-                )
+                .background(if (colors.isDark) Color(0xFF1C1C1E) else Color(0xFFF2F2F7))
         ) {
             if (presetBannerRes != null) {
                 Image(

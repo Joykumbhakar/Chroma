@@ -179,6 +179,7 @@ fun ChatScreen(
                 isDarkMode = !isDarkMode
 
                 settingsManager.isDarkMode = isDarkMode
+                context.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE).edit().putBoolean("is_dark_mode", isDarkMode).apply()
 
                 onAppearanceToggle()
 

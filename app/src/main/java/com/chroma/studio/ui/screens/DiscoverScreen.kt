@@ -270,7 +270,7 @@ fun DiscoverScreen(
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
 
     val density = LocalDensity.current
-    val maxCollapsePx = remember(density) { with(density) { 195.dp.toPx() } }
+    val maxCollapsePx = remember(density) { with(density) { 280.dp.toPx() } }
     var collapseOffsetPx by remember { mutableFloatStateOf(0f) }
     var snapJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
@@ -1967,7 +1967,7 @@ fun CreatorFeedHeader(
     )
 
     val clampedCollapse = collapseProgress.coerceIn(0f, 1f)
-    val expandedHeight = (195.dp * (1f - clampedCollapse)).coerceAtLeast(0.dp)
+    val expandedHeight = (280.dp * (1f - clampedCollapse)).coerceAtLeast(0.dp)
     val expandedAlpha = (1f - (clampedCollapse * 1.35f)).coerceIn(0f, 1f)
 
     Column(
@@ -1989,8 +1989,8 @@ fun CreatorFeedHeader(
             ) {
                 Text(
                     text = title,
-                    fontSize = 36.sp,
-                    lineHeight = 40.sp,
+                    fontSize = 46.sp,
+                    lineHeight = 50.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = (-0.6).sp,
                     color = colors.textMain,
