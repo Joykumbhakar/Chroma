@@ -54,15 +54,24 @@ fun StoriesSection(
     val isDark = colors.isDark
     val effectiveGapColor = gapColor ?: (if (isDark) Color(0xFF161A22) else Color.White)
 
-    val infiniteTransition = rememberInfiniteTransition(label = "story_skeleton")
-    val skeletonAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.12f,
-        targetValue = 0.32f,
+    val shimmerTransition = rememberInfiniteTransition(label = "story_shimmer")
+    val shimmerTranslate by shimmerTransition.animateFloat(
+        initialValue = -250f,
+        targetValue = 850f,
         animationSpec = infiniteRepeatable(
-            animation = tween(900, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
+            animation = tween(1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
         ),
-        label = "skeleton_alpha"
+        label = "story_shimmer_translate"
+    )
+    val storyShimmerBrush = Brush.linearGradient(
+        colors = if (isDark) {
+            listOf(Color(0xFF1E2028), Color(0xFF2F323D), Color(0xFF1E2028))
+        } else {
+            listOf(Color(0xFFE5E9F0), Color(0xFFF4F7FB), Color(0xFFE5E9F0))
+        },
+        start = Offset(shimmerTranslate, 0f),
+        end = Offset(shimmerTranslate + 250f, 100f)
     )
 
     LazyRow(
@@ -82,7 +91,7 @@ fun StoriesSection(
                             modifier = Modifier
                                 .size(68.dp)
                                 .clip(CircleShape)
-                                .background(Color.Gray.copy(alpha = skeletonAlpha))
+                                .background(storyShimmerBrush)
                         )
                         Spacer(Modifier.height(5.dp))
                         Box(
@@ -90,7 +99,7 @@ fun StoriesSection(
                                 .width(48.dp)
                                 .height(10.dp)
                                 .clip(RoundedCornerShape(5.dp))
-                                .background(Color.Gray.copy(alpha = skeletonAlpha))
+                                .background(storyShimmerBrush)
                         )
                     }
                 } else {
@@ -165,7 +174,7 @@ fun StoriesSection(
                         modifier = Modifier
                             .size(68.dp)
                             .clip(CircleShape)
-                            .background(Color.Gray.copy(alpha = skeletonAlpha))
+                            .background(storyShimmerBrush)
                     )
                     Spacer(Modifier.height(5.dp))
                     Box(
@@ -173,7 +182,7 @@ fun StoriesSection(
                             .width(48.dp)
                             .height(10.dp)
                             .clip(RoundedCornerShape(5.dp))
-                            .background(Color.Gray.copy(alpha = skeletonAlpha))
+                            .background(storyShimmerBrush)
                     )
                 }
             }

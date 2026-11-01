@@ -631,6 +631,26 @@ fun DiscoverScreen(
                 }
             }
 
+            val communityShimmerTransition = rememberInfiniteTransition(label = "community_feed_shimmer")
+            val communityShimmerTranslate by communityShimmerTransition.animateFloat(
+                initialValue = -300f,
+                targetValue = 1400f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 1250, easing = LinearEasing),
+                    repeatMode = RepeatMode.Restart
+                ),
+                label = "community_shimmer_translate"
+            )
+            val communityShimmerBrush = Brush.linearGradient(
+                colors = if (colors.isDark) {
+                    listOf(Color(0xFF1E2028), Color(0xFF2F323D), Color(0xFF1E2028))
+                } else {
+                    listOf(Color(0xFFE5E9F0), Color(0xFFF4F7FB), Color(0xFFE5E9F0))
+                },
+                start = Offset(communityShimmerTranslate, 0f),
+                end = Offset(communityShimmerTranslate + 350f, 180f)
+            )
+
             if (isLoading) {
                 LazyColumn(modifier = Modifier.fillMaxSize().clipToBounds(), userScrollEnabled = false) {
                     item {
@@ -657,8 +677,8 @@ fun DiscoverScreen(
                             )
                         }
                     }
-                    items(3) {
-                        SkeletonPost()
+                    items(4) {
+                        SkeletonPost(shimmerBrush = communityShimmerBrush)
                     }
                 }
             } else {
