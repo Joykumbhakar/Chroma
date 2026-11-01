@@ -50,9 +50,17 @@ class ChromaApp : Application(), ImageLoaderFactory {
         instance = this
         
         try {
-            // Initialize Firebase
+            // Initialize Firebase (with offline-safe default app fallback if google-services.json is absent)
             if (FirebaseApp.getApps(this).isEmpty()) {
-                FirebaseApp.initializeApp(this)
+                val initialized = FirebaseApp.initializeApp(this)
+                if (initialized == null && FirebaseApp.getApps(this).isEmpty()) {
+                    val fallbackOptions = com.google.firebase.FirebaseOptions.Builder()
+                        .setApplicationId("1:000000000000:android:0000000000000000000000")
+                        .setApiKey("AIzaSyDummyKeyForOfflineFallbackMode00000")
+                        .setProjectId("oscellion-studio-local")
+                        .build()
+                    FirebaseApp.initializeApp(this, fallbackOptions)
+                }
             }
         } catch (e: Exception) {
             Log.e("ChromaApp", "Failed to initialize Firebase", e)

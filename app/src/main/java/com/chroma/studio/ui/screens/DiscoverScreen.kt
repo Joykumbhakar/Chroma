@@ -4842,18 +4842,23 @@ private fun CounterToggleRow(
 }
 
 @Composable
-fun SkeletonPost() {
-    val infiniteTransition = rememberInfiniteTransition(label = "skeleton_transition")
-    val alpha by infiniteTransition.animateFloat(
-        initialValue = 0.15f,
-        targetValue = 0.40f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "skeleton_alpha"
-    )
+fun SkeletonPost(shimmerBrush: Brush? = null) {
     val colors = LocalOscellionColors.current
+    val effectiveBrush = if (shimmerBrush != null) {
+        shimmerBrush
+    } else {
+        val infiniteTransition = rememberInfiniteTransition(label = "skeleton_transition")
+        val alpha by infiniteTransition.animateFloat(
+            initialValue = 0.15f,
+            targetValue = 0.40f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1000),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "skeleton_alpha"
+        )
+        SolidColor(Color.Gray.copy(alpha = alpha))
+    }
 
     Column(
         modifier = Modifier
@@ -4866,12 +4871,12 @@ fun SkeletonPost() {
                 .padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(modifier = Modifier.size(42.dp).clip(CircleShape).background(Color.Gray.copy(alpha = alpha)))
+            Box(modifier = Modifier.size(42.dp).clip(CircleShape).background(effectiveBrush))
             Spacer(Modifier.width(10.dp))
             Column {
-                Box(modifier = Modifier.width(130.dp).height(14.dp).clip(RoundedCornerShape(4.dp)).background(Color.Gray.copy(alpha = alpha)))
+                Box(modifier = Modifier.width(130.dp).height(14.dp).clip(RoundedCornerShape(4.dp)).background(effectiveBrush))
                 Spacer(Modifier.height(5.dp))
-                Box(modifier = Modifier.width(85.dp).height(10.dp).clip(RoundedCornerShape(4.dp)).background(Color.Gray.copy(alpha = alpha)))
+                Box(modifier = Modifier.width(85.dp).height(10.dp).clip(RoundedCornerShape(4.dp)).background(effectiveBrush))
             }
         }
         Box(
@@ -4879,7 +4884,7 @@ fun SkeletonPost() {
                 .fillMaxWidth()
                 .aspectRatio(4f / 3f)
                 .clip(RectangleShape)
-                .background(Color.Gray.copy(alpha = alpha))
+                .background(effectiveBrush)
         )
         Spacer(Modifier.height(14.dp))
         Row(
@@ -4888,9 +4893,9 @@ fun SkeletonPost() {
                 .padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(Color.Gray.copy(alpha = alpha)))
-            Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(Color.Gray.copy(alpha = alpha)))
-            Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(Color.Gray.copy(alpha = alpha)))
+            Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(effectiveBrush))
+            Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(effectiveBrush))
+            Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(effectiveBrush))
         }
         Spacer(Modifier.height(14.dp))
         HorizontalDivider(

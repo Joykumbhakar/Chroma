@@ -1,0 +1,8 @@
+{
+  "name": "Oscellion",
+  "description": "Oscellion Studio — Creative gradient design, Flash video feed, Community discovery, and real-time messaging.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
