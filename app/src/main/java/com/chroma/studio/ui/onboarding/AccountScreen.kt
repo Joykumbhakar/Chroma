@@ -3,6 +3,8 @@ package com.chroma.studio.ui.onboarding
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,8 +25,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
@@ -78,33 +82,59 @@ fun AccountScreen(
             )
             Spacer(Modifier.height(14.dp))
 
-            // Multiline Personality / Bio Card with 0/500 counter (matching reference screen 3)
-            ObGlassCard(
+            // Multiline Personality / Bio input with Uiverse floating label & transparent background
+            var isBioFocused by remember { mutableStateOf(false) }
+            val isBioActive = isBioFocused || state.bio.isNotEmpty()
+            val bioBorderColor by animateColorAsState(
+                targetValue = if (isBioActive) Color(0xFF1A73E8) else Color(0xFF9E9E9E),
+                animationSpec = tween(150, easing = CubicBezierEasing(0.4f, 0f, 0.2f, 1f)),
+                label = "bioBorder"
+            )
+            val bioLabelColor by animateColorAsState(
+                targetValue = if (isBioActive) Color(0xFF2196F3) else Color(0xFFE8E8E8),
+                animationSpec = tween(150, easing = CubicBezierEasing(0.4f, 0f, 0.2f, 1f)),
+                label = "bioLabelColor"
+            )
+            val bioLabelOffsetY by animateDpAsState(
+                targetValue = if (isBioActive) (-9).dp else 17.dp,
+                animationSpec = tween(150, easing = CubicBezierEasing(0.4f, 0f, 0.2f, 1f)),
+                label = "bioLabelOffset"
+            )
+            val bioLabelScale by animateFloatAsState(
+                targetValue = if (isBioActive) 0.8f else 1.0f,
+                animationSpec = tween(150, easing = CubicBezierEasing(0.4f, 0f, 0.2f, 1f)),
+                label = "bioLabelScale"
+            )
+
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp),
-                shape = RoundedCornerShape(18.dp)
+                    .padding(horizontal = 20.dp)
+                    .padding(top = 9.dp)
             ) {
                 Column(
                     modifier = Modifier
-                        .background(Color(0x8C111636))
-                        .padding(14.dp)
+                        .fillMaxWidth()
+                        .background(Color.Transparent, RoundedCornerShape(16.dp))
+                        .border(1.5.dp, bioBorderColor, RoundedCornerShape(16.dp))
+                        .padding(horizontal = 16.dp, vertical = 14.dp)
                 ) {
                     BasicTextField(
                         value = state.bio,
                         onValueChange = { if (it.length <= 500) state.bio = it },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(min = 96.dp),
-                        textStyle = TextStyle(color = Color.White, fontSize = 14.sp, lineHeight = 21.sp),
-                        cursorBrush = SolidColor(ObColors.Lime),
+                            .heightIn(min = 84.dp)
+                            .onFocusChanged { isBioFocused = it.isFocused },
+                        textStyle = TextStyle(color = Color(0xFFF5F5F5), fontSize = 15.sp, lineHeight = 22.sp),
+                        cursorBrush = SolidColor(Color(0xFF2196F3)),
                         decorationBox = { innerTextField ->
-                            if (state.bio.isEmpty()) {
+                            if (state.bio.isEmpty() && isBioFocused) {
                                 Text(
-                                    text = "e.g., A sarcastic food critic from Dubai who secretly loves fast food but publicly only reviews fine dining restaurants. Thinks every meal deserves a dramatic backstory...",
+                                    text = "e.g., A creator designing shaders and motion wallpapers...",
                                     color = Color(0x66FFFFFF),
-                                    fontSize = 13.5.sp,
-                                    lineHeight = 19.sp
+                                    fontSize = 14.sp,
+                                    lineHeight = 20.sp
                                 )
                             }
                             innerTextField()
@@ -116,6 +146,32 @@ fun AccountScreen(
                         color = Color(0x60FFFFFF),
                         fontSize = 11.5.sp,
                         modifier = Modifier.align(Alignment.End)
+                    )
+                }
+
+                // Floating label
+                Box(
+                    modifier = Modifier
+                        .padding(start = 15.dp)
+                        .offset(y = bioLabelOffsetY)
+                        .graphicsLayer {
+                            scaleX = bioLabelScale
+                            scaleY = bioLabelScale
+                            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f)
+                        }
+                        .then(
+                            if (isBioActive) {
+                                Modifier
+                                    .background(ObColors.Abyss, RoundedCornerShape(4.dp))
+                                    .padding(horizontal = 4.dp)
+                            } else Modifier
+                        )
+                ) {
+                    Text(
+                        text = "Personality & voice (bio)",
+                        color = bioLabelColor,
+                        fontSize = 16.sp,
+                        fontWeight = if (isBioActive) FontWeight.SemiBold else FontWeight.Normal
                     )
                 }
             }
@@ -217,104 +273,107 @@ fun AccountScreen(
             }
             Spacer(Modifier.height(12.dp))
 
-            ObGlassCard(Modifier.padding(horizontal = 20.dp).fillMaxWidth(), RoundedCornerShape(18.dp)) {
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    // Username with live debounced checking
-                    ObTextField(
-                        value = state.username,
-                        onValueChange = { state.updateUsername(it, discoverRepo, scope) },
-                        placeholder = "username",
-                        leading = Icons.Rounded.AlternateEmail,
-                        leadingTint = ObColors.Lime,
-                        isError = tried && state.usernameStatus != UsernameStatus.Free,
-                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, imeAction = ImeAction.Next, autoCorrect = false),
-                        keyboardActions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Down) }),
-                        trailing = {
-                            if (state.username.isNotEmpty()) {
-                                when (state.usernameStatus) {
-                                    UsernameStatus.Free -> {
-                                        Icon(Icons.Rounded.CheckCircle, null, tint = ObColors.Lime, modifier = Modifier.size(16.dp))
-                                        Text("Free", color = ObColors.Lime, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                    UsernameStatus.Taken -> {
-                                        Icon(Icons.Rounded.Cancel, null, tint = ObColors.Danger, modifier = Modifier.size(16.dp))
-                                        Text("Taken", color = ObColors.Danger, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                    UsernameStatus.TooShort -> {
-                                        Icon(Icons.Rounded.Error, null, tint = ObColors.Amber, modifier = Modifier.size(16.dp))
-                                        Text("Min 3", color = ObColors.Amber, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                    UsernameStatus.Checking -> {
-                                        CircularProgressIndicator(modifier = Modifier.size(14.dp), color = ObColors.Lime, strokeWidth = 2.dp)
-                                    }
+            // Direct profile fields without secondary background card
+            Column(
+                modifier = Modifier
+                    .padding(horizontal = 20.dp)
+                    .fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                // Username with live debounced checking and Uiverse floating label
+                ObTextField(
+                    value = state.username,
+                    onValueChange = { state.updateUsername(it, discoverRepo, scope) },
+                    placeholder = "Username",
+                    leading = Icons.Rounded.AlternateEmail,
+                    isError = tried && state.usernameStatus != UsernameStatus.Free,
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, imeAction = ImeAction.Next, autoCorrect = false),
+                    keyboardActions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Down) }),
+                    trailing = {
+                        if (state.username.isNotEmpty()) {
+                            when (state.usernameStatus) {
+                                UsernameStatus.Free -> {
+                                    Icon(Icons.Rounded.CheckCircle, null, tint = ObColors.Lime, modifier = Modifier.size(16.dp))
+                                    Text("Free", color = ObColors.Lime, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                                UsernameStatus.Taken -> {
+                                    Icon(Icons.Rounded.Cancel, null, tint = ObColors.Danger, modifier = Modifier.size(16.dp))
+                                    Text("Taken", color = ObColors.Danger, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                                UsernameStatus.TooShort -> {
+                                    Icon(Icons.Rounded.Error, null, tint = ObColors.Amber, modifier = Modifier.size(16.dp))
+                                    Text("Min 3", color = ObColors.Amber, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                                UsernameStatus.Checking -> {
+                                    CircularProgressIndicator(modifier = Modifier.size(14.dp), color = ObColors.Lime, strokeWidth = 2.dp)
                                 }
                             }
                         }
-                    )
+                    }
+                )
 
-                    // Suggested usernames if taken
-                    if (state.usernameStatus == UsernameStatus.Taken && state.usernameSuggestions.isNotEmpty()) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("Suggestions:", color = ObColors.TextFaint, fontSize = 11.sp)
-                            state.usernameSuggestions.take(2).forEach { sug ->
-                                Text(
-                                    text = "@$sug",
-                                    color = ObColors.Lime,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    modifier = Modifier.clickable {
-                                        state.updateUsername(sug, discoverRepo, scope)
-                                    }
-                                )
-                            }
+                // Suggested usernames if taken
+                if (state.usernameStatus == UsernameStatus.Taken && state.usernameSuggestions.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Suggestions:", color = ObColors.TextFaint, fontSize = 11.sp)
+                        state.usernameSuggestions.take(2).forEach { sug ->
+                            Text(
+                                text = "@$sug",
+                                color = ObColors.Lime,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.clickable {
+                                    state.updateUsername(sug, discoverRepo, scope)
+                                }
+                            )
                         }
                     }
-
-                    // Full Name
-                    ObTextField(
-                        value = state.fullName,
-                        onValueChange = { state.fullName = it.take(50) },
-                        placeholder = "Full name",
-                        leading = Icons.Rounded.Person,
-                        isError = tried && state.fullName.isBlank(),
-                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(onDone = { focus.clearFocus() })
-                    )
-
-                    // Birthday
-                    ObTextField(
-                        value = dobText,
-                        onValueChange = {},
-                        placeholder = "Birthday (13+)",
-                        leading = Icons.Rounded.CalendarMonth,
-                        isError = tried && !dobOk,
-                        onClick = { focus.clearFocus(); showDob = true }
-                    )
-
-                    // Gender Selector
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Gender.values().forEach { g ->
-                            val sel = state.gender == g
-                            Box(
-                                Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(10.dp))
-                                    .background(if (sel) Color.White else Color(0xA0060F42))
-                                    .border(if (sel) 1.5.dp else 1.dp, if (sel) Color(0xFFFACC15) else Color(0x3D8CB6FF), RoundedCornerShape(10.dp))
-                                    .clickable(role = Role.RadioButton) { state.gender = g },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    g.label, fontSize = 11.sp, maxLines = 1, fontWeight = if (sel) FontWeight.Bold else FontWeight.SemiBold,
-                                    color = if (sel) Color(0xFF09155C) else Color(0xDDE4EEFF)
-                                )
-                            }
-                        }
-                    }
-                    if (tried && !dobOk && state.dobMillis != null) Text("You must be 13 or older to join.", color = ObColors.Danger, fontSize = 12.sp)
                 }
+
+                // Full Name with Uiverse floating label
+                ObTextField(
+                    value = state.fullName,
+                    onValueChange = { state.fullName = it.take(50) },
+                    placeholder = "Full name",
+                    leading = Icons.Rounded.Person,
+                    isError = tried && state.fullName.isBlank(),
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { focus.clearFocus() })
+                )
+
+                // Birthday with Uiverse floating label
+                ObTextField(
+                    value = dobText,
+                    onValueChange = {},
+                    placeholder = "Birthday (13+)",
+                    leading = Icons.Rounded.CalendarMonth,
+                    isError = tried && !dobOk,
+                    onClick = { focus.clearFocus(); showDob = true }
+                )
+
+                // Gender Selector
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Gender.values().forEach { g ->
+                        val sel = state.gender == g
+                        Box(
+                            Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(10.dp))
+                                .background(if (sel) Color.White else Color(0xA0060F42))
+                                .border(if (sel) 1.5.dp else 1.dp, if (sel) Color(0xFFFACC15) else Color(0x3D8CB6FF), RoundedCornerShape(10.dp))
+                                .clickable(role = Role.RadioButton) { state.gender = g },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                g.label, fontSize = 11.sp, maxLines = 1, fontWeight = if (sel) FontWeight.Bold else FontWeight.SemiBold,
+                                color = if (sel) Color(0xFF09155C) else Color(0xDDE4EEFF)
+                            )
+                        }
+                    }
+                }
+                if (tried && !dobOk && state.dobMillis != null) Text("You must be 13 or older to join.", color = ObColors.Danger, fontSize = 12.sp)
             }
             Spacer(Modifier.height(16.dp))
         }

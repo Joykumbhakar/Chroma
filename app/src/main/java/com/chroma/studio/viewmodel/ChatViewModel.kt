@@ -28,6 +28,14 @@ import kotlinx.coroutines.tasks.await
 class ChatViewModel : ViewModel() {
     private val repository = SupabaseChatRepository()
     private val discoverRepository = DiscoverRepository()
+    private val presenceListeners = mutableMapOf<String, () -> Unit>()
+    private var typingDebounceJob: kotlinx.coroutines.Job? = null
+    private var lastTypingSendTime: Long = 0L
+    private var recordingHeartbeatJob: kotlinx.coroutines.Job? = null
+    private var currentActivityStatus: String? = null
+    private var statusTtlMonitorJob: kotlinx.coroutines.Job? = null
+    private val receivedActivityTimestamps = java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.ConcurrentHashMap<String, Long>>()
+    private val typingListeners = mutableMapOf<String, com.google.firebase.database.ValueEventListener>()
 
     private val _recentChats = MutableStateFlow<List<ChatRoom>>(emptyList())
     val recentChats: StateFlow<List<ChatRoom>> = _recentChats.asStateFlow()
@@ -152,27 +160,30 @@ class ChatViewModel : ViewModel() {
         }
     }
 
-    private val presenceListeners = mutableMapOf<String, () -> Unit>()
-
     private fun observeUsersPresence(userIds: List<String>) {
         val currentUids = userIds.toSet()
+        val listeners = presenceListeners ?: return
         // Remove listeners for users no longer present
-        val removed = presenceListeners.keys - currentUids
+        val removed = listeners.keys - currentUids
         for (uid in removed) {
-            presenceListeners.remove(uid)?.invoke()
+            listeners.remove(uid)?.invoke()
             _onlineUsersPresence.value = _onlineUsersPresence.value - uid
         }
         // Add listeners for new users
         for (uid in currentUids) {
-            if (presenceListeners.containsKey(uid)) continue
-            val unsubscribe = com.chroma.studio.data.OnlineStatusManager.observeUserPresence(uid) { presence ->
-                _onlineUsersPresence.value = _onlineUsersPresence.value + (uid to presence)
-                if (uid == currentOtherUserId) {
-                    _isOtherUserOnline.value = presence.online
-                    _otherUserLastSeen.value = presence.lastOnline
+            if (listeners.containsKey(uid)) continue
+            try {
+                val unsubscribe = com.chroma.studio.data.OnlineStatusManager.observeUserPresence(uid) { presence ->
+                    _onlineUsersPresence.value = _onlineUsersPresence.value + (uid to presence)
+                    if (uid == currentOtherUserId) {
+                        _isOtherUserOnline.value = presence.online
+                        _otherUserLastSeen.value = presence.lastOnline
+                    }
                 }
+                listeners[uid] = unsubscribe
+            } catch (e: Exception) {
+                // Ignore presence observation failures in offline/guest mode
             }
-            presenceListeners[uid] = unsubscribe
         }
     }
 
@@ -643,11 +654,6 @@ class ChatViewModel : ViewModel() {
             }
         }
     }
-
-    private var typingDebounceJob: kotlinx.coroutines.Job? = null
-    private var lastTypingSendTime: Long = 0L
-    private var recordingHeartbeatJob: kotlinx.coroutines.Job? = null
-    private var currentActivityStatus: String? = null
 
     /**
      * WhatsApp-grade typing indicator:
@@ -1359,10 +1365,6 @@ class ChatViewModel : ViewModel() {
         }
     }
 
-    private var statusTtlMonitorJob: kotlinx.coroutines.Job? = null
-    private val receivedActivityTimestamps = java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.ConcurrentHashMap<String, Long>>()
-    private val typingListeners = mutableMapOf<String, com.google.firebase.database.ValueEventListener>()
-
     private fun startStatusTtlMonitor() {
         if (statusTtlMonitorJob != null) return
         statusTtlMonitorJob = viewModelScope.launch {
@@ -1373,7 +1375,7 @@ class ChatViewModel : ViewModel() {
                 val currentMap = _typingStatuses.value.toMutableMap()
 
                 for ((roomId, roomActivities) in currentMap.toList()) {
-                    val roomTimestamps = receivedActivityTimestamps[roomId] ?: continue
+                    val roomTimestamps = receivedActivityTimestamps?.get(roomId) ?: continue
                     val filtered = roomActivities.filter { (uid, _) ->
                         val lastSeen = roomTimestamps[uid] ?: 0L
                         (now - lastSeen) <= 3500L // Expire stale indicators after 3.5s
@@ -1396,7 +1398,8 @@ class ChatViewModel : ViewModel() {
 
     fun observeRoomTyping(roomId: String) {
         startStatusTtlMonitor()
-        if (typingListeners.containsKey(roomId)) return
+        val listeners = typingListeners ?: return
+        if (listeners.containsKey(roomId)) return
         if (com.google.firebase.auth.FirebaseAuth.getInstance().currentUser == null) return
         val db = com.chroma.studio.data.OnlineStatusManager.getDatabase()
         val roomRef = db.getReference("status/$roomId")
@@ -1404,7 +1407,7 @@ class ChatViewModel : ViewModel() {
             override fun onDataChange(snapshot: com.google.firebase.database.DataSnapshot) {
                 val activityMap = mutableMapOf<String, String>()
                 val now = System.currentTimeMillis()
-                val roomTimestamps = receivedActivityTimestamps.getOrPut(roomId) { java.util.concurrent.ConcurrentHashMap() }
+                val roomTimestamps = receivedActivityTimestamps?.getOrPut(roomId) { java.util.concurrent.ConcurrentHashMap() } ?: return
 
                 for (userSnapshot in snapshot.children) {
                     val userId = userSnapshot.key ?: continue
@@ -1428,22 +1431,27 @@ class ChatViewModel : ViewModel() {
             }
         }
         roomRef.addValueEventListener(listener)
-        typingListeners[roomId] = listener
+        listeners[roomId] = listener
     }
 
     private fun observeTypingStatuses(chats: List<ChatRoom>) {
         startStatusTtlMonitor()
+        val listeners = typingListeners ?: return
         val db = com.chroma.studio.data.OnlineStatusManager.getDatabase()
         val currentRoomIds = chats.map { it.id }.toSet()
 
         // Remove listeners for rooms we're no longer in, keeping active room alive
         val activeId = _activeRoomId.value
-        val removedRooms = typingListeners.keys.filter { it !in currentRoomIds && it != activeId }
+        val removedRooms = listeners.keys.filter { it !in currentRoomIds && it != activeId }
         for (roomId in removedRooms) {
-            typingListeners.remove(roomId)?.let {
-                db.getReference("status/$roomId").removeEventListener(it)
+            listeners.remove(roomId)?.let {
+                try {
+                    db.getReference("status/$roomId").removeEventListener(it)
+                } catch (e: Exception) {
+                    // ignore
+                }
             }
-            receivedActivityTimestamps.remove(roomId)
+            receivedActivityTimestamps?.remove(roomId)
             _typingStatuses.value = _typingStatuses.value - roomId
         }
 

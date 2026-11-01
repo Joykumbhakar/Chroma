@@ -1,12 +1,15 @@
 package com.chroma.studio.ui.onboarding
 
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.AutoAwesome
@@ -39,6 +42,9 @@ import com.chroma.studio.ui.components.OscellionAppIcon
 import com.chroma.studio.ui.components.GhostFibers
 import com.chroma.studio.ui.components.GhostFibersConfig
 
+import androidx.compose.material.icons.rounded.Explore
+import androidx.compose.material.icons.rounded.PersonAdd
+
 val TheSignatureFont = FontFamily(Font(R.font.thesignature))
 
 @Composable
@@ -49,42 +55,13 @@ fun WelcomeScreen(
     onGoogle: () -> Unit,
     onCreateAccount: () -> Unit,
     onSignInExisting: () -> Unit = {},
+    onExploreGuest: () -> Unit = {},
     onTerms: () -> Unit
 ) {
     var showAbout by remember { mutableStateOf(false) }
 
-    // Chromatic animated wave gradient
-    val infiniteTransition = rememberInfiniteTransition(label = "waveGradient")
-    val phase by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 3500, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "gradientPhase"
-    )
-
-    val waveColors = listOf(
-        Color(0xFF38EF7D), // Vibrant Lime
-        Color(0xFF00F2FE), // Electric Cyan
-        Color(0xFF4FACFE), // Azure Sky
-        Color(0xFF9D4EDD), // Neon Violet
-        Color(0xFFFF5E7E), // Radiant Coral
-        Color(0xFFFFAA00), // Amber Gold
-        Color(0xFF38EF7D)  // Seamless cycle back to Lime
-    )
-
-    val animatedWaveBrush = remember(phase) {
-        val spread = 700f
-        val offset = phase * spread
-        Brush.linearGradient(
-            colors = waveColors,
-            start = Offset(offset, 0f),
-            end = Offset(offset + spread, spread * 0.45f),
-            tileMode = TileMode.Repeated
-        )
-    }
+    // Neon Green animated wave gradient
+    val animatedWaveBrush = rememberNeonGreenWaveBrush()
 
     Box(Modifier.fillMaxSize().background(ObColors.Abyss)) {
         // GhostFibers animated background (React Bits port)
@@ -142,14 +119,14 @@ fun WelcomeScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Icon(Icons.Rounded.AutoAwesome, null, tint = ObColors.Lime, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Rounded.AutoAwesome, null, tint = ObColors.NeonGreen, modifier = Modifier.size(16.dp))
                     Text("About", color = Color.White, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
 
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(18.dp))
 
-            // Hero Section: "Welcome to Oscellion" with animated wave gradient & bold title
+            // Hero Section: "Welcome to Oscellion" with animated Neon Green wave gradient & bold title
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
                     text = "Welcome to",
@@ -170,7 +147,7 @@ fun WelcomeScreen(
                 Text(
                     buildAnnotatedString {
                         append("Where ")
-                        withStyle(SpanStyle(color = ObColors.Lime, fontWeight = FontWeight.Bold)) { append("Creativity") }
+                        withStyle(SpanStyle(color = ObColors.NeonGreen, fontWeight = FontWeight.Bold)) { append("Creativity") }
                         append(" has a Social Life")
                     },
                     fontSize = 15.5.sp,
@@ -204,11 +181,12 @@ fun WelcomeScreen(
                     }
                 )
                 ObSecondaryButton("Create new account", onCreateAccount, icon = Icons.Rounded.PersonAdd)
+                ObSecondaryButton("Explore Studio (No login required)", onExploreGuest, icon = Icons.Rounded.Explore)
 
                 Row(Modifier.fillMaxWidth().padding(top = 2.dp), horizontalArrangement = Arrangement.Center) {
                     Text("Already have an account? ", color = Color(0xCCFFFFFF), fontSize = 12.sp)
                     Text(
-                        "Sign In", color = ObColors.Lime, fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                        "Sign In", color = ObColors.NeonGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold,
                         modifier = Modifier.clickable(onClick = onSignInExisting)
                     )
                 }
@@ -216,34 +194,30 @@ fun WelcomeScreen(
                 Row(Modifier.fillMaxWidth().padding(top = 2.dp), horizontalArrangement = Arrangement.Center) {
                     Text("By signing up, you agree to our ", color = Color(0xCCFFFFFF), fontSize = 11.sp)
                     Text(
-                        "Terms and Privacy Policy", color = ObColors.Lime, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+                        "Terms and Privacy Policy", color = ObColors.NeonGreen, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.clickable(onClick = onTerms)
                     )
                 }
             }
         }
         if (showAbout) {
-            Dialog(onDismissRequest = { showAbout = false }) {
-                ObGlassCard(Modifier.fillMaxWidth(), RoundedCornerShape(24.dp)) {
-                    Column(Modifier.background(ObColors.Night.copy(alpha = 0.85f)).padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        OscellionAppIcon(size = 48.dp)
-                        Spacer(Modifier.height(10.dp))
-                        Text(
-                            text = "Welcome to Oscellion",
-                            fontFamily = TheSignatureFont,
-                            fontSize = 32.sp,
-                            style = TextStyle(brush = animatedWaveBrush),
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            "Design multi-layer shaders and wallpapers, share them, and message with end-to-end encryption.",
-                            style = ObType.Body, textAlign = TextAlign.Center
-                        )
-                        Spacer(Modifier.height(18.dp))
-                        ObPrimaryButton("Start onboarding", { showAbout = false; onCreateAccount() })
-                    }
-                }
+            ObPopupCardWindow(onDismissRequest = { showAbout = false }) {
+                OscellionAppIcon(size = 48.dp)
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = "Welcome to Oscellion",
+                    fontFamily = TheSignatureFont,
+                    fontSize = 32.sp,
+                    style = TextStyle(brush = animatedWaveBrush),
+                    textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Design multi-layer shaders and wallpapers, share them, and message with end-to-end encryption.",
+                    style = ObType.Body, textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(18.dp))
+                ObPrimaryButton("Start onboarding", { showAbout = false; onCreateAccount() })
             }
         }
     }

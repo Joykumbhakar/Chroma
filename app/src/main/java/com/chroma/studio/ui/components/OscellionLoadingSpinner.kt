@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.chroma.studio.ui.theme.LocalOscellionColors
 
 /**
  * Oscellion Brand Animated In-App Loader
@@ -31,7 +32,7 @@ fun OscellionLoadingSpinner(
     innerColor: Color? = null,
     strokeWidth: Dp? = null
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = LocalOscellionColors.current.isDark
     val spinnerColor = color ?: if (isDark) Color.White else Color(0xFF1C1C1E)
 
     val infiniteTransition = rememberInfiniteTransition(label = "OscellionSpinner")

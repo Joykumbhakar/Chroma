@@ -65,7 +65,7 @@ fun UserProfileStatusSection(
 ) {
     val context = LocalContext.current
     val colors = LocalOscellionColors.current
-    val isDark = isSystemInDarkTheme()
+    val isDark = colors.isDark
     val prefs = remember { context.getSharedPreferences("user_profile_prefs", Context.MODE_PRIVATE) }
 
     var statusEmoji by remember(userId) {
@@ -324,7 +324,7 @@ fun UserProfileHighlightsSection(
 ) {
     val context = LocalContext.current
     val colors = LocalOscellionColors.current
-    val isDark = isSystemInDarkTheme()
+    val isDark = colors.isDark
     val prefs = remember { context.getSharedPreferences("user_highlights_prefs", Context.MODE_PRIVATE) }
 
     fun loadHighlights(): List<ProfileHighlightItem> {

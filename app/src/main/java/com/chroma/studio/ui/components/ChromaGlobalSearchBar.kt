@@ -58,7 +58,7 @@ fun ChromaGlobalExpandingSearchBar(
     onSearchAction: (() -> Unit)? = null
 ) {
     val colors = LocalOscellionColors.current
-    val isDark = isSystemInDarkTheme()
+    val isDark = colors.isDark
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     var isFocused by remember { mutableStateOf(false) }
@@ -230,7 +230,7 @@ fun ChromaGlobalInlineSearchBar(
     onSearchAction: (() -> Unit)? = null
 ) {
     val colors = LocalOscellionColors.current
-    val isDark = isSystemInDarkTheme()
+    val isDark = colors.isDark
     var isFocused by remember { mutableStateOf(false) }
     val keyboardController = LocalSoftwareKeyboardController.current
 

@@ -635,7 +635,7 @@ fun UserProfileScreen(
 
     // Samsung One UI 7.0 Translucent Navigation Bar
     val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    val isSysDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val isSysDark = colors.isDark
     val topBarBg = if (isSysDark) Color(0xFF000000).copy(alpha = (scrollProgress * 0.94f).coerceIn(0f, 0.96f))
                    else Color(0xFFF2F4F7).copy(alpha = (scrollProgress * 0.96f).coerceIn(0f, 0.98f))
     val topBarBorder = if (isSysDark) Color(0xFF1F2430).copy(alpha = scrollProgress)
@@ -1331,9 +1331,10 @@ private fun UserProfileSettingsAndSignOutSheets(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val colors = LocalOscellionColors.current
 
     if (showSettingsBottomSheet) {
-        val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+        val isDark = colors.isDark
         ModalBottomSheet(
             onDismissRequest = onDismissSettingsSheet,
             containerColor = if (isDark) Color(0xFF0F1117) else Color(0xFFF2F4F7),
@@ -1474,7 +1475,7 @@ private fun UserProfileSettingsAndSignOutSheets(
     }
 
     if (showSignOutConfirm) {
-        val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+        val isDark = colors.isDark
         AlertDialog(
             onDismissRequest = { onShowSignOutConfirm(false) },
             shape = RoundedCornerShape(26.dp),
@@ -1568,7 +1569,7 @@ private fun UserProfileModalsAndSheets(
     val scope = rememberCoroutineScope()
 
     if (showOtherUserOptionsSheet) {
-        val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+        val isDark = colors.isDark
         ModalBottomSheet(
             onDismissRequest = onDismissOtherUserOptions,
             containerColor = if (isDark) Color(0xFF0F1117) else Color(0xFFF2F4F7),
@@ -1695,7 +1696,7 @@ private fun UserProfileModalsAndSheets(
     }
 
     if (showBlockConfirmDialog) {
-        val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+        val isDark = colors.isDark
         AlertDialog(
             onDismissRequest = { onShowBlockConfirmDialog(false) },
             shape = RoundedCornerShape(26.dp),
@@ -1759,7 +1760,7 @@ private fun UserProfileModalsAndSheets(
     }
 
     if (showReportUserSheet) {
-        val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+        val isDark = colors.isDark
         ModalBottomSheet(
             onDismissRequest = { onShowReportUserSheet(false) },
             containerColor = if (isDark) Color(0xFF0F1117) else Color(0xFFF2F2F7),
@@ -1971,7 +1972,7 @@ private fun UserProfileModalsAndSheets(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(10.dp))
-                        .background(if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFF1C1C1E) else Color(0xFFF2F2F7))
+                        .background(if (colors.isDark) Color(0xFF1C1C1E) else Color(0xFFF2F2F7))
                         .padding(3.dp)
                 ) {
                     listOf("Waves (${wavePresets.size})", "Work (${myWorksWithImages.size})").forEachIndexed { index, title ->
@@ -2051,7 +2052,7 @@ private fun UserProfileModalsAndSheets(
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .background(if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFF2C2C2E) else Color(0xFFF9F9F9))
+                                            .background(if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFF9F9F9))
                                             .padding(horizontal = 8.dp, vertical = 5.dp)
                                     ) {
                                         Text(preset.name, color = colors.textMain, fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -2125,7 +2126,7 @@ private fun UserProfileModalsAndSheets(
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .background(if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFF2C2C2E) else Color(0xFFF9F9F9))
+                                                .background(if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFF9F9F9))
                                                 .padding(horizontal = 8.dp, vertical = 5.dp)
                                         ) {
                                             Text(work.title.ifBlank { "Creation" }, color = colors.textMain, fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)

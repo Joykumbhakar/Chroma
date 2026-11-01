@@ -166,38 +166,48 @@ fun PrivacyScreen(state: OnboardingState, onBack: () -> Unit, onLaunch: () -> Un
     }
 
     if (showDone) {
-        Dialog(onDismissRequest = { showDone = false }) {
-            ObGlassCard(Modifier.fillMaxWidth(), RoundedCornerShape(24.dp)) {
-                Column(Modifier.background(ObColors.Night.copy(alpha = 0.9f)).padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(
-                        Modifier.size(60.dp).clip(CircleShape).background(ObColors.Lime.copy(alpha = 0.2f)).border(1.dp, ObColors.Lime, CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Rounded.CheckCircle, null, tint = ObColors.Lime, modifier = Modifier.size(34.dp))
-                    }
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        text = "Welcome, ${state.fullName.substringBefore(' ').ifBlank { "creator" }}!",
-                        style = ObType.Title.copy(fontSize = 20.sp),
-                        textAlign = TextAlign.Center
-                    )
-                    Text(
-                        text = "@${state.username} · ${state.interests.size} interests",
-                        color = ObColors.Lime,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(top = 2.dp)
-                    )
-                    Text(
-                        text = (if (state.e2ee) "Private chats are end-to-end encrypted. " else "End-to-end encryption is off. You can turn it on in Settings. ") +
-                            (if (state.privateAccount) "Only approved followers can see your posts." else "Your posts are public."),
-                        style = ObType.Body,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(top = 10.dp, bottom = 18.dp)
-                    )
-                    ObPrimaryButton("Enter Chroma Studio", { showDone = false; onLaunch() })
-                }
+        val waveBrush = rememberNeonGreenWaveBrush()
+        ObPopupCardWindow(onDismissRequest = { showDone = false }) {
+            Box(
+                Modifier
+                    .size(64.dp)
+                    .clip(CircleShape)
+                    .background(ObColors.NeonGreen.copy(alpha = 0.18f))
+                    .border(1.5.dp, ObColors.NeonGreen, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Rounded.CheckCircle,
+                    contentDescription = null,
+                    tint = ObColors.NeonGreen,
+                    modifier = Modifier.size(36.dp)
+                )
             }
+            Spacer(Modifier.height(14.dp))
+            Text(
+                text = "Welcome, ${state.fullName.substringBefore(' ').ifBlank { "Creator" }}!",
+                style = ObType.Title.copy(
+                    brush = waveBrush,
+                    fontSize = 24.sp
+                ),
+                textAlign = TextAlign.Center
+            )
+            Text(
+                text = "@${state.username} · ${state.interests.size} interests",
+                color = ObColors.NeonGreen,
+                fontSize = 12.5.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+            Text(
+                text = (if (state.e2ee) "Private chats are end-to-end encrypted. " else "End-to-end encryption is off. You can turn it on in Settings. ") +
+                    (if (state.privateAccount) "Only approved followers can see your posts." else "Your posts are public."),
+                style = ObType.Body,
+                textAlign = TextAlign.Center,
+                color = Color.White.copy(alpha = 0.85f),
+                modifier = Modifier.padding(top = 10.dp, bottom = 20.dp)
+            )
+            ObPrimaryButton("Enter Chroma Studio", { showDone = false; onLaunch() })
         }
     }
 }

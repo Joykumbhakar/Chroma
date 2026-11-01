@@ -21,6 +21,7 @@ fun OnboardingFlow(
     onContinueSaved: () -> Unit,
     onLoginSuccess: () -> Unit = {},
     onSignInExisting: () -> Unit = {},
+    onExploreGuest: () -> Unit = {},
     onOpenTerms: () -> Unit = {},
     savedAccountName: String? = null,
     savedAccounts: List<SavedAccount> = emptyList(),
@@ -50,6 +51,7 @@ fun OnboardingFlow(
                 onGoogle = onGoogleSignIn,
                 onCreateAccount = { s.step = ObStep.Interests },
                 onSignInExisting = { s.step = ObStep.SignIn },
+                onExploreGuest = onExploreGuest,
                 onTerms = onOpenTerms
             )
             ObStep.SignIn -> SignInScreen(
@@ -57,6 +59,7 @@ fun OnboardingFlow(
                 onLoginSuccess = onLoginSuccess,
                 onCreateAccount = { s.step = ObStep.Interests },
                 onGoogleSignIn = onGoogleSignIn,
+                onExploreGuest = onExploreGuest,
                 onOpenTerms = onOpenTerms,
                 savedAccounts = savedAccounts,
                 googleLoading = googleLoading,

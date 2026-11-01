@@ -1,5 +1,6 @@
 package com.chroma.studio.model
 
+import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import java.util.UUID
@@ -7,6 +8,7 @@ import java.util.UUID
 // ──────────────────────────────────────────────────────
 // Social Features / Firestore Models
 // ──────────────────────────────────────────────────────
+@Immutable
 data class UserProfile(
     val uid: String = "",
     val username: String = "",
@@ -73,6 +75,7 @@ data class UserProfile(
 
 }
 
+@Immutable
 data class DiscoverPost(
     val id: String = "",
     val creatorId: String = "",

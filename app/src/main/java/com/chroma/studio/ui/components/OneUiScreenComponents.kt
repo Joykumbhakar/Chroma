@@ -23,6 +23,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import com.chroma.studio.ui.theme.LocalOscellionColors
+
+private val isAppInDark: Boolean
+    @Composable
+    get() = LocalOscellionColors.current.isDark
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -77,7 +82,7 @@ fun OneUiViewingArea(
     height: Dp = 175.dp,
     modifier: Modifier = Modifier
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = isAppInDark
     val screenBg = if (isDark) Color(0xFF000000) else Color(0xFFF2F4F7)
 
     Box(
@@ -209,7 +214,7 @@ fun OneUiStickyTopBar(
     actions: @Composable RowScope.() -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = isAppInDark
     val barBg = if (isDark) Color(0xFF000000).copy(alpha = 0.92f) else Color(0xFFF2F4F7).copy(alpha = 0.94f)
     val textDark = if (isDark) Color.White else Color(0xFF0F172A)
 
@@ -278,7 +283,7 @@ fun OneUiSettingsGroup(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = isAppInDark
     val cardBg = if (isDark) Color(0xFF12141A) else Color(0xFFFFFFFF)
     val cardBorder = if (isDark) Color(0xFF1F2430) else Color.Transparent
     val textMuted = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
@@ -361,7 +366,7 @@ fun OneUiSettingsNavRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = isAppInDark
     val textDark = if (isDark) Color.White else Color(0xFF0F172A)
     val textMuted = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
     val effectiveTint = if (iconTint != Color(0xFF2563EB)) iconTint else iconColor
@@ -450,7 +455,7 @@ fun OneUiSettingsToggleRow(
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = isAppInDark
     val textDark = if (isDark) Color.White else Color(0xFF0F172A)
     val textMuted = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
     val effectiveTint = if (iconTint != Color(0xFF2563EB)) iconTint else iconColor
@@ -533,7 +538,7 @@ fun OneUiSettingsSliderRow(
     steps: Int = 0,
     modifier: Modifier = Modifier
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = isAppInDark
     val textDark = if (isDark) Color.White else Color(0xFF0F172A)
     val effectiveTint = if (iconTint != Color(0xFF2563EB)) iconTint else iconColor
 
@@ -606,7 +611,7 @@ fun OneUiSettingsDivider(
     modifier: Modifier = Modifier,
     paddingStart: Dp = 16.dp
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = isAppInDark
     val dividerColor = if (isDark) Color(0xFF1F2430) else Color(0xFFE2E8F0)
     HorizontalDivider(
         modifier = modifier.padding(start = paddingStart, end = 16.dp),

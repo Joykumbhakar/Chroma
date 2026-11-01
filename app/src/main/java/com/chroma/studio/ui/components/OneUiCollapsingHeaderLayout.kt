@@ -63,7 +63,7 @@ fun OneUiCollapsingHeaderLayout(
     ) -> Unit
 ) {
     val colors = LocalOscellionColors.current
-    val isDark = isSystemInDarkTheme()
+    val isDark = colors.isDark
     val context = LocalContext.current
     val density = LocalDensity.current
     val coroutineScope = rememberCoroutineScope()
@@ -329,7 +329,7 @@ fun OneUiSquircleSearchBar(
     placeholder: String = "Search...",
     onClear: () -> Unit = { onQueryChange("") }
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = LocalOscellionColors.current.isDark
     val cardBorderColor = if (!isDark) Color.Black.copy(alpha = 0.05f) else Color.White.copy(alpha = 0.07f)
     val textDark = if (!isDark) Color(0xFF0A0A0C) else Color(0xFFF2F2F7)
     val textMuted = if (!isDark) Color(0xFF71717A) else Color(0xFF8E8E93)
@@ -414,7 +414,7 @@ fun ChromaOneUiHeaderBackdrop(
     expandedHeightDp: Dp,
     collapseProgress: Float,
     gradientAlpha: Float = 1f,
-    isDark: Boolean = isSystemInDarkTheme(),
+    isDark: Boolean = LocalOscellionColors.current.isDark,
     screenBgColor: Color = if (!isDark) Color(0xFFF8FAFC) else Color(0xFF000000),
     modifier: Modifier = Modifier
 ) {
