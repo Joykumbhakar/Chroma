@@ -958,7 +958,7 @@ fun SearchScreen(
     }
 
     // ── One UI Extended App Bar Height & State Persistence ────────────────────
-    val expandedHeightDp: Dp = 220.dp
+    val expandedHeightDp: Dp = 240.dp
     val maxCollapsePx = remember(density, expandedHeightDp) { with(density) { expandedHeightDp.toPx() } }
 
     // Restore exact collapsed/expanded fraction from SharedPreferences
@@ -1097,9 +1097,9 @@ fun SearchScreen(
     // Auto-resize font size when title text is long (per One UI Title specification)
     val extendedTitleFontSize = remember(resolvedHeaderTitle) {
         when {
-            resolvedHeaderTitle.length > 28 -> 22.sp
-            resolvedHeaderTitle.length > 18 -> 26.sp
-            else -> 32.sp
+            resolvedHeaderTitle.length > 28 -> 24.sp
+            resolvedHeaderTitle.length > 18 -> 28.sp
+            else -> 38.sp
         }
     }
 
@@ -1163,7 +1163,7 @@ fun SearchScreen(
                             text = resolvedHeaderTitle,
                             fontSize = extendedTitleFontSize,
                             fontWeight = if (useDynamicTitle) FontWeight.Bold else FontWeight.SemiBold,
-                            letterSpacing = (-0.5).sp,
+                            letterSpacing = (-0.6).sp,
                             color = textDark,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,

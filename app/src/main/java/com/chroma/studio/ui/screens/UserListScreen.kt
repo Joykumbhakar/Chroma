@@ -1,7 +1,7 @@
 package com.chroma.studio.ui.screens
 
 import com.chroma.studio.ui.components.VerifiedBadge
-import com.chroma.studio.ui.components.GlassIconButton
+import com.chroma.studio.ui.components.OneUiCollapsingHeaderLayout
 import com.chroma.studio.ui.components.GlassButton
 import com.chroma.studio.ui.components.LiquidGlassPrimaryButton
 import com.chroma.studio.ui.components.LiquidGlassSecondaryButton
@@ -90,20 +90,14 @@ fun UserListScreen(
         isLoading = false
     }
 
-    Scaffold(
-        topBar = {
-            com.chroma.studio.ui.components.ChromaScreenHeader(
-                title = "Oscellion",
-                badgeText = if (type == "followers") "Followers" else "Following",
-                showBackButton = true,
-                onBack = onBack
-            )
-        },
-        containerColor = colors.bg
-    ) { padding ->
+    OneUiCollapsingHeaderLayout(
+        title = if (type == "followers") "Followers" else "Following",
+        subtitle = "${users.size} people",
+        onBack = onBack
+    ) { collapseProgress ->
         if (isLoading) {
             LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(padding),
+                modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
@@ -114,7 +108,7 @@ fun UserListScreen(
         } else {
             if (users.isEmpty()) {
                 val emptyState = rememberAppleGraphicAnimationState()
-                Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         AppleHeartHandshakeGraphic(
                             modifier = Modifier.size(130.dp),
@@ -129,7 +123,7 @@ fun UserListScreen(
                 }
             } else {
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize().padding(padding),
+                    modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {

@@ -1,5 +1,7 @@
 package com.chroma.studio.ui.screens
 
+import com.chroma.studio.ui.components.OneUiCollapsingHeaderLayout
+
 import com.chroma.studio.ui.components.GlassIconButton
 
 import com.chroma.studio.ui.components.OscellionBrandLockup
@@ -89,6 +91,7 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.graphics.Brush
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 
 import androidx.compose.ui.graphics.graphicsLayer
 
@@ -189,6 +192,7 @@ fun DrawerItem(
 ) {
 
     val colors = LocalOscellionColors.current
+    val textDark = if (!colors.isDark) Color(0xFF0A0A0C) else Color(0xFFF2F2F7)
 
     
 
@@ -359,6 +363,7 @@ fun HomeScreen(
 ) {
 
     val colors = LocalOscellionColors.current
+    val textDark = if (!colors.isDark) Color(0xFF0A0A0C) else Color(0xFFF2F2F7)
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
 
@@ -956,569 +961,120 @@ fun HomeScreen(
 
             }
 
-            Box(modifier = Modifier.fillMaxSize().then(if (showHeader) Modifier.statusBarsPadding() else Modifier)) {
-
-                // ── Hero Section ──
-
-                Column(modifier = Modifier.fillMaxWidth().height(if (showHeader) 420.dp else 340.dp).zIndex(1f).padding(horizontal = 20.dp, vertical = if (showHeader) 16.dp else 12.dp)) {
-
-                    
-
-                    val heroTextColor = Color.White
-
-                    val heroMutedColor = Color.White.copy(alpha = 0.9f)
-
-                    val heroIconBg = Color.White.copy(alpha = 0.15f)
-
-                    val heroIconBorder = Color.White.copy(alpha = 0.4f)
-
-
-
-                    // Top Bar with Animated Search
-
-                    if (showHeader) {
-
-                    Row(
-
-                        modifier = Modifier.fillMaxWidth().height(48.dp),
-
-                        horizontalArrangement = Arrangement.SpaceBetween,
-
-                        verticalAlignment = Alignment.CenterVertically
-
+            OneUiCollapsingHeaderLayout(
+                title = "Pictures",
+                subtitle = if (works.isNotEmpty()) "${works.size} creations" else "",
+                expandedHeightDp = 240.dp,
+                headerLeadingContent = { compactTitleAlpha ->
+                    Icon(
+                        imageVector = Lucide.Menu,
+                        contentDescription = "Menu",
+                        tint = textDark,
+                        modifier = Modifier
+                            .size(26.dp)
+                            .clip(CircleShape)
+                            .clickable { scope.launch { drawerState.open() } }
+                            .padding(2.dp)
+                    )
+                },
+                headerActions = { compactTitleAlpha ->
+                    // 1. Create Popover / New Work Button
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(if (showCreatePostMenu) colors.glassBgHover else Color.Transparent)
+                            .clickable { showCreatePostMenu = !showCreatePostMenu },
+                        contentAlignment = Alignment.Center
                     ) {
-
-                        // Left side: Menu -> Oscellion Brand
-
-                        AnimatedVisibility(
-
-                            visible = !searchActive,
-
-                            enter = fadeIn() + expandHorizontally(),
-
-                            exit = fadeOut() + shrinkHorizontally()
-
-                        ) {
-
-                            Row(
-
-                                verticalAlignment = Alignment.CenterVertically,
-
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-
-                            ) {
-
-                                Icon(
-
-                                    Lucide.Menu,
-
-                                    contentDescription = "Menu",
-
-                                    tint = heroTextColor.copy(alpha = 0.9f),
-
-                                    modifier = Modifier
-
-                                        .size(28.dp)
-
-                                        .clickable { scope.launch { drawerState.open() } }
-
-                                        .padding(end = 4.dp)
-
-                                )
-
-                                OscellionBrandLockup(
-
-                                    iconSize = 22.dp,
-
-                                    fontSize = 18.dp
-
-                                )
-
-                            }
-
-                        }
-
-                        
-
-                        // Right side: ViewMode + Search
-
-                        Row(
-
-                            verticalAlignment = Alignment.CenterVertically,
-
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-
-                            modifier = Modifier
-
-                                .animateContentSize()
-
-                                .then(if (searchActive) Modifier.fillMaxWidth() else Modifier.wrapContentWidth())
-
-                        ) {
-
-                            if (!searchActive) {
-
-                                Box(
-
-                                    modifier = Modifier
-
-                                        .size(36.dp)
-
-                                        .clickable { 
-
-                                            importWorkLauncher.launch(arrayOf("application/json", "*/*"))
-
-                                        },
-
-                                    contentAlignment = Alignment.Center
-
-                                ) {
-
-                                    Icon(Lucide.Upload, "Import JSON File", tint = heroTextColor, modifier = Modifier.size(16.dp))
-
-                                }
-
-                                
-
-                                val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
-
-                                Box(
-
-                                    modifier = Modifier
-
-                                        .size(36.dp)
-
-                                        .clickable { 
-
-                                            val clipboardText = clipboardManager.getText()?.text
-
-                                            if (clipboardText.isNullOrBlank()) {
-
-                                                com.chroma.studio.ui.components.ToastManager.showToast("Clipboard is empty")
-
-                                            } else {
-
-                                                try {
-
-                                                    val importedWork = gson.fromJson(clipboardText, com.chroma.studio.model.ChromaWork::class.java)
-
-                                                    if (importedWork != null && importedWork.layersJson.isNotEmpty()) {
-
-                                                        val newWork = importedWork.copy(
-
-                                                            id = java.util.UUID.randomUUID().toString(),
-
-                                                            name = importedWork.name + " (Pasted)",
-
-                                                            createdAt = System.currentTimeMillis(),
-
-                                                            lastModifiedAt = System.currentTimeMillis()
-
-                                                        )
-
-                                                        repository.save(newWork)
-
-                                                        com.chroma.studio.ui.components.ToastManager.showToast("Pasted JSON successfully")
-
-                                                    } else {
-
-                                                        com.chroma.studio.ui.components.ToastManager.showToast("Invalid Oscellion JSON format")
-
-                                                    }
-
-                                                } catch (e: Exception) {
-
-                                                    com.chroma.studio.ui.components.ToastManager.showToast("Failed to parse JSON")
-
-                                                }
-
-                                            }
-
-                                        },
-
-                                    contentAlignment = Alignment.Center
-
-                                ) {
-
-                                    Icon(Lucide.ClipboardPaste, "Paste JSON", tint = heroTextColor, modifier = Modifier.size(16.dp))
-
-                                }
-
-                                val haptic = LocalHapticFeedback.current
-
-                                Box(
-
-                                    modifier = Modifier
-
-                                        .size(36.dp)
-
-                                        .combinedClickable(
-
-                                            onClick = { 
-
-                                                viewMode = viewMode.next()
-
-                                                onViewModeChanged(viewMode)
-
-                                            },
-
-                                            onLongClick = {
-
-                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-
-                                                showViewModeSheet = true
-
-                                            }
-
-                                        ),
-
-                                    contentAlignment = Alignment.Center
-
-                                ) {
-
-                                    Icon(viewMode.icon, "View Mode: ${viewMode.title}", tint = heroTextColor, modifier = Modifier.size(16.dp))
-
-                                }
-
-                            }
-
-                            
-
-                            if (searchActive) {
-
-                                androidx.compose.foundation.text.BasicTextField(
-
-                                    value = searchQuery,
-
-                                    onValueChange = { searchQuery = it },
-
-                                    textStyle = androidx.compose.ui.text.TextStyle(color = heroTextColor, fontSize = 16.sp),
-
-                                    cursorBrush = androidx.compose.ui.graphics.SolidColor(heroTextColor),
-
-                                    singleLine = true,
-
-                                    modifier = Modifier
-
-                                        .fillMaxWidth()
-
-                                        .clip(CircleShape)
-
-                                        .background(heroIconBg)
-
-                                        .padding(horizontal = 16.dp, vertical = 8.dp),
-
-                                    decorationBox = { innerTextField ->
-
-                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-
-                                            Icon(Lucide.Search, null, tint = heroTextColor, modifier = Modifier.size(18.dp))
-
-                                            Box(modifier = Modifier.weight(1f)) {
-
-                                                if (searchQuery.isEmpty()) {
-
-                                                    Text("Search works...", color = heroMutedColor, fontSize = 14.sp)
-
-                                                }
-
-                                                innerTextField()
-
-                                            }
-
-                                            Icon(Lucide.X, null, tint = heroTextColor, modifier = Modifier.size(18.dp).clickable { 
-
-                                                if (searchQuery.isEmpty()) searchActive = false else searchQuery = "" 
-
-                                            })
-
-                                        }
-
-                                    }
-
-                                )
-
-                            } else {
-
-                                Box(
-
-                                    modifier = Modifier
-
-                                        .size(36.dp)
-
-                                        .clip(CircleShape)
-
-                                        .background(heroIconBg)
-
-                                        .clickable { searchActive = true },
-
-                                    contentAlignment = Alignment.Center
-
-                                ) {
-
-                                    Icon(Lucide.Search, "Search", tint = heroTextColor, modifier = Modifier.size(18.dp))
-
-                                }
-
-                            }
-
-                        }
-
+                        Icon(Lucide.Plus, "Create", tint = textDark, modifier = Modifier.size(20.dp))
                     }
 
+                    // 2. Search Icon
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(if (searchActive) colors.glassBgHover else Color.Transparent)
+                            .clickable {
+                                searchActive = !searchActive
+                                if (!searchActive) searchQuery = ""
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Lucide.Search, "Search", tint = textDark, modifier = Modifier.size(19.dp))
                     }
 
-
-
-                    Spacer(modifier = Modifier.weight(1f))
-
-
-
-                    // Text section
-
-                    Text("Gradient create", color = heroMutedColor, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-
-                        Text("Get started", color = heroTextColor, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold)
-
-                        Spacer(Modifier.width(8.dp))
-
-                        Box(
-
-                            modifier = Modifier
-
-                                .size(26.dp)
-
-                                .clip(CircleShape)
-
-                                .background(heroIconBg),
-
-                            contentAlignment = Alignment.Center
-
-                        ) {
-
-                            Icon(Lucide.ChevronRight, null, tint = heroTextColor, modifier = Modifier.size(15.dp))
-
-                        }
-
-                    }
-
-
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-
-
-                    // Buttons
-
-                    Row(modifier = Modifier.fillMaxWidth().height(110.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-
-                        // Button 1: New gradient
-
-                        val cardBrush = Brush.linearGradient(
-
-                            colors = listOf(Color.White.copy(alpha = 0.35f), Color.White.copy(alpha = 0.20f)),
-
-                            start = androidx.compose.ui.geometry.Offset.Zero,
-
-                            end = androidx.compose.ui.geometry.Offset(0f, Float.POSITIVE_INFINITY)
-
-                        )
-
-                        val cardTextColor = Color.White
-
-                        val cardBorderColor = Color.White.copy(alpha = 0.4f)
-
-                        
-
-                        Column(
-
-                            modifier = Modifier
-
-                                .weight(1.5f)
-
-                                .fillMaxHeight()
-
-                                .clip(RoundedCornerShape(24.dp))
-
-                                .background(cardBrush)
-
-                                .border(1.dp, cardBorderColor, RoundedCornerShape(24.dp))
-
-                                .clickable { showCreatePostMenu = true },
-
-                            horizontalAlignment = Alignment.CenterHorizontally,
-
-                            verticalArrangement = Arrangement.Center
-
-                        ) {
-
-                            Box(modifier = Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(Color.Black), contentAlignment = Alignment.Center) {
-
-                                Icon(Lucide.Plus, null, tint = Color.White, modifier = Modifier.size(20.dp))
-
-                            }
-
-                            Spacer(Modifier.height(12.dp))
-
-                            Text("New gradient", color = cardTextColor, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-
-                        }
-
-
-
-                        // Button 2: Generate (AI)
-
-                        val generateButtonLayers = remember(GENERATE_BUTTON_BG_JSON) {
-
-                            repository.deserializeLayers(GENERATE_BUTTON_BG_JSON)
-
-                        }
-
-                        Box(
-
-                            modifier = Modifier
-
-                                .weight(1.0f)
-
-                                .fillMaxHeight()
-
-                        ) {
-
-                            Box(
-
-                                modifier = Modifier
-
-                                    .fillMaxSize()
-
-                                    .clip(RoundedCornerShape(24.dp))
-
-                                    .border(2.dp, Color.White.copy(alpha = 0.5f), RoundedCornerShape(24.dp))
-
-                                    .clickable { 
-
-                                        if (FirebaseAuth.getInstance().currentUser != null) {
-
-                                            val intent = Intent(context, MainActivity::class.java).apply {
-
-                                                putExtra("EXTRA_START_AI_GENERATOR", true)
-
-                                            }
-
-                                            context.startActivity(intent)
-
-                                        } else {
-
-                                            showLoginScreen = true
-
-                                        }
-
-                                    }
-
-                            ) {
-
-                                CanvasPreview(layers = generateButtonLayers, shape = "full", borderColor = Color.Transparent, modifier = Modifier.fillMaxSize())
-
-                                // Glossy highlight overlay
-
-                                Box(modifier = Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color.White.copy(alpha = 0.3f), Color.Transparent))))
-
-                                
-
-                                Column(
-
-                                    modifier = Modifier.fillMaxSize(),
-
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-
-                                    verticalArrangement = Arrangement.Center
-
-                                ) {
-
-                                    Box(modifier = Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(Color.Black), contentAlignment = Alignment.Center) {
-
-                                        AiWaveSphereIcon(modifier = Modifier.size(26.dp))
-
-                                    }
-
-                                    Spacer(Modifier.height(12.dp))
-
-                                    Text("Generate", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-
+                    // 3. View Mode Toggle
+                    val haptic = LocalHapticFeedback.current
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .combinedClickable(
+                                onClick = {
+                                    viewMode = viewMode.next()
+                                    onViewModeChanged(viewMode)
+                                },
+                                onLongClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    showViewModeSheet = true
                                 }
-
-                            }
-
-                            
-
-                            Box(
-
-                                modifier = Modifier
-
-                                    .align(Alignment.TopCenter)
-
-                                    .offset(y = (-8).dp)
-
-                                    .clip(RoundedCornerShape(50))
-
-                                    .background(Color.White)
-
-                                    .padding(horizontal = 10.dp, vertical = 4.dp)
-
-                            ) {
-
-                                Text("Pro Magic", color = Color.Black, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-
-                            }
-
-                        }
-
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(viewMode.icon, "View Mode: ${viewMode.title}", tint = textDark, modifier = Modifier.size(19.dp))
                     }
-
-
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
                 }
+            ) { collapseProgress ->
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // Slide-Out Search Bar
+                    AnimatedVisibility(
+                        visible = searchActive,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut()
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 6.dp)
+                                .height(44.dp)
+                                .clip(RoundedCornerShape(22.dp))
+                                .background(if (colors.isDark) Color(0xFF1E2028) else Color.White)
+                                .border(1.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f), RoundedCornerShape(22.dp))
+                                .padding(horizontal = 14.dp),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(Lucide.Search, null, tint = colors.textMuted, modifier = Modifier.size(18.dp))
+                                Box(modifier = Modifier.weight(1f)) {
+                                    if (searchQuery.isEmpty()) {
+                                        Text("Search creations...", color = colors.textMuted, fontSize = 14.sp)
+                                    }
+                                    BasicTextField(
+                                        value = searchQuery,
+                                        onValueChange = { searchQuery = it },
+                                        textStyle = TextStyle(color = textDark, fontSize = 14.sp),
+                                        cursorBrush = SolidColor(Color(0xFF007AFF)),
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
+                                if (searchQuery.isNotEmpty()) {
+                                    Icon(
+                                        Lucide.X,
+                                        contentDescription = "Clear",
+                                        tint = colors.textMuted,
+                                        modifier = Modifier.size(18.dp).clickable { searchQuery = "" }
+                                    )
+                                }
+                            }
+                        }
+                    }
 
-
-
-                // â”€â”€ Grid Area (Fading to white) â”€â”€
-
-                val density = androidx.compose.ui.platform.LocalDensity.current
-
-                val fadeEndY = remember(density) { with(density) { 110.dp.toPx() } }
-
-                
-
-                Box(
-
-                    modifier = Modifier
-
-                        .fillMaxSize()
-
-                        .padding(top = 294.dp)
-
-                        .background(
-
-                            Brush.verticalGradient(
-
-                                0.0f to colors.bg.copy(alpha = 0f),
-
-                                1.0f to colors.bg,
-
-                                startY = 0f,
-
-                                endY = fadeEndY
-
-                            )
-
-                        )
-
-                ) {
-
-                    Column(modifier = Modifier.fillMaxSize().padding(top = 126.dp)) {
 
                         // â”€â”€ Contextual Action Bar for Selection Mode â”€â”€
 
@@ -1778,7 +1334,7 @@ fun HomeScreen(
 
                         state = gridState,
 
-                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 180.dp),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 130.dp),
 
                         verticalArrangement = Arrangement.spacedBy(12.dp),
 
@@ -1967,12 +1523,7 @@ fun HomeScreen(
                 }
 
             }
-
-        }
-
-    }
-
-            
+            }
 
             // ── Synchronized Rotating Action Menu (Floating for non-empty state) ──
 
@@ -2414,7 +1965,7 @@ fun HomeSkeletonGrid(
 
         columns = gridColumns,
 
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 180.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 130.dp),
 
         verticalArrangement = Arrangement.spacedBy(12.dp),
 

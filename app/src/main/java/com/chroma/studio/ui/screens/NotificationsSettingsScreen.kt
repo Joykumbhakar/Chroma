@@ -119,7 +119,7 @@ fun NotificationsSettingsScreen(
     OneUiCollapsingHeaderLayout(
         title = "Notifications",
         subtitle = "Preferences & delivery alerts",
-        expandedHeightDp = 130.dp,
+        expandedHeightDp = 240.dp,
         onBack = onBack,
         headerActions = { compactTitleAlpha ->
             Surface(

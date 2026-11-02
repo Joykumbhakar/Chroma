@@ -1,6 +1,6 @@
 package com.chroma.studio.ui.screens
 import com.chroma.studio.ui.components.OscellionLoadingSpinner
-import com.chroma.studio.ui.components.GlassIconButton
+import com.chroma.studio.ui.components.OneUiCollapsingHeaderLayout
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -39,18 +39,12 @@ fun ArchivesScreen(
         discoverVm.loadArchivedWorks(userId)
     }
 
-    Scaffold(
-        topBar = {
-            com.chroma.studio.ui.components.ChromaScreenHeader(
-                title = "Oscellion",
-                badgeText = "Archives",
-                showBackButton = true,
-                onBack = onBack
-            )
-        },
-        containerColor = colors.bg
-    ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+    OneUiCollapsingHeaderLayout(
+        title = "Archives",
+        subtitle = "${archivedWorks.size} archived items",
+        onBack = onBack
+    ) { collapseProgress ->
+        Box(modifier = Modifier.fillMaxSize()) {
             if (isLoading) {
                 OscellionLoadingSpinner(
                     modifier = Modifier.align(Alignment.Center),

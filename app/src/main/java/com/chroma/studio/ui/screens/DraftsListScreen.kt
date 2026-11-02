@@ -1,5 +1,7 @@
 package com.chroma.studio.ui.screens
 
+import com.chroma.studio.ui.components.OneUiCollapsingHeaderLayout
+
 import android.net.Uri
 import androidx.compose.animation.*
 import androidx.compose.foundation.*
@@ -47,64 +49,14 @@ fun DraftsListScreen(
     val drafts by actualDraftRepo.draftsFlow.collectAsState()
     var draftToDelete by remember { mutableStateOf<CreatorPostDraft?>(null) }
 
-    Scaffold(
-        topBar = {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp)
-                    .background(colors.bg)
-                    .border(BorderStroke(1.dp, colors.glassBorder))
-                    .padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        imageVector = Lucide.ArrowLeft,
-                        contentDescription = "Back",
-                        tint = colors.textMain,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = "Drafts",
-                        color = colors.textMain,
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    if (drafts.isNotEmpty()) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0xFF2563EB))
-                                .padding(horizontal = 8.dp, vertical = 2.dp)
-                        ) {
-                            Text(
-                                text = "${drafts.size}",
-                                color = Color.White,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-
-                // Balance spacing
-                Spacer(Modifier.width(36.dp))
-            }
-        },
-        containerColor = colors.bg
-    ) { innerPadding ->
+    OneUiCollapsingHeaderLayout(
+        title = "Drafts",
+        subtitle = if (drafts.isNotEmpty()) "${drafts.size} saved drafts" else "",
+        expandedHeightDp = 240.dp,
+        onBack = onBack
+    ) { collapseProgress ->
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
+            modifier = Modifier.fillMaxSize()
         ) {
             if (drafts.isEmpty()) {
                 Box(

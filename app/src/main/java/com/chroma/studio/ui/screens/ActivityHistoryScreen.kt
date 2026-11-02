@@ -112,7 +112,7 @@ fun ActivityHistoryScreen(
     OneUiCollapsingHeaderLayout(
         title = "Your Activity",
         subtitle = "${selectedTab.title} collection (${currentList.size} items)",
-        expandedHeightDp = 130.dp,
+        expandedHeightDp = 240.dp,
         onBack = onBack,
         headerActions = { compactTitleAlpha ->
             // View mode toggle

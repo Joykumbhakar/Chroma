@@ -1,7 +1,5 @@
 package com.chroma.studio.ui.screens
-import com.chroma.studio.ui.components.OneUiViewingArea
-import com.chroma.studio.ui.components.OneUiStickyTopBar
-import com.chroma.studio.ui.components.rememberOneUiGradientStyle
+import com.chroma.studio.ui.components.OneUiCollapsingHeaderLayout
 import com.chroma.studio.ui.components.GlassIconButton
 
 import androidx.compose.foundation.background
@@ -55,67 +53,47 @@ fun BackgroundsScreen(
     onResetToDefault: () -> Unit = {}
 ) {
     val colors = LocalOscellionColors.current
-    val (gradientStyle, cycleGradient) = rememberOneUiGradientStyle()
     val backgroundWorks = remember(works) { works.filter { it.isHomeBackground } }
 
     var workToConfirm by remember { mutableStateOf<ChromaWork?>(null) }
     var showResetDialog by remember { mutableStateOf(false) }
 
-    Scaffold(
-        topBar = {
-            OneUiStickyTopBar(
-                title = "Wallpapers",
-                onBack = onBack,
-                gradientStyle = gradientStyle,
-                onCycleGradient = cycleGradient,
-                actions = {
-                    if (isCustomBackgroundActive) {
-                        IconButton(
-                            onClick = { showResetDialog = true },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                imageVector = Lucide.RotateCcw,
-                                contentDescription = "Reset to Default Background",
-                                tint = colors.textMuted,
-                                modifier = Modifier.size(19.dp)
-                            )
-                        }
-                    }
+    OneUiCollapsingHeaderLayout(
+        title = "Wallpapers",
+        subtitle = if (isCustomBackgroundActive) "Custom wallpaper active on Home" else "Default dynamic gradient active",
+        onBack = onBack,
+        headerActions = {
+            if (isCustomBackgroundActive) {
+                IconButton(
+                    onClick = { showResetDialog = true },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Lucide.RotateCcw,
+                        contentDescription = "Reset to Default Background",
+                        tint = colors.textMuted,
+                        modifier = Modifier.size(19.dp)
+                    )
                 }
-            )
-        },
-        containerColor = colors.bg
-    ) { padding ->
+            }
+        }
+    ) { collapseProgress ->
         LazyVerticalGrid(
             columns = GridCells.Adaptive(minSize = 145.dp),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 48.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 48.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.padding(padding).fillMaxSize()
+            modifier = Modifier.fillMaxSize()
         ) {
-            // Section Header & One UI Viewing Area
             item(span = { GridItemSpan(maxLineSpan) }) {
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    OneUiViewingArea(
-                        title = "Wallpapers",
-                        subtitle = if (isCustomBackgroundActive) "Custom wallpaper active on Home" else "Default dynamic gradient active",
-                        gradientStyle = gradientStyle,
-                        onCycleGradient = cycleGradient,
-                        height = 145.dp
-                    )
-                    Text(
-                        text = "SELECT A DESIGN TO SET AS YOUR DYNAMIC HOME SCREEN BACKGROUND",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = colors.textMuted.copy(alpha = 0.8f),
-                        letterSpacing = 0.8.sp,
-                        modifier = Modifier.padding(horizontal = 4.dp)
-                    )
-                }
+                Text(
+                    text = "SELECT A DESIGN TO SET AS YOUR DYNAMIC HOME SCREEN BACKGROUND",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.textMuted.copy(alpha = 0.8f),
+                    letterSpacing = 0.8.sp,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp)
+                )
             }
 
             // 1. System Default Background Card

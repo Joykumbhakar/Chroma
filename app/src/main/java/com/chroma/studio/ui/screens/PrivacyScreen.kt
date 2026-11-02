@@ -8,6 +8,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.text.font.FontWeight
+import com.chroma.studio.chat.sound.SoundManager
 import com.chroma.studio.model.UserProfile
 import com.chroma.studio.ui.components.*
 import com.composables.icons.lucide.*
@@ -30,33 +36,35 @@ fun PrivacyScreen(
                      (showOnline != profile.showOnlineStatus)
     }
 
-    val screenBg = if (isDark) Color(0xFF000000) else Color(0xFFF4F7FB)
-
-    Scaffold(
-        topBar = {
-            AppleSettingsHeader(
-                title = "Privacy",
-                icon = Lucide.Lock,
-                iconGradient = listOf(Color(0xFF4DA6FF), Color(0xFF0A84FF), Color(0xFF0051D5)),
-                doneText = if (hasChanges) "Save" else "Done",
-                onDoneClick = {
-                    if (hasChanges) {
-                        onSave(profile.copy(
-                            isPrivateAccount = isPrivate,
-                            allowTagging = allowTagging,
-                            showOnlineStatus = showOnline
-                        ))
+    OneUiCollapsingHeaderLayout(
+        title = "Privacy",
+        subtitle = "Account visibility & permissions",
+        onBack = onBack,
+        headerActions = { compactTitleAlpha ->
+            Text(
+                text = if (hasChanges) "Save" else "Done",
+                fontSize = 14.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF007AFF),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable {
+                        SoundManager.playReaction()
+                        if (hasChanges) {
+                            onSave(profile.copy(
+                                isPrivateAccount = isPrivate,
+                                allowTagging = allowTagging,
+                                showOnlineStatus = showOnline
+                            ))
+                        }
+                        onBack()
                     }
-                    onBack()
-                }
+                    .padding(horizontal = 8.dp, vertical = 6.dp)
             )
-        },
-        containerColor = screenBg
-    ) { padding ->
+        }
+    ) { collapseProgress ->
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
+            modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(22.dp)
         ) {

@@ -2578,7 +2578,7 @@ fun NotificationsFeedScreen(
     OneUiCollapsingHeaderLayout(
         title = "Activity",
         subtitle = if (unreadCount > 0) "$unreadCount unread updates" else "Notifications & interactions",
-        expandedHeightDp = 130.dp,
+        expandedHeightDp = 240.dp,
         onBack = onBack,
         headerActions = { compactTitleAlpha ->
             // Global Expanding Search Bar (slide out/in, rounded corners, no border when inactive!)

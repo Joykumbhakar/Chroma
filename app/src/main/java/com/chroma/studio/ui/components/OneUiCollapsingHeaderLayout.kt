@@ -50,7 +50,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun OneUiCollapsingHeaderLayout(
     title: String,
-    subtitle: String,
+    subtitle: String = "",
     modifier: Modifier = Modifier,
     onBack: (() -> Unit)? = null,
     backIcon: ImageVector = Lucide.ArrowLeft,

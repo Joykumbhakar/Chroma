@@ -1,5 +1,7 @@
 package com.chroma.studio.ui.screens
 
+import com.chroma.studio.ui.components.OneUiCollapsingHeaderLayout
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -77,6 +79,7 @@ fun TrashScreen(
     onRefresh: (() -> Unit)? = null
 ) {
     val colors = LocalOscellionColors.current
+    val textDark = if (!colors.isDark) Color(0xFF0A0A0C) else Color(0xFFF2F2F7)
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
     var showEmptyTrashDialog by remember { mutableStateOf(false) }
     var singleDeleteId by remember { mutableStateOf<String?>(null) }
@@ -115,125 +118,104 @@ fun TrashScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            ChromaScreenHeader(
-                title = if (selectionMode) {
-                    "${selectedWorkIds.size} Selected"
-                } else if (deletedWorks.isNotEmpty()) {
-                    "Trash (${deletedWorks.size})"
-                } else {
-                    "Trash"
-                },
-                badgeText = null, // No pill badge - clean text used in title
-                showBackButton = true,
-                circularBackButton = false,
-                onBack = {
-                    if (selectionMode) onClearSelection() else onBack()
-                },
-                actions = {
-                    if (selectionMode) {
-                        val allSelected = deletedWorks.isNotEmpty() && selectedWorkIds.size >= deletedWorks.size
-                        // Deselect All / Select All Icon
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clickable {
-                                    if (allSelected) onClearSelection() else onSelectAll?.invoke()
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Lucide.CheckCheck,
-                                contentDescription = if (allSelected) "Deselect All" else "Select All",
-                                tint = Color.White,
-                                modifier = Modifier
-                                    .size(20.dp)
-                                    .gradientTint(if (allSelected) selectIconGradient else subtleIconGradient)
-                            )
-                        }
-                        Spacer(Modifier.width(4.dp))
-                        // Restore Selected Icon
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .clickable { onRestoreSelected() },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Lucide.RefreshCcw,
-                                contentDescription = "Restore",
-                                tint = Color.White,
-                                modifier = Modifier
-                                    .size(19.dp)
-                                    .gradientTint(restoreIconGradient)
-                            )
-                        }
-                        Spacer(Modifier.width(4.dp))
-                        // Delete Selected Icon
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .clickable { showDeleteConfirmDialog = true },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Lucide.Trash2,
-                                contentDescription = "Delete",
-                                tint = Color.White,
-                                modifier = Modifier
-                                    .size(20.dp)
-                                    .gradientTint(dangerIconGradient)
-                            )
-                        }
-                    } else if (deletedWorks.isNotEmpty()) {
-                        // Quick Select Icon Button
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .clickable { onSelectAll?.invoke() },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Lucide.ListCheck,
-                                contentDescription = "Select",
-                                tint = Color.White,
-                                modifier = Modifier
-                                    .size(21.dp)
-                                    .gradientTint(selectIconGradient)
-                            )
-                        }
-                        Spacer(Modifier.width(4.dp))
-                        // Empty Trash Icon Button
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .clickable { showEmptyTrashDialog = true },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Lucide.Trash2,
-                                contentDescription = "Empty Trash",
-                                tint = Color.White,
-                                modifier = Modifier
-                                    .size(20.dp)
-                                    .gradientTint(dangerIconGradient)
-                            )
-                        }
-                    }
-                }
-            )
+    OneUiCollapsingHeaderLayout(
+        title = if (selectionMode) "${selectedWorkIds.size} Selected" else "Trash",
+        subtitle = if (!selectionMode) "${deletedWorks.size} items in trash" else "",
+        expandedHeightDp = 240.dp,
+        onBack = {
+            if (selectionMode) onClearSelection() else onBack()
         },
-        containerColor = colors.bg
-    ) { padding ->
+        headerActions = { compactTitleAlpha ->
+            if (selectionMode) {
+                val allSelected = deletedWorks.isNotEmpty() && selectedWorkIds.size >= deletedWorks.size
+                // Deselect All / Select All Icon
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .clickable {
+                            if (allSelected) onClearSelection() else onSelectAll?.invoke()
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Lucide.CheckCheck,
+                        contentDescription = if (allSelected) "Deselect All" else "Select All",
+                        tint = textDark,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Spacer(Modifier.width(4.dp))
+                // Restore Selected Icon
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .clickable { onRestoreSelected() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Lucide.RefreshCcw,
+                        contentDescription = "Restore",
+                        tint = Color(0xFF007AFF),
+                        modifier = Modifier.size(19.dp)
+                    )
+                }
+                Spacer(Modifier.width(4.dp))
+                // Delete Selected Icon
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .clickable { showDeleteConfirmDialog = true },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Lucide.Trash2,
+                        contentDescription = "Delete",
+                        tint = Color(0xFFEF4444),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            } else if (deletedWorks.isNotEmpty()) {
+                // Quick Select Icon Button
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .clickable { onSelectAll?.invoke() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Lucide.ListCheck,
+                        contentDescription = "Select",
+                        tint = textDark,
+                        modifier = Modifier.size(21.dp)
+                    )
+                }
+                Spacer(Modifier.width(4.dp))
+                // Empty Trash Icon Button
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .clickable { showEmptyTrashDialog = true },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Lucide.Trash2,
+                        contentDescription = "Empty Trash",
+                        tint = Color(0xFFEF4444),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        }
+    ) { collapseProgress ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+                
         ) {
             if (deletedWorks.isEmpty()) {
                 val emptyTrashState = rememberAppleTrashState()
