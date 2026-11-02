@@ -858,27 +858,7 @@ fun DiscoverScreen(
                         // End Point Stretch Loader / All Caught Up indicator
                         if (isLoadingMore) {
                             item(key = "end_stretch_loader") {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 24.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                    ) {
-                                        OscellionLoadingSpinner(
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                        Text(
-                                            "Loading more creations...",
-                                            color = colors.textMuted,
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                    }
-                                }
+                                SkeletonPost(shimmerBrush = communityShimmerBrush)
                             }
                         } else {
                             item(key = "end_of_feed") {
@@ -4842,61 +4822,145 @@ private fun CounterToggleRow(
 }
 
 @Composable
-fun SkeletonPost() {
-    val infiniteTransition = rememberInfiniteTransition(label = "skeleton_transition")
-    val alpha by infiniteTransition.animateFloat(
-        initialValue = 0.15f,
-        targetValue = 0.40f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "skeleton_alpha"
-    )
+fun SkeletonPost(
+    modifier: Modifier = Modifier,
+    shimmerBrush: Brush? = null
+) {
     val colors = LocalOscellionColors.current
+    val isDark = colors.isDark
+
+    val brush = shimmerBrush ?: run {
+        val transition = rememberInfiniteTransition(label = "skeleton_shimmer")
+        val shimmerTranslate by transition.animateFloat(
+            initialValue = -300f,
+            targetValue = 1400f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 1250, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "skeleton_shimmer_translate"
+        )
+        val shimmerColors = if (isDark) {
+            listOf(Color(0xFF1E2028), Color(0xFF2F323D), Color(0xFF1E2028))
+        } else {
+            listOf(Color(0xFFE5E9F0), Color(0xFFF4F7FB), Color(0xFFE5E9F0))
+        }
+        Brush.linearGradient(
+            colors = shimmerColors,
+            start = Offset(shimmerTranslate, 0f),
+            end = Offset(shimmerTranslate + 350f, 180f)
+        )
+    }
+
+    val cardBg = if (isDark) Color(0xFF16161A) else Color.White
 
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
+            .background(cardBg)
             .padding(top = 4.dp)
     ) {
+        // 1. Post Header: Avatar + Name & Timestamp + Options dot
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
+                .padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(modifier = Modifier.size(42.dp).clip(CircleShape).background(Color.Gray.copy(alpha = alpha)))
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(brush)
+            )
             Spacer(Modifier.width(10.dp))
-            Column {
-                Box(modifier = Modifier.width(130.dp).height(14.dp).clip(RoundedCornerShape(4.dp)).background(Color.Gray.copy(alpha = alpha)))
-                Spacer(Modifier.height(5.dp))
-                Box(modifier = Modifier.width(85.dp).height(10.dp).clip(RoundedCornerShape(4.dp)).background(Color.Gray.copy(alpha = alpha)))
+            Column(modifier = Modifier.weight(1f)) {
+                Box(
+                    modifier = Modifier
+                        .width(125.dp)
+                        .height(13.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(brush)
+                )
+                Spacer(Modifier.height(6.dp))
+                Box(
+                    modifier = Modifier
+                        .width(80.dp)
+                        .height(10.dp)
+                        .clip(RoundedCornerShape(5.dp))
+                        .background(brush)
+                )
             }
+            Box(
+                modifier = Modifier
+                    .size(width = 24.dp, height = 12.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(brush)
+            )
         }
+
+        // 2. Media Viewport (4:3 aspect ratio matching feed posts)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(4f / 3f)
-                .clip(RectangleShape)
-                .background(Color.Gray.copy(alpha = alpha))
+                .background(brush)
         )
-        Spacer(Modifier.height(14.dp))
+
+        // 3. Action Buttons Row (Heart, Comment, Remix, Share, Save)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(Color.Gray.copy(alpha = alpha)))
-            Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(Color.Gray.copy(alpha = alpha)))
-            Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(Color.Gray.copy(alpha = alpha)))
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(brush))
+                Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(brush))
+                Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(brush))
+                Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(brush))
+            }
+            Box(modifier = Modifier.size(24.dp).clip(RoundedCornerShape(6.dp)).background(brush))
         }
-        Spacer(Modifier.height(14.dp))
+
+        // 4. Metadata: Likes & Caption
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp)
+                .padding(bottom = 12.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(90.dp)
+                    .height(11.dp)
+                    .clip(RoundedCornerShape(5.dp))
+                    .background(brush)
+            )
+            Spacer(Modifier.height(8.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.85f)
+                    .height(12.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(brush)
+            )
+            Spacer(Modifier.height(6.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.55f)
+                    .height(12.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(brush)
+            )
+        }
+
+        // Divider
         HorizontalDivider(
             modifier = Modifier.fillMaxWidth(),
             thickness = 0.5.dp,
-            color = if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.08f)
+            color = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.08f)
         )
     }
 }
