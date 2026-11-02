@@ -2387,7 +2387,7 @@ fun CreatorFeedHeader(
                             .clip(pillShape)
                             .background(
                                 if (isSelected) {
-                                    if (colors.isDark) Color.White else Color(0xFF0F172A)
+                                    colors.primary // Fixed Brand color: Clean and Professional
                                 } else {
                                     if (colors.isDark) Color(0xFF1E2028) else Color(0xFFE2E8F0)
                                 }
@@ -2408,22 +2408,14 @@ fun CreatorFeedHeader(
                             Icon(
                                 imageVector = tab.icon,
                                 contentDescription = tab.label,
-                                tint = if (isSelected) {
-                                    if (colors.isDark) Color.Black else Color.White
-                                } else {
-                                    if (colors.isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
-                                },
+                                tint = if (isSelected) Color.White else (if (colors.isDark) Color(0xFF94A3B8) else Color(0xFF64748B)),
                                 modifier = Modifier.size(14.dp)
                             )
                             Text(
                                 text = tab.label,
                                 fontSize = 12.5.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isSelected) {
-                                    if (colors.isDark) Color.Black else Color.White
-                                } else {
-                                    if (colors.isDark) Color(0xFFE2E8F0) else Color(0xFF1E293B)
-                                }
+                                color = if (isSelected) Color.White else (if (colors.isDark) Color(0xFFE2E8F0) else Color(0xFF1E293B))
                             )
                         }
                     }

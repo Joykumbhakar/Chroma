@@ -870,11 +870,8 @@ fun OneUiCollapsingConversationsScreen(
             exit = scaleOut(spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)) + fadeOut(),
             modifier = Modifier.align(Alignment.BottomCenter)
         ) {
-            val fabColor = if (gradientStyle == OneUiGradientStyle.SOLID) {
-                colors.iosBlue
-            } else {
-                gradientStyle.primaryColor
-            }
+            // Always use our fixed Brand color clean and Professional
+            val fabColor = colors.iosBlue
 
             // Claymorphism Tonal Palette
             val clayHighlight = remember(fabColor) {

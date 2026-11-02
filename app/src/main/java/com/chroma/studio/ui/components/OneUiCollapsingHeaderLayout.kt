@@ -71,9 +71,9 @@ fun OneUiCollapsingHeaderLayout(
     // One UI Theme Synchronization
     val prefs = remember { context.getSharedPreferences("chat_ui_preferences", Context.MODE_PRIVATE) }
     val gradientStyle = remember {
-        val savedName = prefs.getString("one_ui_gradient_style", OneUiGradientStyle.GALAXY_AI.name)
+        val savedName = prefs.getString("one_ui_gradient_style", OneUiGradientStyle.SOLID.name)
         try {
-            OneUiGradientStyle.valueOf(savedName ?: "GALAXY_AI")
+            OneUiGradientStyle.valueOf(savedName ?: "SOLID")
         } catch (_: Exception) {
             OneUiGradientStyle.GALAXY_AI
         }
