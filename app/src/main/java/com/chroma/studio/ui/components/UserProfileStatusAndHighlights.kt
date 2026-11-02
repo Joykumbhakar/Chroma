@@ -76,8 +76,7 @@ fun UserProfileStatusSection(
     }
     var showEditDialog by remember { mutableStateOf(false) }
 
-    val statusCardBg = if (isDark) Color(0xFF141416) else Color(0xFFF1F5F9)
-    val statusBorder = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f)
+    val statusCardBg = if (isDark) Color(0xFF1E1E22) else Color(0xFFE9E9EE)
 
     // Breathing glow animation for active dot
     val infiniteTransition = rememberInfiniteTransition(label = "onlinePulse")
@@ -94,14 +93,13 @@ fun UserProfileStatusSection(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(12.dp))
             .background(statusCardBg)
-            .border(1.dp, statusBorder, RoundedCornerShape(16.dp))
             .clickable(enabled = isCurrentUser) {
                 SoundManager.playReaction()
                 showEditDialog = true
             }
-            .padding(horizontal = 14.dp, vertical = 10.dp)
+            .padding(horizontal = 12.dp, vertical = 7.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -118,8 +116,7 @@ fun UserProfileStatusSection(
                     modifier = Modifier
                         .size(36.dp)
                         .clip(CircleShape)
-                        .background(if (isDark) Color(0xFF1E1E22) else Color.White)
-                        .border(0.5.dp, statusBorder, CircleShape),
+                        .background(if (isDark) Color(0xFF26262B) else Color.White),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -209,11 +206,7 @@ fun UserProfileStatusSection(
                                     .size(42.dp)
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(if (tempEmoji == em) colors.primary.copy(alpha = 0.2f) else if (isDark) Color(0xFF1E1E22) else Color(0xFFEFF2F6))
-                                    .border(
-                                        width = if (tempEmoji == em) 1.5.dp else 0.dp,
-                                        color = if (tempEmoji == em) colors.primary else Color.Transparent,
-                                        shape = RoundedCornerShape(12.dp)
-                                    )
+
                                     .clickable { tempEmoji = em },
                                 contentAlignment = Alignment.Center
                             ) {
@@ -231,11 +224,7 @@ fun UserProfileStatusSection(
                                     .size(42.dp)
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(if (tempEmoji == em) colors.primary.copy(alpha = 0.2f) else if (isDark) Color(0xFF1E1E22) else Color(0xFFEFF2F6))
-                                    .border(
-                                        width = if (tempEmoji == em) 1.5.dp else 0.dp,
-                                        color = if (tempEmoji == em) colors.primary else Color.Transparent,
-                                        shape = RoundedCornerShape(12.dp)
-                                    )
+
                                     .clickable { tempEmoji = em },
                                 contentAlignment = Alignment.Center
                             ) {
@@ -386,8 +375,8 @@ fun UserProfileHighlightsSection(
 
     Column(modifier = modifier.fillMaxWidth()) {
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 0.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(horizontal = 0.dp, vertical = 3.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
             // + New Highlight (if current user)
@@ -400,7 +389,7 @@ fun UserProfileHighlightsSection(
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
-                            .width(66.dp)
+                            .width(56.dp)
                             .graphicsLayer { scaleX = scale; scaleY = scale }
                             .clickable(interactionSource = interactionSource, indication = null) {
                                 SoundManager.playReaction()
@@ -409,16 +398,9 @@ fun UserProfileHighlightsSection(
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(64.dp)
+                                .size(54.dp)
                                 .clip(CircleShape)
-                                .border(
-                                    width = 1.2.dp,
-                                    color = if (isDark) Color.White.copy(0.20f) else Color.Black.copy(0.12f),
-                                    shape = CircleShape
-                                )
-                                .padding(3.dp)
-                                .clip(CircleShape)
-                                .background(if (isDark) Color(0xFF1A1A1E) else Color(0xFFF1F5F9)),
+                                .background(if (isDark) Color(0xFF1E1E22) else Color(0xFFE9E9EE)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
@@ -451,7 +433,7 @@ fun UserProfileHighlightsSection(
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
-                        .width(66.dp)
+                        .width(56.dp)
                         .graphicsLayer { scaleX = scale; scaleY = scale }
                         .clickable(interactionSource = interactionSource, indication = null) {
                             SoundManager.playReaction()
@@ -461,16 +443,9 @@ fun UserProfileHighlightsSection(
                     // Instagram-style Outer Status Ring
                     Box(
                         modifier = Modifier
-                            .size(64.dp)
+                            .size(54.dp)
                             .clip(CircleShape)
-                            .border(
-                                width = 1.8.dp,
-                                brush = Brush.linearGradient(gradientColors),
-                                shape = CircleShape
-                            )
-                            .padding(3.5.dp)
-                            .clip(CircleShape)
-                            .background(if (isDark) Color(0xFF16161A) else Color(0xFFF8FAFC)),
+                            .background(if (isDark) Color(0xFF1E1E22) else Color(0xFFE9E9EE)),
                         contentAlignment = Alignment.Center
                     ) {
                         if (!hl.coverUrl.isNullOrBlank()) {

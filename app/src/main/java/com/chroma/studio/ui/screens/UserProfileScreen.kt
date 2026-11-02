@@ -638,16 +638,12 @@ fun UserProfileScreen(
     val isSysDark = colors.isDark
     val topBarBg = if (isSysDark) Color(0xFF000000).copy(alpha = (scrollProgress * 0.94f).coerceIn(0f, 0.96f))
                    else Color(0xFFF2F4F7).copy(alpha = (scrollProgress * 0.96f).coerceIn(0f, 0.98f))
-    val topBarBorder = if (isSysDark) Color(0xFF1F2430).copy(alpha = scrollProgress)
-                       else Color(0xFFE2E8F0).copy(alpha = scrollProgress)
-
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .align(Alignment.TopCenter)
             .background(topBarBg)
-            .border(width = 0.5.dp, color = topBarBorder)
-            .padding(top = statusBarTop + 4.dp, bottom = 8.dp, start = 14.dp, end = 14.dp)
+            .padding(top = statusBarTop + 2.dp, bottom = 4.dp, start = 14.dp, end = 14.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -2011,11 +2007,7 @@ private fun UserProfileModalsAndSheets(
                                 Column(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(10.dp))
-                                        .border(
-                                            width = if (isSelected) 2.dp else 0.75.dp,
-                                            color = if (isSelected) Color(0xFF007AFF) else colors.glassBorder,
-                                            shape = RoundedCornerShape(10.dp)
-                                        )
+
                                         .clickable {
                                             val uid = currentUserId ?: return@clickable
                                             scope.launch {
@@ -2094,11 +2086,7 @@ private fun UserProfileModalsAndSheets(
                                     Column(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(10.dp))
-                                            .border(
-                                                width = if (isSelected) 2.dp else 0.75.dp,
-                                                color = if (isSelected) Color(0xFF007AFF) else colors.glassBorder,
-                                                shape = RoundedCornerShape(10.dp)
-                                            )
+
                                             .clickable {
                                                 val workImg = work.imageUrl ?: return@clickable
                                                 onSelectWorkForBannerCrop(Uri.parse(workImg))
@@ -2164,8 +2152,7 @@ fun AppleDetailTile(
             modifier = Modifier
                 .size(22.dp)
                 .clip(CircleShape)
-                .background(Brush.linearGradient(iconGradient))
-                .border(0.5.dp, Color.White.copy(alpha = 0.35f), CircleShape),
+                .background(Brush.linearGradient(iconGradient)),
             contentAlignment = Alignment.Center
         ) {
             if (iconRes != null) {
@@ -2218,15 +2205,13 @@ fun AppleHorizontalDetailChip(
         modifier = Modifier
             .clip(RoundedCornerShape(7.dp))
             .background(colors.bg.copy(alpha = 0.5f))
-            .border(0.5.dp, colors.glassBorder.copy(alpha = 0.5f), RoundedCornerShape(7.dp))
             .padding(horizontal = 6.dp, vertical = 3.dp)
     ) {
         Box(
             modifier = Modifier
                 .size(18.dp)
                 .clip(RoundedCornerShape(5.dp))
-                .background(Brush.linearGradient(iconGradient))
-                .border(0.5.dp, Color.White.copy(alpha = 0.35f), RoundedCornerShape(5.dp)),
+                .background(Brush.linearGradient(iconGradient)),
             contentAlignment = Alignment.Center
         ) {
             if (iconRes != null) {
@@ -2275,8 +2260,7 @@ fun AppleDetailRow(
                 modifier = Modifier
                     .size(28.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(Brush.linearGradient(iconGradient))
-                    .border(0.75.dp, Color.White.copy(alpha = 0.28f), RoundedCornerShape(8.dp)),
+                    .background(Brush.linearGradient(iconGradient)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(icon, contentDescription = title, tint = Color.White, modifier = Modifier.size(15.dp))
@@ -2309,8 +2293,7 @@ fun AppleSettingSheetItem(
             modifier = Modifier
                 .size(36.dp)
                 .clip(RoundedCornerShape(10.dp))
-                .background(Brush.linearGradient(iconGradient))
-                .border(0.75.dp, Color.White.copy(alpha = 0.32f), RoundedCornerShape(10.dp)),
+                .background(Brush.linearGradient(iconGradient)),
             contentAlignment = Alignment.Center
         ) {
             Icon(icon, contentDescription = title, tint = Color.White, modifier = Modifier.size(18.dp))
@@ -2380,8 +2363,7 @@ fun ProfileFlashCard(
             .aspectRatio(9f / 16f)
             .clip(RectangleShape)
             .background(colors.glassBgHover)
-            .border(0.5.dp, colors.glassBorder, RectangleShape)
-    ) {
+                ) {
         if (flash.thumbnailUrl.isNotBlank()) {
             AsyncImage(
                 model = flash.thumbnailUrl,
@@ -2436,7 +2418,7 @@ fun ProfileFlashCard(
                         .size(28.dp)
                         .clip(CircleShape)
                         .background(Color.Black.copy(alpha = 0.4f))
-                        .border(0.5.dp, Color.White.copy(alpha = 0.2f), CircleShape)
+                        
                         .clickable { showMenu = true },
                     contentAlignment = Alignment.Center
                 ) {
@@ -2452,10 +2434,8 @@ fun ProfileFlashCard(
                     expanded = showMenu,
                     onDismissRequest = { showMenu = false },
                     modifier = Modifier
-                        .shadow(16.dp, RoundedCornerShape(16.dp), ambientColor = Color.Black.copy(alpha = 0.25f), spotColor = Color.Black.copy(alpha = 0.15f))
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(colors.glassBg)
-                        .border(1.dp, colors.glassBorder, RoundedCornerShape(16.dp))
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(if (colors.isDark) Color(0xFF1E1E22) else Color(0xFFF2F4F7))
                 ) {
                     DropdownMenuItem(
                         text = { Text("Delete Flash", color = colors.error, fontWeight = FontWeight.SemiBold) },
@@ -2610,9 +2590,8 @@ fun SkeletonUserProfile(onBack: () -> Unit) {
                             modifier = Modifier
                                 .size(84.dp)
                                 .clip(CircleShape)
-                                .background(colors.bg)
-                                .border(4.dp, colors.bg, CircleShape),
-                            contentAlignment = Alignment.Center
+                                .background(colors.bg),
+            contentAlignment = Alignment.Center
                         ) {
                             Box(modifier = Modifier.size(84.dp).clip(CircleShape).shimmerEffect())
                         }
