@@ -102,6 +102,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
@@ -272,7 +273,7 @@ fun DiscoverScreen(
     val listState = rememberLazyListState()
 
     val density = LocalDensity.current
-    val maxCollapsePx = remember(density) { with(density) { 280.dp.toPx() } }
+    val maxCollapsePx = remember(density) { with(density) { 240.dp.toPx() } }
     var collapseOffsetPx by remember { mutableFloatStateOf(0f) }
     var snapJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
@@ -527,7 +528,7 @@ fun DiscoverScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(if (colors.isDark) Color(0xFF0E0E11) else Color(0xFFFFFFFF))
+            .background(if (colors.isDark) Color(0xFF000000) else Color(0xFFF2F4F7))
             .nestedScroll(nestedScrollConnection)
     ) {
         BackHandler(enabled = isSearchExpanded) {
@@ -1947,47 +1948,74 @@ fun CreatorFeedHeader(
         label = "headerItemsAlpha"
     )
 
-    val neonWaveTransition = rememberInfiniteTransition(label = "neonWave")
-    val waveTranslate by neonWaveTransition.animateFloat(
-        initialValue = -150f,
-        targetValue = 650f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2800, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "waveOffset"
-    )
-    val neonWaveBrush = if (colors.isDark) {
-        Brush.linearGradient(
-            colors = listOf(
-                Color(0xFF00E676),
-                Color(0xFFCCFF00),
-                Color(0xFF00FF87),
-                Color(0xFF00E676)
-            ),
-            start = Offset(waveTranslate, 0f),
-            end = Offset(waveTranslate + 260f, 60f)
-        )
-    } else {
-        Brush.linearGradient(
-            colors = listOf(
-                Color(0xFF047857),
-                Color(0xFF10B981),
-                Color(0xFF059669),
-                Color(0xFF047857)
-            ),
-            start = Offset(waveTranslate, 0f),
-            end = Offset(waveTranslate + 260f, 60f)
-        )
-    }
+    val density = LocalDensity.current
+    val isDark = colors.isDark
+    val headerBgColor = if (isDark) Color(0xFF000000) else Color(0xFFF2F4F7)
+    val textPrimary = if (isDark) Color.White else Color(0xFF0F172A)
+    val textMuted = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+
+    // Samsung One UI 6/7 Expanded Header Metrics (Collapses smoothly on scroll)
+    val maxViewingHeight = 220.dp
+    val currentViewingHeight = (maxViewingHeight * (1f - collapseProgress)).coerceAtLeast(0.dp)
+    val largeTitleAlpha = (1f - (collapseProgress / 0.40f)).coerceIn(0f, 1f)
+    val subtitleAlpha = (1f - (collapseProgress / 0.30f)).coerceIn(0f, 1f)
+    val compactTitleAlpha = ((collapseProgress - 0.45f) / 0.55f).coerceIn(0f, 1f)
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(if (colors.isDark) Color(0xFF16161A) else Color.White)
+            .background(headerBgColor)
             .statusBarsPadding()
     ) {
-        // COMPACT ACTION BAR
+        // 1. EXPANDED VIEWING AREA (Matches Samsung One UI Settings & Pictures reference geometry)
+        if (currentViewingHeight > 0.dp && !isSearchExpanded) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(currentViewingHeight),
+                contentAlignment = Alignment.Center
+            ) {
+                if (largeTitleAlpha > 0.01f) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp)
+                            .graphicsLayer {
+                                alpha = largeTitleAlpha
+                                translationY = -collapseProgress * with(density) { 24.dp.toPx() }
+                                val scale = 1f - (collapseProgress * 0.06f)
+                                scaleX = scale
+                                scaleY = scale
+                            }
+                    ) {
+                        Text(
+                            text = title,
+                            fontSize = 38.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            letterSpacing = (-0.6).sp,
+                            color = textPrimary,
+                            textAlign = TextAlign.Center
+                        )
+
+                        if (subtitle.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = subtitle,
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.Normal,
+                                color = textMuted,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.graphicsLayer { alpha = subtitleAlpha }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. COMPACT ACTION BAR (Pinned 52dp height)
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1997,12 +2025,12 @@ fun CreatorFeedHeader(
         ) {
             val maxHeaderWidth = maxWidth
 
-            // 1. LEFT BRAND HEADING: "Community" + Instagram-Style Feed Switcher Dropdown
+            // LEFT BRAND HEADING: "Community" (Fades in when collapsing, matching One UI)
             Row(
                 modifier = Modifier
                     .align(Alignment.CenterStart)
                     .offset(x = headerItemsOffset)
-                    .alpha(headerItemsAlpha),
+                    .alpha(headerItemsAlpha * compactTitleAlpha),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box {
@@ -2017,18 +2045,16 @@ fun CreatorFeedHeader(
                     ) {
                         Text(
                             text = "Community",
-                            style = TextStyle(
-                                brush = neonWaveBrush,
-                                fontSize = 22.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = (-0.5).sp
-                            )
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = (-0.5).sp,
+                            color = textPrimary
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Icon(
                             imageVector = Lucide.ChevronDown,
                             contentDescription = "Switch Feed",
-                            tint = colors.textMain.copy(alpha = 0.85f),
+                            tint = textPrimary.copy(alpha = 0.85f),
                             modifier = Modifier
                                 .size(16.dp)
                                 .rotate(chevronRotation)
@@ -2323,7 +2349,7 @@ fun CreatorFeedHeader(
             }
         }
 
-        // Category Filter Pills Bar
+        // 3. Category Filter Pills Bar (Solid Samsung One UI Aesthetic)
         if (!isSearchExpanded) {
             val feedTabs = listOf(
                 CommunityFeedTab.ALL,
@@ -2361,21 +2387,9 @@ fun CreatorFeedHeader(
                             .clip(pillShape)
                             .background(
                                 if (isSelected) {
-                                    Brush.horizontalGradient(
-                                        listOf(
-                                            Color(0xFF00E676),
-                                            Color(0xFF10B981)
-                                        )
-                                    )
+                                    if (colors.isDark) Color.White else Color(0xFF0F172A)
                                 } else {
-                                    SolidColor(if (colors.isDark) Color(0xFF1E2028) else Color(0xFFF1F5F9))
-                                }
-                            )
-                            .then(
-                                if (isSelected) {
-                                    Modifier.shadow(4.dp, pillShape, spotColor = Color(0xFF00E676).copy(alpha = 0.4f))
-                                } else {
-                                    Modifier.border(0.5.dp, colors.glassBorder.copy(alpha = 0.5f), pillShape)
+                                    if (colors.isDark) Color(0xFF1E2028) else Color(0xFFE2E8F0)
                                 }
                             )
                             .clickable(
@@ -2394,21 +2408,28 @@ fun CreatorFeedHeader(
                             Icon(
                                 imageVector = tab.icon,
                                 contentDescription = tab.label,
-                                tint = if (isSelected) Color.Black else colors.textMuted,
+                                tint = if (isSelected) {
+                                    if (colors.isDark) Color.Black else Color.White
+                                } else {
+                                    if (colors.isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+                                },
                                 modifier = Modifier.size(14.dp)
                             )
                             Text(
                                 text = tab.label,
                                 fontSize = 12.5.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isSelected) Color.Black else colors.textMain
+                                color = if (isSelected) {
+                                    if (colors.isDark) Color.Black else Color.White
+                                } else {
+                                    if (colors.isDark) Color(0xFFE2E8F0) else Color(0xFF1E293B)
+                                }
                             )
                         }
                     }
                 }
             }
         }
-
         if (isRefreshing || refreshProgress > 0f) {
             Box(
                 modifier = Modifier

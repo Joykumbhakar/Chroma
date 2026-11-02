@@ -71,15 +71,16 @@ fun rememberOneUiGradientStyle(): Pair<OneUiGradientStyle, () -> Unit> {
 
 /**
  * Samsung One UI 7.0 Viewing Area (Expanded Header Zone)
+ * Matches exact One UI reference geometry, typography, and solid background.
  */
 @Composable
 fun OneUiViewingArea(
     title: String,
     subtitle: String? = null,
-    gradientStyle: OneUiGradientStyle = OneUiGradientStyle.GALAXY_AI,
+    gradientStyle: OneUiGradientStyle = OneUiGradientStyle.SOLID,
     onCycleGradient: () -> Unit = {},
     showBadge: Boolean = false,
-    height: Dp = 175.dp,
+    height: Dp = 240.dp,
     modifier: Modifier = Modifier
 ) {
     val isDark = isAppInDark
@@ -89,66 +90,24 @@ fun OneUiViewingArea(
         modifier = modifier
             .fillMaxWidth()
             .height(height)
+            .background(screenBg),
+        contentAlignment = Alignment.Center
     ) {
-        if (gradientStyle != OneUiGradientStyle.SOLID) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val w = size.width
-                val h = size.height
-
-                drawRect(
-                    brush = Brush.linearGradient(
-                        colors = listOf(
-                            gradientStyle.primaryColor.copy(alpha = if (isDark) 0.35f else 0.18f),
-                            gradientStyle.secondaryColor.copy(alpha = if (isDark) 0.25f else 0.12f),
-                            Color.Transparent
-                        ),
-                        start = Offset(0f, 0f),
-                        end = Offset(w, h)
-                    )
-                )
-
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            gradientStyle.orbColor.copy(alpha = if (isDark) 0.40f else 0.22f),
-                            Color.Transparent
-                        ),
-                        center = Offset(w * 0.82f, h * 0.28f),
-                        radius = w * 0.65f
-                    )
-                )
-
-                drawRect(
-                    brush = Brush.verticalGradient(
-                        0.60f to Color.Transparent,
-                        1.0f to screenBg
-                    )
-                )
-            }
-        }
-
         Column(
             modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(horizontal = 20.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
             if (showBadge) {
                 Surface(
                     onClick = onCycleGradient,
                     shape = RoundedCornerShape(999.dp),
-                    color = if (gradientStyle == OneUiGradientStyle.SOLID) {
-                        if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f)
-                    } else {
-                        gradientStyle.primaryColor.copy(alpha = 0.16f)
-                    },
+                    color = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f),
                     border = BorderStroke(
                         1.dp,
-                        if (gradientStyle == OneUiGradientStyle.SOLID) {
-                            if (isDark) Color.White.copy(alpha = 0.14f) else Color.Black.copy(alpha = 0.08f)
-                        } else {
-                            gradientStyle.primaryColor.copy(alpha = 0.30f)
-                        }
+                        if (isDark) Color.White.copy(alpha = 0.14f) else Color.Black.copy(alpha = 0.08f)
                     ),
                     modifier = Modifier.height(26.dp)
                 ) {
@@ -161,16 +120,10 @@ fun OneUiViewingArea(
                             modifier = Modifier
                                 .size(7.dp)
                                 .clip(CircleShape)
-                                .background(
-                                    if (gradientStyle == OneUiGradientStyle.SOLID) {
-                                        if (isDark) Color.White else Color.Black
-                                    } else {
-                                        gradientStyle.orbColor
-                                    }
-                                )
+                                .background(if (isDark) Color.White else Color.Black)
                         )
                         Text(
-                            text = "ONE UI 7.0 • ${gradientStyle.label.uppercase()}",
+                            text = "ONE UI • ${title.uppercase()}",
                             fontSize = 10.5.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (isDark) Color(0xFF93C5FD) else Color(0xFF1D4ED8),
@@ -178,23 +131,27 @@ fun OneUiViewingArea(
                         )
                     }
                 }
+                Spacer(modifier = Modifier.height(8.dp))
             }
 
             Text(
                 text = title,
-                fontSize = 34.sp,
-                fontWeight = FontWeight.Light,
+                fontSize = 38.sp,
+                fontWeight = FontWeight.SemiBold,
                 color = if (isDark) Color.White else Color(0xFF0F172A),
-                letterSpacing = (-0.5).sp,
+                letterSpacing = (-0.6).sp,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 fontFamily = InterFontFamily
             )
 
             if (!subtitle.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = subtitle,
                     fontSize = 13.5.sp,
                     fontWeight = FontWeight.Normal,
                     color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     fontFamily = InterFontFamily
                 )
             }

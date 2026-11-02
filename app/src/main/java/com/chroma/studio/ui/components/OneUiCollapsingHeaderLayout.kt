@@ -55,7 +55,7 @@ fun OneUiCollapsingHeaderLayout(
     onBack: (() -> Unit)? = null,
     backIcon: ImageVector = Lucide.ArrowLeft,
     backContentDescription: String = "Back",
-    expandedHeightDp: Dp = 190.dp,
+    expandedHeightDp: Dp = 240.dp,
     headerLeadingContent: (@Composable RowScope.(compactTitleAlpha: Float) -> Unit)? = null,
     headerActions: (@Composable RowScope.(compactTitleAlpha: Float) -> Unit)? = null,
     content: @Composable BoxScope.(
@@ -79,7 +79,7 @@ fun OneUiCollapsingHeaderLayout(
         }
     }
 
-    val screenBgColor = if (!isDark) Color(0xFFF8FAFC) else Color(0xFF000000)
+    val screenBgColor = if (!isDark) Color(0xFFF2F4F7) else Color(0xFF000000)
     val cardBorderColor = if (!isDark) Color.Black.copy(alpha = 0.05f) else Color.White.copy(alpha = 0.07f)
     val dividerColor = if (!isDark) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.08f)
     val textDark = if (!isDark) Color(0xFF0A0A0C) else Color(0xFFF2F2F7)
@@ -206,9 +206,9 @@ fun OneUiCollapsingHeaderLayout(
                     ) {
                         Text(
                             text = title,
-                            fontSize = 34.sp,
-                            fontWeight = FontWeight.Light,
-                            letterSpacing = (-0.5).sp,
+                            fontSize = 38.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            letterSpacing = (-0.6).sp,
                             color = textDark,
                             textAlign = TextAlign.Center
                         )

@@ -201,7 +201,7 @@ fun OneUiCollapsingConversationsScreen(
     }
 
     // One UI Expanded Viewing Area (~38% proportion)
-    val expandedHeightDp: Dp = 190.dp
+    val expandedHeightDp: Dp = 240.dp
     val maxCollapsePx = remember(density) { with(density) { expandedHeightDp.toPx() } }
     var collapseOffsetPx by remember { mutableFloatStateOf(0f) }
     var isSearchExpanded by remember { mutableStateOf(false) }
@@ -406,28 +406,59 @@ fun OneUiCollapsingConversationsScreen(
                         // Large One UI Expanded Title
                         Text(
                             text = title,
-                            fontSize = 34.sp,
-                            fontWeight = FontWeight.Light,
-                            letterSpacing = (-0.5).sp,
+                            fontSize = 38.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            letterSpacing = (-0.6).sp,
                             color = colors.textDark,
                             textAlign = TextAlign.Center
                         )
 
-                        Spacer(modifier = Modifier.height(4.dp))
-
-                        // Dynamic Unread & Conversations Subtitle
-                        Text(
-                            text = if (totalUnreadMessages > 0) {
-                                "$totalUnreadMessages unread message${if (totalUnreadMessages > 1) "s" else ""} • ${chats.size} conversations"
-                            } else {
-                                "All caught up • ${chats.size} conversations"
-                            },
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Normal,
-                            color = colors.textMuted,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.graphicsLayer { alpha = subtitleAlpha }
-                        )
+                        if (totalUnreadMessages > 0) {
+                            Spacer(modifier = Modifier.height(14.dp))
+                            androidx.compose.material3.Surface(
+                                shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp),
+                                color = if (!colors.isLight) Color(0xFF1E2028) else Color.White,
+                                shadowElevation = 1.dp,
+                                modifier = Modifier
+                                    .padding(horizontal = 16.dp)
+                                    .graphicsLayer { alpha = subtitleAlpha }
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp)
+                                ) {
+                                    Text(
+                                        text = "$totalUnreadMessages unread message${if (totalUnreadMessages > 1) "s" else ""}",
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = colors.textDark
+                                    )
+                                    androidx.compose.material3.Surface(
+                                        shape = androidx.compose.foundation.shape.RoundedCornerShape(999.dp),
+                                        color = if (!colors.isLight) Color(0xFF2E323E) else Color(0xFFE5E7EB)
+                                    ) {
+                                        Text(
+                                            text = "View",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = colors.textDark,
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        } else {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "All caught up • ${chats.size} conversations",
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.Normal,
+                                color = colors.textMuted,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.graphicsLayer { alpha = subtitleAlpha }
+                            )
+                        }
                     }
                 }
             }
