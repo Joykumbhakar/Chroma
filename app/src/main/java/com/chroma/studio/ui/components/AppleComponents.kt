@@ -39,6 +39,11 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.chroma.studio.ui.theme.InterFontFamily
 import com.chroma.studio.ui.theme.LocalOscellionColors
+
+private val isAppInDark: Boolean
+    @Composable
+    get() = LocalOscellionColors.current.isDark
+import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.composables.icons.lucide.*
 import dev.chrisbanes.haze.hazeChild
 import kotlinx.coroutines.delay
@@ -61,7 +66,7 @@ fun LiquidGlassKnob(
     isToggleKnob: Boolean = false
 ) {
     val knobShape = RoundedCornerShape(50.dp)
-    val isDark = isSystemInDarkTheme()
+    val isDark = isAppInDark
 
     Box(
         modifier = modifier
@@ -159,7 +164,7 @@ fun AppleSwitch(
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     activeTrackColor: Color = Color(0xFF34C759),
-    inactiveTrackColor: Color = if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFF39393D) else Color(0xFFE5E5EA),
+    inactiveTrackColor: Color = if (isAppInDark) Color(0xFF39393D) else Color(0xFFE5E5EA),
     hazeState: dev.chrisbanes.haze.HazeState? = null
 ) {
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
@@ -311,7 +316,7 @@ fun AppleSlider(
         label = "tsScale"
     )
 
-    val isDark = isSystemInDarkTheme()
+    val isDark = isAppInDark
     val inactiveTrackColor = if (isDark) Color(0xFF39393D) else Color(0xFFE5E5EA)
     val activeGrad = gradientColors ?: listOf(Color(0xFF0A84FF), Color(0xFF0A84FF))
 
@@ -429,7 +434,7 @@ fun AppleDialog(
     onDismiss: () -> Unit,
     customContent: @Composable (() -> Unit)? = null
 ) {
-    val isSystemInDarkTheme = isSystemInDarkTheme()
+    val isDark = isAppInDark
     
     var show by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { show = true }
@@ -445,11 +450,11 @@ fun AppleDialog(
         label = "dialogAlpha"
     )
 
-    val dialogBg = if (isSystemInDarkTheme) Color(0xEB2C2C2E) else Color(0xEBFFFFFF)
-    val titleColor = if (isSystemInDarkTheme) Color.White else Color.Black
-    val dividerColor = if (isSystemInDarkTheme) Color(0x40545458) else Color(0x203C3C43)
-    val blueColor = if (isSystemInDarkTheme) Color(0xFF0A84FF) else Color(0xFF007AFF)
-    val redColor = if (isSystemInDarkTheme) Color(0xFFFF453A) else Color(0xFFFF3B30)
+    val dialogBg = if (isDark) Color(0xEB2C2C2E) else Color(0xEBFFFFFF)
+    val titleColor = if (isDark) Color.White else Color.Black
+    val dividerColor = if (isDark) Color(0x40545458) else Color(0x203C3C43)
+    val blueColor = if (isDark) Color(0xFF0A84FF) else Color(0xFF007AFF)
+    val redColor = if (isDark) Color(0xFFFF453A) else Color(0xFFFF3B30)
 
     Dialog(
         onDismissRequest = onDismiss,

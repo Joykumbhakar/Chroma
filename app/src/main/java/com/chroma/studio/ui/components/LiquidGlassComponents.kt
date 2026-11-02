@@ -36,6 +36,11 @@ import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Ellipsis
+import com.chroma.studio.ui.theme.LocalOscellionColors
+
+private val isAppInDark: Boolean
+    @Composable
+    get() = LocalOscellionColors.current.isDark
 
 /**
  * Core Liquid Glass Design System Tokens
@@ -272,7 +277,7 @@ fun LiquidGlassSecondaryButton(
         label = "secBtnScale"
     )
 
-    val isDark = isSystemInDarkTheme()
+    val isDark = isAppInDark
     val secBg = when {
         !enabled -> if (isDark) Color(0x10FFFFFF) else Color(0xFFE2E8F0)
         isPressed -> if (isDark) Color(0x30FFFFFF) else Color(0xFFE5E5EA)
@@ -408,7 +413,7 @@ fun LiquidGlassPillChip(
         label = "chipScale"
     )
 
-    val isDark = isSystemInDarkTheme()
+    val isDark = isAppInDark
     val unselectedBg = if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9)
     val unselectedBorder = if (isDark) Color(0x33FFFFFF) else Color(0x18000000)
 
@@ -672,7 +677,7 @@ fun LiquidGlassCheckbox(
     checkedColor: Color = Color(0xFF0A84FF),
     uncheckedColor: Color? = null
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = isAppInDark
     val resolvedUncheckedColor = uncheckedColor ?: (if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8))
 
     val tickProgress by animateFloatAsState(
@@ -954,7 +959,7 @@ fun LiquidGlassProgressBar(
     fillBrush: Brush? = null,
     animated: Boolean = true
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = isAppInDark
     val resolvedTrack = trackColor ?: (if (isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA))
     val resolvedFill = fillBrush ?: LiquidGlassProgressGradients.PrimaryBlue
 
@@ -1110,7 +1115,7 @@ fun LiquidGlassToggle(
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     activeTrackColor: Color = Color(0xFF34C759),
-    inactiveTrackColor: Color = if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFF39393D) else Color(0xFFE5E5EA)
+    inactiveTrackColor: Color = if (isAppInDark) Color(0xFF39393D) else Color(0xFFE5E5EA)
 ) {
     AppleSwitch(
         checked = checked,
@@ -1137,7 +1142,7 @@ fun LiquidGlassSlider(
     modifier: Modifier = Modifier,
     steps: Int = 0,
     activeColor: Color = Color(0xFF0A84FF),
-    inactiveColor: Color = if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFF39393D) else Color(0xFFE5E5EA),
+    inactiveColor: Color = if (isAppInDark) Color(0xFF39393D) else Color(0xFFE5E5EA),
     trackHeight: Dp = 6.dp
 ) {
     AppleSlider(
@@ -1162,8 +1167,8 @@ fun LiquidGlassBottomSheet(
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
     sheetState: SheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-    containerColor: Color = if (isSystemInDarkTheme()) Color(0xFF1C1C1E) else Color(0xFFFFFFFF),
-    contentColor: Color = if (isSystemInDarkTheme()) Color.White else Color(0xFF0F172A),
+    containerColor: Color = if (isAppInDark) Color(0xFF1C1C1E) else Color(0xFFFFFFFF),
+    contentColor: Color = if (isAppInDark) Color.White else Color(0xFF0F172A),
     dragHandle: @Composable (() -> Unit)? = {
         Box(
             modifier = Modifier
@@ -1171,7 +1176,7 @@ fun LiquidGlassBottomSheet(
                 .width(36.dp)
                 .height(5.dp)
                 .clip(RoundedCornerShape(9999.dp))
-                .background(if (isSystemInDarkTheme()) Color.White.copy(alpha = 0.25f) else Color.Black.copy(alpha = 0.2f))
+                .background(if (isAppInDark) Color.White.copy(alpha = 0.25f) else Color.Black.copy(alpha = 0.2f))
         )
     },
     content: @Composable ColumnScope.() -> Unit

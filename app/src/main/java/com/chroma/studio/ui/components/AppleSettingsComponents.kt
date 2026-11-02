@@ -47,6 +47,10 @@ import com.chroma.studio.ui.graphics3d.AppleSettingsSquircleIcon
 import kotlin.math.cos
 import kotlin.math.sin
 
+private val isAppInDark: Boolean
+    @Composable
+    get() = LocalOscellionColors.current.isDark
+
 /**
  * Authentic macOS 3D Aluminum Squircle System Settings Gear Icon
  */
@@ -55,7 +59,7 @@ fun MacOSSettingsGearIcon(
     modifier: Modifier = Modifier,
     size: Dp = 34.dp
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = isAppInDark
     val squircleCorner = size * 0.2237f
 
     Box(
@@ -331,7 +335,7 @@ fun AppleSettingsSearchBar(
     placeholder: String = "Search",
     modifier: Modifier = Modifier
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = isAppInDark
     val colors = LocalOscellionColors.current
 
     Row(
@@ -398,7 +402,7 @@ fun AppleSettingsProfileHeaderCard(
     modifier: Modifier = Modifier
 ) {
     val colors = LocalOscellionColors.current
-    val isDark = isSystemInDarkTheme()
+    val isDark = isAppInDark
     val presetRes = remember(avatarUrl) { getAvatarPresetDrawableRes(avatarUrl) }
     val isPreset = remember(avatarUrl) { isPresetAvatar(avatarUrl) }
     val defaultRes = remember(gender) { getDefaultAvatarDrawableRes(gender) }
@@ -467,7 +471,7 @@ fun AppleSettingsGroup(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = isAppInDark
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -840,7 +844,7 @@ fun AppleSettingSegmentedRow(
     modifier: Modifier = Modifier
 ) {
     val colors = LocalOscellionColors.current
-    val isDark = isSystemInDarkTheme()
+    val isDark = isAppInDark
 
     Column(
         modifier = modifier
@@ -901,7 +905,7 @@ fun AppleSettingSegmentedRow(
  */
 @Composable
 fun AppleSettingDivider(paddingStart: Dp = 50.dp) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = isAppInDark
     HorizontalDivider(
         color = if (isDark) Color(0xFF38383A) else Color(0xFFDFE8F3),
         thickness = 0.5.dp,

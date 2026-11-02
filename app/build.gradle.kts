@@ -1,16 +1,19 @@
-import java.util.Properties
-import java.io.FileInputStream
-
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
-    id("com.google.gms.google-services")
     kotlin("plugin.serialization")
+    id("com.google.android.libraries.mapsplatform.secrets-gradle-plugin")
 }
 
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
 
-
+secrets {
+    propertiesFileName = ".env"
+    defaultPropertiesFileName = ".env.example"
+}
 
 android {
     namespace = "com.chroma.studio"
@@ -23,42 +26,26 @@ android {
         versionCode = 1
         versionName = "1.0"
         multiDexEnabled = true
-        
-        val properties = Properties()
-        val localPropertiesFile = rootProject.file("local.properties")
-        if (localPropertiesFile.exists()) {
-            properties.load(FileInputStream(localPropertiesFile))
+    }
+
+    signingConfigs {
+        create("debugConfig") {
+            storeFile = file("${rootDir}/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
         }
-        
-        val supabaseUrl = properties.getProperty("SUPABASE_URL", "")
-        val supabaseKey = properties.getProperty("SUPABASE_ANON_KEY", "")
-        
-        buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
-        buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseKey\"")
-        
-        val cloudinaryCloudName = properties.getProperty("CLOUDINARY_CLOUD_NAME", "")
-        val cloudinaryUploadPreset = properties.getProperty("CLOUDINARY_UPLOAD_PRESET", "oscellion_posts")
-        buildConfigField("String", "CLOUDINARY_CLOUD_NAME", "\"$cloudinaryCloudName\"")
-        buildConfigField("String", "CLOUDINARY_UPLOAD_PRESET", "\"$cloudinaryUploadPreset\"")
-        
-        val cloudinaryVideoPreset = properties.getProperty("CLOUDINARY_VIDEO_UPLOAD_PRESET", "flash_videos")
-        buildConfigField("String", "CLOUDINARY_VIDEO_UPLOAD_PRESET", "\"$cloudinaryVideoPreset\"")
+    }
+
+    buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("debugConfig")
+        }
     }
 
     buildFeatures {
         compose = true
         buildConfig = true
-    }
-
-    buildTypes {
-        release {
-            isMinifyEnabled = false
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
-            signingConfig = signingConfigs.getByName("debug")
-        }
     }
 
     androidResources {
@@ -97,6 +84,7 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.activity:activity-compose:1.9.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.2")
+    implementation("androidx.lifecycle:lifecycle-process:2.8.2")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.2")
     implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("androidx.core:core-ktx:1.13.1")

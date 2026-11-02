@@ -635,7 +635,7 @@ fun UserProfileScreen(
 
     // Samsung One UI 7.0 Translucent Navigation Bar
     val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    val isSysDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val isSysDark = colors.isDark
     val topBarBg = if (isSysDark) Color(0xFF000000).copy(alpha = (scrollProgress * 0.94f).coerceIn(0f, 0.96f))
                    else Color(0xFFF2F4F7).copy(alpha = (scrollProgress * 0.96f).coerceIn(0f, 0.98f))
     val topBarBorder = if (isSysDark) Color(0xFF1F2430).copy(alpha = scrollProgress)
@@ -1237,11 +1237,106 @@ fun UserProfileScreen(
         )
     }
 
-    // Samsung One UI 7.0 Settings Bottom Sheet
+    UserProfileSettingsAndSignOutSheets(
+        profile = profile,
+        storyVm = storyVm,
+        showSettingsBottomSheet = showSettingsBottomSheet,
+        onDismissSettingsSheet = { showSettingsBottomSheet = false },
+        onNavigateToSettings = onNavigateToSettings,
+        onNavigateToEditProfile = onNavigateToEditProfile,
+        onShowShareCardModal = { showShareCardModal = true },
+        onShowOnlyFriendsSheet = { showOnlyFriendsManagementSheet = true },
+        onSelectSavedTab = { selectedTabIndex = 4 },
+        showSignOutConfirm = showSignOutConfirm,
+        onShowSignOutConfirm = { showSignOutConfirm = it },
+        onLogout = onLogout,
+        onRequireLogin = onRequireLogin
+    )
+
+    UserProfileModalsAndSheets(
+        userId = userId,
+        currentUserId = currentUserId,
+        profile = profile,
+        works = works,
+        isUploadingBanner = isUploadingBanner,
+        showOtherUserOptionsSheet = showOtherUserOptionsSheet,
+        onDismissOtherUserOptions = { showOtherUserOptionsSheet = false },
+        onShowShareCardModal = { showShareCardModal = true },
+        onNavigateToChat = onNavigateToChat,
+        isMutedStories = isMutedStories,
+        onToggleMuteStories = {
+            isMutedStories = !isMutedStories
+            ToastManager.showToast(if (isMutedStories) "Stories from @${profile?.username ?: ""} muted" else "Stories unmuted")
+        },
+        showBlockConfirmDialog = showBlockConfirmDialog,
+        onShowBlockConfirmDialog = { showBlockConfirmDialog = it },
+        onUserBlocked = { isFollowing = false },
+        showReportUserSheet = showReportUserSheet,
+        onShowReportUserSheet = { showReportUserSheet = it },
+        selectedReportReason = selectedReportReason,
+        onSelectReportReason = { selectedReportReason = it },
+        showBannerLibrarySheet = showBannerLibrarySheet,
+        onDismissBannerLibrary = { showBannerLibrarySheet = false },
+        onUploadBannerFromDevice = { bannerGalleryLauncher.launch("image/*") },
+        onBannerUrlUpdated = { newUrl -> profile = profile?.copy(bannerUrl = newUrl) },
+        onSelectWorkForBannerCrop = { uri ->
+            pendingEditorUri = uri
+            pendingEditorTarget = ProfileCropTarget.BANNER
+        }
+    )
+
+    // Delete Flash Video Dialog
+    if (flashToDelete != null) {
+        val f = flashToDelete!!
+        IosAlertDialog(
+            title = "Delete Flash Video?",
+            message = "Are you sure you want to permanently delete this Flash video? This action cannot be undone.",
+            confirmText = "Delete",
+            onConfirm = {
+                flashToDelete = null
+                scope.launch {
+                    val flashRepo = com.chroma.studio.data.FlashRepository()
+                    val success = flashRepo.deleteFlash(f.id)
+                    if (success) {
+                        userFlashes = userFlashes.filter { it.id != f.id }
+                        ToastManager.showToast("Flash video deleted")
+                    } else {
+                        ToastManager.showToast("Failed to delete video")
+                    }
+                }
+            },
+            dismissText = "Cancel",
+            onDismiss = { flashToDelete = null },
+            isDestructive = true
+        )
+    }
+}
+}
+
+@Composable
+private fun UserProfileSettingsAndSignOutSheets(
+    profile: UserProfile?,
+    storyVm: StoryViewModel,
+    showSettingsBottomSheet: Boolean,
+    onDismissSettingsSheet: () -> Unit,
+    onNavigateToSettings: () -> Unit,
+    onNavigateToEditProfile: () -> Unit,
+    onShowShareCardModal: () -> Unit,
+    onShowOnlyFriendsSheet: () -> Unit,
+    onSelectSavedTab: () -> Unit,
+    showSignOutConfirm: Boolean,
+    onShowSignOutConfirm: (Boolean) -> Unit,
+    onLogout: (() -> Unit)?,
+    onRequireLogin: () -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val colors = LocalOscellionColors.current
+
     if (showSettingsBottomSheet) {
-        val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+        val isDark = colors.isDark
         ModalBottomSheet(
-            onDismissRequest = { showSettingsBottomSheet = false },
+            onDismissRequest = onDismissSettingsSheet,
             containerColor = if (isDark) Color(0xFF0F1117) else Color(0xFFF2F4F7),
             dragHandle = { BottomSheetDefaults.DragHandle() },
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
@@ -1267,7 +1362,7 @@ fun UserProfileScreen(
                         fontFamily = InterFontFamily
                     )
                     IconButton(
-                        onClick = { showSettingsBottomSheet = false },
+                        onClick = onDismissSettingsSheet,
                         modifier = Modifier.size(32.dp)
                     ) {
                         Icon(Lucide.X, contentDescription = "Close", tint = if (isDark) Color.White else Color(0xFF0F172A), modifier = Modifier.size(18.dp))
@@ -1281,7 +1376,7 @@ fun UserProfileScreen(
                         icon = Lucide.UserCog,
                         iconColor = Color(0xFF2563EB),
                         onClick = {
-                            showSettingsBottomSheet = false
+                            onDismissSettingsSheet()
                             onNavigateToSettings()
                         }
                     )
@@ -1292,7 +1387,7 @@ fun UserProfileScreen(
                         icon = Lucide.UserCheck,
                         iconColor = Color(0xFF6366F1),
                         onClick = {
-                            showSettingsBottomSheet = false
+                            onDismissSettingsSheet()
                             onNavigateToEditProfile()
                         }
                     )
@@ -1303,8 +1398,8 @@ fun UserProfileScreen(
                         icon = Lucide.QrCode,
                         iconColor = Color(0xFF10B981),
                         onClick = {
-                            showSettingsBottomSheet = false
-                            showShareCardModal = true
+                            onDismissSettingsSheet()
+                            onShowShareCardModal()
                         }
                     )
                     HorizontalDivider(color = if (isDark) Color(0xFF1F2430) else Color(0xFFE2E8F0), thickness = 0.5.dp)
@@ -1314,8 +1409,8 @@ fun UserProfileScreen(
                         icon = Lucide.Star,
                         iconColor = Color(0xFFF59E0B),
                         onClick = {
-                            showSettingsBottomSheet = false
-                            showOnlyFriendsManagementSheet = true
+                            onDismissSettingsSheet()
+                            onShowOnlyFriendsSheet()
                         }
                     )
                     HorizontalDivider(color = if (isDark) Color(0xFF1F2430) else Color(0xFFE2E8F0), thickness = 0.5.dp)
@@ -1325,8 +1420,8 @@ fun UserProfileScreen(
                         icon = Lucide.Bookmark,
                         iconColor = Color(0xFF8B5CF6),
                         onClick = {
-                            showSettingsBottomSheet = false
-                            selectedTabIndex = 4
+                            onDismissSettingsSheet()
+                            onSelectSavedTab()
                         }
                     )
                 }
@@ -1338,7 +1433,7 @@ fun UserProfileScreen(
                         icon = Lucide.Share2,
                         iconColor = Color(0xFF06B6D4),
                         onClick = {
-                            showSettingsBottomSheet = false
+                            onDismissSettingsSheet()
                             val shareIntent = Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"
                                 putExtra(Intent.EXTRA_TEXT, "Check out my profile on Oscellion: https://oscellion.vercel.app/u/${profile?.username ?: ""}")
@@ -1353,7 +1448,7 @@ fun UserProfileScreen(
                         icon = Lucide.Copy,
                         iconColor = Color(0xFF64748B),
                         onClick = {
-                            showSettingsBottomSheet = false
+                            onDismissSettingsSheet()
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             clipboard.setPrimaryClip(ClipData.newPlainText("profile_link", "https://oscellion.vercel.app/u/${profile?.username ?: ""}"))
                             ToastManager.showToast("Profile link copied")
@@ -1370,8 +1465,8 @@ fun UserProfileScreen(
                         isDestructive = true,
                         showChevron = false,
                         onClick = {
-                            showSettingsBottomSheet = false
-                            showSignOutConfirm = true
+                            onDismissSettingsSheet()
+                            onShowSignOutConfirm(true)
                         }
                     )
                 }
@@ -1379,11 +1474,10 @@ fun UserProfileScreen(
         }
     }
 
-    // Samsung One UI 7.0 Sign Out Confirmation Dialog
     if (showSignOutConfirm) {
-        val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+        val isDark = colors.isDark
         AlertDialog(
-            onDismissRequest = { showSignOutConfirm = false },
+            onDismissRequest = { onShowSignOutConfirm(false) },
             shape = RoundedCornerShape(26.dp),
             containerColor = if (isDark) Color(0xFF12141A) else Color.White,
             tonalElevation = 6.dp,
@@ -1413,7 +1507,7 @@ fun UserProfileScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        showSignOutConfirm = false
+                        onShowSignOutConfirm(false)
                         if (onLogout != null) {
                             onLogout()
                         } else {
@@ -1433,7 +1527,7 @@ fun UserProfileScreen(
             },
             dismissButton = {
                 OutlinedButton(
-                    onClick = { showSignOutConfirm = false },
+                    onClick = { onShowSignOutConfirm(false) },
                     shape = RoundedCornerShape(999.dp),
                     border = BorderStroke(1.dp, if (isDark) Color(0xFF2E384D) else Color(0xFFCBD5E1))
                 ) {
@@ -1442,12 +1536,42 @@ fun UserProfileScreen(
             }
         )
     }
+}
 
-    // Samsung One UI 7.0 Other User Options Bottom Sheet
+@Composable
+private fun UserProfileModalsAndSheets(
+    userId: String,
+    currentUserId: String?,
+    profile: UserProfile?,
+    works: List<DiscoverPost>,
+    isUploadingBanner: Boolean,
+    showOtherUserOptionsSheet: Boolean,
+    onDismissOtherUserOptions: () -> Unit,
+    onShowShareCardModal: () -> Unit,
+    onNavigateToChat: ((String) -> Unit)?,
+    isMutedStories: Boolean,
+    onToggleMuteStories: () -> Unit,
+    showBlockConfirmDialog: Boolean,
+    onShowBlockConfirmDialog: (Boolean) -> Unit,
+    onUserBlocked: () -> Unit,
+    showReportUserSheet: Boolean,
+    onShowReportUserSheet: (Boolean) -> Unit,
+    selectedReportReason: String,
+    onSelectReportReason: (String) -> Unit,
+    showBannerLibrarySheet: Boolean,
+    onDismissBannerLibrary: () -> Unit,
+    onUploadBannerFromDevice: () -> Unit,
+    onBannerUrlUpdated: (String) -> Unit,
+    onSelectWorkForBannerCrop: (Uri) -> Unit
+) {
+    val colors = LocalOscellionColors.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
     if (showOtherUserOptionsSheet) {
-        val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+        val isDark = colors.isDark
         ModalBottomSheet(
-            onDismissRequest = { showOtherUserOptionsSheet = false },
+            onDismissRequest = onDismissOtherUserOptions,
             containerColor = if (isDark) Color(0xFF0F1117) else Color(0xFFF2F4F7),
             dragHandle = { BottomSheetDefaults.DragHandle() },
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
@@ -1472,7 +1596,7 @@ fun UserProfileScreen(
                         fontFamily = InterFontFamily
                     )
                     IconButton(
-                        onClick = { showOtherUserOptionsSheet = false },
+                        onClick = onDismissOtherUserOptions,
                         modifier = Modifier.size(32.dp)
                     ) {
                         Icon(Lucide.X, contentDescription = "Close", tint = if (isDark) Color.White else Color(0xFF0F172A), modifier = Modifier.size(18.dp))
@@ -1486,7 +1610,7 @@ fun UserProfileScreen(
                         icon = Lucide.Share2,
                         iconColor = Color(0xFF2563EB),
                         onClick = {
-                            showOtherUserOptionsSheet = false
+                            onDismissOtherUserOptions()
                             val shareIntent = Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"
                                 putExtra(Intent.EXTRA_TEXT, "Check out @${profile?.username ?: ""} on Oscellion: https://oscellion.vercel.app/u/${profile?.username ?: ""}")
@@ -1501,7 +1625,7 @@ fun UserProfileScreen(
                         icon = Lucide.Copy,
                         iconColor = Color(0xFF64748B),
                         onClick = {
-                            showOtherUserOptionsSheet = false
+                            onDismissOtherUserOptions()
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             clipboard.setPrimaryClip(ClipData.newPlainText("profile_link", "https://oscellion.vercel.app/u/${profile?.username ?: ""}"))
                             ToastManager.showToast("Profile link copied")
@@ -1514,8 +1638,8 @@ fun UserProfileScreen(
                         icon = Lucide.QrCode,
                         iconColor = Color(0xFF10B981),
                         onClick = {
-                            showOtherUserOptionsSheet = false
-                            showShareCardModal = true
+                            onDismissOtherUserOptions()
+                            onShowShareCardModal()
                         }
                     )
                     HorizontalDivider(color = if (isDark) Color(0xFF1F2430) else Color(0xFFE2E8F0), thickness = 0.5.dp)
@@ -1525,7 +1649,7 @@ fun UserProfileScreen(
                         icon = Lucide.MessageSquare,
                         iconColor = Color(0xFF06B6D4),
                         onClick = {
-                            showOtherUserOptionsSheet = false
+                            onDismissOtherUserOptions()
                             onNavigateToChat?.invoke(userId)
                         }
                     )
@@ -1536,9 +1660,8 @@ fun UserProfileScreen(
                         icon = if (isMutedStories) Lucide.Bell else Lucide.BellOff,
                         iconColor = Color(0xFFF59E0B),
                         onClick = {
-                            showOtherUserOptionsSheet = false
-                            isMutedStories = !isMutedStories
-                            ToastManager.showToast(if (isMutedStories) "Stories from @${profile?.username ?: ""} muted" else "Stories unmuted")
+                            onDismissOtherUserOptions()
+                            onToggleMuteStories()
                         }
                     )
                 }
@@ -1551,8 +1674,8 @@ fun UserProfileScreen(
                         iconColor = Color(0xFFEF4444),
                         isDestructive = true,
                         onClick = {
-                            showOtherUserOptionsSheet = false
-                            showBlockConfirmDialog = true
+                            onDismissOtherUserOptions()
+                            onShowBlockConfirmDialog(true)
                         }
                     )
                     HorizontalDivider(color = if (isDark) Color(0xFF1F2430) else Color(0xFFE2E8F0), thickness = 0.5.dp)
@@ -1563,8 +1686,8 @@ fun UserProfileScreen(
                         iconColor = Color(0xFFEF4444),
                         isDestructive = true,
                         onClick = {
-                            showOtherUserOptionsSheet = false
-                            showReportUserSheet = true
+                            onDismissOtherUserOptions()
+                            onShowReportUserSheet(true)
                         }
                     )
                 }
@@ -1572,11 +1695,10 @@ fun UserProfileScreen(
         }
     }
 
-    // Samsung One UI 7.0 Block Confirmation Dialog
     if (showBlockConfirmDialog) {
-        val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+        val isDark = colors.isDark
         AlertDialog(
-            onDismissRequest = { showBlockConfirmDialog = false },
+            onDismissRequest = { onShowBlockConfirmDialog(false) },
             shape = RoundedCornerShape(26.dp),
             containerColor = if (isDark) Color(0xFF12141A) else Color.White,
             tonalElevation = 6.dp,
@@ -1606,14 +1728,14 @@ fun UserProfileScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        showBlockConfirmDialog = false
+                        onShowBlockConfirmDialog(false)
                         val uid = currentUserId ?: return@Button
                         scope.launch {
                             try {
                                 FirebaseFirestore.getInstance().collection("users").document(uid)
                                     .update("blockedUserIds", FieldValue.arrayUnion(userId)).await()
                                 ToastManager.showToast("@${profile?.username ?: ""} has been blocked")
-                                isFollowing = false
+                                onUserBlocked()
                             } catch (e: Exception) {
                                 ToastManager.showToast("Failed to block user")
                             }
@@ -1627,7 +1749,7 @@ fun UserProfileScreen(
             },
             dismissButton = {
                 OutlinedButton(
-                    onClick = { showBlockConfirmDialog = false },
+                    onClick = { onShowBlockConfirmDialog(false) },
                     shape = RoundedCornerShape(999.dp),
                     border = BorderStroke(1.dp, if (isDark) Color(0xFF2E384D) else Color(0xFFCBD5E1))
                 ) {
@@ -1637,11 +1759,10 @@ fun UserProfileScreen(
         )
     }
 
-    // Samsung One UI 7.0 Report User Bottom Sheet
     if (showReportUserSheet) {
-        val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+        val isDark = colors.isDark
         ModalBottomSheet(
-            onDismissRequest = { showReportUserSheet = false },
+            onDismissRequest = { onShowReportUserSheet(false) },
             containerColor = if (isDark) Color(0xFF0F1117) else Color(0xFFF2F2F7),
             dragHandle = { BottomSheetDefaults.DragHandle() },
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
@@ -1674,7 +1795,7 @@ fun UserProfileScreen(
                         )
                     }
                     IconButton(
-                        onClick = { showReportUserSheet = false },
+                        onClick = { onShowReportUserSheet(false) },
                         modifier = Modifier.size(32.dp)
                     ) {
                         Icon(Lucide.X, contentDescription = "Close", tint = if (isDark) Color.White else Color(0xFF0F172A), modifier = Modifier.size(18.dp))
@@ -1695,7 +1816,7 @@ fun UserProfileScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { selectedReportReason = reason }
+                                .clickable { onSelectReportReason(reason) }
                                 .padding(horizontal = 16.dp, vertical = 13.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
@@ -1709,7 +1830,7 @@ fun UserProfileScreen(
                             )
                             RadioButton(
                                 selected = isSelected,
-                                onClick = { selectedReportReason = reason },
+                                onClick = { onSelectReportReason(reason) },
                                 colors = RadioButtonDefaults.colors(
                                     selectedColor = Color(0xFF2563EB),
                                     unselectedColor = if (isDark) Color(0xFF475569) else Color(0xFF94A3B8)
@@ -1724,7 +1845,7 @@ fun UserProfileScreen(
 
                 Button(
                     onClick = {
-                        showReportUserSheet = false
+                        onShowReportUserSheet(false)
                         val uid = currentUserId ?: "anonymous"
                         scope.launch {
                             try {
@@ -1754,10 +1875,9 @@ fun UserProfileScreen(
         }
     }
 
-    // Banner Library Modal Bottom Sheet
     if (showBannerLibrarySheet) {
         ModalBottomSheet(
-            onDismissRequest = { if (!isUploadingBanner) showBannerLibrarySheet = false },
+            onDismissRequest = { if (!isUploadingBanner) onDismissBannerLibrary() },
             containerColor = colors.bg,
             dragHandle = { BottomSheetDefaults.DragHandle() }
         ) {
@@ -1771,7 +1891,6 @@ fun UserProfileScreen(
                     .padding(horizontal = 16.dp)
                     .padding(bottom = 36.dp)
             ) {
-                // Header
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -1796,7 +1915,7 @@ fun UserProfileScreen(
                         OscellionLoadingSpinner(modifier = Modifier.size(24.dp))
                     } else {
                         IconButton(
-                            onClick = { showBannerLibrarySheet = false },
+                            onClick = onDismissBannerLibrary,
                             modifier = Modifier.size(32.dp)
                         ) {
                             Icon(Lucide.X, contentDescription = "Close", tint = colors.textMain, modifier = Modifier.size(16.dp))
@@ -1806,13 +1925,12 @@ fun UserProfileScreen(
 
                 Spacer(Modifier.height(14.dp))
 
-                // Action Buttons Row: Upload from Device & Remove Banner
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     ChromaPillButton(
-                        onClick = { bannerGalleryLauncher.launch("image/*") },
+                        onClick = onUploadBannerFromDevice,
                         variant = ChromaPillVariant.Blue,
                         modifier = Modifier.weight(1f).height(40.dp),
                         enabled = !isUploadingBanner
@@ -1829,12 +1947,12 @@ fun UserProfileScreen(
                                 scope.launch {
                                     try {
                                         com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users").document(uid).update("bannerUrl", "").await()
-                                        profile = profile?.copy(bannerUrl = "")
+                                        onBannerUrlUpdated("")
                                         ToastManager.showToast("Banner removed")
                                     } catch (e: Exception) {
                                         ToastManager.showToast("Failed to remove banner")
                                     }
-                                    showBannerLibrarySheet = false
+                                    onDismissBannerLibrary()
                                 }
                             },
                             variant = ChromaPillVariant.Rose,
@@ -1850,12 +1968,11 @@ fun UserProfileScreen(
 
                 Spacer(Modifier.height(14.dp))
 
-                // Tab Switchers
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(10.dp))
-                        .background(if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFF1C1C1E) else Color(0xFFF2F2F7))
+                        .background(if (colors.isDark) Color(0xFF1C1C1E) else Color(0xFFF2F2F7))
                         .padding(3.dp)
                 ) {
                     listOf("Waves (${wavePresets.size})", "Work (${myWorksWithImages.size})").forEachIndexed { index, title ->
@@ -1904,12 +2021,12 @@ fun UserProfileScreen(
                                             scope.launch {
                                                 try {
                                                     com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users").document(uid).update("bannerUrl", preset.id).await()
-                                                    profile = profile?.copy(bannerUrl = preset.id)
-                                                    ToastManager.showToast("Banner set to ")
+                                                    onBannerUrlUpdated(preset.id)
+                                                    ToastManager.showToast("Banner set to ${preset.name}")
                                                 } catch (e: Exception) {
                                                     ToastManager.showToast("Failed to update banner")
                                                 }
-                                                showBannerLibrarySheet = false
+                                                onDismissBannerLibrary()
                                             }
                                         }
                                 ) {
@@ -1935,7 +2052,7 @@ fun UserProfileScreen(
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .background(if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFF2C2C2E) else Color(0xFFF9F9F9))
+                                            .background(if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFF9F9F9))
                                             .padding(horizontal = 8.dp, vertical = 5.dp)
                                     ) {
                                         Text(preset.name, color = colors.textMain, fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -1983,10 +2100,8 @@ fun UserProfileScreen(
                                                 shape = RoundedCornerShape(10.dp)
                                             )
                                             .clickable {
-                                                val uid = currentUserId ?: return@clickable
                                                 val workImg = work.imageUrl ?: return@clickable
-                                                 pendingEditorUri = Uri.parse(workImg)
-                                                 pendingEditorTarget = ProfileCropTarget.BANNER
+                                                onSelectWorkForBannerCrop(Uri.parse(workImg))
                                             }
                                     ) {
                                         Box(modifier = Modifier.fillMaxWidth().height(60.dp)) {
@@ -2011,8 +2126,8 @@ fun UserProfileScreen(
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .background(if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFF2C2C2E) else Color(0xFFF9F9F9))
-                                            .padding(horizontal = 8.dp, vertical = 5.dp)
+                                                .background(if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFF9F9F9))
+                                                .padding(horizontal = 8.dp, vertical = 5.dp)
                                         ) {
                                             Text(work.title.ifBlank { "Creation" }, color = colors.textMain, fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                         }
@@ -2025,34 +2140,6 @@ fun UserProfileScreen(
             }
         }
     }
-
-
-    // Delete Flash Video Dialog
-    if (flashToDelete != null) {
-        val f = flashToDelete!!
-        IosAlertDialog(
-            title = "Delete Flash Video?",
-            message = "Are you sure you want to permanently delete this Flash video? This action cannot be undone.",
-            confirmText = "Delete",
-            onConfirm = {
-                flashToDelete = null
-                scope.launch {
-                    val flashRepo = com.chroma.studio.data.FlashRepository()
-                    val success = flashRepo.deleteFlash(f.id)
-                    if (success) {
-                        userFlashes = userFlashes.filter { it.id != f.id }
-                        ToastManager.showToast("Flash video deleted")
-                    } else {
-                        ToastManager.showToast("Failed to delete video")
-                    }
-                }
-            },
-            dismissText = "Cancel",
-            onDismiss = { flashToDelete = null },
-            isDestructive = true
-        )
-    }
-}
 }
 
 @Composable

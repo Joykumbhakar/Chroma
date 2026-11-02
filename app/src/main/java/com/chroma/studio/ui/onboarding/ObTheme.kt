@@ -16,8 +16,23 @@ object ObColors {
     val Cobalt = Color(0xFF182258)
     val Royal = Color(0xFF1B2664)
 
-    val Lime = Color(0xFFC8F535)
+    val Lime = Color(0xFF00FF87)
     val OnLime = Color(0xFF080B1E)
+    val NeonGreen = Color(0xFF00FF87)
+    val NeonLime = Color(0xFF60EFA0)
+    val NeonChartreuse = Color(0xFFA3FF2E)
+    val NeonEmerald = Color(0xFF00DF81)
+    val NeonElectric = Color(0xFF76FF03)
+
+    val NeonGreenWaveColors = listOf(
+        Color(0xFF00FF87),
+        Color(0xFF60EFA0),
+        Color(0xFFA3FF2E),
+        Color(0xFF00DF81),
+        Color(0xFF76FF03),
+        Color(0xFF00FF87)
+    )
+
     val Cyan = Color(0xFF7DF9FF)
     val Amber = Color(0xFFFBBF24)
     val Danger = Color(0xFFFF5271)

@@ -68,15 +68,13 @@ fun SetPasswordScreen(state: OnboardingState, onBack: () -> Unit, onNext: () -> 
         )
             Spacer(Modifier.height(18.dp))
 
-            Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                // ── Box 1: create ─────────────────────────────────────────
-                FieldLabel("Create password")
+            Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                // ── Box 1: create with Uiverse floating label ───────────────
                 ObTextField(
                     value = state.password,
                     onValueChange = { state.password = it.take(24) },
-                    placeholder = "8–24 characters",
+                    placeholder = "Create password",
                     leading = Icons.Rounded.Lock,
-                    leadingTint = if (rules.allMet) ObColors.Lime else ObColors.Sky,
                     visualTransformation = if (showPw) VisualTransformation.None else PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next, autoCorrect = false),
                     keyboardActions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Down) }),
@@ -87,26 +85,23 @@ fun SetPasswordScreen(state: OnboardingState, onBack: () -> Unit, onNext: () -> 
                 )
                 StrengthMeter(rules.metCount, state.password.isNotEmpty())
                 Spacer(Modifier.height(2.dp))
-                ObGlassCard(Modifier.fillMaxWidth(), RoundedCornerShape(14.dp)) {
-                    Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                        RuleRow(rules.length, "8 to 24 characters")
-                        RuleRow(rules.upper, "One uppercase letter (A–Z)")
-                        RuleRow(rules.lower, "One lowercase letter (a–z)")
-                        RuleRow(rules.digit, "One number (0–9)")
-                        RuleRow(rules.special, "One symbol (#, !, @…)")
-                    }
+                // Clean rules list without secondary background card
+                Column(Modifier.padding(horizontal = 6.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    RuleRow(rules.length, "8 to 24 characters")
+                    RuleRow(rules.upper, "One uppercase letter (A–Z)")
+                    RuleRow(rules.lower, "One lowercase letter (a–z)")
+                    RuleRow(rules.digit, "One number (0–9)")
+                    RuleRow(rules.special, "One symbol (#, !, @…)")
                 }
 
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(8.dp))
 
-                // ── Box 2: confirm ────────────────────────────────────────
-                FieldLabel("Confirm password")
+                // ── Box 2: confirm with Uiverse floating label ──────────────
                 ObTextField(
                     value = state.confirm,
                     onValueChange = { state.confirm = it.take(24) },
-                    placeholder = "Type it again",
+                    placeholder = "Confirm password",
                     leading = if (matches) Icons.Rounded.Lock else Icons.Rounded.LockOpen,
-                    leadingTint = if (matches) ObColors.Lime else ObColors.Sky,
                     isError = mismatch,
                     visualTransformation = if (showConfirm) VisualTransformation.None else PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done, autoCorrect = false),
@@ -116,7 +111,7 @@ fun SetPasswordScreen(state: OnboardingState, onBack: () -> Unit, onNext: () -> 
                         EyeToggle(showConfirm) { showConfirm = !showConfirm }
                     }
                 )
-                Row(Modifier.padding(start = 2.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.padding(start = 2.dp, top = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     ObCheck(matches, size = 18.dp)
                     Text(
                         text = if (mismatch) "Passwords don’t match yet" else "Passwords match",

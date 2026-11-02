@@ -39,6 +39,16 @@ object FcmPushSender {
     fun init(context: Context) {
         if (privateKey != null) return
         try {
+            val hasKey = try {
+                context.assets.list("")?.contains("serviceAccountKey.json") == true
+            } catch (_: Exception) {
+                false
+            }
+            if (!hasKey) {
+                Log.d(TAG, "serviceAccountKey.json not bundled; skipping local service account push dispatch.")
+                return
+            }
+
             val jsonString = context.assets.open("serviceAccountKey.json").bufferedReader().use { it.readText() }
             val json = JSONObject(jsonString)
             projectId = json.optString("project_id", "chromamelt")
@@ -56,8 +66,10 @@ object FcmPushSender {
             val keyFactory = KeyFactory.getInstance("RSA")
             privateKey = keyFactory.generatePrivate(keySpec)
             Log.d(TAG, "Initialized FCM service account for $clientEmail (project: $projectId)")
+        } catch (e: java.io.FileNotFoundException) {
+            Log.d(TAG, "serviceAccountKey.json not bundled in assets")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to load service account credentials", e)
+            Log.w(TAG, "FCM service account credentials not loaded: ${e.message}")
         }
     }
 

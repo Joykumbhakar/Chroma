@@ -83,7 +83,7 @@ fun CommunityOneUiHeader(
     modifier: Modifier = Modifier
 ) {
     val colors = LocalOscellionColors.current
-    val isDark = isSystemInDarkTheme()
+    val isDark = colors.isDark
     val density = LocalDensity.current
     val context = LocalContext.current
 
@@ -334,7 +334,8 @@ fun CommunityCategoryPills(
     modifier: Modifier = Modifier,
     activeColor: Color = Color(0xFF2563EB)
 ) {
-    val isDark = isSystemInDarkTheme()
+    val colors = LocalOscellionColors.current
+    val isDark = colors.isDark
     val haptic = LocalHapticFeedback.current
 
     val cardBgColor = if (!isDark) Color(0xFFFFFFFF) else Color(0xFF17171A)
@@ -437,18 +438,20 @@ fun CommunityStoriesCard(
     onStoryClick: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val isDark = isSystemInDarkTheme()
-    val cardBgColor = if (!isDark) Color(0xFFFFFFFF) else Color(0xFF17171A)
+    val colors = LocalOscellionColors.current
+    val isDark = colors.isDark
+    val cardBgColor = if (!isDark) Color(0xFFF9FAFB) else Color(0xFF16181F)
     val cardBorderColor = if (!isDark) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.08f)
-    val squircleShape = RoundedCornerShape(26.dp)
+    val squircleShape = RoundedCornerShape(20.dp)
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 14.dp, vertical = 4.dp)
-            .shadow(4.dp, squircleShape, spotColor = Color.Black.copy(alpha = 0.06f))
+            .shadow(2.dp, squircleShape, spotColor = Color.Black.copy(alpha = 0.04f))
             .clip(squircleShape)
             .background(cardBgColor)
+            .border(0.6.dp, cardBorderColor, squircleShape)
             .padding(vertical = 4.dp)
     ) {
         StoriesSection(
@@ -481,7 +484,8 @@ fun CommunityInteractiveEmptyState(
     onTopicClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val isDark = isSystemInDarkTheme()
+    val colors = LocalOscellionColors.current
+    val isDark = colors.isDark
     val photoState = rememberAppleGraphicAnimationState()
 
     val cardBgColor = if (!isDark) Color(0xFFFFFFFF) else Color(0xFF17171A)

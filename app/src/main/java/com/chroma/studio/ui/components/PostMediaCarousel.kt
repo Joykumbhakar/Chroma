@@ -630,6 +630,15 @@ fun PostMediaCarousel(
             // Multi-media carousel via HorizontalPager
             HorizontalPager(
                 state = pagerState,
+                key = { pageIndex ->
+                    slides.getOrNull(pageIndex)?.let { slide ->
+                        when (slide) {
+                            is PostMediaSlide.ImageSlide -> slide.url
+                            is PostMediaSlide.VideoSlide -> slide.videoUrl
+                            is PostMediaSlide.WorkSlide -> slide.jsonUrl
+                        }
+                    } ?: pageIndex
+                },
                 modifier = Modifier.fillMaxSize()
             ) { pageIndex ->
                 val slide = slides.getOrNull(pageIndex)

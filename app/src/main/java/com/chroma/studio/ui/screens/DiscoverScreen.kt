@@ -51,8 +51,10 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -267,7 +269,7 @@ fun DiscoverScreen(
     var isSearchExpanded by remember { mutableStateOf(false) }
     var showCreateMenu by remember { mutableStateOf(false) }
     var hasUnreadNotifications by remember { mutableStateOf(true) }
-    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val listState = rememberLazyListState()
 
     val density = LocalDensity.current
     val maxCollapsePx = remember(density) { with(density) { 280.dp.toPx() } }
@@ -651,124 +653,104 @@ fun DiscoverScreen(
                 end = Offset(communityShimmerTranslate + 350f, 180f)
             )
 
-            if (isLoading) {
-                LazyColumn(modifier = Modifier.fillMaxSize().clipToBounds(), userScrollEnabled = false) {
-                    item {
-                        CommunityStoriesCard(
-                            stories = emptyList(),
-                            isLoading = true,
-                            hasMyStory = false,
-                            myStoryAvatarUrl = "",
-                            myStoryGender = null,
-                            myStoriesList = emptyList(),
-                            isUploading = false,
-                            onMyStoryClick = {},
-                            onAddStoryClick = {},
-                            onStoryClick = {}
+            LazyColumn(
+                state = listState,
+                contentPadding = PaddingValues(top = 2.dp, bottom = 110.dp),
+                modifier = Modifier.fillMaxSize().clipToBounds()
+            ) {
+                // Unified Stories Section
+                item(key = "stories") {
+                    CommunityStoriesCard(
+                        stories = if (isLoading) emptyList() else stories,
+                        isLoading = isLoading,
+                        hasMyStory = if (isLoading) false else myStories.isNotEmpty(),
+                        myStoryAvatarUrl = if (isLoading) "" else (myProfile?.avatarUrl ?: ""),
+                        myStoryGender = if (isLoading) null else myProfile?.gender,
+                        myStoriesList = if (isLoading) emptyList() else myStories,
+                        isUploading = isUploadingStory,
+                        onMyStoryClick = {
+                            if (myStories.isNotEmpty()) {
+                                storyViewerInitialIndex = -1
+                                showStoryViewer = true
+                            } else {
+                                showStoryCreationSheet = true
+                            }
+                        },
+                        onAddStoryClick = {
+                            showStoryCreationSheet = true
+                        },
+                        onStoryClick = { groupIndex ->
+                            storyViewerInitialIndex = groupIndex
+                            showStoryViewer = true
+                        }
+                    )
+                }
+
+                // ── INSTAGRAM-STYLE FLASH VIDEO / POST UPLOAD PROGRESS BANNER ──
+                if (uploadTask != null && uploadTask?.status != UploadStatus.IDLE) {
+                    item(key = "community_upload_progress_banner") {
+                        CommunityUploadProgressBanner(
+                            task = uploadTask!!,
+                            onRetry = { FlashUploadManager.retry() },
+                            onViewDrafts = { onNavigateToDrafts() },
+                            onDismiss = { FlashUploadManager.dismiss() }
+                        )
+                        HorizontalDivider(
+                            color = colors.glassBorder,
+                            thickness = 0.5.dp,
+                            modifier = Modifier.padding(vertical = 2.dp)
                         )
                     }
-                    if (uploadTask != null && uploadTask?.status != UploadStatus.IDLE) {
-                        item(key = "loading_upload_progress_banner") {
-                            CommunityUploadProgressBanner(
-                                task = uploadTask!!,
-                                onRetry = { FlashUploadManager.retry() },
-                                onViewDrafts = { onNavigateToDrafts() },
-                                onDismiss = { FlashUploadManager.dismiss() }
-                            )
-                        }
-                    }
-                    items(4) {
-                        SkeletonPost(shimmerBrush = communityShimmerBrush)
-                    }
                 }
-            } else {
-                LazyColumn(
-                    state = listState,
-                    contentPadding = PaddingValues(top = 2.dp, bottom = 110.dp),
-                    modifier = Modifier.fillMaxSize().clipToBounds()
+
+                // ── TRENDING MASTERWORKS SPOTLIGHT REEL ──
+                if (!isLoading &&
+                    (selectedFeedTab == CommunityFeedTab.ALL || selectedFeedTab == CommunityFeedTab.TRENDING) &&
+                    qualifyingMasterworks.isNotEmpty() &&
+                    searchQuery.isBlank()
                 ) {
-                    // Unified Stories Section
-                    item(key = "stories") {
-                        CommunityStoriesCard(
-                            stories = stories,
-                            isLoading = false,
-                            hasMyStory = myStories.isNotEmpty(),
-                            myStoryAvatarUrl = myProfile?.avatarUrl ?: "",
-                            myStoryGender = myProfile?.gender,
-                            myStoriesList = myStories,
-                            isUploading = isUploadingStory,
-                            onMyStoryClick = {
-                                if (myStories.isNotEmpty()) {
-                                    storyViewerInitialIndex = -1
-                                    showStoryViewer = true
+                    item(key = "trending_spotlight_reel") {
+                        CommunityTrendingSpotlightReel(
+                            trendingWorks = qualifyingMasterworks,
+                            repository = repository,
+                            onWorkClick = { work ->
+                                if (isVideoPost(work)) {
+                                    onFlashVideoClick?.invoke(work.id)
                                 } else {
-                                    showStoryCreationSheet = true
+                                    onAuthorClick(work.creatorId, work.id)
                                 }
-                            },
-                            onAddStoryClick = {
-                                showStoryCreationSheet = true
-                            },
-                            onStoryClick = { groupIndex ->
-                                storyViewerInitialIndex = groupIndex
-                                showStoryViewer = true
                             }
                         )
                     }
+                }
 
-
-                    // ── INSTAGRAM-STYLE FLASH VIDEO / POST UPLOAD PROGRESS BANNER ──
-                    if (uploadTask != null && uploadTask?.status != UploadStatus.IDLE) {
-                        item(key = "community_upload_progress_banner") {
-                            CommunityUploadProgressBanner(
-                                task = uploadTask!!,
-                                onRetry = { FlashUploadManager.retry() },
-                                onViewDrafts = { onNavigateToDrafts() },
-                                onDismiss = { FlashUploadManager.dismiss() }
-                            )
-                            HorizontalDivider(
-                                color = colors.glassBorder,
-                                thickness = 0.5.dp,
-                                modifier = Modifier.padding(vertical = 2.dp)
-                            )
-                        }
-                    }
-
-                    // ── TRENDING MASTERWORKS SPOTLIGHT REEL ──
-                    if ((selectedFeedTab == CommunityFeedTab.ALL || selectedFeedTab == CommunityFeedTab.TRENDING) &&
-                        qualifyingMasterworks.isNotEmpty() &&
-                        searchQuery.isBlank()
+                // Feed Posts / Skeletons
+                if (isLoading) {
+                    items(
+                        count = 4,
+                        key = { "skeleton_post_$it" }
                     ) {
-                        item(key = "trending_spotlight_reel") {
-                            CommunityTrendingSpotlightReel(
-                                trendingWorks = qualifyingMasterworks,
-                                repository = repository,
-                                onWorkClick = { work ->
-                                    if (isVideoPost(work)) {
-                                        onFlashVideoClick?.invoke(work.id)
-                                    } else {
-                                        onAuthorClick(work.creatorId, work.id)
-                                    }
-                                }
-                            )
-                        }
+                        SkeletonPost(shimmerBrush = communityShimmerBrush)
                     }
-
-                    // Feed Posts List
-                    if (filteredWorks.isEmpty()) {
-                        item(key = "empty_state") {
-                            CommunityInteractiveEmptyState(
-                                selectedTab = selectedFeedTab,
-                                searchQuery = searchQuery,
-                                onCreatePostClick = { onCreatePost() },
-                                onRefreshClick = { triggerFeedRefresh() },
-                                onTopicClick = { topic ->
-                                    searchQuery = topic
-                                    isSearchExpanded = true
-                                }
-                            )
-                        }
-                    } else {
-                        items(filteredWorks, key = { it.id }) { work ->
+                } else if (filteredWorks.isEmpty()) {
+                    item(key = "empty_state") {
+                        CommunityInteractiveEmptyState(
+                            selectedTab = selectedFeedTab,
+                            searchQuery = searchQuery,
+                            onCreatePostClick = { onCreatePost() },
+                            onRefreshClick = { triggerFeedRefresh() },
+                            onTopicClick = { topic ->
+                                searchQuery = topic
+                                isSearchExpanded = true
+                            }
+                        )
+                    }
+                } else {
+                        items(
+                            items = filteredWorks,
+                            key = { it.id },
+                            contentType = { work -> if (isVideoPost(work)) "video_feed_item" else "post_feed_item" }
+                        ) { work ->
                             val isFollowing = followingUserIds.contains(work.creatorId)
                             FeedPostCard(
                                 work = work,
@@ -868,7 +850,6 @@ fun DiscoverScreen(
                     }
                 }
             }
-        }
 
         // Story Viewer Overlay
         if (showStoryViewer && (stories.isNotEmpty() || myStories.isNotEmpty()) && storyViewModel != null) {
@@ -1966,9 +1947,39 @@ fun CreatorFeedHeader(
         label = "headerItemsAlpha"
     )
 
-    val clampedCollapse = collapseProgress.coerceIn(0f, 1f)
-    val expandedHeight = (280.dp * (1f - clampedCollapse)).coerceAtLeast(0.dp)
-    val expandedAlpha = (1f - (clampedCollapse * 1.35f)).coerceIn(0f, 1f)
+    val neonWaveTransition = rememberInfiniteTransition(label = "neonWave")
+    val waveTranslate by neonWaveTransition.animateFloat(
+        initialValue = -150f,
+        targetValue = 650f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2800, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "waveOffset"
+    )
+    val neonWaveBrush = if (colors.isDark) {
+        Brush.linearGradient(
+            colors = listOf(
+                Color(0xFF00E676),
+                Color(0xFFCCFF00),
+                Color(0xFF00FF87),
+                Color(0xFF00E676)
+            ),
+            start = Offset(waveTranslate, 0f),
+            end = Offset(waveTranslate + 260f, 60f)
+        )
+    } else {
+        Brush.linearGradient(
+            colors = listOf(
+                Color(0xFF047857),
+                Color(0xFF10B981),
+                Color(0xFF059669),
+                Color(0xFF047857)
+            ),
+            start = Offset(waveTranslate, 0f),
+            end = Offset(waveTranslate + 260f, 60f)
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -1976,51 +1987,17 @@ fun CreatorFeedHeader(
             .background(if (colors.isDark) Color(0xFF16161A) else Color.White)
             .statusBarsPadding()
     ) {
-        // EXPANDED HEADER: Strictly ONE main heading and a small sub-text (Nothing else)
-        if (expandedHeight > 1.dp && !isSearchExpanded) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(expandedHeight)
-                    .alpha(expandedAlpha)
-                    .padding(horizontal = 20.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = title,
-                    fontSize = 46.sp,
-                    lineHeight = 50.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = (-0.6).sp,
-                    color = colors.textMain,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = subtitle,
-                    fontSize = 12.5.sp,
-                    lineHeight = 16.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = colors.textMuted,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-
         // COMPACT ACTION BAR
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(48.dp)
+                .height(52.dp)
                 .padding(horizontal = 14.dp),
             contentAlignment = Alignment.CenterStart
         ) {
             val maxHeaderWidth = maxWidth
 
-            // 1. LEFT BRAND HEADING: "Oscellion" + Instagram-Style Feed Switcher Dropdown
+            // 1. LEFT BRAND HEADING: "Community" + Instagram-Style Feed Switcher Dropdown
             Row(
                 modifier = Modifier
                     .align(Alignment.CenterStart)
@@ -2039,11 +2016,13 @@ fun CreatorFeedHeader(
                             .padding(vertical = 4.dp, horizontal = 2.dp)
                     ) {
                         Text(
-                            text = "Oscellion",
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = (-0.5).sp,
-                            color = colors.textMain
+                            text = "Community",
+                            style = TextStyle(
+                                brush = neonWaveBrush,
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = (-0.5).sp
+                            )
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Icon(
@@ -2337,6 +2316,92 @@ fun CreatorFeedHeader(
                                 contentDescription = if (searchQuery.isNotEmpty()) "Clear Search" else "Close Search",
                                 tint = colors.textMuted,
                                 modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Category Filter Pills Bar
+        if (!isSearchExpanded) {
+            val feedTabs = listOf(
+                CommunityFeedTab.ALL,
+                CommunityFeedTab.TRENDING,
+                CommunityFeedTab.FLASH,
+                CommunityFeedTab.FOLLOWING,
+                CommunityFeedTab.SAVED
+            )
+
+            LazyRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                items(feedTabs, key = { it.name }) { tab ->
+                    val isSelected = selectedFeedTab == tab
+                    val interactionSource = remember { MutableInteractionSource() }
+                    val isPressed by interactionSource.collectIsPressedAsState()
+                    val pillScale by animateFloatAsState(
+                        targetValue = if (isPressed) 0.94f else 1f,
+                        animationSpec = spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMediumLow),
+                        label = "pillScale_${tab.name}"
+                    )
+                    val pillShape = RoundedCornerShape(50)
+
+                    Box(
+                        modifier = Modifier
+                            .graphicsLayer {
+                                scaleX = pillScale
+                                scaleY = pillScale
+                            }
+                            .height(34.dp)
+                            .clip(pillShape)
+                            .background(
+                                if (isSelected) {
+                                    Brush.horizontalGradient(
+                                        listOf(
+                                            Color(0xFF00E676),
+                                            Color(0xFF10B981)
+                                        )
+                                    )
+                                } else {
+                                    SolidColor(if (colors.isDark) Color(0xFF1E2028) else Color(0xFFF1F5F9))
+                                }
+                            )
+                            .then(
+                                if (isSelected) {
+                                    Modifier.shadow(4.dp, pillShape, spotColor = Color(0xFF00E676).copy(alpha = 0.4f))
+                                } else {
+                                    Modifier.border(0.5.dp, colors.glassBorder.copy(alpha = 0.5f), pillShape)
+                                }
+                            )
+                            .clickable(
+                                interactionSource = interactionSource,
+                                indication = null
+                            ) {
+                                onSelectFeedTab(tab)
+                            }
+                            .padding(horizontal = 14.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = tab.icon,
+                                contentDescription = tab.label,
+                                tint = if (isSelected) Color.Black else colors.textMuted,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                text = tab.label,
+                                fontSize = 12.5.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isSelected) Color.Black else colors.textMain
                             )
                         }
                     }

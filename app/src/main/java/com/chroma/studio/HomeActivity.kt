@@ -206,6 +206,7 @@ class HomeActivity : ComponentActivity() {
                 val handleLogout: () -> Unit = {
                     // Optimistic instant UI transition directly to Login screen (never blank)
                     prefs.edit().putBoolean("is_first_launch", true).apply()
+                    com.chroma.studio.data.SavedAccountManager.clearAllAccounts(this@HomeActivity)
                     navController.navigate("login") {
                         popUpTo(0) { inclusive = true }
                         launchSingleTop = true
@@ -675,7 +676,8 @@ class HomeActivity : ComponentActivity() {
                                                         ) {
                                                             if (index >= 3) {
                                                                 val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
-                                                                if (auth.currentUser == null) {
+                                                                val hasLocal = com.chroma.studio.data.SavedAccountManager.getSavedAccounts(this@HomeActivity).isNotEmpty()
+                                                                if (auth.currentUser == null && !hasLocal) {
                                                                     navController.navigate("login")
                                                                     return@clickable
                                                                 }
@@ -752,7 +754,8 @@ class HomeActivity : ComponentActivity() {
                                                                 pillDragOffsetX = 0f
                                                                 if (closest >= 3) {
                                                                     val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
-                                                                    if (auth.currentUser == null) {
+                                                                    val hasLocal = com.chroma.studio.data.SavedAccountManager.getSavedAccounts(this@HomeActivity).isNotEmpty()
+                                                                    if (auth.currentUser == null && !hasLocal) {
                                                                         navController.navigate("login")
                                                                         return@detectDragGesturesAfterLongPress
                                                                     }
@@ -789,9 +792,10 @@ class HomeActivity : ComponentActivity() {
                         }
                     }
 
+                    val hasLocalAccount = remember { com.chroma.studio.data.SavedAccountManager.getSavedAccounts(this@HomeActivity).isNotEmpty() }
                     val targetDestination = when {
                         !hasAcceptedTerms -> "terms_agreement"
-                        isFirstLaunch || auth.currentUser == null -> "login"
+                        isFirstLaunch || (auth.currentUser == null && !hasLocalAccount) -> "login"
                         !prefs.getBoolean("has_completed_post_onboarding", false) -> "post_onboarding"
                         else -> "main"
                     }
@@ -1109,8 +1113,9 @@ class HomeActivity : ComponentActivity() {
                                 }
                                 4 -> {
                         val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
-                        val currentUser = auth.currentUser
-                        if (currentUser == null) {
+                        val activeSaved = com.chroma.studio.data.SavedAccountManager.getSavedAccounts(this@HomeActivity).firstOrNull()
+                        val activeUid = auth.currentUser?.uid ?: activeSaved?.uid
+                        if (activeUid == null) {
                             // Render Oscellion Onboarding Screen
                             com.chroma.studio.ui.onboarding.OscellionOnboardingScreen(
                                 onLoginSuccess = {
@@ -1125,7 +1130,7 @@ class HomeActivity : ComponentActivity() {
                             )
                         } else {
                             com.chroma.studio.ui.screens.UserProfileScreen(
-                                userId = currentUser.uid,
+                                userId = activeUid,
                                 repository = vm.repository,
                                 chatViewModel = chatVm,
                                 storyViewModel = storyVm,
@@ -1446,15 +1451,21 @@ class HomeActivity : ComponentActivity() {
 
                     composable("profile_identity") {
                         val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
-                        val currentUser = auth.currentUser
-                        if (currentUser != null) {
+                        val activeSaved = com.chroma.studio.data.SavedAccountManager.getSavedAccounts(this@HomeActivity).firstOrNull()
+                        val activeUid = auth.currentUser?.uid ?: activeSaved?.uid
+                        if (activeUid != null) {
                             var profile by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<com.chroma.studio.model.UserProfile?>(null) }
                             var works by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<List<com.chroma.studio.model.DiscoverPost>>(emptyList()) }
                             val discoverVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.DiscoverViewModel>()
 
-                            androidx.compose.runtime.LaunchedEffect(currentUser.uid) {
-                                profile = discoverVm.repository.getUserProfile(currentUser.uid)
-                                works = discoverVm.repository.getWorksByUser(currentUser.uid)
+                            androidx.compose.runtime.LaunchedEffect(activeUid) {
+                                val fetched = discoverVm.repository.getUserProfile(activeUid)
+                                profile = fetched ?: com.chroma.studio.model.UserProfile(
+                                    uid = activeUid,
+                                    username = activeSaved?.username ?: "creator",
+                                    displayName = activeSaved?.displayName ?: "Studio Creator"
+                                )
+                                works = discoverVm.repository.getWorksByUser(activeUid)
                             }
 
                             if (profile != null) {
@@ -1463,6 +1474,8 @@ class HomeActivity : ComponentActivity() {
                                     works = works,
                                     onSave = { updatedProfile ->
                                         discoverVm.updateUserProfile(updatedProfile)
+                                        com.chroma.studio.data.SavedAccountManager.saveFromProfile(this@HomeActivity, updatedProfile)
+                                        Result.success(Unit)
                                     },
                                     onBack = { navController.popBackStack() }
                                 )
@@ -1476,13 +1489,19 @@ class HomeActivity : ComponentActivity() {
 
                     composable("security") {
                         val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
-                        val currentUser = auth.currentUser
-                        if (currentUser != null) {
+                        val activeSaved = com.chroma.studio.data.SavedAccountManager.getSavedAccounts(this@HomeActivity).firstOrNull()
+                        val activeUid = auth.currentUser?.uid ?: activeSaved?.uid
+                        if (activeUid != null) {
                             var profile by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<com.chroma.studio.model.UserProfile?>(null) }
                             val discoverVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.DiscoverViewModel>()
 
-                            androidx.compose.runtime.LaunchedEffect(currentUser.uid) {
-                                profile = discoverVm.repository.getUserProfile(currentUser.uid)
+                            androidx.compose.runtime.LaunchedEffect(activeUid) {
+                                val fetched = discoverVm.repository.getUserProfile(activeUid)
+                                profile = fetched ?: com.chroma.studio.model.UserProfile(
+                                    uid = activeUid,
+                                    username = activeSaved?.username ?: "creator",
+                                    displayName = activeSaved?.displayName ?: "Studio Creator"
+                                )
                             }
                             if (profile != null) {
                                 com.chroma.studio.ui.screens.SecurityScreen(
@@ -1505,13 +1524,19 @@ class HomeActivity : ComponentActivity() {
 
                     composable("privacy") {
                         val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
-                        val currentUser = auth.currentUser
-                        if (currentUser != null) {
+                        val activeSaved = com.chroma.studio.data.SavedAccountManager.getSavedAccounts(this@HomeActivity).firstOrNull()
+                        val activeUid = auth.currentUser?.uid ?: activeSaved?.uid
+                        if (activeUid != null) {
                             var profile by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<com.chroma.studio.model.UserProfile?>(null) }
                             val discoverVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.DiscoverViewModel>()
 
-                            androidx.compose.runtime.LaunchedEffect(currentUser.uid) {
-                                profile = discoverVm.repository.getUserProfile(currentUser.uid)
+                            androidx.compose.runtime.LaunchedEffect(activeUid) {
+                                val fetched = discoverVm.repository.getUserProfile(activeUid)
+                                profile = fetched ?: com.chroma.studio.model.UserProfile(
+                                    uid = activeUid,
+                                    username = activeSaved?.username ?: "creator",
+                                    displayName = activeSaved?.displayName ?: "Studio Creator"
+                                )
                             }
                             if (profile != null) {
                                 com.chroma.studio.ui.screens.PrivacyScreen(
