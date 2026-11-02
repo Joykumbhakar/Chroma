@@ -25,9 +25,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import com.chroma.studio.ui.theme.LocalOscellionColors
 
-private val isAppInDark: Boolean
-    @Composable
-    get() = LocalOscellionColors.current.isDark
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -35,10 +32,13 @@ import androidx.compose.ui.unit.sp
 import com.chroma.studio.chat.sound.SoundManager
 import com.chroma.studio.chat.ui.components.OneUiGradientStyle
 import com.chroma.studio.ui.theme.InterFontFamily
-import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.composables.icons.lucide.ChevronLeft
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.Lucide
+
+private val isAppInDark: Boolean
+    @Composable
+    get() = LocalOscellionColors.current.isDark
 
 /**
  * Remember and sync Samsung One UI 7.0 Gradient Style from SharedPreferences.

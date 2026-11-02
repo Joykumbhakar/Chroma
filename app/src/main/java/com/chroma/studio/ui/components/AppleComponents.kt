@@ -40,15 +40,15 @@ import coil.request.ImageRequest
 import com.chroma.studio.ui.theme.InterFontFamily
 import com.chroma.studio.ui.theme.LocalOscellionColors
 
-private val isAppInDark: Boolean
-    @Composable
-    get() = LocalOscellionColors.current.isDark
-import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.composables.icons.lucide.*
 import dev.chrisbanes.haze.hazeChild
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+
+private val isAppInDark: Boolean
+    @Composable
+    get() = LocalOscellionColors.current.isDark
 
 /**
  * Liquid Jelly Knob Component
