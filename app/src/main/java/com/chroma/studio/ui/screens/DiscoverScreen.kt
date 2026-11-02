@@ -1955,7 +1955,7 @@ fun CreatorFeedHeader(
     val textMuted = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
 
     // Samsung One UI 6/7 Expanded Header Metrics (Collapses smoothly on scroll)
-    val maxViewingHeight = 220.dp
+    val maxViewingHeight = 240.dp
     val currentViewingHeight = (maxViewingHeight * (1f - collapseProgress)).coerceAtLeast(0.dp)
     val largeTitleAlpha = (1f - (collapseProgress / 0.40f)).coerceIn(0f, 1f)
     val subtitleAlpha = (1f - (collapseProgress / 0.30f)).coerceIn(0f, 1f)

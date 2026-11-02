@@ -31,6 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -330,11 +331,12 @@ fun OneUiCollapsingConversationsScreen(
         }
     }
 
-    val screenBgColor = if (colors.isLight) Color(0xFFF8FAFC) else Color(0xFF000000)
+    val screenBgColor = if (colors.isLight) Color(0xFFF2F4F7) else Color(0xFF000000)
     val cardBgColor = if (colors.isLight) Color(0xFFFFFFFF) else Color(0xFF17171A)
     val cardBorderColor = if (colors.isLight) Color.Transparent else Color.White.copy(alpha = 0.06f)
     val dividerColor = if (colors.isLight) Color.Black.copy(alpha = 0.05f) else Color.White.copy(alpha = 0.06f)
 
+    var isUnreadBannerDismissed by rememberSaveable { mutableStateOf(false) }
     val totalUnreadMessages = remember(chats) { chats.sumOf { it.unreadCount } }
     val filteredChats = remember(chats, activeTab, searchQuery, pinnedChatIds, lockedChatIds) {
         val base = chats.filter { chat ->
@@ -408,55 +410,91 @@ fun OneUiCollapsingConversationsScreen(
                     ) {
 
 
-                        // Large One UI Expanded Title
-                        Text(
-                            text = title,
-                            fontSize = 38.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            letterSpacing = (-0.6).sp,
-                            color = colors.textDark,
-                            textAlign = TextAlign.Center
-                        )
-
-                        if (totalUnreadMessages > 0) {
-                            Spacer(modifier = Modifier.height(14.dp))
+                        if (totalUnreadMessages > 0 && !isUnreadBannerDismissed) {
+                            // Samsung One UI Messages Unread Hero Card (Matching Reference Image)
                             androidx.compose.material3.Surface(
-                                shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp),
+                                shape = androidx.compose.foundation.shape.RoundedCornerShape(26.dp),
                                 color = if (!colors.isLight) Color(0xFF1E2028) else Color.White,
-                                shadowElevation = 1.dp,
+                                shadowElevation = 0.5.dp,
                                 modifier = Modifier
+                                    .fillMaxWidth()
                                     .padding(horizontal = 16.dp)
-                                    .graphicsLayer { alpha = subtitleAlpha }
+                                    .graphicsLayer { alpha = largeTitleAlpha }
                             ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp)
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 20.dp, vertical = 22.dp)
                                 ) {
-                                    Text(
-                                        text = "$totalUnreadMessages unread message${if (totalUnreadMessages > 1) "s" else ""}",
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = colors.textDark
-                                    )
-                                    androidx.compose.material3.Surface(
-                                        shape = androidx.compose.foundation.shape.RoundedCornerShape(999.dp),
-                                        color = if (!colors.isLight) Color(0xFF2E323E) else Color(0xFFE5E7EB)
+                                    // Dismiss 'X' Button at Top-Right
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .size(28.dp)
+                                            .clip(CircleShape)
+                                            .background(if (!colors.isLight) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f))
+                                            .clickable {
+                                                SoundManager.playReaction()
+                                                isUnreadBannerDismissed = true
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Lucide.X,
+                                            contentDescription = "Dismiss unread banner",
+                                            tint = colors.textDark,
+                                            modifier = Modifier.size(15.dp)
+                                        )
+                                    }
+
+                                    // Centered Unread Messages Count + View Action Button
+                                    Column(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(14.dp)
                                     ) {
                                         Text(
-                                            text = "View",
-                                            fontSize = 12.sp,
+                                            text = "$totalUnreadMessages unread message${if (totalUnreadMessages > 1) "s" else ""}",
+                                            fontSize = 24.sp,
                                             fontWeight = FontWeight.SemiBold,
+                                            letterSpacing = (-0.5).sp,
                                             color = colors.textDark,
-                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
+                                            textAlign = TextAlign.Center
                                         )
+
+                                        androidx.compose.material3.Surface(
+                                            shape = androidx.compose.foundation.shape.RoundedCornerShape(999.dp),
+                                            color = if (!colors.isLight) Color(0xFF2E323E) else Color(0xFFE5E7EB),
+                                            modifier = Modifier.clickable {
+                                                SoundManager.playReaction()
+                                                onTabSelected("unread")
+                                            }
+                                        ) {
+                                            Text(
+                                                text = "View",
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = colors.textDark,
+                                                modifier = Modifier.padding(horizontal = 22.dp, vertical = 6.dp)
+                                            )
+                                        }
                                     }
                                 }
                             }
                         } else {
+                            // Large One UI Expanded Title
+                            Text(
+                                text = title,
+                                fontSize = 38.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                letterSpacing = (-0.6).sp,
+                                color = colors.textDark,
+                                textAlign = TextAlign.Center
+                            )
+
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "All caught up • ${chats.size} conversations",
+                                text = if (totalUnreadMessages > 0) "$totalUnreadMessages unread • ${chats.size} conversations" else "All caught up • ${chats.size} conversations",
                                 fontSize = 13.5.sp,
                                 fontWeight = FontWeight.Normal,
                                 color = colors.textMuted,

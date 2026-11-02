@@ -98,7 +98,7 @@ fun AccountCenterScreen(
     }
 
     // One UI Collapsing Engine
-    val expandedHeightDp: Dp = 190.dp
+    val expandedHeightDp: Dp = 240.dp
     val maxCollapsePx = remember(density) { with(density) { expandedHeightDp.toPx() } }
     var collapseOffsetPx by remember { mutableFloatStateOf(0f) }
 
@@ -181,7 +181,7 @@ fun AccountCenterScreen(
         }
     }
 
-    val screenBgColor = if (!isDark) Color(0xFFF8FAFC) else Color(0xFF000000)
+    val screenBgColor = if (!isDark) Color(0xFFF2F4F7) else Color(0xFF000000)
     val cardBgColor = if (!isDark) Color(0xFFFFFFFF) else Color(0xFF17171A)
     val cardBorderColor = if (!isDark) Color.Black.copy(alpha = 0.05f) else Color.White.copy(alpha = 0.07f)
     val dividerColor = if (!isDark) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.08f)
@@ -258,9 +258,9 @@ fun AccountCenterScreen(
                         // Large One UI Title
                         Text(
                             text = "Settings",
-                            fontSize = 34.sp,
-                            fontWeight = FontWeight.Light,
-                            letterSpacing = (-0.5).sp,
+                            fontSize = 38.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            letterSpacing = (-0.6).sp,
                             color = textDark,
                             textAlign = TextAlign.Center
                         )
@@ -663,40 +663,30 @@ private fun OneUiSettingsProfileCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                modifier = Modifier.weight(1f)
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                IosAvatarView(
-                    name = displayName,
-                    avatarUrl = avatarUrl ?: "",
-                    size = 54.dp
+                Text(
+                    text = displayName,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = textDark,
+                    fontFamily = InterFontFamily
                 )
-
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(
-                        text = displayName,
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = textDark,
-                        fontFamily = InterFontFamily
-                    )
-                    Text(
-                        text = handleOrEmail,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Normal,
-                        color = textMuted,
-                        fontFamily = InterFontFamily
-                    )
-                }
+                Text(
+                    text = handleOrEmail,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Normal,
+                    color = textMuted,
+                    fontFamily = InterFontFamily
+                )
             }
 
-            Icon(
-                imageVector = Lucide.ChevronRight,
-                contentDescription = null,
-                tint = textMuted,
-                modifier = Modifier.size(20.dp)
+            IosAvatarView(
+                name = displayName,
+                avatarUrl = avatarUrl ?: "",
+                size = 58.dp
             )
         }
     }

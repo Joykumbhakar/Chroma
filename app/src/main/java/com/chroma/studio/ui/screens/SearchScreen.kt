@@ -958,7 +958,7 @@ fun SearchScreen(
     }
 
     // ── One UI Extended App Bar Height & State Persistence ────────────────────
-    val expandedHeightDp: Dp = if (useDynamicTitle) 158.dp else 140.dp
+    val expandedHeightDp: Dp = 220.dp
     val maxCollapsePx = remember(density, expandedHeightDp) { with(density) { expandedHeightDp.toPx() } }
 
     // Restore exact collapsed/expanded fraction from SharedPreferences
