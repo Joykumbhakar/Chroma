@@ -35,6 +35,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -858,155 +863,142 @@ fun OneUiCollapsingConversationsScreen(
         }
     }
 
-        // 5. ONE UI FLOATING ACTION BUTTON (Freely Draggable Left to Right, Shrinks on collapse)
-        val context = LocalContext.current
-        val prefs = remember { context.getSharedPreferences("chat_ui_preferences", Context.MODE_PRIVATE) }
-        val configuration = LocalConfiguration.current
-        val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
-        val marginPx = with(density) { 20.dp.toPx() }
-        var fabWidthPx by remember { mutableFloatStateOf(0f) }
-        val maxLeftOffset = remember(screenWidthPx, fabWidthPx, marginPx) {
-            if (fabWidthPx > 0f) -(screenWidthPx - fabWidthPx - (marginPx * 2)).coerceAtLeast(0f) else 0f
-        }
-        val savedFabRatio = remember { prefs.getFloat("one_ui_fab_x_ratio", 1f) }
-        val fabOffsetX = remember { Animatable(0f) }
-        var isDraggingFab by remember { mutableStateOf(false) }
-
-        LaunchedEffect(maxLeftOffset) {
-            if (maxLeftOffset < 0f) {
-                val targetOffset = maxLeftOffset * (1f - savedFabRatio)
-                fabOffsetX.snapTo(targetOffset)
-            }
-        }
-
+        // 5. ONE UI CLAYMORPHISM FLOATING ACTION BUTTON (Centered, Compact, Scroll-Morphing)
         AnimatedVisibility(
             visible = !isSelectionMode,
-            enter = scaleIn() + fadeIn(),
-            exit = scaleOut() + fadeOut(),
-            modifier = Modifier.align(Alignment.BottomEnd)
+            enter = scaleIn(spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)) + fadeIn(),
+            exit = scaleOut(spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)) + fadeOut(),
+            modifier = Modifier.align(Alignment.BottomCenter)
         ) {
             val fabColor = if (gradientStyle == OneUiGradientStyle.SOLID) {
                 colors.iosBlue
             } else {
                 gradientStyle.primaryColor
             }
-            val fabElevation by animateDpAsState(
-                targetValue = if (isDraggingFab) 18.dp else 10.dp,
-                animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                label = "fabElevation"
-            )
-            val fabScale by animateFloatAsState(
-                targetValue = if (isDraggingFab) 1.08f else 1f,
-                animationSpec = spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMediumLow),
-                label = "fabScale"
-            )
 
-            // Specular shiny glass border (135 degree diagonal specular highlights from top-left white highlight to bottom-right sky rim glow)
-            val shinyGlassBorder = remember(fabColor) {
-                Brush.linearGradient(
-                    colors = listOf(
-                        Color.White.copy(alpha = 0.95f),
-                        Color.White.copy(alpha = 0.30f),
-                        Color(0xFF93C5FD).copy(alpha = 0.40f),
-                        Color(0xFF60A5FA).copy(alpha = 0.85f)
-                    ),
-                    start = Offset.Zero,
-                    end = Offset.Infinite
+            // Claymorphism Tonal Palette
+            val clayHighlight = remember(fabColor) {
+                Color(
+                    red = (fabColor.red * 1.25f).coerceIn(0f, 1f),
+                    green = (fabColor.green * 1.25f).coerceIn(0f, 1f),
+                    blue = (fabColor.blue * 1.25f).coerceIn(0f, 1f)
+                )
+            }
+            val clayDark = remember(fabColor) {
+                Color(
+                    red = (fabColor.red * 0.70f).coerceIn(0f, 1f),
+                    green = (fabColor.green * 0.70f).coerceIn(0f, 1f),
+                    blue = (fabColor.blue * 0.70f).coerceIn(0f, 1f)
                 )
             }
 
-            val fabBackground = remember(fabColor) {
-                Brush.linearGradient(
-                    colors = listOf(
-                        fabColor,
-                        fabColor.copy(alpha = 0.90f)
-                    ),
-                    start = Offset.Zero,
-                    end = Offset.Infinite
-                )
-            }
-
-            val targetFabWidth = if (isFabExpanded) 216.dp else 56.dp
+            // Compact sizing: 46dp collapsed circle, 184dp expanded pill
+            val targetFabWidth = if (isFabExpanded) 184.dp else 46.dp
             val fabWidth by animateDpAsState(
                 targetValue = targetFabWidth,
                 animationSpec = spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow),
                 label = "fabWidth"
             )
-            val fabCorner = 28.dp
-            val fabShape = RoundedCornerShape(fabCorner)
+            val fabShape = RoundedCornerShape(23.dp)
+
+            val fabInteractionSource = remember { MutableInteractionSource() }
+            val isFabPressed by fabInteractionSource.collectIsPressedAsState()
+            val fabScale by animateFloatAsState(
+                targetValue = if (isFabPressed) 0.94f else 1f,
+                animationSpec = spring(dampingRatio = 0.65f, stiffness = Spring.StiffnessMediumLow),
+                label = "clayFabScale"
+            )
+
+            // Clay Inset Light & Specular Rim Gradients
+            val clayGradientBrush = remember(clayHighlight, fabColor, clayDark) {
+                Brush.linearGradient(
+                    colors = listOf(clayHighlight, fabColor, clayDark),
+                    start = Offset(0f, 0f),
+                    end = Offset(300f, 100f)
+                )
+            }
 
             Box(
                 modifier = Modifier
                     .windowInsetsPadding(WindowInsets.navigationBars)
-                    .padding(end = 20.dp, bottom = 114.dp)
-                    .offset { IntOffset(x = fabOffsetX.value.roundToInt(), y = 0) }
+                    .padding(bottom = 114.dp)
                     .graphicsLayer {
                         scaleX = fabScale
                         scaleY = fabScale
                     }
-                    .onGloballyPositioned { coordinates ->
-                        fabWidthPx = coordinates.size.width.toFloat()
-                    }
                     .width(fabWidth)
-                    .height(56.dp)
-                    .shadow(fabElevation, fabShape, spotColor = fabColor.copy(alpha = 0.5f))
+                    .height(46.dp)
+                    // Outer diffuse clay drop shadow (ambient + spot color)
+                    .shadow(
+                        elevation = if (isFabPressed) 4.dp else 10.dp,
+                        shape = fabShape,
+                        ambientColor = Color.Black.copy(alpha = 0.14f),
+                        spotColor = fabColor.copy(alpha = 0.45f)
+                    )
                     .clip(fabShape)
-                    .background(fabBackground)
-                    .border(1.2.dp, shinyGlassBorder, fabShape)
+                    .background(clayGradientBrush)
+                    // Outer subtle tactile rim
+                    .border(
+                        width = 1.dp,
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.55f),
+                                Color.White.copy(alpha = 0.15f),
+                                Color.Black.copy(alpha = 0.20f)
+                            )
+                        ),
+                        shape = fabShape
+                    )
+                    // Claymorphism 3D Inset Shadows: Specular top-left light + Deep bottom-right shadow
+                    .drawWithContent {
+                        drawContent()
+
+                        val strokeWidth = 2.dp.toPx()
+                        val cornerRadius = CornerRadius(size.height / 2, size.height / 2)
+
+                        // 1. Top Specular Clay Highlight (inflated round cushion effect)
+                        drawRoundRect(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.White.copy(alpha = 0.65f),
+                                    Color.White.copy(alpha = 0.12f),
+                                    Color.Transparent
+                                ),
+                                startY = 0f,
+                                endY = size.height * 0.60f
+                            ),
+                            topLeft = Offset(strokeWidth / 2, strokeWidth / 2),
+                            size = Size(size.width - strokeWidth, size.height - strokeWidth),
+                            cornerRadius = cornerRadius,
+                            style = Stroke(width = strokeWidth)
+                        )
+
+                        // 2. Bottom Deep Clay Shadow (deep puffy extrusion)
+                        drawRoundRect(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    Color.Black.copy(alpha = 0.08f),
+                                    Color.Black.copy(alpha = 0.35f)
+                                ),
+                                startY = size.height * 0.40f,
+                                endY = size.height
+                            ),
+                            topLeft = Offset(strokeWidth / 2, strokeWidth / 2),
+                            size = Size(size.width - strokeWidth, size.height - strokeWidth),
+                            cornerRadius = cornerRadius,
+                            style = Stroke(width = strokeWidth)
+                        )
+                    }
                     .then(
                         if (!isFabExpanded) {
-                            Modifier.pointerInput(maxLeftOffset) {
-                                awaitEachGesture {
-                            val down = awaitFirstDown(requireUnconsumed = false)
-                            var totalDrag = 0f
-                            var hasDragged = false
-                            val touchSlop = viewConfiguration.touchSlop
-
-                            while (true) {
-                                val event = awaitPointerEvent()
-                                val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                                if (!change.pressed) {
-                                    if (!hasDragged && !isFabExpanded) {
-                                        SoundManager.playReaction()
-                                        onNewMessageClick()
-                                    } else if (hasDragged) {
-                                        isDraggingFab = false
-                                        coroutineScope.launch {
-                                            val current = fabOffsetX.value
-                                            val range = (0f - maxLeftOffset).coerceAtLeast(1f)
-                                            val ratio = ((current - maxLeftOffset) / range).coerceIn(0f, 1f)
-                                            val target = when {
-                                                ratio < 0.15f -> maxLeftOffset
-                                                ratio > 0.85f -> 0f
-                                                else -> current
-                                            }
-                                            fabOffsetX.animateTo(
-                                                target,
-                                                spring(dampingRatio = 0.78f, stiffness = Spring.StiffnessMediumLow)
-                                            )
-                                            val finalRatio = ((target - maxLeftOffset) / range).coerceIn(0f, 1f)
-                                            prefs.edit().putFloat("one_ui_fab_x_ratio", finalRatio).apply()
-                                        }
-                                    }
-                                    break
-                                }
-
-                                val dragAmount = change.positionChange().x
-                                totalDrag += kotlin.math.abs(dragAmount)
-                                if (totalDrag > touchSlop) {
-                                    if (!hasDragged) {
-                                        hasDragged = true
-                                        isDraggingFab = true
-                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                    }
-                                    change.consume()
-                                    coroutineScope.launch {
-                                        val newOffset = (fabOffsetX.value + dragAmount).coerceIn(maxLeftOffset, 0f)
-                                        fabOffsetX.snapTo(newOffset)
-                                    }
-                                }
-                            }
-                                }
+                            Modifier.clickable(
+                                interactionSource = fabInteractionSource,
+                                indication = null
+                            ) {
+                                SoundManager.playReaction()
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onNewMessageClick()
                             }
                         } else Modifier
                     ),
@@ -1017,20 +1009,20 @@ fun OneUiCollapsingConversationsScreen(
                     transitionSpec = {
                         fadeIn(tween(180)) togetherWith fadeOut(tween(120))
                     },
-                    label = "fabContent"
+                    label = "clayFabContent"
                 ) { expanded ->
                     if (!expanded) {
                         Icon(
                             imageVector = Lucide.Plus,
                             contentDescription = "New chat",
                             tint = Color.White,
-                            modifier = Modifier.size(26.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                     } else {
                         Row(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(horizontal = 8.dp),
+                                .padding(horizontal = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceEvenly
                         ) {
@@ -1042,6 +1034,7 @@ fun OneUiCollapsingConversationsScreen(
                                     .clip(RoundedCornerShape(20.dp))
                                     .clickable {
                                         SoundManager.playReaction()
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                         onCreateGroupClick?.invoke() ?: onNewMessageClick()
                                     }
                                     .padding(horizontal = 4.dp),
@@ -1052,23 +1045,23 @@ fun OneUiCollapsingConversationsScreen(
                                     imageVector = Lucide.Users,
                                     contentDescription = "Create Group",
                                     tint = Color.White,
-                                    modifier = Modifier.size(17.dp)
+                                    modifier = Modifier.size(15.dp)
                                 )
-                                Spacer(modifier = Modifier.width(5.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
                                 Text(
                                     text = "Group",
                                     color = Color.White,
-                                    fontSize = 12.5.sp,
+                                    fontSize = 12.sp,
                                     fontWeight = FontWeight.SemiBold
                                 )
                             }
 
-                            // Divider
+                            // Subtle Divider
                             Box(
                                 modifier = Modifier
                                     .width(1.dp)
-                                    .height(20.dp)
-                                    .background(Color.White.copy(alpha = 0.35f))
+                                    .height(18.dp)
+                                    .background(Color.White.copy(alpha = 0.30f))
                             )
 
                             // Direct Chat
@@ -1079,6 +1072,7 @@ fun OneUiCollapsingConversationsScreen(
                                     .clip(RoundedCornerShape(20.dp))
                                     .clickable {
                                         SoundManager.playReaction()
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                         onNewMessageClick()
                                     }
                                     .padding(horizontal = 4.dp),
@@ -1089,13 +1083,13 @@ fun OneUiCollapsingConversationsScreen(
                                     imageVector = Lucide.MessageSquare,
                                     contentDescription = "Direct Chat",
                                     tint = Color.White,
-                                    modifier = Modifier.size(17.dp)
+                                    modifier = Modifier.size(15.dp)
                                 )
-                                Spacer(modifier = Modifier.width(5.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = "Direct Chat",
+                                    text = "Chat",
                                     color = Color.White,
-                                    fontSize = 12.5.sp,
+                                    fontSize = 12.sp,
                                     fontWeight = FontWeight.SemiBold
                                 )
                             }
