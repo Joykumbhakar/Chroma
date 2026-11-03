@@ -539,7 +539,7 @@ fun AppleIconBadge(
     modifier: Modifier = Modifier
 ) {
     if (hasBackground) {
-        val squircleShape = RoundedCornerShape(11.5.dp)
+        val squircleShape = RoundedCornerShape(13.5.dp)
         if (icon != null) {
             val bgModifier = if (iconGradient != null && iconGradient.isNotEmpty()) {
                 Modifier.background(Brush.linearGradient(iconGradient))
