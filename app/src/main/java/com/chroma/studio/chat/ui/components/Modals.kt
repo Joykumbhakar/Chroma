@@ -380,49 +380,65 @@ fun ContactInfoDrawer(
                         .padding(bottom = 24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Profile Avatar with Border & Online Status
+                    // Profile Avatar with Border & Online Status - full unclipped badges
                     Box(
                         modifier = Modifier
-                            .size(112.dp)
-                            .shadow(4.dp, CircleShape)
+                            .size(116.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        com.chroma.studio.ui.components.IosAvatarView(
-                            name = chat.name,
-                            avatarUrl = currentDisplayAvatar,
-                            size = 112.dp,
-                            isGroup = isGroup,
+                        Box(
                             modifier = Modifier
-                                .fillMaxSize()
+                                .size(112.dp)
+                                .shadow(4.dp, CircleShape)
                                 .clip(CircleShape)
-                                .border(3.5.dp, colors.appBg, CircleShape)
-                                .clickable {
-                                    if (isGroup) {
-                                        SoundManager.playReaction()
-                                        isIconStudioOpen = true
-                                    } else {
-                                        onImageClick(chat.avatar)
+                        ) {
+                            com.chroma.studio.ui.components.IosAvatarView(
+                                name = chat.name,
+                                avatarUrl = currentDisplayAvatar,
+                                size = 112.dp,
+                                isGroup = isGroup,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(CircleShape)
+                                    .border(3.5.dp, colors.appBg, CircleShape)
+                                    .clickable {
+                                        if (isGroup) {
+                                            SoundManager.playReaction()
+                                            isIconStudioOpen = true
+                                        } else {
+                                            onImageClick(chat.avatar)
+                                        }
                                     }
-                                }
-                        )
+                            )
+                        }
 
                         if (isGroup) {
-                            PhosphorCameraIcon(
-                                tint = colors.iosBlue,
-                                size = 20.dp,
+                            Box(
                                 modifier = Modifier
                                     .align(Alignment.BottomEnd)
                                     .offset(x = (-2).dp, y = (-2).dp)
+                                    .size(28.dp)
+                                    .shadow(3.dp, CircleShape)
+                                    .clip(CircleShape)
+                                    .background(colors.appBg)
+                                    .border(2.dp, colors.borderSubtle, CircleShape)
                                     .clickable {
                                         SoundManager.playReaction()
                                         isIconStudioOpen = true
-                                    }
-                            )
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                PhosphorCameraIcon(
+                                    tint = colors.iosBlue,
+                                    size = 15.dp
+                                )
+                            }
                         } else if (chat.online) {
                             Box(
                                 modifier = Modifier
                                     .size(22.dp)
                                     .align(Alignment.BottomEnd)
-                                    .offset(x = (-3).dp, y = (-2).dp)
+                                    .offset(x = (-2).dp, y = (-2).dp)
                                     .background(colors.success, CircleShape)
                                     .border(3.dp, colors.appBg, CircleShape)
                             )

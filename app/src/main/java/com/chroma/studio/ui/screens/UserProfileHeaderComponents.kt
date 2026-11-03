@@ -165,14 +165,14 @@ fun UserProfileHeroSection(
 
             Box(
                 modifier = Modifier
-                    .size(86.dp)
+                    .size(90.dp)
                     .scale(avatarScale),
                 contentAlignment = Alignment.Center
             ) {
                 // Avatar Container with Theme Background Separation Mask & Clean Native Elevation
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
+                        .size(86.dp)
                         .shadow(
                             elevation = 6.dp,
                             shape = CircleShape,

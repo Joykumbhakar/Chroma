@@ -24,6 +24,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
@@ -95,35 +96,43 @@ fun AccountScreen(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(84.dp)
-                        .clip(CircleShape)
-                        .border(2.dp, ObColors.NeonGreen, CircleShape)
-                        .clickable { galleryLauncher.launch("image/*") },
+                        .size(90.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    IosAvatarView(
-                        name = state.fullName.ifBlank { state.username.ifBlank { "Creator" } },
-                        avatarUrl = state.avatarUri?.toString() ?: state.avatarPresetId ?: "",
-                        size = 84.dp,
-                        gender = state.gender.name,
-                        modifier = Modifier.fillMaxSize()
-                    )
+                    Box(
+                        modifier = Modifier
+                            .size(84.dp)
+                            .clip(CircleShape)
+                            .border(2.dp, ObColors.NeonGreen, CircleShape)
+                            .clickable { galleryLauncher.launch("image/*") },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        IosAvatarView(
+                            name = state.fullName.ifBlank { state.username.ifBlank { "Creator" } },
+                            avatarUrl = state.avatarUri?.toString() ?: state.avatarPresetId ?: "",
+                            size = 84.dp,
+                            gender = state.gender.name,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
 
-                    // Small camera badge
+                    // Small camera badge - full and unclipped
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
-                            .size(24.dp)
+                            .size(28.dp)
+                            .shadow(2.dp, CircleShape)
                             .clip(CircleShape)
                             .background(Color(0xFF0C2088))
-                            .border(1.5.dp, Color.White, CircleShape),
+                            .border(1.5.dp, Color.White, CircleShape)
+                            .clickable { galleryLauncher.launch("image/*") },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.CameraAlt,
                             contentDescription = "Change Avatar",
                             tint = ObColors.NeonGreen,
-                            modifier = Modifier.size(13.dp)
+                            modifier = Modifier.size(14.dp)
                         )
                     }
                 }

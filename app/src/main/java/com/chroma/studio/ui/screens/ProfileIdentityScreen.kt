@@ -691,18 +691,19 @@ fun ProfileIdentityScreen(
                 Box(
                     modifier = Modifier
                         .padding(start = 16.dp, top = 95.dp)
-                        .size(86.dp)
-                        .clickable { showAvatarDialog = true }
+                        .size(92.dp),
+                    contentAlignment = Alignment.Center
                 ) {
                     val presetRes = remember(avatarUrl) { getAvatarPresetDrawableRes(avatarUrl) }
 
                     Box(
                         modifier = Modifier
-                            .fillMaxSize()
+                            .size(86.dp)
                             .shadow(8.dp, CircleShape, spotColor = Color.Black.copy(alpha = 0.28f))
                             .background(if (isDark) Color(0xFF1C1C1E) else Color.White, CircleShape)
                             .padding(3.5.dp)
                             .clip(CircleShape)
+                            .clickable { showAvatarDialog = true }
                     ) {
                         if (selectedAvatarUri != null) {
                             AsyncImage(selectedAvatarUri, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
@@ -726,21 +727,22 @@ fun ProfileIdentityScreen(
                         }
                     }
 
-                    // Anchored Camera Action Badge
+                    // Anchored Camera Action Badge - fully unclipped with crisp border
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .size(28.dp)
-                            .shadow(4.dp, CircleShape)
+                            .shadow(3.dp, CircleShape)
+                            .clip(CircleShape)
                             .background(
                                 Brush.linearGradient(
                                     listOf(Color(0xFF0A84FF), Color(0xFF0051D5)),
                                     start = Offset.Zero,
                                     end = Offset.Infinite
-                                ),
-                                CircleShape
+                                )
                             )
-                            .border(2.dp, if (isDark) Color(0xFF1C1C1E) else Color.White, CircleShape),
+                            .border(2.dp, if (isDark) Color(0xFF1C1C1E) else Color.White, CircleShape)
+                            .clickable { showAvatarDialog = true },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(

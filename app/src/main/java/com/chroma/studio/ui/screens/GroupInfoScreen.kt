@@ -121,9 +121,9 @@ fun GroupInfoScreen(
                         .padding(20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Group Avatar with Camera Edit Badge
+                    // Group Avatar with Camera Edit Badge - full unclipped badge
                     Box(
-                        modifier = Modifier.size(92.dp),
+                        modifier = Modifier.size(96.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         IosAvatarView(
@@ -134,15 +134,24 @@ fun GroupInfoScreen(
                         )
 
                         if (isAdmin && !isLeft && !isClosed) {
-                            Icon(
-                                Lucide.Camera,
-                                contentDescription = "Change Photo",
-                                tint = Color(0xFF007AFF),
+                            Box(
                                 modifier = Modifier
                                     .align(Alignment.BottomEnd)
-                                    .size(22.dp)
-                                    .clickable { imagePickerLauncher.launch("image/*") }
-                            )
+                                    .size(28.dp)
+                                    .shadow(3.dp, CircleShape)
+                                    .clip(CircleShape)
+                                    .background(if (colors.isDark) Color(0xFF2C2C2E) else Color.White)
+                                    .border(2.dp, colors.bg, CircleShape)
+                                    .clickable { imagePickerLauncher.launch("image/*") },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Lucide.Camera,
+                                    contentDescription = "Change Photo",
+                                    tint = Color(0xFF007AFF),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
                         }
                     }
 

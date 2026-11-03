@@ -522,13 +522,13 @@ fun AppleStatusAvatar(
             }
         }
 
-        // Add (+) badge at bottom-end with clean gap border
+        // Add (+) badge at bottom-end with clean gap border - full unclipped
         if (showAddBadge) {
             Box(
                 modifier = Modifier
                     .size(22.dp)
                     .align(Alignment.BottomEnd)
-                    .offset(x = 1.dp, y = 1.dp)
+                    .offset(x = 0.dp, y = 0.dp)
                     .shadow(elevation = 2.dp, shape = CircleShape, spotColor = Color.Black.copy(alpha = 0.28f))
                     .background(gapColor, CircleShape)
                     .padding(2.dp)

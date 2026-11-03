@@ -2019,35 +2019,43 @@ fun CupertinoAvatarPickerStep(
 
     Box(
         modifier = Modifier
-            .size(136.dp)
-            .clip(CircleShape)
-            .border(2.dp, colors.primary.copy(alpha = 0.4f), CircleShape)
-            .clickable { showSheet = true },
+            .size(142.dp),
         contentAlignment = Alignment.Center
     ) {
-        if (selectedUri != null) {
-            AsyncImage(selectedUri, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-        } else {
-            IosAvatarView(
-                name = title,
-                avatarUrl = "",
-                size = 136.dp,
-                gender = gender,
-                modifier = Modifier.fillMaxSize()
-            )
+        Box(
+            modifier = Modifier
+                .size(136.dp)
+                .clip(CircleShape)
+                .border(2.dp, colors.primary.copy(alpha = 0.4f), CircleShape)
+                .clickable { showSheet = true },
+            contentAlignment = Alignment.Center
+        ) {
+            if (selectedUri != null) {
+                AsyncImage(selectedUri, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            } else {
+                IosAvatarView(
+                    name = title,
+                    avatarUrl = "",
+                    size = 136.dp,
+                    gender = gender,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
         }
 
+        // Pencil badge - completely unclipped and full
         Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(4.dp)
-                .size(34.dp)
+                .size(36.dp)
+                .shadow(3.dp, CircleShape)
                 .clip(CircleShape)
                 .background(colors.primary)
-                .border(2.dp, colors.bg, CircleShape),
+                .border(2.5.dp, colors.bg, CircleShape)
+                .clickable { showSheet = true },
             contentAlignment = Alignment.Center
         ) {
-            Icon(Lucide.Pencil, null, tint = Color.White, modifier = Modifier.size(15.dp))
+            Icon(Lucide.Pencil, null, tint = Color.White, modifier = Modifier.size(16.dp))
         }
     }
 

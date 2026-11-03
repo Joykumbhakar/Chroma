@@ -18,6 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
@@ -597,29 +598,50 @@ private fun StepGroupDetails(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Large Avatar Picker with Camera Badge
+                // Large Avatar Picker with Camera Badge - unclipped and full
                 Box(
                     modifier = Modifier
-                        .size(80.dp)
-                        .clip(CircleShape)
-                        .border(1.5.dp, colors.iosBlue, CircleShape)
-                        .clickable {
-                            isIconStudioOpen = true
-                            SoundManager.playReaction()
-                        }
+                        .size(86.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    com.chroma.studio.ui.components.IosAvatarView(
-                        name = "Group",
-                        avatarUrl = selectedAvatar,
-                        size = 64.dp,
-                        isGroup = true
-                    )
+                    Box(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .clip(CircleShape)
+                            .border(1.5.dp, colors.iosBlue, CircleShape)
+                            .clickable {
+                                isIconStudioOpen = true
+                                SoundManager.playReaction()
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        com.chroma.studio.ui.components.IosAvatarView(
+                            name = "Group",
+                            avatarUrl = selectedAvatar,
+                            size = 80.dp,
+                            isGroup = true
+                        )
+                    }
 
-                    PhosphorCameraIcon(
-                        tint = colors.iosBlue,
-                        size = 18.dp,
-                        modifier = Modifier.align(Alignment.BottomEnd)
-                    )
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .size(26.dp)
+                            .shadow(2.dp, CircleShape)
+                            .clip(CircleShape)
+                            .background(colors.appBg)
+                            .border(1.5.dp, colors.iosBlue, CircleShape)
+                            .clickable {
+                                isIconStudioOpen = true
+                                SoundManager.playReaction()
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        PhosphorCameraIcon(
+                            tint = colors.iosBlue,
+                            size = 14.dp
+                        )
+                    }
                 }
 
                 Row(
