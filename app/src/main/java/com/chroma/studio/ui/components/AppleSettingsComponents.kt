@@ -534,24 +534,31 @@ fun AppleIconBadge(
     iconColor: Color = Color(0xFF0A84FF),
     iconGradient: List<Color>? = null,
     size: Dp = 22.dp,
-    hasBackground: Boolean = false,
+    hasBackground: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     if (hasBackground) {
-        val squircleShape = RoundedCornerShape(8.dp)
+        val squircleShape = RoundedCornerShape(8.5.dp)
         if (icon != null) {
+            val bgModifier = if (iconGradient != null && iconGradient.isNotEmpty()) {
+                Modifier.background(Brush.linearGradient(iconGradient))
+            } else {
+                Modifier.background(iconColor.copy(alpha = 1f))
+            }
+
             Box(
                 modifier = modifier
                     .size(30.dp)
                     .clip(squircleShape)
-                    .background(iconColor.copy(alpha = 0.14f)),
+                    .then(bgModifier)
+                    .border(width = 0.85.dp, brush = SettingsShineBorderBrush, shape = squircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = iconColor,
-                    modifier = Modifier.size(18.dp)
+                    tint = Color.White,
+                    modifier = Modifier.size(17.dp)
                 )
             }
         } else if (graphic3dId != null) {
@@ -570,7 +577,7 @@ fun AppleIconBadge(
                     .size(30.dp)
                     .clip(squircleShape)
                     .background(brush)
-                    .border(1.dp, Color.White.copy(alpha = 0.42f), squircleShape),
+                    .border(0.85.dp, SettingsShineBorderBrush, squircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Apple3DGraphicIcon(

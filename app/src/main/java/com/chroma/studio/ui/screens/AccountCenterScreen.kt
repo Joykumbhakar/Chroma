@@ -752,20 +752,10 @@ private fun OneUiSettingsRow(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             modifier = Modifier.weight(1f)
         ) {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(iconTint.copy(alpha = 0.12f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = iconTint,
-                    modifier = Modifier.size(19.dp)
-                )
-            }
+            OneUiIconBadge(
+                icon = icon,
+                iconColor = iconTint
+            )
 
             Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 Text(

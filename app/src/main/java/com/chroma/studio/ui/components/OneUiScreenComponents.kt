@@ -272,7 +272,24 @@ fun OneUiSettingsGroup(
 }
 
 /**
- * Samsung One UI 7.0 Squircle Icon Badge
+ * Specular shine light gradient border for settings icon badges:
+ * Illuminates the top-left corner (0f, 0f) and bottom-right corner (width, height),
+ * fading to transparent along the top-right and bottom-left edges.
+ */
+val SettingsShineBorderBrush = Brush.linearGradient(
+    0.00f to Color.White.copy(alpha = 0.85f),
+    0.20f to Color.White.copy(alpha = 0.22f),
+    0.36f to Color.Transparent,
+    0.64f to Color.Transparent,
+    0.80f to Color.White.copy(alpha = 0.16f),
+    1.00f to Color.White.copy(alpha = 0.52f),
+    start = Offset.Zero,
+    end = Offset.Infinite
+)
+
+/**
+ * Samsung One UI 7.0 Squircle Icon Badge with solid filled colored background (no transparency),
+ * white icon glyph, and tiny thin shine border light on top-left and bottom-right corners.
  */
 @Composable
 fun OneUiIconBadge(
@@ -281,24 +298,26 @@ fun OneUiIconBadge(
     iconGradient: List<Color>? = null,
     modifier: Modifier = Modifier
 ) {
+    val shape = RoundedCornerShape(11.dp)
     val bgModifier = if (iconGradient != null && iconGradient.isNotEmpty()) {
         Modifier.background(Brush.linearGradient(iconGradient))
     } else {
-        Modifier.background(iconColor.copy(alpha = 0.12f))
+        Modifier.background(iconColor.copy(alpha = 1f))
     }
 
     Box(
         modifier = modifier
             .size(36.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .then(bgModifier),
+            .clip(shape)
+            .then(bgModifier)
+            .border(width = 0.9.dp, brush = SettingsShineBorderBrush, shape = shape),
         contentAlignment = Alignment.Center
     ) {
         if (icon != null) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (iconGradient != null) Color.White else iconColor,
+                tint = Color.White,
                 modifier = Modifier.size(19.dp)
             )
         }

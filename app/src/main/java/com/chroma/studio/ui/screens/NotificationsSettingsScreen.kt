@@ -26,6 +26,7 @@ import com.chroma.studio.chat.sound.SoundManager
 import com.chroma.studio.model.UserProfile
 import com.chroma.studio.ui.components.AppleSwitch
 import com.chroma.studio.ui.components.ToastManager
+import com.chroma.studio.ui.components.SettingsShineBorderBrush
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.*
@@ -469,18 +470,19 @@ private fun NotificationSettingRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(13.dp)
         ) {
+            val shape = RoundedCornerShape(10.dp)
             Box(
                 modifier = Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(iconColor.copy(alpha = 0.16f))
-                    .border(1.dp, iconColor.copy(alpha = 0.3f), RoundedCornerShape(10.dp)),
+                    .size(34.dp)
+                    .clip(shape)
+                    .background(iconColor.copy(alpha = 1f))
+                    .border(width = 0.9.dp, brush = SettingsShineBorderBrush, shape = shape),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = title,
-                    tint = iconColor,
+                    tint = Color.White,
                     modifier = Modifier.size(18.dp)
                 )
             }
