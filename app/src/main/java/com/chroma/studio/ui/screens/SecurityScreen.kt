@@ -76,7 +76,7 @@ fun SecurityScreen(
                         title = "Change Password",
                         subtitle = user?.email?.let { "Send reset link to $it" } ?: "Reset your password",
                         icon = Lucide.Key,
-                        iconGradient = listOf(Color(0xFF0A84FF), Color(0xFF0051D5)),
+                        iconGradient = listOf(Color(0xFF0055FF), Color(0xFF0022CC)),
                         valueText = if (isSendingReset) "Sending..." else "Send",
                         showChevron = false,
                         onClick = {
@@ -112,7 +112,7 @@ fun SecurityScreen(
                         title = "Biometric Passkey Lock",
                         subtitle = "Require Face/Fingerprint for sensitive operations",
                         icon = Lucide.Fingerprint,
-                        iconGradient = listOf(Color(0xFF34C759), Color(0xFF248A3D)),
+                        iconGradient = listOf(Color(0xFF0055FF), Color(0xFF0022CC)),
                         checked = true,
                         onCheckedChange = { }
                     )
@@ -123,7 +123,7 @@ fun SecurityScreen(
                         title = "Unrecognized Login Alerts",
                         subtitle = "Notify when a new device signs in",
                         icon = Lucide.ShieldAlert,
-                        iconGradient = listOf(Color(0xFFFF9500), Color(0xFFCC7A00)),
+                        iconGradient = listOf(Color(0xFF0055FF), Color(0xFF0022CC)),
                         checked = unrecognizedLogins,
                         onCheckedChange = { unrecognizedLogins = it }
                     )

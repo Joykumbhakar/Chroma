@@ -388,7 +388,7 @@ fun AccountCenterScreen(
                                         .size(7.dp)
                                         .clip(CircleShape)
                                         .background(
-                                            if (gradientStyle == OneUiGradientStyle.SOLID) Color(0xFF0A84FF)
+                                            if (gradientStyle == OneUiGradientStyle.SOLID) Color(0xFF0055FF)
                                             else gradientStyle.orbColor
                                         )
                                 )
@@ -533,7 +533,7 @@ fun AccountCenterScreen(
                                 title = "Profile & Identity",
                                 subtitle = "Name, avatar, bio, and social handles",
                                 icon = LucideFilled.User,
-                                iconTint = activeAccent,
+                                iconTint = Color(0xFF0055FF),
                                 valueText = profile?.displayName?.takeIf { it.isNotBlank() },
                                 textDark = textDark,
                                 textMuted = textMuted,
@@ -546,7 +546,7 @@ fun AccountCenterScreen(
                                 title = "Security & Access",
                                 subtitle = "Password, logins, and recovery alerts",
                                 icon = LucideFilled.ShieldCheck,
-                                iconTint = Color(0xFF10B981),
+                                iconTint = Color(0xFF0055FF),
                                 textDark = textDark,
                                 textMuted = textMuted,
                                 onClick = { profile?.let { onNavigateToSecurity(it) } }
@@ -558,7 +558,7 @@ fun AccountCenterScreen(
                                 title = "Privacy & Interaction",
                                 subtitle = "Account visibility, mentions, and blocking",
                                 icon = LucideFilled.Lock,
-                                iconTint = Color(0xFF8B5CF6),
+                                iconTint = Color(0xFF0055FF),
                                 valueText = if (profile?.isPrivateAccount == true) "Private" else "Public",
                                 textDark = textDark,
                                 textMuted = textMuted,
@@ -571,7 +571,7 @@ fun AccountCenterScreen(
                                 title = "Notifications & Alerts",
                                 subtitle = "Push notifications, tones, and vibration",
                                 icon = LucideFilled.Bell,
-                                iconTint = Color(0xFFF59E0B),
+                                iconTint = Color(0xFF0055FF),
                                 valueText = if (profile?.pushNotificationsEnabled == true) "On" else "Off",
                                 textDark = textDark,
                                 textMuted = textMuted,
@@ -584,7 +584,7 @@ fun AccountCenterScreen(
                                 title = "Archived Creatives",
                                 subtitle = "View and restore your archived creations",
                                 icon = LucideFilled.Archive,
-                                iconTint = Color(0xFF06B6D4),
+                                iconTint = Color(0xFF0055FF),
                                 textDark = textDark,
                                 textMuted = textMuted,
                                 onClick = { profile?.let { onNavigateToArchives(it) } }
@@ -596,7 +596,7 @@ fun AccountCenterScreen(
                                 title = "Your Activity",
                                 subtitle = "Liked, saved, and shared posts history",
                                 icon = LucideFilled.History,
-                                iconTint = Color(0xFFEC4899),
+                                iconTint = Color(0xFF0055FF),
                                 textDark = textDark,
                                 textMuted = textMuted,
                                 onClick = { profile?.let { onNavigateToActivityHistory(it) } }
@@ -608,7 +608,7 @@ fun AccountCenterScreen(
                                 title = "Toggle Switch Lab",
                                 subtitle = "Spring physics solver, telemetry & presets",
                                 icon = LucideFilled.Sliders,
-                                iconTint = Color(0xFF6366F1),
+                                iconTint = Color(0xFF0055FF),
                                 valueText = "Lab",
                                 textDark = textDark,
                                 textMuted = textMuted,
@@ -630,7 +630,7 @@ fun AccountCenterScreen(
                                 title = "Download My Information",
                                 subtitle = "Export personal JSON archive",
                                 icon = LucideFilled.Download,
-                                iconTint = Color(0xFF0A84FF),
+                                iconTint = Color(0xFF0055FF),
                                 textDark = textDark,
                                 textMuted = textMuted,
                                 onClick = {
@@ -652,7 +652,7 @@ fun AccountCenterScreen(
                                 title = "Privacy Policy and Terms",
                                 subtitle = "Legal agreements, terms, and data safety",
                                 icon = LucideFilled.FileText,
-                                iconTint = Color(0xFF6B7280),
+                                iconTint = Color(0xFF0055FF),
                                 textDark = textDark,
                                 textMuted = textMuted,
                                 onClick = onNavigateToPrivacyTerms

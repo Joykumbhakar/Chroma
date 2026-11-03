@@ -77,7 +77,7 @@ fun PrivacyScreen(
                         title = "Private Account",
                         subtitle = "Only approved followers can view your portfolio",
                         icon = Lucide.Lock,
-                        iconGradient = listOf(Color(0xFF5856D6), Color(0xFF3634A3)),
+                        iconGradient = listOf(Color(0xFF0055FF), Color(0xFF0022CC)),
                         checked = isPrivate,
                         onCheckedChange = { isPrivate = it }
                     )
@@ -93,7 +93,7 @@ fun PrivacyScreen(
                         title = "Allow Mentions & Tags",
                         subtitle = "Let other creators mention @${profile.username}",
                         icon = Lucide.AtSign,
-                        iconGradient = listOf(Color(0xFF0A84FF), Color(0xFF0051D5)),
+                        iconGradient = listOf(Color(0xFF0055FF), Color(0xFF0022CC)),
                         checked = allowTagging,
                         onCheckedChange = { allowTagging = it }
                     )
@@ -104,7 +104,7 @@ fun PrivacyScreen(
                         title = "Show Online Activity",
                         subtitle = "Show presence beacon when active on mesh",
                         icon = Lucide.Activity,
-                        iconGradient = listOf(Color(0xFF34C759), Color(0xFF248A3D)),
+                        iconGradient = listOf(Color(0xFF0055FF), Color(0xFF0022CC)),
                         checked = showOnline,
                         onCheckedChange = { showOnline = it }
                     )

@@ -290,16 +290,17 @@ val SettingsShineBorderBrush = Brush.linearGradient(
 
 /**
  * Authentic Apple-style clean vertical gradient for settings icons:
- * For example: linear-gradient(180deg, #0095ff 0%, #0022cc 100%)
+ * For example: linear-gradient(180deg, #0055ff 0%, #0022cc 100%)
  */
 fun getAppleCleanIconGradient(baseColor: Color): List<Color> {
+    val appleCleanBlueGradient = listOf(Color(0xFF0055FF), Color(0xFF0022CC))
     val r = baseColor.red
     val g = baseColor.green
     val b = baseColor.blue
 
     // Blue family (e.g. 0xFF0A84FF, 0xFF007AFF, 0xFF0095FF)
     if (b > 0.70f && r < 0.35f) {
-        return listOf(Color(0xFF0095FF), Color(0xFF0022CC))
+        return listOf(Color(0xFF0055FF), Color(0xFF0022CC))
     }
     // Green family (e.g. 0xFF34C759, 0xFF30D158, 0xFF10B981, 0xFF22C55E)
     if (g > 0.60f && r < 0.40f && b < 0.50f) {
@@ -360,7 +361,7 @@ fun getAppleCleanIconGradient(baseColor: Color): List<Color> {
 @Composable
 fun OneUiIconBadge(
     icon: ImageVector? = null,
-    iconColor: Color = Color(0xFF0A84FF),
+    iconColor: Color = Color(0xFF0055FF),
     iconGradient: List<Color>? = null,
     modifier: Modifier = Modifier
 ) {
@@ -395,7 +396,7 @@ fun OneUiSettingsNavRow(
     title: String,
     subtitle: String? = null,
     icon: ImageVector? = null,
-    iconColor: Color = Color(0xFF0A84FF),
+    iconColor: Color = Color(0xFF0055FF),
     iconTint: Color = iconColor,
     iconGradient: List<Color>? = null,
     valueText: String? = null,
@@ -408,7 +409,7 @@ fun OneUiSettingsNavRow(
     val isDark = isAppInDark
     val textDark = if (isDark) Color.White else Color(0xFF0F172A)
     val textMuted = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
-    val effectiveTint = if (iconTint != Color(0xFF0A84FF)) iconTint else iconColor
+    val effectiveTint = if (iconTint != Color(0xFF0055FF) && iconTint != Color(0xFF0A84FF)) iconTint else iconColor
 
     Row(
         modifier = modifier
@@ -487,19 +488,19 @@ fun OneUiSettingsToggleRow(
     title: String,
     subtitle: String? = null,
     icon: ImageVector? = null,
-    iconColor: Color = Color(0xFF0A84FF),
+    iconColor: Color = Color(0xFF0055FF),
     iconTint: Color = iconColor,
     iconGradient: List<Color>? = null,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     infoOnClick: (() -> Unit)? = null,
-    activeTrackColor: Color = Color(0xFF0A84FF),
+    activeTrackColor: Color = Color(0xFF0055FF),
     modifier: Modifier = Modifier
 ) {
     val isDark = isAppInDark
     val textDark = if (isDark) Color.White else Color(0xFF0F172A)
     val textMuted = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
-    val effectiveTint = if (iconTint != Color(0xFF0A84FF)) iconTint else iconColor
+    val effectiveTint = if (iconTint != Color(0xFF0055FF) && iconTint != Color(0xFF0A84FF)) iconTint else iconColor
 
     Row(
         modifier = modifier
@@ -589,7 +590,7 @@ fun OneUiSettingsSliderRow(
     valueText: String,
     valueTextColor: Color = Color(0xFF0A84FF),
     icon: ImageVector? = null,
-    iconColor: Color = Color(0xFF0A84FF),
+    iconColor: Color = Color(0xFF0055FF),
     iconTint: Color = iconColor,
     iconGradient: List<Color>? = null,
     value: Float,
@@ -600,7 +601,7 @@ fun OneUiSettingsSliderRow(
 ) {
     val isDark = isAppInDark
     val textDark = if (isDark) Color.White else Color(0xFF0F172A)
-    val effectiveTint = if (iconTint != Color(0xFF0A84FF)) iconTint else iconColor
+    val effectiveTint = if (iconTint != Color(0xFF0055FF) && iconTint != Color(0xFF0A84FF)) iconTint else iconColor
 
     Column(
         modifier = modifier

@@ -519,7 +519,7 @@ fun AppleSettingsGroup(
  * Universal Signature Programmatic Gradient for Icon Badges:
  * Single Unified Apple Blue Gradient matching Liquid Glass spec.
  */
-val UniversalIconGradientColors = listOf(Color(0xFF0095FF), Color(0xFF0022CC))
+val UniversalIconGradientColors = listOf(Color(0xFF0055FF), Color(0xFF0022CC))
 val UniversalIconBrush = Brush.verticalGradient(
     colors = UniversalIconGradientColors
 )
@@ -532,7 +532,7 @@ val UniversalIconBrush = Brush.verticalGradient(
 fun AppleIconBadge(
     icon: ImageVector? = null,
     graphic3dId: Apple3DGraphicId? = null,
-    iconColor: Color = Color(0xFF0A84FF),
+    iconColor: Color = Color(0xFF0055FF),
     iconGradient: List<Color>? = null,
     size: Dp = 22.dp,
     hasBackground: Boolean = true,
@@ -608,7 +608,7 @@ fun AppleSettingNavRow(
     valueTextColor: Color = Color(0xFF8E8E93),
     icon: ImageVector? = null,
     graphic3dId: Apple3DGraphicId? = null,
-    iconColor: Color = Color(0xFF0A84FF),
+    iconColor: Color = Color(0xFF0055FF),
     iconGradient: List<Color>? = null,
     isDestructive: Boolean = false,
     showChevron: Boolean = true,
@@ -700,12 +700,12 @@ fun AppleSettingToggleRow(
     subtitle: String? = null,
     icon: ImageVector? = null,
     graphic3dId: Apple3DGraphicId? = null,
-    iconColor: Color = Color(0xFF0A84FF),
+    iconColor: Color = Color(0xFF0055FF),
     iconGradient: List<Color>? = null,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     infoOnClick: (() -> Unit)? = null,
-    activeTrackColor: Color = Color(0xFF0A84FF),
+    activeTrackColor: Color = Color(0xFF0055FF),
     modifier: Modifier = Modifier
 ) {
     val colors = LocalOscellionColors.current
@@ -797,7 +797,7 @@ fun AppleSettingSliderRow(
     valueTextColor: Color = Color(0xFF0A84FF),
     icon: ImageVector? = null,
     graphic3dId: Apple3DGraphicId? = null,
-    iconColor: Color = Color(0xFF0A84FF),
+    iconColor: Color = Color(0xFF0055FF),
     iconGradient: List<Color>? = null,
     value: Float,
     onValueChange: (Float) -> Unit,

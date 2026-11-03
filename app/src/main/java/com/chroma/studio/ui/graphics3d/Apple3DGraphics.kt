@@ -252,16 +252,16 @@ fun AppleSettingsSquircleIcon(
         return
     }
 
-    val squircleShape = RoundedCornerShape(percent = 32)
+    val squircleShape = RoundedCornerShape(8.5.dp)
     Box(
         modifier = modifier
             .size(size)
             .clip(squircleShape)
             .background(
                 Brush.verticalGradient(
-                    0.00f to Color(0xFF4DA6FF),
-                    0.52f to Color(0xFF0A84FF),
-                    1.00f to Color(0xFF0051D5)
+                    0.00f to Color(0xFF0055FF),
+                    0.50f to Color(0xFF0044EE),
+                    1.00f to Color(0xFF0022CC)
                 )
             )
             .border(1.dp, Color.White.copy(alpha = 0.42f), squircleShape)
@@ -332,16 +332,16 @@ fun AppleSettingsSquircleVectorIcon(
         return
     }
 
-    val squircleShape = RoundedCornerShape(percent = 32)
+    val squircleShape = RoundedCornerShape(8.5.dp)
     Box(
         modifier = modifier
             .size(size)
             .clip(squircleShape)
             .background(
                 Brush.verticalGradient(
-                    0.00f to Color(0xFF4DA6FF),
-                    0.52f to Color(0xFF0A84FF),
-                    1.00f to Color(0xFF0051D5)
+                    0.00f to Color(0xFF0055FF),
+                    0.50f to Color(0xFF0044EE),
+                    1.00f to Color(0xFF0022CC)
                 )
             )
             .border(1.dp, Color.White.copy(alpha = 0.42f), squircleShape)

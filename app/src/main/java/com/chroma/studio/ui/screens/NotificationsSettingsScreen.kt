@@ -471,12 +471,12 @@ private fun NotificationSettingRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(13.dp)
         ) {
-            val shape = RoundedCornerShape(13.5.dp)
+            val shape = RoundedCornerShape(8.5.dp)
             Box(
                 modifier = Modifier
                     .size(34.dp)
                     .clip(shape)
-                    .background(iconColor.copy(alpha = 1f))
+                    .background(Brush.verticalGradient(listOf(Color(0xFF0055FF), Color(0xFF0022CC))))
                     .border(width = 0.9.dp, brush = SettingsShineBorderBrush, shape = shape),
                 contentAlignment = Alignment.Center
             ) {
@@ -510,7 +510,7 @@ private fun NotificationSettingRow(
         AppleSwitch(
             checked = checked,
             onCheckedChange = onCheckedChange,
-            activeTrackColor = iconColor
+            activeTrackColor = Color(0xFF0055FF)
         )
     }
 }

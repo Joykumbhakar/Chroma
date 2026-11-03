@@ -1415,7 +1415,7 @@ private fun UserProfileSettingsAndSignOutSheets(
                         title = "Account Settings",
                         subtitle = "Manage privacy, security & alerts",
                         icon = Lucide.UserCog,
-                        iconColor = Color(0xFF0A84FF),
+                        iconColor = Color(0xFF0055FF),
                         onClick = {
                             onDismissSettingsSheet()
                             onNavigateToSettings()
@@ -1426,7 +1426,7 @@ private fun UserProfileSettingsAndSignOutSheets(
                         title = "Edit Identity & Avatar",
                         subtitle = "Change name, avatars, and bio",
                         icon = Lucide.UserCheck,
-                        iconColor = Color(0xFF6366F1),
+                        iconColor = Color(0xFF0055FF),
                         onClick = {
                             onDismissSettingsSheet()
                             onNavigateToEditProfile()
@@ -1437,7 +1437,7 @@ private fun UserProfileSettingsAndSignOutSheets(
                         title = "Profile Pass Card",
                         subtitle = "Share your scannable digital card",
                         icon = Lucide.QrCode,
-                        iconColor = Color(0xFF10B981),
+                        iconColor = Color(0xFF0055FF),
                         onClick = {
                             onDismissSettingsSheet()
                             onShowShareCardModal()
@@ -1448,7 +1448,7 @@ private fun UserProfileSettingsAndSignOutSheets(
                         title = "Only Friend List",
                         subtitle = "Manage close friends (${storyVm.onlyFriendsIds.collectAsState().value.size})",
                         icon = Lucide.Star,
-                        iconColor = Color(0xFFF59E0B),
+                        iconColor = Color(0xFF0055FF),
                         onClick = {
                             onDismissSettingsSheet()
                             onShowOnlyFriendsSheet()
@@ -1459,7 +1459,7 @@ private fun UserProfileSettingsAndSignOutSheets(
                         title = "Saved Collection",
                         subtitle = "View bookmarked creations",
                         icon = Lucide.Bookmark,
-                        iconColor = Color(0xFF8B5CF6),
+                        iconColor = Color(0xFF0055FF),
                         onClick = {
                             onDismissSettingsSheet()
                             onSelectSavedTab()
@@ -1472,7 +1472,7 @@ private fun UserProfileSettingsAndSignOutSheets(
                         title = "Share Profile",
                         subtitle = "Share your profile link with others",
                         icon = Lucide.Share2,
-                        iconColor = Color(0xFF06B6D4),
+                        iconColor = Color(0xFF0055FF),
                         onClick = {
                             onDismissSettingsSheet()
                             val shareIntent = Intent(Intent.ACTION_SEND).apply {
@@ -1487,7 +1487,7 @@ private fun UserProfileSettingsAndSignOutSheets(
                         title = "Copy Profile Link",
                         subtitle = "oscellion.vercel.app/u/${profile?.username ?: ""}",
                         icon = Lucide.Copy,
-                        iconColor = Color(0xFF64748B),
+                        iconColor = Color(0xFF0055FF),
                         onClick = {
                             onDismissSettingsSheet()
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -1649,7 +1649,7 @@ private fun UserProfileModalsAndSheets(
                         title = "Share Profile",
                         subtitle = "Share @${profile?.username ?: ""} with others",
                         icon = Lucide.Share2,
-                        iconColor = Color(0xFF0A84FF),
+                        iconColor = Color(0xFF0055FF),
                         onClick = {
                             onDismissOtherUserOptions()
                             val shareIntent = Intent(Intent.ACTION_SEND).apply {
@@ -1664,7 +1664,7 @@ private fun UserProfileModalsAndSheets(
                         title = "Copy Profile Link",
                         subtitle = "oscellion.vercel.app/u/${profile?.username ?: ""}",
                         icon = Lucide.Copy,
-                        iconColor = Color(0xFF64748B),
+                        iconColor = Color(0xFF0055FF),
                         onClick = {
                             onDismissOtherUserOptions()
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -1677,7 +1677,7 @@ private fun UserProfileModalsAndSheets(
                         title = "Profile Pass Card",
                         subtitle = "View scannable digital card",
                         icon = Lucide.QrCode,
-                        iconColor = Color(0xFF10B981),
+                        iconColor = Color(0xFF0055FF),
                         onClick = {
                             onDismissOtherUserOptions()
                             onShowShareCardModal()
@@ -1688,7 +1688,7 @@ private fun UserProfileModalsAndSheets(
                         title = "Direct Message",
                         subtitle = "Open conversation with @${profile?.username ?: ""}",
                         icon = Lucide.MessageSquare,
-                        iconColor = Color(0xFF06B6D4),
+                        iconColor = Color(0xFF0055FF),
                         onClick = {
                             onDismissOtherUserOptions()
                             onNavigateToChat?.invoke(userId)
@@ -1699,7 +1699,7 @@ private fun UserProfileModalsAndSheets(
                         title = if (isMutedStories) "Unmute Stories" else "Mute Stories",
                         subtitle = if (isMutedStories) "Show stories in feed" else "Hide stories from feed",
                         icon = if (isMutedStories) Lucide.Bell else Lucide.BellOff,
-                        iconColor = Color(0xFFF59E0B),
+                        iconColor = Color(0xFF0055FF),
                         onClick = {
                             onDismissOtherUserOptions()
                             onToggleMuteStories()

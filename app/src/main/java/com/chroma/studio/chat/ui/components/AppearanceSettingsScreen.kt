@@ -540,7 +540,7 @@ fun MainAppearanceSections(
                     title = "Bubble Styles",
                     subtitle = "${currentBubbleStyle.title} • ${currentBubbleStyle.category}",
                     icon = Lucide.MessageCircle,
-                    iconColor = Color(0xFF0A84FF),
+                    iconColor = Color(0xFF0055FF),
                     onClick = {
                         SoundManager.playReaction()
                         onNavigateToSubScreen(AppearanceSubScreen.BUBBLE_STYLES)
@@ -551,7 +551,7 @@ fun MainAppearanceSections(
                     title = "Corners & Geometry",
                     subtitle = if (currentCustomCorners.customEnabled) "Custom (${currentCustomCorners.topStart.toInt()}dp)" else "Preset defaults",
                     icon = Lucide.SlidersHorizontal,
-                    iconColor = Color(0xFFFF9500),
+                    iconColor = Color(0xFF0055FF),
                     onClick = {
                         SoundManager.playReaction()
                         onNavigateToSubScreen(AppearanceSubScreen.CORNER_GEOMETRY)
@@ -562,7 +562,7 @@ fun MainAppearanceSections(
                     title = "Animations & Physics",
                     subtitle = currentAnimationStyle.title,
                     icon = Lucide.Sparkles,
-                    iconColor = Color(0xFFAF52DE),
+                    iconColor = Color(0xFF0055FF),
                     onClick = {
                         SoundManager.playReaction()
                         onNavigateToSubScreen(AppearanceSubScreen.ANIMATIONS)
@@ -573,7 +573,7 @@ fun MainAppearanceSections(
                     title = "Toggle Switch Lab",
                     subtitle = "Spring physics solver & live telemetry",
                     icon = LucideFilled.Sliders,
-                    iconColor = Color(0xFF6366F1),
+                    iconColor = Color(0xFF0055FF),
                     valueText = "Lab",
                     onClick = {
                         SoundManager.playReaction()
@@ -601,7 +601,7 @@ fun MainAppearanceSections(
                     title = "Wallpapers & Themes",
                     subtitle = "Backgrounds, accents & dark mode",
                     icon = Lucide.Image,
-                    iconColor = Color(0xFF34C759),
+                    iconColor = Color(0xFF0055FF),
                     onClick = {
                         SoundManager.playReaction()
                         onNavigateToSubScreen(AppearanceSubScreen.THEME_WALLPAPERS)
@@ -612,7 +612,7 @@ fun MainAppearanceSections(
                     title = "Dark Appearance",
                     subtitle = if (colors.isLight) "Light Mode active" else "Dark Mode active",
                     icon = Lucide.Moon,
-                    iconColor = Color(0xFF8E8E93),
+                    iconColor = Color(0xFF0055FF),
                     checked = !colors.isLight,
                     onCheckedChange = { onToggleAppearance() }
                 )
@@ -836,7 +836,7 @@ fun CornerGeometrySubScreen(
                     title = "Enable Custom Corners",
                     subtitle = if (currentCustomCorners.customEnabled) "Custom parameters active" else "Using preset style geometry",
                     icon = Lucide.Square,
-                    iconColor = Color(0xFF0A84FF),
+                    iconColor = Color(0xFF0055FF),
                     checked = currentCustomCorners.customEnabled,
                     onCheckedChange = {
                         SoundManager.playReaction()
@@ -853,7 +853,7 @@ fun CornerGeometrySubScreen(
                         title = "Top Radius",
                         valueText = "${currentCustomCorners.topStart.toInt()} dp",
                         icon = Lucide.CornerLeftUp,
-                        iconColor = Color(0xFF0A84FF),
+                        iconColor = Color(0xFF0055FF),
                         value = currentCustomCorners.topStart,
                         onValueChange = { onUpdateCustomCorners(currentCustomCorners.copy(topStart = it, topEnd = it)) },
                         valueRange = 0f..40f
@@ -863,7 +863,7 @@ fun CornerGeometrySubScreen(
                         title = "Bottom Radius",
                         valueText = "${currentCustomCorners.bottomStart.toInt()} dp",
                         icon = Lucide.CornerLeftDown,
-                        iconColor = Color(0xFF0A84FF),
+                        iconColor = Color(0xFF0055FF),
                         value = currentCustomCorners.bottomStart,
                         onValueChange = { onUpdateCustomCorners(currentCustomCorners.copy(bottomStart = it)) },
                         valueRange = 0f..40f
@@ -873,7 +873,7 @@ fun CornerGeometrySubScreen(
                         title = "Pointy Corner Depth",
                         valueText = "${currentCustomCorners.bottomEnd.toInt()} dp",
                         icon = Lucide.Play,
-                        iconColor = Color(0xFFFF9500),
+                        iconColor = Color(0xFF0055FF),
                         value = currentCustomCorners.bottomEnd,
                         onValueChange = { onUpdateCustomCorners(currentCustomCorners.copy(bottomEnd = it)) },
                         valueRange = 0f..20f
@@ -883,7 +883,7 @@ fun CornerGeometrySubScreen(
                         title = "Apply To Both Sides",
                         subtitle = if (currentCustomCorners.applyToBoth) "Both incoming & outgoing" else "Outgoing only",
                         icon = Lucide.ArrowLeftRight,
-                        iconColor = Color(0xFF34C759),
+                        iconColor = Color(0xFF0055FF),
                         checked = currentCustomCorners.applyToBoth,
                         onCheckedChange = {
                             SoundManager.playReaction()
@@ -913,7 +913,7 @@ fun CornerGeometrySubScreen(
                             title = style.title,
                             subtitle = style.description,
                             icon = Lucide.Share2,
-                            iconColor = Color(0xFF0A84FF),
+                            iconColor = Color(0xFF0055FF),
                             showChevron = false,
                             valueText = if (isSelected) "✓" else null,
                             valueTextColor = Color(0xFF0A84FF),
@@ -976,7 +976,7 @@ fun AnimationsSubScreen(
                         title = anim.title,
                         subtitle = anim.description,
                         icon = Lucide.Zap,
-                        iconColor = Color(0xFFAF52DE),
+                        iconColor = Color(0xFF0055FF),
                         showChevron = false,
                         valueText = if (isSelected) "✓" else null,
                         valueTextColor = Color(0xFF0A84FF),
@@ -1084,7 +1084,7 @@ fun ThemeWallpapersSubScreen(
                     title = "Choose Chat Wallpaper",
                     subtitle = "Gallery images or gradient presets",
                     icon = Lucide.FolderPlus,
-                    iconColor = Color(0xFF34C759),
+                    iconColor = Color(0xFF0055FF),
                     onClick = {
                         SoundManager.playReaction()
                         onOpenWallpaperPicker()
@@ -1099,7 +1099,7 @@ fun ThemeWallpapersSubScreen(
                     title = "Dark Appearance",
                     subtitle = if (colors.isLight) "Light Mode active" else "Dark Mode active",
                     icon = Lucide.Moon,
-                    iconColor = Color(0xFF8E8E93),
+                    iconColor = Color(0xFF0055FF),
                     checked = !colors.isLight,
                     onCheckedChange = { onToggleAppearance() }
                 )
