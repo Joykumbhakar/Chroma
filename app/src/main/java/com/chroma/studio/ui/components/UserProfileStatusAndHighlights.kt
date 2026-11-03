@@ -185,18 +185,26 @@ fun UserProfileStatusSection(
         var tempText by remember { mutableStateOf(statusText) }
         val emojis = listOf("✨", "🎨", "🚀", "💡", "☕", "🔥", "🎧", "🌿", "📸", "⚡")
 
-        AlertDialog(
-            onDismissRequest = { showEditDialog = false },
-            title = {
-                Text(
-                    text = "Set Profile Status",
-                    fontSize = 17.sp,
-                    fontFamily = InterFontFamily,
-                    fontWeight = FontWeight.Bold,
-                    color = colors.textMain
-                )
+        IosAlertDialog(
+            title = "Set Profile Status",
+            message = null,
+            confirmText = "Save",
+            onConfirm = {
+                statusEmoji = tempEmoji
+                statusText = tempText
+                prefs.edit()
+                    .putString("status_emoji_$userId", tempEmoji)
+                    .putString("status_text_$userId", tempText)
+                    .apply()
+                try {
+                    FirebaseFirestore.getInstance().collection("users").document(userId)
+                        .update(mapOf("statusEmoji" to tempEmoji, "statusText" to tempText))
+                } catch (_: Exception) {}
+                showEditDialog = false
             },
-            text = {
+            dismissText = "Cancel",
+            onDismiss = { showEditDialog = false },
+            customContent = {
                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     // Quick emoji selector
                     Row(
@@ -278,33 +286,7 @@ fun UserProfileStatusSection(
                         )
                     }
                 }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        statusEmoji = tempEmoji
-                        statusText = tempText
-                        prefs.edit()
-                            .putString("status_emoji_$userId", tempEmoji)
-                            .putString("status_text_$userId", tempText)
-                            .apply()
-                        try {
-                            FirebaseFirestore.getInstance().collection("users").document(userId)
-                                .update(mapOf("statusEmoji" to tempEmoji, "statusText" to tempText))
-                        } catch (_: Exception) {}
-                        showEditDialog = false
-                    }
-                ) {
-                    Text("Save", color = colors.primary, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showEditDialog = false }) {
-                    Text("Cancel", color = colors.textMuted)
-                }
-            },
-            containerColor = colors.bg,
-            shape = RoundedCornerShape(20.dp)
+            }
         )
     }
 }
@@ -508,24 +490,28 @@ fun UserProfileHighlightsSection(
         var selectedEmoji by remember { mutableStateOf("✨") }
         val emojis = listOf("✨", "🎨", "🚀", "💡", "📸", "🎧", "🔥", "💎")
 
-        AlertDialog(
-            onDismissRequest = { showNewHighlightDialog = false },
-            title = {
-                Text(
-                    text = "New Highlight",
-                    fontSize = 17.sp,
-                    fontFamily = InterFontFamily,
-                    fontWeight = FontWeight.Bold,
-                    color = colors.textMain
-                )
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(
-                        text = "Choose an icon & give your highlight a name:",
-                        fontSize = 13.sp,
-                        color = colors.textMuted
+        IosAlertDialog(
+            title = "New Highlight",
+            message = "Choose an icon & give your highlight a name:",
+            confirmText = "Add",
+            confirmEnabled = highlightTitle.isNotBlank(),
+            onConfirm = {
+                if (highlightTitle.isNotBlank()) {
+                    val newItem = ProfileHighlightItem(
+                        title = highlightTitle.trim(),
+                        emoji = selectedEmoji,
+                        gradientColorIndex = highlightsList.size % 5
                     )
+                    val updated = highlightsList + newItem
+                    highlightsList = updated
+                    saveHighlights(updated)
+                    showNewHighlightDialog = false
+                }
+            },
+            dismissText = "Cancel",
+            onDismiss = { showNewHighlightDialog = false },
+            customContent = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
@@ -577,32 +563,7 @@ fun UserProfileHighlightsSection(
                         )
                     }
                 }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = highlightTitle.isNotBlank(),
-                    onClick = {
-                        val newItem = ProfileHighlightItem(
-                            title = highlightTitle.trim(),
-                            emoji = selectedEmoji,
-                            gradientColorIndex = highlightsList.size % 5
-                        )
-                        val updated = highlightsList + newItem
-                        highlightsList = updated
-                        saveHighlights(updated)
-                        showNewHighlightDialog = false
-                    }
-                ) {
-                    Text("Add", color = colors.primary, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showNewHighlightDialog = false }) {
-                    Text("Cancel", color = colors.textMuted)
-                }
-            },
-            containerColor = colors.bg,
-            shape = RoundedCornerShape(20.dp)
+            }
         )
     }
 }

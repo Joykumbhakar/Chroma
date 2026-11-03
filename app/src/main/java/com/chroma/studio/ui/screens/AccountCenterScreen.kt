@@ -75,6 +75,7 @@ fun AccountCenterScreen(
     val currentUserId = FirebaseAuth.getInstance().currentUser?.uid
     var profile by remember { mutableStateOf<UserProfile?>(null) }
     var isLoading by remember { mutableStateOf(true) }
+    var showSignOutConfirm by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
 
     // One UI Theme Synchronization
@@ -668,7 +669,7 @@ fun AccountCenterScreen(
                                 isDestructive = true,
                                 textDark = textDark,
                                 textMuted = textMuted,
-                                onClick = onLogout
+                                onClick = { showSignOutConfirm = true }
                             )
                         }
                     }
@@ -679,6 +680,21 @@ fun AccountCenterScreen(
                 }
             }
         }
+    }
+
+    if (showSignOutConfirm) {
+        IosAlertDialog(
+            title = "Sign Out?",
+            message = "Are you sure you want to log out from this device?",
+            confirmText = "Sign Out",
+            onConfirm = {
+                showSignOutConfirm = false
+                onLogout()
+            },
+            dismissText = "Cancel",
+            onDismiss = { showSignOutConfirm = false },
+            isDestructive = true
+        )
     }
 }
 

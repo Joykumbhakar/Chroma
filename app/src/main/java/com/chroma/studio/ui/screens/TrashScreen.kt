@@ -384,39 +384,40 @@ fun TrashScreen(
     }
 
     if (showEmptyTrashDialog) {
-        androidx.compose.ui.window.Dialog(
-            onDismissRequest = { showEmptyTrashDialog = false },
-            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.45f))
-                    .clickable { showEmptyTrashDialog = false },
-                contentAlignment = Alignment.Center
-            ) {
-                Box(modifier = Modifier.clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {}) {
-                    com.chroma.studio.ui.graphics3d.AppleHigDialogCard(
-                        graphicId = com.chroma.studio.ui.graphics3d.Apple3DGraphicId.TRASH_BIN,
-                        title = "Empty Trash?",
-                        description = "This action cannot be undone.",
-                        cancelText = "Cancel",
-                        confirmText = "Empty Trash",
-                        onCancel = { showEmptyTrashDialog = false },
-                        onConfirm = {
-                            showEmptyTrashDialog = false
-                            coroutineScope.launch {
-                                val allIds = deletedWorks.map { it.id }.toSet()
-                                deletingWorkIds = deletingWorkIds + allIds
-                                delay(200)
-                                onEmptyTrash?.invoke()
-                                deletingWorkIds = emptySet()
-                            }
-                        }
+        val emptyTrashState = rememberAppleTrashState()
+        LaunchedEffect(Unit) {
+            emptyTrashState.triggerDeleteAnimation()
+        }
+        com.chroma.studio.ui.components.IosAlertDialog(
+            title = "Empty Trash?",
+            message = "All items in the trash will be permanently deleted. This action cannot be undone.",
+            confirmText = "Empty Trash",
+            onConfirm = {
+                showEmptyTrashDialog = false
+                coroutineScope.launch {
+                    val allIds = deletedWorks.map { it.id }.toSet()
+                    deletingWorkIds = deletingWorkIds + allIds
+                    delay(200)
+                    onEmptyTrash?.invoke()
+                    deletingWorkIds = emptySet()
+                }
+            },
+            dismissText = "Cancel",
+            onDismiss = { showEmptyTrashDialog = false },
+            isDestructive = true,
+            customContent = {
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    AppleTrashBinIcon(
+                        modifier = Modifier.size(86.dp),
+                        state = emptyTrashState,
+                        enableClickToAnimate = true
                     )
                 }
             }
-        }
+        )
     }
 }
 

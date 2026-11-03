@@ -48,6 +48,9 @@ import com.chroma.studio.data.FlashRepository
 import com.chroma.studio.model.CreatorPostDraft
 import com.chroma.studio.model.FlashVideo
 import com.chroma.studio.ui.components.AppleFlashGraphic
+import com.chroma.studio.ui.components.AppleTrashBinIcon
+import com.chroma.studio.ui.components.IosAlertDialog
+import com.chroma.studio.ui.components.rememberAppleTrashState
 import com.chroma.studio.ui.components.GalleryLayoutMode
 import com.chroma.studio.ui.components.GalleryMediaTypeFilter
 import com.chroma.studio.ui.components.OscellionGalleryLayout
@@ -742,55 +745,56 @@ fun FlashProjectsHubScreen(
         // Delete Confirmation Dialog — Apple HIG Style matching TrashScreen
         if (itemToDelete != null) {
             val item = itemToDelete!!
-            androidx.compose.ui.window.Dialog(
-                onDismissRequest = { itemToDelete = null },
-                properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.5f))
-                        .clickable { itemToDelete = null },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Box(modifier = Modifier.clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {}) {
-                        com.chroma.studio.ui.graphics3d.AppleHigDialogCard(
-                            graphicId = com.chroma.studio.ui.graphics3d.Apple3DGraphicId.TRASH_BIN,
-                            title = if (item.isDraft) "Delete Draft?" else "Delete Video?",
-                            description = "This action cannot be undone.",
-                            cancelText = "Cancel",
-                            confirmText = "Delete",
-                            onCancel = { itemToDelete = null },
-                            onConfirm = {
-                                val target = item
-                                itemToDelete = null
-                                coroutineScope.launch {
-                                    when (target) {
-                                        is FlashHubItem.Draft -> {
-                                            draftRepo.deleteDraft(target.id)
-                                            ToastManager.showToast("Draft deleted")
-                                        }
-                                        is FlashHubItem.LocalExported -> {
-                                            try {
-                                                File(target.fileUri.path ?: "").delete()
-                                                localExportedVideos = localExportedVideos.filter { it.id != target.id }
-                                                ToastManager.showToast("Exported video deleted")
-                                            } catch (_: Exception) {}
-                                        }
-                                        is FlashHubItem.Saved -> {
-                                            try {
-                                                FlashRepository().deleteFlash(target.id)
-                                                userFlashes = userFlashes.filter { it.id != target.id }
-                                                ToastManager.showToast("Video deleted")
-                                            } catch (_: Exception) {}
-                                        }
-                                    }
-                                }
+            val trashState = rememberAppleTrashState()
+            LaunchedEffect(Unit) {
+                trashState.triggerDeleteAnimation()
+            }
+            IosAlertDialog(
+                title = if (item.isDraft) "Delete Draft?" else "Delete Video?",
+                message = "Are you sure you want to delete this ${if (item.isDraft) "draft" else "video"}? This action cannot be undone.",
+                confirmText = "Delete",
+                onConfirm = {
+                    val target = item
+                    itemToDelete = null
+                    coroutineScope.launch {
+                        when (target) {
+                            is FlashHubItem.Draft -> {
+                                draftRepo.deleteDraft(target.id)
+                                ToastManager.showToast("Draft deleted")
                             }
+                            is FlashHubItem.LocalExported -> {
+                                try {
+                                    File(target.fileUri.path ?: "").delete()
+                                    localExportedVideos = localExportedVideos.filter { it.id != target.id }
+                                    ToastManager.showToast("Exported video deleted")
+                                } catch (_: Exception) {}
+                            }
+                            is FlashHubItem.Saved -> {
+                                try {
+                                    FlashRepository().deleteFlash(target.id)
+                                    userFlashes = userFlashes.filter { it.id != target.id }
+                                    ToastManager.showToast("Video deleted")
+                                } catch (_: Exception) {}
+                            }
+                        }
+                    }
+                },
+                dismissText = "Cancel",
+                onDismiss = { itemToDelete = null },
+                isDestructive = true,
+                customContent = {
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AppleTrashBinIcon(
+                            modifier = Modifier.size(86.dp),
+                            state = trashState,
+                            enableClickToAnimate = true
                         )
                     }
                 }
-            }
+            )
         }
 
         // Fixed Unified In-App Oscellion Gallery

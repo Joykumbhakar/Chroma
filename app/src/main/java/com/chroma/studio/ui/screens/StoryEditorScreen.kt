@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.chroma.studio.ui.components.IosAvatarView
+import com.chroma.studio.ui.components.IosAlertDialog
 import com.chroma.studio.ui.components.ToastManager
 import com.chroma.studio.ui.components.LiquidGlassPrimaryButton
 import com.chroma.studio.ui.components.LiquidGlassSecondaryButton
@@ -1313,33 +1314,17 @@ fun StoryEditorScreen(
 
     // ── Discard Changes Confirmation Dialog ────────────────────────────────
     if (showDiscardDialog) {
-        AlertDialog(
-            onDismissRequest = { showDiscardDialog = false },
-            containerColor = themeColors.glassBg,
-            shape = RoundedCornerShape(14.dp),
-            title = {
-                Text("Discard story draft?", color = themeColors.textMain, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        IosAlertDialog(
+            title = "Discard story draft?",
+            message = "If you go back now, your current writing and styling will be lost.",
+            confirmText = "Discard",
+            onConfirm = {
+                showDiscardDialog = false
+                onNavigateBack()
             },
-            text = {
-                Text("If you go back now, your current writing and styling will be lost.", color = themeColors.textMuted, fontSize = 13.sp)
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showDiscardDialog = false
-                        onNavigateBack()
-                    }
-                ) {
-                    Text("Discard", color = themeColors.error, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                LiquidGlassSecondaryButton(
-                    text = "Keep Editing",
-                    onClick = { showDiscardDialog = false },
-                    isSmall = true
-                )
-            }
+            dismissText = "Keep Editing",
+            onDismiss = { showDiscardDialog = false },
+            isDestructive = true
         )
     }
 

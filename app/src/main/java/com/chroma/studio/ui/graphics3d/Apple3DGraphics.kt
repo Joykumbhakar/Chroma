@@ -14,6 +14,8 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.VerticalDivider
+import com.chroma.studio.ui.theme.LocalOscellionColors
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -386,26 +388,29 @@ fun AppleHigDialogCard(
     confirmText: String = "Confirm",
     onCancel: () -> Unit = {},
     onConfirm: () -> Unit = {},
+    isDestructive: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     var isOpen by remember { mutableStateOf(false) }
-    val cardBg = Color.White
-    val borderCol = Color(0xFFE2E8F0)
-    val titleCol = Color(0xFF0F172A)
-    val descCol = Color(0xFF64748B)
-    val dividerCol = Color(0xFFF1F5F9)
-    val bottomBarBg = Color(0xFFF8FAFD)
-    val cancelTextCol = Color(0xFF0F172A)
+    val colors = LocalOscellionColors.current
+    val isDark = colors.isDark
+
+    val dialogBg = if (isDark) Color(0xF22C2C2E) else Color(0xF2FFFFFF)
+    val titleCol = if (isDark) Color.White else Color.Black
+    val descCol = if (isDark) Color.White.copy(alpha = 0.8f) else Color.Black.copy(alpha = 0.8f)
+    val dividerCol = if (isDark) Color(0x36545458) else Color(0x363C3C43)
+    val blueColor = Color(0xFF0A84FF)
+    val redColor = Color(0xFFFF3B30)
 
     Surface(
-        modifier = modifier.widthIn(max = 320.dp),
-        shape = RoundedCornerShape(24.dp),
-        color = cardBg,
-        border = androidx.compose.foundation.BorderStroke(1.dp, borderCol)
+        modifier = modifier.width(270.dp),
+        shape = RoundedCornerShape(14.dp),
+        color = dialogBg,
+        shadowElevation = 24.dp
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Column(
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 22.dp),
+                modifier = Modifier.padding(top = 20.dp, bottom = 16.dp, start = 16.dp, end = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Apple3DGraphicIcon(
@@ -417,44 +422,65 @@ fun AppleHigDialogCard(
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
                     text = title,
-                    fontSize = 15.5.sp,
+                    fontSize = 17.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = titleCol,
-                    textAlign = TextAlign.Center
+                    textAlign = TextAlign.Center,
+                    lineHeight = 22.sp
                 )
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = description,
-                    fontSize = 12.5.sp,
-                    lineHeight = 18.sp,
-                    color = descCol,
-                    textAlign = TextAlign.Center
-                )
-            }
-            HorizontalDivider(color = dividerCol, thickness = 1.dp)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(bottomBarBg)
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                com.chroma.studio.ui.components.LiquidGlassSecondaryButton(
-                    onClick = onCancel,
-                    isSmall = true,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(cancelText, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = cancelTextCol)
+                if (description.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = description,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Normal,
+                        lineHeight = 18.sp,
+                        color = descCol,
+                        textAlign = TextAlign.Center
+                    )
                 }
-                com.chroma.studio.ui.components.LiquidGlassPrimaryButton(
-                    onClick = {
-                        isOpen = !isOpen
-                        onConfirm()
-                    },
-                    isSmall = true,
-                    modifier = Modifier.weight(1f)
+            }
+            HorizontalDivider(color = dividerCol, thickness = 0.5.dp)
+            Row(modifier = Modifier.fillMaxWidth().height(44.dp)) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = onCancel
+                        ),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text(confirmText, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                    Text(
+                        text = cancelText,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = blueColor
+                    )
+                }
+                VerticalDivider(color = dividerCol, thickness = 0.5.dp)
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = {
+                                isOpen = !isOpen
+                                onConfirm()
+                            }
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = confirmText,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (isDestructive) redColor else blueColor
+                    )
                 }
             }
         }

@@ -985,9 +985,14 @@ fun StoryViewerScreen(
             // ── Only Friend Info Dialog (Viewer) ──────────────────────────────────────
             if (showOnlyFriendsInfoDialog) {
                 val authorName = currentGroup?.userProfile?.displayName?.ifBlank { "this user" } ?: "this user"
-                AlertDialog(
-                    onDismissRequest = { showOnlyFriendsInfoDialog = false },
-                    icon = {
+                IosAlertDialog(
+                    title = "Only Friend",
+                    message = "Only people on $authorName's Only Friend list can see this story. They won't know you saw this.",
+                    confirmText = "Got it",
+                    onConfirm = { showOnlyFriendsInfoDialog = false },
+                    dismissText = null,
+                    onDismiss = { showOnlyFriendsInfoDialog = false },
+                    customContent = {
                         Box(
                             modifier = Modifier
                                 .size(42.dp)
@@ -1002,29 +1007,7 @@ fun StoryViewerScreen(
                                 modifier = Modifier.size(22.dp)
                             )
                         }
-                    },
-                    title = {
-                        Text(
-                            text = "Only Friend",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp,
-                            textAlign = TextAlign.Center
-                        )
-                    },
-                    text = {
-                        Text(
-                            text = "Only people on $authorName's Only Friend list can see this story. They won't know you saw this.",
-                            fontSize = 13.5.sp,
-                            lineHeight = 18.sp,
-                            textAlign = TextAlign.Center
-                        )
-                    },
-                    confirmButton = {
-                        TextButton(onClick = { showOnlyFriendsInfoDialog = false }) {
-                            Text("Got it", fontWeight = FontWeight.Bold, color = Color(0xFF007AFF))
-                        }
-                    },
-                    shape = RoundedCornerShape(22.dp)
+                    }
                 )
             }
         }

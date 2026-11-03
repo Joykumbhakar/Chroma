@@ -1516,65 +1516,26 @@ private fun UserProfileSettingsAndSignOutSheets(
     }
 
     if (showSignOutConfirm) {
-        val isDark = colors.isDark
-        AlertDialog(
-            onDismissRequest = { onShowSignOutConfirm(false) },
-            shape = RoundedCornerShape(26.dp),
-            containerColor = if (isDark) Color(0xFF12141A) else Color.White,
-            tonalElevation = 6.dp,
-            icon = {
-                OneUiIconBadge(
-                    icon = Lucide.LogOut,
-                    iconColor = Color(0xFFEF4444)
-                )
-            },
-            title = {
-                Text(
-                    text = "Sign Out",
-                    fontFamily = InterFontFamily,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 20.sp,
-                    color = if (isDark) Color.White else Color(0xFF0F172A)
-                )
-            },
-            text = {
-                Text(
-                    text = "Are you sure you want to log out from this device?",
-                    fontFamily = InterFontFamily,
-                    fontSize = 14.sp,
-                    color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        onShowSignOutConfirm(false)
-                        if (onLogout != null) {
-                            onLogout()
-                        } else {
-                            onRequireLogin()
-                            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                                try {
-                                    com.google.firebase.auth.FirebaseAuth.getInstance().signOut()
-                                } catch (_: Exception) {}
-                            }
-                        }
-                    },
-                    shape = RoundedCornerShape(999.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444))
-                ) {
-                    Text("Sign Out", fontFamily = InterFontFamily, fontWeight = FontWeight.SemiBold)
+        IosAlertDialog(
+            title = "Sign Out?",
+            message = "Are you sure you want to log out from this device?",
+            confirmText = "Sign Out",
+            onConfirm = {
+                onShowSignOutConfirm(false)
+                if (onLogout != null) {
+                    onLogout()
+                } else {
+                    onRequireLogin()
+                    scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                        try {
+                            com.google.firebase.auth.FirebaseAuth.getInstance().signOut()
+                        } catch (_: Exception) {}
+                    }
                 }
             },
-            dismissButton = {
-                OutlinedButton(
-                    onClick = { onShowSignOutConfirm(false) },
-                    shape = RoundedCornerShape(999.dp),
-                    border = BorderStroke(1.dp, if (isDark) Color(0xFF2E384D) else Color(0xFFCBD5E1))
-                ) {
-                    Text("Cancel", fontFamily = InterFontFamily, color = if (isDark) Color.White else Color(0xFF0F172A))
-                }
-            }
+            dismissText = "Cancel",
+            onDismiss = { onShowSignOutConfirm(false) },
+            isDestructive = true
         )
     }
 }
@@ -1737,66 +1698,27 @@ private fun UserProfileModalsAndSheets(
     }
 
     if (showBlockConfirmDialog) {
-        val isDark = colors.isDark
-        AlertDialog(
-            onDismissRequest = { onShowBlockConfirmDialog(false) },
-            shape = RoundedCornerShape(26.dp),
-            containerColor = if (isDark) Color(0xFF12141A) else Color.White,
-            tonalElevation = 6.dp,
-            icon = {
-                OneUiIconBadge(
-                    icon = Lucide.Ban,
-                    iconColor = Color(0xFFEF4444)
-                )
-            },
-            title = {
-                Text(
-                    text = "Block @${profile?.username ?: "User"}?",
-                    fontFamily = InterFontFamily,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 20.sp,
-                    color = if (isDark) Color.White else Color(0xFF0F172A)
-                )
-            },
-            text = {
-                Text(
-                    text = "They will not be able to message you or view your profile and posts. They will not be notified that you blocked them.",
-                    fontFamily = InterFontFamily,
-                    fontSize = 14.sp,
-                    color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        onShowBlockConfirmDialog(false)
-                        val uid = currentUserId ?: return@Button
-                        scope.launch {
-                            try {
-                                FirebaseFirestore.getInstance().collection("users").document(uid)
-                                    .update("blockedUserIds", FieldValue.arrayUnion(userId)).await()
-                                ToastManager.showToast("@${profile?.username ?: ""} has been blocked")
-                                onUserBlocked()
-                            } catch (e: Exception) {
-                                ToastManager.showToast("Failed to block user")
-                            }
-                        }
-                    },
-                    shape = RoundedCornerShape(999.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444))
-                ) {
-                    Text("Block", fontFamily = InterFontFamily, fontWeight = FontWeight.SemiBold)
+        IosAlertDialog(
+            title = "Block @${profile?.username ?: "User"}?",
+            message = "They will not be able to message you or view your profile and posts. They will not be notified that you blocked them.",
+            confirmText = "Block",
+            onConfirm = {
+                onShowBlockConfirmDialog(false)
+                val uid = currentUserId ?: return@IosAlertDialog
+                scope.launch {
+                    try {
+                        FirebaseFirestore.getInstance().collection("users").document(uid)
+                            .update("blockedUserIds", FieldValue.arrayUnion(userId)).await()
+                        ToastManager.showToast("@${profile?.username ?: ""} has been blocked")
+                        onUserBlocked()
+                    } catch (e: Exception) {
+                        ToastManager.showToast("Failed to block user")
+                    }
                 }
             },
-            dismissButton = {
-                OutlinedButton(
-                    onClick = { onShowBlockConfirmDialog(false) },
-                    shape = RoundedCornerShape(999.dp),
-                    border = BorderStroke(1.dp, if (isDark) Color(0xFF2E384D) else Color(0xFFCBD5E1))
-                ) {
-                    Text("Cancel", fontFamily = InterFontFamily, color = if (isDark) Color.White else Color(0xFF0F172A))
-                }
-            }
+            dismissText = "Cancel",
+            onDismiss = { onShowBlockConfirmDialog(false) },
+            isDestructive = true
         )
     }
 

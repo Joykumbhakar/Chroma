@@ -12848,11 +12848,19 @@ fun FcpExitConfirmationDialog(
     onDismiss: () -> Unit
 ) {
     val colors = LocalOscellionColors.current
+    val isDark = colors.isDark
+    val dialogBg = if (isDark) Color(0xF22C2C2E) else Color(0xF2FFFFFF)
+    val titleColor = if (isDark) Color.White else Color.Black
+    val messageColor = if (isDark) Color.White.copy(alpha = 0.8f) else Color.Black.copy(alpha = 0.8f)
+    val dividerColor = if (isDark) Color(0x36545458) else Color(0x363C3C43)
+    val blueColor = Color(0xFF0A84FF)
+    val redColor = Color(0xFFFF3B30)
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
     ) {
-        val scaleAnim = remember { Animatable(0.94f) }
+        val scaleAnim = remember { Animatable(0.95f) }
         val alphaAnim = remember { Animatable(0f) }
         LaunchedEffect(Unit) {
             launch {
@@ -12871,7 +12879,7 @@ fun FcpExitConfirmationDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.55f * alphaAnim.value))
+                .background(Color.Black.copy(alpha = 0.4f * alphaAnim.value))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -12881,16 +12889,15 @@ fun FcpExitConfirmationDialog(
         ) {
             Column(
                 modifier = Modifier
-                    .width(280.dp)
+                    .width(270.dp)
                     .graphicsLayer {
                         scaleX = scaleAnim.value
                         scaleY = scaleAnim.value
                         alpha = alphaAnim.value
                     }
-                    .shadow(24.dp, RoundedCornerShape(16.dp), spotColor = Color(0x33000000))
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(colors.glassBg)
-                    .border(1.dp, colors.glassBorder, RoundedCornerShape(16.dp))
+                    .shadow(24.dp, RoundedCornerShape(14.dp), spotColor = Color.Black.copy(alpha = 0.35f))
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(dialogBg)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
@@ -12899,14 +12906,14 @@ fun FcpExitConfirmationDialog(
             ) {
                 // Video Graphic Header
                 Column(
-                    modifier = Modifier.padding(top = 22.dp, bottom = 14.dp, start = 20.dp, end = 20.dp),
+                    modifier = Modifier.padding(top = 20.dp, bottom = 16.dp, start = 16.dp, end = 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     AppleVideosIcon(modifier = Modifier.size(64.dp))
                     Spacer(Modifier.height(12.dp))
                     Text(
                         text = "Save changes?",
-                        color = colors.textMain,
+                        color = titleColor,
                         fontSize = 17.sp,
                         fontWeight = FontWeight.SemiBold,
                         textAlign = TextAlign.Center,
@@ -12914,63 +12921,61 @@ fun FcpExitConfirmationDialog(
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "Save before leaving?",
-                        color = colors.textMuted,
+                        text = "Save your video project before leaving?",
+                        color = messageColor,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Normal,
-                        textAlign = TextAlign.Center
+                        textAlign = TextAlign.Center,
+                        lineHeight = 18.sp
                     )
                 }
-                HorizontalDivider(color = colors.glassBorder, thickness = 0.5.dp)
+                HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
                 // Actions:
-                // 1. Solid Blue Save Draft & Exit Button
+                // 1. Save & Exit Button (Primary Blue)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(46.dp)
-                        .background(colors.primary)
+                        .height(44.dp)
                         .clickable { onSaveDraftAndExit() },
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = "Save & Exit",
-                        color = Color.White,
-                        fontSize = 15.sp,
+                        color = blueColor,
+                        fontSize = 17.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
-                HorizontalDivider(color = colors.glassBorder, thickness = 0.5.dp)
+                HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
                 // 2. Discard Changes Button (Destructive Red)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(44.dp)
-                        .background(colors.glassBg)
                         .clickable { onDiscardAndExit() },
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = "Discard",
-                        color = Color(0xFFFF3B30),
-                        fontSize = 15.sp,
+                        color = redColor,
+                        fontSize = 17.sp,
                         fontWeight = FontWeight.Normal
                     )
                 }
-                HorizontalDivider(color = colors.glassBorder, thickness = 0.5.dp)
-                // 3. Keep Editing Button
+                HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
+                // 3. Cancel Button
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(44.dp)
-                        .background(colors.glassBg)
                         .clickable { onDismiss() },
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = "Cancel",
-                        color = colors.textMuted,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Medium
+                        color = blueColor,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Normal
                     )
                 }
             }
@@ -12988,11 +12993,19 @@ fun FcpDurationWarningDialog(
     onDismiss: () -> Unit
 ) {
     val colors = LocalOscellionColors.current
+    val isDark = colors.isDark
+    val dialogBg = if (isDark) Color(0xF22C2C2E) else Color(0xF2FFFFFF)
+    val titleColor = if (isDark) Color.White else Color.Black
+    val messageColor = if (isDark) Color.White.copy(alpha = 0.8f) else Color.Black.copy(alpha = 0.8f)
+    val dividerColor = if (isDark) Color(0x36545458) else Color(0x363C3C43)
+    val blueColor = Color(0xFF0A84FF)
+    val greenColor = Color(0xFF34C759)
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
     ) {
-        val scaleAnim = remember { Animatable(0.94f) }
+        val scaleAnim = remember { Animatable(0.95f) }
         val alphaAnim = remember { Animatable(0f) }
         LaunchedEffect(Unit) {
             launch {
@@ -13014,7 +13027,7 @@ fun FcpDurationWarningDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.55f * alphaAnim.value))
+                .background(Color.Black.copy(alpha = 0.4f * alphaAnim.value))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -13024,16 +13037,15 @@ fun FcpDurationWarningDialog(
         ) {
             Column(
                 modifier = Modifier
-                    .width(300.dp)
+                    .width(270.dp)
                     .graphicsLayer {
                         scaleX = scaleAnim.value
                         scaleY = scaleAnim.value
                         alpha = alphaAnim.value
                     }
-                    .shadow(28.dp, RoundedCornerShape(16.dp), spotColor = Color(0x44000000))
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(colors.glassBg)
-                    .border(1.dp, colors.glassBorder, RoundedCornerShape(16.dp))
+                    .shadow(24.dp, RoundedCornerShape(14.dp), spotColor = Color.Black.copy(alpha = 0.35f))
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(dialogBg)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
@@ -13041,7 +13053,7 @@ fun FcpDurationWarningDialog(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Column(
-                    modifier = Modifier.padding(top = 22.dp, bottom = 14.dp, start = 20.dp, end = 20.dp),
+                    modifier = Modifier.padding(top = 20.dp, bottom = 16.dp, start = 16.dp, end = 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Box(
@@ -13058,53 +13070,47 @@ fun FcpDurationWarningDialog(
                             modifier = Modifier.size(26.dp)
                         )
                     }
-                    Spacer(Modifier.height(14.dp))
+                    Spacer(Modifier.height(12.dp))
                     Text(
                         text = "Video Exceeds 1 Minute",
-                        color = colors.textMain,
+                        color = titleColor,
                         fontSize = 17.sp,
                         fontWeight = FontWeight.SemiBold,
-                        textAlign = TextAlign.Center
+                        textAlign = TextAlign.Center,
+                        lineHeight = 22.sp
                     )
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(4.dp))
                     Text(
                         text = "Your timeline is currently $formattedDuration.\nVideos shared to Flash or Community feeds must be 60 seconds or less. You can auto-trim to 1 minute or export the full video directly to your gallery.",
-                        color = colors.textMuted,
+                        color = messageColor,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Normal,
                         textAlign = TextAlign.Center,
                         lineHeight = 18.sp
                     )
                 }
-                HorizontalDivider(color = colors.glassBorder, thickness = 0.5.dp)
+                HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
                 // 1. Auto-Trim to 1 Min Button (Primary Blue)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(46.dp)
-                        .background(colors.primary)
+                        .height(44.dp)
                         .clickable { onAutoTrimTo1Min() },
                     contentAlignment = Alignment.Center
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Text(
-                            text = "Auto-Trim to 1 Min",
-                            color = Color.White,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
+                    Text(
+                        text = "Auto-Trim to 1 Min",
+                        color = blueColor,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
-                HorizontalDivider(color = colors.glassBorder, thickness = 0.5.dp)
+                HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
                 // 2. Export Full to Gallery Button
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(44.dp)
-                        .background(colors.glassBg)
                         .clickable { onExportFullToGallery() },
                     contentAlignment = Alignment.Center
                 ) {
@@ -13115,31 +13121,30 @@ fun FcpDurationWarningDialog(
                         Icon(
                             imageVector = Lucide.Download,
                             contentDescription = "Download video",
-                            tint = Color(0xFF34C759),
+                            tint = greenColor,
                             modifier = Modifier.size(16.dp)
                         )
                         Text(
                             text = "Export Full Video to Gallery",
-                            color = Color(0xFF34C759),
-                            fontSize = 14.5.sp,
+                            color = greenColor,
+                            fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
-                HorizontalDivider(color = colors.glassBorder, thickness = 0.5.dp)
-                // 3. Dismiss / Keep Editing Button
+                HorizontalDivider(color = dividerColor, thickness = 0.5.dp)
+                // 3. Dismiss Button
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(44.dp)
-                        .background(colors.glassBg)
                         .clickable { onDismiss() },
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = "Dismiss",
-                        color = colors.textMuted,
-                        fontSize = 14.5.sp,
+                        color = blueColor,
+                        fontSize = 17.sp,
                         fontWeight = FontWeight.Normal
                     )
                 }

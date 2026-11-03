@@ -570,6 +570,7 @@ fun IosAlertDialog(
     title: String,
     message: String? = null,
     confirmText: String = "OK",
+    confirmEnabled: Boolean = true,
     onConfirm: () -> Unit,
     dismissText: String? = "Cancel",
     onDismiss: () -> Unit,
@@ -731,12 +732,12 @@ fun IosAlertDialog(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxHeight()
-                                .clickable { onConfirm() },
+                                .clickable(enabled = confirmEnabled) { onConfirm() },
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = confirmText,
-                                color = blueColor,
+                                color = if (confirmEnabled) blueColor else blueColor.copy(alpha = 0.35f),
                                 fontSize = 17.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 fontFamily = InterFontFamily
@@ -749,7 +750,7 @@ fun IosAlertDialog(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(44.dp)
-                            .clickable { onConfirm() },
+                            .clickable(enabled = confirmEnabled) { onConfirm() },
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
