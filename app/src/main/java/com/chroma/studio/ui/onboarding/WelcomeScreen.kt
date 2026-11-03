@@ -100,107 +100,129 @@ fun WelcomeScreen(
                 )
             )
         }
-        val scrollState = rememberScrollState()
-        Column(
-            Modifier
+        BoxWithConstraints(
+            modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding()
-                .verticalScroll(scrollState)
-                .padding(horizontal = 22.dp, vertical = 12.dp)
         ) {
-            // Top Bar
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            val screenHeight = maxHeight
+            val scrollState = rememberScrollState()
+
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(scrollState)
+                    .padding(horizontal = 22.dp, vertical = 12.dp)
             ) {
-                OscellionAppIcon(size = 36.dp)
-                Row(
-                    Modifier
-                        .clickable(role = androidx.compose.ui.semantics.Role.Button) { showAbout = true }
-                        .padding(4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .defaultMinSize(minHeight = screenHeight - 24.dp),
+                    verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Icon(Icons.Rounded.AutoAwesome, null, tint = ObColors.NeonGreen, modifier = Modifier.size(16.dp))
-                    Text("About", color = Color.White, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
-                }
-            }
+                    // Top Bar & Hero Section
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OscellionAppIcon(size = 36.dp)
+                            Row(
+                                Modifier
+                                    .clickable(role = androidx.compose.ui.semantics.Role.Button) { showAbout = true }
+                                    .padding(4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(Icons.Rounded.AutoAwesome, null, tint = ObColors.NeonGreen, modifier = Modifier.size(16.dp))
+                                Text("About", color = Color.White, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.3).sp)
+                            }
+                        }
 
-            Spacer(Modifier.height(18.dp))
+                        Spacer(Modifier.height(18.dp))
 
-            // Hero Section: "Welcome to Oscellion" with animated Neon Green wave gradient & bold title
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = "Welcome to",
-                    fontSize = 36.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    letterSpacing = (-0.5).sp
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = "Oscellion",
-                    fontFamily = TheSignatureFont,
-                    fontSize = 58.sp,
-                    lineHeight = 62.sp,
-                    style = TextStyle(brush = animatedWaveBrush)
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    buildAnnotatedString {
-                        append("Where ")
-                        withStyle(SpanStyle(color = ObColors.NeonGreen, fontWeight = FontWeight.Bold)) { append("Creativity") }
-                        append(" has a Social Life")
-                    },
-                    fontSize = 15.5.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Color.White.copy(alpha = 0.88f),
-                    letterSpacing = 0.2.sp
-                )
-            }
-
-            Spacer(Modifier.weight(1f, fill = false).heightIn(min = 24.dp))
-
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (savedAccountName != null) {
-                    ObPrimaryButton(
-                        "Continue as $savedAccountName", onContinueSaved,
-                        leading = { Icon(Icons.Rounded.AccountCircle, null, tint = Color(0xFF090C22), modifier = Modifier.size(20.dp)) }
-                    )
-                }
-                ObPrimaryButton(
-                    text = "Sign in with Google",
-                    onClick = onGoogle,
-                    loading = googleLoading,
-                    trailingIcon = null,
-                    leading = {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_google_logo),
-                            contentDescription = "Google logo",
-                            tint = Color.Unspecified,
-                            modifier = Modifier.size(19.dp)
+                        // Hero Section: "Welcome to Oscellion" with animated Neon Green wave gradient & bold title
+                        Text(
+                            text = "Welcome to",
+                            fontSize = 36.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            letterSpacing = (-0.5).sp,
+                            lineHeight = 40.sp
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = "Oscellion",
+                            fontFamily = TheSignatureFont,
+                            fontSize = 58.sp,
+                            lineHeight = 56.sp,
+                            style = TextStyle(brush = animatedWaveBrush)
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            buildAnnotatedString {
+                                append("Where ")
+                                withStyle(SpanStyle(color = ObColors.NeonGreen, fontWeight = FontWeight.Bold)) { append("Creativity") }
+                                append(" has a Social Life")
+                            },
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.White.copy(alpha = 0.88f),
+                            letterSpacing = (-0.2).sp,
+                            lineHeight = 19.sp
                         )
                     }
-                )
-                ObSecondaryButton("Create new account", onCreateAccount, icon = Icons.Rounded.PersonAdd)
-                ObSecondaryButton("Explore Studio (No login required)", onExploreGuest, icon = Icons.Rounded.Explore)
 
-                Row(Modifier.fillMaxWidth().padding(top = 2.dp), horizontalArrangement = Arrangement.Center) {
-                    Text("Already have an account? ", color = Color(0xCCFFFFFF), fontSize = 12.sp)
-                    Text(
-                        "Sign In", color = ObColors.NeonGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold,
-                        modifier = Modifier.clickable(onClick = onSignInExisting)
-                    )
-                }
+                    // Bottom Action Section (All buttons shifted to bottom)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 20.dp, bottom = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        if (savedAccountName != null) {
+                            ObPrimaryButton(
+                                "Continue as $savedAccountName", onContinueSaved,
+                                leading = { Icon(Icons.Rounded.AccountCircle, null, tint = Color(0xFF090C22), modifier = Modifier.size(20.dp)) }
+                            )
+                        }
+                        ObPrimaryButton(
+                            text = "Sign in with Google",
+                            onClick = onGoogle,
+                            loading = googleLoading,
+                            trailingIcon = null,
+                            leading = {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_google_logo),
+                                    contentDescription = "Google logo",
+                                    tint = Color.Unspecified,
+                                    modifier = Modifier.size(19.dp)
+                                )
+                            }
+                        )
+                        ObSecondaryButton("Create new account", onCreateAccount, icon = Icons.Rounded.PersonAdd)
+                        ObSecondaryButton("Explore Studio (No login required)", onExploreGuest, icon = Icons.Rounded.Explore)
 
-                Row(Modifier.fillMaxWidth().padding(top = 2.dp), horizontalArrangement = Arrangement.Center) {
-                    Text("By signing up, you agree to our ", color = Color(0xCCFFFFFF), fontSize = 11.sp)
-                    Text(
-                        "Terms and Privacy Policy", color = ObColors.NeonGreen, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.clickable(onClick = onTerms)
-                    )
+                        Spacer(Modifier.height(2.dp))
+
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                            Text("Already have an account? ", color = Color(0xCCFFFFFF), fontSize = 12.5.sp, letterSpacing = (-0.3).sp)
+                            Text(
+                                "Sign In", color = ObColors.NeonGreen, fontSize = 12.5.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.3).sp,
+                                modifier = Modifier.clickable(onClick = onSignInExisting)
+                            )
+                        }
+
+                        Row(Modifier.fillMaxWidth().padding(top = 2.dp), horizontalArrangement = Arrangement.Center) {
+                            Text("By signing up, you agree to our ", color = Color(0xCCFFFFFF), fontSize = 11.sp, letterSpacing = (-0.2).sp)
+                            Text(
+                                "Terms and Privacy Policy", color = ObColors.NeonGreen, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.2).sp,
+                                modifier = Modifier.clickable(onClick = onTerms)
+                            )
+                        }
+                    }
                 }
             }
         }
