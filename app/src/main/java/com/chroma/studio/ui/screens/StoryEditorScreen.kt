@@ -1,6 +1,12 @@
 package com.chroma.studio.ui.screens
 
 import android.graphics.Color as AndroidColor
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
@@ -211,6 +217,14 @@ fun StoryEditorScreen(
     // Document State
     var headlineText by remember { mutableStateOf("") }
     var bodyContent by remember { mutableStateOf("") }
+    var backgroundImageUri by remember { mutableStateOf<Uri?>(null) }
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            backgroundImageUri = uri
+        }
+    }
     var selectedCategory by remember { mutableStateOf("") }
     var selectedMood by remember { mutableStateOf("") }
     var audienceType by remember { mutableStateOf("public") } // "public", "followers", "only_friends"
@@ -326,7 +340,7 @@ fun StoryEditorScreen(
 
     // Handle Publish Action
     val onPublishAction: () -> Unit = {
-        if (bodyContent.isNotBlank() || headlineText.isNotBlank()) {
+        if (bodyContent.isNotBlank() || headlineText.isNotBlank() || backgroundImageUri != null) {
             isPublishing = true
             val fullContent = buildString {
                 if (headlineText.isNotBlank()) {
@@ -360,13 +374,23 @@ fun StoryEditorScreen(
                 "{}"
             }
 
-            storyViewModel.publishTextStory(
-                textContent = fullContent,
-                textFormat = jsonFormat,
-                backgroundColor = formatState.backgroundColorHex,
-                audienceType = audienceType,
-                customAudienceIds = if (audienceType == "only_friends") storyViewModel.onlyFriendsIds.value else emptyList()
-            )
+            val targetAudienceIds = if (audienceType == "only_friends") storyViewModel.onlyFriendsIds.value else emptyList()
+            if (backgroundImageUri != null) {
+                storyViewModel.uploadStory(
+                    context = context,
+                    uri = backgroundImageUri!!,
+                    audienceType = audienceType,
+                    customAudienceIds = targetAudienceIds
+                )
+            } else {
+                storyViewModel.publishTextStory(
+                    textContent = fullContent,
+                    textFormat = jsonFormat,
+                    backgroundColor = formatState.backgroundColorHex,
+                    audienceType = audienceType,
+                    customAudienceIds = targetAudienceIds
+                )
+            }
 
             isPublishing = false
             ToastManager.showToast("Story published! ✨")
@@ -387,7 +411,7 @@ fun StoryEditorScreen(
                 // Clean Close icon button (NO background)
                 IconButton(
                     onClick = {
-                        if (bodyContent.isNotBlank() || headlineText.isNotBlank()) {
+                        if (bodyContent.isNotBlank() || headlineText.isNotBlank() || backgroundImageUri != null) {
                             showDiscardDialog = true
                         } else {
                             onNavigateBack()
@@ -570,12 +594,40 @@ fun StoryEditorScreen(
                     .fillMaxWidth()
                     .weight(1f)
                     .clip(RoundedCornerShape(14.dp))
-                    .background(canvasBackgroundBrush)
+                    .then(
+                        if (backgroundImageUri != null) {
+                            Modifier.background(Color.Black)
+                        } else {
+                            Modifier.background(canvasBackgroundBrush)
+                        }
+                    )
                     .border(0.5.dp, themeColors.glassBorder, RoundedCornerShape(14.dp))
-                    .padding(14.dp)
             ) {
+                if (backgroundImageUri != null) {
+                    AsyncImage(
+                        model = backgroundImageUri,
+                        contentDescription = "Story Photo Background",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                    // Protective scrim so text is readable
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(
+                                        Color.Black.copy(alpha = 0.38f),
+                                        Color.Black.copy(alpha = 0.65f)
+                                    )
+                                )
+                            )
+                    )
+                }
                 Column(
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(14.dp)
                 ) {
                     // Header Meta: Category & Mood Badges inside Canvas
                     if (selectedCategory.isNotBlank() || selectedMood.isNotBlank()) {
@@ -929,6 +981,46 @@ fun StoryEditorScreen(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
+                                // Photo Background Picker Button
+                                Box(
+                                    modifier = Modifier
+                                        .height(24.dp)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(if (backgroundImageUri != null) themeColors.primary.copy(alpha = 0.22f) else themeColors.glassBg)
+                                        .border(
+                                            width = if (backgroundImageUri != null) 1.5.dp else 0.5.dp,
+                                            color = if (backgroundImageUri != null) themeColors.primary else themeColors.glassBorder,
+                                            shape = RoundedCornerShape(6.dp)
+                                        )
+                                        .clickable {
+                                            photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                        }
+                                        .padding(horizontal = 7.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Lucide.Image, contentDescription = "Add Photo", tint = if (backgroundImageUri != null) themeColors.primary else themeColors.textMain, modifier = Modifier.size(12.dp))
+                                        Text(
+                                            text = if (backgroundImageUri != null) "Photo Set" else "Add Photo",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = if (backgroundImageUri != null) themeColors.primary else themeColors.textMain
+                                        )
+                                        if (backgroundImageUri != null) {
+                                            Icon(
+                                                Lucide.X,
+                                                contentDescription = "Remove Photo",
+                                                tint = themeColors.primary,
+                                                modifier = Modifier
+                                                    .size(11.dp)
+                                                    .clickable { backgroundImageUri = null }
+                                            )
+                                        }
+                                    }
+                                }
                                 StoryGradientThemes.forEach { theme ->
                                     val isSelected = !isCustomSolidBg && selectedGradientId == theme.id
                                     Box(
@@ -1068,13 +1160,40 @@ fun StoryEditorScreen(
                         .fillMaxWidth(0.92f)
                         .fillMaxHeight(0.85f)
                         .clip(RoundedCornerShape(20.dp))
-                        .background(canvasBackgroundBrush)
+                        .then(
+                            if (backgroundImageUri != null) {
+                                Modifier.background(Color.Black)
+                            } else {
+                                Modifier.background(canvasBackgroundBrush)
+                            }
+                        )
                         .border(0.5.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(20.dp))
                         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
-                        .padding(18.dp)
                 ) {
+                    if (backgroundImageUri != null) {
+                        AsyncImage(
+                            model = backgroundImageUri,
+                            contentDescription = "Story Preview Photo",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        listOf(
+                                            Color.Black.copy(alpha = 0.38f),
+                                            Color.Black.copy(alpha = 0.65f)
+                                        )
+                                    )
+                                )
+                        )
+                    }
                     Column(
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(18.dp)
                     ) {
                         // Story Progress Bars Simulation
                         Row(
