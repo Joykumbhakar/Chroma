@@ -383,11 +383,7 @@ fun Modifier.clayPillThumb(
     val radius = size.height / 2f
     val cornerRadius = CornerRadius(radius, radius)
 
-    val pillPath = Path().apply {
-        addRoundRect(RoundRect(rect = Rect(Offset.Zero, size), cornerRadius = cornerRadius))
-    }
-
-    // Porcelain surface gradient (170deg angle approximation)
+    // Porcelain surface gradient
     val surfaceGradient = Brush.linearGradient(
         colors = listOf(
             Color.White.copy(alpha = 0.95f),
@@ -397,112 +393,39 @@ fun Modifier.clayPillThumb(
         end = Offset(size.width * 0.8f, size.height)
     )
 
-    val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-        style = android.graphics.Paint.Style.FILL
-    }
-    val ringPath = android.graphics.Path()
-    val holePath = android.graphics.Path()
+    // Specular top highlight gradient (100% GPU shader)
+    val topSpecularGradient = Brush.verticalGradient(
+        0.0f to Color.White.copy(alpha = 0.90f),
+        0.4f to Color.White.copy(alpha = 0.15f),
+        1.0f to Color.Transparent
+    )
+
+    // Bottom clay bevel contour gradient (100% GPU shader)
+    val bottomBevelGradient = Brush.verticalGradient(
+        0.0f to Color.Transparent,
+        0.6f to Color(0xFF0F172A).copy(alpha = 0.04f * clayDepth.coerceIn(0.5f, 2.5f)),
+        1.0f to Color(0xFF0F172A).copy(alpha = 0.16f * clayDepth.coerceIn(0.5f, 2.5f))
+    )
+
+    val strokeWidth = 1.dp.toPx()
 
     onDrawBehind {
         // 1. Draw base solid color + porcelain gradient
         drawRoundRect(color = baseColor, cornerRadius = cornerRadius)
         drawRoundRect(brush = surfaceGradient, cornerRadius = cornerRadius)
 
-        // 2. Clip strictly to the pill outline so all blurred shadows are 100% INSET
-        clipPath(pillPath) {
-            drawIntoCanvas { canvas ->
-                val nativeCanvas = canvas.nativeCanvas
+        // 2. Specular top highlight & bottom clay bevel
+        drawRoundRect(brush = topSpecularGradient, cornerRadius = cornerRadius)
+        drawRoundRect(brush = bottomBevelGradient, cornerRadius = cornerRadius)
 
-                fun drawInsetShadow(
-                    dxDp: Float,
-                    dyDp: Float,
-                    blurDp: Float,
-                    shadowColor: Color
-                ) {
-                    val dx = dxDp.dp.toPx()
-                    val dy = dyDp.dp.toPx()
-                    val blurPx = max(0.5f, blurDp.dp.toPx())
-
-                    val outerRect = Rect(
-                        left = -size.width,
-                        top = -size.height,
-                        right = size.width * 2f,
-                        bottom = size.height * 2f
-                    )
-                    val innerShifted = RoundRect(
-                        rect = Rect(Offset(dx, dy), size),
-                        cornerRadius = cornerRadius
-                    )
-
-                    ringPath.reset()
-                    ringPath.addRect(
-                        outerRect.left,
-                        outerRect.top,
-                        outerRect.right,
-                        outerRect.bottom,
-                        android.graphics.Path.Direction.CW
-                    )
-
-                    holePath.reset()
-                    holePath.addRoundRect(
-                        innerShifted.left,
-                        innerShifted.top,
-                        innerShifted.right,
-                        innerShifted.bottom,
-                        radius,
-                        radius,
-                        android.graphics.Path.Direction.CW
-                    )
-                    ringPath.op(holePath, android.graphics.Path.Op.DIFFERENCE)
-
-                    paint.color = shadowColor.toArgb()
-                    paint.maskFilter = BlurMaskFilter(blurPx, BlurMaskFilter.Blur.NORMAL)
-
-                    nativeCanvas.drawPath(ringPath, paint)
-                }
-
-                val depth = max(0.1f, clayDepth)
-
-                // Dynamic bottom clay bevel that deepens as the knob zooms up on tap/hold
-                val bottomInsetY = -4f * depth
-                val bottomInsetBlur = 7.5f * depth
-                val bottomInsetAlpha = min(0.24f, 0.16f * depth)
-
-                // Inset 1: Bottom clay bevel shadow
-                drawInsetShadow(
-                    dxDp = 0f,
-                    dyDp = bottomInsetY,
-                    blurDp = bottomInsetBlur,
-                    shadowColor = Color(0xFF0F172A).copy(alpha = bottomInsetAlpha)
-                )
-
-                // Inset 2: Bottom-right soft clay contour
-                drawInsetShadow(
-                    dxDp = -2f * depth,
-                    dyDp = -2f * depth,
-                    blurDp = 5f * depth,
-                    shadowColor = Color(0xFF0F172A).copy(alpha = 0.09f)
-                )
-
-                // Inset 3: Top crisp white specular highlight
-                drawInsetShadow(
-                    dxDp = 0f,
-                    dyDp = 3.5f * depth,
-                    blurDp = 5f * depth,
-                    shadowColor = Color.White
-                )
-            }
-
-            // Inset 4: 1dp subtle inner rim contour
-            val strokeWidth = 1.dp.toPx()
-            drawRoundRect(
-                color = Color(0xFF0F172A).copy(alpha = 0.04f),
-                topLeft = Offset(strokeWidth / 2f, strokeWidth / 2f),
-                size = Size(size.width - strokeWidth, size.height - strokeWidth),
-                cornerRadius = cornerRadius,
-                style = Stroke(width = strokeWidth)
-            )
-        }
+        // 3. Crisp inner rim contour
+        drawRoundRect(
+            color = Color(0xFF0F172A).copy(alpha = 0.04f),
+            topLeft = Offset(strokeWidth / 2f, strokeWidth / 2f),
+            size = Size(size.width - strokeWidth, size.height - strokeWidth),
+            cornerRadius = cornerRadius,
+            style = Stroke(width = strokeWidth)
+        )
     }
 }
 
@@ -536,7 +459,7 @@ fun SpringPillSwitch(
     val paddingDp = (trackHeight * 0.07f).coerceIn(1.5.dp, 3.5.dp)
     val thumbHeightDp = trackHeight - paddingDp * 2
     val innerTrackWidthDp = trackWidth - paddingDp * 2
-    val baseThumbWidthDp = innerTrackWidthDp * (61f / 92f)
+    val baseThumbWidthDp = if (trackWidth <= 64.dp) thumbHeightDp else innerTrackWidthDp * (61f / 92f)
     val maxTravelDp = innerTrackWidthDp - baseThumbWidthDp
     val maxTravelPx = with(density) { maxTravelDp.toPx() }
 
@@ -841,7 +764,7 @@ fun SpringPillSwitch(
             val impulse = if (checked) 3.2f else -3.2f
             state.setCheckedState(checked, extraVelocity = impulse)
             state.onPressStart(impulse = 6.0f)
-            delay(120)
+            delay(40)
             state.onPressRelease()
         }
     }
