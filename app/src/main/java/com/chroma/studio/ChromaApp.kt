@@ -48,6 +48,11 @@ class ChromaApp : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        try {
+            com.chroma.studio.ui.components.AppSpringPhysics.init(this)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
         
         try {
             // Initialize Firebase (with offline-safe default app fallback if google-services.json is absent)

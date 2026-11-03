@@ -861,4 +861,61 @@ object LucideFilled {
             }
         }.build()
     }
+
+    // ── Sliders / Controls (Spring Lab) ──────────────────────────────────────
+    val Sliders: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "LucideFilled.Sliders",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            path(fill = SolidColor(Color.White)) {
+                // Top Track
+                moveTo(3f, 6.5f)
+                horizontalLineTo(21f)
+                arcTo(1f, 1f, 0f, false, true, 22f, 7.5f)
+                arcTo(1f, 1f, 0f, false, true, 21f, 8.5f)
+                horizontalLineTo(3f)
+                arcTo(1f, 1f, 0f, false, true, 2f, 7.5f)
+                arcTo(1f, 1f, 0f, false, true, 3f, 6.5f)
+                close()
+
+                // Top Knob
+                moveTo(7f, 4f)
+                horizontalLineTo(11f)
+                arcTo(2f, 2f, 0f, false, true, 13f, 6f)
+                verticalLineTo(9f)
+                arcTo(2f, 2f, 0f, false, true, 11f, 11f)
+                horizontalLineTo(7f)
+                arcTo(2f, 2f, 0f, false, true, 5f, 9f)
+                verticalLineTo(6f)
+                arcTo(2f, 2f, 0f, false, true, 7f, 4f)
+                close()
+
+                // Bottom Track
+                moveTo(3f, 15.5f)
+                horizontalLineTo(21f)
+                arcTo(1f, 1f, 0f, false, true, 22f, 16.5f)
+                arcTo(1f, 1f, 0f, false, true, 21f, 17.5f)
+                horizontalLineTo(3f)
+                arcTo(1f, 1f, 0f, false, true, 2f, 16.5f)
+                arcTo(1f, 1f, 0f, false, true, 3f, 15.5f)
+                close()
+
+                // Bottom Knob
+                moveTo(13f, 13f)
+                horizontalLineTo(17f)
+                arcTo(2f, 2f, 0f, false, true, 19f, 15f)
+                verticalLineTo(18f)
+                arcTo(2f, 2f, 0f, false, true, 17f, 20f)
+                horizontalLineTo(13f)
+                arcTo(2f, 2f, 0f, false, true, 11f, 18f)
+                verticalLineTo(15f)
+                arcTo(2f, 2f, 0f, false, true, 13f, 13f)
+                close()
+            }
+        }.build()
+    }
 }

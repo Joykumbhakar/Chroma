@@ -49,7 +49,8 @@ enum class AppearanceSubScreen {
     CORNER_GEOMETRY,
     ANIMATIONS,
     VOICE_GLOBE,
-    THEME_WALLPAPERS
+    THEME_WALLPAPERS,
+    SWITCH_LAB
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -565,6 +566,18 @@ fun MainAppearanceSections(
                     onClick = {
                         SoundManager.playReaction()
                         onNavigateToSubScreen(AppearanceSubScreen.ANIMATIONS)
+                    }
+                )
+                OneUiSettingsDivider()
+                OneUiSettingsNavRow(
+                    title = "Toggle Switch Lab",
+                    subtitle = "Spring physics solver & live telemetry",
+                    icon = LucideFilled.Sliders,
+                    iconColor = Color(0xFF6366F1),
+                    valueText = "Lab",
+                    onClick = {
+                        SoundManager.playReaction()
+                        onNavigateToSubScreen(AppearanceSubScreen.SWITCH_LAB)
                     }
                 )
                 OneUiSettingsDivider()
@@ -1150,6 +1163,7 @@ fun AppearanceSettingsScreen(
         AppearanceSubScreen.ANIMATIONS -> "Animations"
         AppearanceSubScreen.VOICE_GLOBE -> "Voice Globe"
         AppearanceSubScreen.THEME_WALLPAPERS -> "Wallpapers & Themes"
+        AppearanceSubScreen.SWITCH_LAB -> "Toggle Switch Lab"
     }
 
     val screenSubtitle = when (currentSubScreen) {
@@ -1159,6 +1173,7 @@ fun AppearanceSettingsScreen(
         AppearanceSubScreen.ANIMATIONS -> "Motion curves and message physics"
         AppearanceSubScreen.VOICE_GLOBE -> "Select your voice dynamic orb theme"
         AppearanceSubScreen.THEME_WALLPAPERS -> "Backgrounds, accents & dark mode"
+        AppearanceSubScreen.SWITCH_LAB -> "Spring physics solver & live telemetry"
     }
 
     OneUiCollapsingHeaderLayout(
@@ -1283,6 +1298,9 @@ fun AppearanceSettingsScreen(
                         onToggleAppearance = onToggleAppearance,
                         onAccentCycle = onAccentCycle,
                         onOpenWallpaperPicker = onOpenWallpaperPicker
+                    )
+                    AppearanceSubScreen.SWITCH_LAB -> SpringToggleShowcaseScreen(
+                        onBack = { currentSubScreen = AppearanceSubScreen.MAIN }
                     )
                 }
             }

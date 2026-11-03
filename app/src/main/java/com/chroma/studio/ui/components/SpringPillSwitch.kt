@@ -1,8 +1,11 @@
 package com.chroma.studio.ui.components
 
+import android.content.Context
 import android.graphics.BlurMaskFilter
 import android.os.Build
 import android.view.HapticFeedbackConstants
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -35,6 +38,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
@@ -45,6 +49,7 @@ import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -52,6 +57,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.chroma.studio.chat.sound.SoundManager
 import com.chroma.studio.ui.theme.LocalOscellionColors
+import com.composables.icons.lucide.ArrowLeft
+import com.composables.icons.lucide.Lucide
 import kotlinx.coroutines.delay
 import kotlin.math.*
 
@@ -86,7 +93,7 @@ class SpringPhysicsConfig(
 
     /** Damping ratio: zeta = c / (2 * sqrt(k * m)) */
     val dampingRatio: Float
-        get() = damping / (2f * sqrt(stiffness * mass))
+        get() = damping / (2f * sqrt(max(1f, stiffness * mass)))
 
     fun applyPreset(preset: SpringPreset) {
         stiffness = preset.stiffness
@@ -110,7 +117,66 @@ enum class SpringPreset(
 }
 
 // ============================================================================
-// 2. COLOR PALETTES MATCHING REFERENCE SPECS
+// 2. GLOBAL APP SPRING PHYSICS MANAGER
+// ============================================================================
+
+/**
+ * App-wide singleton that manages and persists customized spring physics settings.
+ * All toggle buttons throughout ChromaStudio reference this configuration.
+ */
+object AppSpringPhysics {
+    val globalConfig = SpringPhysicsConfig(
+        stiffness = 520f,
+        damping = 26f,
+        mass = 1.0f,
+        squishFactor = 1.0f,
+        timeScale = 1.0f,
+        hapticsEnabled = true
+    )
+
+    private const val PREFS_NAME = "spring_physics_preferences"
+
+    fun init(context: Context) {
+        try {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            globalConfig.stiffness = prefs.getFloat("stiffness", 520f)
+            globalConfig.damping = prefs.getFloat("damping", 26f)
+            globalConfig.mass = prefs.getFloat("mass", 1.0f)
+            globalConfig.squishFactor = prefs.getFloat("squish", 1.0f)
+            globalConfig.timeScale = prefs.getFloat("timeScale", 1.0f)
+            globalConfig.hapticsEnabled = prefs.getBoolean("haptics", true)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    fun save(context: Context) {
+        try {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            prefs.edit()
+                .putFloat("stiffness", globalConfig.stiffness)
+                .putFloat("damping", globalConfig.damping)
+                .putFloat("mass", globalConfig.mass)
+                .putFloat("squish", globalConfig.squishFactor)
+                .putFloat("timeScale", globalConfig.timeScale)
+                .putBoolean("haptics", globalConfig.hapticsEnabled)
+                .apply()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    fun reset(context: Context) {
+        globalConfig.applyPreset(SpringPreset.Snappy)
+        globalConfig.mass = 1.0f
+        globalConfig.timeScale = 1.0f
+        globalConfig.hapticsEnabled = true
+        save(context)
+    }
+}
+
+// ============================================================================
+// 3. COLOR PALETTES MATCHING REFERENCE SPECS
 // ============================================================================
 
 @Immutable
@@ -157,7 +223,7 @@ data class PillSwitchColors(
 }
 
 // ============================================================================
-// 3. REAL-TIME SECOND-ORDER SPRING SOLVER STATE
+// 4. REAL-TIME SECOND-ORDER SPRING SOLVER STATE
 // ============================================================================
 
 /**
@@ -261,7 +327,7 @@ class SpringToggleState(
         // Tighten spring while dragging so thumb tracks finger closely with liquid lag
         val k = if (isDragging) 1100f else config.stiffness
         val c = if (isDragging) 58f else config.damping
-        val m = config.mass
+        val m = max(0.2f, config.mass)
 
         for (i in 0 until subSteps) {
             // 1. Main horizontal displacement spring
@@ -297,7 +363,7 @@ fun rememberSpringToggleState(
 }
 
 // ============================================================================
-// 4. CLAYMORPHIC INSET-ONLY KNOB RENDERER (CUSTOM COMPOSE CANVAS)
+// 5. CLAYMORPHIC INSET-ONLY KNOB RENDERER (CUSTOM COMPOSE CANVAS)
 // ============================================================================
 
 /**
@@ -346,10 +412,6 @@ fun Modifier.clayPillThumb(
             drawIntoCanvas { canvas ->
                 val nativeCanvas = canvas.nativeCanvas
 
-                /**
-                 * Helper to draw an authentic CSS `inset dx dy blur color` shadow:
-                 * Subtracts a shifted pill from an expanded outer rect and draws it with BlurMaskFilter.
-                 */
                 fun drawInsetShadow(
                     dxDp: Float,
                     dyDp: Float,
@@ -444,7 +506,7 @@ fun Modifier.clayPillThumb(
 }
 
 // ============================================================================
-// 5. PIXEL-PERFECT SPRING PILL SWITCH COMPOSABLE
+// 6. PIXEL-PERFECT SPRING PILL SWITCH COMPOSABLE
 // ============================================================================
 
 /**
@@ -460,7 +522,7 @@ fun SpringPillSwitch(
     modifier: Modifier = Modifier,
     onCheckedChange: ((Boolean) -> Unit)? = null,
     colors: PillSwitchColors = PillSwitchColors.Brand,
-    config: SpringPhysicsConfig = remember { SpringPhysicsConfig() },
+    config: SpringPhysicsConfig = AppSpringPhysics.globalConfig,
     trackWidth: Dp = 56.dp,
     trackHeight: Dp = 28.dp,
     showIoLabels: Boolean = false,
@@ -737,7 +799,7 @@ fun SpringPillSwitch(
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     colors: PillSwitchColors = PillSwitchColors.Brand,
-    config: SpringPhysicsConfig = remember { SpringPhysicsConfig() },
+    config: SpringPhysicsConfig = AppSpringPhysics.globalConfig,
     trackWidth: Dp = 56.dp,
     trackHeight: Dp = 28.dp,
     showIoLabels: Boolean = false
@@ -767,12 +829,25 @@ fun SpringPillSwitch(
 }
 
 // ============================================================================
-// 6. REFERENCE SHOWCASE SCREEN (CARDS + LIVE SPRING LAB)
+// 7. FULL SPRING PHYSICS LAB & SHOWCASE SCREEN (MATCHING EXACT HTML LAB)
 // ============================================================================
 
+/**
+ * Exact implementation of the Spring Physics Lab from spring_physics_pill_toggle_switch.html:
+ *  - Real-time live oscilloscope telemetry curve (x(t), v(t), zeta)
+ *  - 4 Spring presets: iOS Snappy, Underdamped Bouncy, Liquid Glass, Critically Damped
+ *  - 4 Dynamic sliders: Stiffness (k), Damping (c), Mass (m), Zoom & Squish
+ *  - Quick action controls: Bounce All, Slow-Mo 0.25x, Sound/Haptics toggle, Reset
+ *  - 3 Exact reference spec cards (Card 01 Indigo, Card 02 System Green, Card 03 HIG Coral)
+ *  - Card 05: Live In-App ChromaStudio Brand Blue (#0A84FF) interactive preview
+ *  - Real-time persistent state auto-saved to SharedPreferences for all switches in the app
+ */
 @Composable
-fun SpringToggleShowcaseScreen() {
-    val config = remember { SpringPhysicsConfig() }
+fun SpringToggleShowcaseScreen(
+    onBack: (() -> Unit)? = null
+) {
+    val context = LocalContext.current
+    val config = AppSpringPhysics.globalConfig
     val view = LocalView.current
 
     val swIndigo1 = rememberSpringToggleState(initialChecked = false, label = "Indigo Top")
@@ -781,21 +856,23 @@ fun SpringToggleShowcaseScreen() {
     val swGreen2 = rememberSpringToggleState(initialChecked = true, label = "Green Bottom")
     val swSpec1 = rememberSpringToggleState(initialChecked = true, label = "Spec Top (ON)")
     val swSpec2 = rememberSpringToggleState(initialChecked = false, label = "Spec Bottom (OFF)")
+    val swBrand = rememberSpringToggleState(initialChecked = true, label = "Brand Blue")
 
     val allToggles = remember {
-        listOf(swIndigo1, swIndigo2, swGreen1, swGreen2, swSpec1, swSpec2)
+        listOf(swIndigo1, swIndigo2, swGreen1, swGreen2, swSpec1, swSpec2, swBrand)
     }
 
     var activeToggle by remember { mutableStateOf(swIndigo2) }
-    var selectedPreset by remember { mutableStateOf(SpringPreset.Snappy) }
+    var selectedPreset by remember { mutableStateOf<SpringPreset?>(SpringPreset.Snappy) }
 
-    val history = remember { mutableStateListOf<Float>().apply { repeat(160) { add(1f) } } }
+    // Live Oscilloscope History (180 samples matching HTML)
+    val history = remember { mutableStateListOf<Float>().apply { repeat(180) { add(1f) } } }
 
     LaunchedEffect(activeToggle) {
         while (true) {
             withFrameNanos {
                 history.add(activeToggle.x)
-                if (history.size > 160) {
+                if (history.size > 180) {
                     history.removeAt(0)
                 }
             }
@@ -809,86 +886,223 @@ fun SpringToggleShowcaseScreen() {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 18.dp, vertical = 28.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(24.dp)
+                .windowInsetsPadding(WindowInsets.statusBars)
         ) {
-            ShowcaseHeader(
-                config = config,
-                onBounceAll = {
-                    allToggles.forEach { t ->
-                        t.toggle(withImpulse = true)
-                    }
-                    if (config.hapticsEnabled) {
-                        try {
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                                view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-                            } else {
-                                view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            // Sticky Navigation Bar if onBack is provided
+            if (onBack != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                        .padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable {
+                                SoundManager.playReaction()
+                                onBack()
                             }
-                        } catch (_: Exception) {}
+                            .padding(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Lucide.ArrowLeft,
+                            contentDescription = "Back",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Text(
+                            text = "Settings",
+                            color = Color(0xFFA1A1AA),
+                            fontSize = 14.sp
+                        )
                     }
-                },
-                onResetAll = {
-                    allToggles.forEach { it.resetToInitial() }
+
+                    Text(
+                        text = "Toggle Switch Lab",
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+
+                    Text(
+                        text = "Apply",
+                        color = Color(0xFF818CF8),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable {
+                                AppSpringPhysics.save(context)
+                                SoundManager.playReaction()
+                                onBack()
+                            }
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
                 }
-            )
-
-            ReferenceCardSection(
-                title = "01 — Indigo Accent Variant",
-                hexSubtitle = "#E3E3E6 → #6155F5"
-            ) {
-                LightGroupedToggleCard(
-                    topState = swIndigo1,
-                    bottomState = swIndigo2,
-                    colors = PillSwitchColors.Indigo,
-                    config = config,
-                    onActivate = { activeToggle = it }
-                )
+                HorizontalDivider(color = Color.White.copy(alpha = 0.08f), thickness = 0.5.dp)
             }
 
-            ReferenceCardSection(
-                title = "02 — System Green Variant",
-                hexSubtitle = "#E3E3E6 → #2AD158"
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 18.dp, vertical = 20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
-                LightGroupedToggleCard(
-                    topState = swGreen1,
-                    bottomState = swGreen2,
-                    colors = PillSwitchColors.SystemGreen,
+                // Header & Quick Action Bar
+                ShowcaseHeader(
                     config = config,
-                    onActivate = { activeToggle = it }
-                )
-            }
-
-            ReferenceCardSection(
-                title = "03 — HIG Anatomy & I/O Labels Spec",
-                hexSubtitle = "#F6565C → #8C2522"
-            ) {
-                HigCoralSpecCard(
-                    topState = swSpec1,
-                    bottomState = swSpec2,
-                    config = config,
-                    onActivate = { activeToggle = it }
-                )
-            }
-
-            ReferenceCardSection(
-                title = "04 — Spring Physics Lab & Telemetry",
-                hexSubtitle = "Active: ${activeToggle.label}",
-                subtitleColor = Color(0xFF818CF8)
-            ) {
-                SpringPhysicsLabCard(
-                    config = config,
-                    activeToggle = activeToggle,
-                    selectedPreset = selectedPreset,
-                    history = history,
-                    onSelectPreset = { preset ->
-                        selectedPreset = preset
-                        config.applyPreset(preset)
-                        activeToggle.toggle(withImpulse = true)
+                    onBounceAll = {
+                        allToggles.forEachIndexed { index, t ->
+                            t.toggle(withImpulse = true)
+                        }
+                        if (config.hapticsEnabled) {
+                            try {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                    view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                                } else {
+                                    view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                                }
+                            } catch (_: Exception) {}
+                        }
+                        try {
+                            SoundManager.playReaction()
+                        } catch (_: Exception) {}
+                    },
+                    onResetAll = {
+                        allToggles.forEach { it.resetToInitial() }
+                        AppSpringPhysics.reset(context)
+                        selectedPreset = SpringPreset.Snappy
+                    },
+                    onConfigChanged = {
+                        AppSpringPhysics.save(context)
                     }
                 )
+
+                // CARD 04: Spring Physics Lab & Live Telemetry (Placed First for Fast Tweaking)
+                ReferenceCardSection(
+                    title = "04 — Spring Physics Lab & Live Telemetry",
+                    hexSubtitle = "Active: ${activeToggle.label}",
+                    subtitleColor = Color(0xFF818CF8)
+                ) {
+                    SpringPhysicsLabCard(
+                        config = config,
+                        activeToggle = activeToggle,
+                        selectedPreset = selectedPreset,
+                        history = history,
+                        onSelectPreset = { preset ->
+                            selectedPreset = preset
+                            config.applyPreset(preset)
+                            AppSpringPhysics.save(context)
+                            activeToggle.toggle(withImpulse = true)
+                        },
+                        onValuesChanged = {
+                            selectedPreset = null // custom values
+                            AppSpringPhysics.save(context)
+                        }
+                    )
+                }
+
+                // CARD 05: In-App Brand Live Test Card (Brand Blue #0A84FF)
+                ReferenceCardSection(
+                    title = "05 — In-App Brand Settings Switch",
+                    hexSubtitle = "Unified Blue: #0A84FF",
+                    subtitleColor = Color(0xFF38BDF8)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(color = Color(0xFF18181B), shape = RoundedCornerShape(28.dp))
+                            .border(1.dp, Color.White.copy(alpha = 0.08f), shape = RoundedCornerShape(28.dp))
+                            .padding(horizontal = 20.dp, vertical = 18.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null
+                                ) {
+                                    activeToggle = swBrand
+                                    swBrand.toggle(withImpulse = true)
+                                },
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(
+                                    text = "Allow High-Res Studio Remix",
+                                    color = Color.White,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = "Previewing live spring motion with unified #0A84FF",
+                                    color = Color(0xFFA1A1AA),
+                                    fontSize = 12.sp
+                                )
+                            }
+
+                            SpringPillSwitch(
+                                state = swBrand,
+                                colors = PillSwitchColors.Brand,
+                                config = config,
+                                trackWidth = 56.dp,
+                                trackHeight = 28.dp,
+                                onActivate = { activeToggle = it }
+                            )
+                        }
+                    }
+                }
+
+                // CARD 01: Indigo Accent Variant
+                ReferenceCardSection(
+                    title = "01 — Indigo Accent Variant",
+                    hexSubtitle = "#E3E3E6 → #6155F5"
+                ) {
+                    LightGroupedToggleCard(
+                        topState = swIndigo1,
+                        bottomState = swIndigo2,
+                        colors = PillSwitchColors.Indigo,
+                        config = config,
+                        onActivate = { activeToggle = it }
+                    )
+                }
+
+                // CARD 02: System Green Variant
+                ReferenceCardSection(
+                    title = "02 — System Green Variant",
+                    hexSubtitle = "#E3E3E6 → #2AD158"
+                ) {
+                    LightGroupedToggleCard(
+                        topState = swGreen1,
+                        bottomState = swGreen2,
+                        colors = PillSwitchColors.SystemGreen,
+                        config = config,
+                        onActivate = { activeToggle = it }
+                    )
+                }
+
+                // CARD 03: HIG Anatomy & I/O Labels Spec Card
+                ReferenceCardSection(
+                    title = "03 — HIG Anatomy & I/O Labels Spec",
+                    hexSubtitle = "#F6565C → #8C2522"
+                ) {
+                    HigCoralSpecCard(
+                        topState = swSpec1,
+                        bottomState = swSpec2,
+                        config = config,
+                        onActivate = { activeToggle = it }
+                    )
+                }
+
+                Spacer(Modifier.height(30.dp))
             }
         }
     }
@@ -898,12 +1112,14 @@ fun SpringToggleShowcaseScreen() {
 private fun ShowcaseHeader(
     config: SpringPhysicsConfig,
     onBounceAll: () -> Unit,
-    onResetAll: () -> Unit
+    onResetAll: () -> Unit,
+    onConfigChanged: () -> Unit
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        // Status Badge
         Row(
             modifier = Modifier
                 .background(Color.White.copy(alpha = 0.06f), CircleShape)
@@ -918,7 +1134,7 @@ private fun ShowcaseHeader(
                     .background(Color(0xFF818CF8), CircleShape)
             )
             Text(
-                text = "Jetpack Compose Second-Order Damped Spring Solver",
+                text = "Real-Time Second-Order Damped Spring Solver",
                 color = Color(0xFFA5B4FC),
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium
@@ -934,12 +1150,13 @@ private fun ShowcaseHeader(
         )
 
         Text(
-            text = "Tap, press & hold, or drag & flick any switch below. Features claymorphic inset bevels, knob zoom plumping, and velocity squish.",
+            text = "Click, press & hold, or drag & flick any switch below. Features elastic overshoot, press plumping, and velocity squish.",
             color = Color(0xFFA1A1AA),
             fontSize = 13.sp,
             lineHeight = 18.sp
         )
 
+        // Action Buttons Row (Matching exact HTML header actions)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -949,21 +1166,24 @@ private fun ShowcaseHeader(
                 onClick = onBounceAll,
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F46E5)),
                 shape = RoundedCornerShape(12.dp),
-                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+                contentPadding = PaddingValues(horizontal = 13.dp, vertical = 8.dp)
             ) {
                 Text("Bounce All", fontSize = 12.sp, fontWeight = FontWeight.Medium)
             }
 
             val isSlowMo = config.timeScale < 1f
             OutlinedButton(
-                onClick = { config.timeScale = if (isSlowMo) 1.0f else 0.25f },
+                onClick = {
+                    config.timeScale = if (isSlowMo) 1.0f else 0.25f
+                    onConfigChanged()
+                },
                 shape = RoundedCornerShape(12.dp),
                 border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
                 colors = ButtonDefaults.outlinedButtonColors(
                     containerColor = Color.White.copy(alpha = if (isSlowMo) 0.14f else 0.06f),
                     contentColor = Color(0xFFE4E4E7)
                 ),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                contentPadding = PaddingValues(horizontal = 11.dp, vertical = 8.dp)
             ) {
                 Box(
                     modifier = Modifier
@@ -981,6 +1201,34 @@ private fun ShowcaseHeader(
             }
 
             OutlinedButton(
+                onClick = {
+                    config.hapticsEnabled = !config.hapticsEnabled
+                    onConfigChanged()
+                },
+                shape = RoundedCornerShape(12.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = Color.White.copy(alpha = if (config.hapticsEnabled) 0.10f else 0.04f),
+                    contentColor = Color(0xFFE4E4E7)
+                ),
+                contentPadding = PaddingValues(horizontal = 11.dp, vertical = 8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(7.dp)
+                        .background(
+                            if (config.hapticsEnabled) Color(0xFF34D399) else Color(0xFF71717A),
+                            CircleShape
+                        )
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = if (config.hapticsEnabled) "Haptic: ON" else "Haptic: OFF",
+                    fontSize = 12.sp
+                )
+            }
+
+            OutlinedButton(
                 onClick = onResetAll,
                 shape = RoundedCornerShape(12.dp),
                 border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
@@ -988,7 +1236,7 @@ private fun ShowcaseHeader(
                     containerColor = Color.White.copy(alpha = 0.06f),
                     contentColor = Color(0xFFE4E4E7)
                 ),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                contentPadding = PaddingValues(horizontal = 11.dp, vertical = 8.dp)
             ) {
                 Text("Reset", fontSize = 12.sp)
             }
@@ -1264,9 +1512,10 @@ private fun SpecToggleRow(
 private fun SpringPhysicsLabCard(
     config: SpringPhysicsConfig,
     activeToggle: SpringToggleState,
-    selectedPreset: SpringPreset,
+    selectedPreset: SpringPreset?,
     history: List<Float>,
-    onSelectPreset: (SpringPreset) -> Unit
+    onSelectPreset: (SpringPreset) -> Unit,
+    onValuesChanged: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -1276,6 +1525,7 @@ private fun SpringPhysicsLabCard(
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // Presets Selector (Matching HTML)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -1286,12 +1536,12 @@ private fun SpringPhysicsLabCard(
                     modifier = Modifier
                         .clip(CircleShape)
                         .background(
-                            if (isSelected) Color(0xFF6366F1).copy(alpha = 0.22f)
+                            if (isSelected) Color(0xFF6366F1).copy(alpha = 0.25f)
                             else Color.White.copy(alpha = 0.05f)
                         )
                         .border(
                             width = 1.dp,
-                            color = if (isSelected) Color(0xFF6366F1).copy(alpha = 0.5f)
+                            color = if (isSelected) Color(0xFF6366F1).copy(alpha = 0.6f)
                             else Color.White.copy(alpha = 0.1f),
                             shape = CircleShape
                         )
@@ -1308,12 +1558,16 @@ private fun SpringPhysicsLabCard(
             }
         }
 
+        // 4 Sliders matching HTML exact ranges
         SpringSliderControl(
             label = "Stiffness (k)",
             valueText = "${config.stiffness.roundToInt()} N/m",
             value = config.stiffness,
             valueRange = 150f..1000f,
-            onValueChange = { config.stiffness = it }
+            onValueChange = {
+                config.stiffness = it
+                onValuesChanged()
+            }
         )
 
         SpringSliderControl(
@@ -1321,7 +1575,21 @@ private fun SpringPhysicsLabCard(
             valueText = "${config.damping.roundToInt()} Ns/m",
             value = config.damping,
             valueRange = 8f..65f,
-            onValueChange = { config.damping = it }
+            onValueChange = {
+                config.damping = it
+                onValuesChanged()
+            }
+        )
+
+        SpringSliderControl(
+            label = "Mass (m)",
+            valueText = "${"%.1f".format(config.mass)} kg",
+            value = config.mass,
+            valueRange = 0.4f..3.0f,
+            onValueChange = {
+                config.mass = it
+                onValuesChanged()
+            }
         )
 
         SpringSliderControl(
@@ -1329,9 +1597,13 @@ private fun SpringPhysicsLabCard(
             valueText = "${(config.squishFactor * 100).roundToInt()}%",
             value = config.squishFactor * 100f,
             valueRange = 0f..200f,
-            onValueChange = { config.squishFactor = it / 100f }
+            onValueChange = {
+                config.squishFactor = it / 100f
+                onValuesChanged()
+            }
         )
 
+        // Real-Time Oscilloscope Telemetry Panel
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1342,7 +1614,8 @@ private fun SpringPhysicsLabCard(
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = "DISPLACEMENT x(t)",
@@ -1375,14 +1648,14 @@ private fun SpringPhysicsLabCard(
             Canvas(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(86.dp)
+                    .height(96.dp)
             ) {
                 fun mapY(v: Float): Float {
                     val norm = (v - (-0.35f)) / 1.7f
                     return size.height - norm * size.height
                 }
 
-                val dashEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f), 0f)
+                val dashEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
                 listOf(0f, 1f).forEach { refVal ->
                     val y = mapY(refVal)
                     drawLine(
@@ -1394,12 +1667,13 @@ private fun SpringPhysicsLabCard(
                     )
                 }
 
-                if (history.size > 1) {
+                if (history.isNotEmpty()) {
                     val wavePath = Path()
-                    history.forEachIndexed { idx, sample ->
-                        val px = (idx.toFloat() / (history.size - 1)) * size.width
-                        val py = mapY(sample)
-                        if (idx == 0) wavePath.moveTo(px, py) else wavePath.lineTo(px, py)
+                    val count = history.size
+                    for (i in 0 until count) {
+                        val px = (i.toFloat() / (count - 1).coerceAtLeast(1)) * size.width
+                        val py = mapY(history[i])
+                        if (i == 0) wavePath.moveTo(px, py) else wavePath.lineTo(px, py)
                     }
                     drawPath(
                         path = wavePath,

@@ -1444,8 +1444,15 @@ class HomeActivity : ComponentActivity() {
                             onNavigateToArchives = { navController.navigate("archives") },
                             onNavigateToActivityHistory = { navController.navigate("activity_history") },
                             onNavigateToPrivacyTerms = { navController.navigate("privacy_terms") },
+                            onNavigateToSwitchLab = { navController.navigate("switch_lab") },
                             onBack = { navController.popBackStack() },
                             onLogout = handleLogout
+                        )
+                    }
+
+                    composable("switch_lab") {
+                        com.chroma.studio.ui.components.SpringToggleShowcaseScreen(
+                            onBack = { navController.popBackStack() }
                         )
                     }
 

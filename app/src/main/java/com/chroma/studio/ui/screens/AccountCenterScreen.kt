@@ -63,6 +63,7 @@ fun AccountCenterScreen(
     onNavigateToArchives: (UserProfile) -> Unit,
     onNavigateToActivityHistory: (UserProfile) -> Unit,
     onNavigateToPrivacyTerms: () -> Unit = {},
+    onNavigateToSwitchLab: (() -> Unit)? = null,
     onBack: () -> Unit,
     onLogout: () -> Unit
 ) {
@@ -567,6 +568,19 @@ fun AccountCenterScreen(
                                 textDark = textDark,
                                 textMuted = textMuted,
                                 onClick = { profile?.let { onNavigateToActivityHistory(it) } }
+                            )
+
+                            HorizontalDivider(thickness = 0.5.dp, color = dividerColor)
+
+                            OneUiSettingsRow(
+                                title = "Toggle Switch Lab",
+                                subtitle = "Spring physics solver, telemetry & presets",
+                                icon = LucideFilled.Sliders,
+                                iconTint = Color(0xFF6366F1),
+                                valueText = "Lab",
+                                textDark = textDark,
+                                textMuted = textMuted,
+                                onClick = { onNavigateToSwitchLab?.invoke() }
                             )
                         }
                     }
