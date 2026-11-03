@@ -308,6 +308,43 @@ class HomeActivity : ComponentActivity() {
                 var flashRemixPostId by remember { mutableStateOf<String?>(null) }
                 var flashRemixAuthorUsername by remember { mutableStateOf<String?>(null) }
                 var remixTargetPost by remember { mutableStateOf<DiscoverPost?>(null) }
+                var incomingSharedData by remember { mutableStateOf<com.chroma.studio.model.SharedIncomingData?>(null) }
+                var showDeviceMusicTrimmer by remember { mutableStateOf(false) }
+
+                androidx.compose.runtime.DisposableEffect(Unit) {
+                    com.chroma.studio.AppIntentManager.onIncomingShare = { data ->
+                        incomingSharedData = data
+                    }
+                    com.chroma.studio.AppIntentManager.onWidgetAction = { action ->
+                        when (action) {
+                            com.chroma.studio.widget.OscellionQuickActionsWidgetProvider.ACTION_CREATE_POST -> {
+                                navController.navigate("create_post/post")
+                            }
+                            com.chroma.studio.widget.OscellionQuickActionsWidgetProvider.ACTION_VIDEO_EDITOR -> {
+                                navController.navigate("flash_projects_hub")
+                            }
+                            com.chroma.studio.widget.OscellionQuickActionsWidgetProvider.ACTION_MUSIC_PLAYER -> {
+                                showDeviceMusicTrimmer = true
+                            }
+                            com.chroma.studio.widget.OscellionQuickActionsWidgetProvider.ACTION_CHAT -> {
+                                coroutineScope.launch {
+                                    pagerState.animateScrollToPage(3)
+                                }
+                            }
+                            com.chroma.studio.widget.OscellionQuickActionsWidgetProvider.ACTION_SWITCH_LAB -> {
+                                navController.navigate("switch_lab")
+                            }
+                        }
+                    }
+                    onDispose {
+                        com.chroma.studio.AppIntentManager.onIncomingShare = null
+                        com.chroma.studio.AppIntentManager.onWidgetAction = null
+                    }
+                }
+
+                androidx.compose.runtime.LaunchedEffect(Unit) {
+                    handleIncomingIntent(intent)
+                }
 
                 val onRemixCommunityPost: (DiscoverPost) -> Unit = { work ->
                     val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
@@ -1981,6 +2018,56 @@ class HomeActivity : ComponentActivity() {
             com.chroma.studio.ui.components.IosDynamicIslandHost(isNotchMode = false)
             com.chroma.studio.ui.components.ChromaInAppBrowserHost()
 
+            // ── Device Music Trimmer Modal ──
+            if (showDeviceMusicTrimmer) {
+                com.chroma.studio.ui.components.DeviceMusicTrimmerModal(
+                    videoDurationSec = 60f,
+                    onAudioSelected = { uri, name, dur, start, end ->
+                        showDeviceMusicTrimmer = false
+                        com.chroma.studio.ui.components.ToastManager.showToast("Selected: $name")
+                    },
+                    onDismiss = {
+                        showDeviceMusicTrimmer = false
+                    }
+                )
+            }
+
+            // ── Incoming Share Sheet Modal ──
+            incomingSharedData?.let { shared ->
+                com.chroma.studio.ui.components.OscellionIncomingShareSheet(
+                    sharedData = shared,
+                    onSelectAction = { action ->
+                        when (action) {
+                            com.chroma.studio.ui.components.SharedTargetAction.POST_CREATION -> {
+                                flashImportedMediaUris = shared.uris
+                                flashPickerPhotoUris = shared.uris
+                                incomingSharedData = null
+                                navController.navigate("create_post/post")
+                            }
+                            com.chroma.studio.ui.components.SharedTargetAction.CHAT_MESSAGE -> {
+                                incomingSharedData = null
+                                coroutineScope.launch {
+                                    pagerState.animateScrollToPage(3)
+                                }
+                            }
+                            com.chroma.studio.ui.components.SharedTargetAction.VIDEO_EDITOR -> {
+                                flashPickerVideoUri = shared.uris.firstOrNull()
+                                flashImportedMediaUris = shared.uris
+                                incomingSharedData = null
+                                navController.navigate("flash_video_editor")
+                            }
+                            com.chroma.studio.ui.components.SharedTargetAction.AUDIO_STUDIO -> {
+                                incomingSharedData = null
+                                showDeviceMusicTrimmer = true
+                            }
+                        }
+                    },
+                    onDismiss = {
+                        incomingSharedData = null
+                    }
+                )
+            }
+
             // ── Native Compose GhostFibers Splash Screen ──
             var showComposeSplash by remember { mutableStateOf(true) }
             androidx.compose.animation.AnimatedVisibility(
@@ -2010,11 +2097,103 @@ class HomeActivity : ComponentActivity() {
         if (!roomId.isNullOrBlank()) {
             com.chroma.studio.ChatStateManager.onNavigateToRoom?.invoke(roomId)
         }
+        handleIncomingIntent(intent)
     }
 
     override fun onDestroy() {
         super.onDestroy()
         com.chroma.studio.ChatStateManager.onNavigateToRoom = null
+        com.chroma.studio.AppIntentManager.onIncomingShare = null
+        com.chroma.studio.AppIntentManager.onWidgetAction = null
+    }
+
+    private fun handleIncomingIntent(intent: Intent?) {
+        if (intent == null) return
+
+        val action = intent.action
+        if (action == Intent.ACTION_SEND || action == Intent.ACTION_SEND_MULTIPLE) {
+            val shared = parseShareIntent(intent)
+            if (shared != null) {
+                com.chroma.studio.AppIntentManager.onIncomingShare?.invoke(shared)
+                return
+            }
+        }
+
+        val widgetAction = intent.getStringExtra(com.chroma.studio.widget.OscellionQuickActionsWidgetProvider.EXTRA_WIDGET_ACTION)
+        if (!widgetAction.isNullOrBlank()) {
+            com.chroma.studio.AppIntentManager.onWidgetAction?.invoke(widgetAction)
+            return
+        }
+
+        // Deep link scheme: oscellion://create_post, etc.
+        intent.data?.let { uri ->
+            val host = uri.host ?: uri.path?.removePrefix("/")
+            if (!host.isNullOrBlank()) {
+                com.chroma.studio.AppIntentManager.onWidgetAction?.invoke(host)
+            }
+        }
+    }
+
+    private fun parseShareIntent(intent: Intent): com.chroma.studio.model.SharedIncomingData? {
+        val action = intent.action ?: return null
+        val type = intent.type
+
+        val uris = mutableListOf<android.net.Uri>()
+
+        if (action == Intent.ACTION_SEND) {
+            val streamUri = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                intent.getParcelableExtra(Intent.EXTRA_STREAM, android.net.Uri::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                intent.getParcelableExtra(Intent.EXTRA_STREAM) as? android.net.Uri
+            }
+            if (streamUri != null) {
+                uris.add(streamUri)
+            } else {
+                intent.clipData?.let { clip ->
+                    for (i in 0 until clip.itemCount) {
+                        clip.getItemAt(i).uri?.let { uris.add(it) }
+                    }
+                }
+            }
+        } else if (action == Intent.ACTION_SEND_MULTIPLE) {
+            val streamUris = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, android.net.Uri::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM)
+            }
+            if (streamUris != null) {
+                uris.addAll(streamUris.filterNotNull())
+            } else {
+                intent.clipData?.let { clip ->
+                    for (i in 0 until clip.itemCount) {
+                        clip.getItemAt(i).uri?.let { uris.add(it) }
+                    }
+                }
+            }
+        }
+
+        val text = intent.getStringExtra(Intent.EXTRA_TEXT)
+        val subject = intent.getStringExtra(Intent.EXTRA_SUBJECT)
+
+        if (uris.isEmpty() && text.isNullOrBlank()) {
+            return null
+        }
+
+        for (u in uris) {
+            try {
+                contentResolver.takePersistableUriPermission(u, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            } catch (_: Exception) {
+            }
+        }
+
+        return com.chroma.studio.model.SharedIncomingData(
+            uris = uris,
+            text = text,
+            mimeType = type,
+            subject = subject
+        )
     }
 }
 

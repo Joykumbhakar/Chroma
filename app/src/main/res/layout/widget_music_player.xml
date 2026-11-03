@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_music_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bg_card"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:padding="12dp">
+
+    <!-- Vinyl Turntable Icon -->
+    <ImageView
+        android:id="@+id/widget_music_art"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:contentDescription="Vinyl Record"
+        android:src="@drawable/ic_widget_vinyl" />
+
+    <!-- Center Track Info -->
+    <LinearLayout
+        android:id="@+id/widget_track_info_container"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="8dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/widget_track_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="Chroma Studio Beats"
+            android:textColor="#F2F2F7"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_track_artist"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="1dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="Oscellion Creative Soundscape • 432Hz"
+            android:textColor="#8E8E93"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <!-- Playback Controls -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <!-- Previous Track Button -->
+        <ImageButton
+            android:id="@+id/btn_music_prev"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Previous"
+            android:padding="6dp"
+            android:src="@drawable/ic_widget_prev" />
+
+        <!-- Play / Pause Circular Button -->
+        <ImageButton
+            android:id="@+id/btn_music_play_pause"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp"
+            android:background="@drawable/widget_play_btn"
+            android:contentDescription="Play/Pause"
+            android:padding="9dp"
+            android:src="@drawable/ic_widget_play" />
+
+        <!-- Next Track Button -->
+        <ImageButton
+            android:id="@+id/btn_music_next"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Next"
+            android:padding="6dp"
+            android:src="@drawable/ic_widget_next" />
+    </LinearLayout>
+</LinearLayout>

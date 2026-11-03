@@ -62,6 +62,50 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="chromastudio" />
             </intent-filter>
+
+            <!-- Android System Share Sheet Target (Receive Files & Media) -->
+            <intent-filter android:label="Oscellion">
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+            <intent-filter android:label="Oscellion">
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+            <intent-filter android:label="Oscellion">
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="audio/*" />
+            </intent-filter>
+            <intent-filter android:label="Oscellion">
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <intent-filter android:label="Oscellion">
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+
+            <!-- Android System Share Sheet Target (Multiple Files / Media) -->
+            <intent-filter android:label="Oscellion">
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+            <intent-filter android:label="Oscellion">
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+            <intent-filter android:label="Oscellion">
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
         </activity>
 
         <!-- Editor — opened by HomeActivity via Intent -->
@@ -100,6 +144,48 @@
             <intent-filter>
                 <action android:name="com.chroma.studio.TEST_HEADS_UP" />
             </intent-filter>
+        </receiver>
+
+        <!-- Home Screen Widget: Studio Quick Actions (4x1 & 4x2) -->
+        <receiver
+            android:name=".widget.OscellionQuickActionsWidgetProvider"
+            android:exported="true"
+            android:label="Studio Quick Actions">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_studio_quick_actions_info" />
+        </receiver>
+
+        <!-- Home Screen Widget: Music & Sound Player (4x1 & 4x2) -->
+        <receiver
+            android:name=".widget.OscellionMusicWidgetProvider"
+            android:exported="true"
+            android:label="Studio Music Player">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.chroma.studio.WIDGET_MUSIC_PLAY_PAUSE" />
+                <action android:name="com.chroma.studio.WIDGET_MUSIC_NEXT" />
+                <action android:name="com.chroma.studio.WIDGET_MUSIC_PREV" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_music_player_info" />
+        </receiver>
+
+        <!-- Home Screen Widget: Quick Creative Capture (2x2) -->
+        <receiver
+            android:name=".widget.OscellionQuickCaptureWidgetProvider"
+            android:exported="true"
+            android:label="Quick Creative Capture">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_quick_capture_info" />
         </receiver>
 
         <!-- FileProvider for camera photo capture -->

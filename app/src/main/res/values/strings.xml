@@ -1,4 +1,7 @@
 <resources>
     <string name="app_name">Oscellion</string>
     <string name="default_web_client_id" translatable="false">000000000000-placeholder.apps.googleusercontent.com</string>
+    <string name="widget_quick_actions_desc">Quickly launch Studio Post, Video Editor, Music Studio, Chat, or Switch Lab</string>
+    <string name="widget_music_player_desc">Interactive music controls and soundscape player from your home screen</string>
+    <string name="widget_quick_capture_desc">One-tap quick creative capture and direct messaging</string>
 </resources>
