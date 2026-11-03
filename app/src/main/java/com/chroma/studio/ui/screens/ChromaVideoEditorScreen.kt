@@ -1106,6 +1106,7 @@ fun ChromaVideoEditorScreen(
 
     if (showAddSheet) {
         AddMediaSheet(
+            videoDurationSec = state.duration,
             onDismiss  = { showAddSheet = false },
             onAddMedia = { type, name, track, color, uri ->
                 viewModel.addClip(type, name, track, color, uri)
@@ -3004,11 +3005,13 @@ fun AppIconBox(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AddMediaSheet(
+    videoDurationSec: Float = 30f,
     onDismiss:  () -> Unit,
     onAddMedia: (MediaType, String, Int, Color, String?) -> Unit
 ) {
     val colors = LocalOscellionColors.current
     var activeGalleryPickerType by remember { mutableStateOf<MediaType?>(null) }
+    var showDeviceMusicModal by remember { mutableStateOf(false) }
     val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) onAddMedia(MediaType.VIDEO, "Video", 1, Color(0xFF1E3A8A), uri.toString())
         onDismiss()
@@ -3068,7 +3071,7 @@ private fun AddMediaSheet(
                                 0 -> activeGalleryPickerType = MediaType.VIDEO
                                 1 -> activeGalleryPickerType = MediaType.IMAGE
                                 2 -> { onAddMedia(MediaType.TEXT, "Text", 3, Color(0xFF701A75), null); onDismiss() }
-                                3 -> audioPicker.launch("audio/*")
+                                3 -> showDeviceMusicModal = true
                                 4 -> activeGalleryPickerType = MediaType.STICKER
                             }
                         }
