@@ -224,8 +224,17 @@ fun PostCreationFlowScreen(
     }
 
     // Media & Editing States
-    var rawPhotoUri by remember { mutableStateOf<Uri?>(initialPhotoUri) }
-    var editedPhotoUri by remember { mutableStateOf<Uri?>(null) }
+    var selectedPhotoUris by remember {
+        mutableStateOf<List<Uri>>(if (initialPhotoUri != null) listOf(initialPhotoUri) else emptyList())
+    }
+    var currentPhotoIndex by remember { mutableIntStateOf(0) }
+    var editedPhotoUris by remember { mutableStateOf<Map<Uri, Uri>>(emptyMap()) }
+    val rawPhotoUri: Uri? by remember {
+        derivedStateOf { selectedPhotoUris.getOrNull(currentPhotoIndex) ?: selectedPhotoUris.firstOrNull() }
+    }
+    val editedPhotoUri: Uri? by remember {
+        derivedStateOf { rawPhotoUri?.let { editedPhotoUris[it] } }
+    }
     var selectedAspectRatio by remember { mutableStateOf("4:5") }
     var selectedFilterIndex by remember { mutableIntStateOf(0) }
     var brightnessOffset by remember { mutableFloatStateOf(0f) } // -50 to +50
@@ -315,8 +324,7 @@ fun PostCreationFlowScreen(
 
     // Share / Publish Post
     fun executePublish() {
-        val currentPhoto = editedPhotoUri ?: rawPhotoUri
-        if (currentPhoto == null) {
+        if (selectedPhotoUris.isEmpty()) {
             Toast.makeText(context, "Please select a photo first", Toast.LENGTH_SHORT).show()
             return
         }
@@ -329,24 +337,34 @@ fun PostCreationFlowScreen(
         isPublishing = true
         scope.launch {
             try {
-                // 1. Render filtered bitmap if applicable
-                val finalToUploadUri = if (editedPhotoUri != null) editedPhotoUri!! else renderFilteredBitmap(currentPhoto)
-
-                // 2. Compress image for high-speed delivery
-                val imageBytes = withContext(Dispatchers.IO) {
-                    compressImageToUnder50KB(context, finalToUploadUri)
-                } ?: throw Exception("Failed to process image")
-
-                // 3. Upload and publish via DiscoverRepository
                 val success = withContext(Dispatchers.IO) {
-                    discoverRepo.uploadImagePost(
-                        imageBytes = imageBytes,
-                        caption = caption.ifBlank { "Untitled creation" },
-                        description = if (locationInput.isNotBlank()) "📍 $locationInput" else "",
-                        aspectRatio = selectedAspectRatio,
-                        tags = tags,
-                        mentions = mentions
-                    )
+                    if (selectedPhotoUris.size > 1) {
+                        val bytesList = selectedPhotoUris.mapNotNull { rawUri ->
+                            val finalUri = editedPhotoUris[rawUri] ?: renderFilteredBitmap(rawUri)
+                            compressImageToUnder50KB(context, finalUri)
+                        }
+                        if (bytesList.isEmpty()) throw Exception("Failed to process images")
+                        discoverRepo.uploadMultiImagePost(
+                            imageBytesList = bytesList,
+                            caption = caption.ifBlank { "Untitled creation" },
+                            description = if (locationInput.isNotBlank()) "📍 $locationInput" else "",
+                            aspectRatio = selectedAspectRatio,
+                            tags = tags,
+                            mentions = mentions
+                        )
+                    } else {
+                        val singleRaw = selectedPhotoUris.first()
+                        val finalToUploadUri = editedPhotoUris[singleRaw] ?: renderFilteredBitmap(singleRaw)
+                        val imageBytes = compressImageToUnder50KB(context, finalToUploadUri) ?: throw Exception("Failed to process image")
+                        discoverRepo.uploadImagePost(
+                            imageBytes = imageBytes,
+                            caption = caption.ifBlank { "Untitled creation" },
+                            description = if (locationInput.isNotBlank()) "📍 $locationInput" else "",
+                            aspectRatio = selectedAspectRatio,
+                            tags = tags,
+                            mentions = mentions
+                        )
+                    }
                 }
 
                 if (success) {
@@ -381,13 +399,14 @@ fun PostCreationFlowScreen(
     }
 
     // If pro editor is opened, render it modally
-    if (showAdvanceEditor && (rawPhotoUri != null || editedPhotoUri != null)) {
+    if (showAdvanceEditor && rawPhotoUri != null) {
         val targetUri = editedPhotoUri ?: rawPhotoUri!!
+        val activeRaw = rawPhotoUri!!
         ChromaPhotoEditorScreen(
             photoUri = targetUri,
             exportButtonLabel = "Done",
             onExportSuccess = { proEditedUri ->
-                editedPhotoUri = proEditedUri
+                editedPhotoUris = editedPhotoUris + (activeRaw to proEditedUri)
                 showAdvanceEditor = false
                 SoundManager.playReaction()
             },
@@ -418,7 +437,7 @@ fun PostCreationFlowScreen(
                 onNext = {
                     when (currentStep) {
                         PostCreationStep.MEDIA_PICKER -> {
-                            if (rawPhotoUri != null) {
+                            if (selectedPhotoUris.isNotEmpty()) {
                                 SoundManager.playReaction()
                                 currentStep = PostCreationStep.QUICK_FILTER
                             }
@@ -431,8 +450,8 @@ fun PostCreationFlowScreen(
                     }
                 },
                 isNextEnabled = when (currentStep) {
-                    PostCreationStep.MEDIA_PICKER -> rawPhotoUri != null
-                    PostCreationStep.QUICK_FILTER -> true
+                    PostCreationStep.MEDIA_PICKER -> selectedPhotoUris.isNotEmpty()
+                    PostCreationStep.QUICK_FILTER -> selectedPhotoUris.isNotEmpty()
                     PostCreationStep.POST_DETAILS -> !isPublishing
                 },
                 isPublishing = isPublishing,
@@ -455,10 +474,10 @@ fun PostCreationFlowScreen(
                         allowedMediaFilter = GalleryMediaTypeFilter.PHOTOS,
                         showCameraTile = true,
                         onPhotosSelected = { uris ->
-                            val selected = uris.firstOrNull()
-                            if (selected != null) {
-                                rawPhotoUri = selected
-                                editedPhotoUri = null
+                            if (uris.isNotEmpty()) {
+                                selectedPhotoUris = uris
+                                currentPhotoIndex = 0
+                                editedPhotoUris = emptyMap()
                                 SoundManager.playReaction()
                                 currentStep = PostCreationStep.QUICK_FILTER
                             }
@@ -471,6 +490,9 @@ fun PostCreationFlowScreen(
                     // STAGE 2: INSTANT FILTERS & LIGHTWEIGHT EDITS (+ PRO EDITOR GATEWAY)
                     PostQuickFilterView(
                         photoUri = editedPhotoUri ?: rawPhotoUri!!,
+                        selectedPhotoUris = selectedPhotoUris,
+                        currentPhotoIndex = currentPhotoIndex,
+                        onSelectPhotoIndex = { currentPhotoIndex = it },
                         aspectRatio = selectedAspectRatio,
                         onAspectRatioChange = { selectedAspectRatio = it },
                         selectedFilterIndex = selectedFilterIndex,
@@ -492,6 +514,7 @@ fun PostCreationFlowScreen(
                     // STAGE 3: POST INFORMATION INPUTS & PUBLISHING
                     PostDetailsInputView(
                         previewUri = editedPhotoUri ?: rawPhotoUri!!,
+                        selectedPhotoUris = selectedPhotoUris,
                         colorMatrix = if (editedPhotoUri == null) activeColorMatrix else null,
                         aspectRatio = selectedAspectRatio,
                         caption = caption,
@@ -664,6 +687,9 @@ private fun OneUiPostCreationTopBar(
 @Composable
 private fun PostQuickFilterView(
     photoUri: Uri,
+    selectedPhotoUris: List<Uri> = emptyList(),
+    currentPhotoIndex: Int = 0,
+    onSelectPhotoIndex: (Int) -> Unit = {},
     aspectRatio: String,
     onAspectRatioChange: (String) -> Unit,
     selectedFilterIndex: Int,
@@ -712,6 +738,74 @@ private fun PostQuickFilterView(
                 colorFilter = ColorFilter.colorMatrix(colorMatrix),
                 modifier = Modifier.fillMaxSize()
             )
+
+            if (selectedPhotoUris.size > 1) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(12.dp)
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(Color.Black.copy(alpha = 0.65f))
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "${currentPhotoIndex + 1} / ${selectedPhotoUris.size}",
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        fontFamily = InterFontFamily
+                    )
+                }
+            }
+        }
+
+        // Multi-photo thumbnail strip selector
+        if (selectedPhotoUris.size > 1) {
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
+                contentPadding = PaddingValues(horizontal = 8.dp)
+            ) {
+                itemsIndexed(selectedPhotoUris) { idx, uri ->
+                    val isCurrent = idx == currentPhotoIndex
+                    Box(
+                        modifier = Modifier
+                            .size(54.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .border(
+                                width = if (isCurrent) 2.5.dp else 1.dp,
+                                color = if (isCurrent) Color(0xFF0A84FF) else (if (isDark) Color(0xFF262C38) else Color(0xFFCBD5E1)),
+                                shape = RoundedCornerShape(14.dp)
+                            )
+                            .clickable {
+                                onSelectPhotoIndex(idx)
+                            }
+                    ) {
+                        AsyncImage(
+                            model = uri,
+                            contentDescription = "Photo ${idx + 1}",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(3.dp)
+                                .clip(CircleShape)
+                                .background(if (isCurrent) Color(0xFF0A84FF) else Color.Black.copy(alpha = 0.6f))
+                                .size(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "${idx + 1}",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         // 2. Aspect Ratio Selectors (Border-less White Capsules)
@@ -932,6 +1026,7 @@ private fun PostQuickFilterView(
 @Composable
 private fun PostDetailsInputView(
     previewUri: Uri,
+    selectedPhotoUris: List<Uri> = emptyList(),
     colorMatrix: ColorMatrix?,
     aspectRatio: String,
     caption: String,
@@ -997,45 +1092,67 @@ private fun PostDetailsInputView(
 
         // 2. Hero Post Preview & Caption Group (26.dp Squircle)
         OneUiSettingsGroup(title = "") {
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(14.dp),
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                verticalAlignment = Alignment.Top
+                    .padding(14.dp)
             ) {
-                // Squircle Thumbnail
-                Box(
-                    modifier = Modifier
-                        .size(76.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(if (isDark) Color(0xFF1E2430) else Color(0xFFE2E8F0))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalAlignment = Alignment.Top
                 ) {
-                    AsyncImage(
-                        model = previewUri,
-                        contentDescription = "Post Thumbnail",
-                        contentScale = ContentScale.Crop,
-                        colorFilter = colorMatrix?.let { ColorFilter.colorMatrix(it) },
-                        modifier = Modifier.fillMaxSize()
-                    )
-
-                    // Aspect Ratio Pill Badge
+                    // Squircle Thumbnail
                     Box(
                         modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(4.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(Color.Black.copy(alpha = 0.65f))
-                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                            .size(76.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(if (isDark) Color(0xFF1E2430) else Color(0xFFE2E8F0))
                     ) {
-                        Text(
-                            text = aspectRatio,
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
+                        AsyncImage(
+                            model = previewUri,
+                            contentDescription = "Post Thumbnail",
+                            contentScale = ContentScale.Crop,
+                            colorFilter = colorMatrix?.let { ColorFilter.colorMatrix(it) },
+                            modifier = Modifier.fillMaxSize()
                         )
+
+                        // Multi-Photo Indicator Badge
+                        if (selectedPhotoUris.size > 1) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopStart)
+                                    .padding(4.dp)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(Color(0xFF0A84FF))
+                                    .padding(horizontal = 4.dp, vertical = 1.dp)
+                            ) {
+                                Text(
+                                    text = "${selectedPhotoUris.size}",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                        }
+
+                        // Aspect Ratio Pill Badge
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(4.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color.Black.copy(alpha = 0.65f))
+                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                        ) {
+                            Text(
+                                text = aspectRatio,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
                     }
-                }
 
                 // Multiline Caption Input
                 Column(modifier = Modifier.weight(1f)) {
@@ -1075,7 +1192,56 @@ private fun PostDetailsInputView(
                     }
                 }
             }
+
+            // If multiple photos selected, display thumbnails row
+            if (selectedPhotoUris.size > 1) {
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = "${selectedPhotoUris.size} Photos in Post",
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF0A84FF),
+                    fontFamily = InterFontFamily
+                )
+                Spacer(Modifier.height(6.dp))
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    itemsIndexed(selectedPhotoUris) { idx, uri ->
+                        Box(
+                            modifier = Modifier
+                                .size(52.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(if (isDark) Color(0xFF1E2430) else Color(0xFFE2E8F0))
+                        ) {
+                            AsyncImage(
+                                model = uri,
+                                contentDescription = "Photo ${idx + 1}",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopStart)
+                                    .padding(3.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.Black.copy(alpha = 0.65f))
+                                    .size(16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "${idx + 1}",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
+    }
 
         // 3. Creative Discovery Tags Group
         OneUiSettingsGroup(title = "Tags & Topics") {

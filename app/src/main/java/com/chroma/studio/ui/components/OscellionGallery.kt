@@ -437,10 +437,10 @@ fun OscellionGalleryLayout(
                         SoundManager.playSend(context)
                         if (onSendMediaWithCaption != null) {
                             onSendMediaWithCaption(selectedUris.toList(), captionText.ifBlank { null })
+                            onClose()
                         } else {
                             onPhotosSelected?.invoke(selectedUris.toList())
                         }
-                        onClose()
                     },
                     onRequestPermission = {
                         val perms = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -596,10 +596,10 @@ fun OscellionGalleryLayout(
                     SoundManager.playSend(context)
                     if (onSendMediaWithCaption != null) {
                         onSendMediaWithCaption(selectedUris.toList(), captionText.ifBlank { null })
+                        onClose()
                     } else {
                         onPhotosSelected?.invoke(selectedUris.toList())
                     }
-                    onClose()
                 },
                 onRequestPermission = {
                     val perms = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -643,12 +643,13 @@ fun OscellionGalleryLayout(
                     }
                     if (onSendMediaWithCaption != null) {
                         onSendMediaWithCaption(selectedUris.toList(), captionText.ifBlank { null })
+                        showLightbox = false
+                        onClose()
                     } else {
+                        showLightbox = false
                         onPhotosSelected?.invoke(selectedUris.toList())
                     }
                 }
-                showLightbox = false
-                onClose()
             },
             onDismiss = { showLightbox = false }
         )
