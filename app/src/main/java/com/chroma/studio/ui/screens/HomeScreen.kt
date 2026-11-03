@@ -1923,11 +1923,11 @@ fun HomeScreen(
 
                         state = gridState,
 
-                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 180.dp),
+                        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 180.dp),
 
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
 
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
 
                         modifier = Modifier
 
@@ -2559,11 +2559,11 @@ fun HomeSkeletonGrid(
 
         columns = gridColumns,
 
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 180.dp),
+        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 180.dp),
 
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
 
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
 
         modifier = Modifier.fillMaxSize(),
 
@@ -2609,21 +2609,9 @@ fun SkeletonWorkCard(
 
             .fillMaxWidth()
 
-            .shadow(
+            .clip(RoundedCornerShape(12.dp))
 
-                elevation = 2.dp,
-
-                shape = RoundedCornerShape(18.dp),
-
-                ambientColor = Color(0x10000000),
-
-                spotColor = Color(0x18000000)
-
-            )
-
-            .clip(RoundedCornerShape(18.dp))
-
-            .glossyBorder(RoundedCornerShape(18.dp), colors)
+            .border(0.5.dp, colors.glassBorder, RoundedCornerShape(12.dp))
 
             .background(colors.glassBg)
 
@@ -2641,9 +2629,9 @@ fun SkeletonWorkCard(
 
                             .fillMaxWidth()
 
-                            .aspectRatio(1.22f)
+                            .aspectRatio(1.0f)
 
-                            .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp))
+                            .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
 
                             .background(shimmerBrush)
 
@@ -3169,11 +3157,19 @@ fun WorkCard(
 
     val haptic = LocalHapticFeedback.current
 
-    val scale by animateFloatAsState(if (isSelected) 0.94f else 1f, tween(200), label = "cardScale")
+    val isDark = colors.isDark
 
-    val borderWidth = if (isSelected) 2.5.dp else 1.dp
+    val scale by animateFloatAsState(
+        targetValue = if (isSelected) 0.95f else 1f,
+        animationSpec = spring(dampingRatio = 0.65f, stiffness = 500f),
+        label = "cardScale"
+    )
 
-    val borderColor = if (isSelected) colors.primary else Color.Transparent
+    val cardShape = RoundedCornerShape(12.dp)
+
+    val borderWidth = if (isSelected) 2.dp else 0.5.dp
+
+    val borderColor = if (isSelected) colors.primary else (if (isDark) Color(0x22FFFFFF) else Color(0x14000000))
 
 
 
@@ -3197,23 +3193,9 @@ fun WorkCard(
 
             .scale(scale)
 
-            .shadow(
+            .clip(cardShape)
 
-                elevation = if (isSelected) 8.dp else 2.5.dp,
-
-                shape = RoundedCornerShape(18.dp),
-
-                ambientColor = Color(0x14000000),
-
-                spotColor = Color(0x1F000000)
-
-            )
-
-            .clip(RoundedCornerShape(18.dp))
-
-            .glossyBorder(RoundedCornerShape(18.dp), colors)
-
-            .border(borderWidth, borderColor, RoundedCornerShape(18.dp))
+            .border(borderWidth, borderColor, cardShape)
 
             .background(colors.glassBg)
 
@@ -3245,13 +3227,9 @@ fun WorkCard(
 
                         modifier = Modifier
 
-                            .size(28.dp)
+                            .size(24.dp)
 
                             .clip(CircleShape)
-
-                            .background(colors.glassBgHover.copy(alpha = 0.65f))
-
-                            .border(0.5.dp, colors.glassBorder, CircleShape)
 
                             .clickable { showMenu = true },
 
@@ -3265,9 +3243,9 @@ fun WorkCard(
 
                             contentDescription = "Options",
 
-                            tint = colors.textMuted,
+                            tint = colors.textMuted.copy(alpha = 0.70f),
 
-                            modifier = Modifier.size(15.dp)
+                            modifier = Modifier.size(14.dp)
 
                         )
 
@@ -3455,17 +3433,11 @@ fun WorkCard(
 
         fun CanvasBox(modifier: Modifier = Modifier) {
 
+            val canvasBg = if (isDark) Color(0xFF1A1A20) else Color(0xFFF1F3F6)
+
             Box(
 
-                modifier = modifier.background(
-
-                    Brush.verticalGradient(
-
-                        listOf(Color(0xFF1E1E26), Color(0xFF131317))
-
-                    )
-
-                ),
+                modifier = modifier.background(canvasBg),
 
                 contentAlignment = Alignment.Center
 
@@ -3691,9 +3663,9 @@ fun WorkCard(
 
                             .fillMaxWidth()
 
-                            .aspectRatio(1.22f)
+                            .aspectRatio(1.0f)
 
-                            .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp))
+                            .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
 
                     )
 
@@ -3703,7 +3675,7 @@ fun WorkCard(
 
                             .fillMaxWidth()
 
-                            .padding(horizontal = 12.dp, vertical = 10.dp)
+                            .padding(horizontal = 10.dp, vertical = 8.dp)
 
                     ) {
 
@@ -3723,9 +3695,9 @@ fun WorkCard(
 
                                 color = colors.textMain,
 
-                                fontSize = 14.5.sp,
+                                fontSize = 13.5.sp,
 
-                                fontWeight = FontWeight.Bold,
+                                fontWeight = FontWeight.SemiBold,
 
                                 fontFamily = InterFontFamily,
 
@@ -3743,7 +3715,7 @@ fun WorkCard(
 
                         }
 
-                        Spacer(Modifier.height(3.dp))
+                        Spacer(Modifier.height(2.dp))
 
                         Row(
 
@@ -3753,29 +3725,19 @@ fun WorkCard(
 
                         ) {
 
-                            Icon(
-
-                                imageVector = Lucide.Clock,
-
-                                contentDescription = null,
-
-                                tint = colors.textMuted.copy(alpha = 0.65f),
-
-                                modifier = Modifier.size(10.5.dp)
-
-                            )
-
                             Text(
 
-                                text = dateString,
+                                text = "${layers.size} layer${if (layers.size != 1) "s" else ""} • $dateString",
 
-                                color = colors.textMuted.copy(alpha = 0.75f),
+                                color = colors.textMuted,
 
-                                fontSize = 11.sp,
+                                fontSize = 11.5.sp,
 
                                 fontFamily = InterFontFamily,
 
-                                maxLines = 1
+                                maxLines = 1,
+
+                                overflow = TextOverflow.Ellipsis
 
                             )
 
@@ -3799,9 +3761,9 @@ fun WorkCard(
 
                             .fillMaxWidth()
 
-                            .aspectRatio(1.22f)
+                            .aspectRatio(1.0f)
 
-                            .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp))
+                            .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
 
                     )
 
@@ -3811,7 +3773,7 @@ fun WorkCard(
 
                             .fillMaxWidth()
 
-                            .padding(horizontal = 12.dp, vertical = 10.dp)
+                            .padding(horizontal = 10.dp, vertical = 8.dp)
 
                     ) {
 

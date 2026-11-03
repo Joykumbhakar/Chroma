@@ -280,25 +280,26 @@ fun AppleSwitch(
         )
 
         // Knob: 27dp height x thumbWidth, with spring zoom scale and soft drop shadow
+        val knobShape = RoundedCornerShape(100.dp)
         Box(
             modifier = Modifier
                 .align(Alignment.CenterStart)
-                .offset(x = thumbTranslationX.dp, y = 2.dp)
+                .offset(x = thumbTranslationX.dp)
                 .graphicsLayer {
                     scaleX = effectiveScale
                     scaleY = effectiveScale
                     transformOrigin = TransformOrigin(0.5f, 0.5f)
                 }
                 .shadow(
-                    elevation = (3.dp * effectiveScale).coerceAtLeast(3.dp),
-                    shape = CircleShape,
-                    spotColor = Color.Black.copy(alpha = 0.26f),
-                    ambientColor = Color.Black.copy(alpha = 0.15f)
+                    elevation = (2.5.dp * effectiveScale).coerceAtLeast(2.dp),
+                    shape = knobShape,
+                    spotColor = Color.Black.copy(alpha = 0.22f),
+                    ambientColor = Color.Black.copy(alpha = 0.12f)
                 )
                 .size(width = thumbWidth, height = 27.dp)
-                .clip(CircleShape)
+                .clip(knobShape)
                 .background(Color.White)
-                .border(0.5.dp, Color.Black.copy(alpha = 0.04f), CircleShape)
+                .border(0.5.dp, Color.Black.copy(alpha = 0.04f), knobShape)
         )
     }
 }
