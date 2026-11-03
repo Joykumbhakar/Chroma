@@ -77,90 +77,18 @@ fun AppleSwitch(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
-    activeTrackColor: Color = Color(0xFF34C759),
-    inactiveTrackColor: Color = if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFF39393D) else Color(0xFFE5E5EA),
+    activeTrackColor: Color = Color(0xFF007AFF),
+    inactiveTrackColor: Color = if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFF39393D) else Color(0xFFE9E9EA),
     hazeState: dev.chrisbanes.haze.HazeState? = null
 ) {
-    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
-    var isPressed by remember { mutableStateOf(false) }
-    val isDark = isSystemInDarkTheme()
-    val trackColor by animateColorAsState(
-        if (checked) activeTrackColor else inactiveTrackColor,
-        animationSpec = androidx.compose.animation.core.tween(250),
-        label = "trackColor"
+    com.chroma.studio.ui.components.AppleSwitch(
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        modifier = modifier,
+        activeTrackColor = activeTrackColor,
+        inactiveTrackColor = inactiveTrackColor,
+        hazeState = hazeState
     )
-
-    // Authentic iOS UISwitch proportions:
-    // Track: 46dp width x 26dp height (pill shape)
-    // Knob: 22dp height x 22dp width (when pressed stretches to 26dp with fluid Apple spring)
-    // Inactive: X = 2dp
-    // Active (checked): X = 22dp (46 - 22 - 2)
-    val targetTranslation = when {
-        !checked && isPressed -> 2f
-        !checked -> 2f
-        checked && isPressed -> 18f
-        else -> 22f
-    }
-
-    val targetWidth = if (isPressed) 26.dp else 22.dp
-
-    val jellySpring = androidx.compose.animation.core.spring<Float>(dampingRatio = 0.65f, stiffness = 600f)
-    val jellySpringDp = androidx.compose.animation.core.spring<androidx.compose.ui.unit.Dp>(dampingRatio = 0.65f, stiffness = 600f)
-
-    val thumbTranslationX by animateFloatAsState(targetTranslation, animationSpec = jellySpring, label = "tx")
-    val thumbWidth by animateDpAsState(targetWidth, animationSpec = jellySpringDp, label = "tw")
-
-    Box(
-        modifier = modifier
-            .minimumInteractiveComponentSize()
-            .width(46.dp)
-            .height(26.dp)
-            .pointerInput(checked) {
-                detectTapGestures(
-                    onPress = {
-                        isPressed = true
-                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
-                        tryAwaitRelease()
-                        isPressed = false
-                    },
-                    onTap = {
-                        onCheckedChange(!checked)
-                    }
-                )
-            }
-    ) {
-        // Track: Clean Apple flat pill, zero shadows
-        val trackShape = RoundedCornerShape(100.dp)
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clip(trackShape)
-                .background(trackColor)
-                .border(
-                    0.5.dp,
-                    if (checked) Color(0x1F000000) else if (isDark) Color(0x33FFFFFF) else Color(0x18000000),
-                    trackShape
-                )
-        )
-
-        // Knob: Clean white Apple knob, zero shadows
-        Box(
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .padding(vertical = 2.dp)
-                .offset(x = thumbTranslationX.dp)
-                .size(width = thumbWidth, height = 22.dp)
-        ) {
-            LiquidGlassKnob(
-                width = thumbWidth,
-                height = 22.dp,
-                scale = 1.0f,
-                baseAlpha = 1.0f,
-                isToggleKnob = true,
-                hazeState = hazeState
-            )
-        }
-    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

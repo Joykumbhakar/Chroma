@@ -34,6 +34,7 @@ import com.chroma.studio.chat.ui.components.OneUiGradientStyle
 import com.chroma.studio.ui.theme.InterFontFamily
 import com.composables.icons.lucide.ChevronLeft
 import com.composables.icons.lucide.ChevronRight
+import com.composables.icons.lucide.Info
 import com.composables.icons.lucide.Lucide
 
 private val isAppInDark: Boolean
@@ -429,6 +430,8 @@ fun OneUiSettingsToggleRow(
     iconGradient: List<Color>? = null,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
+    infoOnClick: (() -> Unit)? = null,
+    activeTrackColor: Color = Color(0xFF007AFF),
     modifier: Modifier = Modifier
 ) {
     val isDark = isAppInDark
@@ -480,19 +483,38 @@ fun OneUiSettingsToggleRow(
             }
         }
 
-        Switch(
-            checked = checked,
-            onCheckedChange = {
-                SoundManager.playReaction()
-                onCheckedChange(it)
-            },
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.White,
-                checkedTrackColor = Color(0xFF2563EB),
-                uncheckedThumbColor = if (isDark) Color(0xFF94A3B8) else Color(0xFFCBD5E1),
-                uncheckedTrackColor = if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            if (infoOnClick != null) {
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .clickable {
+                            SoundManager.playReaction()
+                            infoOnClick()
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Lucide.Info,
+                        contentDescription = "Info",
+                        tint = textMuted,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            AppleSwitch(
+                checked = checked,
+                onCheckedChange = {
+                    onCheckedChange(it)
+                },
+                activeTrackColor = activeTrackColor
             )
-        )
+        }
     }
 }
 

@@ -158,113 +158,148 @@ fun LiquidGlassKnob(
  * - Translation: unchecked -> 2px, checked -> 18px (translateX: 16px)
  * - Press states: unchecked -> -1px, checked -> 15px
  */
+/**
+ * Authentic Apple iOS Toggle Switch matching user reference image:
+ * - 51dp width x 31dp height pill track.
+ * - Active track: Apple Blue #007AFF (or custom activeTrackColor).
+ * - Inactive track: #E9E9EA (light) / #39393D (dark) with crisp subtle border.
+ * - Knob: 27dp diameter solid white pill with soft depth shadow.
+ * - Physics:
+ *   - Fluid spring translation between unchecked (2dp) and checked (22dp).
+ *   - Knob stretches horizontally during press / travel (27dp -> 31.5dp).
+ *   - Bouncy Spring Zoom animation when user taps or presses (knob scales up to ~1.22x and springs back with realistic damping physics).
+ */
 @Composable
 fun AppleSwitch(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
-    activeTrackColor: Color = Color(0xFF34C759),
-    inactiveTrackColor: Color = if (isAppInDark) Color(0xFF39393D) else Color(0xFFE5E5EA),
+    activeTrackColor: Color = Color(0xFF007AFF),
+    inactiveTrackColor: Color = if (isAppInDark) Color(0xFF39393D) else Color(0xFFE9E9EA),
     hazeState: dev.chrisbanes.haze.HazeState? = null
 ) {
-    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val haptic = LocalHapticFeedback.current
+    val coroutineScope = rememberCoroutineScope()
     var isPressed by remember { mutableStateOf(false) }
+
+    // Fast tap punch-and-spring zoom animation
+    val tapZoomAnim = remember { Animatable(1.0f) }
 
     val trackColor by animateColorAsState(
         targetValue = if (checked) activeTrackColor else inactiveTrackColor,
-        animationSpec = androidx.compose.animation.core.tween(350, easing = androidx.compose.animation.core.CubicBezierEasing(0.25f, 1f, 0.5f, 1f)),
+        animationSpec = tween(durationMillis = 260, easing = CubicBezierEasing(0.25f, 1f, 0.5f, 1f)),
         label = "trackColor"
     )
 
-    // Exact CSS translations & dimensions:
+    // Knob X translation:
+    // Track is 51dp wide, resting knob is 27dp, padding is 2dp.
     // Resting unchecked: X = 2.dp
-    // Resting checked: X = 18.dp (44 - 24 - 2 = 18.dp; translateX: 16px)
-    // Pressed unchecked: X = -1.dp (translateX: -3px), width: 28.dp, scale: 1.26
-    // Pressed checked: X = 15.dp (translateX: 15px), width: 28.dp, scale: 1.26
+    // Resting checked: X = 51 - 27 - 2 = 22.dp
+    // While pressed, knob stretches horizontally to 31.5.dp:
+    // Pressed unchecked: X = 2.dp
+    // Pressed checked: X = 51 - 31.5 - 2 = 17.5.dp
     val targetKnobX = when {
-        !checked && isPressed -> (-1f)
         !checked -> 2f
-        checked && isPressed -> 15f
-        else -> 18f
+        checked && isPressed -> 17.5f
+        else -> 22f
     }
-    val targetKnobW = if (isPressed) 28.dp else 24.dp
-    val targetScale = if (isPressed) 1.26f else 1.0f
+    val targetKnobW = if (isPressed) 31.5.dp else 27.dp
 
-    val jellySpring = androidx.compose.animation.core.spring<Float>(dampingRatio = 0.45f, stiffness = 550f)
-    val jellySpringDp = androidx.compose.animation.core.spring<androidx.compose.ui.unit.Dp>(dampingRatio = 0.45f, stiffness = 550f)
+    val springSlide = spring<Float>(
+        dampingRatio = 0.58f,
+        stiffness = 450f
+    )
+    val springWidth = spring<Dp>(
+        dampingRatio = 0.50f,
+        stiffness = 500f
+    )
 
-    val thumbTranslationX by animateFloatAsState(targetKnobX, animationSpec = jellySpring, label = "tx")
-    val thumbWidth by animateDpAsState(targetKnobW, animationSpec = jellySpringDp, label = "tw")
-    val thumbScale by animateFloatAsState(targetScale, animationSpec = jellySpring, label = "tscale")
+    val thumbTranslationX by animateFloatAsState(targetKnobX, animationSpec = springSlide, label = "tx")
+    val thumbWidth by animateDpAsState(targetKnobW, animationSpec = springWidth, label = "tw")
+
+    // Continuous press zoom scale
+    val pressScale by animateFloatAsState(
+        targetValue = if (isPressed) 1.20f else 1.0f,
+        animationSpec = spring(
+            dampingRatio = 0.48f,
+            stiffness = 420f
+        ),
+        label = "pressScale"
+    )
+
+    val effectiveScale = maxOf(pressScale, tapZoomAnim.value)
 
     Box(
         modifier = modifier
-            .width(44.dp)
-            .height(22.dp)
+            .width(51.dp)
+            .height(31.dp)
             .pointerInput(checked) {
                 detectTapGestures(
                     onPress = {
                         isPressed = true
-                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        com.chroma.studio.chat.sound.SoundManager.playReaction()
                         tryAwaitRelease()
                         isPressed = false
                     },
                     onTap = {
+                        coroutineScope.launch {
+                            tapZoomAnim.snapTo(1.0f)
+                            // Punch zoom with spring physics
+                            tapZoomAnim.animateTo(
+                                targetValue = 1.22f,
+                                animationSpec = spring(dampingRatio = 0.50f, stiffness = 1200f)
+                            )
+                            // Spring settle back with lively bounce
+                            tapZoomAnim.animateTo(
+                                targetValue = 1.0f,
+                                animationSpec = spring(dampingRatio = 0.45f, stiffness = 400f)
+                            )
+                        }
                         onCheckedChange(!checked)
                     }
                 )
             }
     ) {
-        // Track: 44x22 rounded pill with inset depth shadows (inset 0 2px 5px rgba(0, 0, 0, 0.15))
+        // Track: 51x31 rounded pill
         val trackShape = RoundedCornerShape(100.dp)
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .clip(trackShape)
                 .background(trackColor)
-        ) {
-            // Inset top shadow gradient:
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(6.dp)
-                    .background(
-                        Brush.verticalGradient(
-                            0.0f to Color.Black.copy(alpha = if (checked) 0.20f else 0.15f),
-                            1.0f to Color.Transparent
-                        )
-                    )
-            )
-            // Inset bottom subtle rim:
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .height(3.dp)
-                    .background(
-                        Brush.verticalGradient(
-                            0.0f to Color.Transparent,
-                            1.0f to Color.White.copy(alpha = if (checked) 0.12f else 0.08f)
-                        )
-                    )
-            )
-        }
+                .border(
+                    width = 0.5.dp,
+                    color = if (!checked) {
+                        if (isAppInDark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f)
+                    } else {
+                        Color.Transparent
+                    },
+                    shape = trackShape
+                )
+        )
 
-        // Liquid Jelly Knob
+        // Knob: 27dp height x thumbWidth, with spring zoom scale and soft drop shadow
         Box(
             modifier = Modifier
                 .align(Alignment.CenterStart)
-                .offset(x = thumbTranslationX.dp, y = 0.dp)
-        ) {
-            LiquidGlassKnob(
-                width = thumbWidth,
-                height = 18.dp,
-                scale = thumbScale,
-                baseAlpha = 0.90f,
-                isToggleKnob = true,
-                hazeState = hazeState
-            )
-        }
+                .offset(x = thumbTranslationX.dp, y = 2.dp)
+                .graphicsLayer {
+                    scaleX = effectiveScale
+                    scaleY = effectiveScale
+                    transformOrigin = TransformOrigin(0.5f, 0.5f)
+                }
+                .shadow(
+                    elevation = (3.dp * effectiveScale).coerceAtLeast(3.dp),
+                    shape = CircleShape,
+                    spotColor = Color.Black.copy(alpha = 0.26f),
+                    ambientColor = Color.Black.copy(alpha = 0.15f)
+                )
+                .size(width = thumbWidth, height = 27.dp)
+                .clip(CircleShape)
+                .background(Color.White)
+                .border(0.5.dp, Color.Black.copy(alpha = 0.04f), CircleShape)
+        )
     }
 }
 

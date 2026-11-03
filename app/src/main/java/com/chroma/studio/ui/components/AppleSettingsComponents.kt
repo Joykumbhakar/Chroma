@@ -41,6 +41,7 @@ import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Search
 import com.composables.icons.lucide.X
+import com.composables.icons.lucide.Info
 import com.chroma.studio.ui.graphics3d.Apple3DGraphicId
 import com.chroma.studio.ui.graphics3d.Apple3DGraphicIcon
 import com.chroma.studio.ui.graphics3d.AppleSettingsSquircleIcon
@@ -716,6 +717,8 @@ fun AppleSettingToggleRow(
     iconGradient: List<Color>? = null,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
+    infoOnClick: (() -> Unit)? = null,
+    activeTrackColor: Color = Color(0xFF007AFF),
     modifier: Modifier = Modifier
 ) {
     val colors = LocalOscellionColors.current
@@ -764,10 +767,36 @@ fun AppleSettingToggleRow(
             }
         }
 
-        AppleSwitch(
-            checked = checked,
-            onCheckedChange = onCheckedChange
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            if (infoOnClick != null) {
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .clickable {
+                            com.chroma.studio.chat.sound.SoundManager.playReaction()
+                            infoOnClick()
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Lucide.Info,
+                        contentDescription = "Info",
+                        tint = Color(0xFF8E8E93),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            AppleSwitch(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                activeTrackColor = activeTrackColor
+            )
+        }
     }
 }
 
