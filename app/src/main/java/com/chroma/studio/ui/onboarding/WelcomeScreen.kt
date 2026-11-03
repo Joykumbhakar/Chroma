@@ -60,8 +60,6 @@ fun WelcomeScreen(
     onExploreGuest: () -> Unit = {},
     onTerms: () -> Unit
 ) {
-    var showAbout by remember { mutableStateOf(false) }
-
     // Neon Green animated wave gradient
     val animatedWaveBrush = rememberNeonGreenWaveBrush()
 
@@ -125,20 +123,10 @@ fun WelcomeScreen(
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Row(
                             Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                            horizontalArrangement = Arrangement.Start,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             OscellionAppIcon(size = 36.dp)
-                            Row(
-                                Modifier
-                                    .clickable(role = androidx.compose.ui.semantics.Role.Button) { showAbout = true }
-                                    .padding(4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Icon(Icons.Rounded.AutoAwesome, null, tint = ObColors.NeonGreen, modifier = Modifier.size(16.dp))
-                                Text("About", color = Color.White, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.3).sp)
-                            }
                         }
 
                         Spacer(Modifier.height(18.dp))
@@ -226,26 +214,7 @@ fun WelcomeScreen(
                 }
             }
         }
-        if (showAbout) {
-            ObPopupCardWindow(onDismissRequest = { showAbout = false }) {
-                OscellionAppIcon(size = 48.dp)
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    text = "Welcome to Oscellion",
-                    fontFamily = TheSignatureFont,
-                    fontSize = 32.sp,
-                    style = TextStyle(brush = animatedWaveBrush),
-                    textAlign = TextAlign.Center
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "Design multi-layer shaders and wallpapers, share them, and message with end-to-end encryption.",
-                    style = ObType.Body, textAlign = TextAlign.Center
-                )
-                Spacer(Modifier.height(18.dp))
-                ObPrimaryButton("Start onboarding", { showAbout = false; onCreateAccount() })
-            }
-        }
+
     }
 }
 
