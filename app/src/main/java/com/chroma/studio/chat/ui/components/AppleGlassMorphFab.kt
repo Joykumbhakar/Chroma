@@ -110,9 +110,9 @@ private val GlassActionPressedBorder = Color(0x80FFFFFF)// Inner pill specular b
 private val GlassContentShadow = Color(0x66002670)      // Crisp icon/label legibility shadow
 
 // Dimensions
-private val CollapsedWidthDp = 50.dp
+private val CollapsedWidthDp = 52.dp
 private val ExpandedWidthDp = 210.dp
-private val CapsuleHeightDp = 50.dp
+private val CapsuleHeightDp = 52.dp
 
 // Spring Physics Constants
 private const val STIFFNESS = 240f
@@ -266,7 +266,7 @@ fun AppleGlassMorphButton(
 
     val currentWidthDp: Dp = remember(position) {
         val rawWidth = CollapsedWidthDp.value + (ExpandedWidthDp.value - CollapsedWidthDp.value) * position
-        max(60f, rawWidth).dp
+        rawWidth.coerceAtLeast(CollapsedWidthDp.value).dp
     }
 
     // Fluid glass velocity stretch & squash

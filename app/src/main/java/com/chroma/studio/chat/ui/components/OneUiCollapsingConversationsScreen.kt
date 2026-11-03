@@ -82,6 +82,8 @@ import com.chroma.studio.model.UserStoryGroup
 import com.chroma.studio.ui.components.IosAvatarView
 import com.chroma.studio.ui.components.LiquidGlassCheckbox
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
 import kotlin.math.roundToInt
 
 // ============================================================================
@@ -213,23 +215,54 @@ fun OneUiCollapsingConversationsScreen(
     var isSearchExpanded by remember { mutableStateOf(false) }
 
     val listState = rememberLazyListState()
+    var isFabVisible by remember { mutableStateOf(false) }
     var isFabExpanded by remember { mutableStateOf(false) }
-    var lastIndex by remember { mutableIntStateOf(0) }
-    var lastOffset by remember { mutableIntStateOf(0) }
+    var scrollSessionCount by remember { mutableIntStateOf(0) }
+    var accumulatedScrollDelta by remember { mutableFloatStateOf(0f) }
+    var autoHideJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+
+    // Auto-hide inactivity timer (collapses and slides down out of view)
+    fun resetAutoHideTimer(customDelayMs: Long = 2800L) {
+        autoHideJob?.cancel()
+        autoHideJob = coroutineScope.launch {
+            delay(customDelayMs)
+            isFabExpanded = false
+            delay(160L)
+            isFabVisible = false
+            scrollSessionCount = 0
+            accumulatedScrollDelta = 0f
+        }
+    }
+
+    // Scroll event: on first scroll -> appear from bottom as circle; on next scroll -> expand
+    fun onScrollEvent(deltaY: Float, isNewGesture: Boolean = false) {
+        val absDelta = kotlin.math.abs(deltaY)
+        if (absDelta < 1f && !isNewGesture) return
+
+        if (!isFabVisible) {
+            isFabVisible = true
+            isFabExpanded = false
+            scrollSessionCount = 1
+            accumulatedScrollDelta = 0f
+            resetAutoHideTimer(2800L)
+        } else {
+            if (isNewGesture) {
+                scrollSessionCount++
+            }
+            accumulatedScrollDelta += absDelta
+            if (!isFabExpanded && (scrollSessionCount >= 2 || accumulatedScrollDelta > 70f)) {
+                isFabExpanded = true
+            }
+            resetAutoHideTimer(2800L)
+        }
+    }
 
     LaunchedEffect(listState) {
-        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
-            .collect { (currentIndex, currentOffset) ->
-                if (listState.isScrollInProgress) {
-                    val isScrollingUp = when {
-                        currentIndex < lastIndex -> true
-                        currentIndex > lastIndex -> false
-                        else -> currentOffset < lastOffset
-                    }
-                    isFabExpanded = isScrollingUp
+        snapshotFlow { listState.isScrollInProgress }
+            .collect { inProgress ->
+                if (inProgress) {
+                    onScrollEvent(deltaY = 12f, isNewGesture = true)
                 }
-                lastIndex = currentIndex
-                lastOffset = currentOffset
             }
     }
 
@@ -274,10 +307,8 @@ fun OneUiCollapsingConversationsScreen(
                     snapJob?.cancel()
                 }
                 val deltaY = available.y
-                if (deltaY < -8f) {
-                    isFabExpanded = false
-                } else if (deltaY > 8f) {
-                    isFabExpanded = true
+                if (kotlin.math.abs(deltaY) > 1.5f) {
+                    onScrollEvent(deltaY)
                 }
                 // Scrolling UP (finger moves up -> deltaY < 0): collapse header first
                 if (deltaY < 0f && collapseOffsetPx < maxCollapsePx) {
@@ -298,10 +329,8 @@ fun OneUiCollapsingConversationsScreen(
                     snapJob?.cancel()
                 }
                 val deltaY = available.y
-                if (deltaY < -8f) {
-                    isFabExpanded = false
-                } else if (deltaY > 8f) {
-                    isFabExpanded = true
+                if (kotlin.math.abs(deltaY) > 1.5f) {
+                    onScrollEvent(deltaY)
                 }
                 // Scrolling DOWN at top of list (deltaY > 0): expand header smoothly
                 if (deltaY > 0f && collapseOffsetPx > 0f) {
@@ -932,22 +961,41 @@ fun OneUiCollapsingConversationsScreen(
         }
     }
 
-        // 5. APPLE LIQUID GLASS CLAYMORPHISM FLOATING ACTION BUTTON (Centered, Compact, Scroll-Morphing)
+        // 5. APPLE LIQUID GLASS CLAYMORPHISM FLOATING ACTION BUTTON (Centered, Scroll-Appearing, Expanding)
         AnimatedVisibility(
-            visible = !isSelectionMode,
-            enter = scaleIn(spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)) + fadeIn(),
-            exit = scaleOut(spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)) + fadeOut(),
+            visible = !isSelectionMode && isFabVisible,
+            enter = slideInVertically(
+                initialOffsetY = { fullHeight -> fullHeight * 2 },
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioLowBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                )
+            ) + fadeIn(animationSpec = tween(220)),
+            exit = slideOutVertically(
+                targetOffsetY = { fullHeight -> fullHeight * 2 },
+                animationSpec = spring(
+                    dampingRatio = 0.88f,
+                    stiffness = Spring.StiffnessMedium
+                )
+            ) + fadeOut(animationSpec = tween(180)),
             modifier = Modifier.align(Alignment.BottomCenter)
         ) {
             AppleGlassMorphButton(
                 isExpanded = isFabExpanded,
-                onExpandChange = { isFabExpanded = it },
+                onExpandChange = { expanded ->
+                    isFabExpanded = expanded
+                    resetAutoHideTimer(if (expanded) 4500L else 2800L)
+                },
                 onGroupClick = {
                     SoundManager.playReaction()
+                    isFabExpanded = false
+                    isFabVisible = false
                     onCreateGroupClick?.invoke() ?: onNewMessageClick()
                 },
                 onChatClick = {
                     SoundManager.playReaction()
+                    isFabExpanded = false
+                    isFabVisible = false
                     onNewMessageClick()
                 },
                 modifier = Modifier
