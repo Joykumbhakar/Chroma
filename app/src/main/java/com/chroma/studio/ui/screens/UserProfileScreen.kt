@@ -185,8 +185,10 @@ fun UserProfileScreen(
     var showShareStoryAudienceSheet by remember { mutableStateOf(false) }
     var showOnlyFriendsManagementSheet by remember { mutableStateOf(false) }
     var storyViewerInitialIndex by remember { mutableIntStateOf(0) }
+    var showAvatarOverlay by remember { mutableStateOf(false) }
+    var showAvatarActionSheet by remember { mutableStateOf(false) }
 
-    val shouldHideBottomNav = showStoryViewer || showStoryCreationSheet || showStoryGalleryPicker || showStoryCamera || (editingStoryImageUri != null) || showShareStoryAudienceSheet || showOnlyFriendsManagementSheet
+    val shouldHideBottomNav = showStoryViewer || showStoryCreationSheet || showStoryGalleryPicker || showStoryCamera || (editingStoryImageUri != null) || showShareStoryAudienceSheet || showOnlyFriendsManagementSheet || showAvatarOverlay || showAvatarActionSheet
     LaunchedEffect(shouldHideBottomNav) {
         onStoryViewerChange?.invoke(shouldHideBottomNav)
     }
@@ -314,7 +316,6 @@ fun UserProfileScreen(
     var isBioExpanded by remember { mutableStateOf(false) }
     var hasBioOverflow by remember { mutableStateOf(false) }
     var selectedPostIndex by remember { mutableStateOf<Int?>(null) }
-    var showAvatarOverlay by remember { mutableStateOf(false) }
 
     LaunchedEffect(isWorksLoading) {
         if (!isWorksLoading && initialPostId != null && works.isNotEmpty()) {
@@ -343,10 +344,38 @@ fun UserProfileScreen(
         derivedStateOf { scrollProgress > 0.45f }
     }
 
-    val filteredStories = remember(allStoryGroups, userId) { allStoryGroups.filter { it.userId == userId } }
-    val hasActiveStories = remember(isCurrentUser, myStories, filteredStories) {
-        if (isCurrentUser) myStories.isNotEmpty() || filteredStories.isNotEmpty()
-        else filteredStories.isNotEmpty()
+    val filteredStories = remember(allStoryGroups, userId) { allStoryGroups.filter { it.userId == userId && it.stories.isNotEmpty() } }
+    val effectiveMyStories = remember(myStories, filteredStories) {
+        if (myStories.isNotEmpty()) myStories else filteredStories.flatMap { it.stories }
+    }
+    val storyCount = remember(isCurrentUser, effectiveMyStories, filteredStories) {
+        if (isCurrentUser) {
+            if (effectiveMyStories.isNotEmpty()) effectiveMyStories.size else filteredStories.sumOf { it.stories.size }
+        } else {
+            filteredStories.sumOf { it.stories.size }
+        }
+    }
+    val hasActiveStories = remember(storyCount) { storyCount > 0 }
+
+    val viewerGroups = remember(allStoryGroups, filteredStories) {
+        if (filteredStories.isNotEmpty() && !allStoryGroups.any { it.userId == userId }) {
+            filteredStories + allStoryGroups
+        } else if (allStoryGroups.isNotEmpty()) {
+            allStoryGroups
+        } else {
+            filteredStories
+        }
+    }
+
+    val launchStoryViewer = {
+        if (isCurrentUser) {
+            storyViewerInitialIndex = -1
+            showStoryViewer = true
+        } else {
+            val groupIdx = viewerGroups.indexOfFirst { it.userId == userId }
+            storyViewerInitialIndex = if (groupIdx >= 0) groupIdx else 0
+            showStoryViewer = true
+        }
     }
 
     Box(
@@ -377,17 +406,13 @@ fun UserProfileScreen(
                     },
                     onAvatarClick = {
                         if (hasActiveStories) {
-                            if (isCurrentUser) {
-                                storyViewerInitialIndex = -1
-                                showStoryViewer = true
-                            } else {
-                                val groupIdx = allStoryGroups.indexOfFirst { it.userId == userId }
-                                storyViewerInitialIndex = if (groupIdx >= 0) groupIdx else 0
-                                showStoryViewer = true
-                            }
+                            launchStoryViewer()
                         } else {
                             showAvatarOverlay = true
                         }
+                    },
+                    onAvatarLongClick = {
+                        showAvatarActionSheet = true
                     },
                     onNavigateToUserList = onNavigateToUserList
                 )
@@ -1077,23 +1102,14 @@ fun UserProfileScreen(
     }
 
     // Story Viewer Overlay
-    if (showStoryViewer && (allStoryGroups.isNotEmpty() || filteredStories.isNotEmpty() || myStories.isNotEmpty())) {
-        val viewerGroups = remember(allStoryGroups, filteredStories) {
-            if (filteredStories.isNotEmpty() && !allStoryGroups.any { it.userId == userId }) {
-                filteredStories + allStoryGroups
-            } else if (allStoryGroups.isNotEmpty()) {
-                allStoryGroups
-            } else {
-                filteredStories
-            }
-        }
+    if (showStoryViewer && (allStoryGroups.isNotEmpty() || filteredStories.isNotEmpty() || myStories.isNotEmpty() || effectiveMyStories.isNotEmpty())) {
         StoryViewerScreen(
             storyGroups = viewerGroups,
             initialGroupIndex = storyViewerInitialIndex,
             currentUserId = currentUserId ?: "",
             storyViewModel = storyVm,
             likedStoryIds = likedStoryIds,
-            myStories = myStories,
+            myStories = effectiveMyStories,
             currentUserProfile = if (isCurrentUser) profile else null,
             onClose = { showStoryViewer = false },
             onAuthorClick = { clickedUid ->
@@ -1102,6 +1118,31 @@ fun UserProfileScreen(
                     onNavigateToUserList?.invoke(clickedUid, "followers")
                 }
             }
+        )
+    }
+
+    // Avatar Action Sheet (Choose: "View Story" or "View Profile Photo")
+    if (showAvatarActionSheet) {
+        ProfileAvatarActionBottomSheet(
+            profile = profile,
+            hasActiveStories = hasActiveStories,
+            storyCount = storyCount,
+            isCurrentUser = isCurrentUser,
+            onViewStory = {
+                showAvatarActionSheet = false
+                launchStoryViewer()
+            },
+            onViewProfilePhoto = {
+                showAvatarActionSheet = false
+                showAvatarOverlay = true
+            },
+            onChangePhoto = if (isCurrentUser) {
+                {
+                    showAvatarActionSheet = false
+                    avatarGalleryLauncher.launch("image/*")
+                }
+            } else null,
+            onDismissRequest = { showAvatarActionSheet = false }
         )
     }
 

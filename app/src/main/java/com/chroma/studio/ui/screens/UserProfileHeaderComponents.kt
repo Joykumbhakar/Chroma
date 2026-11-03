@@ -14,6 +14,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -22,6 +24,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import com.chroma.studio.chat.sound.SoundManager
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -67,6 +76,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun UserProfileHeroSection(
     profile: UserProfile?,
@@ -75,10 +85,12 @@ fun UserProfileHeroSection(
     isRestricted: Boolean,
     userId: String,
     onAvatarClick: () -> Unit,
+    onAvatarLongClick: (() -> Unit)? = null,
     onNavigateToUserList: ((String, String) -> Unit)?,
     onPostsClick: (() -> Unit)? = null
 ) {
     val colors = LocalOscellionColors.current
+    val haptic = LocalHapticFeedback.current
     val heroHazeState = remember { HazeState() }
     val presetBannerRes = remember(profile?.bannerUrl) { getBannerPresetDrawableRes(profile?.bannerUrl) }
 
@@ -142,9 +154,19 @@ fun UserProfileHeroSection(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // Elevated Avatar with Crisp Cut-out Ring
+            // Elevated Avatar with Crisp Cut-out Ring & Tactile Spring Scale
+            val avatarInteractionSource = remember { MutableInteractionSource() }
+            val isAvatarPressed by avatarInteractionSource.collectIsPressedAsState()
+            val avatarScale by animateFloatAsState(
+                targetValue = if (isAvatarPressed) 0.94f else 1f,
+                animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                label = "avatarScale"
+            )
+
             Box(
-                modifier = Modifier.size(84.dp),
+                modifier = Modifier
+                    .size(86.dp)
+                    .scale(avatarScale),
                 contentAlignment = Alignment.Center
             ) {
                 // Avatar Container with Theme Background Separation Mask & Clean Native Elevation
@@ -160,40 +182,71 @@ fun UserProfileHeroSection(
                         )
                         .clip(CircleShape)
                         .background(colors.bg)
-                        .border(
-                            width = 3.5.dp,
-                            color = colors.bg,
-                            shape = CircleShape
-                        )
-                        .clickable { onAvatarClick() },
+                        .combinedClickable(
+                            interactionSource = avatarInteractionSource,
+                            indication = null,
+                            onClick = { onAvatarClick() },
+                            onLongClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                SoundManager.playReaction()
+                                onAvatarLongClick?.invoke()
+                            }
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(if (hasActiveStories) 2.5.dp else 0.dp)
-                            .clip(CircleShape)
-                            .border(
-                                width = if (hasActiveStories) 2.5.dp else 0.5.dp,
-                                brush = if (hasActiveStories) {
-                                    Brush.sweepGradient(AppleStatusVibrantGradient)
-                                } else {
-                                    Brush.linearGradient(
+                    if (hasActiveStories) {
+                        // Instagram-style Story Ring with inner theme gap
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .border(
+                                    width = 2.8.dp,
+                                    brush = Brush.sweepGradient(AppleStatusVibrantGradient),
+                                    shape = CircleShape
+                                )
+                                .padding(4.5.dp) // Gap separator in theme background color
+                                .clip(CircleShape)
+                                .background(colors.bg)
+                        ) {
+                            IosAvatarView(
+                                name = profile?.displayName ?: profile?.username ?: "",
+                                avatarUrl = profile?.avatarUrl.orEmpty(),
+                                size = 74.dp,
+                                gender = profile?.gender,
+                                isOnline = false,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    } else {
+                        // Standard Profile Avatar with crisp theme border
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .border(
+                                    width = 3.5.dp,
+                                    color = colors.bg,
+                                    shape = CircleShape
+                                )
+                                .padding(1.dp)
+                                .clip(CircleShape)
+                                .border(
+                                    width = 0.8.dp,
+                                    brush = Brush.linearGradient(
                                         if (colors.isDark) listOf(Color(0xFF2C2C2E), Color(0xFF1C1C1E))
                                         else listOf(Color(0xFFE5E5EA), Color(0xFFF2F2F7))
-                                    )
-                                },
-                                shape = CircleShape
+                                    ),
+                                    shape = CircleShape
+                                )
+                        ) {
+                            IosAvatarView(
+                                name = profile?.displayName ?: profile?.username ?: "",
+                                avatarUrl = profile?.avatarUrl.orEmpty(),
+                                size = 78.dp,
+                                gender = profile?.gender,
+                                isOnline = false,
+                                modifier = Modifier.fillMaxSize()
                             )
-                    ) {
-                        IosAvatarView(
-                            name = profile?.displayName ?: profile?.username ?: "",
-                            avatarUrl = profile?.avatarUrl.orEmpty(),
-                            size = 78.dp,
-                            gender = profile?.gender,
-                            isOnline = false,
-                            modifier = Modifier.fillMaxSize()
-                        )
+                        }
                     }
                 }
 
@@ -1116,5 +1169,409 @@ fun UserProfileActionsStoriesSection(
         )
 
         Spacer(Modifier.height(4.dp))
+    }
+}
+
+/**
+ * Instagram-style Long-Press Avatar Action Sheet
+ * Allows user to choose: "View Story" or "View Profile Photo" (and "Change Profile Photo" for current user)
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ProfileAvatarActionBottomSheet(
+    profile: UserProfile?,
+    hasActiveStories: Boolean,
+    storyCount: Int,
+    isCurrentUser: Boolean,
+    onViewStory: () -> Unit,
+    onViewProfilePhoto: () -> Unit,
+    onChangePhoto: (() -> Unit)? = null,
+    onDismissRequest: () -> Unit
+) {
+    val colors = LocalOscellionColors.current
+    val haptic = LocalHapticFeedback.current
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        containerColor = if (colors.isDark) Color(0xFF1C1C1E) else Color.White,
+        contentColor = colors.textMain,
+        scrimColor = Color.Black.copy(alpha = 0.5f),
+        tonalElevation = 0.dp,
+        dragHandle = {
+            Box(
+                modifier = Modifier
+                    .padding(top = 10.dp, bottom = 8.dp)
+                    .width(36.dp)
+                    .height(5.dp)
+                    .clip(RoundedCornerShape(9999.dp))
+                    .background(if (colors.isDark) Color.White.copy(alpha = 0.22f) else Color.Black.copy(alpha = 0.18f))
+            )
+        }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 28.dp)
+        ) {
+            // Profile Preview Header
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                // Mini Avatar with Story Ring if active
+                Box(
+                    modifier = Modifier.size(52.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (hasActiveStories) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .border(
+                                    width = 2.dp,
+                                    brush = Brush.sweepGradient(AppleStatusVibrantGradient),
+                                    shape = CircleShape
+                                )
+                                .padding(3.dp)
+                                .clip(CircleShape)
+                        ) {
+                            IosAvatarView(
+                                name = profile?.displayName ?: profile?.username ?: "",
+                                avatarUrl = profile?.avatarUrl.orEmpty(),
+                                size = 46.dp,
+                                gender = profile?.gender,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(CircleShape)
+                                .border(
+                                    width = 0.8.dp,
+                                    color = if (colors.isDark) Color(0xFF38383A) else Color(0xFFE5E5EA),
+                                    shape = CircleShape
+                                )
+                        ) {
+                            IosAvatarView(
+                                name = profile?.displayName ?: profile?.username ?: "",
+                                avatarUrl = profile?.avatarUrl.orEmpty(),
+                                size = 52.dp,
+                                gender = profile?.gender,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
+                }
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = profile?.displayName.orEmpty().ifBlank { profile?.username ?: "User" },
+                        color = colors.textMain,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = (-0.3).sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = "@${profile?.username.orEmpty().ifBlank { "user" }}",
+                        color = colors.textMuted,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Normal,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
+
+            // iOS / Samsung Grouped Card Container
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFF2F2F7))
+            ) {
+                // 1. View Story
+                val storyInteractionSource = remember { MutableInteractionSource() }
+                val isStoryPressed by storyInteractionSource.collectIsPressedAsState()
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            if (isStoryPressed) {
+                                if (colors.isDark) Color(0xFF3A3A3C) else Color(0xFFE5E5EA)
+                            } else Color.Transparent
+                        )
+                        .clickable(
+                            interactionSource = storyInteractionSource,
+                            indication = null,
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                SoundManager.playReaction()
+                                if (hasActiveStories) {
+                                    onDismissRequest()
+                                    onViewStory()
+                                } else {
+                                    ToastManager.showToast("No active stories right now")
+                                }
+                            }
+                        )
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                if (hasActiveStories) Brush.sweepGradient(AppleStatusVibrantGradient)
+                                else Brush.linearGradient(
+                                    listOf(
+                                        if (colors.isDark) Color(0xFF3A3A3C) else Color(0xFFD1D1D6),
+                                        if (colors.isDark) Color(0xFF3A3A3C) else Color(0xFFD1D1D6)
+                                    )
+                                )
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Lucide.Play,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(19.dp)
+                        )
+                    }
+
+                    Spacer(Modifier.width(14.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "View Story",
+                            color = if (hasActiveStories) colors.textMain else colors.textMuted,
+                            fontSize = 15.5.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = if (hasActiveStories) {
+                                if (storyCount > 0) "$storyCount active ${if (storyCount == 1) "story" else "stories"}"
+                                else "Watch active stories"
+                            } else "No active stories",
+                            color = colors.textMuted,
+                            fontSize = 12.5.sp
+                        )
+                    }
+
+                    if (hasActiveStories) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(999.dp))
+                                .background(Brush.linearGradient(listOf(Color(0xFFFF2D55), Color(0xFFAF52DE))))
+                                .padding(horizontal = 9.dp, vertical = 3.5.dp)
+                        ) {
+                            Text(
+                                text = "Active",
+                                color = Color.White,
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    } else {
+                        Icon(
+                            imageVector = Lucide.ChevronRight,
+                            contentDescription = null,
+                            tint = colors.textMuted.copy(alpha = 0.5f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
+                HorizontalDivider(
+                    thickness = 0.5.dp,
+                    color = if (colors.isDark) Color(0xFF38383A) else Color(0xFFE5E5EA),
+                    modifier = Modifier.padding(start = 70.dp, end = 16.dp)
+                )
+
+                // 2. View Profile Photo
+                val photoInteractionSource = remember { MutableInteractionSource() }
+                val isPhotoPressed by photoInteractionSource.collectIsPressedAsState()
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            if (isPhotoPressed) {
+                                if (colors.isDark) Color(0xFF3A3A3C) else Color(0xFFE5E5EA)
+                            } else Color.Transparent
+                        )
+                        .clickable(
+                            interactionSource = photoInteractionSource,
+                            indication = null,
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                SoundManager.playReaction()
+                                onDismissRequest()
+                                onViewProfilePhoto()
+                            }
+                        )
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFF0A84FF)), // In-App Brand Blue
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Lucide.Eye,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    Spacer(Modifier.width(14.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "View Profile Photo",
+                            color = colors.textMain,
+                            fontSize = 15.5.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = "See full-size profile picture",
+                            color = colors.textMuted,
+                            fontSize = 12.5.sp
+                        )
+                    }
+
+                    Icon(
+                        imageVector = Lucide.ChevronRight,
+                        contentDescription = null,
+                        tint = colors.textMuted,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                // 3. Change Profile Photo (Current User only)
+                if (isCurrentUser && onChangePhoto != null) {
+                    HorizontalDivider(
+                        thickness = 0.5.dp,
+                        color = if (colors.isDark) Color(0xFF38383A) else Color(0xFFE5E5EA),
+                        modifier = Modifier.padding(start = 70.dp, end = 16.dp)
+                    )
+
+                    val changeInteractionSource = remember { MutableInteractionSource() }
+                    val isChangePressed by changeInteractionSource.collectIsPressedAsState()
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                if (isChangePressed) {
+                                    if (colors.isDark) Color(0xFF3A3A3C) else Color(0xFFE5E5EA)
+                                } else Color.Transparent
+                            )
+                            .clickable(
+                                interactionSource = changeInteractionSource,
+                                indication = null,
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    SoundManager.playReaction()
+                                    onDismissRequest()
+                                    onChangePhoto()
+                                }
+                            )
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF5856D6)), // Apple / One UI Purple
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Lucide.Camera,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        Spacer(Modifier.width(14.dp))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Change Profile Photo",
+                                color = colors.textMain,
+                                fontSize = 15.5.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "Upload new avatar from device",
+                                color = colors.textMuted,
+                                fontSize = 12.5.sp
+                            )
+                        }
+
+                        Icon(
+                            imageVector = Lucide.ChevronRight,
+                            contentDescription = null,
+                            tint = colors.textMuted,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // Cancel Button
+            val cancelInteractionSource = remember { MutableInteractionSource() }
+            val isCancelPressed by cancelInteractionSource.collectIsPressedAsState()
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(
+                        if (isCancelPressed) {
+                            if (colors.isDark) Color(0xFF38383A) else Color(0xFFE5E5EA)
+                        } else {
+                            if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFF2F2F7)
+                        }
+                    )
+                    .clickable(
+                        interactionSource = cancelInteractionSource,
+                        indication = null,
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onDismissRequest()
+                        }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Cancel",
+                    color = colors.textMain,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
     }
 }
