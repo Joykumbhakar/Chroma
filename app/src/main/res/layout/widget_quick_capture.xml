@@ -26,7 +26,7 @@
             android:layout_marginStart="6dp"
             android:letterSpacing="0.08"
             android:text="OSCELLION"
-            android:textColor="#C7C7CC"
+            android:textColor="@color/widget_text_secondary"
             android:textSize="10sp"
             android:textStyle="bold" />
     </LinearLayout>

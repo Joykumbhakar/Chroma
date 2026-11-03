@@ -12,11 +12,13 @@ import android.content.Context
 import android.content.Intent
 import android.widget.RemoteViews
 import com.chroma.studio.R
+import com.google.firebase.auth.FirebaseAuth
 
 /**
  * Android Home Screen Widget for Oscellion Studio Quick Actions.
  * Features 5 squircle shortcuts: New Post (+), Video Editor (🎬),
  * Audio Studio (🎵), Messages (💬), and Switch Lab (⚡).
+ * Compatible across all Android versions (Android 8.0 Oreo up to Android 15+).
  */
 class OscellionQuickActionsWidgetProvider : AppWidgetProvider() {
 
@@ -45,6 +47,19 @@ class OscellionQuickActionsWidgetProvider : AppWidgetProvider() {
         ) {
             val views = RemoteViews(context.packageName, R.layout.widget_studio_quick_actions)
 
+            // Dynamic Personalized Header
+            try {
+                val user = FirebaseAuth.getInstance().currentUser
+                val name = user?.displayName?.takeIf { it.isNotBlank() }
+                if (name != null) {
+                    views.setTextViewText(R.id.widget_header_action, "Hi, ${name.split(" ").first()}")
+                } else {
+                    views.setTextViewText(R.id.widget_header_action, "Studio Hub")
+                }
+            } catch (_: Exception) {
+                views.setTextViewText(R.id.widget_header_action, "Studio Hub")
+            }
+
             // Header / App click -> open Home
             val homeIntent = Intent().apply {
                 setClassName(context.packageName, "com.chroma.studio.HomeActivity")
@@ -56,6 +71,7 @@ class OscellionQuickActionsWidgetProvider : AppWidgetProvider() {
                 homeIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
+            views.setOnClickPendingIntent(R.id.widget_header_bar, homePendingIntent)
             views.setOnClickPendingIntent(R.id.widget_header_action, homePendingIntent)
 
             // Button 1: Create Post

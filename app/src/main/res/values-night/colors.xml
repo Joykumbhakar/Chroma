@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Widget Adaptive Dark Colors -->
+    <color name="widget_card_bg_start">#FF202026</color>
+    <color name="widget_card_bg_end">#FF121215</color>
+    <color name="widget_card_stroke">#FF34343E</color>
+    <color name="widget_text_primary">#FFF2F2F7</color>
+    <color name="widget_text_secondary">#FF9898A0</color>
+    <color name="widget_accent">#FF0A84FF</color>
+    <color name="widget_icon_pill_bg">#FF2A2A32</color>
+</resources>

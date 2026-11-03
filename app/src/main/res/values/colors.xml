@@ -8,4 +8,13 @@
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
     <color name="oscellion_window_background">#FFF8FAFC</color>
+
+    <!-- Widget Adaptive Light Colors -->
+    <color name="widget_card_bg_start">#FFFFFFFF</color>
+    <color name="widget_card_bg_end">#FFF4F5F8</color>
+    <color name="widget_card_stroke">#FFE2E4EC</color>
+    <color name="widget_text_primary">#FF0D0D11</color>
+    <color name="widget_text_secondary">#FF71717A</color>
+    <color name="widget_accent">#FF0A84FF</color>
+    <color name="widget_icon_pill_bg">#FFEAEBEE</color>
 </resources>

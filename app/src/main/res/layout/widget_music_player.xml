@@ -13,6 +13,8 @@
         android:id="@+id/widget_music_art"
         android:layout_width="48dp"
         android:layout_height="48dp"
+        android:clickable="true"
+        android:focusable="true"
         android:contentDescription="Vinyl Record"
         android:src="@drawable/ic_widget_vinyl" />
 
@@ -24,6 +26,8 @@
         android:layout_marginStart="12dp"
         android:layout_marginEnd="8dp"
         android:layout_weight="1"
+        android:clickable="true"
+        android:focusable="true"
         android:orientation="vertical">
 
         <TextView
@@ -33,7 +37,7 @@
             android:ellipsize="end"
             android:maxLines="1"
             android:text="Chroma Studio Beats"
-            android:textColor="#F2F2F7"
+            android:textColor="@color/widget_text_primary"
             android:textSize="14sp"
             android:textStyle="bold" />
 
@@ -41,11 +45,11 @@
             android:id="@+id/widget_track_artist"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="1dp"
+            android:layout_marginTop="2dp"
             android:ellipsize="end"
             android:maxLines="1"
             android:text="Oscellion Creative Soundscape • 432Hz"
-            android:textColor="#8E8E93"
+            android:textColor="@color/widget_text_secondary"
             android:textSize="11sp" />
     </LinearLayout>
 
@@ -59,12 +63,14 @@
         <!-- Previous Track Button -->
         <ImageButton
             android:id="@+id/btn_music_prev"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
             android:background="?android:attr/selectableItemBackgroundBorderless"
             android:contentDescription="Previous"
-            android:padding="6dp"
-            android:src="@drawable/ic_widget_prev" />
+            android:padding="7dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_widget_prev"
+            android:tint="@color/widget_text_primary" />
 
         <!-- Play / Pause Circular Button -->
         <ImageButton
@@ -76,16 +82,19 @@
             android:background="@drawable/widget_play_btn"
             android:contentDescription="Play/Pause"
             android:padding="9dp"
+            android:scaleType="centerInside"
             android:src="@drawable/ic_widget_play" />
 
         <!-- Next Track Button -->
         <ImageButton
             android:id="@+id/btn_music_next"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
             android:background="?android:attr/selectableItemBackgroundBorderless"
             android:contentDescription="Next"
-            android:padding="6dp"
-            android:src="@drawable/ic_widget_next" />
+            android:padding="7dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_widget_next"
+            android:tint="@color/widget_text_primary" />
     </LinearLayout>
 </LinearLayout>

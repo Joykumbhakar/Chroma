@@ -10,8 +10,11 @@
 
     <!-- Top Studio Brand Header -->
     <LinearLayout
+        android:id="@+id/widget_header_bar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:clickable="true"
+        android:focusable="true"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingStart="4dp"
@@ -24,13 +27,16 @@
             android:background="@drawable/widget_play_btn" />
 
         <TextView
+            android:id="@+id/widget_brand_title"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:layout_weight="1"
-            android:letterSpacing="0.08"
+            android:ellipsize="end"
+            android:letterSpacing="0.06"
+            android:maxLines="1"
             android:text="OSCELLION STUDIO"
-            android:textColor="#C7C7CC"
+            android:textColor="@color/widget_text_secondary"
             android:textSize="11sp"
             android:textStyle="bold" />
 
@@ -38,8 +44,10 @@
             android:id="@+id/widget_header_action"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Quick Hub"
-            android:textColor="#0A84FF"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="Studio Hub"
+            android:textColor="@color/widget_accent"
             android:textSize="11sp"
             android:textStyle="bold" />
     </LinearLayout>
@@ -64,19 +72,22 @@
             android:orientation="vertical">
 
             <ImageView
-                android:layout_width="44dp"
-                android:layout_height="44dp"
+                android:layout_width="42dp"
+                android:layout_height="42dp"
                 android:background="@drawable/widget_badge_blue"
                 android:contentDescription="New Post"
                 android:padding="10dp"
+                android:scaleType="centerInside"
                 android:src="@drawable/ic_widget_plus" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
+                android:ellipsize="end"
+                android:maxLines="1"
                 android:text="Post"
-                android:textColor="#F2F2F7"
+                android:textColor="@color/widget_text_primary"
                 android:textSize="11sp"
                 android:textStyle="bold" />
         </LinearLayout>
@@ -93,19 +104,22 @@
             android:orientation="vertical">
 
             <ImageView
-                android:layout_width="44dp"
-                android:layout_height="44dp"
+                android:layout_width="42dp"
+                android:layout_height="42dp"
                 android:background="@drawable/widget_badge_purple"
                 android:contentDescription="Video Editor"
-                android:padding="11dp"
+                android:padding="10dp"
+                android:scaleType="centerInside"
                 android:src="@drawable/ic_widget_video" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
+                android:ellipsize="end"
+                android:maxLines="1"
                 android:text="Video"
-                android:textColor="#F2F2F7"
+                android:textColor="@color/widget_text_primary"
                 android:textSize="11sp"
                 android:textStyle="bold" />
         </LinearLayout>
@@ -122,19 +136,22 @@
             android:orientation="vertical">
 
             <ImageView
-                android:layout_width="44dp"
-                android:layout_height="44dp"
+                android:layout_width="42dp"
+                android:layout_height="42dp"
                 android:background="@drawable/widget_badge_pink"
                 android:contentDescription="Audio Studio"
-                android:padding="11dp"
+                android:padding="10dp"
+                android:scaleType="centerInside"
                 android:src="@drawable/ic_widget_music" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
+                android:ellipsize="end"
+                android:maxLines="1"
                 android:text="Music"
-                android:textColor="#F2F2F7"
+                android:textColor="@color/widget_text_primary"
                 android:textSize="11sp"
                 android:textStyle="bold" />
         </LinearLayout>
@@ -151,19 +168,22 @@
             android:orientation="vertical">
 
             <ImageView
-                android:layout_width="44dp"
-                android:layout_height="44dp"
+                android:layout_width="42dp"
+                android:layout_height="42dp"
                 android:background="@drawable/widget_badge_cyan"
                 android:contentDescription="Chat"
-                android:padding="11dp"
+                android:padding="10dp"
+                android:scaleType="centerInside"
                 android:src="@drawable/ic_widget_chat" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
+                android:ellipsize="end"
+                android:maxLines="1"
                 android:text="Chat"
-                android:textColor="#F2F2F7"
+                android:textColor="@color/widget_text_primary"
                 android:textSize="11sp"
                 android:textStyle="bold" />
         </LinearLayout>
@@ -180,19 +200,22 @@
             android:orientation="vertical">
 
             <ImageView
-                android:layout_width="44dp"
-                android:layout_height="44dp"
+                android:layout_width="42dp"
+                android:layout_height="42dp"
                 android:background="@drawable/widget_badge_amber"
                 android:contentDescription="Switch Lab"
-                android:padding="11dp"
+                android:padding="10dp"
+                android:scaleType="centerInside"
                 android:src="@drawable/ic_widget_sliders" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
+                android:ellipsize="end"
+                android:maxLines="1"
                 android:text="Lab"
-                android:textColor="#F2F2F7"
+                android:textColor="@color/widget_text_primary"
                 android:textSize="11sp"
                 android:textStyle="bold" />
         </LinearLayout>
