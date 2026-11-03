@@ -64,6 +64,14 @@ import androidx.compose.ui.platform.LocalDensity
 
 import kotlin.math.roundToInt
 
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.unit.Velocity
+
+
 import androidx.compose.material3.*
 
 import androidx.compose.runtime.*
@@ -956,11 +964,147 @@ fun HomeScreen(
 
             }
 
-            Box(modifier = Modifier.fillMaxSize().then(if (showHeader) Modifier.statusBarsPadding() else Modifier)) {
+                        val density = LocalDensity.current
+            val expandedHeroHeight = if (showHeader) 420.dp else 340.dp
+            val collapsedHeroHeight = if (showHeader) 72.dp else 0.dp
+            val maxCollapseDp = expandedHeroHeight - collapsedHeroHeight
+            val maxCollapsePx = remember(density, maxCollapseDp) { with(density) { maxCollapseDp.toPx() } }
+
+            var collapseOffsetPx by remember { mutableFloatStateOf(0f) }
+            var snapJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+
+            val nestedScrollConnection = remember(maxCollapsePx, gridState) {
+                object : NestedScrollConnection {
+                    override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                        if (source == NestedScrollSource.Drag && snapJob?.isActive == true) {
+                            snapJob?.cancel()
+                        }
+                        val deltaY = available.y
+                        // When user scrolls down (finger moves up -> deltaY < 0): collapse extended hero header first
+                        if (deltaY < 0f && collapseOffsetPx < maxCollapsePx) {
+                            val newOffset = (collapseOffsetPx - deltaY).coerceIn(0f, maxCollapsePx)
+                            val consumedY = -(newOffset - collapseOffsetPx)
+                            collapseOffsetPx = newOffset
+                            return Offset(0f, consumedY)
+                        }
+                        return Offset.Zero
+                    }
+
+                    override fun onPostScroll(
+                        consumed: Offset,
+                        available: Offset,
+                        source: NestedScrollSource
+                    ): Offset {
+                        if (source == NestedScrollSource.Drag && snapJob?.isActive == true) {
+                            snapJob?.cancel()
+                        }
+                        val deltaY = available.y
+                        // When user scrolls up (finger moves down -> deltaY > 0): expand header when at top of grid
+                        if (deltaY > 0f && collapseOffsetPx > 0f) {
+                            val isAtTop = gridState.firstVisibleItemIndex == 0 && gridState.firstVisibleItemScrollOffset == 0
+                            if (isAtTop) {
+                                val newOffset = (collapseOffsetPx - deltaY).coerceIn(0f, maxCollapsePx)
+                                val consumedY = -(newOffset - collapseOffsetPx)
+                                collapseOffsetPx = newOffset
+                                return Offset(0f, consumedY)
+                            }
+                        }
+                        return Offset.Zero
+                    }
+
+                    override suspend fun onPreFling(available: Velocity): Velocity {
+                        val progress = if (maxCollapsePx <= 0f) 0f else (collapseOffsetPx / maxCollapsePx)
+                        if (available.y < -300f && progress < 0.99f && progress > 0.05f) {
+                            snapJob?.cancel()
+                            snapJob = scope.launch {
+                                animate(
+                                    initialValue = collapseOffsetPx,
+                                    targetValue = maxCollapsePx,
+                                    animationSpec = spring(
+                                        dampingRatio = 0.85f,
+                                        stiffness = Spring.StiffnessMediumLow
+                                    )
+                                ) { value, _ ->
+                                    collapseOffsetPx = value
+                                }
+                            }
+                            return Velocity(0f, available.y)
+                        }
+                        return Velocity.Zero
+                    }
+
+                    override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+                        val progress = if (maxCollapsePx <= 0f) 0f else (collapseOffsetPx / maxCollapsePx)
+                        if (progress > 0.01f && progress < 0.99f) {
+                            val isAtTop = gridState.firstVisibleItemIndex == 0 && gridState.firstVisibleItemScrollOffset == 0
+                            val targetPx = when {
+                                available.y < -250f -> maxCollapsePx
+                                available.y > 250f && isAtTop -> 0f
+                                progress >= 0.45f -> maxCollapsePx
+                                else -> 0f
+                            }
+                            snapJob?.cancel()
+                            snapJob = scope.launch {
+                                animate(
+                                    initialValue = collapseOffsetPx,
+                                    targetValue = targetPx,
+                                    animationSpec = spring(
+                                        dampingRatio = 0.85f,
+                                        stiffness = Spring.StiffnessMediumLow
+                                    )
+                                ) { value, _ ->
+                                    collapseOffsetPx = value
+                                }
+                            }
+                        }
+                        return Velocity.Zero
+                    }
+                }
+            }
+
+            val collapseProgress by remember {
+                derivedStateOf {
+                    if (maxCollapsePx <= 0f) 0f else (collapseOffsetPx / maxCollapsePx).coerceIn(0f, 1f)
+                }
+            }
+
+            val heroContentAlpha = (1f - (collapseProgress / 0.40f)).coerceIn(0f, 1f)
+            val heroContentTranslationY = -collapseProgress * with(density) { 36.dp.toPx() }
+            val topBarBackdropAlpha = (collapseProgress / 0.65f).coerceIn(0f, 1f)
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(if (showHeader) Modifier.statusBarsPadding() else Modifier)
+                    .nestedScroll(nestedScrollConnection)
+            ) {
 
                 // ── Hero Section ──
 
-                Column(modifier = Modifier.fillMaxWidth().height(if (showHeader) 420.dp else 340.dp).zIndex(1f).padding(horizontal = 20.dp, vertical = if (showHeader) 16.dp else 12.dp)) {
+                val currentHeroHeight = (expandedHeroHeight - with(density) { collapseOffsetPx.toDp() }).coerceAtLeast(collapsedHeroHeight)
+                val currentBottomPadding = (16.dp * (1f - collapseProgress * 0.5f)).coerceAtLeast(8.dp)
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(currentHeroHeight)
+                        .zIndex(1f)
+                        .clipToBounds()
+                        .background(
+                            if (topBarBackdropAlpha > 0.01f) {
+                                if (colors.isDark) Color(0xFF000000).copy(alpha = 0.88f * topBarBackdropAlpha)
+                                else Color(0xFF0A1128).copy(alpha = 0.88f * topBarBackdropAlpha)
+                            } else {
+                                Color.Transparent
+                            }
+                        )
+                        .padding(
+                            start = 20.dp,
+                            end = 20.dp,
+                            top = if (showHeader) 16.dp else 12.dp,
+                            bottom = if (showHeader) currentBottomPadding else 12.dp
+                        )
+                ) {
 
                     
 
@@ -1270,7 +1414,20 @@ fun HomeScreen(
 
 
 
-                    Spacer(modifier = Modifier.weight(1f))
+                    if (heroContentAlpha > 0.01f) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                                .graphicsLayer {
+                                    alpha = heroContentAlpha
+                                    translationY = heroContentTranslationY
+                                    val s = 1f - (collapseProgress * 0.05f)
+                                    scaleX = s
+                                    scaleY = s
+                                }
+                        ) {
+                            Spacer(modifier = Modifier.weight(1f))
 
 
 
@@ -1479,6 +1636,8 @@ fun HomeScreen(
 
 
                     Spacer(modifier = Modifier.height(16.dp))
+                        }
+                    }
 
                 }
 
@@ -1486,39 +1645,25 @@ fun HomeScreen(
 
                 // â”€â”€ Grid Area (Fading to white) â”€â”€
 
-                val density = androidx.compose.ui.platform.LocalDensity.current
-
                 val fadeEndY = remember(density) { with(density) { 110.dp.toPx() } }
-
-                
+                val currentGridTotalTop = (expandedHeroHeight - with(density) { collapseOffsetPx.toDp() }).coerceAtLeast(collapsedHeroHeight)
+                val currentBoxTop = (currentGridTotalTop - (126.dp * (1f - collapseProgress))).coerceAtLeast(collapsedHeroHeight)
+                val currentColumnTop = (currentGridTotalTop - currentBoxTop).coerceAtLeast(0.dp)
 
                 Box(
-
                     modifier = Modifier
-
                         .fillMaxSize()
-
-                        .padding(top = 294.dp)
-
+                        .padding(top = currentBoxTop)
                         .background(
-
                             Brush.verticalGradient(
-
-                                0.0f to colors.bg.copy(alpha = 0f),
-
+                                0.0f to colors.bg.copy(alpha = collapseProgress),
                                 1.0f to colors.bg,
-
                                 startY = 0f,
-
                                 endY = fadeEndY
-
                             )
-
                         )
-
                 ) {
-
-                    Column(modifier = Modifier.fillMaxSize().padding(top = 126.dp)) {
+                    Column(modifier = Modifier.fillMaxSize().padding(top = currentColumnTop)) {
 
                         // â”€â”€ Contextual Action Bar for Selection Mode â”€â”€
 
