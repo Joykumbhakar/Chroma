@@ -1,4 +1,6 @@
 package com.chroma.studio
+
+import androidx.compose.runtime.Composable
 import com.chroma.studio.ui.components.OscellionLoadingSpinner
 
 import android.content.Intent
@@ -73,6 +75,27 @@ import androidx.compose.ui.platform.LocalContext
 @androidx.compose.material3.ExperimentalMaterial3Api
 @androidx.compose.foundation.ExperimentalFoundationApi
 class HomeActivity : ComponentActivity() {
+
+@Composable
+private fun AuthenticatedRoute(
+    navController: androidx.navigation.NavController,
+    featureName: String = "this feature",
+    content: @Composable () -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val isGuest = androidx.compose.runtime.remember(context) { com.chroma.studio.data.SavedAccountManager.isGuest(context) }
+    if (isGuest) {
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            com.chroma.studio.ui.components.ToastManager.showToast("Sign in or create an account to access $featureName")
+            navController.navigate("login") {
+                popUpTo("main") { inclusive = false }
+            }
+        }
+    } else {
+        content()
+    }
+}
+
 
     private val vm: HomeViewModel by viewModels()
     private val flashVm: FlashViewModel by viewModels()
@@ -349,8 +372,10 @@ class HomeActivity : ComponentActivity() {
                 }
 
                 val onRemixCommunityPost: (DiscoverPost) -> Unit = { work ->
+                    val isGuest = com.chroma.studio.data.SavedAccountManager.isGuest(this@HomeActivity)
                     val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
-                    if (currentUid.isNullOrBlank()) {
+                    if (isGuest || currentUid.isNullOrBlank()) {
+                        com.chroma.studio.ui.components.ToastManager.showToast("Sign in or create an account to remix works")
                         navController.navigate("login")
                     } else {
                         remixTargetPost = work
@@ -438,44 +463,50 @@ class HomeActivity : ComponentActivity() {
                 }
 
                 val onDownloadCommunityPost: (DiscoverPost) -> Unit = { work ->
-                    val videoUrl = extractVideoUrlFromPost(work)
-                    coroutineScope.launch {
-                        val repo = com.chroma.studio.data.DiscoverRepository()
-                        com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid?.let { repo.incrementDownloadCount(work.id, it) }
-                    }
-                    if (!videoUrl.isNullOrBlank()) {
-                        try {
-                            val downloadUri = Uri.parse(videoUrl)
-                            if (videoUrl.startsWith("http://") || videoUrl.startsWith("https://")) {
-                                val request = android.app.DownloadManager.Request(downloadUri).apply {
-                                    setTitle(work.title.ifBlank { "Flash Video" })
-                                    setDescription("Downloading video from @${work.authorUsername}...")
-                                    setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                                    setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_MOVIES, "Chroma_${System.currentTimeMillis()}.mp4")
-                                    setAllowedOverMetered(true)
-                                    setAllowedOverRoaming(true)
+                    val isGuest = com.chroma.studio.data.SavedAccountManager.isGuest(this@HomeActivity)
+                    if (isGuest) {
+                        com.chroma.studio.ui.components.ToastManager.showToast("Sign in or create an account to download works")
+                        navController.navigate("login")
+                    } else {
+                        val videoUrl = extractVideoUrlFromPost(work)
+                        coroutineScope.launch {
+                            val repo = com.chroma.studio.data.DiscoverRepository()
+                            com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid?.let { repo.incrementDownloadCount(work.id, it) }
+                        }
+                        if (!videoUrl.isNullOrBlank()) {
+                            try {
+                                val downloadUri = Uri.parse(videoUrl)
+                                if (videoUrl.startsWith("http://") || videoUrl.startsWith("https://")) {
+                                    val request = android.app.DownloadManager.Request(downloadUri).apply {
+                                        setTitle(work.title.ifBlank { "Flash Video" })
+                                        setDescription("Downloading video from @${work.authorUsername}...")
+                                        setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                                        setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_MOVIES, "Chroma_${System.currentTimeMillis()}.mp4")
+                                        setAllowedOverMetered(true)
+                                        setAllowedOverRoaming(true)
+                                    }
+                                    val manager = getSystemService(Context.DOWNLOAD_SERVICE) as? android.app.DownloadManager
+                                    manager?.enqueue(request)
+                                    com.chroma.studio.ui.components.ToastManager.showToast("Downloading video to Movies...")
+                                } else {
+                                    com.chroma.studio.ui.components.ToastManager.showToast("Video saved to library!")
                                 }
-                                val manager = getSystemService(Context.DOWNLOAD_SERVICE) as? android.app.DownloadManager
-                                manager?.enqueue(request)
-                                com.chroma.studio.ui.components.ToastManager.showToast("Downloading video to Movies...")
-                            } else {
+                            } catch (e: Exception) {
                                 com.chroma.studio.ui.components.ToastManager.showToast("Video saved to library!")
                             }
-                        } catch (e: Exception) {
-                            com.chroma.studio.ui.components.ToastManager.showToast("Video saved to library!")
-                        }
-                    } else {
-                        vm.repository.save(
-                            ChromaWork(
-                                id = java.util.UUID.randomUUID().toString(),
-                                name = work.title,
-                                description = "Downloaded from @${work.authorUsername}",
-                                layersJson = work.jsonUrl,
-                                canvasShape = "rounded",
-                                lastModifiedAt = System.currentTimeMillis()
+                        } else {
+                            vm.repository.save(
+                                ChromaWork(
+                                    id = java.util.UUID.randomUUID().toString(),
+                                    name = work.title,
+                                    description = "Downloaded from @${work.authorUsername}",
+                                    layersJson = work.jsonUrl,
+                                    canvasShape = "rounded",
+                                    lastModifiedAt = System.currentTimeMillis()
+                                )
                             )
-                        )
-                        com.chroma.studio.ui.components.ToastManager.showToast("Saved to library!")
+                            com.chroma.studio.ui.components.ToastManager.showToast("Saved to library!")
+                        }
                     }
                 }
 
@@ -713,13 +744,14 @@ class HomeActivity : ComponentActivity() {
                                                             interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                                                             indication = null
                                                         ) {
-                                                            if (index >= 3) {
-                                                                val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
-                                                                val hasLocal = com.chroma.studio.data.SavedAccountManager.getSavedAccounts(this@HomeActivity).isNotEmpty()
-                                                                if (auth.currentUser == null && !hasLocal) {
-                                                                    navController.navigate("login")
-                                                                    return@clickable
-                                                                }
+                                                            val isGuest = com.chroma.studio.data.SavedAccountManager.isGuest(this@HomeActivity)
+                                                            if (index >= 3 && isGuest) {
+                                                                com.chroma.studio.ui.components.ToastManager.showToast(
+                                                                    if (index == 3) "Sign in or create an account to access Messages & Chat"
+                                                                    else "Sign in or create an account to access Profile"
+                                                                )
+                                                                navController.navigate("login")
+                                                                return@clickable
                                                             }
                                                             if (currentRoute != "main") {
                                                                 navController.popBackStack("main", inclusive = false)
@@ -791,13 +823,14 @@ class HomeActivity : ComponentActivity() {
                                                                 }.minByOrNull { it.second }?.first ?: pagerState.currentPage
                                                                 isDraggingPill = false
                                                                 pillDragOffsetX = 0f
-                                                                if (closest >= 3) {
-                                                                    val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
-                                                                    val hasLocal = com.chroma.studio.data.SavedAccountManager.getSavedAccounts(this@HomeActivity).isNotEmpty()
-                                                                    if (auth.currentUser == null && !hasLocal) {
-                                                                        navController.navigate("login")
-                                                                        return@detectDragGesturesAfterLongPress
-                                                                    }
+                                                                val isGuest = com.chroma.studio.data.SavedAccountManager.isGuest(this@HomeActivity)
+                                                                if (closest >= 3 && isGuest) {
+                                                                    com.chroma.studio.ui.components.ToastManager.showToast(
+                                                                        if (closest == 3) "Sign in or create an account to access Messages & Chat"
+                                                                        else "Sign in or create an account to access Profile"
+                                                                    )
+                                                                    navController.navigate("login")
+                                                                    return@detectDragGesturesAfterLongPress
                                                                 }
                                                                 if (currentRoute != "main") {
                                                                     navController.popBackStack("main", inclusive = false)
@@ -1069,6 +1102,7 @@ class HomeActivity : ComponentActivity() {
                                 navController.navigate("userProfile/$creatorId?postId=$postId")
                             },
                             onRemixWork = onRemixCommunityPost,
+                            onRequireLogin = { navController.navigate("login") },
                             onBack = {
                                 coroutineScope.launch { pagerState.animateScrollToPage(0) }
                             }
@@ -1132,10 +1166,13 @@ class HomeActivity : ComponentActivity() {
                         )
                                 }
                                 3 -> {
+                                    val isGuest = com.chroma.studio.data.SavedAccountManager.isGuest(this@HomeActivity)
                                     val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
-                                    if (auth.currentUser == null) {
+                                    if (isGuest || auth.currentUser == null) {
                                         androidx.compose.runtime.LaunchedEffect(Unit) {
-                                            navController.navigate("main") { popUpTo("main") { inclusive = true } }
+                                            pagerState.scrollToPage(0)
+                                            com.chroma.studio.ui.components.ToastManager.showToast("Sign in or create an account to access Messages & Chat")
+                                            navController.navigate("login")
                                         }
                                     } else {
                                         com.chroma.studio.chat.ChatScreen(
@@ -1155,103 +1192,102 @@ class HomeActivity : ComponentActivity() {
                                     }
                                 }
                                 4 -> {
-                        val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
-                        val activeSaved = com.chroma.studio.data.SavedAccountManager.getSavedAccounts(this@HomeActivity).firstOrNull()
-                        val activeUid = auth.currentUser?.uid ?: activeSaved?.uid
-                        if (activeUid == null) {
-                            // Render Oscellion Onboarding Screen
-                            com.chroma.studio.ui.onboarding.OscellionOnboardingScreen(
-                                onLoginSuccess = {
-                                    prefs.edit().putBoolean("is_first_launch", false).apply()
-                                    prefs.edit().putBoolean("has_accepted_terms", true).apply()
-                                    prefs.edit().putBoolean("has_completed_post_onboarding", true).apply()
-                                    vm.refresh()
-                                },
-                                onCancel = {
-                                    coroutineScope.launch { pagerState.animateScrollToPage(0) }
-                                }
-                            )
-                        } else {
-                            com.chroma.studio.ui.screens.UserProfileScreen(
-                                userId = activeUid,
-                                repository = vm.repository,
-                                chatViewModel = chatVm,
-                                storyViewModel = storyVm,
-                                showBackButton = false,
-                                onRequireLogin = { navController.navigate("login") },
-                                onLogout = handleLogout,
-                                onNavigateToChat = { otherUserId ->
-                                    chatVm.startChat(otherUserId) { roomId ->
-                                        navController.navigate("chat/$roomId") {
-                                            launchSingleTop = true
-                                        }
-                                    }
-                                },
-                                onNavigateToEditProfile = { navController.navigate("profile_identity") },
-                                onNavigateToSettings = { navController.navigate("settings") },
-                                onDownloadWork = onDownloadCommunityPost,
-                                onNavigateToUserList = { targetUserId, type ->
-                                    navController.navigate("user_list/$targetUserId/$type")
-                                },
-                                onRemixWork = onRemixCommunityPost,
-                                onNavigateToOriginal = { authorId, origPostId ->
-                                    if (origPostId != null) {
-                                        navController.navigate("userProfile/$authorId?postId=$origPostId")
+                                    val isGuest = com.chroma.studio.data.SavedAccountManager.isGuest(this@HomeActivity)
+                                    val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+                                    val activeSaved = com.chroma.studio.data.SavedAccountManager.getActiveAccount(this@HomeActivity)
+                                    val activeUid = auth.currentUser?.uid ?: activeSaved?.uid
+                                    if (isGuest || activeUid == null || com.chroma.studio.data.SavedAccountManager.isGuestUid(activeUid)) {
+                                        com.chroma.studio.ui.screens.GuestProfilePlaceholderScreen(
+                                            onSignInClick = { navController.navigate("login") },
+                                            onExploreStudioClick = {
+                                                coroutineScope.launch { pagerState.animateScrollToPage(0) }
+                                            }
+                                        )
                                     } else {
-                                        navController.navigate("userProfile/$authorId")
+                                        com.chroma.studio.ui.screens.UserProfileScreen(
+                                            userId = activeUid,
+                                            repository = vm.repository,
+                                            chatViewModel = chatVm,
+                                            storyViewModel = storyVm,
+                                            showBackButton = false,
+                                            onRequireLogin = { navController.navigate("login") },
+                                            onLogout = handleLogout,
+                                            onNavigateToChat = { otherUserId ->
+                                                chatVm.startChat(otherUserId) { roomId ->
+                                                    navController.navigate("chat/$roomId") {
+                                                        launchSingleTop = true
+                                                    }
+                                                }
+                                            },
+                                            onNavigateToEditProfile = { navController.navigate("profile_identity") },
+                                            onNavigateToSettings = { navController.navigate("settings") },
+                                            onDownloadWork = onDownloadCommunityPost,
+                                            onNavigateToUserList = { targetUserId, type ->
+                                                navController.navigate("user_list/$targetUserId/$type")
+                                            },
+                                            onRemixWork = onRemixCommunityPost,
+                                            onNavigateToOriginal = { authorId, origPostId ->
+                                                if (origPostId != null) {
+                                                    navController.navigate("userProfile/$authorId?postId=$origPostId")
+                                                } else {
+                                                    navController.navigate("userProfile/$authorId")
+                                                }
+                                            },
+                                            onNavigateToCreateStory = { maybeUri ->
+                                                storyInitialPhotoUri = maybeUri
+                                                navController.navigate("story_editor")
+                                            },
+                                            onStoryViewerChange = { isProfileStoryViewerActive = it },
+                                            onBack = { navController.popBackStack() }
+                                        )
                                     }
-                                },
-                                onNavigateToCreateStory = { maybeUri ->
-                                    storyInitialPhotoUri = maybeUri
-                                    navController.navigate("story_editor")
-                                },
-                                onStoryViewerChange = { isProfileStoryViewerActive = it },
-                                onBack = { navController.popBackStack() }
-                            )
-                        }
                                 }
                             }
                         }
                     }
 
                     composable("create_post") {
-                        val importedUri = flashImportedMediaUris.firstOrNull() ?: flashPickerPhotoUris.firstOrNull()
-                        com.chroma.studio.ui.screens.PostCreationFlowScreen(
-                            initialPhotoUri = importedUri,
-                            onFinish = {
-                                flashImportedMediaUris = emptyList()
-                                flashPickerPhotoUris = emptyList()
-                                navController.popBackStack()
-                                coroutineScope.launch {
-                                    pagerState.animateScrollToPage(2)
+                        AuthenticatedRoute(navController, "Post Creation") {
+                            val importedUri = flashImportedMediaUris.firstOrNull() ?: flashPickerPhotoUris.firstOrNull()
+                            com.chroma.studio.ui.screens.PostCreationFlowScreen(
+                                initialPhotoUri = importedUri,
+                                onFinish = {
+                                    flashImportedMediaUris = emptyList()
+                                    flashPickerPhotoUris = emptyList()
+                                    navController.popBackStack()
+                                    coroutineScope.launch {
+                                        pagerState.animateScrollToPage(2)
+                                    }
+                                },
+                                onClose = {
+                                    flashImportedMediaUris = emptyList()
+                                    flashPickerPhotoUris = emptyList()
+                                    navController.popBackStack()
                                 }
-                            },
-                            onClose = {
-                                flashImportedMediaUris = emptyList()
-                                flashPickerPhotoUris = emptyList()
-                                navController.popBackStack()
-                            }
-                        )
+                            )
+                        }
                     }
 
                     composable("create_post/{mode}") {
-                        val importedUri = flashImportedMediaUris.firstOrNull() ?: flashPickerPhotoUris.firstOrNull()
-                        com.chroma.studio.ui.screens.PostCreationFlowScreen(
-                            initialPhotoUri = importedUri,
-                            onFinish = {
-                                flashImportedMediaUris = emptyList()
-                                flashPickerPhotoUris = emptyList()
-                                navController.popBackStack()
-                                coroutineScope.launch {
-                                    pagerState.animateScrollToPage(2)
+                        AuthenticatedRoute(navController, "Post Creation") {
+                            val importedUri = flashImportedMediaUris.firstOrNull() ?: flashPickerPhotoUris.firstOrNull()
+                            com.chroma.studio.ui.screens.PostCreationFlowScreen(
+                                initialPhotoUri = importedUri,
+                                onFinish = {
+                                    flashImportedMediaUris = emptyList()
+                                    flashPickerPhotoUris = emptyList()
+                                    navController.popBackStack()
+                                    coroutineScope.launch {
+                                        pagerState.animateScrollToPage(2)
+                                    }
+                                },
+                                onClose = {
+                                    flashImportedMediaUris = emptyList()
+                                    flashPickerPhotoUris = emptyList()
+                                    navController.popBackStack()
                                 }
-                            },
-                            onClose = {
-                                flashImportedMediaUris = emptyList()
-                                flashPickerPhotoUris = emptyList()
-                                navController.popBackStack()
-                            }
-                        )
+                            )
+                        }
                     }
 
                     composable(
@@ -1268,61 +1304,67 @@ class HomeActivity : ComponentActivity() {
                             }
                         )
                     ) {
-                        val importedUri = flashImportedMediaUris.firstOrNull() ?: flashPickerPhotoUris.firstOrNull()
-                        com.chroma.studio.ui.screens.PostCreationFlowScreen(
-                            initialPhotoUri = importedUri,
-                            onFinish = {
-                                flashImportedMediaUris = emptyList()
-                                flashPickerPhotoUris = emptyList()
-                                navController.popBackStack()
-                                coroutineScope.launch {
-                                    pagerState.animateScrollToPage(2)
+                        AuthenticatedRoute(navController, "Creator Studio") {
+                            val importedUri = flashImportedMediaUris.firstOrNull() ?: flashPickerPhotoUris.firstOrNull()
+                            com.chroma.studio.ui.screens.PostCreationFlowScreen(
+                                initialPhotoUri = importedUri,
+                                onFinish = {
+                                    flashImportedMediaUris = emptyList()
+                                    flashPickerPhotoUris = emptyList()
+                                    navController.popBackStack()
+                                    coroutineScope.launch {
+                                        pagerState.animateScrollToPage(2)
+                                    }
+                                },
+                                onClose = {
+                                    flashImportedMediaUris = emptyList()
+                                    flashPickerPhotoUris = emptyList()
+                                    navController.popBackStack()
                                 }
-                            },
-                            onClose = {
-                                flashImportedMediaUris = emptyList()
-                                flashPickerPhotoUris = emptyList()
-                                navController.popBackStack()
-                            }
-                        )
+                            )
+                        }
                     }
 
                     composable("flash_projects_hub") {
-                        com.chroma.studio.ui.screens.FlashProjectsHubScreen(
-                            onBack = { navController.popBackStack() },
-                            onImportMedia = { uris ->
-                                flashImportedMediaUris = uris
-                                flashPickerVideoUri = uris.firstOrNull()
-                                navController.navigate("flash_video_editor")
-                            },
-                            onOpenDraft = { draft ->
-                                flashPickerVideoUri = draft.videoUri?.let { Uri.parse(it) }
-                                flashTrimStart = draft.flashTrimStartMs
-                                flashTrimEnd = draft.flashTrimEndMs
-                                navController.navigate("flash_video_editor?draftId=${draft.id}")
-                            },
-                            onOpenSavedVideo = { videoUri ->
-                                flashPickerVideoUri = videoUri
-                                navController.navigate("flash_video_editor")
-                            }
-                        )
-                    }
-
-                    composable("drafts_list") {
-                        com.chroma.studio.ui.screens.DraftsListScreen(
-                            workRepository = vm.repository,
-                            onOpenDraft = { draft ->
-                                if (draft.mode.equals("flash", ignoreCase = true) || draft.videoUri != null) {
+                        AuthenticatedRoute(navController, "Flash Video Hub") {
+                            com.chroma.studio.ui.screens.FlashProjectsHubScreen(
+                                onBack = { navController.popBackStack() },
+                                onImportMedia = { uris ->
+                                    flashImportedMediaUris = uris
+                                    flashPickerVideoUri = uris.firstOrNull()
+                                    navController.navigate("flash_video_editor")
+                                },
+                                onOpenDraft = { draft ->
                                     flashPickerVideoUri = draft.videoUri?.let { Uri.parse(it) }
                                     flashTrimStart = draft.flashTrimStartMs
                                     flashTrimEnd = draft.flashTrimEndMs
                                     navController.navigate("flash_video_editor?draftId=${draft.id}")
-                                } else {
-                                    navController.navigate("creator_studio/${draft.mode}?draftId=${draft.id}")
+                                },
+                                onOpenSavedVideo = { videoUri ->
+                                    flashPickerVideoUri = videoUri
+                                    navController.navigate("flash_video_editor")
                                 }
-                            },
-                            onBack = { navController.popBackStack() }
-                        )
+                            )
+                        }
+                    }
+
+                    composable("drafts_list") {
+                        AuthenticatedRoute(navController, "Drafts") {
+                            com.chroma.studio.ui.screens.DraftsListScreen(
+                                workRepository = vm.repository,
+                                onOpenDraft = { draft ->
+                                    if (draft.mode.equals("flash", ignoreCase = true) || draft.videoUri != null) {
+                                        flashPickerVideoUri = draft.videoUri?.let { Uri.parse(it) }
+                                        flashTrimStart = draft.flashTrimStartMs
+                                        flashTrimEnd = draft.flashTrimEndMs
+                                        navController.navigate("flash_video_editor?draftId=${draft.id}")
+                                    } else {
+                                        navController.navigate("creator_studio/${draft.mode}?draftId=${draft.id}")
+                                    }
+                                },
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
                     }
 
                     composable(
@@ -1497,18 +1539,20 @@ class HomeActivity : ComponentActivity() {
                     }
 
                     composable("settings") {
-                        com.chroma.studio.ui.screens.AccountCenterScreen(
-                            onNavigateToProfileIdentity = { navController.navigate("profile_identity") },
-                            onNavigateToSecurity = { navController.navigate("security") },
-                            onNavigateToPrivacy = { navController.navigate("privacy") },
-                            onNavigateToNotifications = { navController.navigate("notifications") },
-                            onNavigateToArchives = { navController.navigate("archives") },
-                            onNavigateToActivityHistory = { navController.navigate("activity_history") },
-                            onNavigateToPrivacyTerms = { navController.navigate("privacy_terms") },
-                            onNavigateToSwitchLab = { navController.navigate("switch_lab") },
-                            onBack = { navController.popBackStack() },
-                            onLogout = handleLogout
-                        )
+                        AuthenticatedRoute(navController, "Settings & Preferences") {
+                            com.chroma.studio.ui.screens.AccountCenterScreen(
+                                onNavigateToProfileIdentity = { navController.navigate("profile_identity") },
+                                onNavigateToSecurity = { navController.navigate("security") },
+                                onNavigateToPrivacy = { navController.navigate("privacy") },
+                                onNavigateToNotifications = { navController.navigate("notifications") },
+                                onNavigateToArchives = { navController.navigate("archives") },
+                                onNavigateToActivityHistory = { navController.navigate("activity_history") },
+                                onNavigateToPrivacyTerms = { navController.navigate("privacy_terms") },
+                                onNavigateToSwitchLab = { navController.navigate("switch_lab") },
+                                onBack = { navController.popBackStack() },
+                                onLogout = handleLogout
+                            )
+                        }
                     }
 
                     composable("switch_lab") {
@@ -1518,211 +1562,227 @@ class HomeActivity : ComponentActivity() {
                     }
 
                     composable("profile_identity") {
-                        val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
-                        val activeSaved = com.chroma.studio.data.SavedAccountManager.getSavedAccounts(this@HomeActivity).firstOrNull()
-                        val activeUid = auth.currentUser?.uid ?: activeSaved?.uid
-                        if (activeUid != null) {
-                            var profile by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<com.chroma.studio.model.UserProfile?>(null) }
-                            var works by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<List<com.chroma.studio.model.DiscoverPost>>(emptyList()) }
-                            val discoverVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.DiscoverViewModel>()
+                        AuthenticatedRoute(navController, "Profile Identity") {
+                            val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+                            val activeSaved = com.chroma.studio.data.SavedAccountManager.getSavedAccounts(this@HomeActivity).firstOrNull()
+                            val activeUid = auth.currentUser?.uid ?: activeSaved?.uid
+                            if (activeUid != null) {
+                                var profile by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<com.chroma.studio.model.UserProfile?>(null) }
+                                var works by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<List<com.chroma.studio.model.DiscoverPost>>(emptyList()) }
+                                val discoverVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.DiscoverViewModel>()
 
-                            androidx.compose.runtime.LaunchedEffect(activeUid) {
-                                val fetched = discoverVm.repository.getUserProfile(activeUid)
-                                profile = fetched ?: com.chroma.studio.model.UserProfile(
-                                    uid = activeUid,
-                                    username = activeSaved?.username ?: "creator",
-                                    displayName = activeSaved?.displayName ?: "Studio Creator"
-                                )
-                                works = discoverVm.repository.getWorksByUser(activeUid)
-                            }
+                                androidx.compose.runtime.LaunchedEffect(activeUid) {
+                                    val fetched = discoverVm.repository.getUserProfile(activeUid)
+                                    profile = fetched ?: com.chroma.studio.model.UserProfile(
+                                        uid = activeUid,
+                                        username = activeSaved?.username ?: "creator",
+                                        displayName = activeSaved?.displayName ?: "Studio Creator"
+                                    )
+                                    works = discoverVm.repository.getWorksByUser(activeUid)
+                                }
 
-                            if (profile != null) {
-                                com.chroma.studio.ui.screens.ProfileIdentityScreen(
-                                    profile = profile!!,
-                                    works = works,
-                                    onSave = { updatedProfile ->
-                                        discoverVm.updateUserProfile(updatedProfile)
-                                        com.chroma.studio.data.SavedAccountManager.saveFromProfile(this@HomeActivity, updatedProfile)
-                                        Result.success(Unit)
-                                    },
-                                    onBack = { navController.popBackStack() }
-                                )
-                            } else {
-                                androidx.compose.foundation.layout.Box(modifier = androidx.compose.ui.Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
-                                    OscellionLoadingSpinner()
+                                if (profile != null) {
+                                    com.chroma.studio.ui.screens.ProfileIdentityScreen(
+                                        profile = profile!!,
+                                        works = works,
+                                        onSave = { updatedProfile ->
+                                            discoverVm.updateUserProfile(updatedProfile)
+                                            com.chroma.studio.data.SavedAccountManager.saveFromProfile(this@HomeActivity, updatedProfile)
+                                            Result.success(Unit)
+                                        },
+                                        onBack = { navController.popBackStack() }
+                                    )
+                                } else {
+                                    androidx.compose.foundation.layout.Box(modifier = androidx.compose.ui.Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                                        OscellionLoadingSpinner()
+                                    }
                                 }
                             }
                         }
                     }
 
                     composable("security") {
-                        val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
-                        val activeSaved = com.chroma.studio.data.SavedAccountManager.getSavedAccounts(this@HomeActivity).firstOrNull()
-                        val activeUid = auth.currentUser?.uid ?: activeSaved?.uid
-                        if (activeUid != null) {
-                            var profile by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<com.chroma.studio.model.UserProfile?>(null) }
-                            val discoverVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.DiscoverViewModel>()
+                        AuthenticatedRoute(navController, "Security") {
+                            val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+                            val activeSaved = com.chroma.studio.data.SavedAccountManager.getSavedAccounts(this@HomeActivity).firstOrNull()
+                            val activeUid = auth.currentUser?.uid ?: activeSaved?.uid
+                            if (activeUid != null) {
+                                var profile by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<com.chroma.studio.model.UserProfile?>(null) }
+                                val discoverVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.DiscoverViewModel>()
 
-                            androidx.compose.runtime.LaunchedEffect(activeUid) {
-                                val fetched = discoverVm.repository.getUserProfile(activeUid)
-                                profile = fetched ?: com.chroma.studio.model.UserProfile(
-                                    uid = activeUid,
-                                    username = activeSaved?.username ?: "creator",
-                                    displayName = activeSaved?.displayName ?: "Studio Creator"
-                                )
-                            }
-                            if (profile != null) {
-                                com.chroma.studio.ui.screens.SecurityScreen(
-                                    profile = profile!!,
-                                    onSave = { updatedProfile ->
-                                        discoverVm.viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                                            try {
-                                                com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users").document(updatedProfile.uid).set(updatedProfile).await()
-                                            } catch (e: Exception) {
-                                                android.util.Log.e("HomeActivity", "Failed to update profile", e)
+                                androidx.compose.runtime.LaunchedEffect(activeUid) {
+                                    val fetched = discoverVm.repository.getUserProfile(activeUid)
+                                    profile = fetched ?: com.chroma.studio.model.UserProfile(
+                                        uid = activeUid,
+                                        username = activeSaved?.username ?: "creator",
+                                        displayName = activeSaved?.displayName ?: "Studio Creator"
+                                    )
+                                }
+                                if (profile != null) {
+                                    com.chroma.studio.ui.screens.SecurityScreen(
+                                        profile = profile!!,
+                                        onSave = { updatedProfile ->
+                                            discoverVm.viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                                try {
+                                                    com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users").document(updatedProfile.uid).set(updatedProfile).await()
+                                                } catch (e: Exception) {
+                                                    android.util.Log.e("HomeActivity", "Failed to update profile", e)
+                                                }
                                             }
-                                        }
-                                        navController.popBackStack()
-                                    },
-                                    onBack = { navController.popBackStack() }
-                                )
+                                            navController.popBackStack()
+                                        },
+                                        onBack = { navController.popBackStack() }
+                                    )
+                                }
                             }
                         }
                     }
 
                     composable("privacy") {
-                        val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
-                        val activeSaved = com.chroma.studio.data.SavedAccountManager.getSavedAccounts(this@HomeActivity).firstOrNull()
-                        val activeUid = auth.currentUser?.uid ?: activeSaved?.uid
-                        if (activeUid != null) {
-                            var profile by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<com.chroma.studio.model.UserProfile?>(null) }
-                            val discoverVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.DiscoverViewModel>()
+                        AuthenticatedRoute(navController, "Privacy") {
+                            val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+                            val activeSaved = com.chroma.studio.data.SavedAccountManager.getSavedAccounts(this@HomeActivity).firstOrNull()
+                            val activeUid = auth.currentUser?.uid ?: activeSaved?.uid
+                            if (activeUid != null) {
+                                var profile by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<com.chroma.studio.model.UserProfile?>(null) }
+                                val discoverVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.DiscoverViewModel>()
 
-                            androidx.compose.runtime.LaunchedEffect(activeUid) {
-                                val fetched = discoverVm.repository.getUserProfile(activeUid)
-                                profile = fetched ?: com.chroma.studio.model.UserProfile(
-                                    uid = activeUid,
-                                    username = activeSaved?.username ?: "creator",
-                                    displayName = activeSaved?.displayName ?: "Studio Creator"
-                                )
-                            }
-                            if (profile != null) {
-                                com.chroma.studio.ui.screens.PrivacyScreen(
-                                    profile = profile!!,
-                                    onSave = { updatedProfile ->
-                                        discoverVm.viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                                            try {
-                                                com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users").document(updatedProfile.uid).set(updatedProfile).await()
-                                            } catch (e: Exception) {
-                                                android.util.Log.e("HomeActivity", "Failed to update profile", e)
+                                androidx.compose.runtime.LaunchedEffect(activeUid) {
+                                    val fetched = discoverVm.repository.getUserProfile(activeUid)
+                                    profile = fetched ?: com.chroma.studio.model.UserProfile(
+                                        uid = activeUid,
+                                        username = activeSaved?.username ?: "creator",
+                                        displayName = activeSaved?.displayName ?: "Studio Creator"
+                                    )
+                                }
+                                if (profile != null) {
+                                    com.chroma.studio.ui.screens.PrivacyScreen(
+                                        profile = profile!!,
+                                        onSave = { updatedProfile ->
+                                            discoverVm.viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                                try {
+                                                    com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users").document(updatedProfile.uid).set(updatedProfile).await()
+                                                } catch (e: Exception) {
+                                                    android.util.Log.e("HomeActivity", "Failed to update profile", e)
+                                                }
                                             }
-                                        }
-                                        navController.popBackStack()
-                                    },
-                                    onBack = { navController.popBackStack() }
-                                )
+                                            navController.popBackStack()
+                                        },
+                                        onBack = { navController.popBackStack() }
+                                    )
+                                }
                             }
                         }
                     }
 
                     composable("notifications_feed") {
-                        com.chroma.studio.ui.screens.NotificationsFeedScreen(
-                            onBack = { navController.popBackStack() },
-                            onNavigateToSettings = { navController.navigate("notifications") },
-                            onNavigateToProfile = { userId -> navController.navigate("userProfile/$userId") },
-                            onNavigateToChat = { roomId -> navController.navigate("chat/$roomId") },
-                            onNavigateToPost = { postId, authorId ->
-                                if (!authorId.isNullOrBlank()) navController.navigate("userProfile/$authorId?postId=$postId")
-                                else navController.navigate("flash_feed")
-                            },
-                            onNavigateToProject = { draftId ->
-                                if (!draftId.isNullOrBlank()) navController.navigate("flash_video_editor?draftId=$draftId")
-                                else navController.navigate("flash_projects_hub")
-                            }
-                        )
-                    }
-
-                    composable("notifications") {
-                        val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
-                        val currentUser = auth.currentUser
-                        if (currentUser != null) {
-                            var profile by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<com.chroma.studio.model.UserProfile?>(null) }
-                            val discoverVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.DiscoverViewModel>()
-
-                            androidx.compose.runtime.LaunchedEffect(currentUser.uid) {
-                                profile = discoverVm.repository.getUserProfile(currentUser.uid)
-                            }
-                            if (profile != null) {
-                                com.chroma.studio.ui.screens.NotificationsSettingsScreen(
-                                    profile = profile!!,
-                                    onSave = { updatedProfile ->
-                                        discoverVm.viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                                            try {
-                                                com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users").document(updatedProfile.uid).set(updatedProfile).await()
-                                            } catch (e: Exception) {
-                                                android.util.Log.e("HomeActivity", "Failed to update profile", e)
-                                            }
-                                        }
-                                        navController.popBackStack()
-                                    },
-                                    onBack = { navController.popBackStack() }
-                                )
-                            }
-                        }
-                    }
-                    composable("archives") {
-                        val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
-                        val currentUser = auth.currentUser
-                        if (currentUser != null) {
-                            val discoverVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.DiscoverViewModel>()
-                            com.chroma.studio.ui.screens.ArchivesScreen(
-                                userId = currentUser.uid,
-                                discoverVm = discoverVm,
-                                repository = vm.repository,
+                        AuthenticatedRoute(navController, "Notifications") {
+                            com.chroma.studio.ui.screens.NotificationsFeedScreen(
                                 onBack = { navController.popBackStack() },
-                                onRequireLogin = { navController.navigate("login") }
-                            )
-                        }
-                    }
-
-                    composable("activity_history") {
-                        val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
-                        val currentUser = auth.currentUser
-                        if (currentUser != null) {
-                            val discoverVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.DiscoverViewModel>()
-                            com.chroma.studio.ui.screens.ActivityHistoryScreen(
-                                userId = currentUser.uid,
-                                discoverVm = discoverVm,
-                                repository = vm.repository,
-                                onBack = { navController.popBackStack() },
-                                onRequireLogin = { navController.navigate("login") },
-                                onNavigateToUser = { targetUserId -> navController.navigate("userProfile/$targetUserId") },
+                                onNavigateToSettings = { navController.navigate("notifications") },
+                                onNavigateToProfile = { userId -> navController.navigate("userProfile/$userId") },
+                                onNavigateToChat = { roomId -> navController.navigate("chat/$roomId") },
                                 onNavigateToPost = { postId, authorId ->
-                                    if (!authorId.isNullOrBlank()) {
-                                        navController.navigate("userProfile/$authorId?postId=$postId")
-                                    } else {
-                                        navController.navigate("flash_feed")
-                                    }
+                                    if (!authorId.isNullOrBlank()) navController.navigate("userProfile/$authorId?postId=$postId")
+                                    else navController.navigate("flash_feed")
+                                },
+                                onNavigateToProject = { draftId ->
+                                    if (!draftId.isNullOrBlank()) navController.navigate("flash_video_editor?draftId=$draftId")
+                                    else navController.navigate("flash_projects_hub")
                                 }
                             )
                         }
                     }
 
+                    composable("notifications") {
+                        AuthenticatedRoute(navController, "Notifications Settings") {
+                            val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+                            val currentUser = auth.currentUser
+                            if (currentUser != null) {
+                                var profile by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<com.chroma.studio.model.UserProfile?>(null) }
+                                val discoverVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.DiscoverViewModel>()
+
+                                androidx.compose.runtime.LaunchedEffect(currentUser.uid) {
+                                    profile = discoverVm.repository.getUserProfile(currentUser.uid)
+                                }
+                                if (profile != null) {
+                                    com.chroma.studio.ui.screens.NotificationsSettingsScreen(
+                                        profile = profile!!,
+                                        onSave = { updatedProfile ->
+                                            discoverVm.viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                                try {
+                                                    com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users").document(updatedProfile.uid).set(updatedProfile).await()
+                                                } catch (e: Exception) {
+                                                    android.util.Log.e("HomeActivity", "Failed to update profile", e)
+                                                }
+                                            }
+                                            navController.popBackStack()
+                                        },
+                                        onBack = { navController.popBackStack() }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    composable("archives") {
+                        AuthenticatedRoute(navController, "Archives") {
+                            val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+                            val currentUser = auth.currentUser
+                            if (currentUser != null) {
+                                val discoverVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.DiscoverViewModel>()
+                                com.chroma.studio.ui.screens.ArchivesScreen(
+                                    userId = currentUser.uid,
+                                    discoverVm = discoverVm,
+                                    repository = vm.repository,
+                                    onBack = { navController.popBackStack() },
+                                    onRequireLogin = { navController.navigate("login") }
+                                )
+                            }
+                        }
+                    }
+
+                    composable("activity_history") {
+                        AuthenticatedRoute(navController, "Activity History") {
+                            val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+                            val currentUser = auth.currentUser
+                            if (currentUser != null) {
+                                val discoverVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.DiscoverViewModel>()
+                                com.chroma.studio.ui.screens.ActivityHistoryScreen(
+                                    userId = currentUser.uid,
+                                    discoverVm = discoverVm,
+                                    repository = vm.repository,
+                                    onBack = { navController.popBackStack() },
+                                    onRequireLogin = { navController.navigate("login") },
+                                    onNavigateToUser = { targetUserId -> navController.navigate("userProfile/$targetUserId") },
+                                    onNavigateToPost = { postId, authorId ->
+                                        if (!authorId.isNullOrBlank()) {
+                                            navController.navigate("userProfile/$authorId?postId=$postId")
+                                        } else {
+                                            navController.navigate("flash_feed")
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
+
                     // ── Flash Upload Flow Routes ──────────────────────────────────────
                     composable("flash_picker") {
-                        FlashPickerScreen(
-                            onVideoSelected = { uri ->
-                                flashPickerVideoUri = uri
-                                flashMediaType = FlashMediaType.VIDEO
-                                navController.navigate("flash_video_editor")
-                            },
-                            onPhotosSelected = { uris ->
-                                flashImportedMediaUris = uris
-                                flashMediaType = FlashMediaType.VIDEO
-                                navController.navigate("flash_video_editor")
-                            },
-                            onBack = { navController.popBackStack() }
-                        )
+                        AuthenticatedRoute(navController, "Flash Video") {
+                            FlashPickerScreen(
+                                onVideoSelected = { uri ->
+                                    flashPickerVideoUri = uri
+                                    flashMediaType = FlashMediaType.VIDEO
+                                    navController.navigate("flash_video_editor")
+                                },
+                                onPhotosSelected = { uris ->
+                                    flashImportedMediaUris = uris
+                                    flashMediaType = FlashMediaType.VIDEO
+                                    navController.navigate("flash_video_editor")
+                                },
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
                     }
 
                     composable(
@@ -1920,43 +1980,49 @@ class HomeActivity : ComponentActivity() {
                         popEnterTransition = { androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(350)) },
                         popExitTransition = { androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(350)) }
                     ) { backStackEntry ->
-                        val roomId = backStackEntry.arguments?.getString("roomId") ?: return@composable
-                        val storyVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.StoryViewModel>()
-                        com.chroma.studio.chat.ChatScreen(
-                            roomId = roomId,
-                            initialRoomId = roomId,
-                            chatViewModel = chatVm,
-                            storyViewModel = storyVm,
-                            onBack = { navController.popBackStack() },
-                            onNavigateBack = { navController.popBackStack() },
-                            onNavigateToUserProfile = { userId -> navController.navigate("userProfile/$userId") },
-                            onNavigateToGroupInfo = { rId -> navController.navigate("group_info/$rId") },
-                            onInsideChatChange = { isInsideChatTab = it }
-                        )
+                        AuthenticatedRoute(navController, "Chat & Messages") {
+                            val roomId = backStackEntry.arguments?.getString("roomId") ?: return@AuthenticatedRoute
+                            val storyVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.StoryViewModel>()
+                            com.chroma.studio.chat.ChatScreen(
+                                roomId = roomId,
+                                initialRoomId = roomId,
+                                chatViewModel = chatVm,
+                                storyViewModel = storyVm,
+                                onBack = { navController.popBackStack() },
+                                onNavigateBack = { navController.popBackStack() },
+                                onNavigateToUserProfile = { userId -> navController.navigate("userProfile/$userId") },
+                                onNavigateToGroupInfo = { rId -> navController.navigate("group_info/$rId") },
+                                onInsideChatChange = { isInsideChatTab = it }
+                            )
+                        }
                     }
 
                     composable(
                         route = "group_info/{roomId}",
                         arguments = listOf(androidx.navigation.navArgument("roomId") { type = androidx.navigation.NavType.StringType })
                     ) { backStackEntry ->
-                        val roomId = backStackEntry.arguments?.getString("roomId") ?: return@composable
-                        com.chroma.studio.ui.screens.GroupInfoScreen(
-                            chatViewModel = chatVm,
-                            roomId = roomId,
-                            onBack = { navController.popBackStack() },
-                            onNavigateToProfile = { userId -> navController.navigate("userProfile/$userId") }
-                        )
+                        AuthenticatedRoute(navController, "Group Info") {
+                            val roomId = backStackEntry.arguments?.getString("roomId") ?: return@AuthenticatedRoute
+                            com.chroma.studio.ui.screens.GroupInfoScreen(
+                                chatViewModel = chatVm,
+                                roomId = roomId,
+                                onBack = { navController.popBackStack() },
+                                onNavigateToProfile = { userId -> navController.navigate("userProfile/$userId") }
+                            )
+                        }
                     }
 
                     composable("create_group") {
-                        com.chroma.studio.ui.screens.CreateGroupScreen(
-                            chatViewModel = chatVm,
-                            onBack = { navController.popBackStack() },
-                            onGroupCreated = { roomId ->
-                                navController.popBackStack()
-                                navController.navigate("chat/$roomId")
-                            }
-                        )
+                        AuthenticatedRoute(navController, "Create Group") {
+                            com.chroma.studio.ui.screens.CreateGroupScreen(
+                                chatViewModel = chatVm,
+                                onBack = { navController.popBackStack() },
+                                onGroupCreated = { roomId ->
+                                    navController.popBackStack()
+                                    navController.navigate("chat/$roomId")
+                                }
+                            )
+                        }
                     }
 
                     composable(
@@ -1979,37 +2045,41 @@ class HomeActivity : ComponentActivity() {
                     }
 
                     composable("story_editor") {
-                        val storyVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.StoryViewModel>()
-                        com.chroma.studio.ui.screens.StoryEditorScreen(
-                            storyViewModel = storyVm,
-                            initialBackgroundUri = storyInitialPhotoUri,
-                            onNavigateBack = {
-                                storyInitialPhotoUri = null
-                                navController.popBackStack()
-                            },
-                            onStoryPosted = {
-                                storyInitialPhotoUri = null
-                                navController.popBackStack()
-                                com.chroma.studio.ui.components.ToastManager.showToast("Story published! 🌟")
-                            }
-                        )
+                        AuthenticatedRoute(navController, "Story Editor") {
+                            val storyVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.StoryViewModel>()
+                            com.chroma.studio.ui.screens.StoryEditorScreen(
+                                storyViewModel = storyVm,
+                                initialBackgroundUri = storyInitialPhotoUri,
+                                onNavigateBack = {
+                                    storyInitialPhotoUri = null
+                                    navController.popBackStack()
+                                },
+                                onStoryPosted = {
+                                    storyInitialPhotoUri = null
+                                    navController.popBackStack()
+                                    com.chroma.studio.ui.components.ToastManager.showToast("Story published! 🌟")
+                                }
+                            )
+                        }
                     }
 
                     composable("create_text_status") {
-                        val storyVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.StoryViewModel>()
-                        com.chroma.studio.ui.screens.StoryEditorScreen(
-                            storyViewModel = storyVm,
-                            initialBackgroundUri = storyInitialPhotoUri,
-                            onNavigateBack = {
-                                storyInitialPhotoUri = null
-                                navController.popBackStack()
-                            },
-                            onStoryPosted = {
-                                storyInitialPhotoUri = null
-                                navController.popBackStack()
-                                com.chroma.studio.ui.components.ToastManager.showToast("Story published! 🌟")
-                            }
-                        )
+                        AuthenticatedRoute(navController, "Story Status") {
+                            val storyVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.StoryViewModel>()
+                            com.chroma.studio.ui.screens.StoryEditorScreen(
+                                storyViewModel = storyVm,
+                                initialBackgroundUri = storyInitialPhotoUri,
+                                onNavigateBack = {
+                                    storyInitialPhotoUri = null
+                                    navController.popBackStack()
+                                },
+                                onStoryPosted = {
+                                    storyInitialPhotoUri = null
+                                    navController.popBackStack()
+                                    com.chroma.studio.ui.components.ToastManager.showToast("Story published! 🌟")
+                                }
+                            )
+                        }
                     }
                 }
             }

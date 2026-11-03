@@ -171,15 +171,15 @@ fun OscellionOnboardingScreen(
     fun enterAsGuest() {
         val guestAccount = SavedAccount(
             uid = "guest_creator_local",
-            username = "creator",
-            displayName = "Studio Creator",
+            username = "guest",
+            displayName = "Guest Creator",
             avatarUrl = "",
-            email = "creator@chromastudio.app",
+            email = "guest@chromastudio.app",
             lastLoginMillis = System.currentTimeMillis(),
             gender = "UNSPECIFIED"
         )
         SavedAccountManager.saveAccount(context, guestAccount)
-        Toast.makeText(context, "Welcome to Chroma Studio!", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, "Exploring Studio as Guest (Canvas & Posts unlocked)", Toast.LENGTH_SHORT).show()
         onLoginSuccess()
     }
 

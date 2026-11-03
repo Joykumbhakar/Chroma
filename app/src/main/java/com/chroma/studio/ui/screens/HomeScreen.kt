@@ -556,13 +556,13 @@ fun HomeScreen(
 
             ActionMenuType.POST -> {
 
-                if (FirebaseAuth.getInstance().currentUser != null) {
+                if (!com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
 
                     onNavigateToCreatePost?.invoke()
 
                 } else {
 
-                    showLoginScreen = true
+                    onRequireLogin()
 
                 }
 
@@ -570,13 +570,13 @@ fun HomeScreen(
 
             ActionMenuType.VIDEO -> {
 
-                if (FirebaseAuth.getInstance().currentUser != null) {
+                if (!com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
 
                     onNavigateToFlashPicker?.invoke()
 
                 } else {
 
-                    showLoginScreen = true
+                    onRequireLogin()
 
                 }
 
@@ -584,13 +584,13 @@ fun HomeScreen(
 
             ActionMenuType.STORY -> {
 
-                if (FirebaseAuth.getInstance().currentUser != null) {
+                if (!com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
 
                     onNavigateToCreateTextStatus?.invoke()
 
                 } else {
 
-                    showLoginScreen = true
+                    onRequireLogin()
 
                 }
 
@@ -598,7 +598,7 @@ fun HomeScreen(
 
             ActionMenuType.AI_GENERATOR -> {
 
-                if (FirebaseAuth.getInstance().currentUser != null) {
+                if (!com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
 
                     val intent = Intent(context, com.chroma.studio.MainActivity::class.java).apply {
 
@@ -610,7 +610,7 @@ fun HomeScreen(
 
                 } else {
 
-                    showLoginScreen = true
+                    onRequireLogin()
 
                 }
 
@@ -724,7 +724,15 @@ fun HomeScreen(
 
                         scope.launch { drawerState.close() }
 
-                        onNavigateToDrafts()
+                        if (com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
+
+                            onRequireLogin()
+
+                        } else {
+
+                            onNavigateToDrafts()
+
+                        }
 
                     }
 
@@ -746,7 +754,15 @@ fun HomeScreen(
 
                         scope.launch { drawerState.close() }
 
-                        onNavigateToSettings() 
+                        if (com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
+
+                            onRequireLogin()
+
+                        } else {
+
+                            onNavigateToSettings() 
+
+                        }
 
                     }
 

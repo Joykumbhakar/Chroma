@@ -1,4 +1,8 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package com.chroma.studio
+
+import android.content.Intent
 
 import com.chroma.studio.ui.components.VerifiedBadge
 
@@ -364,7 +368,17 @@ fun OscellionApp(vm: ChromaViewModel, workName: String, repository: com.chroma.s
                 onRedo = vm::redo,
                 onExport = vm::toggleExportModal,
                 isRemix = vm.isRemix,
-                onPublish = { showPublishDialog = true },
+                onPublish = {
+                    if (com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
+                        com.chroma.studio.ui.components.ToastManager.showToast("Sign in or create an account to publish to Community")
+                        val intent = Intent(context, Class.forName("com.chroma.studio.HomeActivity")).apply {
+                            putExtra("navigate_to", "login")
+                        }
+                        context.startActivity(intent)
+                    } else {
+                        showPublishDialog = true
+                    }
+                },
                 onSave = { 
                     val prefs = context.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
                     vm.saveWork(repository, prefs) 
@@ -498,7 +512,17 @@ fun OscellionApp(vm: ChromaViewModel, workName: String, repository: com.chroma.s
                 onRedo = vm::redo,
                 onExport = vm::toggleExportModal,
                 isRemix = vm.isRemix,
-                onPublish = { showPublishDialog = true },
+                onPublish = {
+                    if (com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
+                        com.chroma.studio.ui.components.ToastManager.showToast("Sign in or create an account to publish to Community")
+                        val intent = Intent(context, Class.forName("com.chroma.studio.HomeActivity")).apply {
+                            putExtra("navigate_to", "login")
+                        }
+                        context.startActivity(intent)
+                    } else {
+                        showPublishDialog = true
+                    }
+                },
                 onSave = { 
                     val prefs = context.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
                     vm.saveWork(repository, prefs) 

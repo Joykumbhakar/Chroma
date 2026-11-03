@@ -229,8 +229,9 @@ fun FlashFeedScreen(
                         isLiked = video.id in likedVideoIds,
                         isMuted = isMuted,
                         onToggleMute = { isMuted = !isMuted },
+                        onRequireLogin = onRequireLogin,
                         onLike = {
-                            if (FirebaseAuth.getInstance().currentUser == null) {
+                            if (FirebaseAuth.getInstance().currentUser == null || com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
                                 onRequireLogin()
                             } else {
                                 flashVm.toggleLike(video.id)
@@ -412,7 +413,8 @@ private fun FlashVideoItem(
     commentVm: com.chroma.studio.viewmodel.FlashCommentViewModel,
     onRemixRequested: (Uri, String, String) -> Unit,
     onNavigateToFlashPicker: () -> Unit = {},
-    onRemixVideo: ((FlashVideo) -> Unit)? = null
+    onRemixVideo: ((FlashVideo) -> Unit)? = null,
+    onRequireLogin: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -705,7 +707,13 @@ private fun FlashVideoItem(
                     icon = Lucide.MessageCircle,
                     tint = Color.White,
                     label = formatCount(video.commentCount),
-                    onClick = { showComments = true }
+                    onClick = {
+                        if (FirebaseAuth.getInstance().currentUser == null || com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
+                            onRequireLogin()
+                        } else {
+                            showComments = true
+                        }
+                    }
                 )
             }
 
@@ -716,7 +724,9 @@ private fun FlashVideoItem(
                     tint = Color.White,
                     label = formatCount(video.remixCount),
                     onClick = {
-                        if (onRemixVideo != null) {
+                        if (FirebaseAuth.getInstance().currentUser == null || com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
+                            onRequireLogin()
+                        } else if (onRemixVideo != null) {
                             onRemixVideo(video)
                         } else {
                             android.widget.Toast.makeText(context, "Preparing for Remix...", android.widget.Toast.LENGTH_SHORT).show()
@@ -990,6 +1000,7 @@ private fun FlashVideoItem(
                 video = video,
                 commentVm = commentVm,
                 onDismiss = { showComments = false },
+                onRequireLogin = onRequireLogin,
                 onCommentCountChanged = { delta ->
                     flashVm.incrementCommentCount(video.id, delta)
                 },
@@ -1421,8 +1432,10 @@ fun FlashCommentsSheet(
     commentVm: com.chroma.studio.viewmodel.FlashCommentViewModel,
     onDismiss: () -> Unit,
     onCommentCountChanged: (Int) -> Unit = {},
-    onReplyWithFlash: (String?) -> Unit
+    onReplyWithFlash: (String?) -> Unit,
+    onRequireLogin: () -> Unit = {}
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val colors = LocalOscellionColors.current
     val comments by commentVm.comments.collectAsState()
     val sortOrder by commentVm.sortOrder.collectAsState()
@@ -1767,6 +1780,10 @@ fun FlashCommentsSheet(
                         Spacer(Modifier.width(8.dp))
                         IconButton(
                             onClick = {
+                                if (FirebaseAuth.getInstance().currentUser == null || com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
+                                    onRequireLogin()
+                                    return@IconButton
+                                }
                                 val parentTargetId = replyingToComment?.id
                                 commentVm.addComment(
                                     videoId = video.id,

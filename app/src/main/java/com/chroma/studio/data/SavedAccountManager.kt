@@ -74,4 +74,19 @@ object SavedAccountManager {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit().remove(KEY_ACCOUNTS_JSON).apply()
     }
+
+    fun getActiveAccount(context: Context): SavedAccount? {
+        return getSavedAccounts(context).firstOrNull()
+    }
+
+    fun isGuest(context: Context): Boolean {
+        val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+        if (auth.currentUser != null) return false
+        val active = getActiveAccount(context)
+        return active == null || active.uid.startsWith("guest")
+    }
+
+    fun isGuestUid(uid: String?): Boolean {
+        return uid == null || uid.isBlank() || uid.startsWith("guest")
+    }
 }

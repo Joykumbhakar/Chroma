@@ -588,9 +588,13 @@ fun DiscoverScreen(
                 refreshProgress = refreshProgressAnim.value,
                 onTogglePlusMenu = { showCreateMenu = !showCreateMenu },
                 onToggleNotificationDrawer = {
-                    showCreateMenu = false
-                    hasUnreadNotifications = false
-                    onNavigateToNotifications()
+                    if (com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
+                        onRequireLogin()
+                    } else {
+                        showCreateMenu = false
+                        hasUnreadNotifications = false
+                        onNavigateToNotifications()
+                    }
                 },
                 onRefreshFeed = { triggerFeedRefresh() },
                 onExpandSearch = { isSearchExpanded = true },
@@ -605,13 +609,17 @@ fun DiscoverScreen(
                         onDismissRequest = { showCreateMenu = false },
                         onSelectOption = { optionTitle ->
                             showCreateMenu = false
-                            when (optionTitle) {
-                                "Post", "Create new Post" -> onCreatePost()
-                                "Flash", "Create new Flash(Video)" -> onCreateFlash()
-                                "Story", "Add New Story" -> {
-                                    showStoryGalleryPicker = true
+                            if (com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
+                                onRequireLogin()
+                            } else {
+                                when (optionTitle) {
+                                    "Post", "Create new Post" -> onCreatePost()
+                                    "Flash", "Create new Flash(Video)" -> onCreateFlash()
+                                    "Story", "Add New Story" -> {
+                                        showStoryGalleryPicker = true
+                                    }
+                                    "Work", "Create or post work" -> onPublishWork()
                                 }
-                                "Work", "Create or post work" -> onPublishWork()
                             }
                         }
                     )
@@ -670,7 +678,9 @@ fun DiscoverScreen(
                         myStoriesList = if (isLoading) emptyList() else myStories,
                         isUploading = isUploadingStory,
                         onMyStoryClick = {
-                            if (myStories.isNotEmpty()) {
+                            if (com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
+                                onRequireLogin()
+                            } else if (myStories.isNotEmpty()) {
                                 storyViewerInitialIndex = -1
                                 showStoryViewer = true
                             } else {
@@ -678,11 +688,19 @@ fun DiscoverScreen(
                             }
                         },
                         onAddStoryClick = {
-                            showStoryCreationSheet = true
+                            if (com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
+                                onRequireLogin()
+                            } else {
+                                showStoryCreationSheet = true
+                            }
                         },
                         onStoryClick = { groupIndex ->
-                            storyViewerInitialIndex = groupIndex
-                            showStoryViewer = true
+                            if (com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
+                                onRequireLogin()
+                            } else {
+                                storyViewerInitialIndex = groupIndex
+                                showStoryViewer = true
+                            }
                         }
                     )
                 }
@@ -738,7 +756,13 @@ fun DiscoverScreen(
                         CommunityInteractiveEmptyState(
                             selectedTab = selectedFeedTab,
                             searchQuery = searchQuery,
-                            onCreatePostClick = { onCreatePost() },
+                            onCreatePostClick = {
+                            if (com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
+                                onRequireLogin()
+                            } else {
+                                onCreatePost()
+                            }
+                        },
                             onRefreshClick = { triggerFeedRefresh() },
                             onTopicClick = { topic ->
                                 searchQuery = topic
@@ -763,7 +787,7 @@ fun DiscoverScreen(
                                 onToggleFeedMute = { isFeedMuted = !isFeedMuted },
                                 onToggleFollowCreator = {
                                     val uid = FirebaseAuth.getInstance().currentUser?.uid
-                                    if (uid.isNullOrBlank()) {
+                                    if (uid.isNullOrBlank() || com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
                                         onRequireLogin()
                                     } else {
                                         discoverViewModel?.toggleFollow(work.creatorId, uid)
@@ -776,7 +800,7 @@ fun DiscoverScreen(
                                 onAuthorClick = { authorId -> onAuthorClick(authorId, null) },
                                 onLikeClick = {
                                     val authUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
-                                    if (!authUserId.isNullOrBlank()) {
+                                    if (!authUserId.isNullOrBlank() && !com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
                                         onToggleLike(work.id, authUserId)
                                     } else {
                                         onRequireLogin()
@@ -784,29 +808,47 @@ fun DiscoverScreen(
                                 },
                                 onForceLike = {
                                     val authUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
-                                    if (!authUserId.isNullOrBlank()) {
+                                    if (!authUserId.isNullOrBlank() && !com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
                                         discoverViewModel?.toggleLike(work.id, authUserId, forceLike = true)
                                     } else {
                                         onRequireLogin()
                                     }
                                 },
                                 onDownloadClick = {
-                                    discoverViewModel?.trackDownload(work.id)
-                                    onDownloadWork(work)
+                                    if (com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
+                                        onRequireLogin()
+                                    } else {
+                                        discoverViewModel?.trackDownload(work.id)
+                                        onDownloadWork(work)
+                                    }
                                 },
                                 onRemixWork = {
-                                    discoverViewModel?.trackRemix(work.id)
-                                    onRemixWork(work)
+                                    if (com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
+                                        onRequireLogin()
+                                    } else {
+                                        discoverViewModel?.trackRemix(work.id)
+                                        onRemixWork(work)
+                                    }
                                 },
                                 onRemixClick = {
-                                    discoverViewModel?.trackRemix(work.id)
-                                    onRemixWork(work)
+                                    if (com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
+                                        onRequireLogin()
+                                    } else {
+                                        discoverViewModel?.trackRemix(work.id)
+                                        onRemixWork(work)
+                                    }
                                 },
                                 onDeleteWork = { onDeleteWork(work.id) },
                                 onArchiveWork = { workId -> discoverViewModel?.archiveWork(workId) },
                                 onEditWork = { workId, title, desc -> onEditWork(workId, title, desc) },
                                 onNavigateToOriginal = { authorId, postId -> onAuthorClick(authorId, postId) },
-                                onReportClick = { workId -> discoverViewModel?.reportWork(workId, "Flagged from feed options") },
+                                onReportClick = { workId ->
+                                    if (com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
+                                        onRequireLogin()
+                                    } else {
+                                        discoverViewModel?.reportWork(workId, "Flagged from feed options")
+                                    }
+                                },
                                 onMentionClick = { mention ->
                                     searchQuery = mention.removePrefix("@")
                                     isSearchExpanded = true
@@ -816,14 +858,24 @@ fun DiscoverScreen(
                                     isSearchExpanded = true
                                 },
                                 onShareClick = {
-                                    discoverViewModel?.trackShare(work.id)
-                                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                        type = "text/plain"
-                                        putExtra(Intent.EXTRA_TEXT, "Check out '${work.title}' by @${work.authorUsername} on Oscellion: https://oscellion.vercel.app/post/${work.id}")
+                                    if (com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
+                                        onRequireLogin()
+                                    } else {
+                                        discoverViewModel?.trackShare(work.id)
+                                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                            type = "text/plain"
+                                            putExtra(Intent.EXTRA_TEXT, "Check out '${work.title}' by @${work.authorUsername} on Oscellion: https://oscellion.vercel.app/post/${work.id}")
+                                        }
+                                        context.startActivity(Intent.createChooser(shareIntent, "Share Post"))
                                     }
-                                    context.startActivity(Intent.createChooser(shareIntent, "Share Post"))
                                 },
-                                onSaveClick = { discoverViewModel?.toggleSave(work.id) },
+                                onSaveClick = {
+                                    if (com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
+                                        onRequireLogin()
+                                    } else {
+                                        discoverViewModel?.toggleSave(work.id)
+                                    }
+                                },
                                 onFlashVideoClick = onFlashVideoClick,
                                 onUpdateVisibility = { hideLikes, hideShares, hideRemixes, hideDownloads, hideSaves ->
                                     discoverViewModel?.updateCounterVisibility(
@@ -2720,6 +2772,7 @@ private fun FeedPostActionRow(
     onSaveClick: (() -> Unit)?,
     onShareClick: (() -> Unit)?
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val colors = LocalOscellionColors.current
 
     val initialLiked = isLiked || (!currentUserId.isNullOrBlank() && work.likedBy.contains(currentUserId))
@@ -2791,7 +2844,7 @@ private fun FeedPostActionRow(
                     .clip(RoundedCornerShape(6.dp))
                     .clickable {
                         val uid = FirebaseAuth.getInstance().currentUser?.uid
-                        if (uid.isNullOrBlank()) {
+                        if (uid.isNullOrBlank() || com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
                             onRequireLogin()
                         } else {
                             val nextLiked = !locallyLiked
@@ -2883,7 +2936,7 @@ private fun FeedPostActionRow(
                     .clip(RoundedCornerShape(6.dp))
                     .clickable {
                         val uid = FirebaseAuth.getInstance().currentUser?.uid
-                        if (uid.isNullOrBlank()) {
+                        if (uid.isNullOrBlank() || com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
                             onRequireLogin()
                         } else {
                             if (!locallyDownloaded && (currentUserId == null || !work.downloadedBy.contains(currentUserId))) {
@@ -2928,7 +2981,7 @@ private fun FeedPostActionRow(
                     .clip(RoundedCornerShape(6.dp))
                     .clickable {
                         val uid = FirebaseAuth.getInstance().currentUser?.uid
-                        if (uid.isNullOrBlank()) {
+                        if (uid.isNullOrBlank() || com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
                             onRequireLogin()
                         } else {
                             val nextSaved = !locallySaved
@@ -2976,7 +3029,7 @@ private fun FeedPostActionRow(
                     .clip(RoundedCornerShape(6.dp))
                     .clickable {
                         val uid = FirebaseAuth.getInstance().currentUser?.uid
-                        if (uid.isNullOrBlank()) {
+                        if (uid.isNullOrBlank() || com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
                             onRequireLogin()
                         } else {
                             if (!locallyShared && (currentUserId == null || !work.sharedBy.contains(currentUserId))) {
@@ -3508,6 +3561,7 @@ fun FeedPostCard(
     onFlashVideoClick: ((String) -> Unit)? = null,
     onUpdateVisibility: ((hideLikes: Boolean, hideShares: Boolean, hideRemixes: Boolean, hideDownloads: Boolean, hideSaves: Boolean) -> Unit)? = null
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val colors = LocalOscellionColors.current
     val currentUserId = FirebaseAuth.getInstance().currentUser?.uid
     val isOwner = !currentUserId.isNullOrBlank() && currentUserId == work.creatorId
@@ -3608,7 +3662,7 @@ fun FeedPostCard(
                     onToggleFeedMute = onToggleFeedMute,
                     onDoubleTap = { offset ->
                         val uid = FirebaseAuth.getInstance().currentUser?.uid
-                        if (uid.isNullOrBlank()) {
+                        if (uid.isNullOrBlank() || com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
                             onRequireLogin()
                         } else {
                             if (onForceLike != null) {

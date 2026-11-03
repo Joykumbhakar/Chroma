@@ -788,6 +788,7 @@ fun SearchScreen(
     onNavigateToProfile: (String) -> Unit,
     onNavigateToPost: ((creatorId: String, postId: String) -> Unit)? = null,
     onRemixWork: ((DiscoverPost) -> Unit)? = null,
+    onRequireLogin: () -> Unit = {},
     onBack: () -> Unit
 ) {
     val colors = LocalOscellionColors.current
@@ -2165,8 +2166,10 @@ fun SearchScreen(
                 isLiked = isLiked,
                 onToggleLike = {
                     val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
-                    if (!uid.isNullOrBlank()) {
+                    if (!uid.isNullOrBlank() && !com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
                         discoverVm.toggleLike(post.id, uid)
+                    } else {
+                        onRequireLogin()
                     }
                 },
                 onDismiss = { selectedPreviewPost = null },
@@ -2184,7 +2187,11 @@ fun SearchScreen(
                 onRemix = {
                     val workToRemix = post
                     selectedPreviewPost = null
-                    onRemixWork?.invoke(workToRemix)
+                    if (com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
+                        onRequireLogin()
+                    } else {
+                        onRemixWork?.invoke(workToRemix)
+                    }
                 }
             )
         }
