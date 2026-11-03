@@ -303,7 +303,7 @@ fun AppleSettingsHeader(
         if (onDoneClick != null && doneText != null) {
             Text(
                 text = doneText,
-                color = Color(0xFF007AFF),
+                color = Color(0xFF0A84FF),
                 fontSize = 17.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier
@@ -314,7 +314,7 @@ fun AppleSettingsHeader(
         } else if (onBackClick != null) {
             Text(
                 text = "Back",
-                color = Color(0xFF007AFF),
+                color = Color(0xFF0A84FF),
                 fontSize = 17.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier
@@ -372,7 +372,7 @@ fun AppleSettingsSearchBar(
                     color = colors.textMain,
                     fontSize = 14.5.sp
                 ),
-                cursorBrush = SolidColor(Color(0xFF007AFF)),
+                cursorBrush = SolidColor(Color(0xFF0A84FF)),
                 modifier = Modifier.fillMaxWidth()
             )
         }
@@ -718,7 +718,7 @@ fun AppleSettingToggleRow(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     infoOnClick: (() -> Unit)? = null,
-    activeTrackColor: Color = Color(0xFF007AFF),
+    activeTrackColor: Color = Color(0xFF0A84FF),
     modifier: Modifier = Modifier
 ) {
     val colors = LocalOscellionColors.current

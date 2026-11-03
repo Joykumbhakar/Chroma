@@ -1190,7 +1190,7 @@ fun AppearanceSettingsScreen(
                                 .size(7.dp)
                                 .clip(CircleShape)
                                 .background(
-                                    if (oneUiGradient == OneUiGradientStyle.SOLID) Color(0xFF007AFF)
+                                    if (oneUiGradient == OneUiGradientStyle.SOLID) Color(0xFF0A84FF)
                                     else oneUiGradient.orbColor
                                 )
                         )
@@ -1207,7 +1207,7 @@ fun AppearanceSettingsScreen(
                     text = "Done",
                     fontSize = 14.5.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (oneUiGradient == OneUiGradientStyle.SOLID) Color(0xFF007AFF) else oneUiGradient.primaryColor,
+                    color = if (oneUiGradient == OneUiGradientStyle.SOLID) Color(0xFF0A84FF) else oneUiGradient.primaryColor,
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
                         .clickable {

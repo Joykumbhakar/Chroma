@@ -3,7 +3,7 @@ package com.chroma.studio.chat.ui.theme
 import androidx.compose.ui.graphics.Color
 
 // === PRIMARY ACCENT PALETTE ===
-val AccentBlue = Color(0xFF007AFF)
+val AccentBlue = Color(0xFF0A84FF)
 val AccentBlueDark = Color(0xFF0A84FF)
 val AccentBluePressed = Color(0xFF005ECB)
 val AccentBlueSubtle = Color(0x1A007AFF)
@@ -45,7 +45,7 @@ val SeparatorOpaqueLight = Color(0xFFC6C6C8)
 val BorderSubtleLight = Color(0x1A000000)
 val BorderMediumLight = Color(0x33000000)
 val BubbleIncomingLight = Color(0xFFE8E8ED)
-val BubbleOutgoingLight = Color(0xFF007AFF)
+val BubbleOutgoingLight = Color(0xFF0A84FF)
 
 // === DARK THEME SURFACE TOKENS ===
 val SurfaceDark = Color(0xFF1C1C1E)

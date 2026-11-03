@@ -630,7 +630,7 @@ fun DiscoverScreen(
                         .padding(vertical = 6.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    OscellionLoadingSpinner(color = Color(0xFF007AFF), modifier = Modifier.size(20.dp))
+                    OscellionLoadingSpinner(color = Color(0xFF0A84FF), modifier = Modifier.size(20.dp))
                 }
             }
 
@@ -1268,7 +1268,7 @@ fun CommunityFeedTabBar(
             ) {
                 CommunityFeedTab.values().forEach { tab ->
                     val isSelected = selectedTab == tab
-                    val activeColor = if (isSelected) Color(0xFF007AFF) else colors.textMuted
+                    val activeColor = if (isSelected) Color(0xFF0A84FF) else colors.textMuted
 
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1299,7 +1299,7 @@ fun CommunityFeedTabBar(
                             if (tab == CommunityFeedTab.SAVED && savedCount > 0) {
                                 Text(
                                     text = "($savedCount)",
-                                    color = if (isSelected) Color(0xFF007AFF) else colors.textMuted,
+                                    color = if (isSelected) Color(0xFF0A84FF) else colors.textMuted,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold
                                 )
@@ -1317,7 +1317,7 @@ fun CommunityFeedTabBar(
                             modifier = Modifier
                                 .width(indicatorWidth)
                                 .height(2.dp)
-                                .background(if (isSelected) Color(0xFF007AFF) else Color.Transparent)
+                                .background(if (isSelected) Color(0xFF0A84FF) else Color.Transparent)
                         )
                     }
                 }
@@ -1370,14 +1370,14 @@ fun CommunityFeedTabBar(
                                     sort.label,
                                     fontSize = 13.sp,
                                     fontWeight = if (selectedSort == sort) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (selectedSort == sort) Color(0xFF007AFF) else colors.textMain
+                                    color = if (selectedSort == sort) Color(0xFF0A84FF) else colors.textMain
                                 )
                             },
                             leadingIcon = {
                                 Icon(
                                     imageVector = sort.icon,
                                     contentDescription = sort.label,
-                                    tint = if (selectedSort == sort) Color(0xFF007AFF) else colors.textMuted,
+                                    tint = if (selectedSort == sort) Color(0xFF0A84FF) else colors.textMuted,
                                     modifier = Modifier.size(16.dp)
                                 )
                             },
@@ -1518,13 +1518,13 @@ fun CommunityGuidelinesSheet(
                         modifier = Modifier
                             .size(36.dp)
                             .clip(RoundedCornerShape(10.dp))
-                            .background(Color(0xFF007AFF).copy(alpha = 0.12f)),
+                            .background(Color(0xFF0A84FF).copy(alpha = 0.12f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Lucide.ShieldCheck,
                             contentDescription = null,
-                            tint = Color(0xFF007AFF),
+                            tint = Color(0xFF0A84FF),
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -1533,7 +1533,7 @@ fun CommunityGuidelinesSheet(
                             text = "COMMUNITY STANDARDS",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF007AFF),
+                            color = Color(0xFF0A84FF),
                             letterSpacing = 0.5.sp
                         )
                         Text(
@@ -1587,7 +1587,7 @@ fun CommunityGuidelinesSheet(
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
-                        tint = Color(0xFF007AFF),
+                        tint = Color(0xFF0A84FF),
                         modifier = Modifier.size(16.dp).padding(top = 1.dp)
                     )
                     Column(modifier = Modifier.weight(1f)) {
@@ -1621,7 +1621,7 @@ fun CommunityGuidelinesSheet(
                     .fillMaxWidth()
                     .height(46.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF007AFF))
+                    .background(Color(0xFF0A84FF))
                     .clickable { onDismiss() },
                 contentAlignment = Alignment.Center
             ) {
@@ -1673,7 +1673,7 @@ object LucideComposeIcons {
         }.build()
     }
 
-    fun bookmark(isSaved: Boolean, savedColor: Color = Color(0xFF007AFF), outlineColor: Color = Color(0xFF334155)): ImageVector {
+    fun bookmark(isSaved: Boolean, savedColor: Color = Color(0xFF0A84FF), outlineColor: Color = Color(0xFF334155)): ImageVector {
         val stroke = if (isSaved) savedColor else outlineColor
         val fill = if (isSaved) SolidColor(savedColor) else null
         return ImageVector.Builder(if (isSaved) "BookmarkFilled" else "BookmarkOutline", 20.dp, 20.dp, 24f, 24f).apply {
@@ -1840,7 +1840,7 @@ fun EndOfFeedIndicator(modifier: Modifier = Modifier) {
                 val strokePx = 1.8f * scale
 
                 drawCircle(
-                    color = Color(0xFF007AFF),
+                    color = Color(0xFF0A84FF),
                     radius = 9f * scale,
                     center = Offset(12f * scale, 12f * scale),
                     style = Stroke(width = strokePx)
@@ -1853,7 +1853,7 @@ fun EndOfFeedIndicator(modifier: Modifier = Modifier) {
                 }
                 drawPath(
                     path = wavePath,
-                    color = Color(0xFF007AFF),
+                    color = Color(0xFF0A84FF),
                     style = Stroke(width = strokePx, cap = StrokeCap.Round)
                 )
             }
@@ -2432,8 +2432,8 @@ fun PlusCreatePopoverMenu(
 @Composable
 fun rememberLucideHeartHandshakeIcon(
     isRemixed: Boolean,
-    strokeColor: Color = if (isRemixed) Color(0xFF007AFF) else LocalOscellionColors.current.textMain,
-    heartFillColor: Color? = if (isRemixed) Color(0xFF007AFF).copy(alpha = 0.15f) else null
+    strokeColor: Color = if (isRemixed) Color(0xFF0A84FF) else LocalOscellionColors.current.textMain,
+    heartFillColor: Color? = if (isRemixed) Color(0xFF0A84FF).copy(alpha = 0.15f) else null
 ): ImageVector {
     val heartFillBrush = heartFillColor?.let { SolidColor(it) }
 
@@ -2505,7 +2505,7 @@ fun rememberLucideHeartHandshakeIcon(
 fun ScallopedVerifiedBadge(
     modifier: Modifier = Modifier.size(15.dp),
     size: Dp = 15.dp,
-    badgeColor: Color = Color(0xFF007AFF)
+    badgeColor: Color = Color(0xFF0A84FF)
 ) {
     VerifiedBadge(
         modifier = modifier,
@@ -2654,19 +2654,19 @@ private fun FeedPostHeader(
                         horizontalArrangement = Arrangement.spacedBy(2.dp),
                         modifier = Modifier
                             .clip(RoundedCornerShape(4.dp))
-                            .background(Color(0xFF007AFF).copy(alpha = 0.12f))
+                            .background(Color(0xFF0A84FF).copy(alpha = 0.12f))
                             .clickable { onRemixTagClick() }
                             .padding(horizontal = 4.dp, vertical = 1.dp)
                     ) {
                         Icon(
                             imageVector = Lucide.Sparkles,
                             contentDescription = "Remix",
-                            tint = Color(0xFF007AFF),
+                            tint = Color(0xFF0A84FF),
                             modifier = Modifier.size(9.dp)
                         )
                         Text(
                             text = "Remix",
-                            color = Color(0xFF007AFF),
+                            color = Color(0xFF0A84FF),
                             fontSize = 10.sp,
                             lineHeight = 12.sp,
                             fontWeight = FontWeight.SemiBold,
@@ -2684,7 +2684,7 @@ private fun FeedPostHeader(
                     )
                     Text(
                         text = if (isFollowingCreator) "Following" else "Follow",
-                        color = if (isFollowingCreator) Color(0xFF8E8E93) else Color(0xFF007AFF),
+                        color = if (isFollowingCreator) Color(0xFF8E8E93) else Color(0xFF0A84FF),
                         fontSize = 11.sp,
                         lineHeight = 13.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -2861,8 +2861,8 @@ private fun FeedPostActionRow(
                     Icon(
                         imageVector = rememberLucideHeartHandshakeIcon(
                             isRemixed = effectiveRemixed || displayRemixCount > 0,
-                            strokeColor = if (effectiveRemixed) Color(0xFF007AFF) else colors.textMain,
-                            heartFillColor = if (effectiveRemixed) Color(0xFF007AFF).copy(alpha = 0.15f) else null
+                            strokeColor = if (effectiveRemixed) Color(0xFF0A84FF) else colors.textMain,
+                            heartFillColor = if (effectiveRemixed) Color(0xFF0A84FF).copy(alpha = 0.15f) else null
                         ),
                         contentDescription = "Remix",
                         tint = Color.Unspecified,
@@ -2872,7 +2872,7 @@ private fun FeedPostActionRow(
                         Spacer(Modifier.width(4.dp))
                         Text(
                             text = "$displayRemixCount",
-                            color = if (effectiveRemixed) Color(0xFF007AFF) else colors.textMain.copy(alpha = 0.85f),
+                            color = if (effectiveRemixed) Color(0xFF0A84FF) else colors.textMain.copy(alpha = 0.85f),
                             fontSize = 12.sp,
                             lineHeight = 14.sp,
                             fontWeight = FontWeight.SemiBold
@@ -2907,14 +2907,14 @@ private fun FeedPostActionRow(
                 Icon(
                     imageVector = LucideComposeIcons.Download,
                     contentDescription = "Save to Studio",
-                    tint = if (effectiveDownloaded) Color(0xFF007AFF) else colors.textMain,
+                    tint = if (effectiveDownloaded) Color(0xFF0A84FF) else colors.textMain,
                     modifier = Modifier.size(20.dp)
                 )
                 if (!work.hideDownloadsCount && displayDownloadCount > 0) {
                     Spacer(Modifier.width(4.dp))
                     Text(
                         text = "$displayDownloadCount",
-                        color = if (effectiveDownloaded) Color(0xFF007AFF) else colors.textMain.copy(alpha = 0.85f),
+                        color = if (effectiveDownloaded) Color(0xFF0A84FF) else colors.textMain.copy(alpha = 0.85f),
                         fontSize = 12.sp,
                         lineHeight = 14.sp,
                         fontWeight = FontWeight.SemiBold
@@ -2955,7 +2955,7 @@ private fun FeedPostActionRow(
                 Icon(
                     imageVector = LucideComposeIcons.bookmark(
                         isSaved = effectiveSaved,
-                        savedColor = Color(0xFF007AFF),
+                        savedColor = Color(0xFF0A84FF),
                         outlineColor = colors.textMain
                     ),
                     contentDescription = "Bookmark",
@@ -2966,7 +2966,7 @@ private fun FeedPostActionRow(
                     Spacer(Modifier.width(4.dp))
                     Text(
                         text = "$displaySaveCount",
-                        color = if (effectiveSaved) Color(0xFF007AFF) else colors.textMain.copy(alpha = 0.85f),
+                        color = if (effectiveSaved) Color(0xFF0A84FF) else colors.textMain.copy(alpha = 0.85f),
                         fontSize = 12.sp,
                         lineHeight = 14.sp,
                         fontWeight = FontWeight.SemiBold
@@ -3000,14 +3000,14 @@ private fun FeedPostActionRow(
                 Icon(
                     imageVector = Lucide.Share2,
                     contentDescription = "Share",
-                    tint = if (effectiveShared) Color(0xFF007AFF) else colors.textMain,
+                    tint = if (effectiveShared) Color(0xFF0A84FF) else colors.textMain,
                     modifier = Modifier.size(20.dp)
                 )
                 if (!work.hideSharesCount && displayShareCount > 0) {
                     Spacer(Modifier.width(4.dp))
                     Text(
                         text = "$displayShareCount",
-                        color = if (effectiveShared) Color(0xFF007AFF) else colors.textMain.copy(alpha = 0.85f),
+                        color = if (effectiveShared) Color(0xFF0A84FF) else colors.textMain.copy(alpha = 0.85f),
                         fontSize = 12.sp,
                         lineHeight = 14.sp,
                         fontWeight = FontWeight.SemiBold
@@ -3091,7 +3091,7 @@ private fun FeedPostMetadata(
                             append(shortTitle)
                             withStyle(
                                 SpanStyle(
-                                    color = Color(0xFF007AFF),
+                                    color = Color(0xFF0A84FF),
                                     fontWeight = FontWeight.Bold
                                 )
                             ) {
@@ -3132,7 +3132,7 @@ private fun FeedPostMetadata(
                             if (needsDescExpand) {
                                 withStyle(
                                     SpanStyle(
-                                        color = Color(0xFF007AFF),
+                                        color = Color(0xFF0A84FF),
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Medium
                                     )
@@ -3144,7 +3144,7 @@ private fun FeedPostMetadata(
                             append(shortDesc)
                             withStyle(
                                 SpanStyle(
-                                    color = Color(0xFF007AFF),
+                                    color = Color(0xFF0A84FF),
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 11.sp
                                 )
@@ -3187,7 +3187,7 @@ private fun FeedPostMetadata(
                 Icon(
                     imageVector = Lucide.HeartHandshake,
                     contentDescription = "Remix",
-                    tint = Color(0xFF007AFF),
+                    tint = Color(0xFF0A84FF),
                     modifier = Modifier.size(12.dp)
                 )
 
@@ -3207,7 +3207,7 @@ private fun FeedPostMetadata(
                         fontSize = 11.sp,
                         lineHeight = 12.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF007AFF),
+                        color = Color(0xFF0A84FF),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -3265,7 +3265,7 @@ private fun FeedPostMetadata(
                     val cleanTag = if (rawTag.startsWith("#")) rawTag else "#$rawTag"
                     Text(
                         text = cleanTag,
-                        color = Color(0xFF007AFF),
+                        color = Color(0xFF0A84FF),
                         fontSize = 11.sp,
                         lineHeight = 13.sp,
                         fontWeight = FontWeight.Medium,
@@ -3750,7 +3750,7 @@ fun OwnerAnalyticsModal(
                             text = "OWNER TELEMETRY & ANALYTICS",
                             fontSize = 10.5.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF007AFF),
+                            color = Color(0xFF0A84FF),
                             letterSpacing = 0.5.sp
                         )
                         Text(
@@ -3804,12 +3804,12 @@ fun OwnerAnalyticsModal(
                             .weight(1f)
                             .clip(RoundedCornerShape(14.dp))
                             .background(if (colors.isDark) Color(0xFF1E3A8A).copy(alpha = 0.25f) else Color(0xFFEFF6FF), RoundedCornerShape(14.dp))
-                            .border(1.dp, Color(0xFF3B82F6).copy(alpha = 0.4f), RoundedCornerShape(14.dp))
+                            .border(1.dp, Color(0xFF0A84FF).copy(alpha = 0.4f), RoundedCornerShape(14.dp))
                             .padding(10.dp)
                     ) {
-                        Text("REMIX FORKS", fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = Color(0xFF007AFF))
+                        Text("REMIX FORKS", fontSize = 9.5.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0A84FF))
                         Spacer(modifier = Modifier.height(2.dp))
-                        Text(numberFormat.format(work.remixCount), fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color(0xFF007AFF))
+                        Text(numberFormat.format(work.remixCount), fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0A84FF))
                         Text("High lineage velocity", fontSize = 10.sp, color = Color(0xFF8E8E93))
                     }
                 }
@@ -3909,8 +3909,8 @@ fun EditPostModal(
                             modifier = Modifier
                                 .weight(1f)
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(if (isSelected) Color(0xFF007AFF) else (if (colors.isDark) Color(0xFF252528) else Color(0xFFF8FAFC)))
-                                .border(1.dp, if (isSelected) Color(0xFF007AFF) else colors.glassBorder, RoundedCornerShape(8.dp))
+                                .background(if (isSelected) Color(0xFF0A84FF) else (if (colors.isDark) Color(0xFF252528) else Color(0xFFF8FAFC)))
+                                .border(1.dp, if (isSelected) Color(0xFF0A84FF) else colors.glassBorder, RoundedCornerShape(8.dp))
                                 .clickable { selectedRatio = ratio }
                                 .padding(vertical = 7.dp),
                             contentAlignment = Alignment.Center
@@ -3932,7 +3932,7 @@ fun EditPostModal(
                     value = titleText,
                     onValueChange = { titleText = it },
                     textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp, color = colors.textMain),
-                    cursorBrush = SolidColor(Color(0xFF007AFF)),
+                    cursorBrush = SolidColor(Color(0xFF0A84FF)),
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
@@ -3948,7 +3948,7 @@ fun EditPostModal(
                     value = descText,
                     onValueChange = { descText = it },
                     textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp, color = colors.textMain),
-                    cursorBrush = SolidColor(Color(0xFF007AFF)),
+                    cursorBrush = SolidColor(Color(0xFF0A84FF)),
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(64.dp)
@@ -3976,7 +3976,7 @@ fun EditPostModal(
                         modifier = Modifier
                             .weight(1f)
                             .clip(RoundedCornerShape(10.dp))
-                            .background(Color(0xFF007AFF))
+                            .background(Color(0xFF0A84FF))
                             .clickable { onSaveEdits(selectedRatio, titleText, descText) }
                             .padding(vertical = 10.dp),
                         contentAlignment = Alignment.Center
@@ -4039,7 +4039,7 @@ fun CreatorProfileModal(
                                 if (profile.verified) ScallopedVerifiedBadge()
                             }
                             Text("@${profile.username.removePrefix("@")}", fontSize = 11.5.sp, color = Color(0xFF8E8E93))
-                            Text(profile.roleTitle, fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Color(0xFF007AFF))
+                            Text(profile.roleTitle, fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Color(0xFF0A84FF))
                         }
                     }
                     IconButton(
@@ -4072,7 +4072,7 @@ fun CreatorProfileModal(
                         Text("Following", fontSize = 10.sp, color = Color(0xFF8E8E93))
                     }
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("${profile.totalRemixes}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF007AFF))
+                        Text("${profile.totalRemixes}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0A84FF))
                         Text("Remixes", fontSize = 10.sp, color = Color(0xFF8E8E93))
                     }
                 }
@@ -4250,7 +4250,7 @@ fun PostOptionsDrawerSheet(
                     Text(
                         text = if (isOwner) "Your post" else "Post options",
                         fontSize = 11.5.sp,
-                        color = if (isOwner) Color(0xFF007AFF) else Color(0xFF8E8E93),
+                        color = if (isOwner) Color(0xFF0A84FF) else Color(0xFF8E8E93),
                         fontWeight = if (isOwner) FontWeight.SemiBold else FontWeight.Normal
                     )
                 }
@@ -4529,14 +4529,14 @@ fun OriginalPostInspectorSheet(
                         modifier = Modifier
                             .size(32.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF007AFF).copy(alpha = 0.12f)),
+                            .background(Color(0xFF0A84FF).copy(alpha = 0.12f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = rememberLucideHeartHandshakeIcon(
                                 isRemixed = true,
-                                strokeColor = Color(0xFF007AFF),
-                                heartFillColor = Color(0xFF007AFF).copy(alpha = 0.2f)
+                                strokeColor = Color(0xFF0A84FF),
+                                heartFillColor = Color(0xFF0A84FF).copy(alpha = 0.2f)
                             ),
                             contentDescription = null,
                             tint = Color.Unspecified,
@@ -4548,7 +4548,7 @@ fun OriginalPostInspectorSheet(
                             "REMIX LINEAGE",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF007AFF),
+                            color = Color(0xFF0A84FF),
                             letterSpacing = 0.6.sp
                         )
                         Text(
@@ -4616,7 +4616,7 @@ fun OriginalPostInspectorSheet(
                         text = "@$origUsername",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
-                        color = Color(0xFF007AFF)
+                        color = Color(0xFF0A84FF)
                     )
                 }
 
@@ -4634,8 +4634,8 @@ fun OriginalPostInspectorSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF007AFF).copy(alpha = 0.08f))
-                    .border(0.5.dp, Color(0xFF007AFF).copy(alpha = 0.20f), RoundedCornerShape(12.dp))
+                    .background(Color(0xFF0A84FF).copy(alpha = 0.08f))
+                    .border(0.5.dp, Color(0xFF0A84FF).copy(alpha = 0.20f), RoundedCornerShape(12.dp))
                     .padding(12.dp)
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -4643,7 +4643,7 @@ fun OriginalPostInspectorSheet(
                         text = "Seed Composition & Vectors",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF007AFF)
+                        color = Color(0xFF0A84FF)
                     )
                     Text(
                         text = "This creation was remixed by @${work.authorUsername.ifBlank { "creator" }} using the procedural layer assets and shader parameters from @$origUsername's master artwork.",
@@ -4660,7 +4660,7 @@ fun OriginalPostInspectorSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(10.dp))
-                    .background(Color(0xFF007AFF))
+                    .background(Color(0xFF0A84FF))
                     .clickable {
                         onDismiss()
                         if (origAuthorId.isNotBlank()) {
@@ -4775,7 +4775,7 @@ fun PostCountersSettingsSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(10.dp))
-                    .background(Color(0xFF007AFF))
+                    .background(Color(0xFF0A84FF))
                     .clickable {
                         onSave(hideLikes, hideShares, hideRemixes, hideDownloads, hideSaves)
                         onDismiss()
@@ -5088,7 +5088,7 @@ fun CommunityUploadProgressBanner(
                                 Spacer(Modifier.width(8.dp))
                                 Text(
                                     text = "${(task.progress * 100).toInt()}%",
-                                    color = Color(0xFF2563EB),
+                                    color = Color(0xFF0A84FF),
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -5178,7 +5178,7 @@ fun CommunityUploadProgressBanner(
                             .weight(1f)
                             .height(36.dp),
                         shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0A84FF)),
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
                     ) {
                         Icon(

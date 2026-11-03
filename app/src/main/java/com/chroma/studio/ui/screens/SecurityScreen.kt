@@ -48,7 +48,7 @@ fun SecurityScreen(
                 text = if (hasChanges) "Save" else "Done",
                 fontSize = 14.5.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF007AFF),
+                color = Color(0xFF0A84FF),
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))
                     .clickable {
@@ -76,7 +76,7 @@ fun SecurityScreen(
                         title = "Change Password",
                         subtitle = user?.email?.let { "Send reset link to $it" } ?: "Reset your password",
                         icon = Lucide.Key,
-                        iconGradient = listOf(Color(0xFF007AFF), Color(0xFF0051D5)),
+                        iconGradient = listOf(Color(0xFF0A84FF), Color(0xFF0051D5)),
                         valueText = if (isSendingReset) "Sending..." else "Send",
                         showChevron = false,
                         onClick = {

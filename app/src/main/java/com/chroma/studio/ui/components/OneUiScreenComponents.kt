@@ -295,7 +295,7 @@ val SettingsShineBorderBrush = Brush.linearGradient(
 @Composable
 fun OneUiIconBadge(
     icon: ImageVector? = null,
-    iconColor: Color = Color(0xFF2563EB),
+    iconColor: Color = Color(0xFF0A84FF),
     iconGradient: List<Color>? = null,
     modifier: Modifier = Modifier
 ) {
@@ -333,7 +333,7 @@ fun OneUiSettingsNavRow(
     title: String,
     subtitle: String? = null,
     icon: ImageVector? = null,
-    iconColor: Color = Color(0xFF2563EB),
+    iconColor: Color = Color(0xFF0A84FF),
     iconTint: Color = iconColor,
     iconGradient: List<Color>? = null,
     valueText: String? = null,
@@ -346,7 +346,7 @@ fun OneUiSettingsNavRow(
     val isDark = isAppInDark
     val textDark = if (isDark) Color.White else Color(0xFF0F172A)
     val textMuted = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
-    val effectiveTint = if (iconTint != Color(0xFF2563EB)) iconTint else iconColor
+    val effectiveTint = if (iconTint != Color(0xFF0A84FF)) iconTint else iconColor
 
     Row(
         modifier = modifier
@@ -425,19 +425,19 @@ fun OneUiSettingsToggleRow(
     title: String,
     subtitle: String? = null,
     icon: ImageVector? = null,
-    iconColor: Color = Color(0xFF2563EB),
+    iconColor: Color = Color(0xFF0A84FF),
     iconTint: Color = iconColor,
     iconGradient: List<Color>? = null,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     infoOnClick: (() -> Unit)? = null,
-    activeTrackColor: Color = Color(0xFF007AFF),
+    activeTrackColor: Color = Color(0xFF0A84FF),
     modifier: Modifier = Modifier
 ) {
     val isDark = isAppInDark
     val textDark = if (isDark) Color.White else Color(0xFF0F172A)
     val textMuted = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
-    val effectiveTint = if (iconTint != Color(0xFF2563EB)) iconTint else iconColor
+    val effectiveTint = if (iconTint != Color(0xFF0A84FF)) iconTint else iconColor
 
     Row(
         modifier = modifier
@@ -525,9 +525,9 @@ fun OneUiSettingsToggleRow(
 fun OneUiSettingsSliderRow(
     title: String,
     valueText: String,
-    valueTextColor: Color = Color(0xFF2563EB),
+    valueTextColor: Color = Color(0xFF0A84FF),
     icon: ImageVector? = null,
-    iconColor: Color = Color(0xFF2563EB),
+    iconColor: Color = Color(0xFF0A84FF),
     iconTint: Color = iconColor,
     iconGradient: List<Color>? = null,
     value: Float,
@@ -538,7 +538,7 @@ fun OneUiSettingsSliderRow(
 ) {
     val isDark = isAppInDark
     val textDark = if (isDark) Color.White else Color(0xFF0F172A)
-    val effectiveTint = if (iconTint != Color(0xFF2563EB)) iconTint else iconColor
+    val effectiveTint = if (iconTint != Color(0xFF0A84FF)) iconTint else iconColor
 
     Column(
         modifier = modifier
@@ -592,8 +592,8 @@ fun OneUiSettingsSliderRow(
             valueRange = valueRange,
             steps = steps,
             colors = SliderDefaults.colors(
-                thumbColor = Color(0xFF2563EB),
-                activeTrackColor = Color(0xFF2563EB),
+                thumbColor = Color(0xFF0A84FF),
+                activeTrackColor = Color(0xFF0A84FF),
                 inactiveTrackColor = if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)
             ),
             modifier = Modifier.fillMaxWidth()

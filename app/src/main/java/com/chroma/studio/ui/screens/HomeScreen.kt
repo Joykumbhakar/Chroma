@@ -1693,7 +1693,7 @@ fun HomeScreen(
 
                                         Brush.horizontalGradient(
 
-                                            listOf(Color(0xFF007AFF), Color(0xFF0056D2))
+                                            listOf(Color(0xFF0A84FF), Color(0xFF0056D2))
 
                                         )
 
@@ -5099,7 +5099,7 @@ private fun CreateOptionRow(
 
                             .clip(RoundedCornerShape(6.dp))
 
-                            .background(Color(0xFF007AFF).copy(alpha = 0.15f))
+                            .background(Color(0xFF0A84FF).copy(alpha = 0.15f))
 
                             .padding(horizontal = 6.dp, vertical = 2.dp)
 
@@ -5113,7 +5113,7 @@ private fun CreateOptionRow(
 
                             fontWeight = FontWeight.Bold,
 
-                            color = Color(0xFF007AFF)
+                            color = Color(0xFF0A84FF)
 
                         )
 

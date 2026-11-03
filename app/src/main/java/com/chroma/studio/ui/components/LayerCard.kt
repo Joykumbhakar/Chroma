@@ -120,8 +120,8 @@ fun LayerCard(
             Brush.linearGradient(
                 colors = listOf(
                     Color(0xFF60A5FA),
-                    Color(0xFF3B82F6),
-                    Color(0xFF2563EB)
+                    Color(0xFF0A84FF),
+                    Color(0xFF0A84FF)
                 )
             )
         } else if (layer.expanded) {
@@ -682,8 +682,8 @@ private fun TypeButton(label: String, icon: androidx.compose.ui.graphics.vector.
                     androidx.compose.ui.graphics.Brush.linearGradient(
                         colors = listOf(
                             androidx.compose.ui.graphics.Color(0xFF60A5FA),
-                            androidx.compose.ui.graphics.Color(0xFF3B82F6),
-                            androidx.compose.ui.graphics.Color(0xFF2563EB)
+                            androidx.compose.ui.graphics.Color(0xFF0A84FF),
+                            androidx.compose.ui.graphics.Color(0xFF0A84FF)
                         )
                     )
                 } else {

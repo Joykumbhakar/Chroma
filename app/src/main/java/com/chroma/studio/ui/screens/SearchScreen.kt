@@ -197,7 +197,7 @@ fun GalaxyAiSparkleIcon(
     val auroraGradient = remember {
         Brush.linearGradient(
             colors = listOf(
-                Color(0xFF3B82F6), // Blue
+                Color(0xFF0A84FF), // Blue
                 Color(0xFFA855F7), // Purple
                 Color(0xFF06B6D4), // Cyan
                 Color(0xFF22C55E)  // Emerald
@@ -245,7 +245,7 @@ fun GalaxyAiSearchButton(
     val auroraBrush = remember {
         Brush.linearGradient(
             colors = listOf(
-                Color(0xFF3B82F6),
+                Color(0xFF0A84FF),
                 Color(0xFFA855F7),
                 Color(0xFF06B6D4),
                 Color(0xFF22C55E)
@@ -331,7 +331,7 @@ fun GalaxyAiAuroraSearchBar(
         if (isFocused) {
             Brush.linearGradient(
                 listOf(
-                    Color(0xFF2563EB),
+                    Color(0xFF0A84FF),
                     Color(0xFF9333EA),
                     Color(0xFF0891B2),
                     Color(0xFF059669)

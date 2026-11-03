@@ -189,7 +189,7 @@ fun PostDetailsScreen(
                         icon = Lucide.Send,
                         enabled = !isPosting && caption.isNotBlank(),
                         isLoading = isPosting,
-                        accentColor = Color(0xFF007AFF),
+                        accentColor = Color(0xFF0A84FF),
                         onClick = {
                             SoundManager.playReaction()
                             scope.launch { compressAndUpload() }
@@ -332,14 +332,14 @@ fun PostDetailsScreen(
                             Row(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(Color(0xFF007AFF).copy(alpha = 0.12f))
-                                    .border(0.5.dp, Color(0xFF007AFF).copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                                    .background(Color(0xFF0A84FF).copy(alpha = 0.12f))
+                                    .border(0.5.dp, Color(0xFF0A84FF).copy(alpha = 0.3f), RoundedCornerShape(8.dp))
                                     .padding(horizontal = 8.dp, vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 AiWaveSphereIcon(modifier = Modifier.size(12.dp))
-                                Text(selectedTemplate, fontSize = 11.5.sp, color = Color(0xFF007AFF), fontWeight = FontWeight.SemiBold)
+                                Text(selectedTemplate, fontSize = 11.5.sp, color = Color(0xFF0A84FF), fontWeight = FontWeight.SemiBold)
                             }
                         }
 
@@ -666,7 +666,7 @@ fun PostDetailsScreen(
                     scope.launch { compressAndUpload() }
                 },
                 enabled = !isPosting && caption.isNotBlank(),
-                containerColor = Color(0xFF007AFF),
+                containerColor = Color(0xFF0A84FF),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp)

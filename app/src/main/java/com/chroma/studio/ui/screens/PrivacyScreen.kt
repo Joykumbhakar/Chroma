@@ -45,7 +45,7 @@ fun PrivacyScreen(
                 text = if (hasChanges) "Save" else "Done",
                 fontSize = 14.5.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF007AFF),
+                color = Color(0xFF0A84FF),
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))
                     .clickable {
@@ -93,7 +93,7 @@ fun PrivacyScreen(
                         title = "Allow Mentions & Tags",
                         subtitle = "Let other creators mention @${profile.username}",
                         icon = Lucide.AtSign,
-                        iconGradient = listOf(Color(0xFF007AFF), Color(0xFF0051D5)),
+                        iconGradient = listOf(Color(0xFF0A84FF), Color(0xFF0051D5)),
                         checked = allowTagging,
                         onCheckedChange = { allowTagging = it }
                     )

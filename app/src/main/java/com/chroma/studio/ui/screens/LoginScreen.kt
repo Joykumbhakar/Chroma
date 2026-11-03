@@ -192,7 +192,7 @@ fun CupertinoPrimaryButton(
         Brush.linearGradient(
             colors = listOf(
                 Color(0xFF2F80ED),
-                Color(0xFF007AFF),
+                Color(0xFF0A84FF),
                 Color(0xFF0056D6)
             ),
             start = Offset(0f, 0f),
@@ -201,7 +201,7 @@ fun CupertinoPrimaryButton(
     } else {
         Brush.linearGradient(
             colors = listOf(
-                Color(0xFF007AFF).copy(alpha = 0.4f),
+                Color(0xFF0A84FF).copy(alpha = 0.4f),
                 Color(0xFF0056D6).copy(alpha = 0.4f)
             )
         )
@@ -230,8 +230,8 @@ fun CupertinoPrimaryButton(
             .shadow(
                 elevation = if (enabled && !isLoading) 10.dp else 0.dp,
                 shape = shape,
-                ambientColor = Color(0xFF007AFF).copy(alpha = 0.25f),
-                spotColor = Color(0xFF007AFF).copy(alpha = 0.40f)
+                ambientColor = Color(0xFF0A84FF).copy(alpha = 0.25f),
+                spotColor = Color(0xFF0A84FF).copy(alpha = 0.40f)
             )
             .clip(shape)
             .background(buttonGradient)
@@ -952,7 +952,7 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onCancel: () -> Unit) {
                                             .background(
                                                 Brush.radialGradient(
                                                     colors = listOf(
-                                                        Color(0xFF007AFF).copy(alpha = if (colors.isDark) 0.35f else 0.20f),
+                                                        Color(0xFF0A84FF).copy(alpha = if (colors.isDark) 0.35f else 0.20f),
                                                         Color(0xFFA855F7).copy(alpha = if (colors.isDark) 0.18f else 0.10f),
                                                         Color.Transparent
                                                     )
@@ -967,7 +967,7 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onCancel: () -> Unit) {
                                             .shadow(
                                                 elevation = 20.dp,
                                                 shape = RoundedCornerShape(24.dp),
-                                                spotColor = Color(0xFF007AFF).copy(alpha = 0.40f)
+                                                spotColor = Color(0xFF0A84FF).copy(alpha = 0.40f)
                                             )
                                             .clip(RoundedCornerShape(24.dp)),
                                         contentAlignment = Alignment.Center
@@ -1102,7 +1102,7 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onCancel: () -> Unit) {
                                                 text = ".",
                                                 fontSize = 27.sp,
                                                 fontWeight = FontWeight.ExtraBold,
-                                                color = Color(0xFF007AFF)
+                                                color = Color(0xFF0A84FF)
                                             )
                                         }
                                     }

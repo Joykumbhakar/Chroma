@@ -113,7 +113,7 @@ fun RemixQuoteRepostSheet(
                     Icon(
                         imageVector = Lucide.HeartHandshake,
                         contentDescription = "Remix",
-                        tint = Color(0xFF007AFF),
+                        tint = Color(0xFF0A84FF),
                         modifier = Modifier.size(18.dp)
                     )
                     Text(
@@ -148,8 +148,8 @@ fun RemixQuoteRepostSheet(
                     enabled = !isPublishing && remixTitle.isNotBlank(),
                     shape = RoundedCornerShape(100.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF007AFF),
-                        disabledContainerColor = Color(0xFF007AFF).copy(alpha = 0.4f)
+                        containerColor = Color(0xFF0A84FF),
+                        disabledContainerColor = Color(0xFF0A84FF).copy(alpha = 0.4f)
                     ),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
                     modifier = Modifier.height(34.dp)
@@ -195,13 +195,13 @@ fun RemixQuoteRepostSheet(
                         modifier = Modifier
                             .size(36.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF007AFF).copy(alpha = 0.15f)),
+                            .background(Color(0xFF0A84FF).copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Lucide.User,
                             contentDescription = null,
-                            tint = Color(0xFF007AFF),
+                            tint = Color(0xFF0A84FF),
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -231,17 +231,17 @@ fun RemixQuoteRepostSheet(
                 singleLine = true,
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color(0xFF007AFF),
+                    focusedBorderColor = Color(0xFF0A84FF),
                     unfocusedBorderColor = if (colors.isDark) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.12f),
                     focusedContainerColor = if (colors.isDark) Color(0xFF1C1C20) else Color(0xFFF9F9FB),
                     unfocusedContainerColor = if (colors.isDark) Color(0xFF1C1C20) else Color(0xFFF9F9FB),
-                    focusedLabelColor = Color(0xFF007AFF)
+                    focusedLabelColor = Color(0xFF0A84FF)
                 ),
                 leadingIcon = {
                     Icon(
                         imageVector = Lucide.Sparkles,
                         contentDescription = null,
-                        tint = Color(0xFF007AFF),
+                        tint = Color(0xFF0A84FF),
                         modifier = Modifier.size(16.dp)
                     )
                 },
@@ -260,11 +260,11 @@ fun RemixQuoteRepostSheet(
                 maxLines = 6,
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color(0xFF007AFF),
+                    focusedBorderColor = Color(0xFF0A84FF),
                     unfocusedBorderColor = if (colors.isDark) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.12f),
                     focusedContainerColor = if (colors.isDark) Color(0xFF1C1C20) else Color(0xFFF9F9FB),
                     unfocusedContainerColor = if (colors.isDark) Color(0xFF1C1C20) else Color(0xFFF9F9FB),
-                    focusedLabelColor = Color(0xFF007AFF)
+                    focusedLabelColor = Color(0xFF0A84FF)
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -359,21 +359,21 @@ fun RemixQuoteRepostSheet(
                             .clip(RoundedCornerShape(6.dp))
                             .background(
                                 if (isVideo) Color(0xFFFF2D55).copy(alpha = 0.12f)
-                                else Color(0xFF007AFF).copy(alpha = 0.12f)
+                                else Color(0xFF0A84FF).copy(alpha = 0.12f)
                             )
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
                         Icon(
                             imageVector = if (isVideo) Lucide.Play else Lucide.Image,
                             contentDescription = null,
-                            tint = if (isVideo) Color(0xFFFF2D55) else Color(0xFF007AFF),
+                            tint = if (isVideo) Color(0xFFFF2D55) else Color(0xFF0A84FF),
                             modifier = Modifier.size(10.dp)
                         )
                         Text(
                             text = if (isVideo) "Flash Video" else if (post.postType == "image") "Photo" else "Artwork",
                             fontSize = 10.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = if (isVideo) Color(0xFFFF2D55) else Color(0xFF007AFF)
+                            color = if (isVideo) Color(0xFFFF2D55) else Color(0xFF0A84FF)
                         )
                     }
                 }

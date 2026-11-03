@@ -539,14 +539,14 @@ fun ConversationsScreen(
                                     Box(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(12.dp))
-                                            .background(Color(0xFF007AFF).copy(alpha = 0.12f))
+                                            .background(Color(0xFF0A84FF).copy(alpha = 0.12f))
                                             .padding(horizontal = 8.dp, vertical = 3.dp)
                                     ) {
                                         Text(
                                             text = "$totalUnread unread",
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF007AFF)
+                                            color = Color(0xFF0A84FF)
                                         )
                                     }
                                 }
@@ -1386,11 +1386,11 @@ private fun IosStoryAvatarItem(
                 !showRing -> SolidColor(Color.Transparent)
                 !seen -> Brush.sweepGradient(
                     listOf(
-                        Color(0xFF007AFF),
+                        Color(0xFF0A84FF),
                         Color(0xFF5856D6),
                         Color(0xFFFF2D55),
                         Color(0xFFFF9500),
-                        Color(0xFF007AFF)
+                        Color(0xFF0A84FF)
                     )
                 )
                 else -> Brush.linearGradient(
