@@ -95,10 +95,10 @@ fun OneUiCollapsingHeaderLayout(
         if (maxCollapsePx <= 0f) 0f else (collapseOffsetPx / maxCollapsePx).coerceIn(0f, 1f)
     }
 
-    val largeTitleAlpha = (1f - (collapseProgress / 0.45f)).coerceIn(0f, 1f)
-    val subtitleAlpha = (1f - (collapseProgress / 0.35f)).coerceIn(0f, 1f)
-    val compactTitleAlpha = ((collapseProgress - 0.55f) / 0.45f).coerceIn(0f, 1f)
-    val gradientAlpha = if (gradientStyle == OneUiGradientStyle.SOLID) 0f else (1f - (collapseProgress / 0.85f)).coerceIn(0f, 1f)
+    val largeTitleAlpha = if (expandedHeightDp <= 0.dp) 0f else (1f - (collapseProgress / 0.45f)).coerceIn(0f, 1f)
+    val subtitleAlpha = if (expandedHeightDp <= 0.dp) 0f else (1f - (collapseProgress / 0.35f)).coerceIn(0f, 1f)
+    val compactTitleAlpha = if (expandedHeightDp <= 0.dp) 1f else ((collapseProgress - 0.55f) / 0.45f).coerceIn(0f, 1f)
+    val gradientAlpha = if (gradientStyle == OneUiGradientStyle.SOLID || expandedHeightDp <= 0.dp) 0f else (1f - (collapseProgress / 0.85f)).coerceIn(0f, 1f)
 
     val nestedScrollConnection = remember(maxCollapsePx) {
         object : NestedScrollConnection {
@@ -203,7 +203,7 @@ fun OneUiCollapsingHeaderLayout(
         )
 
         Column(modifier = Modifier.fillMaxSize()) {
-            val toolbarBgAlpha = (collapseProgress * 0.94f).coerceIn(0f, 0.94f)
+            val toolbarBgAlpha = if (expandedHeightDp <= 0.dp) 0.94f else (collapseProgress * 0.94f).coerceIn(0f, 0.94f)
 
             // Top Status Bar Spacer
             Spacer(
@@ -213,53 +213,7 @@ fun OneUiCollapsingHeaderLayout(
                     .background(screenBgColor.copy(alpha = toolbarBgAlpha))
             )
 
-            // 2. Expanded Viewing Area (Collapses smoothly on scroll)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(currentExpandedHeightDp),
-                contentAlignment = Alignment.Center
-            ) {
-                if (largeTitleAlpha > 0.01f) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 24.dp)
-                            .graphicsLayer {
-                                alpha = largeTitleAlpha
-                                translationY = -collapseProgress * with(density) { 20.dp.toPx() }
-                                val scale = 1f - (collapseProgress * 0.05f)
-                                scaleX = scale
-                                scaleY = scale
-                            }
-                    ) {
-                        Text(
-                            text = title,
-                            fontSize = 38.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            letterSpacing = (-0.6).sp,
-                            color = textDark,
-                            textAlign = TextAlign.Center
-                        )
-
-                        if (subtitle.isNotBlank()) {
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = subtitle,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Normal,
-                                color = textMuted,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.graphicsLayer { alpha = subtitleAlpha }
-                            )
-                        }
-                    }
-                }
-            }
-
-            // 3. Sticky Compact One UI Toolbar (Pinned at 56dp height)
+            // 1. Sticky Compact One UI Toolbar (Pinned at Top directly under Status Bar)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -281,7 +235,7 @@ fun OneUiCollapsingHeaderLayout(
                         if (onBack != null) {
                             Box(
                                 modifier = Modifier
-                                    .size(36.dp)
+                                    .size(40.dp)
                                     .clip(CircleShape)
                                     .clickable {
                                         SoundManager.playReaction()
@@ -319,7 +273,7 @@ fun OneUiCollapsingHeaderLayout(
                     // Right Side: Action Items
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         if (headerActions != null) {
                             headerActions(compactTitleAlpha)
@@ -327,7 +281,7 @@ fun OneUiCollapsingHeaderLayout(
                     }
                 }
 
-                if (collapseProgress > 0.85f) {
+                if (collapseProgress > 0.85f || expandedHeightDp <= 0.dp) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -337,7 +291,55 @@ fun OneUiCollapsingHeaderLayout(
                 }
             }
 
-            // 4. Content Area
+            // 2. Expanded Viewing Area (Collapses smoothly on scroll)
+            if (expandedHeightDp > 0.dp) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(currentExpandedHeightDp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (largeTitleAlpha > 0.01f) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 24.dp)
+                                .graphicsLayer {
+                                    alpha = largeTitleAlpha
+                                    translationY = -collapseProgress * with(density) { 20.dp.toPx() }
+                                    val scale = 1f - (collapseProgress * 0.05f)
+                                    scaleX = scale
+                                    scaleY = scale
+                                }
+                        ) {
+                            Text(
+                                text = title,
+                                fontSize = 38.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                letterSpacing = (-0.6).sp,
+                                color = textDark,
+                                textAlign = TextAlign.Center
+                            )
+
+                            if (subtitle.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = subtitle,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Normal,
+                                    color = textMuted,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.graphicsLayer { alpha = subtitleAlpha }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 3. Content Area
             Box(
                 modifier = Modifier
                     .fillMaxWidth()

@@ -46,6 +46,7 @@ import com.chroma.studio.ui.components.AppleTrashBinIcon
 import com.chroma.studio.ui.components.rememberAppleTrashState
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.composables.icons.lucide.*
+import com.chroma.studio.chat.sound.SoundManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -118,88 +119,128 @@ fun TrashScreen(
         }
     }
 
+    val hasItems = deletedWorks.isNotEmpty()
+    val allSelected = hasItems && selectedWorkIds.size >= deletedWorks.size
+    val hasSelection = selectedWorkIds.isNotEmpty()
+
+    val screenTitle = if (selectionMode) {
+        if (hasSelection) "${selectedWorkIds.size} Selected" else "Select Items"
+    } else {
+        "Trash"
+    }
+
+    val screenSubtitle = if (selectionMode) {
+        if (allSelected) {
+            "All items selected"
+        } else if (hasSelection) {
+            "${selectedWorkIds.size} of ${deletedWorks.size} items"
+        } else {
+            "Choose items to restore or delete"
+        }
+    } else if (hasItems) {
+        "${deletedWorks.size} ${if (deletedWorks.size == 1) "item" else "items"} in trash"
+    } else {
+        ""
+    }
+
     OneUiCollapsingHeaderLayout(
-        title = if (selectionMode) "${selectedWorkIds.size} Selected" else "Trash",
-        subtitle = if (!selectionMode) "${deletedWorks.size} items in trash" else "",
-        expandedHeightDp = 240.dp,
+        title = screenTitle,
+        subtitle = screenSubtitle,
+        expandedHeightDp = if (!hasItems) 0.dp else 180.dp,
         onBack = {
             if (selectionMode) onClearSelection() else onBack()
         },
+        backIcon = if (selectionMode) Lucide.X else Lucide.ArrowLeft,
+        backContentDescription = if (selectionMode) "Clear selection" else "Back",
         headerActions = { compactTitleAlpha ->
             if (selectionMode) {
-                val allSelected = deletedWorks.isNotEmpty() && selectedWorkIds.size >= deletedWorks.size
                 // Deselect All / Select All Icon
                 Box(
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(40.dp)
                         .clip(CircleShape)
                         .clickable {
+                            SoundManager.playReaction()
                             if (allSelected) onClearSelection() else onSelectAll?.invoke()
                         },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Lucide.CheckCheck,
+                        imageVector = if (allSelected) Lucide.CheckCheck else Lucide.ListCheck,
                         contentDescription = if (allSelected) "Deselect All" else "Select All",
-                        tint = textDark,
+                        tint = if (allSelected) Color(0xFF0A84FF) else textDark,
                         modifier = Modifier.size(20.dp)
                     )
                 }
-                Spacer(Modifier.width(4.dp))
+                Spacer(Modifier.width(2.dp))
                 // Restore Selected Icon
                 Box(
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(40.dp)
                         .clip(CircleShape)
-                        .clickable { onRestoreSelected() },
+                        .clickable(enabled = hasSelection) {
+                            SoundManager.playReaction()
+                            onRestoreSelected()
+                        }
+                        .alpha(if (hasSelection) 1f else 0.35f),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Lucide.RefreshCcw,
-                        contentDescription = "Restore",
+                        contentDescription = "Restore Selected",
                         tint = Color(0xFF0A84FF),
                         modifier = Modifier.size(19.dp)
                     )
                 }
-                Spacer(Modifier.width(4.dp))
+                Spacer(Modifier.width(2.dp))
                 // Delete Selected Icon
                 Box(
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(40.dp)
                         .clip(CircleShape)
-                        .clickable { showDeleteConfirmDialog = true },
+                        .clickable(enabled = hasSelection) {
+                            SoundManager.playReaction()
+                            showDeleteConfirmDialog = true
+                        }
+                        .alpha(if (hasSelection) 1f else 0.35f),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Lucide.Trash2,
-                        contentDescription = "Delete",
+                        contentDescription = "Delete Selected",
                         tint = Color(0xFFEF4444),
                         modifier = Modifier.size(20.dp)
                     )
                 }
-            } else if (deletedWorks.isNotEmpty()) {
+            } else if (hasItems) {
                 // Quick Select Icon Button
                 Box(
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(40.dp)
                         .clip(CircleShape)
-                        .clickable { onSelectAll?.invoke() },
+                        .clickable {
+                            SoundManager.playReaction()
+                            onSelectAll?.invoke()
+                        },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Lucide.ListCheck,
-                        contentDescription = "Select",
+                        contentDescription = "Select Items",
                         tint = textDark,
                         modifier = Modifier.size(21.dp)
                     )
                 }
-                Spacer(Modifier.width(4.dp))
+                Spacer(Modifier.width(2.dp))
                 // Empty Trash Icon Button
                 Box(
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(40.dp)
                         .clip(CircleShape)
-                        .clickable { showEmptyTrashDialog = true },
+                        .clickable {
+                            SoundManager.playReaction()
+                            showEmptyTrashDialog = true
+                        },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
