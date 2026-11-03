@@ -12,6 +12,7 @@ import android.Manifest
 import android.app.Activity
 import android.net.Uri
 import android.util.Log
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
@@ -296,7 +297,8 @@ fun CupertinoPrimaryButton(
             color = Color.White,
             fontSize = 16.sp,
             fontWeight = FontWeight.SemiBold,
-            letterSpacing = (-0.2).sp
+            letterSpacing = (-0.5).sp,
+            lineHeight = 20.sp
         )
     }
 }
@@ -469,14 +471,16 @@ private fun LoginFeatureCard(
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 14.5.sp,
                 color = colors.textMain,
-                letterSpacing = (-0.2).sp
+                letterSpacing = (-0.4).sp,
+                lineHeight = 17.5.sp
             )
             Spacer(Modifier.height(2.dp))
             Text(
                 text = subtitle,
                 fontSize = 12.5.sp,
                 color = colors.textMuted,
-                lineHeight = 16.sp
+                lineHeight = 15.5.sp,
+                letterSpacing = (-0.2).sp
             )
         }
     }
@@ -548,20 +552,24 @@ private fun LoginSavedAccountCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = account.displayName,
-                    fontSize = 15.5.sp,
+                    fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = colors.textMain,
                     maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    letterSpacing = (-0.4).sp,
+                    lineHeight = 18.sp
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = "@${account.username}",
-                    fontSize = 13.sp,
+                    fontSize = 12.5.sp,
                     color = colors.primary,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    letterSpacing = (-0.2).sp,
+                    lineHeight = 15.sp
                 )
             }
 
@@ -860,6 +868,8 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onCancel: () -> Unit) {
         else -> 0
     }
 
+    BackHandler { handleBack() }
+
     OscellionBackground {
         Scaffold(
             topBar = {
@@ -914,778 +924,1049 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onCancel: () -> Unit) {
             },
             containerColor = Color.Transparent
         ) { paddingValues ->
-            Column(
+            BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .padding(horizontal = 24.dp)
-                    .verticalScroll(rememberScrollState()),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .imePadding()
             ) {
-                Spacer(Modifier.height(8.dp))
+                val screenHeight = maxHeight
+                val scrollState = rememberScrollState()
 
-                AnimatedContent(
-                    targetState = currentStep,
-                    transitionSpec = {
-                        slideInHorizontally(initialOffsetX = { it / 2 }) + fadeIn() togetherWith
-                                slideOutHorizontally(targetOffsetX = { -it / 2 }) + fadeOut()
-                    },
-                    label = "AuthSteps"
-                ) { step ->
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(scrollState)
+                        .padding(horizontal = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    AnimatedContent(
+                        targetState = currentStep,
+                        transitionSpec = {
+                            slideInHorizontally(initialOffsetX = { it / 2 }) + fadeIn() togetherWith
+                                    slideOutHorizontally(targetOffsetX = { -it / 2 }) + fadeOut()
+                        },
+                        label = "AuthSteps",
                         modifier = Modifier.fillMaxWidth()
-                    ) {
-                        when (step) {
+                    ) { step ->
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .defaultMinSize(minHeight = screenHeight),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            when (step) {
 
-                            // ════════════════════════════════════════════════
-                            // INITIAL — Login Screen
-                            // ════════════════════════════════════════════════
-                            AuthStep.INITIAL -> {
-                                Spacer(Modifier.height(24.dp))
-
-                                Box(contentAlignment = Alignment.Center) {
-                                    // Ambient Aurora halo bloom behind logo
-                                    Box(
-                                        modifier = Modifier
-                                            .size(160.dp)
-                                            .background(
-                                                Brush.radialGradient(
-                                                    colors = listOf(
-                                                        Color(0xFF0A84FF).copy(alpha = if (colors.isDark) 0.35f else 0.20f),
-                                                        Color(0xFFA855F7).copy(alpha = if (colors.isDark) 0.18f else 0.10f),
-                                                        Color.Transparent
-                                                    )
-                                                )
-                                            )
-                                    )
-
-                                    // Official 3D Milled Metallic Logo Icon
-                                    Box(
-                                        modifier = Modifier
-                                            .size(86.dp)
-                                            .shadow(
-                                                elevation = 20.dp,
-                                                shape = RoundedCornerShape(24.dp),
-                                                spotColor = Color(0xFF0A84FF).copy(alpha = 0.40f)
-                                            )
-                                            .clip(RoundedCornerShape(24.dp)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        OscellionAppIcon(size = 86.dp)
-                                    }
-                                }
-
-                                Spacer(Modifier.height(24.dp))
-
-                                if (savedAccounts.isNotEmpty()) {
-                                    Text(
-                                        text = "Choose an Account",
-                                        fontSize = 26.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = colors.textMain,
-                                        textAlign = TextAlign.Center,
-                                        letterSpacing = (-0.5).sp
-                                    )
-                                    Spacer(Modifier.height(6.dp))
-                                    Text(
-                                        text = "Select an existing profile or continue with another Google account.",
-                                        fontSize = 14.sp,
-                                        color = colors.textMuted,
-                                        textAlign = TextAlign.Center,
-                                        modifier = Modifier.padding(horizontal = 16.dp)
-                                    )
-
-                                    Spacer(Modifier.height(28.dp))
-
-                                    // Saved Accounts list (Glass Frosted Cards)
+                                // ════════════════════════════════════════════════
+                                // INITIAL — Login Screen
+                                // ════════════════════════════════════════════════
+                                AuthStep.INITIAL -> {
                                     Column(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        savedAccounts.forEach { account ->
-                                            LoginSavedAccountCard(
-                                                account = account,
-                                                onClick = { loginWithGoogle() },
-                                                onRemove = {
-                                                    SavedAccountManager.removeAccount(context, account.uid)
-                                                    savedAccounts = SavedAccountManager.getSavedAccounts(context)
-                                                }
+                                        Spacer(Modifier.height(16.dp))
+
+                                        Box(contentAlignment = Alignment.Center) {
+                                            // Ambient Aurora halo bloom behind logo
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(140.dp)
+                                                    .background(
+                                                        Brush.radialGradient(
+                                                            colors = listOf(
+                                                                Color(0xFF0A84FF).copy(alpha = if (colors.isDark) 0.35f else 0.20f),
+                                                                Color(0xFFA855F7).copy(alpha = if (colors.isDark) 0.18f else 0.10f),
+                                                                Color.Transparent
+                                                            )
+                                                        )
+                                                    )
                                             )
+
+                                            // Official 3D Milled Metallic Logo Icon
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(80.dp)
+                                                    .shadow(
+                                                        elevation = 20.dp,
+                                                        shape = RoundedCornerShape(22.dp),
+                                                        spotColor = Color(0xFF0A84FF).copy(alpha = 0.40f)
+                                                    )
+                                                    .clip(RoundedCornerShape(22.dp)),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                OscellionAppIcon(size = 80.dp)
+                                            }
+                                        }
+
+                                        Spacer(Modifier.height(18.dp))
+
+                                        if (savedAccounts.isNotEmpty()) {
+                                            Text(
+                                                text = "Choose an Account",
+                                                fontSize = 25.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = colors.textMain,
+                                                textAlign = TextAlign.Center,
+                                                letterSpacing = (-0.5).sp,
+                                                lineHeight = 29.sp
+                                            )
+                                            Spacer(Modifier.height(4.dp))
+                                            Text(
+                                                text = "Select an existing profile or continue with another Google account.",
+                                                fontSize = 13.5.sp,
+                                                color = colors.textMuted,
+                                                textAlign = TextAlign.Center,
+                                                letterSpacing = (-0.2).sp,
+                                                lineHeight = 17.5.sp,
+                                                modifier = Modifier.padding(horizontal = 16.dp)
+                                            )
+
+                                            Spacer(Modifier.height(20.dp))
+
+                                            // Saved Accounts list (Glass Frosted Cards)
+                                            Column(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                                            ) {
+                                                savedAccounts.forEach { account ->
+                                                    LoginSavedAccountCard(
+                                                        account = account,
+                                                        onClick = { loginWithGoogle() },
+                                                        onRemove = {
+                                                            SavedAccountManager.removeAccount(context, account.uid)
+                                                            savedAccounts = SavedAccountManager.getSavedAccounts(context)
+                                                        }
+                                                    )
+                                                }
+                                            }
+
+                                            if (errorMessage != null) {
+                                                Spacer(Modifier.height(14.dp))
+                                                Text(
+                                                    text = errorMessage!!,
+                                                    color = colors.error,
+                                                    fontSize = 13.sp,
+                                                    textAlign = TextAlign.Center,
+                                                    lineHeight = 16.sp,
+                                                    letterSpacing = (-0.2).sp,
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
+                                            }
+                                        } else {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.Center
+                                            ) {
+                                                Text(
+                                                    text = "Welcome to ",
+                                                    fontSize = 25.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = colors.textMain,
+                                                    letterSpacing = (-0.5).sp,
+                                                    lineHeight = 29.sp
+                                                )
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Text(
+                                                        text = "Oscellion",
+                                                        fontSize = 27.sp,
+                                                        fontWeight = FontWeight.ExtraBold,
+                                                        color = colors.textMain,
+                                                        letterSpacing = (-0.5).sp,
+                                                        lineHeight = 29.sp
+                                                    )
+                                                    Text(
+                                                        text = ".",
+                                                        fontSize = 27.sp,
+                                                        fontWeight = FontWeight.ExtraBold,
+                                                        color = Color(0xFF0A84FF),
+                                                        lineHeight = 29.sp
+                                                    )
+                                                }
+                                            }
+                                            Spacer(Modifier.height(6.dp))
+                                            Text(
+                                                text = "Craft high-fidelity visual artwork, explore creations, and connect with a community of designers.",
+                                                fontSize = 13.5.sp,
+                                                color = colors.textMuted,
+                                                textAlign = TextAlign.Center,
+                                                lineHeight = 18.sp,
+                                                letterSpacing = (-0.2).sp,
+                                                modifier = Modifier.padding(horizontal = 16.dp)
+                                            )
+
+                                            Spacer(Modifier.height(20.dp))
+
+                                            // Feature highlights (Shiny glass frosted cards)
+                                            Column(
+                                                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                                            ) {
+                                                LoginFeatureCard(
+                                                    icon = Lucide.Palette,
+                                                    iconGradient = listOf(Color(0xFF2F80ED), Color(0xFF7C3AED)),
+                                                    title = "Creative Studio",
+                                                    subtitle = "Multi-layer gradient studio with real-time rendering"
+                                                )
+                                                LoginFeatureCard(
+                                                    icon = Lucide.Lock,
+                                                    iconGradient = listOf(Color(0xFF10B981), Color(0xFF06B6D4)),
+                                                    title = "Private Messaging",
+                                                    subtitle = "Encrypted direct chats, audio, and media sharing"
+                                                )
+                                                LoginFeatureCard(
+                                                    icon = Lucide.Zap,
+                                                    iconGradient = listOf(Color(0xFFFF2D55), Color(0xFFA855F7)),
+                                                    title = "Instant Stories",
+                                                    subtitle = "Share daily status, audio waveforms, and community art"
+                                                )
+                                            }
+
+                                            if (errorMessage != null) {
+                                                Spacer(Modifier.height(14.dp))
+                                                Text(
+                                                    text = errorMessage!!,
+                                                    color = colors.error,
+                                                    fontSize = 13.sp,
+                                                    textAlign = TextAlign.Center,
+                                                    lineHeight = 16.sp,
+                                                    letterSpacing = (-0.2).sp,
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
+                                            }
                                         }
                                     }
 
-                                    if (errorMessage != null) {
+                                    // BOTTOM ACTION SECTION FOR INITIAL
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(top = 24.dp, bottom = 20.dp)
+                                    ) {
+                                        if (savedAccounts.isNotEmpty()) {
+                                            CupertinoPrimaryButton(
+                                                onClick = { loginWithGoogle() },
+                                                isLoading = isLoading
+                                            ) {
+                                                Icon(
+                                                    painter = painterResource(R.drawable.ic_google_logo),
+                                                    contentDescription = "Google",
+                                                    modifier = Modifier.size(20.dp),
+                                                    tint = Color.Unspecified
+                                                )
+                                                Spacer(Modifier.width(10.dp))
+                                                Text(
+                                                    text = "Use Another Account",
+                                                    color = Color.White,
+                                                    fontSize = 15.5.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    letterSpacing = (-0.5).sp,
+                                                    lineHeight = 20.sp
+                                                )
+                                            }
+
+                                            Spacer(Modifier.height(10.dp))
+
+                                            CupertinoSecondaryButton(
+                                                onClick = { loginWithGoogle() }
+                                            ) {
+                                                Icon(
+                                                    painter = painterResource(R.drawable.ic_apple_logo),
+                                                    contentDescription = "Apple",
+                                                    modifier = Modifier.size(20.dp),
+                                                    tint = if (colors.isDark) Color.White else Color.Black
+                                                )
+                                                Spacer(Modifier.width(10.dp))
+                                                Text(
+                                                    text = "Continue with Apple",
+                                                    color = colors.textMain,
+                                                    fontSize = 15.5.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    letterSpacing = (-0.5).sp,
+                                                    lineHeight = 20.sp
+                                                )
+                                            }
+
+                                            Spacer(Modifier.height(8.dp))
+
+                                            GlassTextButton(
+                                                onClick = { loginWithGoogle() }
+                                            ) {
+                                                Text(
+                                                    text = "Create New Account",
+                                                    color = colors.primary,
+                                                    fontSize = 14.5.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    letterSpacing = (-0.4).sp
+                                                )
+                                            }
+                                        } else {
+                                            CupertinoPrimaryButton(
+                                                onClick = { loginWithGoogle() },
+                                                isLoading = isLoading
+                                            ) {
+                                                Icon(
+                                                    painter = painterResource(R.drawable.ic_google_logo),
+                                                    contentDescription = "Google",
+                                                    modifier = Modifier.size(20.dp),
+                                                    tint = Color.Unspecified
+                                                )
+                                                Spacer(Modifier.width(10.dp))
+                                                Text(
+                                                    text = "Continue with Google",
+                                                    color = Color.White,
+                                                    fontSize = 16.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    letterSpacing = (-0.5).sp,
+                                                    lineHeight = 20.sp
+                                                )
+                                            }
+
+                                            Spacer(Modifier.height(10.dp))
+
+                                            CupertinoSecondaryButton(
+                                                onClick = { loginWithGoogle() }
+                                            ) {
+                                                Icon(
+                                                    painter = painterResource(R.drawable.ic_apple_logo),
+                                                    contentDescription = "Apple",
+                                                    modifier = Modifier.size(20.dp),
+                                                    tint = if (colors.isDark) Color.White else Color.Black
+                                                )
+                                                Spacer(Modifier.width(10.dp))
+                                                Text(
+                                                    text = "Continue with Apple",
+                                                    color = colors.textMain,
+                                                    fontSize = 15.5.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    letterSpacing = (-0.5).sp,
+                                                    lineHeight = 20.sp
+                                                )
+                                            }
+                                        }
+
+                                        Spacer(Modifier.height(14.dp))
+                                        Text(
+                                            text = "By continuing, you agree to Oscellion's Terms of Service and Privacy Policy.",
+                                            fontSize = 11.5.sp,
+                                            lineHeight = 15.sp,
+                                            letterSpacing = (-0.2).sp,
+                                            color = colors.textMuted.copy(alpha = 0.7f),
+                                            textAlign = TextAlign.Center,
+                                            modifier = Modifier.padding(horizontal = 16.dp)
+                                        )
+                                    }
+                                }
+
+                                // ════════════════════════════════════════════════
+                                // GOOGLE_MATCH — Existing Account Match
+                                // ════════════════════════════════════════════════
+                                AuthStep.GOOGLE_MATCH -> {
+                                    matchedProfile?.let { profile ->
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Spacer(Modifier.height(20.dp))
+                                            Text(
+                                                "Is this your account?",
+                                                fontSize = 24.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = colors.textMain,
+                                                letterSpacing = (-0.5).sp,
+                                                lineHeight = 28.sp
+                                            )
+                                            Spacer(Modifier.height(6.dp))
+                                            Text(
+                                                "We found an existing Oscellion profile linked to your Google account.",
+                                                color = colors.textMuted,
+                                                fontSize = 13.5.sp,
+                                                textAlign = TextAlign.Center,
+                                                letterSpacing = (-0.2).sp,
+                                                lineHeight = 17.5.sp
+                                            )
+
+                                            Spacer(Modifier.height(32.dp))
+                                            IosAvatarView(
+                                                name = profile.displayName,
+                                                avatarUrl = profile.avatarUrl,
+                                                size = 96.dp,
+                                                gender = profile.gender
+                                            )
+                                            Spacer(Modifier.height(14.dp))
+                                            Text(
+                                                profile.displayName,
+                                                color = colors.textMain,
+                                                fontSize = 20.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                letterSpacing = (-0.5).sp,
+                                                lineHeight = 24.sp
+                                            )
+                                            Text(
+                                                "@${profile.username}",
+                                                color = colors.textMuted,
+                                                fontSize = 14.5.sp,
+                                                letterSpacing = (-0.3).sp,
+                                                lineHeight = 18.sp
+                                            )
+                                        }
+
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(top = 24.dp, bottom = 20.dp)
+                                        ) {
+                                            CupertinoPrimaryButton(
+                                                onClick = { completeLogin(profile) },
+                                                text = "Continue as ${profile.displayName}"
+                                            )
+                                            Spacer(Modifier.height(10.dp))
+                                            GlassTextButton(onClick = {
+                                                FirebaseAuth.getInstance().signOut()
+                                                currentStep = AuthStep.INITIAL
+                                                matchedProfile = null
+                                            }) {
+                                                Text(
+                                                    "This isn't my account",
+                                                    color = colors.primary,
+                                                    fontSize = 14.5.sp,
+                                                    letterSpacing = (-0.3).sp
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // ════════════════════════════════════════════════
+                                // LOGIN_MISSING_AVATAR
+                                // ════════════════════════════════════════════════
+                                AuthStep.LOGIN_MISSING_AVATAR -> {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Spacer(Modifier.height(16.dp))
+                                        CupertinoAvatarPickerStep(
+                                            title = "Set Profile Photo",
+                                            subtitle = "Add a photo to make your profile recognizable to friends.",
+                                            selectedUri = selectedAvatarUri,
+                                            gender = selectedGender,
+                                            onGallery = { galleryLauncher.launch("image/*") },
+                                            onCamera = { launchCamera() }
+                                        )
+                                    }
+
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(top = 24.dp, bottom = 20.dp)
+                                    ) {
+                                        CupertinoPrimaryButton(
+                                            onClick = {
+                                                scope.launch {
+                                                    isLoading = true
+                                                    try {
+                                                        val uid = FirebaseAuth.getInstance().currentUser?.uid
+                                                        if (uid != null && selectedAvatarBytes != null) {
+                                                            val url = uploadAvatarToSupabase(uid, selectedAvatarBytes!!)
+                                                            if (url != null) {
+                                                                com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                                                    .collection("users").document(uid)
+                                                                    .update("avatarUrl", url).await()
+                                                            }
+                                                        }
+                                                        com.chroma.studio.services.ChromaMessagingService.syncTokenForCurrentUser()
+                                                        onLoginSuccess()
+                                                    } finally { isLoading = false }
+                                                }
+                                            },
+                                            isLoading = isLoading,
+                                            text = if (selectedAvatarUri == null) "Skip for Now" else "Save & Continue"
+                                        )
+                                    }
+                                }
+
+                                // ════════════════════════════════════════════════
+                                // SIGNUP_USERNAME — Step 1: Choose Username
+                                // ════════════════════════════════════════════════
+                                AuthStep.SIGNUP_USERNAME -> {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
                                         Spacer(Modifier.height(16.dp))
                                         Text(
-                                            text = errorMessage!!,
-                                            color = colors.error,
-                                            fontSize = 13.sp,
-                                            textAlign = TextAlign.Center,
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                    }
-
-                                    Spacer(Modifier.height(28.dp))
-
-                                    CupertinoSecondaryButton(
-                                        onClick = { loginWithGoogle() },
-                                        modifier = Modifier.padding(bottom = 10.dp)
-                                    ) {
-                                        Icon(
-                                            painter = painterResource(R.drawable.ic_apple_logo),
-                                            contentDescription = "Apple",
-                                            modifier = Modifier.size(20.dp),
-                                            tint = if (colors.isDark) Color.White else Color.Black
-                                        )
-                                        Spacer(Modifier.width(10.dp))
-                                        Text(
-                                            text = "Continue with Apple",
+                                            "Choose Your Username",
+                                            fontSize = 24.sp,
+                                            fontWeight = FontWeight.Bold,
                                             color = colors.textMain,
-                                            fontSize = 15.5.sp,
-                                            fontWeight = FontWeight.SemiBold
-                                        )
-                                    }
-
-                                    CupertinoPrimaryButton(
-                                        onClick = { loginWithGoogle() },
-                                        isLoading = isLoading
-                                    ) {
-                                        Icon(
-                                            painter = painterResource(R.drawable.ic_google_logo),
-                                            contentDescription = "Google",
-                                            modifier = Modifier.size(20.dp),
-                                            tint = Color.Unspecified
-                                        )
-                                        Spacer(Modifier.width(10.dp))
-                                        Text(
-                                            text = "Use Another Account",
-                                            color = Color.White,
-                                            fontSize = 15.5.sp,
-                                            fontWeight = FontWeight.SemiBold
-                                        )
-                                    }
-
-                                    Spacer(Modifier.height(10.dp))
-
-                                    GlassTextButton(
-                                        onClick = { loginWithGoogle() }
-                                    ) {
-                                        Text(
-                                            text = "Create New Account",
-                                            color = colors.primary,
-                                            fontSize = 14.5.sp,
-                                            fontWeight = FontWeight.SemiBold
-                                        )
-                                    }
-                                } else {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.Center
-                                    ) {
-                                        Text(
-                                            text = "Welcome to ",
-                                            fontSize = 25.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            color = colors.textMain,
-                                            letterSpacing = (-0.4).sp
-                                        )
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text(
-                                                text = "Oscellion",
-                                                fontSize = 27.sp,
-                                                fontWeight = FontWeight.ExtraBold,
-                                                color = colors.textMain,
-                                                letterSpacing = (-0.5).sp
-                                            )
-                                            Text(
-                                                text = ".",
-                                                fontSize = 27.sp,
-                                                fontWeight = FontWeight.ExtraBold,
-                                                color = Color(0xFF0A84FF)
-                                            )
-                                        }
-                                    }
-                                    Spacer(Modifier.height(8.dp))
-                                    Text(
-                                        text = "Craft high-fidelity visual artwork, explore creations, and connect with a community of designers.",
-                                        fontSize = 14.5.sp,
-                                        color = colors.textMuted,
-                                        textAlign = TextAlign.Center,
-                                        lineHeight = 21.sp,
-                                        modifier = Modifier.padding(horizontal = 20.dp)
-                                    )
-
-                                    Spacer(Modifier.height(30.dp))
-
-                                    // Feature highlights (Shiny glass frosted cards)
-                                    Column(
-                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-                                        verticalArrangement = Arrangement.spacedBy(11.dp)
-                                    ) {
-                                        LoginFeatureCard(
-                                            icon = Lucide.Palette,
-                                            iconGradient = listOf(Color(0xFF2F80ED), Color(0xFF7C3AED)),
-                                            title = "Creative Studio",
-                                            subtitle = "Multi-layer gradient studio with real-time rendering"
-                                        )
-                                        LoginFeatureCard(
-                                            icon = Lucide.Lock,
-                                            iconGradient = listOf(Color(0xFF10B981), Color(0xFF06B6D4)),
-                                            title = "Private Messaging",
-                                            subtitle = "Encrypted direct chats, audio, and media sharing"
-                                        )
-                                        LoginFeatureCard(
-                                            icon = Lucide.Zap,
-                                            iconGradient = listOf(Color(0xFFFF2D55), Color(0xFFA855F7)),
-                                            title = "Instant Stories",
-                                            subtitle = "Share daily status, audio waveforms, and community art"
-                                        )
-                                    }
-
-                                    if (errorMessage != null) {
-                                        Spacer(Modifier.height(18.dp))
-                                        Text(
-                                            text = errorMessage!!,
-                                            color = colors.error,
-                                            fontSize = 13.5.sp,
-                                            textAlign = TextAlign.Center,
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                    }
-
-                                    Spacer(Modifier.height(36.dp))
-
-                                    CupertinoPrimaryButton(
-                                        onClick = { loginWithGoogle() },
-                                        isLoading = isLoading
-                                    ) {
-                                        Icon(
-                                            painter = painterResource(R.drawable.ic_google_logo),
-                                            contentDescription = "Google",
-                                            modifier = Modifier.size(20.dp),
-                                            tint = Color.Unspecified
-                                        )
-                                        Spacer(Modifier.width(10.dp))
-                                        Text(
-                                            text = "Continue with Google",
-                                            color = Color.White,
-                                            fontSize = 16.sp,
-                                            fontWeight = FontWeight.SemiBold
-                                        )
-                                    }
-                                }
-
-                                Spacer(Modifier.height(24.dp))
-                                Text(
-                                    text = "By continuing, you agree to Oscellion's Terms of Service and Privacy Policy.",
-                                    fontSize = 12.sp,
-                                    color = colors.textMuted.copy(alpha = 0.7f),
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.padding(horizontal = 16.dp)
-                                )
-                            }
-
-                            // ════════════════════════════════════════════════
-                            // GOOGLE_MATCH — Existing Account Match
-                            // ════════════════════════════════════════════════
-                            AuthStep.GOOGLE_MATCH -> {
-                                matchedProfile?.let { profile ->
-                                    Spacer(Modifier.height(24.dp))
-                                    Text("Is this your account?", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = colors.textMain, letterSpacing = (-0.5).sp)
-                                    Spacer(Modifier.height(8.dp))
-                                    Text("We found an existing Oscellion profile linked to your Google account.", color = colors.textMuted, fontSize = 14.sp, textAlign = TextAlign.Center)
-
-                                    Spacer(Modifier.height(32.dp))
-                                    IosAvatarView(
-                                        name = profile.displayName,
-                                        avatarUrl = profile.avatarUrl,
-                                        size = 96.dp,
-                                        gender = profile.gender
-                                    )
-                                    Spacer(Modifier.height(14.dp))
-                                    Text(profile.displayName, color = colors.textMain, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                                    Text("@${profile.username}", color = colors.textMuted, fontSize = 15.sp)
-
-                                    Spacer(Modifier.height(36.dp))
-                                    CupertinoPrimaryButton(onClick = { completeLogin(profile) }, text = "Continue as ${profile.displayName}")
-                                    Spacer(Modifier.height(12.dp))
-                                    GlassTextButton(onClick = {
-                                        FirebaseAuth.getInstance().signOut()
-                                        currentStep = AuthStep.INITIAL
-                                        matchedProfile = null
-                                    }) {
-                                        Text("This isn't my account", color = colors.primary, fontSize = 15.sp)
-                                    }
-                                }
-                            }
-
-                            // ════════════════════════════════════════════════
-                            // LOGIN_MISSING_AVATAR
-                            // ════════════════════════════════════════════════
-                            AuthStep.LOGIN_MISSING_AVATAR -> {
-                                Spacer(Modifier.height(16.dp))
-                                CupertinoAvatarPickerStep(
-                                    title = "Set Profile Photo",
-                                    subtitle = "Add a photo to make your profile recognizable to friends.",
-                                    selectedUri = selectedAvatarUri,
-                                    gender = selectedGender,
-                                    onGallery = { galleryLauncher.launch("image/*") },
-                                    onCamera = { launchCamera() }
-                                )
-                                Spacer(Modifier.height(36.dp))
-                                CupertinoPrimaryButton(
-                                    onClick = {
-                                        scope.launch {
-                                            isLoading = true
-                                            try {
-                                                val uid = FirebaseAuth.getInstance().currentUser?.uid
-                                                if (uid != null && selectedAvatarBytes != null) {
-                                                    val url = uploadAvatarToSupabase(uid, selectedAvatarBytes!!)
-                                                    if (url != null) {
-                                                        com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                                                            .collection("users").document(uid)
-                                                            .update("avatarUrl", url).await()
-                                                    }
-                                                }
-                                                com.chroma.studio.services.ChromaMessagingService.syncTokenForCurrentUser()
-                                                onLoginSuccess()
-                                            } finally { isLoading = false }
-                                        }
-                                    },
-                                    isLoading = isLoading,
-                                    text = if (selectedAvatarUri == null) "Skip for Now" else "Save & Continue"
-                                )
-                            }
-
-                            // ════════════════════════════════════════════════
-                            // SIGNUP_USERNAME — Step 1: Choose Username
-                            // ════════════════════════════════════════════════
-                            AuthStep.SIGNUP_USERNAME -> {
-                                Spacer(Modifier.height(12.dp))
-                                Text("Choose Your Username", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = colors.textMain, letterSpacing = (-0.5).sp)
-                                Spacer(Modifier.height(6.dp))
-                                Text("Pick a unique handle for your profile and messages.", color = colors.textMuted, fontSize = 14.sp, textAlign = TextAlign.Center)
-
-                                Spacer(Modifier.height(28.dp))
-
-                                CupertinoTextField(
-                                    value = usernameInput,
-                                    onValueChange = {
-                                        val filtered = it.filter { c -> c.isLetterOrDigit() }.lowercase()
-                                        if (filtered.length <= 30) usernameInput = filtered
-                                    },
-                                    placeholder = "Username",
-                                    leadingIcon = { Icon(Lucide.AtSign, null, tint = colors.textMuted, modifier = Modifier.size(18.dp)) },
-                                    trailingIcon = {
-                                        when {
-                                            isCheckingUsername -> OscellionLoadingSpinner(Modifier.size(16.dp), color = colors.primary, strokeWidth = 2.dp)
-                                            isUsernameAvailable == true -> Icon(Lucide.Check, null, tint = Color(0xFF34C759), modifier = Modifier.size(18.dp))
-                                            isUsernameAvailable == false -> Icon(Lucide.X, null, tint = colors.error, modifier = Modifier.size(18.dp))
-                                        }
-                                    }
-                                )
-
-                                if (isUsernameAvailable == false && usernameInput.length >= 3) {
-                                    Spacer(Modifier.height(6.dp))
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Text("User already exists with this name", color = colors.error, fontSize = 12.sp)
-                                        Text(
-                                            text = "Sign In",
-                                            color = colors.primary,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            modifier = Modifier.clickable {
-                                                loginUsernameInput = usernameInput
-                                                handleBack()
-                                            }
-                                        )
-                                    }
-
-                                    if (usernameSuggestions.isNotEmpty()) {
-                                        Spacer(Modifier.height(8.dp))
-                                        Text(
-                                            text = "Suggested handles:",
-                                            color = colors.textMuted,
-                                            fontSize = 12.sp,
-                                            modifier = Modifier.fillMaxWidth().padding(start = 4.dp)
+                                            letterSpacing = (-0.5).sp,
+                                            lineHeight = 28.sp
                                         )
                                         Spacer(Modifier.height(6.dp))
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            usernameSuggestions.forEach { suggestion ->
-                                                Box(
-                                                    modifier = Modifier
-                                                        .clip(RoundedCornerShape(8.dp))
-                                                        .background(colors.primary.copy(alpha = 0.12f))
-                                                        .border(0.5.dp, colors.primary.copy(alpha = 0.35f), RoundedCornerShape(8.dp))
-                                                        .clickable {
-                                                            usernameInput = suggestion
-                                                        }
-                                                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                                        Text(
+                                            "Pick a unique handle for your profile and messages.",
+                                            color = colors.textMuted,
+                                            fontSize = 13.5.sp,
+                                            textAlign = TextAlign.Center,
+                                            letterSpacing = (-0.2).sp,
+                                            lineHeight = 17.5.sp
+                                        )
+
+                                        Spacer(Modifier.height(24.dp))
+
+                                        CupertinoTextField(
+                                            value = usernameInput,
+                                            onValueChange = {
+                                                val filtered = it.filter { c -> c.isLetterOrDigit() }.lowercase()
+                                                if (filtered.length <= 30) usernameInput = filtered
+                                            },
+                                            placeholder = "Username",
+                                            leadingIcon = { Icon(Lucide.AtSign, null, tint = colors.textMuted, modifier = Modifier.size(18.dp)) },
+                                            trailingIcon = {
+                                                when {
+                                                    isCheckingUsername -> OscellionLoadingSpinner(Modifier.size(16.dp), color = colors.primary, strokeWidth = 2.dp)
+                                                    isUsernameAvailable == true -> Icon(Lucide.Check, null, tint = Color(0xFF34C759), modifier = Modifier.size(18.dp))
+                                                    isUsernameAvailable == false -> Icon(Lucide.X, null, tint = colors.error, modifier = Modifier.size(18.dp))
+                                                }
+                                            }
+                                        )
+
+                                        if (isUsernameAvailable == false && usernameInput.length >= 3) {
+                                            Spacer(Modifier.height(6.dp))
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Text("User already exists with this name", color = colors.error, fontSize = 12.sp, letterSpacing = (-0.2).sp)
+                                                Text(
+                                                    text = "Sign In",
+                                                    color = colors.primary,
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    letterSpacing = (-0.2).sp,
+                                                    modifier = Modifier.clickable {
+                                                        loginUsernameInput = usernameInput
+                                                        handleBack()
+                                                    }
+                                                )
+                                            }
+
+                                            if (usernameSuggestions.isNotEmpty()) {
+                                                Spacer(Modifier.height(8.dp))
+                                                Text(
+                                                    text = "Suggested handles:",
+                                                    color = colors.textMuted,
+                                                    fontSize = 12.sp,
+                                                    letterSpacing = (-0.2).sp,
+                                                    modifier = Modifier.fillMaxWidth().padding(start = 4.dp)
+                                                )
+                                                Spacer(Modifier.height(6.dp))
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                                 ) {
+                                                    usernameSuggestions.forEach { suggestion ->
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .clip(RoundedCornerShape(8.dp))
+                                                                .background(colors.primary.copy(alpha = 0.12f))
+                                                                .border(0.5.dp, colors.primary.copy(alpha = 0.35f), RoundedCornerShape(8.dp))
+                                                                .clickable {
+                                                                    usernameInput = suggestion
+                                                                }
+                                                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                                                        ) {
+                                                            Text(
+                                                                text = "@$suggestion",
+                                                                color = colors.primary,
+                                                                fontSize = 12.5.sp,
+                                                                fontWeight = FontWeight.SemiBold,
+                                                                letterSpacing = (-0.3).sp
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        if (errorMessage != null) {
+                                            Spacer(Modifier.height(12.dp))
+                                            Text(errorMessage!!, color = colors.error, fontSize = 13.sp, textAlign = TextAlign.Center, lineHeight = 16.sp, letterSpacing = (-0.2).sp, modifier = Modifier.fillMaxWidth())
+                                        }
+                                    }
+
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(top = 24.dp, bottom = 20.dp)
+                                    ) {
+                                        CupertinoPrimaryButton(
+                                            onClick = {
+                                                if (displayNameInput.isBlank() && !googleUser?.displayName.isNullOrBlank()) {
+                                                    displayNameInput = googleUser?.displayName ?: ""
+                                                }
+                                                if (selectedAvatarUri == null && googleUser?.photoUrl != null) {
+                                                    selectedAvatarUri = googleUser?.photoUrl
+                                                }
+                                                currentStep = AuthStep.SIGNUP_NAME
+                                            },
+                                            isLoading = isLoading,
+                                            text = "Continue",
+                                            enabled = isUsernameAvailable == true
+                                        )
+                                    }
+                                }
+
+                                // ════════════════════════════════════════════════
+                                // SIGNUP_NAME — Step 2: Display Name
+                                // ════════════════════════════════════════════════
+                                AuthStep.SIGNUP_NAME -> {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Spacer(Modifier.height(16.dp))
+                                        Text(
+                                            "What's your name?",
+                                            fontSize = 24.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = colors.textMain,
+                                            letterSpacing = (-0.5).sp,
+                                            lineHeight = 28.sp
+                                        )
+                                        Spacer(Modifier.height(6.dp))
+                                        Text(
+                                            "Your name will be visible to everyone on your profile.",
+                                            color = colors.textMuted,
+                                            fontSize = 13.5.sp,
+                                            textAlign = TextAlign.Center,
+                                            letterSpacing = (-0.2).sp,
+                                            lineHeight = 17.5.sp
+                                        )
+
+                                        Spacer(Modifier.height(24.dp))
+
+                                        CupertinoTextField(
+                                            value = displayNameInput,
+                                            onValueChange = { if (it.length <= 50) displayNameInput = it },
+                                            placeholder = "Full Name (e.g. Alex Rivera)",
+                                            leadingIcon = { Icon(Lucide.User, null, tint = colors.textMuted, modifier = Modifier.size(18.dp)) }
+                                        )
+                                    }
+
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(top = 24.dp, bottom = 20.dp)
+                                    ) {
+                                        CupertinoPrimaryButton(
+                                            onClick = { currentStep = AuthStep.SIGNUP_DOB },
+                                            text = "Continue",
+                                            enabled = displayNameInput.isNotBlank()
+                                        )
+                                    }
+                                }
+
+                                // ════════════════════════════════════════════════
+                                // SIGNUP_DOB — Step 3: Date of Birth
+                                // ════════════════════════════════════════════════
+                                AuthStep.SIGNUP_DOB -> {
+                                    val dobFormatter = remember { SimpleDateFormat("dd MMMM yyyy", Locale.getDefault()) }
+                                    val dobDisplay = selectedDobMillis?.let { dobFormatter.format(Date(it)) }
+
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Spacer(Modifier.height(16.dp))
+                                        Text(
+                                            "When's your birthday?",
+                                            fontSize = 24.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = colors.textMain,
+                                            letterSpacing = (-0.5).sp,
+                                            lineHeight = 28.sp
+                                        )
+                                        Spacer(Modifier.height(6.dp))
+                                        Text(
+                                            "This helps us verify your age and secure your account.",
+                                            color = colors.textMuted,
+                                            fontSize = 13.5.sp,
+                                            textAlign = TextAlign.Center,
+                                            letterSpacing = (-0.2).sp,
+                                            lineHeight = 17.5.sp
+                                        )
+
+                                        Spacer(Modifier.height(24.dp))
+
+                                        // Direct clickable selection row on the background
+                                        Surface(
+                                            onClick = { showDobPicker = true },
+                                            modifier = Modifier.fillMaxWidth().height(56.dp),
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = Color.Transparent,
+                                            border = BorderStroke(1.dp, colors.glassBorder.copy(alpha = 0.75f))
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(Lucide.Calendar, null, tint = colors.primary, modifier = Modifier.size(20.dp))
+                                                    Spacer(Modifier.width(12.dp))
                                                     Text(
-                                                        text = "@$suggestion",
-                                                        color = colors.primary,
-                                                        fontSize = 12.5.sp,
-                                                        fontWeight = FontWeight.SemiBold
+                                                        text = dobDisplay ?: "Select Date of Birth",
+                                                        fontSize = 15.5.sp,
+                                                        color = if (dobDisplay != null) colors.textMain else colors.textMuted.copy(alpha = 0.6f),
+                                                        fontWeight = if (dobDisplay != null) FontWeight.SemiBold else FontWeight.Normal,
+                                                        letterSpacing = (-0.3).sp
                                                     )
+                                                }
+                                                Icon(Lucide.ChevronRight, null, tint = colors.textMuted.copy(alpha = 0.5f), modifier = Modifier.size(18.dp))
+                                            }
+                                        }
+
+                                        Spacer(Modifier.height(14.dp))
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)
+                                        ) {
+                                            Icon(Lucide.Info, null, tint = colors.primary, modifier = Modifier.size(16.dp))
+                                            Spacer(Modifier.width(8.dp))
+                                            Text(
+                                                "You must be at least 13 years old to use Chroma.",
+                                                fontSize = 12.5.sp,
+                                                color = colors.textMuted,
+                                                fontWeight = FontWeight.Medium,
+                                                lineHeight = 16.sp,
+                                                letterSpacing = (-0.2).sp
+                                            )
+                                        }
+                                    }
+
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(top = 24.dp, bottom = 20.dp)
+                                    ) {
+                                        CupertinoPrimaryButton(
+                                            onClick = { currentStep = AuthStep.SIGNUP_GENDER },
+                                            text = "Continue",
+                                            enabled = selectedDobMillis != null
+                                        )
+                                    }
+
+                                    if (showDobPicker) {
+                                        val dpState = rememberDatePickerState(
+                                            initialSelectedDateMillis = selectedDobMillis ?: maxDobMillis,
+                                            selectableDates = object : SelectableDates {
+                                                override fun isSelectableDate(utcTimeMillis: Long) = utcTimeMillis <= maxDobMillis
+                                                override fun isSelectableYear(year: Int): Boolean {
+                                                    val minYear = Calendar.getInstance().apply { add(Calendar.YEAR, -13) }.get(Calendar.YEAR)
+                                                    return year <= minYear
+                                                }
+                                            }
+                                        )
+                                        DatePickerDialog(
+                                            onDismissRequest = { showDobPicker = false },
+                                            confirmButton = {
+                                                TextButton(
+                                                    onClick = {
+                                                        selectedDobMillis = dpState.selectedDateMillis
+                                                        showDobPicker = false
+                                                    },
+                                                    enabled = dpState.selectedDateMillis != null
+                                                ) {
+                                                    Text("Done", color = colors.primary, fontWeight = FontWeight.Bold, fontSize = 16.sp, letterSpacing = (-0.3).sp)
+                                                }
+                                            },
+                                            dismissButton = {
+                                                TextButton(onClick = { showDobPicker = false }) {
+                                                    Text("Cancel", color = colors.textMuted, fontSize = 16.sp, letterSpacing = (-0.3).sp)
+                                                }
+                                            }
+                                        ) {
+                                            DatePicker(
+                                                state = dpState,
+                                                title = { Text("Select Date of Birth", modifier = Modifier.padding(start = 24.dp, end = 12.dp, top = 16.dp), fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp) }
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // ════════════════════════════════════════════════
+                                // SIGNUP_GENDER — Step 4: Gender Selection
+                                // ════════════════════════════════════════════════
+                                AuthStep.SIGNUP_GENDER -> {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Spacer(Modifier.height(16.dp))
+                                        Text(
+                                            "What's your gender?",
+                                            fontSize = 24.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = colors.textMain,
+                                            letterSpacing = (-0.5).sp,
+                                            lineHeight = 28.sp
+                                        )
+                                        Spacer(Modifier.height(6.dp))
+                                        Text(
+                                            "This helps us personalise your default profile styling.",
+                                            color = colors.textMuted,
+                                            fontSize = 13.5.sp,
+                                            textAlign = TextAlign.Center,
+                                            letterSpacing = (-0.2).sp,
+                                            lineHeight = 17.5.sp
+                                        )
+
+                                        Spacer(Modifier.height(24.dp))
+
+                                        Column(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                                        ) {
+                                            genderOptions.forEach { gender ->
+                                                val isSelected = selectedGender == gender
+                                                val (iconRes, iconVector) = when (gender) {
+                                                    "Male" -> Pair(R.drawable.ic_gender_male, null)
+                                                    "Female" -> Pair(R.drawable.ic_gender_female, null)
+                                                    "Non-binary" -> Pair(null, Lucide.Heart)
+                                                    else -> Pair(null, Lucide.EyeOff)
+                                                }
+
+                                                Surface(
+                                                    onClick = { selectedGender = gender },
+                                                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                                                    shape = RoundedCornerShape(12.dp),
+                                                    color = if (isSelected) colors.primary.copy(alpha = 0.12f) else Color.Transparent,
+                                                    border = BorderStroke(
+                                                        width = if (isSelected) 1.5.dp else 1.dp,
+                                                        color = if (isSelected) colors.primary else colors.glassBorder.copy(alpha = 0.7f)
+                                                    )
+                                                ) {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)
+                                                    ) {
+                                                        if (iconRes != null) {
+                                                            Icon(painterResource(iconRes), contentDescription = null, tint = if (isSelected) colors.primary else colors.textMuted, modifier = Modifier.size(18.dp))
+                                                        } else if (iconVector != null) {
+                                                            Icon(iconVector, contentDescription = null, tint = if (isSelected) colors.primary else colors.textMuted, modifier = Modifier.size(18.dp))
+                                                        }
+                                                        Spacer(Modifier.width(14.dp))
+                                                        Text(
+                                                            text = gender,
+                                                            fontSize = 15.5.sp,
+                                                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                                            letterSpacing = (-0.3).sp,
+                                                            color = if (isSelected) colors.primary else colors.textMain
+                                                        )
+                                                        Spacer(Modifier.weight(1f))
+                                                        if (isSelected) {
+                                                            Icon(Lucide.Check, null, tint = colors.primary, modifier = Modifier.size(18.dp))
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
                                     }
-                                }
 
-                                if (errorMessage != null) {
-                                    Spacer(Modifier.height(12.dp))
-                                    Text(errorMessage!!, color = colors.error, fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-                                }
-
-                                Spacer(Modifier.height(32.dp))
-
-                                CupertinoPrimaryButton(
-                                    onClick = {
-                                        if (displayNameInput.isBlank() && !googleUser?.displayName.isNullOrBlank()) {
-                                            displayNameInput = googleUser?.displayName ?: ""
-                                        }
-                                        if (selectedAvatarUri == null && googleUser?.photoUrl != null) {
-                                            selectedAvatarUri = googleUser?.photoUrl
-                                        }
-                                        currentStep = AuthStep.SIGNUP_NAME
-                                    },
-                                    isLoading = isLoading,
-                                    text = "Continue",
-                                    enabled = isUsernameAvailable == true
-                                )
-                            }
-
-                            // ════════════════════════════════════════════════
-                            // SIGNUP_NAME — Step 2: Display Name
-                            // ════════════════════════════════════════════════
-                            AuthStep.SIGNUP_NAME -> {
-                                Spacer(Modifier.height(12.dp))
-                                Text("What's your name?", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = colors.textMain, letterSpacing = (-0.5).sp)
-                                Spacer(Modifier.height(6.dp))
-                                Text("Your name will be visible to everyone on your profile.", color = colors.textMuted, fontSize = 14.sp, textAlign = TextAlign.Center)
-
-                                Spacer(Modifier.height(28.dp))
-
-                                CupertinoTextField(
-                                    value = displayNameInput,
-                                    onValueChange = { if (it.length <= 50) displayNameInput = it },
-                                    placeholder = "Full Name (e.g. Alex Rivera)",
-                                    leadingIcon = { Icon(Lucide.User, null, tint = colors.textMuted, modifier = Modifier.size(18.dp)) }
-                                )
-
-                                Spacer(Modifier.height(32.dp))
-                                CupertinoPrimaryButton(
-                                    onClick = { currentStep = AuthStep.SIGNUP_DOB },
-                                    text = "Continue",
-                                    enabled = displayNameInput.isNotBlank()
-                                )
-                            }
-
-                            // ════════════════════════════════════════════════
-                            // SIGNUP_DOB — Step 3: Date of Birth
-                            // ════════════════════════════════════════════════
-                            AuthStep.SIGNUP_DOB -> {
-                                val dobFormatter = remember { SimpleDateFormat("dd MMMM yyyy", Locale.getDefault()) }
-                                val dobDisplay = selectedDobMillis?.let { dobFormatter.format(Date(it)) }
-
-                                Spacer(Modifier.height(12.dp))
-                                Text("When's your birthday?", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = colors.textMain, letterSpacing = (-0.5).sp)
-                                Spacer(Modifier.height(6.dp))
-                                Text("This helps us verify your age and secure your account.", color = colors.textMuted, fontSize = 14.sp, textAlign = TextAlign.Center)
-
-                                Spacer(Modifier.height(28.dp))
-
-                                // Direct clickable selection row on the background
-                                Surface(
-                                    onClick = { showDobPicker = true },
-                                    modifier = Modifier.fillMaxWidth().height(56.dp),
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = Color.Transparent,
-                                    border = BorderStroke(1.dp, colors.glassBorder.copy(alpha = 0.75f))
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(top = 24.dp, bottom = 20.dp)
                                     ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(Lucide.Calendar, null, tint = colors.primary, modifier = Modifier.size(20.dp))
-                                            Spacer(Modifier.width(12.dp))
-                                            Text(
-                                                text = dobDisplay ?: "Select Date of Birth",
-                                                fontSize = 15.5.sp,
-                                                color = if (dobDisplay != null) colors.textMain else colors.textMuted.copy(alpha = 0.6f),
-                                                fontWeight = if (dobDisplay != null) FontWeight.SemiBold else FontWeight.Normal
-                                            )
-                                        }
-                                        Icon(Lucide.ChevronRight, null, tint = colors.textMuted.copy(alpha = 0.5f), modifier = Modifier.size(18.dp))
+                                        CupertinoPrimaryButton(
+                                            onClick = { currentStep = AuthStep.SIGNUP_AVATAR },
+                                            text = "Continue",
+                                            enabled = selectedGender.isNotEmpty()
+                                        )
                                     }
                                 }
 
-                                Spacer(Modifier.height(14.dp))
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)
-                                ) {
-                                    Icon(Lucide.Info, null, tint = colors.primary, modifier = Modifier.size(16.dp))
-                                    Spacer(Modifier.width(8.dp))
-                                    Text("You must be at least 13 years old to use Chroma.", fontSize = 12.5.sp, color = colors.textMuted, fontWeight = FontWeight.Medium)
+                                // ════════════════════════════════════════════════
+                                // SIGNUP_AVATAR — Step 5: Avatar Picker
+                                // ════════════════════════════════════════════════
+                                AuthStep.SIGNUP_AVATAR -> {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Spacer(Modifier.height(16.dp))
+                                        CupertinoAvatarPickerStep(
+                                            title = "Choose Profile Photo",
+                                            subtitle = "Upload your custom photo or keep your default avatar.",
+                                            selectedUri = selectedAvatarUri,
+                                            gender = selectedGender,
+                                            onGallery = { galleryLauncher.launch("image/*") },
+                                            onCamera = { launchCamera() }
+                                        )
+                                    }
+
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(top = 24.dp, bottom = 20.dp)
+                                    ) {
+                                        CupertinoPrimaryButton(
+                                            onClick = { currentStep = AuthStep.SIGNUP_INTERESTS },
+                                            text = if (selectedAvatarUri == null && selectedGender.isNotBlank()) "Keep Default & Continue" else if (selectedAvatarUri == null) "Skip for Now" else "Continue"
+                                        )
+                                    }
                                 }
 
-                                Spacer(Modifier.height(32.dp))
-                                CupertinoPrimaryButton(
-                                    onClick = { currentStep = AuthStep.SIGNUP_GENDER },
-                                    text = "Continue",
-                                    enabled = selectedDobMillis != null
-                                )
-
-                                if (showDobPicker) {
-                                    val dpState = rememberDatePickerState(
-                                        initialSelectedDateMillis = selectedDobMillis ?: maxDobMillis,
-                                        selectableDates = object : SelectableDates {
-                                            override fun isSelectableDate(utcTimeMillis: Long) = utcTimeMillis <= maxDobMillis
-                                            override fun isSelectableYear(year: Int): Boolean {
-                                                val minYear = Calendar.getInstance().apply { add(Calendar.YEAR, -13) }.get(Calendar.YEAR)
-                                                return year <= minYear
-                                            }
-                                        }
-                                    )
-                                    DatePickerDialog(
-                                        onDismissRequest = { showDobPicker = false },
-                                        confirmButton = {
-                                            TextButton(
-                                                onClick = {
-                                                    selectedDobMillis = dpState.selectedDateMillis
-                                                    showDobPicker = false
-                                                },
-                                                enabled = dpState.selectedDateMillis != null
-                                            ) {
-                                                Text("Done", color = colors.primary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                                            }
-                                        },
-                                        dismissButton = {
-                                            TextButton(onClick = { showDobPicker = false }) {
-                                                Text("Cancel", color = colors.textMuted, fontSize = 16.sp)
-                                            }
-                                        }
+                                // ════════════════════════════════════════════════
+                                // SIGNUP_INTERESTS — Step 6: Categories (No Pills)
+                                // ════════════════════════════════════════════════
+                                AuthStep.SIGNUP_INTERESTS -> {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        DatePicker(
-                                            state = dpState,
-                                            title = { Text("Select Date of Birth", modifier = Modifier.padding(start = 24.dp, end = 12.dp, top = 16.dp), fontWeight = FontWeight.Bold) }
+                                        Spacer(Modifier.height(16.dp))
+                                        Text(
+                                            "What are your interests?",
+                                            fontSize = 24.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = colors.textMain,
+                                            letterSpacing = (-0.5).sp,
+                                            lineHeight = 28.sp
+                                        )
+                                        Spacer(Modifier.height(6.dp))
+                                        Text(
+                                            "Select topics you love to discover relevant content.",
+                                            color = colors.textMuted,
+                                            fontSize = 13.5.sp,
+                                            textAlign = TextAlign.Center,
+                                            letterSpacing = (-0.2).sp,
+                                            lineHeight = 17.5.sp
+                                        )
+
+                                        Spacer(Modifier.height(24.dp))
+
+                                        FlowRow(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            interestOptions.forEach { interest ->
+                                                val isSelected = selectedInterests.contains(interest)
+                                                Surface(
+                                                    onClick = {
+                                                        val s = selectedInterests.toMutableSet()
+                                                        if (isSelected) s.remove(interest) else s.add(interest)
+                                                        selectedInterests = s
+                                                    },
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    color = if (isSelected) colors.primary.copy(alpha = 0.14f) else Color.Transparent,
+                                                    border = BorderStroke(
+                                                        width = 1.dp,
+                                                        color = if (isSelected) colors.primary else colors.glassBorder.copy(alpha = 0.7f)
+                                                    )
+                                                ) {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp)
+                                                    ) {
+                                                        if (isSelected) {
+                                                            Icon(Lucide.Check, null, tint = colors.primary, modifier = Modifier.size(14.dp))
+                                                        }
+                                                        Text(
+                                                            text = interest,
+                                                            color = if (isSelected) colors.primary else colors.textMain,
+                                                            fontSize = 13.5.sp,
+                                                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                                                            letterSpacing = (-0.3).sp
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        if (errorMessage != null) {
+                                            Spacer(Modifier.height(12.dp))
+                                            Text(errorMessage!!, color = colors.error, fontSize = 13.sp, textAlign = TextAlign.Center, lineHeight = 16.sp, letterSpacing = (-0.2).sp, modifier = Modifier.fillMaxWidth())
+                                        }
+                                    }
+
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(top = 24.dp, bottom = 20.dp)
+                                    ) {
+                                        CupertinoPrimaryButton(
+                                            onClick = {
+                                                scope.launch {
+                                                    isLoading = true
+                                                    errorMessage = null
+                                                    try {
+                                                        val uid = googleUser?.uid ?: FirebaseAuth.getInstance().currentUser?.uid
+                                                        if (uid == null) {
+                                                            errorMessage = "Authentication session expired. Please sign in again."
+                                                            return@launch
+                                                        }
+                                                        var avatarUrl = ""
+                                                        if (selectedAvatarBytes != null) {
+                                                            avatarUrl = uploadAvatarToSupabase(uid, selectedAvatarBytes!!) ?: ""
+                                                        } else if (selectedAvatarUri != null && googleUser?.photoUrl != null && selectedAvatarUri == googleUser?.photoUrl) {
+                                                            avatarUrl = googleUser?.photoUrl.toString()
+                                                        }
+                                                        val success = discoverRepo.registerDetailedUser(
+                                                            uid = uid,
+                                                            displayName = displayNameInput.trim(),
+                                                            username = usernameInput.trim().lowercase(),
+                                                            dob = selectedDobMillis,
+                                                            avatarUrl = avatarUrl,
+                                                            interests = selectedInterests.toList(),
+                                                            gender = selectedGender,
+                                                            agreedToTermsAt = System.currentTimeMillis()
+                                                        )
+                                                        if (success) {
+                                                            com.chroma.studio.services.ChromaMessagingService.syncTokenForCurrentUser()
+                                                            onLoginSuccess()
+                                                        } else {
+                                                            errorMessage = "Failed to create profile. Please try again."
+                                                        }
+                                                    } catch (e: Exception) {
+                                                        errorMessage = "Error: ${e.message}"
+                                                    } finally { isLoading = false }
+                                                }
+                                            },
+                                            isLoading = isLoading,
+                                            text = "Create Profile & Launch",
+                                            enabled = selectedInterests.isNotEmpty()
+                                        )
+
+                                        Spacer(Modifier.height(12.dp))
+                                        Text(
+                                            text = "By creating a profile, you agree to Oscellion's Terms of Service and Privacy Policy.",
+                                            fontSize = 11.5.sp,
+                                            lineHeight = 15.sp,
+                                            letterSpacing = (-0.2).sp,
+                                            color = colors.textMuted.copy(alpha = 0.6f),
+                                            textAlign = TextAlign.Center,
+                                            modifier = Modifier.padding(horizontal = 16.dp)
                                         )
                                     }
                                 }
                             }
-
-                            // ════════════════════════════════════════════════
-                            // SIGNUP_GENDER — Step 4: Gender Selection
-                            // ════════════════════════════════════════════════
-                            AuthStep.SIGNUP_GENDER -> {
-                                Spacer(Modifier.height(12.dp))
-                                Text("What's your gender?", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = colors.textMain, letterSpacing = (-0.5).sp)
-                                Spacer(Modifier.height(6.dp))
-                                Text("This helps us personalise your default profile styling.", color = colors.textMuted, fontSize = 14.sp, textAlign = TextAlign.Center)
-
-                                Spacer(Modifier.height(28.dp))
-
-                                Column(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    genderOptions.forEach { gender ->
-                                        val isSelected = selectedGender == gender
-                                        val (iconRes, iconVector) = when (gender) {
-                                            "Male" -> Pair(R.drawable.ic_gender_male, null)
-                                            "Female" -> Pair(R.drawable.ic_gender_female, null)
-                                            "Non-binary" -> Pair(null, Lucide.Heart)
-                                            else -> Pair(null, Lucide.EyeOff)
-                                        }
-
-                                        Surface(
-                                            onClick = { selectedGender = gender },
-                                            modifier = Modifier.fillMaxWidth().height(52.dp),
-                                            shape = RoundedCornerShape(12.dp),
-                                            color = if (isSelected) colors.primary.copy(alpha = 0.12f) else Color.Transparent,
-                                            border = BorderStroke(
-                                                width = if (isSelected) 1.5.dp else 1.dp,
-                                                color = if (isSelected) colors.primary else colors.glassBorder.copy(alpha = 0.7f)
-                                            )
-                                        ) {
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)
-                                            ) {
-                                                if (iconRes != null) {
-                                                    Icon(painterResource(iconRes), contentDescription = null, tint = if (isSelected) colors.primary else colors.textMuted, modifier = Modifier.size(18.dp))
-                                                } else if (iconVector != null) {
-                                                    Icon(iconVector, contentDescription = null, tint = if (isSelected) colors.primary else colors.textMuted, modifier = Modifier.size(18.dp))
-                                                }
-                                                Spacer(Modifier.width(14.dp))
-                                                Text(
-                                                    text = gender,
-                                                    fontSize = 15.5.sp,
-                                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                                    color = if (isSelected) colors.primary else colors.textMain
-                                                )
-                                                Spacer(Modifier.weight(1f))
-                                                if (isSelected) {
-                                                    Icon(Lucide.Check, null, tint = colors.primary, modifier = Modifier.size(18.dp))
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                Spacer(Modifier.height(32.dp))
-                                CupertinoPrimaryButton(
-                                    onClick = { currentStep = AuthStep.SIGNUP_AVATAR },
-                                    text = "Continue",
-                                    enabled = selectedGender.isNotEmpty()
-                                )
-                            }
-
-                            // ════════════════════════════════════════════════
-                            // SIGNUP_AVATAR — Step 5: Avatar Picker
-                            // ════════════════════════════════════════════════
-                            AuthStep.SIGNUP_AVATAR -> {
-                                Spacer(Modifier.height(12.dp))
-                                CupertinoAvatarPickerStep(
-                                    title = "Choose Profile Photo",
-                                    subtitle = "Upload your custom photo or keep your default avatar.",
-                                    selectedUri = selectedAvatarUri,
-                                    gender = selectedGender,
-                                    onGallery = { galleryLauncher.launch("image/*") },
-                                    onCamera = { launchCamera() }
-                                )
-                                Spacer(Modifier.height(36.dp))
-                                CupertinoPrimaryButton(
-                                    onClick = { currentStep = AuthStep.SIGNUP_INTERESTS },
-                                    text = if (selectedAvatarUri == null && selectedGender.isNotBlank()) "Keep Default & Continue" else if (selectedAvatarUri == null) "Skip for Now" else "Continue"
-                                )
-                            }
-
-                            // ════════════════════════════════════════════════
-                            // SIGNUP_INTERESTS — Step 6: Categories (No Pills)
-                            // ════════════════════════════════════════════════
-                            AuthStep.SIGNUP_INTERESTS -> {
-                                Spacer(Modifier.height(12.dp))
-                                Text("What are your interests?", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = colors.textMain, letterSpacing = (-0.5).sp)
-                                Spacer(Modifier.height(6.dp))
-                                Text("Select topics you love to discover relevant content.", color = colors.textMuted, fontSize = 14.sp, textAlign = TextAlign.Center)
-
-                                Spacer(Modifier.height(28.dp))
-
-                                FlowRow(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    interestOptions.forEach { interest ->
-                                        val isSelected = selectedInterests.contains(interest)
-                                        Surface(
-                                            onClick = {
-                                                val s = selectedInterests.toMutableSet()
-                                                if (isSelected) s.remove(interest) else s.add(interest)
-                                                selectedInterests = s
-                                            },
-                                            shape = RoundedCornerShape(8.dp),
-                                            color = if (isSelected) colors.primary.copy(alpha = 0.14f) else Color.Transparent,
-                                            border = BorderStroke(
-                                                width = 1.dp,
-                                                color = if (isSelected) colors.primary else colors.glassBorder.copy(alpha = 0.7f)
-                                            )
-                                        ) {
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp)
-                                            ) {
-                                                if (isSelected) {
-                                                    Icon(Lucide.Check, null, tint = colors.primary, modifier = Modifier.size(14.dp))
-                                                }
-                                                Text(
-                                                    text = interest,
-                                                    color = if (isSelected) colors.primary else colors.textMain,
-                                                    fontSize = 13.5.sp,
-                                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-
-                                if (errorMessage != null) {
-                                    Spacer(Modifier.height(12.dp))
-                                    Text(errorMessage!!, color = colors.error, fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-                                }
-
-                                Spacer(Modifier.height(36.dp))
-
-                                CupertinoPrimaryButton(
-                                    onClick = {
-                                        scope.launch {
-                                            isLoading = true
-                                            errorMessage = null
-                                            try {
-                                                val uid = googleUser?.uid ?: FirebaseAuth.getInstance().currentUser?.uid
-                                                if (uid == null) {
-                                                    errorMessage = "Authentication session expired. Please sign in again."
-                                                    return@launch
-                                                }
-                                                var avatarUrl = ""
-                                                if (selectedAvatarBytes != null) {
-                                                    avatarUrl = uploadAvatarToSupabase(uid, selectedAvatarBytes!!) ?: ""
-                                                } else if (selectedAvatarUri != null && googleUser?.photoUrl != null && selectedAvatarUri == googleUser?.photoUrl) {
-                                                    avatarUrl = googleUser?.photoUrl.toString()
-                                                }
-                                                val success = discoverRepo.registerDetailedUser(
-                                                    uid = uid,
-                                                    displayName = displayNameInput.trim(),
-                                                    username = usernameInput.trim().lowercase(),
-                                                    dob = selectedDobMillis,
-                                                    avatarUrl = avatarUrl,
-                                                    interests = selectedInterests.toList(),
-                                                    gender = selectedGender,
-                                                    agreedToTermsAt = System.currentTimeMillis()
-                                                )
-                                                if (success) {
-                                                    com.chroma.studio.services.ChromaMessagingService.syncTokenForCurrentUser()
-                                                    onLoginSuccess()
-                                                } else {
-                                                    errorMessage = "Failed to create profile. Please try again."
-                                                }
-                                            } catch (e: Exception) {
-                                                errorMessage = "Error: ${e.message}"
-                                            } finally { isLoading = false }
-                                        }
-                                    },
-                                    isLoading = isLoading,
-                                    text = "Create Profile & Launch",
-                                    enabled = selectedInterests.isNotEmpty()
-                                )
-
-                                Spacer(Modifier.height(14.dp))
-                                Text(
-                                    text = "By creating a profile, you agree to Oscellion's Terms of Service and Privacy Policy.",
-                                    fontSize = 12.sp,
-                                    color = colors.textMuted.copy(alpha = 0.6f),
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.padding(horizontal = 16.dp)
-                                )
-                            }
-                        } // end when
-
-                        Spacer(Modifier.height(32.dp))
+                        }
                     }
                 }
             }
@@ -1708,9 +1989,9 @@ fun CupertinoAvatarPickerStep(
     val colors = LocalOscellionColors.current
     val defaultAvatarRes = remember(gender) { getDefaultAvatarDrawableRes(gender) }
 
-    Text(title, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = colors.textMain, textAlign = TextAlign.Center, letterSpacing = (-0.5).sp)
+    Text(title, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = colors.textMain, textAlign = TextAlign.Center, letterSpacing = (-0.5).sp, lineHeight = 28.sp)
     Spacer(Modifier.height(6.dp))
-    Text(subtitle, color = colors.textMuted, fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 16.dp))
+    Text(subtitle, color = colors.textMuted, fontSize = 13.5.sp, textAlign = TextAlign.Center, letterSpacing = (-0.2).sp, lineHeight = 17.5.sp, modifier = Modifier.padding(horizontal = 16.dp))
     Spacer(Modifier.height(32.dp))
 
     Box(

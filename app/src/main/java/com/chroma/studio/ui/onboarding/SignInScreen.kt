@@ -174,313 +174,335 @@ fun SignInScreen(
             )
         }
 
-        Column(
+        BoxWithConstraints(
             modifier = Modifier
                 .weight(1f)
-                .verticalScroll(rememberScrollState())
+                .fillMaxWidth()
+                .imePadding()
         ) {
-            Spacer(Modifier.height(6.dp))
+            val contentHeight = maxHeight
+            val scrollState = rememberScrollState()
 
-            ObHeader(
-                firstLine = "Sign in to",
-                highlightLine = "Chroma Studio",
-                subtitle = "Access your creative canvas, encrypted conversations, and personal studio profile."
-            )
-
-            Spacer(Modifier.height(18.dp))
-
-            // Quick select for saved accounts if available
-            if (savedAccounts.isNotEmpty()) {
-                Column(Modifier.padding(horizontal = 22.dp)) {
-                    Text(
-                        text = "SAVED ACCOUNTS",
-                        style = ObType.SectionHeader,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(scrollState)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .defaultMinSize(minHeight = contentHeight),
+                    verticalArrangement = Arrangement.SpaceBetween
+                ) {
+                    // TOP SECTION: Header, Saved Accounts, Inputs
+                    Column(
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        savedAccounts.forEach { acc ->
-                            val isSelected = identifier.equals(acc.username, ignoreCase = true) ||
-                                identifier.equals(acc.email, ignoreCase = true)
-                            ObGlassCard(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .clickable(role = Role.Button) {
-                                        identifier = acc.username.ifBlank { acc.email }
+                        Spacer(Modifier.height(6.dp))
+
+                        ObHeader(
+                            firstLine = "Sign in to",
+                            highlightLine = "Chroma Studio",
+                            subtitle = "Access your creative canvas, encrypted conversations, and personal studio profile."
+                        )
+
+                        Spacer(Modifier.height(18.dp))
+
+                        // Quick select for saved accounts if available
+                        if (savedAccounts.isNotEmpty()) {
+                            Column(Modifier.padding(horizontal = 22.dp)) {
+                                Text(
+                                    text = "SAVED ACCOUNTS",
+                                    style = ObType.SectionHeader,
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    savedAccounts.forEach { acc ->
+                                        val isSelected = identifier.equals(acc.username, ignoreCase = true) ||
+                                            identifier.equals(acc.email, ignoreCase = true)
+                                        ObGlassCard(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(14.dp))
+                                                .clickable(role = Role.Button) {
+                                                    identifier = acc.username.ifBlank { acc.email }
+                                                    loginError = null
+                                                },
+                                            shape = RoundedCornerShape(14.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .background(if (isSelected) Color(0x35C8F535) else Color(0x75111636))
+                                                    .border(
+                                                        width = 1.dp,
+                                                        color = if (isSelected) ObColors.Lime else Color(0x22FFFFFF),
+                                                        shape = RoundedCornerShape(14.dp)
+                                                    )
+                                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(28.dp)
+                                                        .clip(CircleShape)
+                                                        .background(Color(0xFF0C1238))
+                                                ) {
+                                                    IosAvatarView(
+                                                        name = acc.displayName.ifBlank { acc.username },
+                                                        avatarUrl = acc.avatarUrl,
+                                                        size = 28.dp,
+                                                        gender = acc.gender,
+                                                        modifier = Modifier.fillMaxSize()
+                                                    )
+                                                }
+                                                Column {
+                                                    Text(
+                                                        text = acc.displayName.ifBlank { acc.username },
+                                                        color = Color.White,
+                                                        fontSize = 12.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        letterSpacing = (-0.4).sp,
+                                                        lineHeight = 15.sp,
+                                                        maxLines = 1
+                                                    )
+                                                    Text(
+                                                        text = "@${acc.username}",
+                                                        color = ObColors.TextMuted,
+                                                        fontSize = 10.5.sp,
+                                                        letterSpacing = (-0.2).sp,
+                                                        lineHeight = 13.sp,
+                                                        maxLines = 1
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                Spacer(Modifier.height(14.dp))
+                            }
+                        }
+
+                        // Direct input section without secondary background card
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp),
+                            verticalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            // Field 1: Identifier with Uiverse floating label
+                            ObTextField(
+                                value = identifier,
+                                onValueChange = {
+                                    identifier = it
+                                    loginError = null
+                                },
+                                placeholder = "Username or email",
+                                leading = Icons.Rounded.AlternateEmail,
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Email,
+                                    imeAction = ImeAction.Next,
+                                    autoCorrect = false
+                                ),
+                                keyboardActions = KeyboardActions(
+                                    onNext = { focus.moveFocus(FocusDirection.Down) }
+                                ),
+                                trailing = {
+                                    if (identifier.isNotEmpty()) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Close,
+                                            contentDescription = "Clear",
+                                            tint = Color.White.copy(alpha = 0.5f),
+                                            modifier = Modifier
+                                                .size(18.dp)
+                                                .clickable(role = Role.Button) { identifier = "" }
+                                        )
+                                    }
+                                }
+                            )
+
+                            // Field 2: Password with Uiverse floating label
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                ObTextField(
+                                    value = password,
+                                    onValueChange = {
+                                        password = it
                                         loginError = null
                                     },
-                                shape = RoundedCornerShape(14.dp)
+                                    placeholder = "Password",
+                                    leading = Icons.Rounded.Lock,
+                                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                                    keyboardOptions = KeyboardOptions(
+                                        keyboardType = KeyboardType.Password,
+                                        imeAction = ImeAction.Done,
+                                        autoCorrect = false
+                                    ),
+                                    keyboardActions = KeyboardActions(
+                                        onDone = {
+                                            focus.clearFocus()
+                                            performSignIn()
+                                        }
+                                    ),
+                                    trailing = {
+                                        Icon(
+                                            imageVector = if (passwordVisible) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                                            contentDescription = if (passwordVisible) "Hide password" else "Show password",
+                                            tint = Color.White.copy(alpha = 0.7f),
+                                            modifier = Modifier
+                                                .size(20.dp)
+                                                .clickable(role = Role.Button) { passwordVisible = !passwordVisible }
+                                        )
+                                    }
+                                )
+                                Text(
+                                    text = "Forgot password?",
+                                    color = Color(0xFF2196F3),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    letterSpacing = (-0.3).sp,
+                                    modifier = Modifier
+                                        .align(Alignment.End)
+                                        .padding(end = 4.dp, top = 2.dp)
+                                        .clickable(role = Role.Button) {
+                                            resetEmail = if (identifier.contains("@")) identifier.trim() else ""
+                                            resetError = null
+                                            resetSent = false
+                                            showForgotDialog = true
+                                        }
+                                )
+                            }
+
+                            // Error message display
+                            AnimatedVisibility(
+                                visible = loginError != null,
+                                enter = fadeIn(tween(150)) + expandVertically(),
+                                exit = fadeOut(tween(150)) + shrinkVertically()
                             ) {
                                 Row(
                                     modifier = Modifier
-                                        .background(if (isSelected) Color(0x35C8F535) else Color(0x75111636))
-                                        .border(
-                                            width = 1.dp,
-                                            color = if (isSelected) ObColors.Lime else Color(0x22FFFFFF),
-                                            shape = RoundedCornerShape(14.dp)
-                                        )
-                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(ObColors.Danger.copy(alpha = 0.15f))
+                                        .border(1.dp, ObColors.Danger.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
+                                        .padding(12.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(28.dp)
-                                            .clip(CircleShape)
-                                            .background(Color(0xFF0C1238))
-                                    ) {
-                                        IosAvatarView(
-                                            name = acc.displayName.ifBlank { acc.username },
-                                            avatarUrl = acc.avatarUrl,
-                                            size = 28.dp,
-                                            gender = acc.gender,
-                                            modifier = Modifier.fillMaxSize()
-                                        )
-                                    }
-                                    Column {
-                                        Text(
-                                            text = acc.displayName.ifBlank { acc.username },
-                                            color = Color.White,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            maxLines = 1
-                                        )
-                                        Text(
-                                            text = "@${acc.username}",
-                                            color = ObColors.TextMuted,
-                                            fontSize = 10.5.sp,
-                                            maxLines = 1
-                                        )
-                                    }
+                                    Icon(
+                                        imageVector = Icons.Rounded.ErrorOutline,
+                                        contentDescription = null,
+                                        tint = ObColors.Danger,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Text(
+                                        text = loginError ?: "",
+                                        color = Color.White,
+                                        fontSize = 12.5.sp,
+                                        lineHeight = 16.sp,
+                                        letterSpacing = (-0.2).sp,
+                                        modifier = Modifier.weight(1f)
+                                    )
                                 }
                             }
                         }
                     }
-                    Spacer(Modifier.height(14.dp))
-                }
-            }
 
-            // Direct input section without secondary background card
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                // Field 1: Identifier with Uiverse floating label
-                ObTextField(
-                    value = identifier,
-                    onValueChange = {
-                        identifier = it
-                        loginError = null
-                    },
-                    placeholder = "Username or email",
-                    leading = Icons.Rounded.AlternateEmail,
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Email,
-                        imeAction = ImeAction.Next,
-                        autoCorrect = false
-                    ),
-                    keyboardActions = KeyboardActions(
-                        onNext = { focus.moveFocus(FocusDirection.Down) }
-                    ),
-                    trailing = {
-                        if (identifier.isNotEmpty()) {
-                            Icon(
-                                imageVector = Icons.Rounded.Close,
-                                contentDescription = "Clear",
-                                tint = Color.White.copy(alpha = 0.5f),
-                                modifier = Modifier
-                                    .size(18.dp)
-                                    .clickable(role = Role.Button) { identifier = "" }
-                            )
-                        }
-                    }
-                )
-
-                // Field 2: Password with Uiverse floating label
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    ObTextField(
-                        value = password,
-                        onValueChange = {
-                            password = it
-                            loginError = null
-                        },
-                        placeholder = "Password",
-                        leading = Icons.Rounded.Lock,
-                        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Password,
-                            imeAction = ImeAction.Done,
-                            autoCorrect = false
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onDone = {
-                                focus.clearFocus()
-                                performSignIn()
-                            }
-                        ),
-                        trailing = {
-                            Icon(
-                                imageVector = if (passwordVisible) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
-                                contentDescription = if (passwordVisible) "Hide password" else "Show password",
-                                tint = Color.White.copy(alpha = 0.7f),
-                                modifier = Modifier
-                                    .size(20.dp)
-                                    .clickable(role = Role.Button) { passwordVisible = !passwordVisible }
-                            )
-                        }
-                    )
-                    Text(
-                        text = "Forgot password?",
-                        color = Color(0xFF2196F3),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier
-                            .align(Alignment.End)
-                            .padding(end = 4.dp, top = 2.dp)
-                            .clickable(role = Role.Button) {
-                                resetEmail = if (identifier.contains("@")) identifier.trim() else ""
-                                resetError = null
-                                resetSent = false
-                                showForgotDialog = true
-                            }
-                    )
-                }
-
-                // Error message display
-                AnimatedVisibility(
-                    visible = loginError != null,
-                    enter = fadeIn(tween(150)) + expandVertically(),
-                    exit = fadeOut(tween(150)) + shrinkVertically()
-                ) {
-                    Row(
+                    // BOTTOM ACTIONS SECTION (Shifted all buttons to bottom)
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(ObColors.Danger.copy(alpha = 0.15f))
-                            .border(1.dp, ObColors.Danger.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            .padding(horizontal = 20.dp)
+                            .padding(top = 24.dp, bottom = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Rounded.ErrorOutline,
-                            contentDescription = null,
-                            tint = ObColors.Danger,
-                            modifier = Modifier.size(18.dp)
+                        // Sign In Button
+                        ObPrimaryButton(
+                            text = "Sign In to Studio",
+                            onClick = {
+                                focus.clearFocus()
+                                performSignIn()
+                            },
+                            loading = isSigningIn,
+                            enabled = !isSigningIn && identifier.isNotBlank() && password.isNotBlank()
                         )
-                        Text(
-                            text = loginError ?: "",
-                            color = Color.White,
-                            fontSize = 12.5.sp,
-                            lineHeight = 17.sp,
-                            modifier = Modifier.weight(1f)
+
+                        // Divider: or continue with
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 4.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Box(Modifier.weight(1f).height(1.dp).background(Color(0x22FFFFFF)))
+                            Text("or continue with", color = ObColors.TextFaint, fontSize = 12.sp, letterSpacing = (-0.3).sp)
+                            Box(Modifier.weight(1f).height(1.dp).background(Color(0x22FFFFFF)))
+                        }
+
+                        // Quick Social Sign-In buttons
+                        ObPrimaryButton(
+                            text = "Sign in with Google",
+                            onClick = onGoogleSignIn,
+                            loading = googleLoading,
+                            trailingIcon = null,
+                            leading = {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_google_logo),
+                                    contentDescription = "Google logo",
+                                    tint = Color.Unspecified,
+                                    modifier = Modifier.size(19.dp)
+                                )
+                            }
                         )
+                        ObSecondaryButton(
+                            text = "Explore Studio without login",
+                            onClick = onExploreGuest,
+                            icon = Icons.Rounded.Explore
+                        )
+
+                        Spacer(Modifier.height(4.dp))
+
+                        // Bottom prompt to create new account
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Don't have a studio account? ", color = Color(0xCCFFFFFF), fontSize = 13.sp, letterSpacing = (-0.3).sp)
+                            Text(
+                                text = "Create account",
+                                color = ObColors.Lime,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = (-0.3).sp,
+                                modifier = Modifier.clickable(role = Role.Button, onClick = onCreateAccount)
+                            )
+                        }
+
+                        // Terms and privacy link
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 2.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("By signing in, you agree to our ", color = Color(0x99FFFFFF), fontSize = 11.sp, letterSpacing = (-0.2).sp)
+                            Text(
+                                text = "Terms & Privacy Policy",
+                                color = ObColors.Lime,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                letterSpacing = (-0.2).sp,
+                                modifier = Modifier.clickable(role = Role.Button, onClick = onOpenTerms)
+                            )
+                        }
                     }
                 }
-
-                Spacer(Modifier.height(4.dp))
-
-                // Sign In Button
-                ObPrimaryButton(
-                    text = "Sign In to Studio",
-                    onClick = {
-                        focus.clearFocus()
-                        performSignIn()
-                    },
-                    loading = isSigningIn,
-                    enabled = !isSigningIn && identifier.isNotBlank() && password.isNotBlank()
-                )
-            }
-
-            Spacer(Modifier.height(18.dp))
-
-            // Divider: or continue with
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Box(Modifier.weight(1f).height(1.dp).background(Color(0x22FFFFFF)))
-                Text("or continue with", color = ObColors.TextFaint, fontSize = 12.sp)
-                Box(Modifier.weight(1f).height(1.dp).background(Color(0x22FFFFFF)))
-            }
-
-            Spacer(Modifier.height(14.dp))
-
-            // Quick Social Sign-In buttons
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                ObPrimaryButton(
-                    text = "Sign in with Google",
-                    onClick = onGoogleSignIn,
-                    loading = googleLoading,
-                    trailingIcon = null,
-                    leading = {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_google_logo),
-                            contentDescription = "Google logo",
-                            tint = Color.Unspecified,
-                            modifier = Modifier.size(19.dp)
-                        )
-                    }
-                )
-                ObSecondaryButton(
-                    text = "Explore Studio without login",
-                    onClick = onExploreGuest,
-                    icon = Icons.Rounded.Explore
-                )
-            }
-
-            Spacer(Modifier.height(20.dp))
-
-            // Bottom prompt to create new account
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Don't have a studio account? ", color = Color(0xCCFFFFFF), fontSize = 13.sp)
-                Text(
-                    text = "Create account",
-                    color = ObColors.Lime,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clickable(role = Role.Button, onClick = onCreateAccount)
-                )
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            // Terms and privacy link
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 20.dp),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("By signing in, you agree to our ", color = Color(0x99FFFFFF), fontSize = 11.sp)
-                Text(
-                    text = "Terms & Privacy Policy",
-                    color = ObColors.Lime,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.clickable(role = Role.Button, onClick = onOpenTerms)
-                )
             }
         }
     }

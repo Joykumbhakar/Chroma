@@ -75,14 +75,15 @@ object ObType {
         fontFamily = Display,
         fontWeight = FontWeight.ExtraBold,
         fontSize = 28.sp,
-        lineHeight = 34.sp,
+        lineHeight = 32.sp,
         letterSpacing = (-0.6).sp,
         color = Color.White
     )
     val Body = TextStyle(
         fontWeight = FontWeight.Normal,
         fontSize = 14.sp,
-        lineHeight = 20.sp,
+        lineHeight = 18.sp,
+        letterSpacing = (-0.3).sp,
         color = ObColors.TextMuted
     )
     val SectionHeader = TextStyle(
