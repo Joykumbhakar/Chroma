@@ -1,7 +1,8 @@
-﻿package com.chroma.studio.gallery
+package com.chroma.studio.gallery
 
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animate
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -24,6 +25,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -44,14 +46,19 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 /**
- * Samsung One UIâ€“style coordinator: the large centred title collapses as the grid scrolls up
- * and re-expands when you overscroll back at the top of the list.
+ * Samsung One UI-style coordinator: the large centred title collapses as the grid scrolls up
+ * and re-expands when you overscroll back at the top of the list with magnetic snap physics.
  */
 @Stable
-class CollapsingHeaderState(val maxCollapsePx: Float) {
+class CollapsingHeaderState(
+    val maxCollapsePx: Float,
+    var coroutineScope: CoroutineScope? = null
+) {
     var offsetPx by mutableFloatStateOf(0f)
         private set
 
@@ -60,8 +67,13 @@ class CollapsingHeaderState(val maxCollapsePx: Float) {
 
     val isCollapsed: Boolean get() = progress > 0.5f
 
+    var snapJob: Job? = null
+
     val connection = object : NestedScrollConnection {
         override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+            if (source == NestedScrollSource.Drag && snapJob?.isActive == true) {
+                snapJob?.cancel()
+            }
             if (available.y >= 0f) return Offset.Zero
             val new = (offsetPx + available.y).coerceIn(-maxCollapsePx, 0f)
             val consumed = new - offsetPx
@@ -70,6 +82,9 @@ class CollapsingHeaderState(val maxCollapsePx: Float) {
         }
 
         override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+            if (source == NestedScrollSource.Drag && snapJob?.isActive == true) {
+                snapJob?.cancel()
+            }
             if (available.y <= 0f) return Offset.Zero
             val new = (offsetPx + available.y).coerceIn(-maxCollapsePx, 0f)
             val used = new - offsetPx
@@ -77,19 +92,59 @@ class CollapsingHeaderState(val maxCollapsePx: Float) {
             return Offset(0f, used)
         }
 
+        override suspend fun onPreFling(available: Velocity): Velocity {
+            val progress = if (maxCollapsePx <= 0f) 0f else (-offsetPx / maxCollapsePx)
+            // One UI Magnetic Auto-Snap on fast upward fling
+            if (available.y < -300f && progress < 0.99f && progress > 0.05f) {
+                snapJob?.cancel()
+                val scope = coroutineScope ?: CoroutineScope(kotlinx.coroutines.Dispatchers.Main.immediate)
+                snapJob = scope.launch {
+                    animateToInternal(-maxCollapsePx)
+                }
+                return Velocity(0f, available.y)
+            }
+            return Velocity.Zero
+        }
+
         override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
-            settle()
+            val progress = if (maxCollapsePx <= 0f) 0f else (-offsetPx / maxCollapsePx)
+            if (progress > 0.01f && progress < 0.99f) {
+                val target = when {
+                    available.y < -300f -> -maxCollapsePx
+                    available.y > 300f -> 0f
+                    progress >= 0.5f -> -maxCollapsePx
+                    else -> 0f
+                }
+                snapJob?.cancel()
+                val scope = coroutineScope ?: CoroutineScope(kotlinx.coroutines.Dispatchers.Main.immediate)
+                snapJob = scope.launch {
+                    animateToInternal(target)
+                }
+            }
             return Velocity.Zero
         }
     }
 
     /** Snap to the nearest end so the header never rests half-collapsed. */
-    suspend fun settle() = animateTo(if (progress > 0.5f) -maxCollapsePx else 0f)
+    suspend fun settle() {
+        snapJob?.cancel()
+        animateToInternal(if (progress > 0.5f) -maxCollapsePx else 0f)
+    }
 
-    suspend fun toggle() = animateTo(if (isCollapsed) 0f else -maxCollapsePx)
+    suspend fun toggle() {
+        snapJob?.cancel()
+        animateToInternal(if (isCollapsed) 0f else -maxCollapsePx)
+    }
 
-    private suspend fun animateTo(target: Float) {
-        animate(offsetPx, target, animationSpec = tween(220)) { v, _ -> offsetPx = v }
+    private suspend fun animateToInternal(target: Float) {
+        animate(
+            initialValue = offsetPx,
+            targetValue = target,
+            animationSpec = spring(
+                dampingRatio = 0.86f,
+                stiffness = Spring.StiffnessMediumLow
+            )
+        ) { v, _ -> offsetPx = v }
     }
 }
 
@@ -107,11 +162,14 @@ fun GalleryHeader(
     onSearch: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val scope = rememberCoroutineScope()
+    SideEffect {
+        state.coroutineScope = scope
+    }
     val c = Gallery.colors
     val density = LocalDensity.current
     val progress = state.progress
     val expandedPx = with(density) { expandedHeight.toPx() }
-    val scope = rememberCoroutineScope()
 
     Column(modifier.fillMaxWidth().background(c.surface)) {
         // Expanded title area (shrinks with scroll)

@@ -133,15 +133,19 @@ fun ConversationsScreen(
     val coroutineScope = rememberCoroutineScope()
     val listState = rememberLazyListState()
 
-    // Samsung One UI Expand/Collapse Header Physics
+    // Samsung One UI Expand/Collapse Header Physics with Magnetic Auto-Snap
     val density = LocalDensity.current
     val expandedHeaderHeight = 88.dp
     val maxCollapseOffsetPx = with(density) { expandedHeaderHeight.toPx() }
     var headerCollapseOffsetPx by remember { mutableFloatStateOf(0f) }
+    var snapJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
-    val nestedScrollConnection = remember {
+    val nestedScrollConnection = remember(maxCollapseOffsetPx) {
         object : NestedScrollConnection {
             override fun onPreScroll(available: androidx.compose.ui.geometry.Offset, source: NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                if (source == NestedScrollSource.Drag && snapJob?.isActive == true) {
+                    snapJob?.cancel()
+                }
                 val delta = available.y
                 if (delta < 0) { // Scrolling up -> collapse header
                     val newOffset = (headerCollapseOffsetPx + delta).coerceIn(-maxCollapseOffsetPx, 0f)
@@ -158,6 +162,9 @@ fun ConversationsScreen(
             }
 
             override fun onPostScroll(consumed: androidx.compose.ui.geometry.Offset, available: androidx.compose.ui.geometry.Offset, source: NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                if (source == NestedScrollSource.Drag && snapJob?.isActive == true) {
+                    snapJob?.cancel()
+                }
                 val delta = available.y
                 if (delta > 0) { // Scrolling down -> expand header
                     val newOffset = (headerCollapseOffsetPx + delta).coerceIn(-maxCollapseOffsetPx, 0f)
@@ -169,26 +176,50 @@ fun ConversationsScreen(
             }
 
             override suspend fun onPreFling(available: androidx.compose.ui.unit.Velocity): androidx.compose.ui.unit.Velocity {
-                if (headerCollapseOffsetPx < 0f && headerCollapseOffsetPx > -maxCollapseOffsetPx) {
-                    val target = if (available.y > 400f) {
-                        0f
-                    } else if (available.y < -400f) {
-                        -maxCollapseOffsetPx
-                    } else if (headerCollapseOffsetPx > -maxCollapseOffsetPx / 2f) {
-                        0f
-                    } else {
-                        -maxCollapseOffsetPx
+                val progress = if (maxCollapseOffsetPx <= 0f) 0f else (-headerCollapseOffsetPx / maxCollapseOffsetPx)
+                if (available.y < -300f && progress < 0.99f && progress > 0.05f) {
+                    snapJob?.cancel()
+                    snapJob = coroutineScope.launch {
+                        androidx.compose.animation.core.animate(
+                            initialValue = headerCollapseOffsetPx,
+                            targetValue = -maxCollapseOffsetPx,
+                            animationSpec = androidx.compose.animation.core.spring(
+                                dampingRatio = 0.86f,
+                                stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+                            )
+                        ) { value, _ ->
+                            headerCollapseOffsetPx = value
+                        }
                     }
-                    androidx.compose.animation.core.animate(
-                        initialValue = headerCollapseOffsetPx,
-                        targetValue = target,
-                        animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.85f, stiffness = 450f)
-                    ) { value, _ ->
-                        headerCollapseOffsetPx = value
-                    }
-                    return androidx.compose.ui.unit.Velocity.Zero
+                    return androidx.compose.ui.unit.Velocity(0f, available.y)
                 }
-                return super.onPreFling(available)
+                return androidx.compose.ui.unit.Velocity.Zero
+            }
+
+            override suspend fun onPostFling(consumed: androidx.compose.ui.unit.Velocity, available: androidx.compose.ui.unit.Velocity): androidx.compose.ui.unit.Velocity {
+                val progress = if (maxCollapseOffsetPx <= 0f) 0f else (-headerCollapseOffsetPx / maxCollapseOffsetPx)
+                if (progress > 0.01f && progress < 0.99f) {
+                    val target = when {
+                        available.y < -300f -> -maxCollapseOffsetPx
+                        available.y > 300f -> 0f
+                        progress >= 0.5f -> -maxCollapseOffsetPx
+                        else -> 0f
+                    }
+                    snapJob?.cancel()
+                    snapJob = coroutineScope.launch {
+                        androidx.compose.animation.core.animate(
+                            initialValue = headerCollapseOffsetPx,
+                            targetValue = target,
+                            animationSpec = androidx.compose.animation.core.spring(
+                                dampingRatio = 0.86f,
+                                stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+                            )
+                        ) { value, _ ->
+                            headerCollapseOffsetPx = value
+                        }
+                    }
+                }
+                return androidx.compose.ui.unit.Velocity.Zero
             }
         }
     }

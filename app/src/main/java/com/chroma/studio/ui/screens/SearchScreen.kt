@@ -1009,9 +1009,13 @@ fun SearchScreen(
     }
 
     // NestedScrollConnection with One UI Magnetic Auto-Snap Physics
+    var snapJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     val nestedScrollConnection = remember(maxCollapsePx) {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (source == NestedScrollSource.Drag && snapJob?.isActive == true) {
+                    snapJob?.cancel()
+                }
                 val deltaY = available.y
                 // When user scrolls down (finger moves up -> deltaY < 0): condense extended app bar first
                 if (deltaY < 0f && collapseOffsetPx < maxCollapsePx) {
@@ -1028,6 +1032,9 @@ fun SearchScreen(
                 available: Offset,
                 source: NestedScrollSource
             ): Offset {
+                if (source == NestedScrollSource.Drag && snapJob?.isActive == true) {
+                    snapJob?.cancel()
+                }
                 val deltaY = available.y
                 // When user scrolls up (finger moves down -> deltaY > 0): expand app bar again
                 if (deltaY > 0f && collapseOffsetPx > 0f) {
@@ -1039,26 +1046,50 @@ fun SearchScreen(
                 return Offset.Zero
             }
 
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                val progress = if (maxCollapsePx <= 0f) 0f else (collapseOffsetPx / maxCollapsePx)
+                if (available.y < -300f && progress < 0.99f && progress > 0.05f) {
+                    snapJob?.cancel()
+                    snapJob = coroutineScope.launch {
+                        animate(
+                            initialValue = collapseOffsetPx,
+                            targetValue = maxCollapsePx,
+                            animationSpec = spring(
+                                dampingRatio = 0.86f,
+                                stiffness = Spring.StiffnessMediumLow
+                            )
+                        ) { value, _ ->
+                            collapseOffsetPx = value
+                        }
+                    }
+                    return Velocity(0f, available.y)
+                }
+                return Velocity.Zero
+            }
+
             override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
                 val progress = if (maxCollapsePx <= 0f) 0f else (collapseOffsetPx / maxCollapsePx)
-                if (progress > 0.02f && progress < 0.98f) {
+                if (progress > 0.01f && progress < 0.99f) {
                     val targetPx = when {
-                        available.y < -350f -> maxCollapsePx
-                        available.y > 350f -> 0f
+                        available.y < -300f -> maxCollapsePx
+                        available.y > 300f -> 0f
                         progress >= 0.5f -> maxCollapsePx
                         else -> 0f
                     }
                     val targetFraction = if (maxCollapsePx <= 0f) 0f else (targetPx / maxCollapsePx).coerceIn(0f, 1f)
                     prefs.edit().putFloat("oneui_search_appbar_collapse_fraction", targetFraction).apply()
-                    animate(
-                        initialValue = collapseOffsetPx,
-                        targetValue = targetPx,
-                        animationSpec = spring(
-                            dampingRatio = 0.86f,
-                            stiffness = Spring.StiffnessMediumLow
-                        )
-                    ) { value, _ ->
-                        collapseOffsetPx = value
+                    snapJob?.cancel()
+                    snapJob = coroutineScope.launch {
+                        animate(
+                            initialValue = collapseOffsetPx,
+                            targetValue = targetPx,
+                            animationSpec = spring(
+                                dampingRatio = 0.86f,
+                                stiffness = Spring.StiffnessMediumLow
+                            )
+                        ) { value, _ ->
+                            collapseOffsetPx = value
+                        }
                     }
                 }
                 return Velocity.Zero
