@@ -1715,14 +1715,10 @@ private fun FooterComposer(
                 }
             }
 
-            // 5. EXPANDING 300x300dp VOICE RECORDING ORB CARD (.input-voice:checked ~ .label-voice)
-            AnimatedVisibility(
+            // 5. EXPANDING 300x300dp VOICE RECORDING ORB CARD WITH SQUEEZE IN/OUT ANIMATION
+            com.chroma.studio.chat.ui.components.SqueezeVoiceBubbleWrapper(
                 visible = isRecordingVoice,
-                enter = fadeIn(tween(300)) + scaleIn(
-                    initialScale = 0.25f,
-                    animationSpec = spring(dampingRatio = 0.78f, stiffness = Spring.StiffnessMediumLow)
-                ),
-                exit = fadeOut(tween(220)) + scaleOut(targetScale = 0.25f)
+                transformOrigin = TransformOrigin(0.5f, 1f)
             ) {
                 VoiceRecorderCard(
                     recordingDurationSec = 1,

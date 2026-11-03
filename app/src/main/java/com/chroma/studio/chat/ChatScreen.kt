@@ -3508,64 +3508,14 @@ private fun ChatScreenContent(
 
 
 
-                // 4. Voice Recording Floating 3D Globe Card (Used when keyboard is NOT open)
-
-                androidx.compose.animation.AnimatedVisibility(
-
+                // 4. Voice Recording Floating 3D Globe Card with Organic Squeeze In/Out Animation
+                com.chroma.studio.chat.ui.components.SqueezeVoiceBubbleWrapper(
                     visible = isVoiceRecording && !imeVisible,
-
-                    enter = scaleIn(
-
-                        initialScale = 0.25f,
-
-                        transformOrigin = TransformOrigin(0.5f, 1f),
-
-                        animationSpec = spring(
-
-                            dampingRatio = 0.72f,
-
-                            stiffness = Spring.StiffnessMediumLow
-
-                        )
-
-                    ) + fadeIn(animationSpec = tween(220)) + slideInVertically(
-
-                        initialOffsetY = { it / 4 },
-
-                        animationSpec = spring(
-
-                            dampingRatio = 0.78f,
-
-                            stiffness = Spring.StiffnessMediumLow
-
-                        )
-
-                    ),
-
-                    exit = scaleOut(
-
-                        targetScale = 0.2f,
-
-                        transformOrigin = TransformOrigin(0.5f, 1f),
-
-                        animationSpec = tween(220, easing = FastOutSlowInEasing)
-
-                    ) + fadeOut(animationSpec = tween(180)) + slideOutVertically(
-
-                        targetOffsetY = { it / 4 },
-
-                        animationSpec = tween(220, easing = FastOutSlowInEasing)
-
-                    ),
-
+                    transformOrigin = TransformOrigin(0.5f, 1f),
                     modifier = Modifier
-
                         .align(Alignment.BottomCenter)
-
                         .windowInsetsPadding(WindowInsets.navigationBars)
-
                         .padding(bottom = 8.dp)
-
                 ) {
 
                     VoiceRecorderCard(

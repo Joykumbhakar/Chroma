@@ -403,6 +403,16 @@ fun ChatInputBar(
                                     }
                                     onSendClick()
                                 } else {
+                                    sendBtnScope.launch {
+                                        sendBtnScale.snapTo(0.70f)
+                                        sendBtnScale.animateTo(
+                                            1f,
+                                            animationSpec = spring(
+                                                dampingRatio = 0.46f,
+                                                stiffness = Spring.StiffnessMediumLow
+                                            )
+                                        )
+                                    }
                                     onVoiceClick()
                                 }
                             },
