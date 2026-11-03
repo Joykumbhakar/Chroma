@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.util.VelocityTracker
@@ -641,8 +642,14 @@ fun SpringPillSwitch(
                 contentDescription = state.label
             }
             .pointerInput(state, maxTravelPx) {
+                val dragSlopPx = viewConfiguration.touchSlop.coerceIn(
+                    with(density) { 10.dp.toPx() },
+                    with(density) { 18.dp.toPx() }
+                )
+
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
+                    val downTime = down.uptimeMillis
                     onActivate?.invoke(state)
                     state.onPressStart(impulse = 10.5f)
                     state.isDragging = false
@@ -654,6 +661,8 @@ fun SpringPillSwitch(
                     var totalDxPx = 0f
                     var totalDyPx = 0f
                     var pointerId = down.id
+                    var lastChange: PointerInputChange? = null
+                    var lastEventTime = down.uptimeMillis
 
                     while (true) {
                         val event = awaitPointerEvent(PointerEventPass.Main)
@@ -662,6 +671,9 @@ fun SpringPillSwitch(
                             ?: break
 
                         pointerId = change.id
+                        lastChange = change
+                        lastEventTime = change.uptimeMillis
+
                         if (!change.pressed) {
                             velocityTracker.addPosition(change.uptimeMillis, change.position)
                             break
@@ -673,7 +685,10 @@ fun SpringPillSwitch(
                         totalDyPx += stepDy
                         velocityTracker.addPosition(change.uptimeMillis, change.position)
 
-                        if (abs(totalDxPx) > 3.dp.toPx() && abs(totalDxPx) > abs(totalDyPx)) {
+                        // Avoid initiating horizontal drag if the user is scrolling a vertical parent list
+                        if (!state.isDragging && abs(totalDyPx) > dragSlopPx && abs(totalDyPx) > abs(totalDxPx) * 1.3f) {
+                            // Predominantly vertical scrolling in list
+                        } else if (!state.isDragging && abs(totalDxPx) > dragSlopPx && abs(totalDxPx) > abs(totalDyPx) * 1.2f) {
                             state.isDragging = true
                         }
 
@@ -693,15 +708,24 @@ fun SpringPillSwitch(
 
                     // Pointer Released
                     state.onPressRelease()
+                    val gestureDuration = lastEventTime - downTime
                     val releaseVelPxPerSec = velocityTracker.calculateVelocity().x
                     val releaseVelNorm = releaseVelPxPerSec / maxTravelPx.coerceAtLeast(1f)
 
                     // Avoid triggering if it was primarily a vertical list scroll
-                    val wasVerticalScroll = !state.isDragging && abs(totalDyPx) > 12.dp.toPx() && abs(totalDxPx) < 6.dp.toPx()
+                    val wasVerticalScroll = !state.isDragging && abs(totalDyPx) > dragSlopPx && abs(totalDyPx) > abs(totalDxPx) * 1.3f
 
                     if (!wasVerticalScroll) {
-                        if (!state.isDragging) {
-                            // Crisp tap: flip state and inject kick impulse
+                        lastChange?.consume()
+
+                        // Determine whether this interaction is a tap or a drag/swipe:
+                        // 1) If movement was within drag slop -> crisp TAP.
+                        // 2) If gesture duration was quick (< 280ms) and without strong swipe velocity -> TAP.
+                        // 3) Otherwise -> deliberate drag/swipe evaluated by release velocity and projected end.
+                        val isTap = !state.isDragging || (gestureDuration < 280L && abs(releaseVelPxPerSec) < 350f && abs(totalDxPx) < maxTravelPx * 0.75f)
+
+                        if (isTap) {
+                            // Crisp tap: flip state immediately with spring kick impulse
                             val nextState = !state.checked
                             val impulse = if (nextState) 3.2f else -3.2f
                             triggerHaptic(nextState)
@@ -710,15 +734,21 @@ fun SpringPillSwitch(
                             } catch (_: Exception) {}
                             state.setCheckedState(nextState, extraVelocity = impulse, onStateChanged = onCheckedChange)
                         } else {
-                            // Evaluate drag position + flick velocity
-                            val projectedEnd = state.x + releaseVelNorm * 0.14f
-                            val nextState = projectedEnd >= 0.5f
-                            state.v += releaseVelNorm * 0.9f
+                            // Evaluate deliberate drag / flick velocity
+                            val nextState = when {
+                                releaseVelPxPerSec > 250f -> true // flicked right (ON)
+                                releaseVelPxPerSec < -250f -> false // flicked left (OFF)
+                                else -> {
+                                    val projectedEnd = state.x + releaseVelNorm * 0.14f
+                                    projectedEnd >= 0.5f
+                                }
+                            }
+                            val extraVel = if (nextState == state.checked) 0f else (if (nextState) 3.2f else -3.2f)
                             triggerHaptic(nextState)
                             try {
                                 SoundManager.playReaction()
                             } catch (_: Exception) {}
-                            state.setCheckedState(nextState, extraVelocity = 0f, onStateChanged = onCheckedChange)
+                            state.setCheckedState(nextState, extraVelocity = extraVel, onStateChanged = onCheckedChange)
                         }
                     }
 
