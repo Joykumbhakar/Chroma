@@ -1,0 +1,1459 @@
+package com.chroma.studio.ui.components
+
+import android.graphics.BlurMaskFilter
+import android.os.Build
+import android.view.HapticFeedbackConstants
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
+import com.chroma.studio.chat.sound.SoundManager
+import com.chroma.studio.ui.theme.LocalOscellionColors
+import kotlinx.coroutines.delay
+import kotlin.math.*
+
+private val isAppInDark: Boolean
+    @Composable
+    get() = LocalOscellionColors.current.isDark
+
+// ============================================================================
+// 1. SPRING PHYSICS CONFIGURATION & PRESETS
+// ============================================================================
+
+/**
+ * Global/shared configuration for the second-order damped harmonic oscillator:
+ * F = -k * (x - target) - c * v
+ * a = F / m
+ */
+@Stable
+class SpringPhysicsConfig(
+    stiffness: Float = 520f,
+    damping: Float = 26f,
+    mass: Float = 1.0f,
+    squishFactor: Float = 1.0f,
+    timeScale: Float = 1.0f,
+    hapticsEnabled: Boolean = true
+) {
+    var stiffness by mutableFloatStateOf(stiffness)
+    var damping by mutableFloatStateOf(damping)
+    var mass by mutableFloatStateOf(mass)
+    var squishFactor by mutableFloatStateOf(squishFactor)
+    var timeScale by mutableFloatStateOf(timeScale)
+    var hapticsEnabled by mutableStateOf(hapticsEnabled)
+
+    /** Damping ratio: zeta = c / (2 * sqrt(k * m)) */
+    val dampingRatio: Float
+        get() = damping / (2f * sqrt(stiffness * mass))
+
+    fun applyPreset(preset: SpringPreset) {
+        stiffness = preset.stiffness
+        damping = preset.damping
+        mass = preset.mass
+        squishFactor = preset.squishFactor
+    }
+}
+
+enum class SpringPreset(
+    val title: String,
+    val stiffness: Float,
+    val damping: Float,
+    val mass: Float,
+    val squishFactor: Float
+) {
+    Snappy("iOS Snappy", stiffness = 520f, damping = 26f, mass = 1.0f, squishFactor = 1.0f),
+    Bouncy("Underdamped Bouncy", stiffness = 620f, damping = 14f, mass = 1.0f, squishFactor = 1.35f),
+    Liquid("Liquid Glass", stiffness = 340f, damping = 19f, mass = 1.4f, squishFactor = 1.65f),
+    Critical("Critically Damped", stiffness = 500f, damping = 45f, mass = 1.0f, squishFactor = 0.75f)
+}
+
+// ============================================================================
+// 2. COLOR PALETTES MATCHING REFERENCE SPECS
+// ============================================================================
+
+@Immutable
+data class PillSwitchColors(
+    val offTrackColor: Color,
+    val onTrackColor: Color,
+    val thumbColor: Color = Color.White,
+    val ioOnIndicatorColor: Color = Color(0xFFFFF7F5),
+    val ioOffIndicatorColor: Color = Color(0xFF962226)
+) {
+    companion object {
+        /** ChromaStudio Brand Blue Theme (#0A84FF) */
+        val Brand: PillSwitchColors
+            @Composable
+            get() = PillSwitchColors(
+                offTrackColor = if (isAppInDark) Color(0xFF39393D) else Color(0xFFE9E9EA),
+                onTrackColor = Color(0xFF0A84FF),
+                thumbColor = Color.White
+            )
+
+        /** Card 01: Indigo / Purple Accent (#E3E3E6 -> #6155F5) */
+        val Indigo = PillSwitchColors(
+            offTrackColor = Color(0xFFE3E3E6),
+            onTrackColor = Color(0xFF6155F5),
+            thumbColor = Color.White
+        )
+
+        /** Card 02: System Green Accent (#E3E3E6 -> #2AD158) */
+        val SystemGreen = PillSwitchColors(
+            offTrackColor = Color(0xFFE3E3E6),
+            onTrackColor = Color(0xFF2AD158),
+            thumbColor = Color.White
+        )
+
+        /** Card 03: HIG Anatomy & I/O Labels Spec (#F6565C -> #8C2522) */
+        val HigSpecCoral = PillSwitchColors(
+            offTrackColor = Color(0xFFF6565C),
+            onTrackColor = Color(0xFF8C2522),
+            thumbColor = Color(0xFFFFF9F8),
+            ioOnIndicatorColor = Color(0xFFFFF7F5),
+            ioOffIndicatorColor = Color(0xFF962226)
+        )
+    }
+}
+
+// ============================================================================
+// 3. REAL-TIME SECOND-ORDER SPRING SOLVER STATE
+// ============================================================================
+
+/**
+ * Holds the real-time physical state of an individual Pill Toggle Switch.
+ * Runs a sub-stepped Semi-Implicit Euler integrator for unconditional stability
+ * at high stiffness, supporting velocity squish, wall-overshoot compression,
+ * tap/hold clay plumping, and hyperbolic tangent drag rubber-banding.
+ */
+@Stable
+class SpringToggleState(
+    initialChecked: Boolean,
+    val label: String = "Switch"
+) {
+    val initialCheckedState: Boolean = initialChecked
+    var checked by mutableStateOf(initialChecked)
+        private set
+
+    // Primary horizontal displacement spring state (0f = OFF, 1f = ON)
+    var x by mutableFloatStateOf(if (initialChecked) 1f else 0f)
+    var targetX by mutableFloatStateOf(if (initialChecked) 1f else 0f)
+    var v by mutableFloatStateOf(0f)
+
+    // Secondary press/hold zoom & plump spring state (0f = rest, 1f = pressed)
+    var press by mutableFloatStateOf(0f)
+    var targetPress by mutableFloatStateOf(0f)
+    var pressV by mutableFloatStateOf(0f)
+
+    // Pointer gesture tracking
+    var isDragging by mutableStateOf(false)
+    var dragStartX by mutableFloatStateOf(0f)
+
+    /** Returns true while either the horizontal or press spring has remaining kinetic/potential energy */
+    val isAnimating: Boolean
+        get() = isDragging ||
+                abs(x - targetX) > 0.0004f ||
+                abs(v) > 0.004f ||
+                abs(press - targetPress) > 0.001f ||
+                abs(pressV) > 0.01f
+
+    /** Trigger a tap/hold press down impulse (used by both the switch and its parent row) */
+    fun onPressStart(impulse: Float = 10.5f) {
+        targetPress = 1f
+        pressV = max(pressV, impulse)
+    }
+
+    /** Release press hold back to rest */
+    fun onPressRelease() {
+        targetPress = 0f
+    }
+
+    /** Flip switch state with an optional kinetic kick impulse */
+    fun toggle(
+        withImpulse: Boolean = true,
+        onStateChanged: ((Boolean) -> Unit)? = null
+    ) {
+        val next = !checked
+        if (withImpulse) {
+            pressV = max(pressV, 10.5f)
+        }
+        setCheckedState(
+            newState = next,
+            extraVelocity = if (withImpulse) (if (next) 3.2f else -3.2f) else 0f,
+            onStateChanged = onStateChanged
+        )
+    }
+
+    /** Set target checked state and inject velocity into the solver */
+    fun setCheckedState(
+        newState: Boolean,
+        extraVelocity: Float = 0f,
+        onStateChanged: ((Boolean) -> Unit)? = null
+    ) {
+        val changed = checked != newState
+        checked = newState
+        targetX = if (newState) 1f else 0f
+        v += extraVelocity
+        if (changed) {
+            onStateChanged?.invoke(newState)
+        }
+    }
+
+    /** Reset back to the reference card's initial state with a crisp bounce */
+    fun resetToInitial(onStateChanged: ((Boolean) -> Unit)? = null) {
+        pressV = 8.5f
+        setCheckedState(
+            newState = initialCheckedState,
+            extraVelocity = if (initialCheckedState) 2.8f else -2.8f,
+            onStateChanged = onStateChanged
+        )
+    }
+
+    /**
+     * Sub-stepped Semi-Implicit Euler integration step.
+     * Called every frame via [withFrameNanos].
+     */
+    fun step(dtSeconds: Float, config: SpringPhysicsConfig) {
+        val scaledDt = min(dtSeconds, 0.032f) * config.timeScale
+        val subSteps = 4
+        val h = scaledDt / subSteps
+
+        // Tighten spring while dragging so thumb tracks finger closely with liquid lag
+        val k = if (isDragging) 1100f else config.stiffness
+        val c = if (isDragging) 58f else config.damping
+        val m = config.mass
+
+        for (i in 0 until subSteps) {
+            // 1. Main horizontal displacement spring
+            val forceX = -k * (x - targetX) - c * v
+            val accX = forceX / m
+            v += accX * h
+            x += v * h
+
+            // 2. Press/hold zoom spring (underdamped for lush tactile zoom pop)
+            val forceP = -560f * (press - targetPress) - 25f * pressV
+            pressV += forceP * h
+            press += pressV * h
+        }
+
+        // Snap to exact rest when energy becomes negligible
+        if (!isDragging && abs(x - targetX) < 0.0004f && abs(v) < 0.004f) {
+            x = targetX
+            v = 0f
+        }
+        if (abs(press - targetPress) < 0.001f && abs(pressV) < 0.01f) {
+            press = targetPress
+            pressV = 0f
+        }
+    }
+}
+
+@Composable
+fun rememberSpringToggleState(
+    initialChecked: Boolean,
+    label: String = "Switch"
+): SpringToggleState {
+    return remember { SpringToggleState(initialChecked = initialChecked, label = label) }
+}
+
+// ============================================================================
+// 4. CLAYMORPHIC INSET-ONLY KNOB RENDERER (CUSTOM COMPOSE CANVAS)
+// ============================================================================
+
+/**
+ * Renders the exact porcelain surface gradient and 4-layer CSS `inset` shadows
+ * inside the pill thumb without any outer drop shadow:
+ *  - Base porcelain surface gradient (`170deg`, white 95% -> #F1F3F9 55%)
+ *  - Layer 1: `inset 0 3.5dp 5dp rgba(255, 255, 255, 1.0)` (top specular highlight)
+ *  - Layer 2: `inset 0 -4dp 7.5dp rgba(15, 23, 42, 0.16)` (bottom clay bevel, deepens with press)
+ *  - Layer 3: `inset -2dp -2dp 5dp rgba(15, 23, 42, 0.09)` (bottom-right contour)
+ *  - Layer 4: `inset 0 0 0 1dp rgba(15, 23, 42, 0.04)` (crisp inner rim)
+ */
+fun Modifier.clayPillThumb(
+    baseColor: Color,
+    clayDepth: Float
+): Modifier = this.drawWithCache {
+    val radius = size.height / 2f
+    val cornerRadius = CornerRadius(radius, radius)
+
+    val pillPath = Path().apply {
+        addRoundRect(RoundRect(rect = Rect(Offset.Zero, size), cornerRadius = cornerRadius))
+    }
+
+    // Porcelain surface gradient (170deg angle approximation)
+    val surfaceGradient = Brush.linearGradient(
+        colors = listOf(
+            Color.White.copy(alpha = 0.95f),
+            Color(0xFFF1F3F9).copy(alpha = 0.55f)
+        ),
+        start = Offset(size.width * 0.2f, 0f),
+        end = Offset(size.width * 0.8f, size.height)
+    )
+
+    val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        style = android.graphics.Paint.Style.FILL
+    }
+    val ringPath = android.graphics.Path()
+    val holePath = android.graphics.Path()
+
+    onDrawBehind {
+        // 1. Draw base solid color + porcelain gradient
+        drawRoundRect(color = baseColor, cornerRadius = cornerRadius)
+        drawRoundRect(brush = surfaceGradient, cornerRadius = cornerRadius)
+
+        // 2. Clip strictly to the pill outline so all blurred shadows are 100% INSET
+        clipPath(pillPath) {
+            drawIntoCanvas { canvas ->
+                val nativeCanvas = canvas.nativeCanvas
+
+                /**
+                 * Helper to draw an authentic CSS `inset dx dy blur color` shadow:
+                 * Subtracts a shifted pill from an expanded outer rect and draws it with BlurMaskFilter.
+                 */
+                fun drawInsetShadow(
+                    dxDp: Float,
+                    dyDp: Float,
+                    blurDp: Float,
+                    shadowColor: Color
+                ) {
+                    val dx = dxDp.dp.toPx()
+                    val dy = dyDp.dp.toPx()
+                    val blurPx = max(0.5f, blurDp.dp.toPx())
+
+                    val outerRect = Rect(
+                        left = -size.width,
+                        top = -size.height,
+                        right = size.width * 2f,
+                        bottom = size.height * 2f
+                    )
+                    val innerShifted = RoundRect(
+                        rect = Rect(Offset(dx, dy), size),
+                        cornerRadius = cornerRadius
+                    )
+
+                    ringPath.reset()
+                    ringPath.addRect(
+                        outerRect.left,
+                        outerRect.top,
+                        outerRect.right,
+                        outerRect.bottom,
+                        android.graphics.Path.Direction.CW
+                    )
+
+                    holePath.reset()
+                    holePath.addRoundRect(
+                        innerShifted.left,
+                        innerShifted.top,
+                        innerShifted.right,
+                        innerShifted.bottom,
+                        radius,
+                        radius,
+                        android.graphics.Path.Direction.CW
+                    )
+                    ringPath.op(holePath, android.graphics.Path.Op.DIFFERENCE)
+
+                    paint.color = shadowColor.toArgb()
+                    paint.maskFilter = BlurMaskFilter(blurPx, BlurMaskFilter.Blur.NORMAL)
+
+                    nativeCanvas.drawPath(ringPath, paint)
+                }
+
+                val depth = max(0.1f, clayDepth)
+
+                // Dynamic bottom clay bevel that deepens as the knob zooms up on tap/hold
+                val bottomInsetY = -4f * depth
+                val bottomInsetBlur = 7.5f * depth
+                val bottomInsetAlpha = min(0.24f, 0.16f * depth)
+
+                // Inset 1: Bottom clay bevel shadow
+                drawInsetShadow(
+                    dxDp = 0f,
+                    dyDp = bottomInsetY,
+                    blurDp = bottomInsetBlur,
+                    shadowColor = Color(0xFF0F172A).copy(alpha = bottomInsetAlpha)
+                )
+
+                // Inset 2: Bottom-right soft clay contour
+                drawInsetShadow(
+                    dxDp = -2f * depth,
+                    dyDp = -2f * depth,
+                    blurDp = 5f * depth,
+                    shadowColor = Color(0xFF0F172A).copy(alpha = 0.09f)
+                )
+
+                // Inset 3: Top crisp white specular highlight
+                drawInsetShadow(
+                    dxDp = 0f,
+                    dyDp = 3.5f * depth,
+                    blurDp = 5f * depth,
+                    shadowColor = Color.White
+                )
+            }
+
+            // Inset 4: 1dp subtle inner rim contour
+            val strokeWidth = 1.dp.toPx()
+            drawRoundRect(
+                color = Color(0xFF0F172A).copy(alpha = 0.04f),
+                topLeft = Offset(strokeWidth / 2f, strokeWidth / 2f),
+                size = Size(size.width - strokeWidth, size.height - strokeWidth),
+                cornerRadius = cornerRadius,
+                style = Stroke(width = strokeWidth)
+            )
+        }
+    }
+}
+
+// ============================================================================
+// 5. PIXEL-PERFECT SPRING PILL SWITCH COMPOSABLE
+// ============================================================================
+
+/**
+ * Universal Wide-Pill Toggle Switch with real-time second-order spring physics,
+ * claymorphic porcelain thumb, knob zoom plumping on tap/hold, drag rubber-banding,
+ * velocity squish, and boundary overshoot.
+ *
+ * Fully scalable across standard settings rows (default 56dp x 28dp) and showcase sizes (98dp x 45dp).
+ */
+@Composable
+fun SpringPillSwitch(
+    state: SpringToggleState,
+    modifier: Modifier = Modifier,
+    onCheckedChange: ((Boolean) -> Unit)? = null,
+    colors: PillSwitchColors = PillSwitchColors.Brand,
+    config: SpringPhysicsConfig = remember { SpringPhysicsConfig() },
+    trackWidth: Dp = 56.dp,
+    trackHeight: Dp = 28.dp,
+    showIoLabels: Boolean = false,
+    onActivate: ((SpringToggleState) -> Unit)? = null
+) {
+    val view = LocalView.current
+    val density = LocalDensity.current
+
+    // Geometry calculations adapt dynamically to trackWidth and trackHeight
+    val paddingDp = (trackHeight * 0.07f).coerceIn(1.5.dp, 3.5.dp)
+    val thumbHeightDp = trackHeight - paddingDp * 2
+    val innerTrackWidthDp = trackWidth - paddingDp * 2
+    val baseThumbWidthDp = innerTrackWidthDp * (61f / 92f)
+    val maxTravelDp = innerTrackWidthDp - baseThumbWidthDp
+    val maxTravelPx = with(density) { maxTravelDp.toPx() }
+
+    val scaleFactor = (trackHeight.value / 45f).coerceIn(0.4f, 2.5f)
+
+    // Haptic trigger helper with SDK safety
+    fun triggerHaptic(isTurnedOn: Boolean) {
+        if (!config.hapticsEnabled) return
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val feedbackConstant = if (isTurnedOn) {
+                    HapticFeedbackConstants.CONFIRM
+                } else {
+                    HapticFeedbackConstants.CLOCK_TICK
+                }
+                if (!view.performHapticFeedback(feedbackConstant)) {
+                    view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                }
+            } else {
+                view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            }
+        } catch (_: Exception) {}
+    }
+
+    // High efficiency frame-synced physics loop (runs strictly when spring is active)
+    LaunchedEffect(state, config) {
+        snapshotFlow { state.isAnimating }
+            .collect { animating ->
+                if (animating) {
+                    var lastFrameNanos = withFrameNanos { it }
+                    while (state.isAnimating) {
+                        withFrameNanos { nowNanos ->
+                            val dt = ((nowNanos - lastFrameNanos) / 1_000_000_000f).coerceIn(0.001f, 0.064f)
+                            lastFrameNanos = nowNanos
+                            state.step(dt, config)
+                        }
+                    }
+                }
+            }
+    }
+
+    // Compute dynamic frame values from spring state
+    val squish = config.squishFactor
+    val intensity = max(0.35f, squish)
+
+    // 1. Tap/Hold Zoom & Plump expansion
+    val pressAmount = max(-0.12f, state.press)
+    val pressWidenDp = max(0f, pressAmount) * (11f * scaleFactor) * intensity
+    val knobZoomScale = 1f + pressAmount * 0.28f * intensity
+
+    // 2. Velocity stretch & boundary wall compression (in Dp)
+    val speedStretchDp = min(9f * scaleFactor, abs(state.v) * 0.9f * scaleFactor) * squish
+    val overshootCompressDp = when {
+        state.x < 0f -> min(8f * scaleFactor, abs(state.x) * 18f * scaleFactor) * squish
+        state.x > 1f -> min(8f * scaleFactor, (state.x - 1f) * 18f * scaleFactor) * squish
+        else -> 0f
+    }
+
+    val dynamicWidthDp = (baseThumbWidthDp.value + pressWidenDp + speedStretchDp - overshootCompressDp).dp
+    val availableTravelDp = innerTrackWidthDp - dynamicWidthDp
+
+    // Horizontal translation with boundary overshoot
+    val clampedX = state.x.coerceIn(0f, 1f)
+    val overX = state.x - clampedX
+    val translateXDp = availableTravelDp * clampedX + (overX * (10f * scaleFactor)).dp
+
+    // Volume-preserving deformation combined with uniform tap/hold zoom
+    val motionDeformRatio = (speedStretchDp - overshootCompressDp) / baseThumbWidthDp.value
+    val scaleX = knobZoomScale * (1f + motionDeformRatio * 0.16f)
+    val scaleY = knobZoomScale / sqrt(max(0.25f, 1f + motionDeformRatio * 0.32f))
+
+    // Whole-track subtle recoil/nudge on high-velocity bounce
+    val trackNudgeXDp = (overX * (3.4f * scaleFactor) * squish).dp
+    val trackScale = 1f + max(0f, pressAmount) * 0.025f * squish
+
+    // Smoothly interpolated track background color
+    val trackColor = lerp(colors.offTrackColor, colors.onTrackColor, clampedX)
+
+    // Claymorphic inset bevel depth
+    val clayDepth = (1f + max(0f, pressAmount) * 0.45f) * scaleFactor
+
+    Box(
+        modifier = modifier
+            .zIndex(if (pressAmount > 0.04f) 10f else 1f)
+            .offset { IntOffset(x = trackNudgeXDp.roundToPx(), y = 0) }
+            .graphicsLayer {
+                this.scaleX = trackScale
+                this.scaleY = trackScale
+            }
+            .size(width = trackWidth, height = trackHeight)
+            .background(color = trackColor, shape = CircleShape)
+            .border(
+                width = 0.5.dp,
+                color = if (clampedX < 0.95f) {
+                    val borderAlpha = ((1f - clampedX) * 0.10f).coerceIn(0f, 0.12f)
+                    if (isAppInDark) Color.White.copy(alpha = borderAlpha * 1.2f) else Color.Black.copy(alpha = borderAlpha)
+                } else Color.Transparent,
+                shape = CircleShape
+            )
+            .semantics {
+                role = Role.Switch
+                toggleableState = ToggleableState(state.checked)
+                contentDescription = state.label
+            }
+            .pointerInput(state, maxTravelPx) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    onActivate?.invoke(state)
+                    state.onPressStart(impulse = 10.5f)
+                    state.isDragging = false
+                    state.dragStartX = state.x
+
+                    val velocityTracker = VelocityTracker()
+                    velocityTracker.addPosition(down.uptimeMillis, down.position)
+
+                    var totalDxPx = 0f
+                    var totalDyPx = 0f
+                    var pointerId = down.id
+
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Main)
+                        val change = event.changes.firstOrNull { it.id == pointerId }
+                            ?: event.changes.firstOrNull()
+                            ?: break
+
+                        pointerId = change.id
+                        if (!change.pressed) {
+                            velocityTracker.addPosition(change.uptimeMillis, change.position)
+                            break
+                        }
+
+                        val stepDx = change.positionChange().x
+                        val stepDy = change.positionChange().y
+                        totalDxPx += stepDx
+                        totalDyPx += stepDy
+                        velocityTracker.addPosition(change.uptimeMillis, change.position)
+
+                        if (abs(totalDxPx) > 3.dp.toPx() && abs(totalDxPx) > abs(totalDyPx)) {
+                            state.isDragging = true
+                        }
+
+                        if (state.isDragging) {
+                            change.consume()
+                            var rawNorm = state.dragStartX + (totalDxPx / maxTravelPx.coerceAtLeast(1f))
+
+                            // Smooth hyperbolic tangent rubber-banding past [0, 1] bounds
+                            if (rawNorm < 0f) {
+                                rawNorm = -tanh(abs(rawNorm) * 1.4f) * 0.22f
+                            } else if (rawNorm > 1f) {
+                                rawNorm = 1f + tanh((rawNorm - 1f) * 1.4f) * 0.22f
+                            }
+                            state.targetX = rawNorm
+                        }
+                    }
+
+                    // Pointer Released
+                    state.onPressRelease()
+                    val releaseVelPxPerSec = velocityTracker.calculateVelocity().x
+                    val releaseVelNorm = releaseVelPxPerSec / maxTravelPx.coerceAtLeast(1f)
+
+                    // Avoid triggering if it was primarily a vertical list scroll
+                    val wasVerticalScroll = !state.isDragging && abs(totalDyPx) > 12.dp.toPx() && abs(totalDxPx) < 6.dp.toPx()
+
+                    if (!wasVerticalScroll) {
+                        if (!state.isDragging) {
+                            // Crisp tap: flip state and inject kick impulse
+                            val nextState = !state.checked
+                            val impulse = if (nextState) 3.2f else -3.2f
+                            triggerHaptic(nextState)
+                            try {
+                                SoundManager.playReaction()
+                            } catch (_: Exception) {}
+                            state.setCheckedState(nextState, extraVelocity = impulse, onStateChanged = onCheckedChange)
+                        } else {
+                            // Evaluate drag position + flick velocity
+                            val projectedEnd = state.x + releaseVelNorm * 0.14f
+                            val nextState = projectedEnd >= 0.5f
+                            state.v += releaseVelNorm * 0.9f
+                            triggerHaptic(nextState)
+                            try {
+                                SoundManager.playReaction()
+                            } catch (_: Exception) {}
+                            state.setCheckedState(nextState, extraVelocity = 0f, onStateChanged = onCheckedChange)
+                        }
+                    }
+
+                    state.isDragging = false
+                }
+            }
+            .padding(paddingDp)
+    ) {
+        // Optional HIG Spec I / O Accessibility Indicators
+        if (showIoLabels) {
+            val onOpacity = ((state.x - 0.25f) / 0.65f).coerceIn(0f, 1f)
+            val offOpacity = ((0.75f - state.x) / 0.65f).coerceIn(0f, 1f)
+
+            // "I" On Indicator
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .offset(x = (trackWidth * 0.16f))
+                    .graphicsLayer {
+                        alpha = onOpacity
+                        val s = 0.75f + 0.25f * onOpacity
+                        this.scaleX = s
+                        this.scaleY = s
+                    }
+                    .size(width = 2.dp, height = trackHeight * 0.35f)
+                    .background(color = colors.ioOnIndicatorColor, shape = RoundedCornerShape(2.dp))
+            )
+
+            // "O" Off Indicator
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .offset(x = -(trackWidth * 0.12f))
+                    .graphicsLayer {
+                        alpha = offOpacity
+                        val s = 0.75f + 0.25f * offOpacity
+                        this.scaleX = s
+                        this.scaleY = s
+                    }
+                    .size(trackHeight * 0.35f)
+                    .border(
+                        width = 2.dp,
+                        color = colors.ioOffIndicatorColor,
+                        shape = CircleShape
+                    )
+            )
+        }
+
+        // Claymorphic Pill Thumb
+        Box(
+            modifier = Modifier
+                .offset { IntOffset(x = translateXDp.roundToPx(), y = 0) }
+                .size(width = dynamicWidthDp, height = thumbHeightDp)
+                .graphicsLayer {
+                    this.scaleX = scaleX
+                    this.scaleY = scaleY
+                }
+                .shadow(
+                    elevation = (1.5.dp * knobZoomScale * scaleFactor).coerceAtLeast(0.5.dp),
+                    shape = CircleShape,
+                    spotColor = Color.Black.copy(alpha = 0.16f),
+                    ambientColor = Color.Black.copy(alpha = 0.08f)
+                )
+                .clayPillThumb(
+                    baseColor = colors.thumbColor,
+                    clayDepth = clayDepth
+                )
+        )
+    }
+}
+
+/**
+ * Value-driven overload for standard Compose [checked] and [onCheckedChange] usage.
+ */
+@Composable
+fun SpringPillSwitch(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    colors: PillSwitchColors = PillSwitchColors.Brand,
+    config: SpringPhysicsConfig = remember { SpringPhysicsConfig() },
+    trackWidth: Dp = 56.dp,
+    trackHeight: Dp = 28.dp,
+    showIoLabels: Boolean = false
+) {
+    val state = remember { SpringToggleState(initialChecked = checked) }
+
+    LaunchedEffect(checked) {
+        if (state.checked != checked) {
+            val impulse = if (checked) 3.2f else -3.2f
+            state.setCheckedState(checked, extraVelocity = impulse)
+            state.onPressStart(impulse = 6.0f)
+            delay(120)
+            state.onPressRelease()
+        }
+    }
+
+    SpringPillSwitch(
+        state = state,
+        modifier = modifier,
+        onCheckedChange = onCheckedChange,
+        colors = colors,
+        config = config,
+        trackWidth = trackWidth,
+        trackHeight = trackHeight,
+        showIoLabels = showIoLabels
+    )
+}
+
+// ============================================================================
+// 6. REFERENCE SHOWCASE SCREEN (CARDS + LIVE SPRING LAB)
+// ============================================================================
+
+@Composable
+fun SpringToggleShowcaseScreen() {
+    val config = remember { SpringPhysicsConfig() }
+    val view = LocalView.current
+
+    val swIndigo1 = rememberSpringToggleState(initialChecked = false, label = "Indigo Top")
+    val swIndigo2 = rememberSpringToggleState(initialChecked = true, label = "Indigo Bottom")
+    val swGreen1 = rememberSpringToggleState(initialChecked = false, label = "Green Top")
+    val swGreen2 = rememberSpringToggleState(initialChecked = true, label = "Green Bottom")
+    val swSpec1 = rememberSpringToggleState(initialChecked = true, label = "Spec Top (ON)")
+    val swSpec2 = rememberSpringToggleState(initialChecked = false, label = "Spec Bottom (OFF)")
+
+    val allToggles = remember {
+        listOf(swIndigo1, swIndigo2, swGreen1, swGreen2, swSpec1, swSpec2)
+    }
+
+    var activeToggle by remember { mutableStateOf(swIndigo2) }
+    var selectedPreset by remember { mutableStateOf(SpringPreset.Snappy) }
+
+    val history = remember { mutableStateListOf<Float>().apply { repeat(160) { add(1f) } } }
+
+    LaunchedEffect(activeToggle) {
+        while (true) {
+            withFrameNanos {
+                history.add(activeToggle.x)
+                if (history.size > 160) {
+                    history.removeAt(0)
+                }
+            }
+        }
+    }
+
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = Color(0xFF0B0C10)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 18.dp, vertical = 28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(24.dp)
+        ) {
+            ShowcaseHeader(
+                config = config,
+                onBounceAll = {
+                    allToggles.forEach { t ->
+                        t.toggle(withImpulse = true)
+                    }
+                    if (config.hapticsEnabled) {
+                        try {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                            } else {
+                                view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                            }
+                        } catch (_: Exception) {}
+                    }
+                },
+                onResetAll = {
+                    allToggles.forEach { it.resetToInitial() }
+                }
+            )
+
+            ReferenceCardSection(
+                title = "01 — Indigo Accent Variant",
+                hexSubtitle = "#E3E3E6 → #6155F5"
+            ) {
+                LightGroupedToggleCard(
+                    topState = swIndigo1,
+                    bottomState = swIndigo2,
+                    colors = PillSwitchColors.Indigo,
+                    config = config,
+                    onActivate = { activeToggle = it }
+                )
+            }
+
+            ReferenceCardSection(
+                title = "02 — System Green Variant",
+                hexSubtitle = "#E3E3E6 → #2AD158"
+            ) {
+                LightGroupedToggleCard(
+                    topState = swGreen1,
+                    bottomState = swGreen2,
+                    colors = PillSwitchColors.SystemGreen,
+                    config = config,
+                    onActivate = { activeToggle = it }
+                )
+            }
+
+            ReferenceCardSection(
+                title = "03 — HIG Anatomy & I/O Labels Spec",
+                hexSubtitle = "#F6565C → #8C2522"
+            ) {
+                HigCoralSpecCard(
+                    topState = swSpec1,
+                    bottomState = swSpec2,
+                    config = config,
+                    onActivate = { activeToggle = it }
+                )
+            }
+
+            ReferenceCardSection(
+                title = "04 — Spring Physics Lab & Telemetry",
+                hexSubtitle = "Active: ${activeToggle.label}",
+                subtitleColor = Color(0xFF818CF8)
+            ) {
+                SpringPhysicsLabCard(
+                    config = config,
+                    activeToggle = activeToggle,
+                    selectedPreset = selectedPreset,
+                    history = history,
+                    onSelectPreset = { preset ->
+                        selectedPreset = preset
+                        config.applyPreset(preset)
+                        activeToggle.toggle(withImpulse = true)
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ShowcaseHeader(
+    config: SpringPhysicsConfig,
+    onBounceAll: () -> Unit,
+    onResetAll: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .background(Color.White.copy(alpha = 0.06f), CircleShape)
+                .border(1.dp, Color.White.copy(alpha = 0.1f), CircleShape)
+                .padding(horizontal = 12.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(7.dp)
+                    .background(Color(0xFF818CF8), CircleShape)
+            )
+            Text(
+                text = "Jetpack Compose Second-Order Damped Spring Solver",
+                color = Color(0xFFA5B4FC),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium
+            )
+        }
+
+        Text(
+            text = "Wide-Pill Toggle Switch & Spring Physics",
+            color = Color.White,
+            fontSize = 24.sp,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = (-0.5).sp
+        )
+
+        Text(
+            text = "Tap, press & hold, or drag & flick any switch below. Features claymorphic inset bevels, knob zoom plumping, and velocity squish.",
+            color = Color(0xFFA1A1AA),
+            fontSize = 13.sp,
+            lineHeight = 18.sp
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Button(
+                onClick = onBounceAll,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F46E5)),
+                shape = RoundedCornerShape(12.dp),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+            ) {
+                Text("Bounce All", fontSize = 12.sp, fontWeight = FontWeight.Medium)
+            }
+
+            val isSlowMo = config.timeScale < 1f
+            OutlinedButton(
+                onClick = { config.timeScale = if (isSlowMo) 1.0f else 0.25f },
+                shape = RoundedCornerShape(12.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = Color.White.copy(alpha = if (isSlowMo) 0.14f else 0.06f),
+                    contentColor = Color(0xFFE4E4E7)
+                ),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(7.dp)
+                        .background(
+                            if (isSlowMo) Color(0xFFFBBF24) else Color(0xFF71717A),
+                            CircleShape
+                        )
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = if (isSlowMo) "Slow-Mo: 0.25x" else "Slow-Mo: OFF",
+                    fontSize = 12.sp
+                )
+            }
+
+            OutlinedButton(
+                onClick = onResetAll,
+                shape = RoundedCornerShape(12.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = Color.White.copy(alpha = 0.06f),
+                    contentColor = Color(0xFFE4E4E7)
+                ),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                Text("Reset", fontSize = 12.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReferenceCardSection(
+    title: String,
+    hexSubtitle: String,
+    subtitleColor: Color = Color(0xFFA1A1AA),
+    content: @Composable () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = title,
+                color = Color(0xFFD4D4D8),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                text = hexSubtitle,
+                color = subtitleColor,
+                fontSize = 11.sp,
+                fontFamily = FontFamily.Monospace
+            )
+        }
+        content()
+    }
+}
+
+@Composable
+fun LightGroupedToggleCard(
+    topState: SpringToggleState,
+    bottomState: SpringToggleState,
+    colors: PillSwitchColors,
+    config: SpringPhysicsConfig,
+    onActivate: (SpringToggleState) -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(color = Color(0xFFF2F2F7), shape = RoundedCornerShape(42.dp))
+            .padding(horizontal = 26.dp, vertical = 28.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(color = Color.White, shape = RoundedCornerShape(30.dp))
+                .padding(horizontal = 26.dp, vertical = 4.dp)
+        ) {
+            GroupedToggleRow(
+                title = "Title",
+                state = topState,
+                colors = colors,
+                config = config,
+                onActivate = onActivate
+            )
+
+            HorizontalDivider(
+                modifier = Modifier.fillMaxWidth(),
+                thickness = 1.dp,
+                color = Color(0xFFCECED2)
+            )
+
+            GroupedToggleRow(
+                title = "Title",
+                state = bottomState,
+                colors = colors,
+                config = config,
+                onActivate = onActivate
+            )
+        }
+    }
+}
+
+@Composable
+private fun GroupedToggleRow(
+    title: String,
+    state: SpringToggleState,
+    colors: PillSwitchColors,
+    config: SpringPhysicsConfig,
+    onActivate: (SpringToggleState) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(82.dp)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) {
+                onActivate(state)
+                state.toggle(withImpulse = true)
+            },
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title,
+            color = Color.Black,
+            fontSize = 25.sp,
+            fontWeight = FontWeight.Normal,
+            letterSpacing = (-0.5).sp
+        )
+
+        SpringPillSwitch(
+            state = state,
+            colors = colors,
+            config = config,
+            trackWidth = 98.dp,
+            trackHeight = 45.dp,
+            onActivate = onActivate
+        )
+    }
+}
+
+@Composable
+fun HigCoralSpecCard(
+    topState: SpringToggleState,
+    bottomState: SpringToggleState,
+    config: SpringPhysicsConfig,
+    onActivate: (SpringToggleState) -> Unit
+) {
+    val coralGradient = Brush.linearGradient(
+        colors = listOf(
+            Color(0xFFFF7A45),
+            Color(0xFFFA665E),
+            Color(0xFFF25A7B)
+        ),
+        start = Offset(0f, 0f),
+        end = Offset(1000f, 650f)
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(brush = coralGradient, shape = RoundedCornerShape(42.dp))
+            .padding(horizontal = 30.dp, vertical = 34.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            SpecToggleRow(
+                label = "Label",
+                state = topState,
+                config = config,
+                showDimensionCallouts = true,
+                onActivate = onActivate
+            )
+
+            SpecToggleRow(
+                label = "Label",
+                state = bottomState,
+                config = config,
+                showDimensionCallouts = false,
+                onActivate = onActivate
+            )
+        }
+    }
+}
+
+@Composable
+private fun SpecToggleRow(
+    label: String,
+    state: SpringToggleState,
+    config: SpringPhysicsConfig,
+    showDimensionCallouts: Boolean,
+    onActivate: (SpringToggleState) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(84.dp)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) {
+                onActivate(state)
+                state.toggle(withImpulse = true)
+            }
+            .padding(end = 14.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier.width(155.dp),
+            contentAlignment = Alignment.BottomStart
+        ) {
+            Text(
+                text = label,
+                color = Color(0xFF8D2323),
+                fontSize = 26.sp,
+                fontWeight = FontWeight.Normal,
+                letterSpacing = (-0.5).sp,
+                modifier = Modifier.padding(start = 18.dp, bottom = 2.dp)
+            )
+
+            Canvas(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(2.dp)
+            ) {
+                drawLine(
+                    color = Color(0xFFA52222).copy(alpha = 0.48f),
+                    start = Offset(0f, 0f),
+                    end = Offset(size.width, 0f),
+                    strokeWidth = 2.dp.toPx(),
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f), 0f)
+                )
+            }
+        }
+
+        Box(contentAlignment = Alignment.Center) {
+            if (showDimensionCallouts) {
+                Canvas(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .offset(y = (-16).dp)
+                        .width(98.dp)
+                        .height(11.dp)
+                ) {
+                    val stroke = 1.5.dp.toPx()
+                    val color = Color(0xFFD83A3A)
+                    val midY = size.height / 2f
+                    drawLine(color, Offset(0f, 0f), Offset(0f, size.height), stroke)
+                    drawLine(color, Offset(0f, midY), Offset(size.width, midY), stroke)
+                    drawLine(color, Offset(size.width, 0f), Offset(size.width, size.height), stroke)
+                }
+
+                Canvas(
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .offset(x = 18.dp)
+                        .width(11.dp)
+                        .height(45.dp)
+                ) {
+                    val stroke = 1.5.dp.toPx()
+                    val color = Color(0xFFD83A3A)
+                    val midX = size.width / 2f
+                    drawLine(color, Offset(0f, 0f), Offset(size.width, 0f), stroke)
+                    drawLine(color, Offset(midX, 0f), Offset(midX, size.height), stroke)
+                    drawLine(color, Offset(0f, size.height), Offset(size.width, size.height), stroke)
+                }
+            }
+
+            SpringPillSwitch(
+                state = state,
+                colors = PillSwitchColors.HigSpecCoral,
+                config = config,
+                trackWidth = 98.dp,
+                trackHeight = 45.dp,
+                showIoLabels = true,
+                onActivate = onActivate
+            )
+        }
+    }
+}
+
+@Composable
+private fun SpringPhysicsLabCard(
+    config: SpringPhysicsConfig,
+    activeToggle: SpringToggleState,
+    selectedPreset: SpringPreset,
+    history: List<Float>,
+    onSelectPreset: (SpringPreset) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFF18181B), RoundedCornerShape(36.dp))
+            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(36.dp))
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            SpringPreset.entries.forEach { preset ->
+                val isSelected = preset == selectedPreset
+                Box(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(
+                            if (isSelected) Color(0xFF6366F1).copy(alpha = 0.22f)
+                            else Color.White.copy(alpha = 0.05f)
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = if (isSelected) Color(0xFF6366F1).copy(alpha = 0.5f)
+                            else Color.White.copy(alpha = 0.1f),
+                            shape = CircleShape
+                        )
+                        .clickable { onSelectPreset(preset) }
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        text = preset.title,
+                        color = if (isSelected) Color(0xFFA5B4FC) else Color(0xFFD4D4D8),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        }
+
+        SpringSliderControl(
+            label = "Stiffness (k)",
+            valueText = "${config.stiffness.roundToInt()} N/m",
+            value = config.stiffness,
+            valueRange = 150f..1000f,
+            onValueChange = { config.stiffness = it }
+        )
+
+        SpringSliderControl(
+            label = "Damping (c)",
+            valueText = "${config.damping.roundToInt()} Ns/m",
+            value = config.damping,
+            valueRange = 8f..65f,
+            onValueChange = { config.damping = it }
+        )
+
+        SpringSliderControl(
+            label = "Zoom & Squish Intensity",
+            valueText = "${(config.squishFactor * 100).roundToInt()}%",
+            value = config.squishFactor * 100f,
+            valueRange = 0f..200f,
+            onValueChange = { config.squishFactor = it / 100f }
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(18.dp))
+                .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(18.dp))
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "DISPLACEMENT x(t)",
+                    color = Color(0xFFA1A1AA),
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "x: ${"%.3f".format(activeToggle.x)}",
+                        color = Color(0xFF34D399),
+                        fontSize = 10.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Text(
+                        text = "v: ${"%.2f".format(activeToggle.v)}/s",
+                        color = Color(0xFF818CF8),
+                        fontSize = 10.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Text(
+                        text = "ζ: ${"%.2f".format(config.dampingRatio)}",
+                        color = Color(0xFFFCD34D),
+                        fontSize = 10.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+            }
+
+            Canvas(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(86.dp)
+            ) {
+                fun mapY(v: Float): Float {
+                    val norm = (v - (-0.35f)) / 1.7f
+                    return size.height - norm * size.height
+                }
+
+                val dashEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f), 0f)
+                listOf(0f, 1f).forEach { refVal ->
+                    val y = mapY(refVal)
+                    drawLine(
+                        color = Color.White.copy(alpha = 0.12f),
+                        start = Offset(0f, y),
+                        end = Offset(size.width, y),
+                        strokeWidth = 1.dp.toPx(),
+                        pathEffect = dashEffect
+                    )
+                }
+
+                if (history.size > 1) {
+                    val wavePath = Path()
+                    history.forEachIndexed { idx, sample ->
+                        val px = (idx.toFloat() / (history.size - 1)) * size.width
+                        val py = mapY(sample)
+                        if (idx == 0) wavePath.moveTo(px, py) else wavePath.lineTo(px, py)
+                    }
+                    drawPath(
+                        path = wavePath,
+                        color = Color(0xFF818CF8),
+                        style = Stroke(width = 2.2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                    )
+
+                    val lastY = mapY(history.last())
+                    drawCircle(
+                        color = Color(0xFF34D399),
+                        radius = 4.dp.toPx(),
+                        center = Offset(size.width - 4.dp.toPx(), lastY)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SpringSliderControl(
+    label: String,
+    valueText: String,
+    value: Float,
+    valueRange: ClosedFloatingPointRange<Float>,
+    onValueChange: (Float) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.Black.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
+            .padding(horizontal = 14.dp, vertical = 8.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(text = label, color = Color(0xFFA1A1AA), fontSize = 12.sp)
+            Text(
+                text = valueText,
+                color = Color(0xFFA5B4FC),
+                fontSize = 12.sp,
+                fontFamily = FontFamily.Monospace
+            )
+        }
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            valueRange = valueRange,
+            colors = SliderDefaults.colors(
+                thumbColor = Color.White,
+                activeTrackColor = Color(0xFF6366F1),
+                inactiveTrackColor = Color.White.copy(alpha = 0.14f)
+            )
+        )
+    }
+}

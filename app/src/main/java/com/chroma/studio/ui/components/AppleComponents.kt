@@ -176,132 +176,22 @@ fun AppleSwitch(
     modifier: Modifier = Modifier,
     activeTrackColor: Color = Color(0xFF0A84FF),
     inactiveTrackColor: Color = if (isAppInDark) Color(0xFF39393D) else Color(0xFFE9E9EA),
-    hazeState: dev.chrisbanes.haze.HazeState? = null
+    hazeState: dev.chrisbanes.haze.HazeState? = null,
+    trackWidth: Dp = 56.dp,
+    trackHeight: Dp = 28.dp
 ) {
-    val haptic = LocalHapticFeedback.current
-    val coroutineScope = rememberCoroutineScope()
-    var isPressed by remember { mutableStateOf(false) }
-
-    // Fast tap punch-and-spring zoom animation
-    val tapZoomAnim = remember { Animatable(1.0f) }
-
-    val trackColor by animateColorAsState(
-        targetValue = if (checked) activeTrackColor else inactiveTrackColor,
-        animationSpec = tween(durationMillis = 260, easing = CubicBezierEasing(0.25f, 1f, 0.5f, 1f)),
-        label = "trackColor"
-    )
-
-    // Knob X translation:
-    // Track is 51dp wide, resting knob is 27dp, padding is 2dp.
-    // Resting unchecked: X = 2.dp
-    // Resting checked: X = 51 - 27 - 2 = 22.dp
-    // While pressed, knob stretches horizontally to 31.5.dp:
-    // Pressed unchecked: X = 2.dp
-    // Pressed checked: X = 51 - 31.5 - 2 = 17.5.dp
-    val targetKnobX = when {
-        !checked -> 2f
-        checked && isPressed -> 17.5f
-        else -> 22f
-    }
-    val targetKnobW = if (isPressed) 31.5.dp else 27.dp
-
-    val springSlide = spring<Float>(
-        dampingRatio = 0.58f,
-        stiffness = 450f
-    )
-    val springWidth = spring<Dp>(
-        dampingRatio = 0.50f,
-        stiffness = 500f
-    )
-
-    val thumbTranslationX by animateFloatAsState(targetKnobX, animationSpec = springSlide, label = "tx")
-    val thumbWidth by animateDpAsState(targetKnobW, animationSpec = springWidth, label = "tw")
-
-    // Continuous press zoom scale
-    val pressScale by animateFloatAsState(
-        targetValue = if (isPressed) 1.20f else 1.0f,
-        animationSpec = spring(
-            dampingRatio = 0.48f,
-            stiffness = 420f
+    SpringPillSwitch(
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        modifier = modifier,
+        colors = PillSwitchColors(
+            offTrackColor = inactiveTrackColor,
+            onTrackColor = activeTrackColor,
+            thumbColor = Color.White
         ),
-        label = "pressScale"
+        trackWidth = trackWidth,
+        trackHeight = trackHeight
     )
-
-    val effectiveScale = maxOf(pressScale, tapZoomAnim.value)
-
-    Box(
-        modifier = modifier
-            .width(51.dp)
-            .height(31.dp)
-            .pointerInput(checked) {
-                detectTapGestures(
-                    onPress = {
-                        isPressed = true
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        com.chroma.studio.chat.sound.SoundManager.playReaction()
-                        tryAwaitRelease()
-                        isPressed = false
-                    },
-                    onTap = {
-                        coroutineScope.launch {
-                            tapZoomAnim.snapTo(1.0f)
-                            // Punch zoom with spring physics
-                            tapZoomAnim.animateTo(
-                                targetValue = 1.22f,
-                                animationSpec = spring(dampingRatio = 0.50f, stiffness = 1200f)
-                            )
-                            // Spring settle back with lively bounce
-                            tapZoomAnim.animateTo(
-                                targetValue = 1.0f,
-                                animationSpec = spring(dampingRatio = 0.45f, stiffness = 400f)
-                            )
-                        }
-                        onCheckedChange(!checked)
-                    }
-                )
-            }
-    ) {
-        // Track: 51x31 rounded pill
-        val trackShape = RoundedCornerShape(100.dp)
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clip(trackShape)
-                .background(trackColor)
-                .border(
-                    width = 0.5.dp,
-                    color = if (!checked) {
-                        if (isAppInDark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f)
-                    } else {
-                        Color.Transparent
-                    },
-                    shape = trackShape
-                )
-        )
-
-        // Knob: 27dp height x thumbWidth, with spring zoom scale and soft drop shadow
-        val knobShape = RoundedCornerShape(100.dp)
-        Box(
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .offset(x = thumbTranslationX.dp)
-                .graphicsLayer {
-                    scaleX = effectiveScale
-                    scaleY = effectiveScale
-                    transformOrigin = TransformOrigin(0.5f, 0.5f)
-                }
-                .shadow(
-                    elevation = (2.5.dp * effectiveScale).coerceAtLeast(2.dp),
-                    shape = knobShape,
-                    spotColor = Color.Black.copy(alpha = 0.22f),
-                    ambientColor = Color.Black.copy(alpha = 0.12f)
-                )
-                .size(width = thumbWidth, height = 27.dp)
-                .clip(knobShape)
-                .background(Color.White)
-                .border(0.5.dp, Color.Black.copy(alpha = 0.04f), knobShape)
-        )
-    }
 }
 
 /**

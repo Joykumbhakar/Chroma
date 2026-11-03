@@ -64,6 +64,7 @@ import coil.compose.AsyncImage
 import com.chroma.studio.chat.sound.SoundManager
 import com.chroma.studio.data.DiscoverRepository
 import com.chroma.studio.model.UserProfile
+import com.chroma.studio.ui.components.AppleSwitch
 import com.chroma.studio.ui.components.OneUiIconBadge
 import com.chroma.studio.ui.components.OneUiSettingsGroup
 import com.chroma.studio.ui.components.OscellionGalleryLayout
@@ -1592,13 +1593,10 @@ private fun PostDetailsInputView(
                         Text("Allow Remixing", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = textMain)
                         Text("Other creators can build upon this visual", fontSize = 11.5.sp, color = textMuted)
                     }
-                    Switch(
+                    AppleSwitch(
                         checked = allowRemix,
                         onCheckedChange = onAllowRemixChange,
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = Color(0xFF0A84FF)
-                        )
+                        activeTrackColor = Color(0xFF0A84FF)
                     )
                 }
 
@@ -1614,13 +1612,10 @@ private fun PostDetailsInputView(
                         Text("High Quality Upload", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = textMain)
                         Text("Uploads using studio color depth profile", fontSize = 11.5.sp, color = textMuted)
                     }
-                    Switch(
+                    AppleSwitch(
                         checked = highQuality,
                         onCheckedChange = onHighQualityChange,
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = Color(0xFF0A84FF)
-                        )
+                        activeTrackColor = Color(0xFF0A84FF)
                     )
                 }
             }

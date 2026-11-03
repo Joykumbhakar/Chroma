@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.chroma.studio.chat.sound.SoundManager
 import com.chroma.studio.chat.ui.components.OneUiGradientStyle
+import com.chroma.studio.ui.components.AppleSwitch
 import com.chroma.studio.ui.components.OneUiIconBadge
 import com.chroma.studio.ui.components.OneUiSettingsGroup
 import com.chroma.studio.ui.components.VerifiedBadge
@@ -909,16 +910,10 @@ private fun OneUiSwitchRow(
             }
         }
 
-        Switch(
+        AppleSwitch(
             checked = checked,
             onCheckedChange = onCheckedChange,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.White,
-                checkedTrackColor = activeAccent,
-                uncheckedThumbColor = Color.White,
-                uncheckedTrackColor = if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1),
-                uncheckedBorderColor = Color.Transparent
-            )
+            activeTrackColor = activeAccent
         )
     }
 }
