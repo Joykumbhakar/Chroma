@@ -7,6 +7,10 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
+import android.media.MediaMetadataRetriever
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -89,9 +93,10 @@ fun queryDeviceAudioFiles(context: Context): List<DeviceAudioTrack> {
         MediaStore.Audio.Media.TITLE,
         MediaStore.Audio.Media.ARTIST,
         MediaStore.Audio.Media.DURATION,
-        MediaStore.Audio.Media.SIZE
+        MediaStore.Audio.Media.SIZE,
+        MediaStore.Audio.Media.DISPLAY_NAME
     )
-    val selection = "${MediaStore.Audio.Media.DURATION} >= 1500"
+    val selection = "(${MediaStore.Audio.Media.DURATION} >= 500 OR ${MediaStore.Audio.Media.DURATION} IS NULL OR ${MediaStore.Audio.Media.DURATION} = 0) AND (${MediaStore.Audio.Media.SIZE} > 0 OR ${MediaStore.Audio.Media.SIZE} IS NULL)"
     val sortOrder = "${MediaStore.Audio.Media.TITLE} ASC"
 
     try {
@@ -107,20 +112,26 @@ fun queryDeviceAudioFiles(context: Context): List<DeviceAudioTrack> {
             val artistCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
             val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
             val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE)
+            val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
 
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idCol)
-                val title = cursor.getString(titleCol) ?: "Unknown Track"
-                val artist = cursor.getString(artistCol) ?: "Local Audio"
-                val durationMs = cursor.getLong(durationCol)
-                val sizeBytes = cursor.getLong(sizeCol)
+                var title = if (!cursor.isNull(titleCol)) cursor.getString(titleCol) else null
+                val displayName = if (!cursor.isNull(nameCol)) cursor.getString(nameCol) else null
+                if (title.isNullOrBlank() || title.contains("unknown", ignoreCase = true)) {
+                    title = displayName?.substringBeforeLast('.') ?: "Audio Track $id"
+                }
+                val rawArtist = if (!cursor.isNull(artistCol)) cursor.getString(artistCol) else null
+                val artist = if (rawArtist.isNullOrBlank() || rawArtist.contains("unknown", ignoreCase = true)) "Device Audio" else rawArtist
+                val durationMs = if (!cursor.isNull(durationCol)) cursor.getLong(durationCol) else 0L
+                val sizeBytes = if (!cursor.isNull(sizeCol)) cursor.getLong(sizeCol) else 0L
                 val contentUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
 
                 audioList.add(
                     DeviceAudioTrack(
                         id = id,
                         title = title,
-                        artist = if (artist.contains("unknown", ignoreCase = true)) "Device Audio" else artist,
+                        artist = artist,
                         durationMs = durationMs,
                         uri = contentUri,
                         sizeBytes = sizeBytes
@@ -135,10 +146,11 @@ fun queryDeviceAudioFiles(context: Context): List<DeviceAudioTrack> {
 }
 
 /**
- * Helper to query file name from content resolver
+ * Helper to query file name and duration from content resolver and MediaMetadataRetriever
  */
-private fun queryAudioFileName(context: Context, uri: Uri): String {
+fun queryAudioTrackInfo(context: Context, uri: Uri): Pair<String, Long> {
     var name = "Custom Audio Track"
+    var durationMs = 0L
     try {
         context.contentResolver.query(uri, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
             if (cursor.moveToFirst()) {
@@ -149,7 +161,22 @@ private fun queryAudioFileName(context: Context, uri: Uri): String {
             }
         }
     } catch (_: Throwable) {}
-    return name
+
+    try {
+        val retriever = MediaMetadataRetriever()
+        retriever.setDataSource(context, uri)
+        val extractedTitle = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
+        if (!extractedTitle.isNullOrBlank()) {
+            name = extractedTitle
+        }
+        val extractedDur = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
+        if (extractedDur != null && extractedDur > 0L) {
+            durationMs = extractedDur
+        }
+        retriever.release()
+    } catch (_: Throwable) {}
+
+    return Pair(name, if (durationMs > 0L) durationMs else 30000L)
 }
 
 /**
@@ -556,33 +583,29 @@ fun DeviceMusicTrimmerModal(
         }
     }
 
-    LaunchedEffect(hasPermission) {
-        if (hasPermission) {
-            loadTracks()
+    // Automatic lifecycle observer: re-check permission when app regains focus from Settings
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                val granted = ContextCompat.checkSelfPermission(context, permissionString) == PackageManager.PERMISSION_GRANTED
+                if (granted != hasPermission) {
+                    hasPermission = granted
+                    if (granted) {
+                        loadTracks()
+                    }
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 
-    // Custom file picker fallback
-    val customFilePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { pickedUri ->
-        if (pickedUri != null) {
-            try {
-                context.contentResolver.takePersistableUriPermission(
-                    pickedUri,
-                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
-            } catch (_: Throwable) {}
-
-            val trackName = queryAudioFileName(context, pickedUri)
-            val track = DeviceAudioTrack(
-                id = System.currentTimeMillis(),
-                title = trackName,
-                artist = "Imported Audio",
-                durationMs = 60000L,
-                uri = pickedUri
-            )
-            audioTracks = listOf(track) + audioTracks.filter { it.uri != pickedUri }
+    LaunchedEffect(hasPermission) {
+        if (hasPermission) {
+            loadTracks()
         }
     }
 
@@ -624,6 +647,31 @@ fun DeviceMusicTrimmerModal(
             isPreviewingTrimOnly = false
         } catch (e: Exception) {
             Log.e("DeviceMusicModal", "Error playing preview", e)
+        }
+    }
+
+    // Custom file picker fallback with real metadata & immediate playback
+    val customFilePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { pickedUri ->
+        if (pickedUri != null) {
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    pickedUri,
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (_: Throwable) {}
+
+            val (trackName, trackDuration) = queryAudioTrackInfo(context, pickedUri)
+            val track = DeviceAudioTrack(
+                id = System.currentTimeMillis(),
+                title = trackName,
+                artist = "Imported Audio",
+                durationMs = trackDuration,
+                uri = pickedUri
+            )
+            audioTracks = listOf(track) + audioTracks.filter { it.uri != pickedUri }
+            selectTrack(track)
         }
     }
 
@@ -924,13 +972,28 @@ fun DeviceMusicTrimmerModal(
                             )
                         }
                         Spacer(Modifier.width(8.dp))
-                        Button(
-                            onClick = { permissionLauncher.launch(permissionString) },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0A84FF)),
-                            shape = RoundedCornerShape(10.dp),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            Text("Grant", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            OutlinedButton(
+                                onClick = {
+                                    val intent = android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                        data = android.net.Uri.fromParts("package", context.packageName, null)
+                                        addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    }
+                                    context.startActivity(intent)
+                                },
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Text("Settings", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                            Button(
+                                onClick = { permissionLauncher.launch(permissionString) },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0A84FF)),
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Text("Grant", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                 }

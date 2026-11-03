@@ -49,6 +49,11 @@ enum class PermissionRequestType(
         title = "“ChatApp” Would Like to Use Speech Recognition",
         description = "Voice recognition transcribes your spoken audio into formatted text messages automatically on-device.",
         buttonText = "Enable Voice Typing"
+    ),
+    MUSIC(
+        title = "“Oscellion” Would Like to Access Your Music & Audio",
+        description = "This allows you to browse and select songs, sound effects, and audio files from your device to add as soundtrack to your stories, videos, and projects.",
+        buttonText = "Allow Music Access"
     )
 }
 

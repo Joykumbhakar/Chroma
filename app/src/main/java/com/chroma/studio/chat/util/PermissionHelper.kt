@@ -41,6 +41,27 @@ object PermissionHelper {
     }
 
     /**
+     * Get appropriate music / audio file permissions based on Android SDK level
+     */
+    fun getAudioPermissions(): Array<String> {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            arrayOf(Manifest.permission.READ_MEDIA_AUDIO)
+        } else {
+            arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+    }
+
+    /**
+     * Check if Device Music & Audio storage permission is granted
+     */
+    fun hasDeviceAudioPermission(context: Context): Boolean {
+        val permissions = getAudioPermissions()
+        return permissions.any {
+            ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    /**
      * Check if Audio Recording permission is granted
      */
     fun hasAudioPermission(context: Context): Boolean {

@@ -5053,6 +5053,7 @@ private fun ChatScreenContent(
                         PermissionRequestType.GALLERY -> mediaPermissionLauncher.launch(PermissionHelper.getMediaPermissions())
 
                         PermissionRequestType.SPEECH -> speechPermissionLauncher.launch(PermissionHelper.RECORD_AUDIO_PERMISSION)
+                        PermissionRequestType.MUSIC -> mediaPermissionLauncher.launch(PermissionHelper.getAudioPermissions())
 
                     }
 

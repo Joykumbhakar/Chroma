@@ -21,6 +21,16 @@ import androidx.lifecycle.LifecycleEventObserver
 
 enum class MediaAccess { Full, Partial, Denied }
 
+fun audioPermissions(): Array<String> = when {
+    Build.VERSION.SDK_INT >= 33 -> arrayOf(Manifest.permission.READ_MEDIA_AUDIO)
+    else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+}
+
+fun Context.currentAudioAccess(): Boolean {
+    val perms = audioPermissions()
+    return perms.any { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }
+}
+
 fun mediaPermissions(): Array<String> = when {
     Build.VERSION.SDK_INT >= 34 -> arrayOf(
         Manifest.permission.READ_MEDIA_IMAGES,
