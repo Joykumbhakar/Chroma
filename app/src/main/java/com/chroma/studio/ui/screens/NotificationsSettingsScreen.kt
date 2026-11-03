@@ -27,6 +27,7 @@ import com.chroma.studio.model.UserProfile
 import com.chroma.studio.ui.components.AppleSwitch
 import com.chroma.studio.ui.components.ToastManager
 import com.chroma.studio.ui.components.SettingsShineBorderBrush
+import com.chroma.studio.ui.components.LucideFilled
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.*
@@ -158,7 +159,7 @@ fun NotificationsSettingsScreen(
                     NotificationSettingRow(
                         title = "Allow Push Notifications",
                         subtitle = "Deliver real-time banners, sounds, and active badges",
-                        icon = Lucide.Bell,
+                        icon = LucideFilled.Bell,
                         iconColor = Color(0xFF0A84FF),
                         checked = pushEnabled,
                         onCheckedChange = {
@@ -172,7 +173,7 @@ fun NotificationsSettingsScreen(
                     NotificationSettingRow(
                         title = "Quiet Hours Mode",
                         subtitle = "Silence banners and alerts between 10:00 PM and 8:00 AM",
-                        icon = Lucide.Moon,
+                        icon = LucideFilled.Moon,
                         iconColor = Color(0xFF6366F1),
                         checked = quietMode,
                         onCheckedChange = {
@@ -197,7 +198,7 @@ fun NotificationsSettingsScreen(
                         NotificationSettingRow(
                             title = "Video Render & Export Alerts",
                             subtitle = "Alerts when 4K ProRes exports or background timeline renders complete",
-                            icon = Lucide.Video,
+                            icon = LucideFilled.Video,
                             iconColor = Color(0xFF10B981),
                             checked = notifProjectExports,
                             onCheckedChange = {
@@ -211,7 +212,7 @@ fun NotificationsSettingsScreen(
                         NotificationSettingRow(
                             title = "Project Collaboration & Invites",
                             subtitle = "Notify when invited to collaborate on or edit shared video timelines",
-                            icon = Lucide.Users,
+                            icon = LucideFilled.Users,
                             iconColor = Color(0xFF0A84FF),
                             checked = notifProjectCollab,
                             onCheckedChange = {
@@ -225,7 +226,7 @@ fun NotificationsSettingsScreen(
                         NotificationSettingRow(
                             title = "Timeline Background Processing",
                             subtitle = "Progress notifications for proxy generation and optical flow stabilization",
-                            icon = Lucide.Layers,
+                            icon = LucideFilled.Layers,
                             iconColor = Color(0xFFF59E0B),
                             checked = notifTimelineRender,
                             onCheckedChange = {
@@ -239,7 +240,7 @@ fun NotificationsSettingsScreen(
                         NotificationSettingRow(
                             title = "Remixes & Asset Re-use",
                             subtitle = "Alerts when creators remix your audio tracks or video transitions",
-                            icon = Lucide.Sparkles,
+                            icon = LucideFilled.Sparkles,
                             iconColor = Color(0xFF8B5CF6),
                             checked = notifRemixes,
                             onCheckedChange = {
@@ -265,7 +266,7 @@ fun NotificationsSettingsScreen(
                         NotificationSettingRow(
                             title = "Likes & Reactions",
                             subtitle = "When creators like your video or timeline exports",
-                            icon = Lucide.Heart,
+                            icon = LucideFilled.Heart,
                             iconColor = Color(0xFFF43F5E),
                             checked = notifLikes,
                             onCheckedChange = {
@@ -279,7 +280,7 @@ fun NotificationsSettingsScreen(
                         NotificationSettingRow(
                             title = "Comments & Discussions",
                             subtitle = "Replies and feedback on your published projects",
-                            icon = Lucide.MessageCircle,
+                            icon = LucideFilled.MessageCircle,
                             iconColor = Color(0xFF10B981),
                             checked = notifComments,
                             onCheckedChange = {
@@ -293,7 +294,7 @@ fun NotificationsSettingsScreen(
                         NotificationSettingRow(
                             title = "New Followers",
                             subtitle = "When a creator follows your creative profile",
-                            icon = Lucide.UserPlus,
+                            icon = LucideFilled.UserPlus,
                             iconColor = Color(0xFF0A84FF),
                             checked = notifFollows,
                             onCheckedChange = {
@@ -307,7 +308,7 @@ fun NotificationsSettingsScreen(
                         NotificationSettingRow(
                             title = "Mentions & Sequence Tags",
                             subtitle = "When another creator tags you in a sequence or caption",
-                            icon = Lucide.AtSign,
+                            icon = LucideFilled.AtSign,
                             iconColor = Color(0xFF06B6D4),
                             checked = notifMentions,
                             onCheckedChange = {
@@ -328,7 +329,7 @@ fun NotificationsSettingsScreen(
                     NotificationSettingRow(
                         title = "LUT & Preset Releases",
                         subtitle = "Alerts for new cinematic grading packs and video tools",
-                        icon = Lucide.Sparkles,
+                        icon = LucideFilled.Sparkles,
                         iconColor = Color(0xFFF59E0B),
                         checked = notifDrops,
                         onCheckedChange = {
@@ -342,7 +343,7 @@ fun NotificationsSettingsScreen(
                     NotificationSettingRow(
                         title = "Weekly Creator Digest",
                         subtitle = "Email roundup of trending projects and community masterclasses",
-                        icon = Lucide.Mail,
+                        icon = LucideFilled.Mail,
                         iconColor = Color(0xFF0A84FF),
                         checked = emailEnabled,
                         onCheckedChange = {
@@ -362,7 +363,7 @@ fun NotificationsSettingsScreen(
                     NotificationSettingRow(
                         title = "In-App Sound Effects",
                         subtitle = "Play subtle audio cues on incoming notifications",
-                        icon = Lucide.Volume2,
+                        icon = LucideFilled.Volume2,
                         iconColor = Color(0xFF10B981),
                         checked = notifSounds,
                         onCheckedChange = {
@@ -376,7 +377,7 @@ fun NotificationsSettingsScreen(
                     NotificationSettingRow(
                         title = "Haptic Vibration",
                         subtitle = "Tactile tap sensation on activity alerts",
-                        icon = Lucide.Smartphone,
+                        icon = LucideFilled.Smartphone,
                         iconColor = Color(0xFF6366F1),
                         checked = notifHaptics,
                         onCheckedChange = {
@@ -470,7 +471,7 @@ private fun NotificationSettingRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(13.dp)
         ) {
-            val shape = RoundedCornerShape(10.dp)
+            val shape = RoundedCornerShape(13.5.dp)
             Box(
                 modifier = Modifier
                     .size(34.dp)

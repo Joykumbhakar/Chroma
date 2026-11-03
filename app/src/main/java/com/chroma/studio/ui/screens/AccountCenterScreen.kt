@@ -499,7 +499,7 @@ fun AccountCenterScreen(
                             OneUiSettingsRow(
                                 title = "Profile & Identity",
                                 subtitle = "Name, avatar, bio, and social handles",
-                                icon = Lucide.User,
+                                icon = LucideFilled.User,
                                 iconTint = activeAccent,
                                 valueText = profile?.displayName?.takeIf { it.isNotBlank() },
                                 textDark = textDark,
@@ -512,7 +512,7 @@ fun AccountCenterScreen(
                             OneUiSettingsRow(
                                 title = "Security & Access",
                                 subtitle = "Password, logins, and recovery alerts",
-                                icon = Lucide.ShieldCheck,
+                                icon = LucideFilled.ShieldCheck,
                                 iconTint = Color(0xFF10B981),
                                 textDark = textDark,
                                 textMuted = textMuted,
@@ -524,7 +524,7 @@ fun AccountCenterScreen(
                             OneUiSettingsRow(
                                 title = "Privacy & Interaction",
                                 subtitle = "Account visibility, mentions, and blocking",
-                                icon = Lucide.Lock,
+                                icon = LucideFilled.Lock,
                                 iconTint = Color(0xFF8B5CF6),
                                 valueText = if (profile?.isPrivateAccount == true) "Private" else "Public",
                                 textDark = textDark,
@@ -537,7 +537,7 @@ fun AccountCenterScreen(
                             OneUiSettingsRow(
                                 title = "Notifications & Alerts",
                                 subtitle = "Push notifications, tones, and vibration",
-                                icon = Lucide.Bell,
+                                icon = LucideFilled.Bell,
                                 iconTint = Color(0xFFF59E0B),
                                 valueText = if (profile?.pushNotificationsEnabled == true) "On" else "Off",
                                 textDark = textDark,
@@ -550,7 +550,7 @@ fun AccountCenterScreen(
                             OneUiSettingsRow(
                                 title = "Archived Creatives",
                                 subtitle = "View and restore your archived creations",
-                                icon = Lucide.Archive,
+                                icon = LucideFilled.Archive,
                                 iconTint = Color(0xFF06B6D4),
                                 textDark = textDark,
                                 textMuted = textMuted,
@@ -562,7 +562,7 @@ fun AccountCenterScreen(
                             OneUiSettingsRow(
                                 title = "Your Activity",
                                 subtitle = "Liked, saved, and shared posts history",
-                                icon = Lucide.History,
+                                icon = LucideFilled.History,
                                 iconTint = Color(0xFFEC4899),
                                 textDark = textDark,
                                 textMuted = textMuted,
@@ -583,7 +583,7 @@ fun AccountCenterScreen(
                             OneUiSettingsRow(
                                 title = "Download My Information",
                                 subtitle = "Export personal JSON archive",
-                                icon = Lucide.Download,
+                                icon = LucideFilled.Download,
                                 iconTint = Color(0xFF0A84FF),
                                 textDark = textDark,
                                 textMuted = textMuted,
@@ -605,7 +605,7 @@ fun AccountCenterScreen(
                             OneUiSettingsRow(
                                 title = "Privacy Policy and Terms",
                                 subtitle = "Legal agreements, terms, and data safety",
-                                icon = Lucide.FileText,
+                                icon = LucideFilled.FileText,
                                 iconTint = Color(0xFF6B7280),
                                 textDark = textDark,
                                 textMuted = textMuted,
@@ -617,7 +617,7 @@ fun AccountCenterScreen(
                             OneUiSettingsRow(
                                 title = "Sign Out",
                                 subtitle = "Log out from this device",
-                                icon = Lucide.LogOut,
+                                icon = LucideFilled.LogOut,
                                 iconTint = Color(0xFFEF4444),
                                 isDestructive = true,
                                 textDark = textDark,

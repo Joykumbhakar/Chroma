@@ -299,7 +299,7 @@ fun OneUiIconBadge(
     iconGradient: List<Color>? = null,
     modifier: Modifier = Modifier
 ) {
-    val shape = RoundedCornerShape(11.dp)
+    val shape = RoundedCornerShape(14.dp)
     val bgModifier = if (iconGradient != null && iconGradient.isNotEmpty()) {
         Modifier.background(Brush.linearGradient(iconGradient))
     } else {
