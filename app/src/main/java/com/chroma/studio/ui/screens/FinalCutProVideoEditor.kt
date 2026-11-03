@@ -271,18 +271,24 @@ val AllFcpFonts = listOf(
 private val fcpFontFamilyCache = mutableMapOf<String, FontFamily>()
 fun getFcpFontFamily(context: Context, assetFileName: String): FontFamily {
     return fcpFontFamilyCache.getOrPut(assetFileName) {
-        try {
-            val tf = Typeface.createFromAsset(context.assets, "fonts/$assetFileName")
-            FontFamily(tf)
-        } catch (e: Exception) {
+        if (assetFileName.isBlank()) return@getOrPut FontFamily.Default
+        val candidates = listOf(
+            assetFileName,
+            assetFileName.replace(" ", ""),
+            assetFileName.replace(".otf", ".ttf"),
+            assetFileName.replace(".ttf", ".otf"),
+            assetFileName.replace(" ", "").replace(".otf", ".ttf"),
+            assetFileName.replace(" ", "").replace(".ttf", ".otf")
+        ).distinct()
+        var family: FontFamily? = null
+        for (candidate in candidates) {
             try {
-                val altName = assetFileName.replace(" ", "")
-                val tfAlt = Typeface.createFromAsset(context.assets, "fonts/$altName")
-                FontFamily(tfAlt)
-            } catch (e2: Exception) {
-                FontFamily.Default
-            }
+                val tf = Typeface.createFromAsset(context.assets, "fonts/$candidate")
+                family = FontFamily(tf)
+                break
+            } catch (_: Exception) {}
         }
+        family ?: com.chroma.studio.ui.theme.StoryFonts.getFontFamily(context, assetFileName)
     }
 }
 enum class TextInAnimation(val label: String, val description: String) {
@@ -619,7 +625,8 @@ enum class FcpVisualEffect(
     PRISM_SPLIT("Prism RGB", Lucide.Layers, "Chromatic lens dispersion & edge fringes"),
     VIGNETTE_MOOD("Vignette", Lucide.Circle, "Dramatic cinematic peripheral dark falloff"),
     NOIR_CONTRAST("Noir Mono", Lucide.Moon, "High-contrast atmospheric monochrome"),
-    ANAMORPHIC_FLARE("Anamorphic", Lucide.Maximize2, "Horizontal cinematic blue streak flare")
+    ANAMORPHIC_FLARE("Anamorphic", Lucide.Maximize2, "Horizontal cinematic blue streak flare"),
+    CYBER_SCANLINE("Cyber Scan", Lucide.Terminal, "Sci-fi holographic matrix scanlines & teal grid")
 }
 enum class FcpClipAnimation(
     val label: String,
@@ -636,7 +643,8 @@ enum class FcpClipAnimation(
     PAN_LEFT("Pan Left", Lucide.ArrowLeft, "Continuous cinematic slide to the left", "PAN L"),
     PAN_RIGHT("Pan Right", Lucide.ArrowRight, "Continuous cinematic slide to the right", "PAN R"),
     FLASH_STROBE("Strobe", Lucide.Sparkles, "High-impact rhythmic luminance strobe flash", "STROBE"),
-    WOBBLE("Wobble", Lucide.RotateCw, "Subtle rotational tilt and sway", "WOBBLE")
+    WOBBLE("Wobble", Lucide.RotateCw, "Subtle rotational tilt and sway", "WOBBLE"),
+    SWAY_DRIFT("Sway Drift", Lucide.Wind, "Gentle floating pendulum sway and breathe", "DRIFT")
 }
 data class FcpAnimationTransforms(
     val scale: Float = 1.0f,
@@ -706,6 +714,13 @@ fun calculateAnimationTransforms(
             val s = 1.05f
             FcpAnimationTransforms(scale = s, rotationZ = rot)
         }
+        FcpClipAnimation.SWAY_DRIFT -> {
+            val rot = (sin(timeSec * 1.8f) * 1.6f) * normInt
+            val px = (cos(timeSec * 1.4f) * 6f) * normInt
+            val py = (sin(timeSec * 2.1f) * 4f) * normInt
+            val s = 1.04f + (0.02f * sin(timeSec * 2.5f) * normInt)
+            FcpAnimationTransforms(scale = s, panX = px, panY = py, rotationZ = rot)
+        }
     }
 }
 data class FcpClip(
@@ -730,6 +745,8 @@ data class FcpClip(
     val scale: Float = 1f,
     val panX: Float = 0f,
     val panY: Float = 0f,
+    val isMirrored: Boolean = false,
+    val rotationAngle: Float = 0f,
     val isDurationLoaded: Boolean = false,
     val transitionToNext: FcpTransitionType = FcpTransitionType.NONE,
     val transitionDurationSec: Float = 0.8f,
@@ -763,7 +780,9 @@ data class FcpCustomAudio(
     val muteOriginalVideo: Boolean = true,
     val loopAudio: Boolean = true,
     val trimStartSec: Float = 0f,
-    val trimEndSec: Float = 0f
+    val trimEndSec: Float = 0f,
+    val fadeInSec: Float = 0f,
+    val fadeOutSec: Float = 0f
 ) {
     /** Effective trim-out point inside the source file (0 / invalid => whole file). */
     val effectiveTrimEndSec: Float
@@ -2604,11 +2623,12 @@ fun FinalCutProVideoEditorScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .graphicsLayer {
-                                scaleX = activeScale * animTransforms.scale
+                                val baseScaleX = if (activeClip?.isMirrored == true) -activeScale else activeScale
+                                scaleX = baseScaleX * animTransforms.scale
                                 scaleY = activeScale * animTransforms.scale
                                 translationX = activePanX + animTransforms.panX
                                 translationY = activePanY + animTransforms.panY
-                                rotationZ = animTransforms.rotationZ
+                                rotationZ = (activeClip?.rotationAngle ?: 0f) + animTransforms.rotationZ
                                 if (supportsRenderEffect) {
                                     renderEffect = activeRenderEffect
                                 }
@@ -2628,11 +2648,12 @@ fun FinalCutProVideoEditorScreen(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .graphicsLayer {
-                                    scaleX = activeScale * animTransforms.scale
+                                    val baseScaleX = if (activeClip.isMirrored) -activeScale else activeScale
+                                    scaleX = baseScaleX * animTransforms.scale
                                     scaleY = activeScale * animTransforms.scale
                                     translationX = activePanX + animTransforms.panX
                                     translationY = activePanY + animTransforms.panY
-                                    rotationZ = animTransforms.rotationZ
+                                    rotationZ = activeClip.rotationAngle + animTransforms.rotationZ
                                     if (supportsRenderEffect) {
                                         renderEffect = activeRenderEffect
                                     }
@@ -3413,7 +3434,30 @@ fun FinalCutProVideoEditorScreen(
                                     onBackgroundChange = { canvasBackground = it },
                                     onPickImage = { bgImagePicker.launch("image/*") },
                                     blurBitmap = activeClipPreviewBitmap ?: blurBackgroundBitmap ?: selectedClip?.let { FcpThumbnailMemoryCache.get("${it.uri}_0") },
-                                    isDarkMode = colors.isDark
+                                    isDarkMode = colors.isDark,
+                                    selectedClip = selectedClip,
+                                    onToggleMirror = {
+                                        selectedClip?.let { cur ->
+                                            saveStateForUndo()
+                                            clips = clips.map { if (it.id == cur.id) it.copy(isMirrored = !it.isMirrored) else it }
+                                            ToastManager.showToast(if (!cur.isMirrored) "Horizontal Mirror: ON" else "Mirror: OFF")
+                                        }
+                                    },
+                                    onRotate90 = {
+                                        selectedClip?.let { cur ->
+                                            saveStateForUndo()
+                                            val nextAngle = ((cur.rotationAngle + 90f) % 360f)
+                                            clips = clips.map { if (it.id == cur.id) it.copy(rotationAngle = nextAngle) else it }
+                                            ToastManager.showToast("Rotated to ${nextAngle.toInt()}°")
+                                        }
+                                    },
+                                    onResetTransform = {
+                                        selectedClip?.let { cur ->
+                                            saveStateForUndo()
+                                            clips = clips.map { if (it.id == cur.id) it.copy(scale = 1f, panX = 0f, panY = 0f, isMirrored = false, rotationAngle = 0f) else it }
+                                            ToastManager.showToast("Transform reset")
+                                        }
+                                    }
                                 )
                             }
                             FcpWorkspaceTab.COLOR -> {
@@ -3443,6 +3487,12 @@ fun FinalCutProVideoEditorScreen(
                                     },
                                     onAudioVolumeChange = { newVol ->
                                         customAudio = customAudio?.copy(volume = newVol)
+                                    },
+                                    onFadeInChange = { newFadeIn ->
+                                        customAudio = customAudio?.copy(fadeInSec = newFadeIn)
+                                    },
+                                    onFadeOutChange = { newFadeOut ->
+                                        customAudio = customAudio?.copy(fadeOutSec = newFadeOut)
                                     },
                                     onMuteOriginalVideoChange = { mute ->
                                         customAudio = customAudio?.copy(muteOriginalVideo = mute)
@@ -5704,6 +5754,8 @@ private fun AudioTabContent(
     onAddAudioFile: () -> Unit = {},
     onExtractAudioFromVideo: () -> Unit = {},
     onAudioVolumeChange: (Float) -> Unit = {},
+    onFadeInChange: (Float) -> Unit = {},
+    onFadeOutChange: (Float) -> Unit = {},
     onMuteOriginalVideoChange: (Boolean) -> Unit = {},
     onLoopAudioChange: (Boolean) -> Unit = {},
     onRemoveCustomAudio: () -> Unit = {},
@@ -5978,6 +6030,38 @@ private fun AudioTabContent(
                             onValueChange = { onAudioVolumeChange(it / 100f) },
                             gradientColors = listOf(Color(0xFF10B981), Color(0xFF84CC16), Color(0xFFFACC15), Color(0xFF38BDF8))
                         )
+                        // Audio Fade In & Fade Out
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(modifier = Modifier.weight(1f)) {
+                                FcpColorSliderRow(
+                                    title = "Fade In",
+                                    icon = Lucide.TrendingUp,
+                                    value = customAudio.fadeInSec,
+                                    defaultValue = 0f,
+                                    valueRange = 0.0f..5.0f,
+                                    isBipolar = false,
+                                    formatValue = { String.format("%.1fs", it) },
+                                    onValueChange = onFadeInChange,
+                                    gradientColors = listOf(Color(0xFF0A84FF), Color(0xFF5AC8FA))
+                                )
+                            }
+                            Box(modifier = Modifier.weight(1f)) {
+                                FcpColorSliderRow(
+                                    title = "Fade Out",
+                                    icon = Lucide.TrendingDown,
+                                    value = customAudio.fadeOutSec,
+                                    defaultValue = 0f,
+                                    valueRange = 0.0f..5.0f,
+                                    isBipolar = false,
+                                    formatValue = { String.format("%.1fs", it) },
+                                    onValueChange = onFadeOutChange,
+                                    gradientColors = listOf(Color(0xFFFF9500), Color(0xFFFFCC00))
+                                )
+                            }
+                        }
                         // Quick Action Buttons
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -6237,7 +6321,25 @@ private fun FcpEffectThumbnailCard(
                             )
                         }
                     }
-                    FcpVisualEffect.VHS_RETRO -> {
+                    FcpVisualEffect.CYBER_SCANLINE -> {
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val w = size.width
+                            val h = size.height
+                            for (y in 0 until h.toInt() step 5) {
+                                drawLine(
+                                    color = Color(0xFF00FFCC).copy(alpha = 0.40f),
+                                    start = Offset(0f, y.toFloat()),
+                                    end = Offset(w, y.toFloat()),
+                                    strokeWidth = 1f
+                                )
+                            }
+                            drawRect(
+                                color = Color(0xFF0A84FF).copy(alpha = 0.12f),
+                                size = Size(w, h)
+                            )
+                        }
+                    }
+        FcpVisualEffect.VHS_RETRO -> {
                         Canvas(modifier = Modifier.fillMaxSize()) {
                             val w = size.width
                             val h = size.height
@@ -6604,7 +6706,7 @@ private fun EffectsTabContent(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    val speeds = listOf(0.5f, 1.0f, 1.5f, 2.0f)
+                    val speeds = listOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f, 3.0f)
                     speeds.forEach { s ->
                         val active = speed == s
                         Box(
@@ -10332,6 +10434,27 @@ private fun FcpVisualEffectsOverlay(
                 }
             }
         }
+        FcpVisualEffect.CYBER_SCANLINE -> {
+            Canvas(modifier = modifier.fillMaxSize()) {
+                val w = size.width
+                val h = size.height
+                val spacing = 8.dp.toPx()
+                var y = ((currentTimeSec * 50f) % spacing)
+                while (y < h) {
+                    drawLine(
+                        color = Color(0xFF00FFCC).copy(alpha = 0.18f * clampedIntensity),
+                        start = Offset(0f, y),
+                        end = Offset(w, y),
+                        strokeWidth = 1.dp.toPx()
+                    )
+                    y += spacing
+                }
+                drawRect(
+                    color = Color(0xFF0A84FF).copy(alpha = 0.05f * clampedIntensity),
+                    size = size
+                )
+            }
+        }
         FcpVisualEffect.VHS_RETRO -> {
             Canvas(modifier = modifier.fillMaxSize()) {
                 val w = size.width
@@ -10797,7 +10920,11 @@ private fun CanvasTabContent(
     onBackgroundChange: (FcpCanvasBackground) -> Unit,
     onPickImage: () -> Unit,
     blurBitmap: Bitmap?,
-    isDarkMode: Boolean
+    isDarkMode: Boolean,
+    selectedClip: FcpClip? = null,
+    onToggleMirror: () -> Unit = {},
+    onRotate90: () -> Unit = {},
+    onResetTransform: () -> Unit = {}
 ) {
     val colors = LocalOscellionColors.current
     val haptic = LocalHapticFeedback.current
@@ -10827,6 +10954,127 @@ private fun CanvasTabContent(
                     fontSize = 11.sp,
                     color = colors.textMuted
                 )
+            }
+        }
+        // Clip Transform & Orientation Controls (Mirror, 90° Rotate, Reset)
+        if (selectedClip != null) {
+            WorkspaceSectionCard(title = "CLIP ORIENTATION & TRANSFORM", icon = Lucide.Maximize2) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Mirror Horizontal Button
+                        val isMirrored = selectedClip.isMirrored
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(40.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isMirrored) colors.primary.copy(alpha = 0.22f) else colors.glassBg)
+                                .border(
+                                    width = if (isMirrored) 1.5.dp else 0.5.dp,
+                                    color = if (isMirrored) colors.primary else colors.glassBorder,
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    onToggleMirror()
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.ArrowLeftRight,
+                                    contentDescription = "Mirror",
+                                    tint = if (isMirrored) colors.primary else colors.textMain,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Text(
+                                    text = if (isMirrored) "Mirrored" else "Mirror H",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = if (isMirrored) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isMirrored) colors.primary else colors.textMain
+                                )
+                            }
+                        }
+                        // Rotate 90° Button
+                        val angle = selectedClip.rotationAngle.toInt()
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(40.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (angle != 0) colors.primary.copy(alpha = 0.22f) else colors.glassBg)
+                                .border(
+                                    width = if (angle != 0) 1.5.dp else 0.5.dp,
+                                    color = if (angle != 0) colors.primary else colors.glassBorder,
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    onRotate90()
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.RotateCw,
+                                    contentDescription = "Rotate 90",
+                                    tint = if (angle != 0) colors.primary else colors.textMain,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Text(
+                                    text = if (angle != 0) "Rotate: $angle°" else "Rotate 90°",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = if (angle != 0) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (angle != 0) colors.primary else colors.textMain
+                                )
+                            }
+                        }
+                        // Reset Framing Button
+                        val hasTransform = selectedClip.isMirrored || selectedClip.rotationAngle != 0f || selectedClip.scale != 1f || selectedClip.panX != 0f || selectedClip.panY != 0f
+                        if (hasTransform) {
+                            Box(
+                                modifier = Modifier
+                                    .weight(0.8f)
+                                    .height(40.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(colors.glassBg)
+                                    .border(0.5.dp, colors.glassBorder, RoundedCornerShape(8.dp))
+                                    .clickable {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        onResetTransform()
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Lucide.RotateCcw,
+                                        contentDescription = "Reset",
+                                        tint = Color(0xFFEF4444),
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Text(
+                                        text = "Reset",
+                                        fontSize = 11.sp,
+                                        color = Color(0xFFEF4444),
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
         // 3-Segment Mode Selector (Blur / Solid Color / Custom Image)

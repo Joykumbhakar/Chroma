@@ -50,5 +50,6 @@ cursors/
 *.ps1
 extracted_*.png
 Notification sound pack/
-fonts/
+/fonts/
+!app/src/main/assets/fonts/
 

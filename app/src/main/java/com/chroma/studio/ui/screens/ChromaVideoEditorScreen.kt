@@ -311,6 +311,8 @@ data class Clip(
     val textSize:        Float        = 48f,
     val textBold:        Boolean      = false,
     val textItalic:      Boolean      = false,
+    val textFont:        String       = "",
+    val textStylePreset: String       = "Normal",
     var transitionIn:    TransitionType = TransitionType.NONE,
     var transitionOut:   TransitionType = TransitionType.NONE,
     val keyframes:       List<Keyframe> = emptyList(),
@@ -1342,7 +1344,8 @@ private fun VideoPreviewArea(
                         color      = clip.textColor,
                         fontSize   = clip.textSize.sp,
                         fontWeight = if (clip.textBold) FontWeight.Bold else FontWeight.Normal,
-                        fontStyle  = if (clip.textItalic) FontStyle.Italic else FontStyle.Normal
+                        fontStyle  = if (clip.textItalic) FontStyle.Italic else FontStyle.Normal,
+                        fontFamily = com.chroma.studio.ui.theme.StoryFonts.getFontFamily(androidx.compose.ui.platform.LocalContext.current, clip.textFont)
                     )
                 }
             }

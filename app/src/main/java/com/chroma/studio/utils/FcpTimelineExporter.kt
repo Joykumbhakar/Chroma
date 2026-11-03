@@ -701,6 +701,16 @@ object FcpTimelineExporter {
                     "black"
                 }
 
+                // Horizontal Mirror & Rotation
+                if (clip.isMirrored) {
+                    vFilter.append("hflip,")
+                }
+                when (((clip.rotationAngle.toInt() % 360) + 360) % 360) {
+                    90 -> vFilter.append("transpose=1,")
+                    180 -> vFilter.append("transpose=2,transpose=2,")
+                    270 -> vFilter.append("transpose=2,")
+                    else -> {}
+                }
                 // Uniform scale and letterboxing
                 vFilter.append("scale=$finalW:$finalH:force_original_aspect_ratio=decrease:flags=bilinear,")
                 vFilter.append("pad=$finalW:$finalH:(ow-iw)/2:(oh-ih)/2:$padColorHex,")
@@ -765,6 +775,9 @@ object FcpTimelineExporter {
                     FcpVisualEffect.ANAMORPHIC_FLARE -> {
                         vFilter.append(",colorbalance=rh=-0.05:gh=0.02:bh=0.26:rm=-0.02:bm=0.16,eq=contrast=1.15:saturation=1.18")
                     }
+                    FcpVisualEffect.CYBER_SCANLINE -> {
+                        vFilter.append(",colorbalance=gs=0.08:bs=0.15,noise=c0s=12:allf=t")
+                    }
                     FcpVisualEffect.NONE -> {}
                 }
 
@@ -810,6 +823,9 @@ object FcpTimelineExporter {
                     }
                     FcpClipAnimation.WOBBLE -> {
                         vFilter.append(String.format(Locale.US, ",rotate='(sin(t*4.5)*0.04*%.2f)':ow=iw:oh=ih:c=black", animInt))
+                    }
+                    FcpClipAnimation.SWAY_DRIFT -> {
+                        vFilter.append(String.format(Locale.US, ",rotate='(sin(t*1.8)*0.025*%.2f)':ow=iw:oh=ih:c=black", animInt))
                     }
                     FcpClipAnimation.NONE -> {}
                 }
@@ -1130,11 +1146,17 @@ object FcpTimelineExporter {
                 val trimEnd = if (customAudio.trimEndSec > trimStart) customAudio.trimEndSec else (trimStart + totalTimelineDurationSec)
                 val trimFilter = if (trimStart > 0f || customAudio.trimEndSec > 0f) String.format(Locale.US, "atrim=start=%.3f:end=%.3f,asetpts=PTS-STARTPTS,", trimStart, trimEnd) else ""
 
+                val fadeInFilter = if (customAudio.fadeInSec > 0f) String.format(Locale.US, ",afade=t=in:st=0:d=%.3f", customAudio.fadeInSec) else ""
+                val fadeOutFilter = if (customAudio.fadeOutSec > 0f) {
+                    val fadeOutStart = (totalTimelineDurationSec - customAudio.fadeOutSec).coerceAtLeast(0f)
+                    String.format(Locale.US, ",afade=t=out:st=%.3f:d=%.3f", fadeOutStart, customAudio.fadeOutSec)
+                } else ""
+                val fadeFilters = "$fadeInFilter$fadeOutFilter"
                 if (muteOrig) {
-                    filterGraph.append(String.format(Locale.US, "[$customAudioInputIndex:a]aformat=sample_rates=44100:channel_layouts=stereo,%s${loopFilter}atrim=start=0:end=%.3f,asetpts=PTS-STARTPTS,volume=%.3f,apad[a_custom];", trimFilter, totalTimelineDurationSec, vol))
+                    filterGraph.append(String.format(Locale.US, "[$customAudioInputIndex:a]aformat=sample_rates=44100:channel_layouts=stereo,%s${loopFilter}atrim=start=0:end=%.3f,asetpts=PTS-STARTPTS,volume=%.3f%s,apad[a_custom];", trimFilter, totalTimelineDurationSec, vol, fadeFilters))
                     finalAudioStream = "[a_custom]"
                 } else {
-                    filterGraph.append(String.format(Locale.US, "[$customAudioInputIndex:a]aformat=sample_rates=44100:channel_layouts=stereo,%s${loopFilter}atrim=start=0:end=%.3f,asetpts=PTS-STARTPTS,volume=%.3f[a_custom];", trimFilter, totalTimelineDurationSec, vol))
+                    filterGraph.append(String.format(Locale.US, "[$customAudioInputIndex:a]aformat=sample_rates=44100:channel_layouts=stereo,%s${loopFilter}atrim=start=0:end=%.3f,asetpts=PTS-STARTPTS,volume=%.3f%s[a_custom];", trimFilter, totalTimelineDurationSec, vol, fadeFilters))
                     filterGraph.append("$finalAudioStream[a_custom]amix=inputs=2:duration=first:dropout_transition=2[a_mixed];")
                     finalAudioStream = "[a_mixed]"
                 }

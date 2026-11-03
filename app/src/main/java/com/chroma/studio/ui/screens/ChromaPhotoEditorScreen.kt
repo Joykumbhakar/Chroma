@@ -509,6 +509,14 @@ class ChromaPhotoEditorViewModel : ViewModel() {
         pushUndo()
         updateSelected { it.copy(textItalic = i) }
     }
+    fun setTextFont(font: String) {
+        pushUndo()
+        updateSelected { it.copy(textFont = font) }
+    }
+    fun setTextStylePreset(preset: String) {
+        pushUndo()
+        updateSelected { it.copy(textStylePreset = preset) }
+    }
     fun setBlendMode(m: BlendMode) {
         pushUndo()
         updateSelected { it.copy(blendMode = m) }
@@ -1358,7 +1366,8 @@ private fun PhotoPreviewArea(
                                 color = clip.textColor,
                                 fontSize = clip.textSize.sp,
                                 fontWeight = if (clip.textBold) FontWeight.Bold else FontWeight.Normal,
-                                fontStyle = if (clip.textItalic) FontStyle.Italic else FontStyle.Normal
+                                fontStyle = if (clip.textItalic) FontStyle.Italic else FontStyle.Normal,
+                                fontFamily = com.chroma.studio.ui.theme.StoryFonts.getFontFamily(androidx.compose.ui.platform.LocalContext.current, clip.textFont)
                             )
                         }
                     }
@@ -3117,6 +3126,44 @@ private fun PhotoTextEditorPanel(clip: Clip, viewModel: ChromaPhotoEditorViewMod
             ),
             maxLines = 3
         )
+
+        // Typography / Font Family Carousel
+        Spacer(Modifier.height(10.dp))
+        Text("Font Family", color = colors.textMuted, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(6.dp))
+        val currentContext = androidx.compose.ui.platform.LocalContext.current
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            com.chroma.studio.ui.theme.StoryFonts.items.forEach { fontItem ->
+                val isSelected = clip.textFont == fontItem.id || (clip.textFont.isBlank() && fontItem.id == "Sans")
+                Box(
+                    modifier = Modifier
+                        .height(34.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (isSelected) colors.primary.copy(alpha = 0.22f) else colors.glassBg)
+                        .border(
+                            width = if (isSelected) 1.5.dp else 0.5.dp,
+                            color = if (isSelected) colors.primary else colors.glassBorder,
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                        .clickable { viewModel.setTextFont(fontItem.id) }
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = fontItem.displayName,
+                        fontSize = 11.5.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isSelected) colors.primary else colors.textMain,
+                        fontFamily = com.chroma.studio.ui.theme.StoryFonts.getFontFamily(currentContext, fontItem.id)
+                    )
+                }
+            }
+        }
 
         Spacer(Modifier.height(10.dp))
         PropertySlider("Size", clip.textSize, 12f, 120f) { viewModel.setTextSize(it) }
