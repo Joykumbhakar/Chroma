@@ -5553,6 +5553,27 @@ private fun ColorTabContent(
                                             )
                                         )
                                 )
+                            } else if (selectedClip.uri != Uri.EMPTY) {
+                                coil.compose.AsyncImage(
+                                    model = selectedClip.uri,
+                                    contentDescription = preset.label,
+                                    contentScale = ContentScale.Crop,
+                                    colorFilter = androidx.compose.ui.graphics.ColorFilter.colorMatrix(presetMatrix),
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(
+                                            Brush.verticalGradient(
+                                                listOf(
+                                                    Color.Transparent,
+                                                    Color(0x44000000),
+                                                    Color(0xCC000000)
+                                                )
+                                            )
+                                        )
+                                )
                             } else {
                                 Box(
                                     modifier = Modifier

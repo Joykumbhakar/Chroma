@@ -1183,7 +1183,8 @@ fun FlashPhotoEditorScreen(
                                     selectedFilter = selectedFilter,
                                     onSelectFilter = { pushSnapshot(); selectedFilter = it },
                                     intensity = filterIntensity,
-                                    onIntensityChange = { filterIntensity = it }
+                                    onIntensityChange = { filterIntensity = it },
+                                    previewUri = previewUri
                                 )
                             }
                             StudioEditorCategory.ADJUST -> {
@@ -1539,7 +1540,8 @@ private fun StudioLooksToolPanel(
     selectedFilter: StudioFilterPreset,
     onSelectFilter: (StudioFilterPreset) -> Unit,
     intensity: Float,
-    onIntensityChange: (Float) -> Unit
+    onIntensityChange: (Float) -> Unit,
+    previewUri: Uri? = null
 ) {
     val colors = LocalOscellionColors.current
     val haptic = LocalHapticFeedback.current
@@ -1611,26 +1613,42 @@ private fun StudioLooksToolPanel(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(32.dp)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(
-                                when (preset) {
-                                    StudioFilterPreset.ORIGINAL -> Brush.linearGradient(listOf(Color(0xFFBDBDBD), Color(0xFF757575)))
-                                    StudioFilterPreset.CINEMATIC -> Brush.linearGradient(listOf(Color(0xFF455A64), Color(0xFF8D6E63)))
-                                    StudioFilterPreset.NORDIC_GLOW -> Brush.linearGradient(listOf(Color(0xFF90A4AE), Color(0xFFCFD8DC)))
-                                    StudioFilterPreset.VIVID -> Brush.linearGradient(listOf(Color(0xFFBF360C), Color(0xFFD84315)))
-                                    StudioFilterPreset.NOIR -> Brush.linearGradient(listOf(Color(0xFF212121), Color(0xFF616161)))
-                                    StudioFilterPreset.BW_CLASSIC -> Brush.linearGradient(listOf(Color(0xFF424242), Color(0xFF9E9E9E)))
-                                    StudioFilterPreset.WARM_SUNSET -> Brush.linearGradient(listOf(Color(0xFFBF360C), Color(0xFFFFA000)))
-                                    StudioFilterPreset.COOL_SLATE -> Brush.linearGradient(listOf(Color(0xFF37474F), Color(0xFF607D8B)))
-                                    StudioFilterPreset.SOFT_FADE -> Brush.linearGradient(listOf(Color(0xFF9E9E9E), Color(0xFFE0E0E0)))
-                                    StudioFilterPreset.SEPIA_VINTAGE -> Brush.linearGradient(listOf(Color(0xFF6D4C41), Color(0xFFA1887F)))
-                                    StudioFilterPreset.MOODY_EMERALD -> Brush.linearGradient(listOf(Color(0xFF1B5E20), Color(0xFF388E3C)))
-                                    StudioFilterPreset.PASTEL_MIST -> Brush.linearGradient(listOf(Color(0xFFB0BEC5), Color(0xFFCFD8DC)))
-                                    StudioFilterPreset.CHROME_MONO -> Brush.linearGradient(listOf(Color(0xFF78909C), Color(0xFFB0BEC5)))
-                                }
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF202020))
+                    ) {
+                        if (previewUri != null) {
+                            AsyncImage(
+                                model = previewUri,
+                                contentDescription = preset.displayName,
+                                contentScale = ContentScale.Crop,
+                                colorFilter = if (preset != StudioFilterPreset.ORIGINAL) ColorFilter.colorMatrix(preset.matrix) else null,
+                                modifier = Modifier.fillMaxSize()
                             )
-                    )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        when (preset) {
+                                            StudioFilterPreset.ORIGINAL -> Brush.linearGradient(listOf(Color(0xFFBDBDBD), Color(0xFF757575)))
+                                            StudioFilterPreset.CINEMATIC -> Brush.linearGradient(listOf(Color(0xFF455A64), Color(0xFF8D6E63)))
+                                            StudioFilterPreset.NORDIC_GLOW -> Brush.linearGradient(listOf(Color(0xFF90A4AE), Color(0xFFCFD8DC)))
+                                            StudioFilterPreset.VIVID -> Brush.linearGradient(listOf(Color(0xFFBF360C), Color(0xFFD84315)))
+                                            StudioFilterPreset.NOIR -> Brush.linearGradient(listOf(Color(0xFF212121), Color(0xFF616161)))
+                                            StudioFilterPreset.BW_CLASSIC -> Brush.linearGradient(listOf(Color(0xFF424242), Color(0xFF9E9E9E)))
+                                            StudioFilterPreset.WARM_SUNSET -> Brush.linearGradient(listOf(Color(0xFFBF360C), Color(0xFFFFA000)))
+                                            StudioFilterPreset.COOL_SLATE -> Brush.linearGradient(listOf(Color(0xFF37474F), Color(0xFF607D8B)))
+                                            StudioFilterPreset.SOFT_FADE -> Brush.linearGradient(listOf(Color(0xFF9E9E9E), Color(0xFFE0E0E0)))
+                                            StudioFilterPreset.SEPIA_VINTAGE -> Brush.linearGradient(listOf(Color(0xFF6D4C41), Color(0xFFA1887F)))
+                                            StudioFilterPreset.MOODY_EMERALD -> Brush.linearGradient(listOf(Color(0xFF1B5E20), Color(0xFF388E3C)))
+                                            StudioFilterPreset.PASTEL_MIST -> Brush.linearGradient(listOf(Color(0xFFB0BEC5), Color(0xFFCFD8DC)))
+                                            StudioFilterPreset.CHROME_MONO -> Brush.linearGradient(listOf(Color(0xFF78909C), Color(0xFFB0BEC5)))
+                                        }
+                                    )
+                            )
+                        }
+                    }
                     Spacer(modifier = Modifier.height(3.dp))
                     Text(
                         text = preset.displayName,

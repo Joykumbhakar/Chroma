@@ -2703,7 +2703,7 @@ private fun PhotoFilterPanel(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(width = 58.dp, height = 76.dp)
+                            .size(width = 60.dp, height = 78.dp)
                             .clip(RoundedCornerShape(10.dp))
                             .background(Brush.linearGradient(gradColors))
                             .then(
@@ -2711,15 +2711,42 @@ private fun PhotoFilterPanel(
                                 else Modifier.border(0.5.dp, colors.glassBorder, RoundedCornerShape(10.dp))
                             )
                     ) {
+                        if (!clip.uri.isNullOrBlank()) {
+                            AsyncImage(
+                                model = clip.uri,
+                                contentDescription = filter.label,
+                                contentScale = ContentScale.Crop,
+                                colorFilter = filter.toColorFilter(),
+                                modifier = Modifier.fillMaxSize()
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(28.dp)
+                                    .align(Alignment.BottomCenter)
+                                    .background(
+                                        Brush.verticalGradient(
+                                            listOf(Color.Transparent, Color(0x99000000))
+                                        )
+                                    )
+                            )
+                        }
                         if (selected) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(colors.primary.copy(alpha = 0.15f))
+                            )
                             Icon(
                                 Lucide.Check,
                                 contentDescription = null,
-                                tint = colors.primary,
+                                tint = Color.White,
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
                                     .padding(4.dp)
-                                    .size(16.dp)
+                                    .size(14.dp)
+                                    .background(colors.primary, CircleShape)
+                                    .padding(2.dp)
                             )
                         }
                     }

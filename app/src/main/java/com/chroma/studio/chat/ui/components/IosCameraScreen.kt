@@ -1166,40 +1166,63 @@ fun IosCameraScreen(
                         val currentCategoryFilters = ProCameraFilter.values().filter { it.category == selectedCategory }
                         items(currentCategoryFilters) { filter ->
                             val isSelected = selectedFilter == filter
-                            Surface(
-                                shape = CircleShape,
-                                color = if (isSelected) Color(0xFFFFCC00) else Color.Black.copy(alpha = 0.65f),
-                                border = androidx.compose.foundation.BorderStroke(
-                                    0.5.dp,
-                                    if (isSelected) Color(0xFFFFCC00) else Color.White.copy(alpha = 0.25f)
-                                ),
-                                modifier = Modifier.clickable {
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                    selectedFilter = filter
-                                }
+                            val filterMatrix = remember(filter, filterIntensity) {
+                                filter.getInterpolatedMatrix(filterIntensity)
+                            }
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier
+                                    .clickable {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        selectedFilter = filter
+                                    }
+                                    .padding(horizontal = 3.dp)
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                Box(
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .border(
+                                            width = if (isSelected) 2.dp else 0.5.dp,
+                                            color = if (isSelected) Color(0xFFFFCC00) else Color.White.copy(alpha = 0.35f),
+                                            shape = RoundedCornerShape(10.dp)
+                                        )
+                                        .background(Color.Black.copy(alpha = 0.65f)),
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    // Swatch dot
-                                    if (filter != ProCameraFilter.STANDARD) {
+                                    if (recentMediaUri != null) {
+                                        AsyncImage(
+                                            model = recentMediaUri,
+                                            contentDescription = filter.displayName,
+                                            contentScale = ContentScale.Crop,
+                                            colorFilter = filterMatrix?.let { ColorFilter.colorMatrix(it) },
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    } else if (filter != ProCameraFilter.STANDARD) {
                                         Box(
                                             modifier = Modifier
-                                                .size(7.dp)
-                                                .clip(CircleShape)
+                                                .fillMaxSize()
                                                 .background(filter.swatchColor)
-                                                .border(0.5.dp, Color.Black.copy(alpha = 0.3f), CircleShape)
+                                        )
+                                    } else {
+                                        PhosphorPhotoPlaceholder(tint = Color.White, size = 18.dp)
+                                    }
+
+                                    if (isSelected) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .background(Color(0xFFFFCC00).copy(alpha = 0.2f))
                                         )
                                     }
-                                    Text(
-                                        text = filter.displayName,
-                                        color = if (isSelected) Color.Black else Color.White,
-                                        fontSize = 11.5.sp,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                                    )
                                 }
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = filter.displayName,
+                                    color = if (isSelected) Color(0xFFFFCC00) else Color.White,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                )
                             }
                         }
                     }
@@ -1897,9 +1920,13 @@ fun IosCameraReviewScreen(
                 modifier = Modifier.fillMaxSize()
             )
         } else if (photoUri != null) {
+            val reviewMatrix = remember(activeFilter) {
+                activeFilter.getInterpolatedMatrix(0.85f)
+            }
             AsyncImage(
                 model = photoUri,
                 contentDescription = "Captured Photo",
+                colorFilter = reviewMatrix?.let { ColorFilter.colorMatrix(it) },
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Fit
             )
@@ -1985,7 +2012,7 @@ fun IosCameraReviewScreen(
             }
         }
 
-        // Bottom Action Bar: Caption Field + Blue Send Button
+        // Bottom Action Bar: Filter Preview Carousel + Caption Field + Blue Send Button
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1994,6 +2021,68 @@ fun IosCameraReviewScreen(
                 .navigationBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 14.dp)
         ) {
+            val currentMediaUri = photoUri ?: videoUri
+            if (currentMediaUri != null) {
+                LazyRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(horizontal = 4.dp)
+                ) {
+                    items(ProCameraFilter.values()) { filter ->
+                        val isSelected = activeFilter == filter
+                        val fMatrix = remember(filter) {
+                            filter.getInterpolatedMatrix(0.85f)
+                        }
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    onFilterChange(filter)
+                                }
+                                .padding(horizontal = 2.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(46.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .border(
+                                        width = if (isSelected) 2.dp else 0.5.dp,
+                                        color = if (isSelected) Color(0xFFFFCC00) else Color.White.copy(alpha = 0.35f),
+                                        shape = RoundedCornerShape(10.dp)
+                                    )
+                                    .background(Color.Black.copy(alpha = 0.65f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                AsyncImage(
+                                    model = currentMediaUri,
+                                    contentDescription = filter.displayName,
+                                    contentScale = ContentScale.Crop,
+                                    colorFilter = fMatrix?.let { ColorFilter.colorMatrix(it) },
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                                if (isSelected) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(Color(0xFFFFCC00).copy(alpha = 0.2f))
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = filter.displayName,
+                                color = if (isSelected) Color(0xFFFFCC00) else Color.White,
+                                fontSize = 10.5.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+            }
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()

@@ -5,6 +5,7 @@ import android.graphics.ColorMatrixColorFilter
 import android.graphics.RenderEffect
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import coil.compose.AsyncImage
 import android.os.Build
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -1038,7 +1039,7 @@ fun FlashVideoEditorScreen(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 FlashFilters.forEach { filter ->
-                    FilterChip(filter, thumbnail, selected = filter.name == selectedFilter.name) {
+                    FilterChip(filter, thumbnail, videoUri = videoUri, selected = filter.name == selectedFilter.name) {
                         selectedFilter = filter
                     }
                 }
@@ -1264,6 +1265,7 @@ private fun DragHandle(
 fun FilterChip(
     filter: FlashFilter,
     thumbnail: Bitmap?,
+    videoUri: Uri? = null,
     selected: Boolean,
     onClick: () -> Unit
 ) {
@@ -1285,6 +1287,14 @@ fun FilterChip(
             if (thumbnail != null) {
                 androidx.compose.foundation.Image(
                     bitmap = thumbnail.asImageBitmap(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    colorFilter = ColorFilter.colorMatrix(filter.colorMatrix),
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else if (videoUri != null) {
+                AsyncImage(
+                    model = videoUri,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     colorFilter = ColorFilter.colorMatrix(filter.colorMatrix),
