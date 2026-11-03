@@ -54,8 +54,7 @@ fun AccountScreen(
     state: OnboardingState,
     onBack: () -> Unit,
     onNext: () -> Unit,
-    discoverRepo: DiscoverRepository? = null,
-    showPresets: Boolean = true
+    discoverRepo: DiscoverRepository? = null
 ) {
     val focus = LocalFocusManager.current
     val haptic = LocalHapticFeedback.current
@@ -369,56 +368,7 @@ fun AccountScreen(
                 }
             }
 
-            if (showPresets) {
-                Spacer(Modifier.height(16.dp))
-                Text(
-                    text = "OR TRY A CREATOR PRESET",
-                    style = ObType.SectionHeader,
-                    modifier = Modifier.padding(horizontal = 22.dp)
-                )
-                Spacer(Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 20.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    PersonalityCard(
-                        name = "Alex Vance",
-                        snippet = "Cinematic colorist & 3D motion artist. Crafting expressive shader presets and lighting rigs.",
-                        gender = Gender.NonBinary
-                    ) {
-                        state.bio = "Cinematic colorist & 3D motion artist. Crafting expressive shader presets and lighting rigs."
-                        state.updateUsername("alexvance", discoverRepo, scope)
-                        state.fullName = "Alex Vance"
-                        state.gender = Gender.NonBinary
-                        state.dobMillis = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply { set(2001, 3, 12) }.timeInMillis
-                    }
-                    PersonalityCard(
-                        name = "Kai Chroma",
-                        snippet = "Motion graphics director. High-fps generative loops, DaVinci grade emulations, and visual typography.",
-                        gender = Gender.Male
-                    ) {
-                        state.bio = "Motion graphics director. High-fps generative loops, DaVinci grade emulations, and visual typography."
-                        state.updateUsername("kaichroma", discoverRepo, scope)
-                        state.fullName = "Kai Chroma"
-                        state.gender = Gender.Male
-                        state.dobMillis = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply { set(2000, 7, 24) }.timeInMillis
-                    }
-                    PersonalityCard(
-                        name = "Elena Sol",
-                        snippet = "Visual compositor & film emulation enthusiast. Exploring organic film grain, halation, and HDR grades.",
-                        gender = Gender.Female
-                    ) {
-                        state.bio = "Visual compositor & film emulation enthusiast. Exploring organic film grain, halation, and HDR grades."
-                        state.updateUsername("elenasol", discoverRepo, scope)
-                        state.fullName = "Elena Sol"
-                        state.gender = Gender.Female
-                        state.dobMillis = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply { set(2002, 8, 22) }.timeInMillis
-                    }
-                }
-            }
+
 
             Spacer(Modifier.height(20.dp))
         }
@@ -449,46 +399,6 @@ fun AccountScreen(
                 state.avatarUri = croppedUri
             }
         )
-    }
-}
-
-@Composable
-private fun PersonalityCard(
-    name: String,
-    snippet: String,
-    gender: Gender,
-    onClick: () -> Unit
-) {
-    ObGlassCard(
-        modifier = Modifier
-            .width(200.dp)
-            .clickable(role = Role.Button, onClick = onClick),
-        shape = RoundedCornerShape(14.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .background(Color(0x99111636))
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(
-                    Modifier.size(34.dp).clip(CircleShape).background(Color(0xFF0C1238))
-                        .border(1.dp, Color(0x60FFFFFF), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    IosAvatarView(
-                        name = name,
-                        avatarUrl = "",
-                        size = 34.dp,
-                        gender = gender.name,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-                Text(name, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-            }
-            Text(snippet, color = Color(0xCCB0C2F0), fontSize = 11.5.sp, lineHeight = 16.sp, maxLines = 3)
-        }
     }
 }
 
