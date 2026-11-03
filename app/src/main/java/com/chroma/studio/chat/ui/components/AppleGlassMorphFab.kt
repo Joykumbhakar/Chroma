@@ -86,17 +86,17 @@ private val StageCenterColor = Color(0xFFDBEAFE)
 private val StageMidColor = Color(0xFFEFF6FF)
 private val StageEdgeColor = Color(0xFFE2E8F0)
 
-// Translucent Apple Liquid Glass Blue Gradient Stops (Richer depth & optical clarity)
-private val GlassBlueTop = Color(0xD61A8CFF)      // Luminous azure crown
-private val GlassBlueUpperMid = Color(0xC20A84FF) // Core iOS/visionOS system blue
-private val GlassBlueLowerMid = Color(0xBA0051D5) // Deep sapphire body
-private val GlassBlueBottom = Color(0xCC0044B8)   // Dense bottom refraction base
-private val GlassCyanCrown = Color(0x99A8E0FF)    // Top sky-blue radial light bloom
-private val GlassBottomCaustic = Color(0x8066D4FF)// Internal bottom lens caustic glow
+// Vibrant Apple Liquid Glass Blue Gradient Stops
+private val GlassBlueTop = Color(0xFF2EA5FF)      // Brilliant vibrant azure crown
+private val GlassBlueUpperMid = Color(0xFF0A84FF) // Core rich vibrant blue
+private val GlassBlueLowerMid = Color(0xFF006DF0) // Saturated electric blue body
+private val GlassBlueBottom = Color(0xFF0056D6)   // Dense vibrant sapphire base
+private val GlassCyanCrown = Color(0x80B3E5FC)    // Top sky-blue radial light bloom
+private val GlassBottomCaustic = Color(0x6040C4FF)// Internal bottom lens caustic glow
 
-// Outer Ambient Blue Glow & Elevation Shadows
-private val GlassAmbientGlow = Color(0x780A84FF)  // Soft chromatic blue projection
-private val GlassDepthShadow = Color(0x52002B7A)  // Crisp ground contact shadow
+// Neutral Elevation Shadow (Zero outer blue glow)
+private val GlassAmbientGlow = Color.Transparent  // Outer glow removed
+private val GlassDepthShadow = Color(0x28000000)  // Crisp neutral contact shadow
 
 // Specular Rim & Inner Refraction Highlights
 private val SpecularTopHighlight = Color(0xF2FFFFFF)    // Razor-sharp top specular edge
@@ -550,21 +550,10 @@ private fun Modifier.appleBlueGlassSurface(
     // Dynamically clamp radius so spring undershoot (w < h) never distorts pill geometry
     val radiusPx = min(w, h) / 2f
 
-    // Outer shadow 1: 0 24dp 48dp -10dp
-    val s1OffsetY = 24.dp.toPx()
-    val s1Blur = 28.dp.toPx()
-    val s1Spread = (-10).dp.toPx()
-
-    // Outer shadow 2: 0 10dp 20dp -6dp
-    val s2OffsetY = 10.dp.toPx()
-    val s2Blur = 14.dp.toPx()
-    val s2Spread = (-6).dp.toPx()
-
-    val outerGlowPaint = NativePaint(NativePaint.ANTI_ALIAS_FLAG).apply {
-        style = NativePaint.Style.FILL
-        color = GlassAmbientGlow.toArgb()
-        maskFilter = BlurMaskFilter(s1Blur, BlurMaskFilter.Blur.NORMAL)
-    }
+    // Outer depth shadow: subtle clean contact shadow (no outer glow)
+    val s2OffsetY = 6.dp.toPx()
+    val s2Blur = 10.dp.toPx()
+    val s2Spread = (-2).dp.toPx()
 
     val outerDepthPaint = NativePaint(NativePaint.ANTI_ALIAS_FLAG).apply {
         style = NativePaint.Style.FILL
@@ -760,18 +749,7 @@ private fun Modifier.appleBlueGlassSurface(
         drawIntoCanvas { canvas ->
             val nativeCanvas = canvas.nativeCanvas
 
-            // 1. Outer Ambient Blue Glow Shadow
-            nativeCanvas.drawRoundRect(
-                -s1Spread,
-                s1OffsetY - s1Spread,
-                w + s1Spread,
-                h + s1OffsetY + s1Spread,
-                radiusPx,
-                radiusPx,
-                outerGlowPaint
-            )
-
-            // 2. Outer Depth Shadow
+            // 1. Outer Depth Shadow (clean neutral grounding, zero blue glow)
             nativeCanvas.drawRoundRect(
                 -s2Spread,
                 s2OffsetY - s2Spread,
