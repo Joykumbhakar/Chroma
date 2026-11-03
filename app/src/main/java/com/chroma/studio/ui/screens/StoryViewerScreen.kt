@@ -93,14 +93,49 @@ private fun StorySlideContent(
             .background(Color.Black)
     ) {
         val media = story.mediaUrl
-        val isTextStory = media.startsWith("text:") || media.startsWith("markdown://")
+        val hasImage = media.isNotBlank() && !media.startsWith("text:") && !media.startsWith("markdown://")
+        val isExplicitText = media.startsWith("text:") || media.startsWith("markdown://")
+        val hasText = story.textContent.isNotBlank() || isExplicitText
+
         val textBody = when {
-            media.startsWith("text:") -> media.removePrefix("text:")
+            story.textContent.isNotBlank() -> story.textContent
+            media.startsWith("text:") && media != "text:story" -> media.removePrefix("text:")
             media.startsWith("markdown://") -> media.removePrefix("markdown://")
             else -> ""
         }
 
-        if (isTextStory) {
+        // 1. Render Background Image if present (full-bleed 9:16 layout)
+        if (hasImage) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(media)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = "Story Media",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+
+            // Scrim overlay to guarantee text legibility when an image is present
+            if (hasText) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(
+                                    Color.Black.copy(alpha = 0.35f),
+                                    Color.Black.copy(alpha = 0.15f),
+                                    Color.Black.copy(alpha = 0.55f)
+                                )
+                            )
+                        )
+                )
+            }
+        }
+
+        // 2. Render Formatted Story Card (over image or standalone with gradient/solid brush)
+        if (hasText) {
             val formatState = try {
                 val resolvedFormat = story.decompressedTextFormat
                 if (resolvedFormat.isNotBlank() && resolvedFormat != "{}") {
@@ -139,7 +174,7 @@ private fun StorySlideContent(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(backgroundBrush)
+                    .then(if (!hasImage) Modifier.background(backgroundBrush) else Modifier)
                     .padding(horizontal = 24.dp, vertical = 64.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -147,7 +182,7 @@ private fun StorySlideContent(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(24.dp))
-                        .background(Color.Black.copy(alpha = 0.25f))
+                        .background(Color.Black.copy(alpha = if (hasImage) 0.40f else 0.25f))
                         .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(24.dp))
                         .padding(24.dp),
                     horizontalAlignment = if (formatState.textAlign == "left") Alignment.Start else if (formatState.textAlign == "right") Alignment.End else Alignment.CenterHorizontally
@@ -200,11 +235,11 @@ private fun StorySlideContent(
                     }
 
                     // Body Content / Quote
-                    if (story.textContent.isNotBlank()) {
-                        val bodyOnly = if (formatState.title.isNotBlank() && story.textContent.startsWith("# ")) {
-                            story.textContent.substringAfter("\n\n").ifBlank { story.textContent }
+                    if (textBody.isNotBlank()) {
+                        val bodyOnly = if (formatState.title.isNotBlank() && textBody.startsWith("# ")) {
+                            textBody.substringAfter("\n\n").ifBlank { textBody }
                         } else {
-                            story.textContent
+                            textBody
                         }
 
                         if (formatState.isQuote) {
@@ -254,13 +289,6 @@ private fun StorySlideContent(
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
-                    } else {
-                        MarkdownText(
-                            markdown = textBody,
-                            defaultColor = Color.White,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth()
-                        )
                     }
 
                     // Mood pill at bottom
@@ -292,16 +320,6 @@ private fun StorySlideContent(
                     }
                 }
             }
-        } else {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(media)
-                    .crossfade(true)
-                    .build(),
-                contentDescription = "Story Media",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Fit
-            )
         }
     }
 }

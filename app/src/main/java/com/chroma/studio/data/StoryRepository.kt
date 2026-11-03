@@ -21,7 +21,10 @@ class StoryRepository {
     suspend fun publishStory(
         mediaUrl: String,
         audienceType: String = "public",
-        customAudienceIds: List<String> = emptyList()
+        customAudienceIds: List<String> = emptyList(),
+        textContent: String = "",
+        textFormat: String = "",
+        backgroundColor: String = ""
     ): String {
         val user = auth.currentUser ?: throw Exception("Not authenticated")
         val docRef = storiesCol.document()
@@ -30,6 +33,9 @@ class StoryRepository {
             id = docRef.id,
             userId = user.uid,
             mediaUrl = mediaUrl,
+            textContent = textContent,
+            textFormat = if (textFormat.isNotBlank()) com.chroma.studio.utils.DataCompressionUtils.compressText(textFormat) else "",
+            backgroundColor = backgroundColor,
             audienceType = audienceType,
             customAudienceIds = customAudienceIds,
             timestamp = now,

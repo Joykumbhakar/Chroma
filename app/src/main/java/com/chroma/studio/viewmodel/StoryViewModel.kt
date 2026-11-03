@@ -165,7 +165,10 @@ class StoryViewModel : ViewModel() {
         context: Context,
         uri: Uri,
         audienceType: String = "public",
-        customAudienceIds: List<String> = emptyList()
+        customAudienceIds: List<String> = emptyList(),
+        textContent: String = "",
+        textFormat: String = "",
+        backgroundColor: String = ""
     ) {
         val currentUid = auth.currentUser?.uid ?: ""
         val tempId = "temp_story_${System.currentTimeMillis()}"
@@ -178,6 +181,9 @@ class StoryViewModel : ViewModel() {
             id = tempId,
             userId = currentUid,
             mediaUrl = uri.toString(),
+            textContent = textContent,
+            textFormat = textFormat,
+            backgroundColor = backgroundColor,
             audienceType = audienceType,
             customAudienceIds = targetAudienceIds,
             timestamp = System.currentTimeMillis()
@@ -201,7 +207,14 @@ class StoryViewModel : ViewModel() {
                     _uploadError.value = "Upload failed. Please try again."
                     return@launch
                 }
-                repository.publishStory(url, audienceType, targetAudienceIds)
+                repository.publishStory(
+                    mediaUrl = url,
+                    audienceType = audienceType,
+                    customAudienceIds = targetAudienceIds,
+                    textContent = textContent,
+                    textFormat = textFormat,
+                    backgroundColor = backgroundColor
+                )
                 _myStories.value = _myStories.value.filter { it.id != tempId }
                 loadMyStories()
                 loadStories()

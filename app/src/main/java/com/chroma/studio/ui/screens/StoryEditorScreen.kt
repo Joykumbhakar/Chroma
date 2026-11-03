@@ -380,7 +380,10 @@ fun StoryEditorScreen(
                     context = context,
                     uri = backgroundImageUri!!,
                     audienceType = audienceType,
-                    customAudienceIds = targetAudienceIds
+                    customAudienceIds = targetAudienceIds,
+                    textContent = fullContent,
+                    textFormat = jsonFormat,
+                    backgroundColor = formatState.backgroundColorHex
                 )
             } else {
                 storyViewModel.publishTextStory(

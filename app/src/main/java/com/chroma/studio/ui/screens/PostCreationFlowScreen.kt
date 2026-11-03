@@ -876,7 +876,7 @@ private fun PostQuickFilterView(
                     )
                     Column {
                         Text(
-                            text = "Open advance Photo editor",
+                            text = "Open Advanced Photo Editor",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = textMain,
@@ -884,7 +884,7 @@ private fun PostQuickFilterView(
                         )
                         Spacer(Modifier.height(2.dp))
                         Text(
-                            text = "Curves, HSL mix, vector draw, stickers & text",
+                            text = "Color grading, optics, grain, stickers, text & crop",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Normal,
                             color = textMuted,
