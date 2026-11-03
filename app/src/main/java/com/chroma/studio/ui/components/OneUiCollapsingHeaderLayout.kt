@@ -84,7 +84,7 @@ fun OneUiCollapsingHeaderLayout(
     val dividerColor = if (!isDark) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.08f)
     val textDark = if (!isDark) Color(0xFF0A0A0C) else Color(0xFFF2F2F7)
     val textMuted = if (!isDark) Color(0xFF71717A) else Color(0xFF8E8E93)
-    val activeAccent = if (gradientStyle == OneUiGradientStyle.SOLID) Color(0xFF007AFF) else gradientStyle.primaryColor
+    val activeAccent = if (gradientStyle == OneUiGradientStyle.SOLID) Color(0xFF0A84FF) else gradientStyle.primaryColor
 
     // One UI Collapsing Engine
     val maxCollapsePx = remember(density, expandedHeightDp) { with(density) { expandedHeightDp.toPx() } }
@@ -374,7 +374,7 @@ fun OneUiSquircleSearchBar(
                         color = textDark,
                         fontWeight = FontWeight.Normal
                     ),
-                    cursorBrush = SolidColor(if (!isDark) Color(0xFF007AFF) else Color(0xFF0A84FF)),
+                    cursorBrush = SolidColor(if (!isDark) Color(0xFF0A84FF) else Color(0xFF0A84FF)),
                     modifier = Modifier.fillMaxWidth()
                 )
             }

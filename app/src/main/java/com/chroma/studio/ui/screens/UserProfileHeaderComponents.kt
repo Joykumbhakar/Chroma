@@ -85,14 +85,14 @@ fun UserProfileHeroSection(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = 4.dp)
+            .padding(bottom = 18.dp)
     ) {
         // 1. Cinematic Banner with subtle bottom corner rounding & top scrim
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(134.dp)
-                .clip(RoundedCornerShape(bottomStart = 18.dp, bottomEnd = 18.dp))
+                .height(148.dp)
+                .clip(RoundedCornerShape(bottomStart = 22.dp, bottomEnd = 22.dp))
                 .haze(heroHazeState)
                 .background(if (colors.isDark) Color(0xFF1C1C1E) else Color(0xFFF2F2F7))
         ) {
@@ -138,21 +138,33 @@ fun UserProfileHeroSection(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(start = 16.dp, end = 16.dp)
-                .padding(top = 70.dp),
+                .padding(top = 80.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             // Elevated Avatar with Crisp Cut-out Ring
             Box(
-                modifier = Modifier.size(76.dp),
+                modifier = Modifier.size(84.dp),
                 contentAlignment = Alignment.Center
             ) {
                 // Avatar Container with Theme Background Separation Mask & Clean Native Elevation
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
+                        .shadow(
+                            elevation = 6.dp,
+                            shape = CircleShape,
+                            clip = false,
+                            spotColor = Color.Black.copy(alpha = 0.20f),
+                            ambientColor = Color.Black.copy(alpha = 0.10f)
+                        )
                         .clip(CircleShape)
                         .background(colors.bg)
+                        .border(
+                            width = 3.5.dp,
+                            color = colors.bg,
+                            shape = CircleShape
+                        )
                         .clickable { onAvatarClick() },
                     contentAlignment = Alignment.Center
                 ) {
@@ -161,11 +173,23 @@ fun UserProfileHeroSection(
                             .fillMaxSize()
                             .padding(if (hasActiveStories) 2.5.dp else 0.dp)
                             .clip(CircleShape)
+                            .border(
+                                width = if (hasActiveStories) 2.5.dp else 0.5.dp,
+                                brush = if (hasActiveStories) {
+                                    Brush.sweepGradient(AppleStatusVibrantGradient)
+                                } else {
+                                    Brush.linearGradient(
+                                        if (colors.isDark) listOf(Color(0xFF2C2C2E), Color(0xFF1C1C1E))
+                                        else listOf(Color(0xFFE5E5EA), Color(0xFFF2F2F7))
+                                    )
+                                },
+                                shape = CircleShape
+                            )
                     ) {
                         IosAvatarView(
                             name = profile?.displayName ?: profile?.username ?: "",
                             avatarUrl = profile?.avatarUrl.orEmpty(),
-                            size = 76.dp,
+                            size = 78.dp,
                             gender = profile?.gender,
                             isOnline = false,
                             modifier = Modifier.fillMaxSize()
@@ -192,8 +216,8 @@ fun UserProfileHeroSection(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(start = 12.dp)
-                    .clip(RoundedCornerShape(14.dp))
+                    .padding(start = 14.dp)
+                    .clip(RoundedCornerShape(16.dp))
                     .hazeChild(
                         state = heroHazeState,
                         shape = RoundedCornerShape(16.dp),
@@ -207,7 +231,7 @@ fun UserProfileHeroSection(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 6.dp, horizontal = 2.dp),
+                        .padding(vertical = 10.dp, horizontal = 4.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -229,13 +253,25 @@ fun UserProfileHeroSection(
                             color = Color.White,
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = (-0.02).em
+                            letterSpacing = (-0.02).em,
+                            style = TextStyle(
+                                shadow = androidx.compose.ui.graphics.Shadow(
+                                    color = Color.Black.copy(alpha = 0.35f),
+                                    blurRadius = 4f
+                                )
+                            )
                         )
                         Text(
                             text = "Posts",
                             color = Color.White.copy(alpha = 0.85f),
                             fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.Medium,
+                            style = TextStyle(
+                                shadow = androidx.compose.ui.graphics.Shadow(
+                                    color = Color.Black.copy(alpha = 0.30f),
+                                    blurRadius = 3f
+                                )
+                            )
                         )
                     }
 
@@ -266,13 +302,25 @@ fun UserProfileHeroSection(
                             color = Color.White,
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = (-0.02).em
+                            letterSpacing = (-0.02).em,
+                            style = TextStyle(
+                                shadow = androidx.compose.ui.graphics.Shadow(
+                                    color = Color.Black.copy(alpha = 0.35f),
+                                    blurRadius = 4f
+                                )
+                            )
                         )
                         Text(
                             text = "Followers",
                             color = Color.White.copy(alpha = 0.85f),
                             fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.Medium,
+                            style = TextStyle(
+                                shadow = androidx.compose.ui.graphics.Shadow(
+                                    color = Color.Black.copy(alpha = 0.30f),
+                                    blurRadius = 3f
+                                )
+                            )
                         )
                     }
 
@@ -303,13 +351,25 @@ fun UserProfileHeroSection(
                             color = Color.White,
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = (-0.02).em
+                            letterSpacing = (-0.02).em,
+                            style = TextStyle(
+                                shadow = androidx.compose.ui.graphics.Shadow(
+                                    color = Color.Black.copy(alpha = 0.35f),
+                                    blurRadius = 4f
+                                )
+                            )
                         )
                         Text(
                             text = "Following",
                             color = Color.White.copy(alpha = 0.85f),
                             fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.Medium,
+                            style = TextStyle(
+                                shadow = androidx.compose.ui.graphics.Shadow(
+                                    color = Color.Black.copy(alpha = 0.30f),
+                                    blurRadius = 3f
+                                )
+                            )
                         )
                     }
                 }
@@ -361,17 +421,17 @@ fun UserProfileBioDetailsSection(
         val roleAnimatedBrush = remember(roleGradientShift) {
             Brush.linearGradient(
                 colors = listOf(
-                    Color(0xFF007AFF),
+                    Color(0xFF0A84FF),
                     Color(0xFF00C6FF),
                     Color(0xFF34C759),
-                    Color(0xFF007AFF)
+                    Color(0xFF0A84FF)
                 ),
                 start = Offset(roleGradientShift, 0f),
                 end = Offset(roleGradientShift + 250f, 0f)
             )
         }
 
-        Spacer(Modifier.height(3.dp))
+        Spacer(Modifier.height(14.dp))
 
         // 1. Display Name + Verified Badge + Sleek QR Pass Icon Button
         Row(
@@ -402,9 +462,9 @@ fun UserProfileBioDetailsSection(
             // Sleek border-less Apple icon button for QR pass
             Box(
                 modifier = Modifier
-                    .size(28.dp)
+                    .size(32.dp)
                     .clip(CircleShape)
-                    .background(if (colors.isDark) Color(0xFF1E1E22) else Color(0xFFE9E9EE))
+                    .background(if (colors.isDark) Color(0xFF161A22) else Color.White)
                     .clickable { onShowShareCard() },
                 contentAlignment = Alignment.Center
             ) {
@@ -478,7 +538,7 @@ fun UserProfileBioDetailsSection(
         // 3. Bio Text with ....Read more
         val bioText = profile?.bio?.trim() ?: ""
         if (bioText.isNotBlank()) {
-            Spacer(Modifier.height(3.dp))
+            Spacer(Modifier.height(5.dp))
             val isBioLong = remember(bioText) {
                 bioText.length > 75 || bioText.contains("\n")
             }
@@ -489,7 +549,7 @@ fun UserProfileBioDetailsSection(
                         val words = bioText.split(Regex("(?<=\\s)|(?=\\s)|\\n"))
                         for (word in words) {
                             if (word.startsWith("@") || word.startsWith("#")) {
-                                withStyle(SpanStyle(color = Color(0xFF007AFF), fontWeight = FontWeight.SemiBold)) {
+                                withStyle(SpanStyle(color = Color(0xFF0A84FF), fontWeight = FontWeight.SemiBold)) {
                                     append(word)
                                 }
                             } else {
@@ -497,7 +557,7 @@ fun UserProfileBioDetailsSection(
                             }
                         }
                         if (isBioLong && isBioExpanded) {
-                            withStyle(SpanStyle(color = Color(0xFF007AFF), fontWeight = FontWeight.Bold)) {
+                            withStyle(SpanStyle(color = Color(0xFF0A84FF), fontWeight = FontWeight.Bold)) {
                                 append(" Show less")
                             }
                         }
@@ -515,7 +575,7 @@ fun UserProfileBioDetailsSection(
                         val words = preview.split(Regex("(?<=\\s)|(?=\\s)|\\n"))
                         for (word in words) {
                             if (word.startsWith("@") || word.startsWith("#")) {
-                                withStyle(SpanStyle(color = Color(0xFF007AFF), fontWeight = FontWeight.SemiBold)) {
+                                withStyle(SpanStyle(color = Color(0xFF0A84FF), fontWeight = FontWeight.SemiBold)) {
                                     append(word)
                                 }
                             } else {
@@ -525,7 +585,7 @@ fun UserProfileBioDetailsSection(
                         withStyle(SpanStyle(color = Color(0xFF8E8E93))) {
                             append("....")
                         }
-                        withStyle(SpanStyle(color = Color(0xFF007AFF), fontWeight = FontWeight.Bold)) {
+                        withStyle(SpanStyle(color = Color(0xFF0A84FF), fontWeight = FontWeight.Bold)) {
                             append("Read more")
                         }
                     }
@@ -584,7 +644,7 @@ fun UserProfileBioDetailsSection(
         }
 
         if (metadataItems.isNotEmpty()) {
-            Spacer(Modifier.height(3.dp))
+            Spacer(Modifier.height(5.dp))
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -593,9 +653,9 @@ fun UserProfileBioDetailsSection(
                 metadataItems.forEach { (icon, text) ->
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (colors.isDark) Color(0xFF1E1E22) else Color(0xFFE9E9EE))
-                            .padding(horizontal = 8.dp, vertical = 3.5.dp)
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(if (colors.isDark) Color(0xFF161A22) else Color.White)
+                            .padding(horizontal = 10.dp, vertical = 5.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -623,7 +683,7 @@ fun UserProfileBioDetailsSection(
         // 5. Social Links (Clean Squircle Dock)
         val profileLinks = profile?.socialLinks ?: emptyMap()
         if (profileLinks.isNotEmpty()) {
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -649,7 +709,7 @@ fun UserProfileBioDetailsSection(
         // 6. Content Tags (Clean Border-less Squircles)
         val hasContentTags = profile?.contentTags?.isNotEmpty() == true
         if (hasContentTags) {
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(8.dp))
             var areTagsExpanded by remember { mutableStateOf(false) }
             val allTags = profile!!.contentTags
             val visibleTags = if (areTagsExpanded || allTags.size <= 4) allTags else allTags.take(4)
@@ -663,9 +723,9 @@ fun UserProfileBioDetailsSection(
                     val tag = if (rawTag.startsWith("#")) rawTag else "#$rawTag"
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (colors.isDark) Color(0xFF1E1E22) else Color(0xFFE9E9EE))
-                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(if (colors.isDark) Color(0xFF161A22) else Color.White)
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
                     ) {
                         Text(
                             text = tag,
@@ -680,13 +740,13 @@ fun UserProfileBioDetailsSection(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(7.dp))
-                            .background(Color(0x12007AFF))
+                            .background(Color(0x120A84FF))
                             .clickable { areTagsExpanded = !areTagsExpanded }
                             .padding(horizontal = 7.5.dp, vertical = 3.5.dp)
                     ) {
                         Text(
                             text = if (areTagsExpanded) "Show less" else "+${allTags.size - 4} more",
-                            color = Color(0xFF007AFF),
+                            color = Color(0xFF0A84FF),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -697,7 +757,7 @@ fun UserProfileBioDetailsSection(
 
         // 7. Mutual Connections Group
         if (mutualFollowers.isNotEmpty()) {
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(8.dp))
             val connectedUsers = remember(mutualFollowers) {
                 mutualFollowers.map { it.toConnectedUser() }
             }
@@ -751,7 +811,7 @@ fun ProfileSquircleSocialButton(
     Box(
         modifier = Modifier
             .scale(scale)
-            .size(30.dp)
+            .size(34.dp)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -808,23 +868,30 @@ fun ProfileActionButton(
         label = "profileBtnScale"
     )
 
-    val shape = RoundedCornerShape(10.dp)
+    val shape = RoundedCornerShape(22.dp)
     val background = if (isPrimary) {
-        if (isPressed) Color(0xFF0062CC) else Color(0xFF007AFF)
+        if (isPressed) Color(0xFF0051D5) else Color(0xFF0A84FF)
     } else {
         if (isPressed) {
-            if (colors.isDark) Color(0xFF26262B) else Color(0xFFDEDEE3)
+            if (colors.isDark) Color(0xFF232A38) else Color(0xFFF1F5F9)
         } else {
-            if (colors.isDark) Color(0xFF1E1E22) else Color(0xFFE9E9EE)
+            if (colors.isDark) Color(0xFF161A22) else Color.White
         }
+    }
+
+    val borderStroke = if (isPrimary) {
+        BorderStroke(1.dp, Color(0xFF0A84FF).copy(alpha = 0.5f))
+    } else {
+        BorderStroke(1.dp, if (colors.isDark) Color(0xFF232A38) else Color.Transparent)
     }
 
     Box(
         modifier = modifier
             .scale(scale)
-            .height(36.dp)
+            .height(40.dp)
             .clip(shape)
             .background(background)
+            .border(borderStroke.width, borderStroke.brush, shape)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -878,7 +945,7 @@ fun UserProfileActionsStoriesSection(
             userId = userId
         )
         Spacer(Modifier.height(10.dp))
-        Spacer(Modifier.height(3.dp))
+        Spacer(Modifier.height(14.dp))
 
         // Action Buttons Row (Apple iOS Squircle Buttons, 12dp radius, border-less!)
         Row(
@@ -1001,9 +1068,9 @@ fun UserProfileActionsStoriesSection(
                 Box(
                     modifier = Modifier
                         .scale(shareScale)
-                        .size(36.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(if (colors.isDark) Color(0xFF1E1E22) else Color(0xFFE9E9EE))
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(if (colors.isDark) Color(0xFF161A22) else Color.White)
                         .clickable(
                             interactionSource = shareInteraction,
                             indication = null,
@@ -1044,7 +1111,7 @@ fun UserProfileActionsStoriesSection(
                 com.chroma.studio.chat.sound.SoundManager.playReaction()
                 onTabSelected(it)
             },
-            selectedColor = Color(0xFF2563EB),
+            selectedColor = Color(0xFF0A84FF),
             modifier = Modifier.padding(horizontal = 2.dp)
         )
 

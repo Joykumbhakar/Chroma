@@ -104,8 +104,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 // ── One UI Design Tokens ──────────────────────────────────────────────────────
-private val OneUiBlueLight = Color(0xFF0381FE)
-private val OneUiBlueDark = Color(0xFF3897FF)
+private val OneUiBlueLight = Color(0xFF0A84FF)
+private val OneUiBlueDark = Color(0xFF0A84FF)
 private val OneUiSurfaceLight = Color(0xFFF2F2F7)
 private val OneUiSurfaceDark = Color(0xFF000000)
 private val OneUiCardLight = Color(0xFFFFFFFF)
