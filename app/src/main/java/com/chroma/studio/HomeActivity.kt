@@ -34,7 +34,6 @@ import com.chroma.studio.ui.components.extractVideoUrlFromPost
 import com.chroma.studio.ui.screens.HomeScreen
 import com.chroma.studio.ui.screens.FlashFeedScreen
 import com.chroma.studio.ui.screens.FlashPickerScreen
-import com.chroma.studio.ui.screens.FlashPhotoEditorScreen
 import com.chroma.studio.ui.screens.FlashPostScreen
 import com.chroma.studio.ui.screens.ChromaPhotoEditorScreen
 import com.chroma.studio.ui.theme.OscellionTheme
@@ -1145,7 +1144,8 @@ class HomeActivity : ComponentActivity() {
                                             onNavigateToUserProfile = { uid ->
                                                 navController.navigate("userProfile/$uid")
                                             },
-                                            onNavigateToCreateStory = {
+                                            onNavigateToCreateStory = { maybeUri ->
+                                                storyInitialPhotoUri = maybeUri
                                                 navController.navigate("story_editor")
                                             },
                                             onInsideChatChange = { inside ->
@@ -1717,9 +1717,9 @@ class HomeActivity : ComponentActivity() {
                                 navController.navigate("flash_video_editor")
                             },
                             onPhotosSelected = { uris ->
-                                flashPickerPhotoUris = uris
-                                flashMediaType = if (uris.size == 1) FlashMediaType.PHOTO else FlashMediaType.SLIDESHOW
-                                navController.navigate("flash_photo_editor")
+                                flashImportedMediaUris = uris
+                                flashMediaType = FlashMediaType.VIDEO
+                                navController.navigate("flash_video_editor")
                             },
                             onBack = { navController.popBackStack() }
                         )
@@ -1784,36 +1784,11 @@ class HomeActivity : ComponentActivity() {
 
                     composable("flash_photo_editor") {
                         val uris = flashPickerPhotoUris.takeIf { it.isNotEmpty() } ?: run { navController.popBackStack(); return@composable }
-                        FlashPhotoEditorScreen(
-                            photoUris = uris,
-                            onNext = { filterName, thumbnail, durationPerSlide ->
-                                flashFilterName = filterName
-                                flashThumbnail = thumbnail
-                                flashDurationPerSlide = durationPerSlide
-                                if (thumbnail != null) {
-                                    try {
-                                        val file = java.io.File(this@HomeActivity.cacheDir, "flash_edited_${System.currentTimeMillis()}.jpg")
-                                        java.io.FileOutputStream(file).use { out ->
-                                            thumbnail.compress(android.graphics.Bitmap.CompressFormat.JPEG, 92, out)
-                                        }
-                                        flashPickerPhotoUris = listOf(android.net.Uri.fromFile(file))
-                                    } catch (_: Exception) {}
-                                }
-                                navController.navigate("flash_post")
-                            },
-                            onSaveDraft = { filterName ->
-                                flashVm.saveDraft(
-                                    com.chroma.studio.model.FlashDraft(
-                                        localUri = uris.firstOrNull()?.toString() ?: "",
-                                        mediaType = if (uris.size == 1) FlashMediaType.PHOTO else FlashMediaType.SLIDESHOW,
-                                        filterName = filterName
-                                    )
-                                )
-                                navController.navigate("main") { popUpTo("main") { inclusive = false } }
-                                Toast.makeText(this@HomeActivity, "Draft saved!", Toast.LENGTH_SHORT).show()
-                            },
-                            onBack = { navController.popBackStack() }
-                        )
+                        flashImportedMediaUris = uris
+                        flashMediaType = FlashMediaType.VIDEO
+                        navController.navigate("flash_video_editor") {
+                            popUpTo("flash_photo_editor") { inclusive = true }
+                        }
                     }
 
                     composable("flash_post") {

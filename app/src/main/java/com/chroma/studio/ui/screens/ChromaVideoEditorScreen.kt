@@ -416,27 +416,3 @@ fun PropertySlider(
     onValueChange: (Float) -> Unit
 ) = EditorSlider(label, value, min, max, onValueChange)
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// UNIFIED SINGLE VIDEO EDITOR DELEGATION
-// Delegates to [FinalCutProVideoEditorScreen] as the single production video editor.
-// ═══════════════════════════════════════════════════════════════════════════════
-
-@Composable
-fun ChromaVideoEditorScreen(
-    videoUri: String? = null,
-    onBack: () -> Unit,
-    onExportComplete: (Uri) -> Unit = {}
-) {
-    val parsedUri = remember(videoUri) {
-        videoUri?.takeIf { it.isNotBlank() }?.let { Uri.parse(it) } ?: Uri.EMPTY
-    }
-    FinalCutProVideoEditorScreen(
-        initialUri = parsedUri,
-        initialUris = if (parsedUri != Uri.EMPTY) listOf(parsedUri) else emptyList(),
-        onDone = { _, _, clips ->
-            val first = clips.firstOrNull() ?: parsedUri
-            onExportComplete(first)
-        },
-        onBack = onBack
-    )
-}

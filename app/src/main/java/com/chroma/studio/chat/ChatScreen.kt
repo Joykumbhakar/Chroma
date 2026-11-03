@@ -146,7 +146,7 @@ fun ChatScreen(
 
     onNavigateToProfile: ((String) -> Unit)? = null,
 
-    onNavigateToCreateStory: (() -> Unit)? = null,
+    onNavigateToCreateStory: ((android.net.Uri?) -> Unit)? = null,
 
     onNavigateToGroupInfo: ((String) -> Unit)? = null,
 
@@ -259,7 +259,7 @@ private fun ChatScreenContent(
 
     onNavigateToProfile: ((String) -> Unit)? = null,
 
-    onNavigateToCreateStory: (() -> Unit)? = null,
+    onNavigateToCreateStory: ((android.net.Uri?) -> Unit)? = null,
 
     onNavigateToGroupInfo: ((String) -> Unit)? = null,
 
@@ -367,13 +367,15 @@ private fun ChatScreenContent(
 
 
     val storyMediaPicker = rememberLauncherForActivityResult(
-
         contract = ActivityResultContracts.PickVisualMedia()
-
     ) { uri: Uri? ->
-
-        uri?.let { editingStoryImageUri = it }
-
+        if (uri != null) {
+            if (onNavigateToCreateStory != null) {
+                onNavigateToCreateStory.invoke(uri)
+            } else {
+                editingStoryImageUri = uri
+            }
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -3939,13 +3941,9 @@ private fun ChatScreenContent(
                 },
 
                 onTextStory = {
-
                     showStoryCreationSheet = false
-
                     if (onNavigateToCreateStory != null) {
-
-                        onNavigateToCreateStory.invoke()
-
+                        onNavigateToCreateStory.invoke(null)
                     } else {
 
                         isStoryEditorOpen = true
@@ -4347,17 +4345,15 @@ private fun ChatScreenContent(
                 },
 
                 onSendMedia = { uris, _ ->
-
                     showStoryGalleryPicker = false
-
                     val pickedUri = uris.firstOrNull()
-
                     if (pickedUri != null) {
-
-                        editingStoryImageUri = pickedUri
-
+                        if (onNavigateToCreateStory != null) {
+                            onNavigateToCreateStory.invoke(pickedUri)
+                        } else {
+                            editingStoryImageUri = pickedUri
+                        }
                     }
-
                 }
 
             )
