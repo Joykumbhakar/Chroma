@@ -72,6 +72,10 @@ import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.composables.icons.lucide.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 /**
  * Filter for media types in Oscellion Gallery
@@ -101,13 +105,89 @@ enum class GalleryLayoutMode {
 }
 
 /**
- * Unified, Fixed Oscellion Gallery Layout.
- * Adheres strictly to the Oscellion Design System:
- * - Dropdown menus for Albums, Filters, and Sorting (no horizontal scrolled rows).
- * - Maximum icon utilization across all controls.
- * - Concise, punchy labels with zero lengthy text/phrases.
- * - Grid density toggle (2, 3, or 4 columns).
- * - Quick live camera tile, search filter, full lightbox preview, and floating multi-select dock.
+ * View modes matching Samsung Native One UI Gallery:
+ * - PICTURES: Chronological timeline view with date headers and group selection
+ * - ALBUMS: 2-column squircle cards grid of media buckets/folders
+ */
+enum class GalleryViewMode(val label: String) {
+    PICTURES("Pictures"),
+    ALBUMS("Albums")
+}
+
+/**
+ * Date-grouped timeline chunk for Samsung One UI chronological gallery
+ */
+data class GalleryDateGroup(
+    val title: String,
+    val dateKey: String,
+    val items: List<GalleryMediaItem>
+)
+
+/**
+ * Album card information for Samsung One UI Albums view
+ */
+data class GalleryAlbumInfo(
+    val name: String,
+    val count: Int,
+    val coverUri: Uri?,
+    val isVideoOnly: Boolean = false
+)
+
+/**
+ * Groups media items chronologically by date:
+ * - "Today"
+ * - "Yesterday"
+ * - "EEE, MMM d" (for this year, e.g. "Wed, Oct 28")
+ * - "MMM d, yyyy" (for earlier years)
+ */
+fun groupMediaByDate(items: List<GalleryMediaItem>): List<GalleryDateGroup> {
+    if (items.isEmpty()) return emptyList()
+    val calNow = Calendar.getInstance()
+    val nowYear = calNow.get(Calendar.YEAR)
+    val nowDayOfYear = calNow.get(Calendar.DAY_OF_YEAR)
+
+    val itemCal = Calendar.getInstance()
+    val dayFormat = SimpleDateFormat("EEE, MMM d", Locale.getDefault())
+    val yearFormat = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
+    val keyFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+
+    val grouped = linkedMapOf<String, Pair<String, MutableList<GalleryMediaItem>>>()
+
+    for (item in items) {
+        val millis = if (item.dateAdded < 100000000000L) item.dateAdded * 1000L else item.dateAdded
+        itemCal.timeInMillis = millis
+        val itemYear = itemCal.get(Calendar.YEAR)
+        val itemDayOfYear = itemCal.get(Calendar.DAY_OF_YEAR)
+
+        val key = keyFormat.format(itemCal.time)
+        val title = when {
+            itemYear == nowYear && itemDayOfYear == nowDayOfYear -> "Today"
+            itemYear == nowYear && itemDayOfYear == nowDayOfYear - 1 -> "Yesterday"
+            itemYear == nowYear -> dayFormat.format(itemCal.time)
+            else -> yearFormat.format(itemCal.time)
+        }
+
+        val entry = grouped.getOrPut(key) { Pair(title, mutableListOf()) }
+        entry.second.add(item)
+    }
+
+    return grouped.map { (key, pair) ->
+        GalleryDateGroup(
+            title = pair.first,
+            dateKey = key,
+            items = pair.second
+        )
+    }
+}
+
+/**
+ * Unified, Fixed Oscellion Gallery Layout powered by Samsung One UI 7.0:
+ * - Pictures vs Albums segmented view modes with 2-column squircle album covers.
+ * - Chronological date timeline grouping with sticky headers and 1-tap "Select day" group toggles.
+ * - Dynamic pinch-to-zoom grid density scaling (2, 3, 4, 5 columns) with instant haptic ticks.
+ * - Drag-to-select with smooth auto-scroll and 120Hz performance.
+ * - One UI 7 Floating Now Bar selection dock with mini thumbnail strip and Brand Blue (#0A84FF) Confirm button.
+ * - Full Lightbox viewer with slide-up Samsung Details (ⓘ) sheet showing EXIF/resolution/storage path.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -120,6 +200,7 @@ fun OscellionGalleryLayout(
     allowedMediaFilter: GalleryMediaTypeFilter = GalleryMediaTypeFilter.ALL,
     showCameraTile: Boolean = true,
     showCaptionInput: Boolean = false,
+    showAlbumsTab: Boolean = (layoutMode == GalleryLayoutMode.FULL_SCREEN),
     onVideoSelected: ((Uri) -> Unit)? = null,
     onPhotosSelected: ((List<Uri>) -> Unit)? = null,
     onSendMediaWithCaption: ((List<Uri>, String?) -> Unit)? = null,
@@ -174,7 +255,6 @@ fun OscellionGalleryLayout(
     ) { success ->
         if (success) {
             SoundManager.playReaction()
-            // reload media
         }
     }
 
@@ -182,12 +262,15 @@ fun OscellionGalleryLayout(
     var allMedia by remember { mutableStateOf<List<GalleryMediaItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
 
+    // Samsung One UI View Mode state (Pictures vs Albums)
+    var viewMode by remember { mutableStateOf(GalleryViewMode.PICTURES) }
+
     // Controls state
     var mediaTypeFilter by remember { mutableStateOf(allowedMediaFilter) }
     var selectedAlbum by remember { mutableStateOf("All") }
     var selectedCategory by remember { mutableStateOf("All") }
     var sortOrder by remember { mutableStateOf(GallerySortOrder.NEWEST) }
-    var gridColumns by remember { mutableIntStateOf(3) } // 2, 3, or 4 columns
+    var gridColumns by remember { mutableIntStateOf(3) } // Supports 2, 3, 4, 5 columns
     var isSearchVisible by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
 
@@ -211,7 +294,24 @@ fun OscellionGalleryLayout(
         }
     }
 
-    // Distinct albums list with counts
+    // Samsung One UI Albums List with cover photos and counts
+    val albumsList: List<GalleryAlbumInfo> = remember(allMedia) {
+        val map = linkedMapOf<String, MutableList<GalleryMediaItem>>()
+        allMedia.forEach { item ->
+            val bucket = item.bucketName.ifBlank { "Other" }
+            map.getOrPut(bucket) { mutableListOf() }.add(item)
+        }
+        map.map { (name, items) ->
+            GalleryAlbumInfo(
+                name = name,
+                count = items.size,
+                coverUri = items.firstOrNull()?.uri,
+                isVideoOnly = items.all { it.isVideo }
+            )
+        }.sortedByDescending { it.count }
+    }
+
+    // Distinct albums list with counts for dropdown
     val albumsWithCounts = remember(allMedia) {
         val counts = mutableMapOf<String, Int>()
         counts["All"] = allMedia.size
@@ -253,6 +353,11 @@ fun OscellionGalleryLayout(
             GallerySortOrder.DURATION -> list.sortedByDescending { it.durationMs }
             GallerySortOrder.NAME -> list.sortedBy { it.name.lowercase() }
         }
+    }
+
+    // Chronologically grouped media list for Samsung One UI timeline
+    val dateGroups = remember(filteredMedia) {
+        groupMediaByDate(filteredMedia)
     }
 
     fun handleCategorySelect(cat: String) {
@@ -321,7 +426,7 @@ fun OscellionGalleryLayout(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .fillMaxHeight(0.88f)
+                    .fillMaxHeight(0.92f)
                     .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
                     .background(colors.bg)
                     .border(0.5.dp, colors.glassBorder, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
@@ -355,10 +460,248 @@ fun OscellionGalleryLayout(
                     onClose = onClose
                 )
 
+                // Samsung One UI Segmented Tabs: Pictures vs Albums
+                if (showAlbumsTab) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        GallerySegmentedTabs(
+                            selectedMode = viewMode,
+                            onModeChange = {
+                                SoundManager.playTap(context)
+                                viewMode = it
+                            }
+                        )
+                    }
+                }
+
+                // Active Album Filter pill if user drilled down into a specific album
+                if (viewMode == GalleryViewMode.PICTURES && selectedAlbum != "All") {
+                    GalleryActiveAlbumChip(
+                        albumName = selectedAlbum,
+                        onClear = {
+                            SoundManager.playTap(context)
+                            selectedAlbum = "All"
+                        }
+                    )
+                }
+
+                if (viewMode == GalleryViewMode.ALBUMS) {
+                    GalleryAlbumsGrid(
+                        albums = albumsList,
+                        onSelectAlbum = { albumName ->
+                            selectedAlbum = albumName
+                            viewMode = GalleryViewMode.PICTURES
+                        }
+                    )
+                } else {
+                    GalleryMainBody(
+                        hasPermission = hasPermission,
+                        isLoading = isLoading,
+                        mediaItems = filteredMedia,
+                        dateGroups = dateGroups,
+                        selectedUris = selectedUris,
+                        maxSelection = maxSelection,
+                        gridColumns = gridColumns,
+                        selectedAlbum = selectedAlbum,
+                        selectedCategory = selectedCategory,
+                        onCategorySelected = { handleCategorySelect(it) },
+                        albumsWithCounts = albumsWithCounts,
+                        mediaTypeFilter = mediaTypeFilter,
+                        sortOrder = sortOrder,
+                        isSearchVisible = isSearchVisible,
+                        searchQuery = searchQuery,
+                        showCameraTile = showCameraTile && selectedAlbum == "All" && searchQuery.isBlank(),
+                        showCaptionInput = showCaptionInput,
+                        captionText = captionText,
+                        onCaptionChange = { captionText = it },
+                        onAlbumChange = { selectedAlbum = it },
+                        onTypeFilterChange = { mediaTypeFilter = it },
+                        onSortOrderChange = { sortOrder = it },
+                        onToggleColumns = {
+                            gridColumns = when (gridColumns) {
+                                2 -> 3
+                                3 -> 4
+                                4 -> 5
+                                else -> 2
+                            }
+                        },
+                        onSearchQueryChange = { searchQuery = it },
+                        onLaunchCamera = {
+                            SoundManager.playTap(context)
+                            if (onLaunchCamera != null) {
+                                onLaunchCamera()
+                            } else {
+                                val (_, uri) = MediaStoreHelper.createTempImageUri(context)
+                                cameraCaptureLauncher.launch(uri)
+                            }
+                        },
+                        onUpdateSelectedUris = { newUris: List<Uri> ->
+                            selectedUris.clear()
+                            selectedUris.addAll(newUris)
+                        },
+                        onMediaClick = { item ->
+                            SoundManager.playPop()
+                            if (item.isVideo && onVideoSelected != null && selectedUris.isEmpty()) {
+                                onVideoSelected(item.uri)
+                            } else {
+                                if (selectedUris.contains(item.uri)) {
+                                    selectedUris.remove(item.uri)
+                                } else if (selectedUris.size < maxSelection) {
+                                    selectedUris.add(item.uri)
+                                }
+                            }
+                        },
+                        onMediaLongClick = { item ->
+                            SoundManager.playPop()
+                            if (!selectedUris.contains(item.uri) && selectedUris.size < maxSelection) {
+                                selectedUris.add(item.uri)
+                            }
+                        },
+                        onQuickPreview = { item ->
+                            SoundManager.playReaction()
+                            val idx = filteredMedia.indexOf(item).coerceAtLeast(0)
+                            lightboxInitialIndex = idx
+                            lightboxMediaList = filteredMedia
+                            showLightbox = true
+                        },
+                        onSelectAll = { handleSelectAll() },
+                        onClearSelection = {
+                            SoundManager.playTap(context)
+                            selectedUris.clear()
+                        },
+                        onRemoveUri = { uri ->
+                            SoundManager.playTap(context)
+                            selectedUris.remove(uri)
+                        },
+                        onSubmitSelection = {
+                            SoundManager.playSend(context)
+                            if (onSendMediaWithCaption != null) {
+                                onSendMediaWithCaption(selectedUris.toList(), captionText.ifBlank { null })
+                                onClose()
+                            } else {
+                                onPhotosSelected?.invoke(selectedUris.toList())
+                            }
+                        },
+                        onRequestPermission = {
+                            val perms = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO)
+                            } else {
+                                arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+                            }
+                            permissionLauncher.launch(perms)
+                        },
+                        onOpenSystemPicker = {
+                            systemPickerLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
+                            )
+                        }
+                    )
+                }
+            }
+        }
+    } else {
+        // Full screen presentation
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(colors.bg)
+        ) {
+            // Fullscreen Screen Header with Reachability & Clean Flat Icons
+            ChromaScreenHeader(
+                title = title,
+                badgeText = null,
+                showBackButton = true,
+                circularBackButton = false,
+                onBack = onClose,
+                actions = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        // System Picker Icon Button
+                        IconButton(
+                            onClick = {
+                                SoundManager.playTap(context)
+                                systemPickerLauncher.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
+                                )
+                            },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                Lucide.FolderOpen,
+                                contentDescription = "System",
+                                tint = colors.textMain,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        // Search Icon Button
+                        IconButton(
+                            onClick = {
+                                SoundManager.playTap(context)
+                                isSearchVisible = !isSearchVisible
+                            },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                Lucide.Search,
+                                contentDescription = "Search",
+                                tint = if (isSearchVisible) Color(0xFF0A84FF) else colors.textMain,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+            )
+
+            // Samsung One UI Segmented Switcher (Pictures vs Albums)
+            if (showAlbumsTab) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    GallerySegmentedTabs(
+                        selectedMode = viewMode,
+                        onModeChange = {
+                            SoundManager.playTap(context)
+                            viewMode = it
+                        }
+                    )
+                }
+            }
+
+            // Active Album Filter chip
+            if (viewMode == GalleryViewMode.PICTURES && selectedAlbum != "All") {
+                GalleryActiveAlbumChip(
+                    albumName = selectedAlbum,
+                    onClear = {
+                        SoundManager.playTap(context)
+                        selectedAlbum = "All"
+                    }
+                )
+            }
+
+            if (viewMode == GalleryViewMode.ALBUMS) {
+                GalleryAlbumsGrid(
+                    albums = albumsList,
+                    onSelectAlbum = { albumName ->
+                        selectedAlbum = albumName
+                        viewMode = GalleryViewMode.PICTURES
+                    }
+                )
+            } else {
                 GalleryMainBody(
                     hasPermission = hasPermission,
                     isLoading = isLoading,
                     mediaItems = filteredMedia,
+                    dateGroups = dateGroups,
                     selectedUris = selectedUris,
                     maxSelection = maxSelection,
                     gridColumns = gridColumns,
@@ -379,9 +722,10 @@ fun OscellionGalleryLayout(
                     onSortOrderChange = { sortOrder = it },
                     onToggleColumns = {
                         gridColumns = when (gridColumns) {
+                            2 -> 3
                             3 -> 4
-                            4 -> 2
-                            else -> 3
+                            4 -> 5
+                            else -> 2
                         }
                     },
                     onSearchQueryChange = { searchQuery = it },
@@ -394,7 +738,7 @@ fun OscellionGalleryLayout(
                             cameraCaptureLauncher.launch(uri)
                         }
                     },
-                    onUpdateSelectedUris = { newUris: List<android.net.Uri> ->
+                    onUpdateSelectedUris = { newUris: List<Uri> ->
                         selectedUris.clear()
                         selectedUris.addAll(newUris)
                     },
@@ -411,11 +755,10 @@ fun OscellionGalleryLayout(
                         }
                     },
                     onMediaLongClick = { item ->
-                        SoundManager.playReaction()
-                        val idx = filteredMedia.indexOf(item).coerceAtLeast(0)
-                        lightboxInitialIndex = idx
-                        lightboxMediaList = filteredMedia
-                        showLightbox = true
+                        SoundManager.playPop()
+                        if (!selectedUris.contains(item.uri) && selectedUris.size < maxSelection) {
+                            selectedUris.add(item.uri)
+                        }
                     },
                     onQuickPreview = { item ->
                         SoundManager.playReaction()
@@ -458,167 +801,9 @@ fun OscellionGalleryLayout(
                 )
             }
         }
-    } else {
-        // Full screen presentation
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(colors.bg)
-        ) {
-            // Fullscreen Screen Header (No circular/pill background for back or action icons)
-            ChromaScreenHeader(
-                title = title,
-                badgeText = null, // No pill badge
-                showBackButton = true,
-                circularBackButton = false, // Clean icon without circle background
-                onBack = onClose,
-                actions = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        // System Picker Icon Button (No circle background)
-                        IconButton(
-                            onClick = {
-                                SoundManager.playTap(context)
-                                systemPickerLauncher.launch(
-                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
-                                )
-                            },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                Lucide.FolderOpen,
-                                contentDescription = "System",
-                                tint = colors.textMain,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        // Search Icon Button (No circle background)
-                        IconButton(
-                            onClick = {
-                                SoundManager.playTap(context)
-                                isSearchVisible = !isSearchVisible
-                            },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                Lucide.Search,
-                                contentDescription = "Search",
-                                tint = if (isSearchVisible) colors.primary else colors.textMain,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-                }
-            )
-
-            GalleryMainBody(
-                hasPermission = hasPermission,
-                isLoading = isLoading,
-                mediaItems = filteredMedia,
-                selectedUris = selectedUris,
-                maxSelection = maxSelection,
-                gridColumns = gridColumns,
-                selectedAlbum = selectedAlbum,
-                selectedCategory = selectedCategory,
-                onCategorySelected = { handleCategorySelect(it) },
-                albumsWithCounts = albumsWithCounts,
-                mediaTypeFilter = mediaTypeFilter,
-                sortOrder = sortOrder,
-                isSearchVisible = isSearchVisible,
-                searchQuery = searchQuery,
-                showCameraTile = showCameraTile && selectedAlbum == "All" && searchQuery.isBlank(),
-                showCaptionInput = showCaptionInput,
-                captionText = captionText,
-                onCaptionChange = { captionText = it },
-                onAlbumChange = { selectedAlbum = it },
-                onTypeFilterChange = { mediaTypeFilter = it },
-                onSortOrderChange = { sortOrder = it },
-                onToggleColumns = {
-                    gridColumns = when (gridColumns) {
-                        3 -> 4
-                        4 -> 2
-                        else -> 3
-                    }
-                },
-                onSearchQueryChange = { searchQuery = it },
-                onLaunchCamera = {
-                    SoundManager.playTap(context)
-                    if (onLaunchCamera != null) {
-                        onLaunchCamera()
-                    } else {
-                        val (_, uri) = MediaStoreHelper.createTempImageUri(context)
-                        cameraCaptureLauncher.launch(uri)
-                    }
-                },
-                onUpdateSelectedUris = { newUris: List<android.net.Uri> ->
-                    selectedUris.clear()
-                    selectedUris.addAll(newUris)
-                },
-                onMediaClick = { item ->
-                    SoundManager.playPop()
-                    if (item.isVideo && onVideoSelected != null && selectedUris.isEmpty()) {
-                        onVideoSelected(item.uri)
-                    } else {
-                        if (selectedUris.contains(item.uri)) {
-                            selectedUris.remove(item.uri)
-                        } else if (selectedUris.size < maxSelection) {
-                            selectedUris.add(item.uri)
-                        }
-                    }
-                },
-                onMediaLongClick = { item ->
-                    SoundManager.playReaction()
-                    val idx = filteredMedia.indexOf(item).coerceAtLeast(0)
-                    lightboxInitialIndex = idx
-                    lightboxMediaList = filteredMedia
-                    showLightbox = true
-                },
-                onQuickPreview = { item ->
-                    SoundManager.playReaction()
-                    val idx = filteredMedia.indexOf(item).coerceAtLeast(0)
-                    lightboxInitialIndex = idx
-                    lightboxMediaList = filteredMedia
-                    showLightbox = true
-                },
-                onSelectAll = { handleSelectAll() },
-                onClearSelection = {
-                    SoundManager.playTap(context)
-                    selectedUris.clear()
-                },
-                onRemoveUri = { uri ->
-                    SoundManager.playTap(context)
-                    selectedUris.remove(uri)
-                },
-                onSubmitSelection = {
-                    SoundManager.playSend(context)
-                    if (onSendMediaWithCaption != null) {
-                        onSendMediaWithCaption(selectedUris.toList(), captionText.ifBlank { null })
-                        onClose()
-                    } else {
-                        onPhotosSelected?.invoke(selectedUris.toList())
-                    }
-                },
-                onRequestPermission = {
-                    val perms = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO)
-                    } else {
-                        arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
-                    }
-                    permissionLauncher.launch(perms)
-                },
-                onOpenSystemPicker = {
-                    systemPickerLauncher.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
-                    )
-                }
-            )
-        }
     }
 
-    // Modern Lightbox Multi-Item Swipe & Zoom Dialog
+    // Modern Lightbox Multi-Item Swipe & Zoom Dialog with Samsung One UI Details Sheet
     if (showLightbox && lightboxMediaList.isNotEmpty()) {
         GalleryLightboxDialog(
             mediaList = lightboxMediaList,
@@ -694,7 +879,7 @@ private fun GalleryTopBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            // System Picker icon (No circle/pill background)
+            // System Picker icon
             IconButton(
                 onClick = onOpenSystemPicker,
                 modifier = Modifier.size(32.dp)
@@ -707,7 +892,7 @@ private fun GalleryTopBar(
                 )
             }
 
-            // Search icon (No circle/pill background)
+            // Search icon
             IconButton(
                 onClick = onToggleSearch,
                 modifier = Modifier.size(32.dp)
@@ -715,12 +900,12 @@ private fun GalleryTopBar(
                 Icon(
                     Lucide.Search,
                     contentDescription = "Search",
-                    tint = if (isSearchVisible) colors.primary else colors.textMain,
+                    tint = if (isSearchVisible) Color(0xFF0A84FF) else colors.textMain,
                     modifier = Modifier.size(16.dp)
                 )
             }
 
-            // Close button (No circle/pill background)
+            // Close button
             IconButton(
                 onClick = onClose,
                 modifier = Modifier.size(32.dp)
@@ -737,6 +922,309 @@ private fun GalleryTopBar(
 }
 
 /**
+ * Samsung One UI Segmented Switcher: [ Pictures | Albums ]
+ */
+@Composable
+private fun GallerySegmentedTabs(
+    selectedMode: GalleryViewMode,
+    onModeChange: (GalleryViewMode) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val colors = LocalOscellionColors.current
+    Surface(
+        modifier = modifier
+            .clip(RoundedCornerShape(20.dp))
+            .border(0.5.dp, colors.glassBorder, RoundedCornerShape(20.dp)),
+        color = colors.glassBg,
+        shape = RoundedCornerShape(20.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(3.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            GalleryViewMode.values().forEach { mode ->
+                val isSelected = mode == selectedMode
+                val bgAnim by animateColorAsState(
+                    targetValue = if (isSelected) Color(0xFF0A84FF) else Color.Transparent,
+                    animationSpec = tween(180),
+                    label = "tabBg"
+                )
+                val textAnim by animateColorAsState(
+                    targetValue = if (isSelected) Color.White else colors.textMuted,
+                    animationSpec = tween(180),
+                    label = "tabText"
+                )
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(bgAnim)
+                        .clickable { onModeChange(mode) }
+                        .padding(horizontal = 20.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = mode.label,
+                        color = textAnim,
+                        fontSize = 13.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Active Album Clear Filter Chip
+ */
+@Composable
+private fun GalleryActiveAlbumChip(
+    albumName: String,
+    onClear: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = Color(0xFF0A84FF).copy(alpha = 0.12f),
+        border = BorderStroke(0.5.dp, Color(0xFF0A84FF).copy(alpha = 0.35f)),
+        modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+        ) {
+            Icon(
+                Lucide.Folder,
+                contentDescription = null,
+                tint = Color(0xFF0A84FF),
+                modifier = Modifier.size(13.dp)
+            )
+            Text(
+                text = albumName,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFF0A84FF)
+            )
+            Icon(
+                Lucide.X,
+                contentDescription = "Clear",
+                tint = Color(0xFF0A84FF),
+                modifier = Modifier
+                    .size(14.dp)
+                    .clip(CircleShape)
+                    .clickable { onClear() }
+            )
+        }
+    }
+}
+
+/**
+ * Samsung One UI Date Group Header with 1-tap "Select day" group checkmark
+ */
+@Composable
+private fun GalleryDateGroupHeader(
+    group: GalleryDateGroup,
+    selectedCountInGroup: Int,
+    totalCountInGroup: Int,
+    onToggleSelectGroup: (Boolean) -> Unit
+) {
+    val colors = LocalOscellionColors.current
+    val allSelected = selectedCountInGroup == totalCountInGroup && totalCountInGroup > 0
+    val someSelected = selectedCountInGroup > 0 && !allSelected
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column {
+            Text(
+                text = group.title,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                color = colors.textMain
+            )
+            Text(
+                text = "${group.items.size} ${if (group.items.size == 1) "item" else "items"}",
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.Normal,
+                color = colors.textMuted
+            )
+        }
+
+        // Samsung 1-tap "Select day" checkmark circle
+        Box(
+            modifier = Modifier
+                .size(26.dp)
+                .clip(CircleShape)
+                .background(
+                    if (allSelected) Color(0xFF0A84FF)
+                    else if (someSelected) Color(0xFF0A84FF).copy(alpha = 0.25f)
+                    else colors.glassBg
+                )
+                .border(
+                    width = if (allSelected || someSelected) 1.5.dp else 1.dp,
+                    color = if (allSelected || someSelected) Color(0xFF0A84FF) else colors.textMuted.copy(alpha = 0.45f),
+                    shape = CircleShape
+                )
+                .clickable {
+                    onToggleSelectGroup(!allSelected)
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            if (allSelected) {
+                Icon(
+                    Lucide.Check,
+                    contentDescription = "Select day",
+                    tint = Color.White,
+                    modifier = Modifier.size(14.dp)
+                )
+            } else if (someSelected) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF0A84FF))
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Samsung One UI Albums Grid View (2-column squircle cards with cover, count badge, and titles)
+ */
+@Composable
+private fun GalleryAlbumsGrid(
+    albums: List<GalleryAlbumInfo>,
+    onSelectAlbum: (String) -> Unit
+) {
+    val colors = LocalOscellionColors.current
+    val context = LocalContext.current
+
+    if (albums.isEmpty()) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("No albums found", color = colors.textMuted, fontSize = 14.sp)
+        }
+        return
+    }
+
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(2),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        modifier = Modifier.fillMaxSize()
+    ) {
+        items(
+            items = albums,
+            key = { it.name }
+        ) { album ->
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(20.dp))
+                    .clickable {
+                        SoundManager.playTap(context)
+                        onSelectAlbum(album.name)
+                    }
+            ) {
+                // Cover preview card
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1f)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(colors.glassBg)
+                        .border(0.5.dp, colors.glassBorder, RoundedCornerShape(20.dp))
+                ) {
+                    if (album.coverUri != null) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(context)
+                                .data(album.coverUri)
+                                .size(Size(320, 320))
+                                .scale(Scale.FILL)
+                                .crossfade(false)
+                                .allowHardware(true)
+                                .build(),
+                            contentDescription = album.name,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Lucide.Folder,
+                                contentDescription = null,
+                                tint = colors.textMuted,
+                                modifier = Modifier.size(36.dp)
+                            )
+                        }
+                    }
+
+                    // Count Badge
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(8.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color.Black.copy(alpha = 0.65f)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            if (album.isVideoOnly) {
+                                Icon(
+                                    Lucide.Video,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(10.dp)
+                                )
+                            }
+                            Text(
+                                text = "${album.count}",
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(6.dp))
+
+                // Album title and subtitle
+                Text(
+                    text = album.name,
+                    fontSize = 14.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = colors.textMain,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 4.dp)
+                )
+                Text(
+                    text = "${album.count} ${if (album.count == 1) "item" else "items"}",
+                    fontSize = 12.sp,
+                    color = colors.textMuted,
+                    modifier = Modifier.padding(horizontal = 4.dp)
+                )
+            }
+        }
+    }
+}
+
+/**
  * Main scrollable body containing dropdown toolbars, quick category chips, search, and the 120Hz-optimized grid
  */
 @Composable
@@ -744,6 +1232,7 @@ private fun GalleryMainBody(
     hasPermission: Boolean,
     isLoading: Boolean,
     mediaItems: List<GalleryMediaItem>,
+    dateGroups: List<GalleryDateGroup>,
     selectedUris: List<Uri>,
     maxSelection: Int,
     gridColumns: Int,
@@ -777,6 +1266,7 @@ private fun GalleryMainBody(
     onOpenSystemPicker: () -> Unit
 ) {
     val colors = LocalOscellionColors.current
+    val context = LocalContext.current
 
     if (!hasPermission) {
         GalleryPermissionCard(
@@ -788,7 +1278,7 @@ private fun GalleryMainBody(
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // Dropdown Controls Toolbar (No horizontal scrolling!)
+            // Dropdown Controls Toolbar
             GalleryControlsBar(
                 selectedAlbum = selectedAlbum,
                 albumsWithCounts = albumsWithCounts,
@@ -853,6 +1343,8 @@ private fun GalleryMainBody(
                     }
                 }
 
+                val useDateGrouping = sortOrder == GallerySortOrder.NEWEST || sortOrder == GallerySortOrder.OLDEST
+
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -865,7 +1357,7 @@ private fun GalleryMainBody(
                             start = 4.dp,
                             end = 4.dp,
                             top = 4.dp,
-                            bottom = if (selectedUris.isNotEmpty()) 120.dp else 24.dp
+                            bottom = if (selectedUris.isNotEmpty()) 130.dp else 24.dp
                         ),
                         horizontalArrangement = Arrangement.spacedBy(3.dp),
                         verticalArrangement = Arrangement.spacedBy(3.dp),
@@ -873,10 +1365,10 @@ private fun GalleryMainBody(
                             .fillMaxSize()
                             .pointerInput(gridColumns) {
                                 detectTransformGestures { _, _, zoom, _ ->
-                                    if (zoom > 1.28f && gridColumns > 2) {
+                                    if (zoom > 1.25f && gridColumns > 2) {
                                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                         onToggleColumns()
-                                    } else if (zoom < 0.76f && gridColumns < 4) {
+                                    } else if (zoom < 0.75f && gridColumns < 5) {
                                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                         onToggleColumns()
                                     }
@@ -890,9 +1382,11 @@ private fun GalleryMainBody(
                                             offset.y >= info.offset.y && offset.y <= info.offset.y + info.size.height
                                         }
                                         if (hitItem != null) {
-                                            val mediaIdx = if (showCameraTile) hitItem.index - 1 else hitItem.index
-                                            val item = mediaItems.getOrNull(mediaIdx)
-                                            if (item != null) {
+                                            val hitKey = hitItem.key.toString()
+                                            val hitUriStr = hitKey.removePrefix("item_")
+                                            val mediaIdx = mediaItems.indexOfFirst { it.uri.toString() == hitUriStr }
+                                            if (mediaIdx != -1) {
+                                                val item = mediaItems[mediaIdx]
                                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                                 SoundManager.playPop()
                                                 dragAnchorIndex = mediaIdx
@@ -912,28 +1406,20 @@ private fun GalleryMainBody(
                                             }
                                         }
                                     },
-                                    onDragEnd = {
-                                        dragAnchorIndex = null
-                                    },
-                                    onDragCancel = {
-                                        dragAnchorIndex = null
-                                    },
+                                    onDragEnd = { dragAnchorIndex = null },
+                                    onDragCancel = { dragAnchorIndex = null },
                                     onDrag = { change, _ ->
                                         change.consume()
                                         val anchor = dragAnchorIndex ?: return@detectDragGesturesAfterLongPress
                                         val offset = change.position
 
-                                        // Auto-scroll when dragging near viewport edges
+                                        // Auto-scroll near viewport edges
                                         val viewportHeight = gridState.layoutInfo.viewportSize.height.toFloat()
                                         if (viewportHeight > 0f) {
                                             if (offset.y < 90f && gridState.canScrollBackward) {
-                                                coroutineScope.launch {
-                                                    gridState.scrollBy(-30f)
-                                                }
+                                                coroutineScope.launch { gridState.scrollBy(-30f) }
                                             } else if (offset.y > viewportHeight - 110f && gridState.canScrollForward) {
-                                                coroutineScope.launch {
-                                                    gridState.scrollBy(30f)
-                                                }
+                                                coroutineScope.launch { gridState.scrollBy(30f) }
                                             }
                                         }
 
@@ -942,8 +1428,10 @@ private fun GalleryMainBody(
                                             offset.y >= info.offset.y && offset.y <= info.offset.y + info.size.height
                                         }
                                         if (hitItem != null) {
-                                            val currentIndex = if (showCameraTile) hitItem.index - 1 else hitItem.index
-                                            if (currentIndex in mediaItems.indices) {
+                                            val hitKey = hitItem.key.toString()
+                                            val hitUriStr = hitKey.removePrefix("item_")
+                                            val currentIndex = mediaItems.indexOfFirst { it.uri.toString() == hitUriStr }
+                                            if (currentIndex != -1) {
                                                 val minIdx = minOf(anchor, currentIndex).coerceAtLeast(0)
                                                 val maxIdx = maxOf(anchor, currentIndex).coerceAtMost(mediaItems.size - 1)
                                                 val draggedUris = (minIdx..maxIdx).mapNotNull { mediaItems.getOrNull(it)?.uri }
@@ -970,33 +1458,84 @@ private fun GalleryMainBody(
                                 )
                             }
                     ) {
-                        // Live Camera Tile (First Slot)
+                        // Live Camera Tile
                         if (showCameraTile) {
-                            item {
-                                GalleryCameraTile(
-                                    onClick = onLaunchCamera
-                                )
+                            item(key = "camera_tile", contentType = "camera") {
+                                GalleryCameraTile(onClick = onLaunchCamera)
                             }
                         }
 
-                        // Media Grid Items (Recycled with contentType and stable keys)
-                        items(
-                            items = mediaItems,
-                            key = { it.uri.toString() },
-                            contentType = { if (it.isVideo) "video" else "photo" }
-                        ) { item ->
-                            val isSelected = selectedUris.contains(item.uri)
-                            val selectionIndex = if (isSelected) selectedUris.indexOf(item.uri) + 1 else null
+                        // Chronological Date Timeline Grouping
+                        if (useDateGrouping) {
+                            dateGroups.forEach { group ->
+                                // Date Group Header spanning full row with 1-tap "Select day" group toggle
+                                item(
+                                    key = "header_${group.dateKey}",
+                                    span = { GridItemSpan(gridColumns) },
+                                    contentType = "date_header"
+                                ) {
+                                    val groupSelectedCount = group.items.count { selectedUris.contains(it.uri) }
+                                    GalleryDateGroupHeader(
+                                        group = group,
+                                        selectedCountInGroup = groupSelectedCount,
+                                        totalCountInGroup = group.items.size,
+                                        onToggleSelectGroup = { shouldSelect ->
+                                            SoundManager.playTap(context)
+                                            if (shouldSelect) {
+                                                val remaining = maxSelection - selectedUris.size
+                                                val toAdd = group.items
+                                                    .map { it.uri }
+                                                    .filter { !selectedUris.contains(it) }
+                                                    .take(remaining)
+                                                onUpdateSelectedUris(selectedUris + toAdd)
+                                            } else {
+                                                val groupUris = group.items.map { it.uri }.toSet()
+                                                onUpdateSelectedUris(selectedUris.filter { !groupUris.contains(it) })
+                                            }
+                                        }
+                                    )
+                                }
 
-                            GalleryMediaCard(
-                                item = item,
-                                isSelected = isSelected,
-                                selectionIndex = selectionIndex,
-                                hasAnySelection = selectedUris.isNotEmpty(),
-                                onClick = { onMediaClick(item) },
-                                onLongClick = { onMediaLongClick(item) },
-                                onQuickPreview = { onQuickPreview(item) }
-                            )
+                                // Media items inside this date group
+                                items(
+                                    items = group.items,
+                                    key = { "item_${it.uri}" },
+                                    contentType = { if (it.isVideo) "video" else "photo" }
+                                ) { item ->
+                                    val isSelected = selectedUris.contains(item.uri)
+                                    val selectionIndex = if (isSelected) selectedUris.indexOf(item.uri) + 1 else null
+
+                                    GalleryMediaCard(
+                                        item = item,
+                                        isSelected = isSelected,
+                                        selectionIndex = selectionIndex,
+                                        hasAnySelection = selectedUris.isNotEmpty(),
+                                        onClick = { onMediaClick(item) },
+                                        onLongClick = { onMediaLongClick(item) },
+                                        onQuickPreview = { onQuickPreview(item) }
+                                    )
+                                }
+                            }
+                        } else {
+                            // Flat list when sorted by Name or Duration
+                            items(
+                                items = mediaItems,
+                                key = { "item_${it.uri}" },
+                                contentType = { if (it.isVideo) "video" else "photo" }
+                            ) { item ->
+                                val isSelected = selectedUris.contains(item.uri)
+                                val selectionIndex = if (isSelected) selectedUris.indexOf(item.uri) + 1 else null
+
+                                GalleryMediaCard(
+                                    item = item,
+                                    isSelected = isSelected,
+                                    selectionIndex = selectionIndex,
+                                    hasAnySelection = selectedUris.isNotEmpty(),
+                                    onClick = { onMediaClick(item) },
+                                    onLongClick = { onMediaLongClick(item) },
+                                    onQuickPreview = { onQuickPreview(item) }
+                                )
+                            }
                         }
                     }
 
@@ -1023,13 +1562,13 @@ private fun GalleryMainBody(
                                     Lucide.Calendar,
                                     contentDescription = null,
                                     tint = Color.White,
-                                    modifier = Modifier.size(11.5.dp)
+                                    modifier = Modifier.size(12.dp)
                                 )
                                 Text(
                                     text = visibleMonthYear,
                                     color = Color.White,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.SemiBold
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Bold
                                 )
                             }
                         }
@@ -1038,7 +1577,7 @@ private fun GalleryMainBody(
             }
         }
 
-        // Floating Selection Dock (at Bottom)
+        // Samsung One UI 7 Floating Now Bar / Selection Dock (at Bottom)
         AnimatedVisibility(
             visible = selectedUris.isNotEmpty(),
             enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
@@ -1101,7 +1640,7 @@ private fun GalleryQuickCategoryChips(
                     .scale(scale)
                     .clip(RoundedCornerShape(8.dp))
                     .background(
-                        if (isSelected) Color(0xFF007AFF)
+                        if (isSelected) Color(0xFF0A84FF)
                         else if (colors.isDark) Color(0x1FFFFFFF)
                         else Color(0x0C000000)
                     )
@@ -1131,8 +1670,7 @@ private fun GalleryQuickCategoryChips(
 }
 
 /**
- * Clean Oscellion Dropdown Controls Toolbar.
- * Replaces all horizontal scrolled rows with modern dropdown menus & icon action buttons.
+ * Clean Dropdown Controls Toolbar with Grid Density and Sort Selectors
  */
 @Composable
 private fun GalleryControlsBar(
@@ -1175,7 +1713,7 @@ private fun GalleryControlsBar(
                     Icon(
                         Lucide.Folder,
                         contentDescription = null,
-                        tint = colors.primary,
+                        tint = Color(0xFF0A84FF),
                         modifier = Modifier.size(13.dp)
                     )
                     Text(
@@ -1219,14 +1757,14 @@ private fun GalleryControlsBar(
                                         Icon(
                                             if (isSelected) Lucide.FolderOpen else Lucide.Folder,
                                             contentDescription = null,
-                                            tint = if (isSelected) colors.primary else colors.textMuted,
+                                            tint = if (isSelected) Color(0xFF0A84FF) else colors.textMuted,
                                             modifier = Modifier.size(14.dp)
                                         )
                                         Text(
                                             text = album,
                                             fontSize = 13.sp,
                                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                            color = if (isSelected) colors.primary else colors.textMain,
+                                            color = if (isSelected) Color(0xFF0A84FF) else colors.textMain,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
                                         )
@@ -1264,7 +1802,7 @@ private fun GalleryControlsBar(
                     Icon(
                         filterIcon,
                         contentDescription = null,
-                        tint = colors.primary,
+                        tint = Color(0xFF0A84FF),
                         modifier = Modifier.size(13.dp)
                     )
                     Text(
@@ -1305,14 +1843,14 @@ private fun GalleryControlsBar(
                                     Icon(
                                         icon,
                                         contentDescription = null,
-                                        tint = if (isSelected) colors.primary else colors.textMuted,
+                                        tint = if (isSelected) Color(0xFF0A84FF) else colors.textMuted,
                                         modifier = Modifier.size(14.dp)
                                     )
                                     Text(
                                         text = filter.label,
                                         fontSize = 13.sp,
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                        color = if (isSelected) colors.primary else colors.textMain
+                                        color = if (isSelected) Color(0xFF0A84FF) else colors.textMain
                                     )
                                 }
                             },
@@ -1331,7 +1869,7 @@ private fun GalleryControlsBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            // 3. Sort Order Dropdown (No circle background)
+            // 3. Sort Order Dropdown
             Box {
                 IconButton(
                     onClick = { sortMenuExpanded = true },
@@ -1370,14 +1908,14 @@ private fun GalleryControlsBar(
                                     Icon(
                                         icon,
                                         contentDescription = null,
-                                        tint = if (isSelected) colors.primary else colors.textMuted,
+                                        tint = if (isSelected) Color(0xFF0A84FF) else colors.textMuted,
                                         modifier = Modifier.size(14.dp)
                                     )
                                     Text(
                                         text = sort.label,
                                         fontSize = 13.sp,
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                        color = if (isSelected) colors.primary else colors.textMain
+                                        color = if (isSelected) Color(0xFF0A84FF) else colors.textMain
                                     )
                                 }
                             },
@@ -1390,14 +1928,18 @@ private fun GalleryControlsBar(
                 }
             }
 
-            // 4. Grid Density Toggle (No circle background)
+            // 4. Grid Density Toggle
             IconButton(
                 onClick = onToggleColumns,
                 modifier = Modifier.size(34.dp)
             ) {
                 Icon(
-                    if (gridColumns == 3) Lucide.Grid3x3 else Lucide.LayoutGrid,
-                    contentDescription = "Grid",
+                    when (gridColumns) {
+                        2 -> Lucide.Columns2
+                        3 -> Lucide.Grid3x3
+                        else -> Lucide.LayoutGrid
+                    },
+                    contentDescription = "Grid density: $gridColumns columns",
                     tint = colors.textMain,
                     modifier = Modifier.size(18.dp)
                 )
@@ -1430,31 +1972,34 @@ private fun GallerySearchInputRow(
         Icon(
             Lucide.Search,
             contentDescription = null,
-            tint = colors.primary,
+            tint = colors.textMuted,
             modifier = Modifier.size(14.dp)
         )
         BasicTextField(
             value = query,
             onValueChange = onQueryChange,
             singleLine = true,
-            textStyle = TextStyle(fontSize = 13.sp, color = colors.textMain),
-            cursorBrush = SolidColor(colors.primary),
+            cursorBrush = SolidColor(Color(0xFF0A84FF)),
+            textStyle = TextStyle(
+                fontSize = 13.sp,
+                color = colors.textMain
+            ),
             modifier = Modifier.weight(1f),
-            decorationBox = { innerTextField ->
+            decorationBox = { inner ->
                 if (query.isEmpty()) {
                     Text(
-                        text = "Search...",
+                        "Search media by name or folder...",
                         fontSize = 13.sp,
                         color = colors.textMuted
                     )
                 }
-                innerTextField()
+                inner()
             }
         )
         if (query.isNotEmpty()) {
             IconButton(
                 onClick = { onQueryChange("") },
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(16.dp)
             ) {
                 Icon(
                     Lucide.X,
@@ -1468,7 +2013,7 @@ private fun GallerySearchInputRow(
 }
 
 /**
- * Camera tile placed at index 0 of grid
+ * Camera tile slot at position 0 in the media grid
  */
 @Composable
 private fun GalleryCameraTile(
@@ -1480,46 +2025,38 @@ private fun GalleryCameraTile(
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.94f else 1.0f,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-        label = "cameraScale"
+        label = "cameraTileScale"
     )
 
     Box(
         modifier = Modifier
             .scale(scale)
             .aspectRatio(1f)
-            .clip(RoundedCornerShape(10.dp))
-            .background(
-                Brush.linearGradient(
-                    colors = if (colors.isDark) {
-                        listOf(Color(0xFF28282C), Color(0xFF18181A))
-                    } else {
-                        listOf(Color(0xFFF2F2F7), Color(0xFFE5E5EA))
-                    }
-                )
-            )
+            .clip(RoundedCornerShape(12.dp))
+            .background(colors.glassBg)
+            .border(0.5.dp, colors.glassBorder, RoundedCornerShape(12.dp))
             .clickable(
                 interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            ),
+                indication = null
+            ) { onClick() },
         contentAlignment = Alignment.Center
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(5.dp)
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .size(38.dp)
+                    .size(34.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFF007AFF).copy(alpha = 0.15f)),
+                    .background(Color(0xFF0A84FF).copy(alpha = 0.15f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     Lucide.Camera,
                     contentDescription = "Camera",
-                    tint = Color(0xFF007AFF),
-                    modifier = Modifier.size(20.dp)
+                    tint = Color(0xFF0A84FF),
+                    modifier = Modifier.size(17.dp)
                 )
             }
             Text(
@@ -1532,11 +2069,11 @@ private fun GalleryCameraTile(
     }
 }
 
-// 120Hz Optimized Thumbnail Request Size
 private val GALLERY_THUMB_SIZE = Size(240, 240)
 
 /**
- * High-performance 120Hz-optimized media thumbnail card
+ * Media card for each photo/video thumbnail in the grid.
+ * Displays ordered selection badges (1, 2, 3...) in Brand Blue (#0A84FF).
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -1563,9 +2100,9 @@ private fun GalleryMediaCard(
                     videoFrameMillis(1000L)
                 }
             }
-            .crossfade(false) // 120Hz smooth scrolling: eliminates transition overdraw
-            .allowRgb565(true) // Halves memory footprint for instant scroll decodes
-            .allowHardware(true) // GPU direct mapping
+            .crossfade(false)
+            .allowRgb565(true)
+            .allowHardware(true)
             .memoryCachePolicy(CachePolicy.ENABLED)
             .diskCachePolicy(CachePolicy.ENABLED)
             .memoryCacheKey("thumb_${item.uri}")
@@ -1585,7 +2122,7 @@ private fun GalleryMediaCard(
         modifier = Modifier
             .scale(scale)
             .aspectRatio(1f)
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(12.dp))
             .combinedClickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -1594,8 +2131,8 @@ private fun GalleryMediaCard(
             )
             .border(
                 width = if (isSelected) 2.dp else 0.5.dp,
-                color = if (isSelected) Color(0xFF007AFF) else colors.glassBorder,
-                shape = RoundedCornerShape(10.dp)
+                color = if (isSelected) Color(0xFF0A84FF) else colors.glassBorder,
+                shape = RoundedCornerShape(12.dp)
             )
     ) {
         AsyncImage(
@@ -1637,23 +2174,23 @@ private fun GalleryMediaCard(
             }
         }
 
-        // Apple Photos-style Selection Badge (Top-End)
+        // Selection Badge: Brand Blue (#0A84FF) with ordered number or ready-ring
         if (isSelected) {
             // Subtle blue tint wash over selected image
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color(0xFF007AFF).copy(alpha = 0.18f))
+                    .background(Color(0xFF0A84FF).copy(alpha = 0.18f))
             )
 
-            // Numbered or checked badge
+            // Numbered badge
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(5.dp)
                     .size(22.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFF007AFF))
+                    .background(Color(0xFF0A84FF))
                     .border(1.5.dp, Color.White, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
@@ -1674,7 +2211,7 @@ private fun GalleryMediaCard(
                 }
             }
         } else if (hasAnySelection) {
-            // Unselected indicator in multi-selection mode (White ring indicating ready to select)
+            // Unselected indicator in multi-selection mode
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
@@ -1689,7 +2226,7 @@ private fun GalleryMediaCard(
 }
 
 /**
- * Floating Multi-Select Action Dock at the bottom
+ * Samsung One UI 7 Floating Multi-Select Action Dock at the bottom
  */
 @Composable
 private fun GalleryFloatingSelectionDock(
@@ -1709,9 +2246,10 @@ private fun GalleryFloatingSelectionDock(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 14.dp, vertical = 10.dp)
-            .shadow(18.dp, RoundedCornerShape(18.dp), spotColor = Color.Black.copy(alpha = 0.25f)),
-        shape = RoundedCornerShape(18.dp),
-        color = if (colors.isDark) Color(0xF01C1C1E) else Color(0xF4FFFFFF)
+            .shadow(20.dp, RoundedCornerShape(22.dp), spotColor = Color.Black.copy(alpha = 0.35f)),
+        shape = RoundedCornerShape(22.dp),
+        color = if (colors.isDark) Color(0xF01C1C1E) else Color(0xF4FFFFFF),
+        border = BorderStroke(0.5.dp, colors.glassBorder)
     ) {
         Column(
             modifier = Modifier
@@ -1719,7 +2257,7 @@ private fun GalleryFloatingSelectionDock(
                 .padding(horizontal = 14.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Top Row: Count Badge, Select All, Clear Button, and Selected Thumbnails
+            // Top Row: Count Badge, Select All, Clear Button
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1732,11 +2270,11 @@ private fun GalleryFloatingSelectionDock(
                     Icon(
                         Lucide.Check,
                         contentDescription = null,
-                        tint = colors.primary,
+                        tint = Color(0xFF0A84FF),
                         modifier = Modifier.size(15.dp)
                     )
                     Text(
-                        text = "${selectedUris.size}/$maxSelection",
+                        text = "${selectedUris.size}/$maxSelection selected",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = colors.textMain
@@ -1752,7 +2290,7 @@ private fun GalleryFloatingSelectionDock(
                             text = "Select All",
                             fontSize = 11.5.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = colors.primary,
+                            color = Color(0xFF0A84FF),
                             modifier = Modifier
                                 .clip(RoundedCornerShape(6.dp))
                                 .clickable { onSelectAll() }
@@ -1774,19 +2312,17 @@ private fun GalleryFloatingSelectionDock(
                 }
             }
 
-            // Thumbnail Strip
+            // Thumbnail Strip with ordered badges and single-tap remove X
             LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                items(selectedUris) { uri ->
+                itemsIndexed(selectedUris) { index, uri ->
                     Box(
                         modifier = Modifier
-                            .size(42.dp)
-                            .graphicsLayer {
-                                shape = RoundedCornerShape(8.dp)
-                                clip = true
-                            }
+                            .size(46.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .border(1.dp, Color(0xFF0A84FF).copy(alpha = 0.5f), RoundedCornerShape(10.dp))
                     ) {
                         val context = LocalContext.current
                         val dockThumbRequest = remember(uri) {
@@ -1806,16 +2342,43 @@ private fun GalleryFloatingSelectionDock(
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()
                         )
-                        Icon(
-                            Lucide.X,
-                            contentDescription = "Remove",
-                            tint = Color.White,
+
+                        // Order number badge on top-start
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .padding(2.dp)
+                                .size(14.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF0A84FF)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "${index + 1}",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
+
+                        // Remove X button on top-end
+                        Box(
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
                                 .padding(2.dp)
                                 .size(14.dp)
-                                .clickable { onRemoveUri(uri) }
-                        )
+                                .clip(CircleShape)
+                                .background(Color.Black.copy(alpha = 0.65f))
+                                .clickable { onRemoveUri(uri) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Lucide.X,
+                                contentDescription = "Remove",
+                                tint = Color.White,
+                                modifier = Modifier.size(9.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -1836,13 +2399,13 @@ private fun GalleryFloatingSelectionDock(
                         value = captionText,
                         onValueChange = onCaptionChange,
                         singleLine = true,
-                        cursorBrush = SolidColor(colors.primary),
+                        cursorBrush = SolidColor(Color(0xFF0A84FF)),
                         textStyle = TextStyle(fontSize = 12.5.sp, color = colors.textMain),
                         modifier = Modifier.weight(1f),
                         decorationBox = { inner ->
                             if (captionText.isEmpty()) {
                                 Text(
-                                    "Caption...",
+                                    "Write a caption...",
                                     fontSize = 12.5.sp,
                                     color = colors.textMuted
                                 )
@@ -1861,19 +2424,21 @@ private fun GalleryFloatingSelectionDock(
                 }
             }
 
-            // Submit Button
+            // Vibrant Brand Blue Action Button
             LiquidGlassPrimaryButton(
                 onClick = onSubmit,
-                modifier = Modifier.fillMaxWidth().height(38.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(42.dp)
             ) {
                 Icon(
                     Lucide.Send,
                     contentDescription = null,
                     tint = Color.White,
-                    modifier = Modifier.size(14.dp)
+                    modifier = Modifier.size(15.dp)
                 )
                 Text(
-                    text = "Confirm (${selectedUris.size})",
+                    text = if (showCaptionInput) "Send (${selectedUris.size})" else "Confirm (${selectedUris.size})",
                     fontSize = 13.5.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
@@ -1884,8 +2449,161 @@ private fun GalleryFloatingSelectionDock(
 }
 
 /**
- * Fullscreen Interactive Lightbox Preview with Swipe Navigation, Pinch-to-Zoom,
- * Metadata Info Sheet, and Native Share.
+ * Slide-Up Samsung Media Details Sheet in Lightbox
+ */
+@Composable
+private fun SamsungMediaDetailsSheet(
+    item: GalleryMediaItem,
+    onDismiss: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)),
+        color = Color(0xFF1E1E22).copy(alpha = 0.98f),
+        border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.15f))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // Drag handle pill
+            Box(
+                modifier = Modifier
+                    .size(width = 38.dp, height = 4.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.35f))
+                    .align(Alignment.CenterHorizontally)
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Details",
+                    color = Color.White,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
+                    Icon(
+                        Lucide.X,
+                        contentDescription = "Close",
+                        tint = Color.White.copy(alpha = 0.7f),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+
+            // File Name
+            Column {
+                Text(
+                    "FILE NAME",
+                    fontSize = 10.5.sp,
+                    color = Color.White.copy(alpha = 0.45f),
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    item.name,
+                    fontSize = 13.5.sp,
+                    color = Color.White,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+
+            // Date & Time
+            Column {
+                Text(
+                    "DATE & TIME",
+                    fontSize = 10.5.sp,
+                    color = Color.White.copy(alpha = 0.45f),
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    item.formattedDate,
+                    fontSize = 13.sp,
+                    color = Color.White.copy(alpha = 0.85f)
+                )
+            }
+
+            // Resolution, Megapixels & Size Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                if (item.width > 0 && item.height > 0) {
+                    val mp = (item.width.toLong() * item.height.toLong()) / 1_000_000.0
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "RESOLUTION",
+                            fontSize = 10.5.sp,
+                            color = Color.White.copy(alpha = 0.45f),
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            "${item.width} × ${item.height} (${"%.1f MP".format(mp)})",
+                            fontSize = 13.sp,
+                            color = Color.White.copy(alpha = 0.85f)
+                        )
+                    }
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "FILE SIZE",
+                        fontSize = 10.5.sp,
+                        color = Color.White.copy(alpha = 0.45f),
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        item.formattedSize,
+                        fontSize = 13.sp,
+                        color = Color(0xFF0A84FF),
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+
+            // Storage Path
+            Column {
+                Text(
+                    "STORAGE LOCATION",
+                    fontSize = 10.5.sp,
+                    color = Color.White.copy(alpha = 0.45f),
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    "Internal storage > DCIM > ${item.bucketName}",
+                    fontSize = 12.5.sp,
+                    color = Color.White.copy(alpha = 0.7f)
+                )
+            }
+
+            // Format
+            Column {
+                Text(
+                    "FORMAT",
+                    fontSize = 10.5.sp,
+                    color = Color.White.copy(alpha = 0.45f),
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    if (item.isVideo) "Video / MP4" else item.mimeType.substringAfterLast("/").uppercase(),
+                    fontSize = 12.5.sp,
+                    color = Color.White.copy(alpha = 0.7f)
+                )
+            }
+
+            Spacer(Modifier.height(6.dp))
+        }
+    }
+}
+
+/**
+ * Modern Lightbox Multi-Item Swipe & Zoom Dialog with Details (ⓘ) sheet and Favorite heart
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -1905,6 +2623,7 @@ private fun GalleryLightboxDialog(
     ) { mediaList.size }
 
     var showInfoSheet by remember { mutableStateOf(false) }
+    var isFavorite by remember { mutableStateOf(false) }
     val currentItem = mediaList.getOrNull(pagerState.currentPage)
 
     Dialog(
@@ -1917,7 +2636,7 @@ private fun GalleryLightboxDialog(
                 .background(Color.Black.copy(alpha = 0.96f))
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
-                // Header: Index, Title, Info, Share, Close
+                // Header: Index, Title, Favorite, Info, Share, Close
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1947,7 +2666,23 @@ private fun GalleryLightboxDialog(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        // Info Button
+                        // Favorite Heart toggle
+                        IconButton(
+                            onClick = {
+                                SoundManager.playTap(context)
+                                isFavorite = !isFavorite
+                            },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                Lucide.Heart,
+                                contentDescription = "Favorite",
+                                tint = if (isFavorite) Color(0xFFFF2D55) else Color.White,
+                                modifier = Modifier.size(19.dp)
+                            )
+                        }
+
+                        // Info Button (toggles Samsung Details sheet)
                         IconButton(
                             onClick = { showInfoSheet = !showInfoSheet },
                             modifier = Modifier.size(36.dp)
@@ -2067,81 +2802,17 @@ private fun GalleryLightboxDialog(
                     }
                 }
 
-                // Info Overlay Card
+                // Slide-Up Samsung Media Details Sheet
                 AnimatedVisibility(
                     visible = showInfoSheet && currentItem != null,
-                    enter = slideInVertically(initialOffsetY = { it / 2 }) + fadeIn(),
-                    exit = slideOutVertically(targetOffsetY = { it / 2 }) + fadeOut()
+                    enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                    exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
                 ) {
                     currentItem?.let { item ->
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 6.dp),
-                            shape = RoundedCornerShape(16.dp),
-                            color = Color(0xFF1E1E22).copy(alpha = 0.95f),
-                            border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.15f))
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "Media Details",
-                                        color = Color.White,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = item.formattedSize,
-                                        color = Color(0xFF0A84FF),
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                }
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(
-                                        text = "Date: ${item.formattedDate}",
-                                        color = Color.White.copy(alpha = 0.75f),
-                                        fontSize = 11.5.sp
-                                    )
-                                    if (item.width > 0 && item.height > 0) {
-                                        Text(
-                                            text = "${item.width} × ${item.height}",
-                                            color = Color.White.copy(alpha = 0.75f),
-                                            fontSize = 11.5.sp
-                                        )
-                                    }
-                                }
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(
-                                        text = "Album: ${item.bucketName}",
-                                        color = Color.White.copy(alpha = 0.75f),
-                                        fontSize = 11.5.sp
-                                    )
-                                    Text(
-                                        text = if (item.isVideo) "Video" else item.mimeType.substringAfterLast("/").uppercase(),
-                                        color = Color.White.copy(alpha = 0.55f),
-                                        fontSize = 11.sp
-                                    )
-                                }
-                            }
-                        }
+                        SamsungMediaDetailsSheet(
+                            item = item,
+                            onDismiss = { showInfoSheet = false }
+                        )
                     }
                 }
 
@@ -2171,7 +2842,7 @@ private fun GalleryLightboxDialog(
                                     .clip(RoundedCornerShape(6.dp))
                                     .border(
                                         width = if (isCurrent) 2.dp else if (isItemSel) 1.dp else 0.dp,
-                                        color = if (isCurrent) Color(0xFF007AFF) else if (isItemSel) Color(0xFF34C759) else Color.Transparent,
+                                        color = if (isCurrent) Color(0xFF0A84FF) else if (isItemSel) Color(0xFF34C759) else Color.Transparent,
                                         shape = RoundedCornerShape(6.dp)
                                     )
                                     .clickable {
@@ -2279,7 +2950,7 @@ private fun GalleryPermissionCard(
             Icon(
                 Lucide.ShieldCheck,
                 contentDescription = null,
-                tint = colors.primary,
+                tint = Color(0xFF0A84FF),
                 modifier = Modifier.size(44.dp)
             )
 
