@@ -901,237 +901,28 @@ fun OneUiCollapsingConversationsScreen(
         }
     }
 
-        // 5. ONE UI CLAYMORPHISM FLOATING ACTION BUTTON (Centered, Compact, Scroll-Morphing)
+        // 5. APPLE LIQUID GLASS CLAYMORPHISM FLOATING ACTION BUTTON (Centered, Compact, Scroll-Morphing)
         AnimatedVisibility(
             visible = !isSelectionMode,
             enter = scaleIn(spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)) + fadeIn(),
             exit = scaleOut(spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)) + fadeOut(),
             modifier = Modifier.align(Alignment.BottomCenter)
         ) {
-            // Always use our fixed Brand color clean and Professional
-            val fabColor = colors.iosBlue
-
-            // Claymorphism Tonal Palette
-            val clayHighlight = remember(fabColor) {
-                Color(
-                    red = (fabColor.red * 1.25f).coerceIn(0f, 1f),
-                    green = (fabColor.green * 1.25f).coerceIn(0f, 1f),
-                    blue = (fabColor.blue * 1.25f).coerceIn(0f, 1f)
-                )
-            }
-            val clayDark = remember(fabColor) {
-                Color(
-                    red = (fabColor.red * 0.70f).coerceIn(0f, 1f),
-                    green = (fabColor.green * 0.70f).coerceIn(0f, 1f),
-                    blue = (fabColor.blue * 0.70f).coerceIn(0f, 1f)
-                )
-            }
-
-            // Compact sizing: 46dp collapsed circle, 184dp expanded pill
-            val targetFabWidth = if (isFabExpanded) 184.dp else 46.dp
-            val fabWidth by animateDpAsState(
-                targetValue = targetFabWidth,
-                animationSpec = spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow),
-                label = "fabWidth"
-            )
-            val fabShape = RoundedCornerShape(23.dp)
-
-            val fabInteractionSource = remember { MutableInteractionSource() }
-            val isFabPressed by fabInteractionSource.collectIsPressedAsState()
-            val fabScale by animateFloatAsState(
-                targetValue = if (isFabPressed) 0.94f else 1f,
-                animationSpec = spring(dampingRatio = 0.65f, stiffness = Spring.StiffnessMediumLow),
-                label = "clayFabScale"
-            )
-
-            // Clay Inset Light & Specular Rim Gradients
-            val clayGradientBrush = remember(clayHighlight, fabColor, clayDark) {
-                Brush.linearGradient(
-                    colors = listOf(clayHighlight, fabColor, clayDark),
-                    start = Offset(0f, 0f),
-                    end = Offset(300f, 100f)
-                )
-            }
-
-            Box(
+            AppleGlassMorphButton(
+                isExpanded = isFabExpanded,
+                onExpandChange = { isFabExpanded = it },
+                onGroupClick = {
+                    SoundManager.playReaction()
+                    onCreateGroupClick?.invoke() ?: onNewMessageClick()
+                },
+                onChatClick = {
+                    SoundManager.playReaction()
+                    onNewMessageClick()
+                },
                 modifier = Modifier
                     .windowInsetsPadding(WindowInsets.navigationBars)
                     .padding(bottom = 114.dp)
-                    .graphicsLayer {
-                        scaleX = fabScale
-                        scaleY = fabScale
-                    }
-                    .width(fabWidth)
-                    .height(46.dp)
-                    // Outer diffuse clay drop shadow (ambient + spot color)
-                    .shadow(
-                        elevation = if (isFabPressed) 4.dp else 10.dp,
-                        shape = fabShape,
-                        ambientColor = Color.Black.copy(alpha = 0.14f),
-                        spotColor = fabColor.copy(alpha = 0.45f)
-                    )
-                    .clip(fabShape)
-                    .background(clayGradientBrush)
-                    // Outer subtle tactile rim
-                    .border(
-                        width = 1.dp,
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                Color.White.copy(alpha = 0.55f),
-                                Color.White.copy(alpha = 0.15f),
-                                Color.Black.copy(alpha = 0.20f)
-                            )
-                        ),
-                        shape = fabShape
-                    )
-                    // Claymorphism 3D Inset Shadows: Specular top-left light + Deep bottom-right shadow
-                    .drawWithContent {
-                        drawContent()
-
-                        val strokeWidth = 2.dp.toPx()
-                        val cornerRadius = CornerRadius(size.height / 2, size.height / 2)
-
-                        // 1. Top Specular Clay Highlight (inflated round cushion effect)
-                        drawRoundRect(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.White.copy(alpha = 0.65f),
-                                    Color.White.copy(alpha = 0.12f),
-                                    Color.Transparent
-                                ),
-                                startY = 0f,
-                                endY = size.height * 0.60f
-                            ),
-                            topLeft = Offset(strokeWidth / 2, strokeWidth / 2),
-                            size = Size(size.width - strokeWidth, size.height - strokeWidth),
-                            cornerRadius = cornerRadius,
-                            style = Stroke(width = strokeWidth)
-                        )
-
-                        // 2. Bottom Deep Clay Shadow (deep puffy extrusion)
-                        drawRoundRect(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    Color.Black.copy(alpha = 0.08f),
-                                    Color.Black.copy(alpha = 0.35f)
-                                ),
-                                startY = size.height * 0.40f,
-                                endY = size.height
-                            ),
-                            topLeft = Offset(strokeWidth / 2, strokeWidth / 2),
-                            size = Size(size.width - strokeWidth, size.height - strokeWidth),
-                            cornerRadius = cornerRadius,
-                            style = Stroke(width = strokeWidth)
-                        )
-                    }
-                    .then(
-                        if (!isFabExpanded) {
-                            Modifier.clickable(
-                                interactionSource = fabInteractionSource,
-                                indication = null
-                            ) {
-                                SoundManager.playReaction()
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onNewMessageClick()
-                            }
-                        } else Modifier
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                AnimatedContent(
-                    targetState = isFabExpanded,
-                    transitionSpec = {
-                        fadeIn(tween(180)) togetherWith fadeOut(tween(120))
-                    },
-                    label = "clayFabContent"
-                ) { expanded ->
-                    if (!expanded) {
-                        Icon(
-                            imageVector = Lucide.Plus,
-                            contentDescription = "New chat",
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    } else {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceEvenly
-                        ) {
-                            // Create Group
-                            Row(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight()
-                                    .clip(RoundedCornerShape(20.dp))
-                                    .clickable {
-                                        SoundManager.playReaction()
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        onCreateGroupClick?.invoke() ?: onNewMessageClick()
-                                    }
-                                    .padding(horizontal = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                Icon(
-                                    imageVector = Lucide.Users,
-                                    contentDescription = "Create Group",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(15.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "Group",
-                                    color = Color.White,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-
-                            // Subtle Divider
-                            Box(
-                                modifier = Modifier
-                                    .width(1.dp)
-                                    .height(18.dp)
-                                    .background(Color.White.copy(alpha = 0.30f))
-                            )
-
-                            // Direct Chat
-                            Row(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight()
-                                    .clip(RoundedCornerShape(20.dp))
-                                    .clickable {
-                                        SoundManager.playReaction()
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        onNewMessageClick()
-                                    }
-                                    .padding(horizontal = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                Icon(
-                                    imageVector = Lucide.MessageSquare,
-                                    contentDescription = "Direct Chat",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(15.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "Chat",
-                                    color = Color.White,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                        }
-                    }
-                }
-            }
+            )
         }
 
         // 6. ONE UI MULTI-SELECTION BOTTOM ACTION MENU BAR
