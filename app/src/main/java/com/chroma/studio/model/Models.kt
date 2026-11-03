@@ -246,7 +246,11 @@ data class Story(
     val shares: Int = 0,
     val viewedBy: List<String> = emptyList(),
     val likedBy: List<String> = emptyList()
-)
+) {
+    @get:com.google.firebase.firestore.Exclude
+    val decompressedTextFormat: String
+        get() = com.chroma.studio.utils.DataCompressionUtils.decompressText(textFormat)
+}
 
 data class UserStoryGroup(
     val userId: String = "",

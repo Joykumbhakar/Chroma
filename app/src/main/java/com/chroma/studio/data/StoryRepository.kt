@@ -54,7 +54,7 @@ class StoryRepository {
             userId = user.uid,
             mediaUrl = "text:story",
             textContent = textContent,
-            textFormat = textFormat,
+            textFormat = com.chroma.studio.utils.DataCompressionUtils.compressText(textFormat),
             backgroundColor = backgroundColor,
             audienceType = audienceType,
             customAudienceIds = customAudienceIds,

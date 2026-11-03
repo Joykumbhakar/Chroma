@@ -23,6 +23,22 @@ rules_version = '2';
 //      - /users/{userId}/liked_posts/{workId} (bookmarked/liked post record)
 //      - /users/{userId}/saved_posts/{workId} (saved post record)
 //      - /users/{userId}/shared_posts/{workId} (shared post record)
+//      - /users/{userId}/notifications/{notifId} (in-app notifications for likes, follows, comments, messages)
+//        Fields:
+//          - id: string (notification ID)
+//          - type: string (LIKE, COMMENT, MENTION, MESSAGE, FOLLOW, REMIX, SYSTEM)
+//          - actorUid: string (UID of actor initiating event)
+//          - actorName: string (display name of actor)
+//          - actorHandle: string (username handle of actor)
+//          - actorAvatarUrl: string (optional avatar URL)
+//          - actorGender: string (optional)
+//          - isVerified: bool
+//          - actionText: string
+//          - detailText: string (optional)
+//          - targetPreviewUrl: string (optional preview image/thumbnail)
+//          - timestamp: number (millisecond epoch timestamp)
+//          - isRead: bool
+//          - targetId: string (optional target document or room ID)
 //
 // 2. Collection: community_works
 //    Document ID: {workId}
@@ -41,12 +57,13 @@ rules_version = '2';
 //      - likedBy: list of string
 //      - remixCount: int (interaction counter)
 //      - remixedBy: list of string
-//      - downloadCount: int (interaction counter)
+//      - downloadCount / downloadsCount: int (interaction counter)
 //      - downloadedBy: list of string
 //      - saveCount: int (interaction counter)
 //      - savedBy: list of string
 //      - shareCount: int (interaction counter)
 //      - sharedBy: list of string
+//      - commentsCount: int (interaction counter)
 //      - isArchived: bool
 //    Subcollections:
 //      - /community_works/{workId}/likes/{userId} (userId is the liker's UID)
@@ -93,7 +110,7 @@ rules_version = '2';
 //      - videoUrl: string
 //      - thumbnailUrl: string
 //      - caption: string
-//      - likesCount, viewsCount, commentCount, remixCount, shareCount, saveCount: int
+//      - likesCount, viewsCount, commentCount, commentsCount, remixCount, shareCount, saveCount: int
 //      - likedBy, viewedBy, remixedBy, sharedBy, savedBy: list of string
 //      - isArchived: bool
 //
@@ -129,10 +146,18 @@ rules_version = '2';
 // 9. Collection: reports
 //    Document ID: {reportId}
 //    Fields:
-//      - workId: string
-//      - reporterId: string
+//      - reporterId: string (UID of reporting user)
+//      - reportedUserId: string (optional)
+//      - reportedUsername: string (optional)
+//      - workId: string (optional)
 //      - reason: string
+//      - type: string (optional)
 //      - timestamp: number
+//
+// 10. Collection: app_config
+//     Document ID: {configId}
+//     Fields:
+//       - Global configuration settings and flags (managed exclusively via Firebase Admin SDK / backend)
 // ===============================================================
 
 service cloud.firestore {
@@ -188,6 +213,11 @@ service cloud.firestore {
       match /shared_posts/{workId} {
         allow read, write: if isOwner(userId);
       }
+
+      match /notifications/{notifId} {
+        allow read, update, delete: if isAuthenticated() && request.auth.uid == userId;
+        allow create: if isAuthenticated() && request.resource.data.actorUid == request.auth.uid;
+      }
     }
 
     // ===============================================================
@@ -204,7 +234,7 @@ service cloud.firestore {
       allow update: if isAuthenticated() && (
         request.auth.uid == resource.data.creatorId ||
         request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['likesCount', 'likedBy', 'remixCount', 'remixedBy', 'downloadCount', 'downloadedBy', 'downloadsCount', 'saveCount', 'savedBy', 'shareCount', 'sharedBy'])
+          .hasOnly(['likesCount', 'likedBy', 'remixCount', 'remixedBy', 'downloadCount', 'downloadedBy', 'downloadsCount', 'saveCount', 'savedBy', 'shareCount', 'sharedBy', 'commentsCount'])
       );
 
       // Only creator can delete their work
@@ -279,7 +309,7 @@ service cloud.firestore {
       allow update: if isAuthenticated() && (
         request.auth.uid == resource.data.creatorId ||
         request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['likesCount', 'viewsCount', 'likedBy', 'viewedBy', 'commentCount', 'remixCount', 'remixedBy', 'shareCount', 'sharedBy', 'saveCount', 'savedBy'])
+          .hasOnly(['likesCount', 'viewsCount', 'likedBy', 'viewedBy', 'commentCount', 'commentsCount', 'remixCount', 'remixedBy', 'shareCount', 'sharedBy', 'saveCount', 'savedBy'])
       );
       allow delete: if isAuthenticated() && request.auth.uid == resource.data.creatorId;
     }
@@ -328,6 +358,14 @@ service cloud.firestore {
       allow read: if false;
       allow create: if isAuthenticated() && request.resource.data.reporterId == request.auth.uid;
       allow update, delete: if false;
+    }
+
+    // ===============================================================
+    // 10. App Config Collection (Read-only configuration for clients)
+    // ===============================================================
+    match /app_config/{configId} {
+      allow read: if isAuthenticated();
+      allow write: if false;
     }
   }
 }

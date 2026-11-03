@@ -102,8 +102,9 @@ private fun StorySlideContent(
 
         if (isTextStory) {
             val formatState = try {
-                if (story.textFormat.isNotBlank() && story.textFormat != "{}") {
-                    StoryViewerJson.decodeFromString<StatusFormatState>(story.textFormat)
+                val resolvedFormat = story.decompressedTextFormat
+                if (resolvedFormat.isNotBlank() && resolvedFormat != "{}") {
+                    StoryViewerJson.decodeFromString<StatusFormatState>(resolvedFormat)
                 } else {
                     StatusFormatState()
                 }

@@ -202,7 +202,7 @@ class DiscoverRepository {
 
         if (originalPost.postType == "video" || !originalPost.videoUrl.isNullOrBlank()) {
             try {
-                val flashDoc = db.collection("flash").document(newWorkId)
+                val flashDoc = db.collection("flash_videos").document(newWorkId)
                 val flashVideo = com.chroma.studio.model.FlashVideo(
                     id = newWorkId,
                     creatorId = user.uid,
