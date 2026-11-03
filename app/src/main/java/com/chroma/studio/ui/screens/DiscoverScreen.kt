@@ -2365,7 +2365,16 @@ fun CreatorFeedHeader(
             }
         }
 
-        HorizontalDivider(thickness = 0.5.dp, color = colors.glassBorder)
+        // ── Samsung One UI / Apple HIG Header Divider ──
+        // Strictly hidden in the Expanded state (collapseProgress <= 0.8f) for a clean, seamless surface;
+        // only appears when collapsed to separate the pinned compact action bar from scrolling feed items.
+        if (collapseProgress > 0.80f || isSearchExpanded) {
+            val dividerAlpha = if (isSearchExpanded) 1f else ((collapseProgress - 0.80f) / 0.20f).coerceIn(0f, 1f)
+            HorizontalDivider(
+                thickness = 0.5.dp,
+                color = colors.glassBorder.copy(alpha = dividerAlpha)
+            )
+        }
     }
 }
 
