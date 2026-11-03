@@ -240,6 +240,8 @@ class HomeActivity : ComponentActivity() {
                     hideBottomNavRoutes.contains(currentRoute) ||
                     currentRoute.startsWith("creator_studio") ||
                     fullRoute.startsWith("creator_studio") ||
+                    currentRoute.startsWith("create_post") ||
+                    fullRoute.startsWith("create_post") ||
                     currentRoute.startsWith("chat") ||
                     fullRoute.startsWith("chat") ||
                     currentRoute.startsWith("story") ||
@@ -293,6 +295,7 @@ class HomeActivity : ComponentActivity() {
 
                 // ── Flash editor pass-through state ────────────────────────
                 var flashPickerVideoUri by remember { mutableStateOf<Uri?>(null) }
+                var storyInitialPhotoUri by remember { mutableStateOf<Uri?>(null) }
                 var flashPickerPhotoUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
                 var flashImportedMediaUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
                 var flashTrimStart by remember { androidx.compose.runtime.mutableLongStateOf(0L) }
@@ -318,7 +321,7 @@ class HomeActivity : ComponentActivity() {
                     com.chroma.studio.AppIntentManager.onWidgetAction = { action ->
                         when (action) {
                             com.chroma.studio.widget.OscellionQuickActionsWidgetProvider.ACTION_CREATE_POST -> {
-                                navController.navigate("create_post/post")
+                                navController.navigate("create_post")
                             }
                             com.chroma.studio.widget.OscellionQuickActionsWidgetProvider.ACTION_VIDEO_EDITOR -> {
                                 navController.navigate("flash_projects_hub")
@@ -1110,12 +1113,15 @@ class HomeActivity : ComponentActivity() {
                             onRemixWork = onRemixCommunityPost,
                              onDeleteWork = { workId -> discoverVm.deleteWork(workId) },
                              onEditWork = { workId, newTitle, newDesc -> discoverVm.updateWork(workId, newTitle, newDesc) },
-                             onCreatePost = { navController.navigate("creator_studio/post") },
+                             onCreatePost = { navController.navigate("create_post") },
                              onCreateFlash = { navController.navigate("flash_projects_hub") },
                              onPublishWork = { navController.navigate("creator_studio/work") },
                              onNavigateToNotifications = { navController.navigate("notifications_feed") },
                              onStoryViewerChange = { isDiscoverStoryViewerActive = it },
-                             onNavigateToCreateStory = { navController.navigate("story_editor") },
+                             onNavigateToCreateStory = { maybeUri ->
+                                 storyInitialPhotoUri = maybeUri
+                                 navController.navigate("story_editor")
+                             },
                              onNavigateToDrafts = { navController.navigate("drafts_list") },
                              onFlashVideoClick = { videoId ->
                                  val post = works.firstOrNull { it.id == videoId }
@@ -1195,7 +1201,10 @@ class HomeActivity : ComponentActivity() {
                                         navController.navigate("userProfile/$authorId")
                                     }
                                 },
-                                onNavigateToCreateStory = { navController.navigate("story_editor") },
+                                onNavigateToCreateStory = { maybeUri ->
+                                    storyInitialPhotoUri = maybeUri
+                                    navController.navigate("story_editor")
+                                },
                                 onStoryViewerChange = { isProfileStoryViewerActive = it },
                                 onBack = { navController.popBackStack() }
                             )
@@ -1207,27 +1216,42 @@ class HomeActivity : ComponentActivity() {
 
                     composable("create_post") {
                         val importedUri = flashImportedMediaUris.firstOrNull() ?: flashPickerPhotoUris.firstOrNull()
-                        if (importedUri != null) {
-                            ChromaPhotoEditorScreen(
-                                photoUri = importedUri,
-                                onExportSuccess = { exportedUri ->
-                                    flashImportedMediaUris = listOf(exportedUri)
-                                    navController.popBackStack()
-                                    coroutineScope.launch {
-                                        pagerState.animateScrollToPage(2)
-                                    }
-                                },
-                                onBack = { navController.popBackStack() }
-                            )
-                        } else {
-                            com.chroma.studio.ui.components.OscellionGalleryLayout(
-                                allowedMediaFilter = com.chroma.studio.ui.components.GalleryMediaTypeFilter.PHOTOS,
-                                onPhotosSelected = { uris ->
-                                    flashImportedMediaUris = uris
-                                },
-                                onClose = { navController.popBackStack() }
-                            )
-                        }
+                        com.chroma.studio.ui.screens.PostCreationFlowScreen(
+                            initialPhotoUri = importedUri,
+                            onFinish = {
+                                flashImportedMediaUris = emptyList()
+                                flashPickerPhotoUris = emptyList()
+                                navController.popBackStack()
+                                coroutineScope.launch {
+                                    pagerState.animateScrollToPage(2)
+                                }
+                            },
+                            onClose = {
+                                flashImportedMediaUris = emptyList()
+                                flashPickerPhotoUris = emptyList()
+                                navController.popBackStack()
+                            }
+                        )
+                    }
+
+                    composable("create_post/{mode}") {
+                        val importedUri = flashImportedMediaUris.firstOrNull() ?: flashPickerPhotoUris.firstOrNull()
+                        com.chroma.studio.ui.screens.PostCreationFlowScreen(
+                            initialPhotoUri = importedUri,
+                            onFinish = {
+                                flashImportedMediaUris = emptyList()
+                                flashPickerPhotoUris = emptyList()
+                                navController.popBackStack()
+                                coroutineScope.launch {
+                                    pagerState.animateScrollToPage(2)
+                                }
+                            },
+                            onClose = {
+                                flashImportedMediaUris = emptyList()
+                                flashPickerPhotoUris = emptyList()
+                                navController.popBackStack()
+                            }
+                        )
                     }
 
                     composable(
@@ -1898,6 +1922,10 @@ class HomeActivity : ComponentActivity() {
                                     navController.navigate("userProfile/$authorId")
                                 }
                             },
+                            onNavigateToCreateStory = { maybeUri ->
+                                storyInitialPhotoUri = maybeUri
+                                navController.navigate("story_editor")
+                            },
                             onStoryViewerChange = { isProfileStoryViewerActive = it },
                             onBack = { navController.popBackStack() }
                         )
@@ -1979,8 +2007,13 @@ class HomeActivity : ComponentActivity() {
                         val storyVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.StoryViewModel>()
                         com.chroma.studio.ui.screens.StoryEditorScreen(
                             storyViewModel = storyVm,
-                            onNavigateBack = { navController.popBackStack() },
+                            initialBackgroundUri = storyInitialPhotoUri,
+                            onNavigateBack = {
+                                storyInitialPhotoUri = null
+                                navController.popBackStack()
+                            },
                             onStoryPosted = {
+                                storyInitialPhotoUri = null
                                 navController.popBackStack()
                                 com.chroma.studio.ui.components.ToastManager.showToast("Story published! 🌟")
                             }
@@ -1991,8 +2024,13 @@ class HomeActivity : ComponentActivity() {
                         val storyVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.StoryViewModel>()
                         com.chroma.studio.ui.screens.StoryEditorScreen(
                             storyViewModel = storyVm,
-                            onNavigateBack = { navController.popBackStack() },
+                            initialBackgroundUri = storyInitialPhotoUri,
+                            onNavigateBack = {
+                                storyInitialPhotoUri = null
+                                navController.popBackStack()
+                            },
                             onStoryPosted = {
+                                storyInitialPhotoUri = null
                                 navController.popBackStack()
                                 com.chroma.studio.ui.components.ToastManager.showToast("Story published! 🌟")
                             }
@@ -2042,7 +2080,7 @@ class HomeActivity : ComponentActivity() {
                                 flashImportedMediaUris = shared.uris
                                 flashPickerPhotoUris = shared.uris
                                 incomingSharedData = null
-                                navController.navigate("create_post/post")
+                                navController.navigate("create_post")
                             }
                             com.chroma.studio.ui.components.SharedTargetAction.CHAT_MESSAGE -> {
                                 incomingSharedData = null

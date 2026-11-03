@@ -1,5 +1,6 @@
 package com.chroma.studio.ui.screens
 
+import android.net.Uri
 import androidx.compose.runtime.Composable
 import com.chroma.studio.viewmodel.StoryViewModel
 import kotlinx.serialization.Serializable
@@ -30,11 +31,13 @@ data class StatusFormatState(
 @Composable
 fun StatusEditorScreen(
     storyViewModel: StoryViewModel,
+    initialBackgroundUri: Uri? = null,
     onNavigateBack: () -> Unit,
     onStatusPosted: () -> Unit
 ) {
     StoryEditorScreen(
         storyViewModel = storyViewModel,
+        initialBackgroundUri = initialBackgroundUri,
         onNavigateBack = onNavigateBack,
         onStoryPosted = onStatusPosted
     )

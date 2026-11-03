@@ -216,7 +216,7 @@ fun DiscoverScreen(
     onPublishWork: () -> Unit,
     onNavigateToNotifications: () -> Unit,
     onStoryViewerChange: ((Boolean) -> Unit)? = null,
-    onNavigateToCreateStory: (() -> Unit)? = null,
+    onNavigateToCreateStory: ((android.net.Uri?) -> Unit)? = null,
     onNavigateToDrafts: () -> Unit = {},
     onFlashVideoClick: ((String) -> Unit)? = null
 ) {
@@ -880,7 +880,7 @@ fun DiscoverScreen(
                 },
                 onTextStory = {
                     showStoryCreationSheet = false
-                    onNavigateToCreateStory?.invoke()
+                    onNavigateToCreateStory?.invoke(null)
                 }
             )
         }
@@ -898,7 +898,7 @@ fun DiscoverScreen(
                     showStoryGalleryPicker = false
                     val pickedUri = uris.firstOrNull()
                     if (pickedUri != null) {
-                        editingStoryImageUri = pickedUri
+                        onNavigateToCreateStory?.invoke(pickedUri)
                     }
                 }
             )
@@ -910,30 +910,12 @@ fun DiscoverScreen(
                 onDismiss = { showStoryCamera = false },
                 onPhotoCaptured = { uri, _ ->
                     showStoryCamera = false
-                    editingStoryImageUri = uri
+                    onNavigateToCreateStory?.invoke(uri)
                 },
                 onVideoCaptured = { uri, _ ->
                     showStoryCamera = false
                     pendingUploadStoryUri = uri
                     showShareStoryAudienceSheet = true
-                }
-            )
-        }
-
-        // Story Image Editor
-        if (editingStoryImageUri != null) {
-            FlashPhotoEditorScreen(
-                photoUris = listOf(editingStoryImageUri!!),
-                title = "Edit Story",
-                initialAspectRatio = PhotoAspectRatio.STORY_9_16,
-                nextButtonLabel = "Share Story",
-                onExportUris = { editedUris ->
-                    val finalUri = editedUris.firstOrNull() ?: editingStoryImageUri!!
-                    pendingUploadStoryUri = finalUri
-                    showShareStoryAudienceSheet = true
-                },
-                onBack = {
-                    editingStoryImageUri = null
                 }
             )
         }

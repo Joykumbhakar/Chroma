@@ -207,6 +207,7 @@ enum class StoryEditorToolbarTab {
 @Composable
 fun StoryEditorScreen(
     storyViewModel: StoryViewModel,
+    initialBackgroundUri: Uri? = null,
     onNavigateBack: () -> Unit,
     onStoryPosted: () -> Unit
 ) {
@@ -217,7 +218,7 @@ fun StoryEditorScreen(
     // Document State
     var headlineText by remember { mutableStateOf("") }
     var bodyContent by remember { mutableStateOf("") }
-    var backgroundImageUri by remember { mutableStateOf<Uri?>(null) }
+    var backgroundImageUri by remember { mutableStateOf<Uri?>(initialBackgroundUri) }
     val photoPickerLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()
     ) { uri ->

@@ -165,7 +165,7 @@ fun UserProfileScreen(
     onNavigateToChat: ((String) -> Unit)? = null,
     onNavigateToSettings: () -> Unit = {},
     onNavigateToEditProfile: () -> Unit = {},
-    onNavigateToCreateStory: (() -> Unit)? = null,
+    onNavigateToCreateStory: ((android.net.Uri?) -> Unit)? = null,
     onStoryViewerChange: ((Boolean) -> Unit)? = null,
     onBack: () -> Unit
 ) {
@@ -1156,7 +1156,7 @@ fun UserProfileScreen(
             },
             onTextStory = {
                 showStoryCreationSheet = false
-                onNavigateToCreateStory?.invoke()
+                onNavigateToCreateStory?.invoke(null)
             }
         )
     }
@@ -1174,7 +1174,7 @@ fun UserProfileScreen(
                 showStoryGalleryPicker = false
                 val pickedUri = uris.firstOrNull()
                 if (pickedUri != null) {
-                    editingStoryImageUri = pickedUri
+                    onNavigateToCreateStory?.invoke(pickedUri)
                 }
             }
         )
@@ -1186,30 +1186,12 @@ fun UserProfileScreen(
             onDismiss = { showStoryCamera = false },
             onPhotoCaptured = { uri, _ ->
                 showStoryCamera = false
-                editingStoryImageUri = uri
+                onNavigateToCreateStory?.invoke(uri)
             },
             onVideoCaptured = { uri, _ ->
                 showStoryCamera = false
                 pendingUploadStoryUri = uri
                 showShareStoryAudienceSheet = true
-            }
-        )
-    }
-
-    // Story Image Editor
-    if (editingStoryImageUri != null) {
-        FlashPhotoEditorScreen(
-            photoUris = listOf(editingStoryImageUri!!),
-            title = "Edit Story",
-            initialAspectRatio = PhotoAspectRatio.STORY_9_16,
-            nextButtonLabel = "Share Story",
-            onExportUris = { editedUris ->
-                val finalUri = editedUris.firstOrNull() ?: editingStoryImageUri!!
-                pendingUploadStoryUri = finalUri
-                showShareStoryAudienceSheet = true
-            },
-            onBack = {
-                editingStoryImageUri = null
             }
         )
     }
