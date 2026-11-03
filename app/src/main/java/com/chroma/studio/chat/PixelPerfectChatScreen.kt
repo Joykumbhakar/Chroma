@@ -369,7 +369,7 @@ fun PixelPerfectChatScreen(
                     })
                 }
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
+            Column(modifier = Modifier.fillMaxSize().imePadding()) {
                 // 1. TOP STICKY GLASS HEADER
                 GlassHeader(
                     userStatus = when {
@@ -1467,6 +1467,8 @@ private fun FooterComposer(
         modifier = Modifier
             .fillMaxWidth()
             .background(colors.appBg)
+            .imePadding()
+            .navigationBarsPadding()
             .drawBehind {
                 drawLine(
                     color = colors.borderSubtle,

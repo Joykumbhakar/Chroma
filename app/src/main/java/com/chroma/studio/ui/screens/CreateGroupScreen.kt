@@ -154,7 +154,7 @@ fun CreateGroupScreen(
         },
         containerColor = Color.Transparent
     ) { innerPadding ->
-        Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+        Box(modifier = Modifier.fillMaxSize().padding(innerPadding).imePadding()) {
             AuroraBackground()
 
             Column(modifier = Modifier.fillMaxSize()) {

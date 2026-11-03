@@ -749,6 +749,7 @@ fun StoryViewerScreen(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
+                        .imePadding()
                         .navigationBarsPadding()
                         .padding(horizontal = 16.dp, vertical = 18.dp)
                 ) {

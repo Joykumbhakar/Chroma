@@ -463,6 +463,7 @@ fun HiddenChatsVaultModal(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .imePadding()
                 .padding(horizontal = 18.dp)
         ) {
             // Header: "Hidden Chats" + Actions

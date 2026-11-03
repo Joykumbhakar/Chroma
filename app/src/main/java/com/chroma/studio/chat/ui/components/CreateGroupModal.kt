@@ -171,6 +171,7 @@ fun CreateGroupModal(
                 modifier = Modifier
                     .fillMaxSize()
                     .windowInsetsPadding(WindowInsets.statusBars)
+                    .imePadding()
                     .windowInsetsPadding(WindowInsets.navigationBars)
             ) {
                 // -- iOS Navigation Bar -----------------------------------

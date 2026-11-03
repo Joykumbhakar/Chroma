@@ -1990,6 +1990,7 @@ fun IosCameraReviewScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.BottomCenter)
+                .imePadding()
                 .navigationBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 14.dp)
         ) {

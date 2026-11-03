@@ -171,6 +171,7 @@ fun CreateTextStatusScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .imePadding()
                 .padding(horizontal = 16.dp)
                 .padding(bottom = 16.dp)
         ) {

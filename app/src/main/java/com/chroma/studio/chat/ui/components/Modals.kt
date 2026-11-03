@@ -2167,6 +2167,7 @@ private fun UserStoryPageView(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
+                .imePadding()
                 .navigationBarsPadding()
                 .padding(horizontal = 14.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.SpaceBetween
@@ -4988,6 +4989,7 @@ fun EmojiReactionPickerModal(
             modifier = Modifier
                 .fillMaxWidth()
                 .fillMaxHeight(0.72f)
+                .imePadding()
                 .navigationBarsPadding()
                 .clickable(
                     interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },

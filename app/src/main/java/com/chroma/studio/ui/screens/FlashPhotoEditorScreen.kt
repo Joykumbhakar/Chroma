@@ -1154,6 +1154,8 @@ fun FlashPhotoEditorScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(188.dp)
+                    .imePadding()
+                    .navigationBarsPadding()
                     .shadow(
                         elevation = 6.dp,
                         shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),

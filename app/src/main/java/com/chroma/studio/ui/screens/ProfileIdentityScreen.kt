@@ -441,6 +441,7 @@ fun ProfileIdentityScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .imePadding()
                         .navigationBarsPadding()
                         .padding(horizontal = 16.dp, vertical = 12.dp)
                 ) {
@@ -487,6 +488,7 @@ fun ProfileIdentityScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)

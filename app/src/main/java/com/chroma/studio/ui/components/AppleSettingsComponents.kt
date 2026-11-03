@@ -519,14 +519,14 @@ fun AppleSettingsGroup(
  * Universal Signature Programmatic Gradient for Icon Badges:
  * Single Unified Apple Blue Gradient matching Liquid Glass spec.
  */
-val UniversalIconGradientColors = listOf(Color(0xFF4DA6FF), Color(0xFF0A84FF), Color(0xFF0051D5))
+val UniversalIconGradientColors = listOf(Color(0xFF0095FF), Color(0xFF0022CC))
 val UniversalIconBrush = Brush.verticalGradient(
     colors = UniversalIconGradientColors
 )
 
 /**
  * Settings List Option Icon
- * Clean thin vector icon without squircle background box (Matching Liquid Glass Design System Section 3)
+ * Decreased by 5px (8.5dp squircle) with clean Apple vertical gradient.
  */
 @Composable
 fun AppleIconBadge(
@@ -539,14 +539,11 @@ fun AppleIconBadge(
     modifier: Modifier = Modifier
 ) {
     if (hasBackground) {
-        val squircleShape = RoundedCornerShape(13.5.dp)
-        if (icon != null) {
-            val bgModifier = if (iconGradient != null && iconGradient.isNotEmpty()) {
-                Modifier.background(Brush.linearGradient(iconGradient))
-            } else {
-                Modifier.background(iconColor.copy(alpha = 1f))
-            }
+        val squircleShape = RoundedCornerShape(8.5.dp)
+        val gradient = iconGradient ?: getAppleCleanIconGradient(iconColor)
+        val bgModifier = Modifier.background(Brush.verticalGradient(gradient))
 
+        if (icon != null) {
             Box(
                 modifier = modifier
                     .size(30.dp)
@@ -563,21 +560,11 @@ fun AppleIconBadge(
                 )
             }
         } else if (graphic3dId != null) {
-            val brush = if (iconGradient != null) {
-                Brush.linearGradient(
-                    colors = iconGradient,
-                    start = Offset.Zero,
-                    end = Offset.Infinite
-                )
-            } else {
-                UniversalIconBrush
-            }
-
             Box(
                 modifier = modifier
                     .size(30.dp)
                     .clip(squircleShape)
-                    .background(brush)
+                    .then(bgModifier)
                     .border(0.85.dp, SettingsShineBorderBrush, squircleShape),
                 contentAlignment = Alignment.Center
             ) {

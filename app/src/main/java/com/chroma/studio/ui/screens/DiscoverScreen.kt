@@ -3738,6 +3738,7 @@ fun OwnerAnalyticsModal(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(24.dp))
                 .border(1.dp, colors.glassBorder, RoundedCornerShape(24.dp))
+                .imePadding()
         ) {
             Column(modifier = Modifier.padding(18.dp)) {
                 Row(

@@ -204,6 +204,8 @@ fun PostDetailsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .imePadding()
+                .navigationBarsPadding()
                 .verticalScroll(scrollState)
                 .padding(horizontal = 20.dp)
         ) {

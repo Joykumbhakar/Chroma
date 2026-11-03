@@ -68,6 +68,7 @@ fun ChatInputBar(
         modifier = modifier
             .fillMaxWidth()
             .wrapContentHeight()
+            .imePadding()
     ) {
         // ── Liquid-glass action menu (GlassIcons) floating over the wallpaper ──
         AnimatedVisibility(

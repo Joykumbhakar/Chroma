@@ -3059,7 +3059,7 @@ private fun ChatScreenContent(
                             .fillMaxWidth()
                     ) {
                             ActiveChatMessageStream(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxSize().imeNestedScroll(),
                         listState = listState,
                         activeChat = activeChat,
                         allMessages = allMessages,

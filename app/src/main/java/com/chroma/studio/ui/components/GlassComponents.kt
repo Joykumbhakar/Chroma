@@ -212,7 +212,9 @@ fun GlassBottomSheet(
         androidx.compose.foundation.layout.Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color.White),
+                .background(Color.White)
+                .navigationBarsPadding()
+                .imePadding(),
             content = content
         )
     }

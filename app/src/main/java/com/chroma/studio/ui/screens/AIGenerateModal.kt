@@ -108,6 +108,7 @@ fun AIGenerateModal(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
                 .fillMaxWidth()
+                .imePadding()
                 .padding(horizontal = 24.dp, vertical = 12.dp)
         ) {
                 Apple3DGraphicIcon(

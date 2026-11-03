@@ -149,6 +149,7 @@ fun CustomFileManagerModal(
             modifier = Modifier
                 .fillMaxWidth()
                 .fillMaxHeight(0.85f)
+                .imePadding()
                 .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
                 .background(if (colors.isLight) Color(0xFFF9F9FC) else Color(0xFF161618))
                 .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
@@ -472,6 +473,7 @@ fun CustomFileManagerModal(
                         .fillMaxWidth()
                         .background(if (colors.isLight) Color.White else Color(0xFF1C1C1E))
                         .border(0.5.dp, colors.borderSubtle)
+                        .imePadding()
                         .navigationBarsPadding()
                         .padding(horizontal = 16.dp, vertical = 12.dp)
                 ) {

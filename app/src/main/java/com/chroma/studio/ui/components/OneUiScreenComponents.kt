@@ -289,8 +289,73 @@ val SettingsShineBorderBrush = Brush.linearGradient(
 )
 
 /**
- * Samsung One UI 7.0 Squircle Icon Badge with solid filled colored background (no transparency),
- * white icon glyph, and tiny thin shine border light on top-left and bottom-right corners.
+ * Authentic Apple-style clean vertical gradient for settings icons:
+ * For example: linear-gradient(180deg, #0095ff 0%, #0022cc 100%)
+ */
+fun getAppleCleanIconGradient(baseColor: Color): List<Color> {
+    val r = baseColor.red
+    val g = baseColor.green
+    val b = baseColor.blue
+
+    // Blue family (e.g. 0xFF0A84FF, 0xFF007AFF, 0xFF0095FF)
+    if (b > 0.70f && r < 0.35f) {
+        return listOf(Color(0xFF0095FF), Color(0xFF0022CC))
+    }
+    // Green family (e.g. 0xFF34C759, 0xFF30D158, 0xFF10B981, 0xFF22C55E)
+    if (g > 0.60f && r < 0.40f && b < 0.50f) {
+        return listOf(Color(0xFF34D465), Color(0xFF1E8738))
+    }
+    // Red family (e.g. 0xFFFF3B30, 0xFFFF453A, 0xFFEF4444)
+    if (r > 0.85f && g < 0.35f && b < 0.35f) {
+        return listOf(Color(0xFFFF453A), Color(0xFFBA1A1A))
+    }
+    // Orange family (e.g. 0xFFFF9500, 0xFFFF9F0A, 0xFFF97316)
+    if (r > 0.85f && g in 0.35f..0.70f && b < 0.25f) {
+        return listOf(Color(0xFFFF9F0A), Color(0xFFC93E00))
+    }
+    // Yellow family (e.g. 0xFFFFCC00, 0xFFEAB308)
+    if (r > 0.85f && g > 0.70f && b < 0.25f) {
+        return listOf(Color(0xFFFFD60A), Color(0xFFCC8400))
+    }
+    // Purple / Violet family (e.g. 0xFFAF52DE, 0xFFBF5AF2, 0xFF8B5CF6)
+    if (r in 0.45f..0.85f && g < 0.45f && b > 0.70f) {
+        return listOf(Color(0xFFBF5AF2), Color(0xFF6E28A0))
+    }
+    // Pink / Magenta family (e.g. 0xFFFF2D55, 0xFFEC4899)
+    if (r > 0.85f && g < 0.35f && b in 0.30f..0.60f) {
+        return listOf(Color(0xFFFF375F), Color(0xFFBA0F37))
+    }
+    // Teal / Cyan family (e.g. 0xFF5AC8FA, 0xFF06B6D4)
+    if (b > 0.75f && g > 0.65f) {
+        return listOf(Color(0xFF64D2FF), Color(0xFF0073A8))
+    }
+    // Indigo family (e.g. 0xFF5856D6, 0xFF6366F1)
+    if (b > 0.70f && r in 0.30f..0.55f && g < 0.45f) {
+        return listOf(Color(0xFF5E5CE6), Color(0xFF3330A2))
+    }
+    // Gray / Neutral family (e.g. 0xFF8E8E93, 0xFF6B7280)
+    if (kotlin.math.abs(r - g) < 0.08f && kotlin.math.abs(g - b) < 0.08f) {
+        return listOf(Color(0xFF98989D), Color(0xFF48484A))
+    }
+
+    val topColor = Color(
+        red = (r * 1.05f).coerceIn(0f, 1f),
+        green = (g * 1.05f).coerceIn(0f, 1f),
+        blue = (b * 1.05f).coerceIn(0f, 1f),
+        alpha = 1f
+    )
+    val bottomColor = Color(
+        red = (r * 0.58f).coerceIn(0f, 1f),
+        green = (g * 0.58f).coerceIn(0f, 1f),
+        blue = (b * 0.65f).coerceIn(0f, 1f),
+        alpha = 1f
+    )
+    return listOf(topColor, bottomColor)
+}
+
+/**
+ * Settings Icon Badge with 11dp squircle (decreased by 5px from 16dp),
+ * authentic Apple-style vertical clean gradient background, and specular shine border.
  */
 @Composable
 fun OneUiIconBadge(
@@ -299,12 +364,9 @@ fun OneUiIconBadge(
     iconGradient: List<Color>? = null,
     modifier: Modifier = Modifier
 ) {
-    val shape = RoundedCornerShape(16.dp)
-    val bgModifier = if (iconGradient != null && iconGradient.isNotEmpty()) {
-        Modifier.background(Brush.linearGradient(iconGradient))
-    } else {
-        Modifier.background(iconColor.copy(alpha = 1f))
-    }
+    val shape = RoundedCornerShape(11.dp)
+    val gradient = iconGradient ?: getAppleCleanIconGradient(iconColor)
+    val bgModifier = Modifier.background(Brush.verticalGradient(gradient))
 
     Box(
         modifier = modifier
