@@ -108,10 +108,10 @@ fun ObProgressRail(progress: Float, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun ObSegmentedProgress(step: Int, totalSteps: Int = 3, modifier: Modifier = Modifier) {
+fun ObSegmentedProgress(step: Int, totalSteps: Int = 4, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         for (i in 1..totalSteps) {
@@ -123,7 +123,7 @@ fun ObSegmentedProgress(step: Int, totalSteps: Int = 3, modifier: Modifier = Mod
             )
             Box(
                 modifier = Modifier
-                    .width(42.dp)
+                    .width(36.dp)
                     .height(4.dp)
                     .clip(CircleShape)
                     .background(animColor)
@@ -136,7 +136,7 @@ fun ObSegmentedProgress(step: Int, totalSteps: Int = 3, modifier: Modifier = Mod
 fun ObNavBar(
     onBack: () -> Unit,
     step: Int,
-    totalSteps: Int = 3,
+    totalSteps: Int = 4,
     trailing: @Composable () -> Unit = {}
 ) {
     Row(
@@ -156,11 +156,12 @@ fun ObNavBar(
 @Composable
 fun ObNavBar(onBack: () -> Unit, progress: Float, trailing: @Composable () -> Unit = {}) {
     val step = when {
-        progress <= 0.35f -> 1
-        progress <= 0.70f -> 2
-        else -> 3
+        progress <= 0.25f -> 1
+        progress <= 0.50f -> 2
+        progress <= 0.75f -> 3
+        else -> 4
     }
-    ObNavBar(onBack = onBack, step = step, totalSteps = 3, trailing = trailing)
+    ObNavBar(onBack = onBack, step = step, totalSteps = 4, trailing = trailing)
 }
 
 /** Infinite-transition Neon Green wave animated gradient brush (#00FF87 -> #60EFA0 -> #A3FF2E -> #00DF81) */
@@ -402,6 +403,26 @@ fun ObSecondaryButton(
                 scaleY = scale
             }
             .clip(shape)
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        Color(0x2EFFFFFF),
+                        Color(0x12FFFFFF)
+                    )
+                )
+            )
+            .border(
+                BorderStroke(
+                    1.2.dp,
+                    Brush.verticalGradient(
+                        listOf(
+                            Color(0x55FFFFFF),
+                            Color(0x18FFFFFF)
+                        )
+                    )
+                ),
+                shape
+            )
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -410,46 +431,6 @@ fun ObSecondaryButton(
             ),
         contentAlignment = Alignment.Center
     ) {
-        // Frosted glass background layer with 24.dp blur
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .blur(24.dp)
-                .background(
-                    Brush.verticalGradient(
-                        listOf(
-                            Color(0x55FFFFFF),
-                            Color(0x221E2548)
-                        )
-                    )
-                )
-        )
-        // Tint overlay and fine glass border
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        listOf(
-                            Color(0x40141A38),
-                            Color(0x600C1028)
-                        )
-                    )
-                )
-                .border(
-                    BorderStroke(
-                        1.2.dp,
-                        Brush.verticalGradient(
-                            listOf(
-                                Color(0x66FFFFFF),
-                                Color(0x18FFFFFF)
-                            )
-                        )
-                    ),
-                    shape
-                )
-        )
-        // Foreground crisp content
         Row(
             modifier = Modifier.padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.Center,
@@ -459,7 +440,7 @@ fun ObSecondaryButton(
                 Icon(
                     imageVector = it,
                     contentDescription = null,
-                    tint = ObColors.Lime,
+                    tint = ObColors.NeonGreen,
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(Modifier.width(8.dp))
@@ -535,7 +516,7 @@ fun ObTextField(
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
     onClick: (() -> Unit)? = null,
-    labelBackground: Color = ObColors.Abyss,
+    labelBackground: Color = Color(0xFF0E143A),
     trailing: (@Composable RowScope.() -> Unit)? = null
 ) {
     var isFocused by remember { mutableStateOf(false) }
@@ -650,7 +631,7 @@ fun ObTextField(
                     if (isActive) {
                         Modifier
                             .background(labelBackground, RoundedCornerShape(4.dp))
-                            .padding(horizontal = 4.dp)
+                            .padding(horizontal = 5.dp, vertical = 1.dp)
                     } else Modifier
                 )
         ) {
@@ -695,7 +676,9 @@ fun ObToggleRow(
         Modifier
             .fillMaxWidth()
             .heightIn(min = 52.dp)
-            .padding(vertical = 6.dp),
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(role = Role.Switch) { onCheckedChange(!checked) }
+            .padding(horizontal = 4.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(

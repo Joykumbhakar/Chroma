@@ -15,16 +15,16 @@ import kotlinx.coroutines.delay
 private data class Topic(val label: String, val icon: ImageVector)
 
 private val topics = listOf(
-    Topic("Technology", Icons.Rounded.Computer),
-    Topic("Gaming", Icons.Rounded.SportsEsports),
-    Topic("Marketing", Icons.Rounded.Campaign),
-    Topic("History", Icons.Rounded.AccountBalance),
-    Topic("Finance", Icons.Rounded.Payments),
-    Topic("Science", Icons.Rounded.Science),
-    Topic("Bitcoin", Icons.Rounded.CurrencyBitcoin),
-    Topic("Linguistics", Icons.Rounded.Translate),
-    Topic("Mythology", Icons.Rounded.AutoAwesome),
-    Topic("Pop Culture", Icons.Rounded.Movie)
+    Topic("Color Grading", Icons.Rounded.ColorLens),
+    Topic("Motion Graphics", Icons.Rounded.Animation),
+    Topic("Sound Design", Icons.Rounded.GraphicEq),
+    Topic("Cinematic Reels", Icons.Rounded.MovieFilter),
+    Topic("3D & VFX", Icons.Rounded.ViewInAr),
+    Topic("Typography", Icons.Rounded.TextFields),
+    Topic("Film Emulation", Icons.Rounded.CameraRoll),
+    Topic("Generative Art", Icons.Rounded.AutoAwesome),
+    Topic("Studio Lighting", Icons.Rounded.WbIncandescent),
+    Topic("Virtual Sets", Icons.Rounded.Landscape)
 )
 
 private const val MIN_PICKS = 2
@@ -44,11 +44,13 @@ fun InterestsScreen(state: OnboardingState, onBack: () -> Unit, onNext: () -> Un
     }
 
     ObScreen {
-        ObNavBar(onBack = onBack, step = 1, totalSteps = 3)
+        ObNavBar(onBack = onBack, step = 1, totalSteps = 4) {
+            ObBadge("Step 1/4", ObColors.NeonGreen)
+        }
         ObHeader(
-            firstLine = "What do you",
-            highlightLine = "care about?",
-            subtitle = "Pick $MIN_PICKS–$MAX_PICKS topics. These shape what you discover and share."
+            firstLine = "What are you",
+            highlightLine = "creating?",
+            subtitle = "Pick $MIN_PICKS–$MAX_PICKS studio domains. These tailor your feed, shaders, and community discover."
         )
         Spacer(Modifier.height(18.dp))
         LazyVerticalGrid(
@@ -70,7 +72,7 @@ fun InterestsScreen(state: OnboardingState, onBack: () -> Unit, onNext: () -> Un
             }
         }
         ObPrimaryButton(
-            text = if (count < MIN_PICKS) "Pick ${MIN_PICKS - count} more" else "Next: Describe Personality",
+            text = if (count < MIN_PICKS) "Pick ${MIN_PICKS - count} more" else "Next: Studio Profile",
             onClick = onNext,
             enabled = count >= MIN_PICKS,
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)

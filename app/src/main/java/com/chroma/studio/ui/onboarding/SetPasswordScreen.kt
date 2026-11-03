@@ -59,7 +59,9 @@ fun SetPasswordScreen(state: OnboardingState, onBack: () -> Unit, onNext: () -> 
     }
 
     ObScreen {
-        ObNavBar(onBack, progress = 0.5f + 0.1f * (rules.metCount / 5f) + if (matches) 0.1f else 0f) { ObBadge("Step 4/5", Color.White) }
+        ObNavBar(onBack = onBack, step = 3, totalSteps = 4) {
+            ObBadge("Step 3/4", ObColors.NeonGreen)
+        }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             ObHeader(
             firstLine = "Set your studio",
@@ -142,10 +144,10 @@ private fun EyeToggle(visible: Boolean, onToggle: () -> Unit) {
         contentDescription = null,
         tint = Color(0xB3FFFFFF),
         modifier = Modifier
-            .size(34.dp)
+            .size(40.dp)
             .clip(CircleShape)
             .clickable(role = Role.Button, onClick = onToggle)
-            .padding(7.dp)
+            .padding(8.dp)
             .semantics { contentDescription = if (visible) "Hide password" else "Show password" }
     )
 }

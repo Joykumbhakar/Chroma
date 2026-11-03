@@ -3,6 +3,8 @@ package com.chroma.studio.ui.onboarding
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -98,11 +100,13 @@ fun WelcomeScreen(
                 )
             )
         }
+        val scrollState = rememberScrollState()
         Column(
             Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding()
+                .verticalScroll(scrollState)
                 .padding(horizontal = 22.dp, vertical = 12.dp)
         ) {
             // Top Bar
@@ -157,7 +161,7 @@ fun WelcomeScreen(
                 )
             }
 
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.weight(1f, fill = false).heightIn(min = 24.dp))
 
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (savedAccountName != null) {

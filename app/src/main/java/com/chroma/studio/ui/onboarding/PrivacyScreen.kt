@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
+import androidx.compose.material.icons.automirrored.rounded.*
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -29,7 +30,9 @@ import androidx.compose.ui.window.Dialog
 fun PrivacyScreen(state: OnboardingState, onBack: () -> Unit, onLaunch: () -> Unit) {
     var showDone by remember { mutableStateOf(false) }
     ObScreen {
-        ObNavBar(onBack = onBack, step = 3, totalSteps = 3)
+        ObNavBar(onBack = onBack, step = 4, totalSteps = 4) {
+            ObBadge("Step 4/4", ObColors.NeonGreen)
+        }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             ObHeader(
                 firstLine = "How would you like to",
@@ -53,7 +56,7 @@ fun PrivacyScreen(state: OnboardingState, onBack: () -> Unit, onLaunch: () -> Un
                 ) { state.startsConversations = it }
 
                 ObToggleRow(
-                    icon = Icons.Rounded.Reply,
+                    icon = Icons.AutoMirrored.Rounded.Reply,
                     tint = Color.White,
                     title = "Responds to others",
                     subtitle = "Replies to community posts",
@@ -77,7 +80,7 @@ fun PrivacyScreen(state: OnboardingState, onBack: () -> Unit, onLaunch: () -> Un
                 ) { state.usesHumor = it }
 
                 ObToggleRow(
-                    icon = Icons.Rounded.TrendingUp,
+                    icon = Icons.AutoMirrored.Rounded.TrendingUp,
                     tint = Color.White,
                     title = "Follows trends",
                     subtitle = "Comments on what's popular",
