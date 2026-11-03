@@ -99,15 +99,42 @@ fun OscellionOnboardingScreen(
                         val existingProfile = discoverRepo.getUserProfile(user.uid)
                         if (existingProfile != null) {
                             SavedAccountManager.saveFromProfile(context, existingProfile, user.email)
+                            com.chroma.studio.services.ChromaMessagingService.syncTokenForCurrentUser()
                             Toast.makeText(context, "Welcome back, ${existingProfile.displayName}!", Toast.LENGTH_SHORT).show()
                             onLoginSuccess()
                         } else {
-                            // New Google user: populate state and go straight to Interests step
-                            val baseUsername = user.email?.substringBefore("@")?.filter { it.isLetterOrDigit() || it == '_' }?.lowercase() ?: ""
-                            vm.state.username = baseUsername
-                            vm.state.fullName = user.displayName ?: ""
-                            user.photoUrl?.let { vm.state.avatarUri = it }
-                            vm.state.step = ObStep.Interests
+                            // Brand new Google user: automatically create studio profile & sign in directly
+                            val baseName = user.email?.substringBefore("@")?.filter { it.isLetterOrDigit() || it == '_' }?.lowercase()?.ifBlank { "creator" } ?: "creator"
+                            var targetUsername = baseName
+                            if (!discoverRepo.checkUsernameAvailable(targetUsername)) {
+                                val suggestions = discoverRepo.suggestAvailableUsernames(baseName)
+                                targetUsername = suggestions.firstOrNull() ?: "${baseName}${System.currentTimeMillis() % 1000}"
+                            }
+                            val displayName = user.displayName?.ifBlank { baseName } ?: baseName
+                            val avatarUrl = user.photoUrl?.toString() ?: ""
+
+                            val registered = discoverRepo.registerDetailedUser(
+                                uid = user.uid,
+                                displayName = displayName,
+                                username = targetUsername,
+                                dob = null,
+                                avatarUrl = avatarUrl,
+                                interests = listOf("Creative Studio", "Design", "Photography"),
+                                gender = "UNSPECIFIED",
+                                agreedToTermsAt = System.currentTimeMillis()
+                            )
+
+                            if (registered) {
+                                val newProfile = discoverRepo.getUserProfile(user.uid)
+                                if (newProfile != null) {
+                                    SavedAccountManager.saveFromProfile(context, newProfile, user.email)
+                                }
+                                com.chroma.studio.services.ChromaMessagingService.syncTokenForCurrentUser()
+                                Toast.makeText(context, "Welcome to Chroma Studio, $displayName!", Toast.LENGTH_SHORT).show()
+                                onLoginSuccess()
+                            } else {
+                                generalError = "Could not initialize your studio profile. Please try again."
+                            }
                         }
                     } else {
                         generalError = "Google authentication failed"

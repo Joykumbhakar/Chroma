@@ -738,17 +738,40 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onCancel: () -> Unit) {
                         val profile = discoverRepo.getUserProfile(user.uid)
                         if (profile != null) {
                             SavedAccountManager.saveFromProfile(context, profile, user.email)
-                            matchedProfile = profile
-                            currentStep = AuthStep.GOOGLE_MATCH
+                            com.chroma.studio.services.ChromaMessagingService.syncTokenForCurrentUser()
+                            onLoginSuccess()
                         } else {
-                            googleUser = user
-                            val baseName = user.email?.substringBefore("@")?.filter { it.isLetterOrDigit() }?.lowercase() ?: ""
-                            usernameInput = baseName
-                            displayNameInput = user.displayName ?: ""
-                            if (user.photoUrl != null) {
-                                selectedAvatarUri = user.photoUrl
+                            // Brand new Google user: automatically create studio profile & sign in directly
+                            val baseName = user.email?.substringBefore("@")?.filter { it.isLetterOrDigit() || it == '_' }?.lowercase()?.ifBlank { "creator" } ?: "creator"
+                            var targetUsername = baseName
+                            if (!discoverRepo.checkUsernameAvailable(targetUsername)) {
+                                val suggestions = discoverRepo.suggestAvailableUsernames(baseName)
+                                targetUsername = suggestions.firstOrNull() ?: "${baseName}${System.currentTimeMillis() % 1000}"
                             }
-                            currentStep = AuthStep.SIGNUP_USERNAME
+                            val displayName = user.displayName?.ifBlank { baseName } ?: baseName
+                            val avatarUrl = user.photoUrl?.toString() ?: ""
+
+                            val registered = discoverRepo.registerDetailedUser(
+                                uid = user.uid,
+                                displayName = displayName,
+                                username = targetUsername,
+                                dob = null,
+                                avatarUrl = avatarUrl,
+                                interests = listOf("Creative Studio", "Design", "Photography"),
+                                gender = "UNSPECIFIED",
+                                agreedToTermsAt = System.currentTimeMillis()
+                            )
+
+                            if (registered) {
+                                val newProfile = discoverRepo.getUserProfile(user.uid)
+                                if (newProfile != null) {
+                                    SavedAccountManager.saveFromProfile(context, newProfile, user.email)
+                                }
+                                com.chroma.studio.services.ChromaMessagingService.syncTokenForCurrentUser()
+                                onLoginSuccess()
+                            } else {
+                                errorMessage = "Could not initialize your studio profile. Please try again."
+                            }
                         }
                     } else {
                         errorMessage = "Login failed: No user found"
