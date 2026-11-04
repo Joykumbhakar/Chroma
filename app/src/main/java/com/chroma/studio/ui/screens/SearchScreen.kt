@@ -7,6 +7,7 @@
 package com.chroma.studio.ui.screens
 
 import android.content.Context
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
@@ -758,6 +759,7 @@ private enum class SearchScope(val label: String) {
 
 private enum class OneUiSortOrder(val label: String) {
     POPULAR("Popular"),
+    LATEST("Latest"),
     MOST_LIKED("Most Liked"),
     MOST_REMIXED("Most Remixed")
 }
@@ -879,13 +881,13 @@ fun SearchScreen(
     val filteredArtworks = remember(allWorks, trendingWorks, searchQuery, selectedCategory, sortOrder) {
         val baseList = when (selectedCategory) {
             "Trending" -> if (trendingWorks.isNotEmpty()) trendingWorks else allWorks
-            "Gradients" -> allWorks.filter { it.postType == "work" }
-            "Photos" -> allWorks.filter { it.postType == "image" }
-            "3D Meshes" -> allWorks.filter { it.tags.any { t -> t.contains("mesh", true) || t.contains("3d", true) } }
-            "Glassmorphism" -> allWorks.filter { it.tags.any { t -> t.contains("glass", true) } }
-            "Minimal" -> allWorks.filter { it.tags.any { t -> t.contains("minimal", true) } }
-            "Cyberpunk" -> allWorks.filter { it.tags.any { t -> t.contains("cyber", true) } }
-            "Aurora" -> allWorks.filter { it.tags.any { t -> t.contains("aurora", true) } }
+            "Gradients" -> allWorks.filter { it.postType == "work" || it.title.contains("gradient", true) || it.tags.any { t -> t.contains("gradient", true) } }
+            "Photos" -> allWorks.filter { it.postType == "image" || !it.imageUrl.isNullOrBlank() }
+            "3D Meshes" -> allWorks.filter { it.title.contains("mesh", true) || it.title.contains("3d", true) || it.tags.any { t -> t.contains("mesh", true) || t.contains("3d", true) } }
+            "Glassmorphism" -> allWorks.filter { it.title.contains("glass", true) || it.tags.any { t -> t.contains("glass", true) } }
+            "Minimal" -> allWorks.filter { it.title.contains("minimal", true) || it.tags.any { t -> t.contains("minimal", true) } }
+            "Cyberpunk" -> allWorks.filter { it.title.contains("cyber", true) || it.title.contains("neon", true) || it.tags.any { t -> t.contains("cyber", true) || t.contains("neon", true) } }
+            "Aurora" -> allWorks.filter { it.title.contains("aurora", true) || it.tags.any { t -> t.contains("aurora", true) } }
             else -> allWorks
         }
 
@@ -904,6 +906,7 @@ fun SearchScreen(
 
         when (sortOrder) {
             OneUiSortOrder.POPULAR -> queriedList
+            OneUiSortOrder.LATEST -> queriedList.sortedByDescending { it.timestamp }
             OneUiSortOrder.MOST_LIKED -> queriedList.sortedByDescending { it.likesCount }
             OneUiSortOrder.MOST_REMIXED -> queriedList.sortedByDescending { it.remixCount }
         }
@@ -921,6 +924,13 @@ fun SearchScreen(
     }
 
     val isSearchActive = searchQuery.isNotBlank() || isSearchFieldFocused
+
+    // BackHandler: Hardware/system back dismisses search first
+    BackHandler(enabled = isSearchActive) {
+        searchQuery = ""
+        isSearchFieldFocused = false
+        focusManager.clearFocus()
+    }
 
     fun handleUserClick(user: UserProfile) {
         historyManager.addSearch(user)
@@ -960,7 +970,7 @@ fun SearchScreen(
     }
 
     // ── One UI Extended App Bar Height & State Persistence ────────────────────
-    val expandedHeightDp: Dp = 240.dp
+    val expandedHeightDp: Dp = 80.dp
     val maxCollapsePx = remember(density, expandedHeightDp) { with(density) { expandedHeightDp.toPx() } }
 
     // Restore exact collapsed/expanded fraction from SharedPreferences
@@ -1007,6 +1017,12 @@ fun SearchScreen(
             ) { value, _ ->
                 collapseOffsetPx = value
             }
+        }
+    }
+
+    LaunchedEffect(isSearchActive) {
+        if (isSearchActive) {
+            animateSnapTo(1f)
         }
     }
 
@@ -1130,9 +1146,9 @@ fun SearchScreen(
     // Auto-resize font size when title text is long (per One UI Title specification)
     val extendedTitleFontSize = remember(resolvedHeaderTitle) {
         when {
-            resolvedHeaderTitle.length > 28 -> 24.sp
-            resolvedHeaderTitle.length > 18 -> 28.sp
-            else -> 38.sp
+            resolvedHeaderTitle.length > 28 -> 22.sp
+            resolvedHeaderTitle.length > 18 -> 25.sp
+            else -> 28.sp
         }
     }
 
@@ -1172,50 +1188,46 @@ fun SearchScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(currentExpandedHeightDp),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.CenterStart
             ) {
                 if (largeTitleAlpha > 0.01f) {
                     Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
+                        horizontalAlignment = Alignment.Start,
                         verticalArrangement = Arrangement.Center,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 24.dp)
+                            .padding(horizontal = 20.dp)
                             .graphicsLayer {
                                 alpha = largeTitleAlpha
-                                translationY = -collapseProgress * with(density) { 18.dp.toPx() }
-                                val scale = 1f - (collapseProgress * 0.06f)
+                                translationY = -collapseProgress * with(density) { 10.dp.toPx() }
+                                val scale = 1f - (collapseProgress * 0.04f)
                                 scaleX = scale
                                 scaleY = scale
                             }
                     ) {
-
-
-                        // [2] Extended Centered Title (Auto-resizing + Ellipsis fallback)
+                        // [2] Extended Title (Auto-resizing + Ellipsis fallback)
                         Text(
                             text = resolvedHeaderTitle,
                             fontSize = extendedTitleFontSize,
-                            fontWeight = if (useDynamicTitle) FontWeight.Bold else FontWeight.SemiBold,
-                            letterSpacing = (-0.6).sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = (-0.5).sp,
                             color = textDark,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            textAlign = TextAlign.Center
+                            overflow = TextOverflow.Ellipsis
                         )
 
-                        Spacer(modifier = Modifier.height(3.dp))
+                        Spacer(modifier = Modifier.height(2.dp))
 
                         // Short clean subheading
                         Text(
                             text = if (isSearchActive) "Search creations & creators"
                                    else if (useDynamicTitle) selectedCategory.lowercase().replaceFirstChar { it.uppercase() } + " creations"
                                    else "Discover creations & creators",
-                            fontSize = 11.5.sp,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Normal,
                             color = textMuted,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            textAlign = TextAlign.Center,
                             modifier = Modifier.graphicsLayer { alpha = subtitleAlpha }
                         )
                     }
@@ -1239,181 +1251,165 @@ fun SearchScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Left: [1] Back Navigation + [2] Condensed Title
+                    // Left: Back button (active only in search mode) + Condensed Title
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .weight(1f)
                             .padding(end = 8.dp)
                     ) {
-                        // [1] Back Button
-                        IconButton(
-                            onClick = {
-                                when {
-                                    searchQuery.isNotBlank() || isSearchFieldFocused -> {
-                                        searchQuery = ""
-                                        isSearchFieldFocused = false
-                                        focusManager.clearFocus()
-                                    }
-                                    collapseProgress > 0.6f -> {
-                                        animateSnapTo(0f)
-                                    }
-                                    else -> {
-                                        onBack()
-                                    }
-                                }
-                            },
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                imageVector = Lucide.ChevronLeft,
-                                contentDescription = "Navigate back",
-                                tint = textDark,
-                                modifier = Modifier.size(23.dp)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(2.dp))
-
-                        // [2] Condensed Title (Fades in smoothly as Extended App Bar collapses)
-                        Text(
-                            text = resolvedHeaderTitle,
-                            fontSize = 19.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = textDark,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.graphicsLayer {
-                                alpha = compactTitleAlpha
-                                translationY = (1f - compactTitleAlpha) * with(density) { 4.dp.toPx() }
-                            }
-                        )
-                    }
-
-                    // Right: [3] Action Buttons (Max 3 recommended) & [4] More Options Menu
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        // [3A] Primary Action Button: Search (Focuses Search Bar & condenses header)
-                        if (useTextActionButtons) {
-                            Box(
-                                modifier = Modifier
-                                    .clip(CircleShape)
-                                    .clickable {
-                                        animateSnapTo(1f)
-                                        coroutineScope.launch {
-                                            delay(60)
-                                            try {
-                                                searchFocusRequester.requestFocus()
-                                            } catch (_: Exception) {}
-                                        }
-                                    }
-                                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "Search",
-                                    color = activeAccent,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontFamily = InterFontFamily
-                                )
-                            }
-                        } else {
+                        if (isSearchActive) {
                             IconButton(
                                 onClick = {
-                                    animateSnapTo(1f)
-                                    coroutineScope.launch {
-                                        delay(60)
-                                        try {
-                                            searchFocusRequester.requestFocus()
-                                        } catch (_: Exception) {}
-                                    }
+                                    searchQuery = ""
+                                    isSearchFieldFocused = false
+                                    focusManager.clearFocus()
                                 },
                                 modifier = Modifier.size(38.dp)
                             ) {
                                 Icon(
-                                    imageVector = Lucide.Search,
-                                    contentDescription = "Search",
+                                    imageVector = Lucide.ArrowLeft,
+                                    contentDescription = "Exit search",
                                     tint = textDark,
-                                    modifier = Modifier.size(20.dp)
+                                    modifier = Modifier.size(22.dp)
                                 )
                             }
+                            Spacer(modifier = Modifier.width(4.dp))
                         }
 
-                        // [3B] Secondary Action Button: Refresh
-                        if (useTextActionButtons) {
-                            Box(
-                                modifier = Modifier
-                                    .clip(CircleShape)
-                                    .clickable { handleRefresh() }
-                                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = if (isRefreshing) "Syncing..." else "Refresh",
-                                    color = activeAccent,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontFamily = InterFontFamily
-                                )
+                        Text(
+                            text = resolvedHeaderTitle,
+                            fontSize = 19.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = textDark,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.graphicsLayer {
+                                alpha = if (isSearchActive) 1f else compactTitleAlpha
+                                translationY = if (isSearchActive) 0f else (1f - compactTitleAlpha) * with(density) { 4.dp.toPx() }
                             }
-                        } else {
-                            val rotation by animateFloatAsState(
-                                targetValue = if (isRefreshing) 360f else 0f,
-                                animationSpec = if (isRefreshing) infiniteRepeatable(tween(800, easing = LinearEasing)) else tween(300),
-                                label = "refreshRotation"
-                            )
-                            IconButton(
-                                onClick = { handleRefresh() },
-                                modifier = Modifier.size(38.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Lucide.RotateCw,
-                                    contentDescription = "Refresh",
-                                    tint = textDark,
-                                    modifier = Modifier
-                                        .size(19.dp)
-                                        .graphicsLayer { rotationZ = rotation }
-                                )
-                            }
-                        }
+                        )
+                    }
 
-                        // [3C] Theme Style Pill Action Button (Hidden when text buttons are wide to respect space)
-                        if (!useTextActionButtons) {
+                    // Right: Action Buttons (Sort, Refresh, Theme, More)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        // [3A] Sort Order Menu Button
+                        var showSortDropdown by remember { mutableStateOf(false) }
+                        Box {
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(14.dp))
-                                    .background(if (!isDark) Color.Black.copy(0.06f) else Color.White.copy(0.10f))
-                                                                        .clickable { cycleGradientStyle() }
-                                    .padding(horizontal = 9.dp, vertical = 5.dp),
+                                    .background(if (!isDark) Color.Black.copy(0.05f) else Color.White.copy(0.08f))
+                                    .clickable { showSortDropdown = true }
+                                    .padding(horizontal = 9.dp, vertical = 6.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(7.dp)
-                                            .clip(CircleShape)
-                                            .background(
-                                                if (gradientStyle == OneUiGradientStyle.SOLID) OneUiBlueLight
-                                                else gradientStyle.orbColor
-                                            )
+                                    Icon(
+                                        imageVector = Lucide.ArrowUpDown,
+                                        contentDescription = "Sort",
+                                        tint = activeAccent,
+                                        modifier = Modifier.size(15.dp)
                                     )
                                     Text(
-                                        text = gradientStyle.label,
-                                        fontSize = 11.5.sp,
+                                        text = sortOrder.label,
+                                        color = textDark,
+                                        fontSize = 12.sp,
                                         fontWeight = FontWeight.SemiBold,
-                                        color = textDark
+                                        fontFamily = InterFontFamily
+                                    )
+                                }
+                            }
+
+                            DropdownMenu(
+                                expanded = showSortDropdown,
+                                onDismissRequest = { showSortDropdown = false },
+                                offset = DpOffset(x = 0.dp, y = 6.dp),
+                                modifier = Modifier
+                                    .width(180.dp)
+                                    .background(
+                                        color = if (isDark) Color(0xFF2C2C2E) else Color.White,
+                                        shape = RoundedCornerShape(18.dp)
+                                    )
+                            ) {
+                                OneUiSortOrder.entries.forEach { option ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                text = option.label,
+                                                color = if (sortOrder == option) activeAccent else textDark,
+                                                fontSize = 13.5.sp,
+                                                fontWeight = if (sortOrder == option) FontWeight.Bold else FontWeight.Normal
+                                            )
+                                        },
+                                        onClick = {
+                                            sortOrder = option
+                                            prefs.edit().putString("oneui_search_sort_order", option.name).apply()
+                                            showSortDropdown = false
+                                        }
                                     )
                                 }
                             }
                         }
 
-                        // [4] More Options Button (Far Right) + One UI Checkbox Menu
+                        // [3B] Refresh Button with Spin Animation
+                        val rotation by animateFloatAsState(
+                            targetValue = if (isRefreshing) 360f else 0f,
+                            animationSpec = if (isRefreshing) infiniteRepeatable(tween(800, easing = LinearEasing)) else tween(300),
+                            label = "refreshRotation"
+                        )
+                        IconButton(
+                            onClick = { handleRefresh() },
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Icon(
+                                imageVector = Lucide.RotateCw,
+                                contentDescription = "Refresh",
+                                tint = textDark,
+                                modifier = Modifier
+                                    .size(19.dp)
+                                    .graphicsLayer { rotationZ = rotation }
+                            )
+                        }
+
+                        // [3C] Theme Style Pill Action Button
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(if (!isDark) Color.Black.copy(0.05f) else Color.White.copy(0.10f))
+                                .clickable { cycleGradientStyle() }
+                                .padding(horizontal = 9.dp, vertical = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(7.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            if (gradientStyle == OneUiGradientStyle.SOLID) OneUiBlueLight
+                                            else gradientStyle.orbColor
+                                        )
+                                )
+                                Text(
+                                    text = gradientStyle.label,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = textDark
+                                )
+                            }
+                        }
+
+                        // [4] More Options Button (Far Right)
                         Box {
                             IconButton(
                                 onClick = { showMoreOptionsMenu = true },
@@ -1432,41 +1428,19 @@ fun SearchScreen(
                                 onDismissRequest = { showMoreOptionsMenu = false },
                                 offset = DpOffset(x = 0.dp, y = 6.dp),
                                 modifier = Modifier
-                                    .width(250.dp)
+                                    .width(240.dp)
                                     .background(
                                         color = if (isDark) Color(0xFF2C2C2E) else Color.White,
-                                        shape = RoundedCornerShape(22.dp)
+                                        shape = RoundedCornerShape(20.dp)
                                     )
                             ) {
                                 Text(
-                                    text = "ONE UI APP BAR OPTIONS",
+                                    text = "EXPLORE SETTINGS",
                                     color = textMuted,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     letterSpacing = 0.6.sp,
                                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
-                                )
-
-                                OneUiMenuCheckboxItem(
-                                    title = "Dynamic sentence title",
-                                    checked = useDynamicTitle,
-                                    accentColor = activeAccent,
-                                    isDark = isDark,
-                                    onCheckedChange = { checked ->
-                                        useDynamicTitle = checked
-                                        prefs.edit().putBoolean("oneui_search_dynamic_title", checked).apply()
-                                    }
-                                )
-
-                                OneUiMenuCheckboxItem(
-                                    title = "Text action buttons",
-                                    checked = useTextActionButtons,
-                                    accentColor = activeAccent,
-                                    isDark = isDark,
-                                    onCheckedChange = { checked ->
-                                        useTextActionButtons = checked
-                                        prefs.edit().putBoolean("oneui_search_text_actions", checked).apply()
-                                    }
                                 )
 
                                 OneUiMenuCheckboxItem(
@@ -1485,57 +1459,42 @@ fun SearchScreen(
                                     modifier = Modifier.padding(vertical = 4.dp)
                                 )
 
-                                Text(
-                                    text = "SORT CREATIONS BY",
-                                    color = textMuted,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.6.sp,
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = "Refresh Feed",
+                                            color = textDark,
+                                            fontSize = 13.5.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    },
+                                    leadingIcon = {
+                                        Icon(Lucide.RotateCw, null, tint = activeAccent, modifier = Modifier.size(16.dp))
+                                    },
+                                    onClick = {
+                                        showMoreOptionsMenu = false
+                                        handleRefresh()
+                                    }
                                 )
 
-                                OneUiSortOrder.entries.forEach { option ->
-                                    OneUiMenuCheckboxItem(
-                                        title = option.label,
-                                        checked = sortOrder == option,
-                                        accentColor = activeAccent,
-                                        isDark = isDark,
-                                        onCheckedChange = {
-                                            sortOrder = option
-                                            prefs.edit().putString("oneui_search_sort_order", option.name).apply()
-                                        }
-                                    )
-                                }
-
-                                HorizontalDivider(
-                                    color = dividerColor,
-                                    modifier = Modifier.padding(vertical = 4.dp)
-                                )
-
-                                // Expand / Collapse Quick Action
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
+                                if (searchHistory.isNotEmpty()) {
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                text = "Clear Search History",
+                                                color = Color(0xFFFF3B30),
+                                                fontSize = 13.5.sp,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        },
+                                        leadingIcon = {
+                                            Icon(Lucide.Trash2, null, tint = Color(0xFFFF3B30), modifier = Modifier.size(16.dp))
+                                        },
+                                        onClick = {
                                             showMoreOptionsMenu = false
-                                            animateSnapTo(if (collapseProgress > 0.5f) 0f else 1f)
+                                            historyManager.clearHistory()
+                                            searchHistory = emptyList()
                                         }
-                                        .padding(horizontal = 16.dp, vertical = 11.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(
-                                        text = if (collapseProgress > 0.5f) "Expand App Bar" else "Condense App Bar",
-                                        color = textDark,
-                                        fontSize = 14.5.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        fontFamily = InterFontFamily
-                                    )
-                                    Icon(
-                                        imageVector = if (collapseProgress > 0.5f) Lucide.ChevronDown else Lucide.ChevronUp,
-                                        contentDescription = null,
-                                        tint = textMuted,
-                                        modifier = Modifier.size(17.dp)
                                     )
                                 }
                             }
@@ -1948,12 +1907,20 @@ fun SearchScreen(
                                 val isSelected = filter == selectedCategory
                                 Box(
                                     modifier = Modifier
+                                        .shadow(
+                                            elevation = if (isSelected) 4.dp else 0.dp,
+                                            shape = CircleShape,
+                                            spotColor = activeAccent.copy(alpha = 0.25f)
+                                        )
                                         .clip(CircleShape)
                                         .background(
                                             if (isSelected) activeAccent
                                             else cardBgColor
                                         )
-                                                                                .clickable { selectedCategory = filter }
+                                        .clickable {
+                                            selectedCategory = filter
+                                            SoundManager.playTap(context)
+                                        }
                                         .padding(horizontal = 15.dp, vertical = 7.5.dp)
                                 ) {
                                     Row(

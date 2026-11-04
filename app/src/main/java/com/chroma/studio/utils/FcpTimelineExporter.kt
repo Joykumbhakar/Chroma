@@ -656,6 +656,7 @@ object FcpTimelineExporter {
             val filterGraph = StringBuilder()
             val concatVideoLabels = mutableListOf<String>()
             val concatAudioLabels = mutableListOf<String>()
+            val needOriginalAudio = (customAudioInputIndex == null || customAudio == null || !customAudio.muteOriginalVideo)
 
             clips.indices.forEach { i ->
                 val clip = clips[i]
@@ -1065,8 +1066,9 @@ object FcpTimelineExporter {
                 filterGraph.append("[$i:v]$vFilter[v_clip_$i];")
                 concatVideoLabels.add("[v_clip_$i]")
 
-                // Audio filter: trim, speed, smooth fades, standardized to 44.1kHz stereo
-                if (hasAudio) {
+                // Audio filter: only processed if original audio is needed (not muted by custom soundtrack)
+                if (needOriginalAudio) {
+                    if (hasAudio) {
                     val aFilter = StringBuilder()
                     aFilter.append(String.format(Locale.US, "atrim=start=%.3f:end=%.3f,asetpts=PTS-STARTPTS", sTime, eTime))
                     if (speed != 1.0f) {
@@ -1107,6 +1109,7 @@ object FcpTimelineExporter {
                     // Generate silent audio of exact matching duration & matching 44.1kHz stereo layout
                     filterGraph.append(String.format(Locale.US, "anullsrc=channel_layout=stereo:sample_rate=44100,atrim=start=0:end=%.3f,asetpts=PTS-STARTPTS[a_clip_$i];", effectiveDur))
                     concatAudioLabels.add("[a_clip_$i]")
+                    }
                 }
             }
 
@@ -1116,19 +1119,28 @@ object FcpTimelineExporter {
             if (clips.size == 1) {
                 // Single clip timeline
                 finalVideoStream = "[v_clip_0]"
-                finalAudioStream = "[a_clip_0]"
+                finalAudioStream = if (needOriginalAudio) "[a_clip_0]" else ""
             } else {
-                // Multi-clip timeline: concatenate all video and audio tracks
+                // Multi-clip timeline: concatenate all video (and audio if needed)
                 val nClips = clips.size
                 val concatBuilder = StringBuilder()
-                for (i in 0 until nClips) {
-                    concatBuilder.append(concatVideoLabels[i])
-                    concatBuilder.append(concatAudioLabels[i])
+                if (needOriginalAudio) {
+                    for (i in 0 until nClips) {
+                        concatBuilder.append(concatVideoLabels[i])
+                        concatBuilder.append(concatAudioLabels[i])
+                    }
+                    concatBuilder.append("concat=n=$nClips:v=1:a=1[v_concat][a_concat];")
+                    finalVideoStream = "[v_concat]"
+                    finalAudioStream = "[a_concat]"
+                } else {
+                    for (i in 0 until nClips) {
+                        concatBuilder.append(concatVideoLabels[i])
+                    }
+                    concatBuilder.append("concat=n=$nClips:v=1:a=0[v_concat];")
+                    finalVideoStream = "[v_concat]"
+                    finalAudioStream = ""
                 }
-                concatBuilder.append("concat=n=$nClips:v=1:a=1[v_concat][a_concat];")
                 filterGraph.append(concatBuilder.toString())
-                finalVideoStream = "[v_concat]"
-                finalAudioStream = "[a_concat]"
             }
 
             // Duration limit to protect timeline exact stop
@@ -1152,7 +1164,7 @@ object FcpTimelineExporter {
                     String.format(Locale.US, ",afade=t=out:st=%.3f:d=%.3f", fadeOutStart, customAudio.fadeOutSec)
                 } else ""
                 val fadeFilters = "$fadeInFilter$fadeOutFilter"
-                if (muteOrig) {
+                if (muteOrig || !needOriginalAudio) {
                     filterGraph.append(String.format(Locale.US, "[$customAudioInputIndex:a]aformat=sample_rates=44100:channel_layouts=stereo,%s${loopFilter}atrim=start=0:end=%.3f,asetpts=PTS-STARTPTS,volume=%.3f%s,apad[a_custom];", trimFilter, totalTimelineDurationSec, vol, fadeFilters))
                     finalAudioStream = "[a_custom]"
                 } else {
@@ -1173,8 +1185,10 @@ object FcpTimelineExporter {
             cmdArgs.add(finalGraph)
             cmdArgs.add("-map")
             cmdArgs.add(finalVideoStream)
-            cmdArgs.add("-map")
-            cmdArgs.add(finalAudioStream)
+            if (finalAudioStream.isNotEmpty()) {
+                cmdArgs.add("-map")
+                cmdArgs.add(finalAudioStream)
+            }
 
             cmdArgs.add("-t")
             cmdArgs.add(String.format(Locale.US, "%.3f", totalTimelineDurationSec))
