@@ -4,6 +4,7 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -13,7 +14,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Calendar
+import com.composables.icons.lucide.ChevronDown
 import androidx.compose.runtime.*
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
@@ -127,6 +132,7 @@ fun ActiveChatMessageStream(
     clipboardManager: ClipboardManager,
     showToast: (String) -> Unit,
     bubbleConfig: MessageBubbleConfig = MessageBubbleConfig(),
+    highlightedMessageId: String? = null,
     onChatsUpdate: ((List<ChatConversation>) -> List<ChatConversation>) -> Unit,
     onSelectContextMenuMessage: (ChatMessage) -> Unit,
     onStartReply: (ChatMessage) -> Unit,
@@ -140,7 +146,31 @@ fun ActiveChatMessageStream(
     onExpandVisibleCount: (Int) -> Unit
 ) {
     val colors = LocalChatColors.current
-    var highlightedMessageId by remember(activeChat.id) { mutableStateOf<String?>(null) }
+    var quoteHighlightedMessageId by remember(activeChat.id) { mutableStateOf<String?>(null) }
+    val effectiveHighlightedId = highlightedMessageId ?: quoteHighlightedMessageId
+
+    // Floating Glass Date Indicator calculation
+    val currentVisibleDateHeader by remember(listState, activeChat.messages) {
+        derivedStateOf {
+            if (activeChat.messages.isEmpty()) null
+            else {
+                val offset = if (allMessages.size > visibleMessageCount) 1 else 0
+                val itemIdx = (listState.firstVisibleItemIndex - offset).coerceIn(0, (activeChat.messages.size - 1).coerceAtLeast(0))
+                val msg = activeChat.messages.getOrNull(itemIdx)
+                msg?.timestamp?.let { ChatAdapters.formatMessageDateHeader(it) }
+            }
+        }
+    }
+
+    var isFloatingDateVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(listState.isScrollInProgress) {
+        if (listState.isScrollInProgress) {
+            isFloatingDateVisible = true
+        } else {
+            delay(1400L)
+            isFloatingDateVisible = false
+        }
+    }
 
     Box(modifier = modifier) {
         LazyColumn(
@@ -370,9 +400,9 @@ fun ActiveChatMessageStream(
                                 if (targetIdx != -1) {
                                     val offsetHeader = (if (allMessages.size > visibleMessageCount) 1 else 0)
                                     listState.animateScrollToItem((targetIdx + offsetHeader).coerceAtLeast(0))
-                                    highlightedMessageId = targetMsgId
+                                    quoteHighlightedMessageId = targetMsgId
                                     delay(1200L)
-                                    highlightedMessageId = null
+                                    quoteHighlightedMessageId = null
                                 } else {
                                     val fullIdx = allMessages.indexOfFirst { it.id == targetMsgId }
                                     if (fullIdx != -1) {
@@ -382,9 +412,9 @@ fun ActiveChatMessageStream(
                                         if (newIdx != -1) {
                                             val offsetHeader = (if (allMessages.size > visibleMessageCount) 1 else 0)
                                             listState.animateScrollToItem((newIdx + offsetHeader).coerceAtLeast(0))
-                                            highlightedMessageId = targetMsgId
+                                            quoteHighlightedMessageId = targetMsgId
                                             delay(1200L)
-                                            highlightedMessageId = null
+                                            quoteHighlightedMessageId = null
                                         }
                                     } else {
                                         showToast("Original message not in current view")
@@ -519,7 +549,7 @@ fun ActiveChatMessageStream(
                     senderDisplayName = msg.senderName,
                     isSelectionMode = isMessageSelectionMode,
                     isSelected = selectedMessageIds.contains(msg.id),
-                    isHighlighted = (highlightedMessageId == msg.id),
+                    isHighlighted = (effectiveHighlightedId == msg.id),
                     config = bubbleConfig,
                     callbacks = rowCallbacks,
                     modifier = Modifier.padding(vertical = if (isConsecutive) 1.5.dp else 4.dp)
@@ -674,7 +704,65 @@ fun ActiveChatMessageStream(
             }
         }
 
-        // Scroll To Bottom Button (Only when scrolled significantly up)
+        // Floating Date Capsule Header (Apple Glass / One UI dynamic indicator)
+        AnimatedVisibility(
+            visible = isFloatingDateVisible && !currentVisibleDateHeader.isNullOrBlank(),
+            enter = fadeIn(tween(180)) + slideInVertically(
+                animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)
+            ) { -it },
+            exit = fadeOut(tween(240)) + slideOutVertically(tween(240)) { -it },
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 10.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .shadow(
+                        elevation = 6.dp,
+                        shape = RoundedCornerShape(16.dp),
+                        ambientColor = Color.Black.copy(alpha = 0.12f),
+                        spotColor = Color.Black.copy(alpha = 0.08f)
+                    )
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(
+                        if (colors.isLight) Color(0xF2FFFFFF)
+                        else Color(0xEE1E293B)
+                    )
+                    .border(
+                        0.65.dp,
+                        Brush.verticalGradient(
+                            listOf(
+                                if (colors.isLight) Color.White else Color(0x33FFFFFF),
+                                if (colors.isLight) Color(0x18000000) else Color(0x11FFFFFF)
+                            )
+                        ),
+                        RoundedCornerShape(16.dp)
+                    )
+                    .padding(horizontal = 14.dp, vertical = 5.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    Icon(
+                        imageVector = Lucide.Calendar,
+                        contentDescription = null,
+                        tint = colors.iosBlue,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Text(
+                        text = currentVisibleDateHeader ?: "",
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.textDark,
+                        letterSpacing = 0.2.sp
+                    )
+                }
+            }
+        }
+
+        // Scroll To Bottom Button (Luxury Frosted Glass Capsule)
         androidx.compose.animation.AnimatedVisibility(
             visible = listState.canScrollForward,
             enter = scaleIn(initialScale = 0.7f, animationSpec = spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMediumLow)) + fadeIn(),
@@ -687,35 +775,55 @@ fun ActiveChatMessageStream(
                 modifier = Modifier.wrapContentSize(),
                 contentAlignment = Alignment.TopEnd
             ) {
-                FloatingActionButton(
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        coroutineScope.launch {
-                            val totalItemCount = (if (allMessages.size > visibleMessageCount) 1 else 0) + activeChat.messages.size
-                            val targetIndex = (totalItemCount - 1).coerceAtLeast(0)
-                            listState.animateScrollToItem(targetIndex)
-                        }
-                    },
+                Box(
                     modifier = Modifier
-                        .size(38.dp)
-                                                .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(10.dp)),
-                    shape = RoundedCornerShape(10.dp),
-                    containerColor = colors.cardBg,
-                    contentColor = colors.iosBlue,
-                    elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp)
+                        .size(42.dp)
+                        .shadow(
+                            elevation = 6.dp,
+                            shape = CircleShape,
+                            ambientColor = Color.Black.copy(alpha = 0.15f),
+                            spotColor = Color.Black.copy(alpha = 0.12f)
+                        )
+                        .clip(CircleShape)
+                        .background(if (colors.isLight) Color(0xF8FFFFFF) else Color(0xEE242F3E))
+                        .border(
+                            0.8.dp,
+                            Brush.verticalGradient(
+                                listOf(
+                                    if (colors.isLight) Color.White else Color(0x40FFFFFF),
+                                    colors.borderSubtle
+                                )
+                            ),
+                            CircleShape
+                        )
+                        .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            coroutineScope.launch {
+                                val totalItemCount = (if (allMessages.size > visibleMessageCount) 1 else 0) + activeChat.messages.size
+                                val targetIndex = (totalItemCount - 1).coerceAtLeast(0)
+                                listState.animateScrollToItem(targetIndex)
+                            }
+                        },
+                    contentAlignment = Alignment.Center
                 ) {
-                    LucideArrowDown(tint = colors.iosBlue, size = 16.dp)
+                    Icon(
+                        imageVector = Lucide.ChevronDown,
+                        contentDescription = "Scroll to bottom",
+                        tint = colors.iosBlue,
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
 
                 if (unreadMessageThreshold > 0) {
                     Box(
                         modifier = Modifier
                             .offset(x = 4.dp, y = (-4).dp)
-                            .height(18.dp)
-                            .widthIn(min = 18.dp)
-                            .background(colors.iosBlue, RoundedCornerShape(9.dp))
-                            .border(1.5.dp, colors.cardBg, RoundedCornerShape(9.dp))
-                            .padding(horizontal = 4.dp),
+                            .height(19.dp)
+                            .widthIn(min = 19.dp)
+                            .shadow(2.dp, CircleShape)
+                            .background(colors.iosBlue, CircleShape)
+                            .border(1.5.dp, if (colors.isLight) Color.White else Color(0xFF1E293B), CircleShape)
+                            .padding(horizontal = 5.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(

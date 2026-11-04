@@ -44,6 +44,9 @@ fun ChatHeader(
     isSearchOpen: Boolean,
     searchInsideQuery: String,
     searchMatchCount: Int,
+    currentSearchIndex: Int = 0,
+    onNextSearchMatch: () -> Unit = {},
+    onPrevSearchMatch: () -> Unit = {},
     isCallActive: Boolean,
     callType: String,
     callDurationSec: Int,
@@ -599,16 +602,56 @@ fun ChatHeader(
                         }
                     )
                     if (searchInsideQuery.isNotEmpty()) {
+                        val indicatorText = if (searchMatchCount > 0) {
+                            "$currentSearchIndex of $searchMatchCount"
+                        } else {
+                            "No results"
+                        }
                         Text(
-                            text = "$searchMatchCount match${if (searchMatchCount == 1) "" else "es"}",
+                            text = indicatorText,
                             fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = colors.textMuted
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (searchMatchCount > 0) colors.iosBlue else colors.textMuted
                         )
+
+                        if (searchMatchCount > 0) {
+                            // Prev Match Button (▲)
+                            Box(
+                                modifier = Modifier
+                                    .size(26.dp)
+                                    .clip(CircleShape)
+                                    .clickable { onPrevSearchMatch() },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.ChevronUp,
+                                    contentDescription = "Previous match",
+                                    tint = colors.textDark,
+                                    modifier = Modifier.size(17.dp)
+                                )
+                            }
+
+                            // Next Match Button (▼)
+                            Box(
+                                modifier = Modifier
+                                    .size(26.dp)
+                                    .clip(CircleShape)
+                                    .clickable { onNextSearchMatch() },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.ChevronDown,
+                                    contentDescription = "Next match",
+                                    tint = colors.textDark,
+                                    modifier = Modifier.size(17.dp)
+                                )
+                            }
+                        }
                     }
                     Box(
                         modifier = Modifier
                             .size(24.dp)
+                            .clip(CircleShape)
                             .clickable { onSearchToggle() },
                         contentAlignment = Alignment.Center
                     ) {

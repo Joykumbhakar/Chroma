@@ -860,6 +860,10 @@ private fun ChatScreenContent(
 
     var searchInsideQuery by remember { mutableStateOf("") }
 
+    var currentSearchMatchIndex by remember { mutableStateOf(0) }
+
+    var searchHighlightedMessageId by remember { mutableStateOf<String?>(null) }
+
 
 
     // Input & Reply & Edit
@@ -2723,7 +2727,61 @@ private fun ChatScreenContent(
 
                     val totalUnread = chats.filter { it.id != activeChatId }.sumOf { it.unreadCount }
 
-                    val searchMatches = if (searchInsideQuery.isEmpty()) 0 else allMessages.count { it.text?.contains(searchInsideQuery, ignoreCase = true) == true }
+                    val matchingMessageIds = remember(allMessages, searchInsideQuery) {
+                        if (searchInsideQuery.isBlank()) emptyList()
+                        else allMessages.filter { it.text?.contains(searchInsideQuery, ignoreCase = true) == true }.map { it.id }
+                    }
+                    val searchMatches = matchingMessageIds.size
+
+                    LaunchedEffect(searchInsideQuery, matchingMessageIds) {
+                        if (matchingMessageIds.isNotEmpty()) {
+                            val targetIdx = (matchingMessageIds.size - 1).coerceAtLeast(0)
+                            currentSearchMatchIndex = targetIdx
+                            val targetMsgId = matchingMessageIds[targetIdx]
+                            val listIndex = activeChat.messages.indexOfFirst { it.id == targetMsgId }
+                            if (listIndex != -1) {
+                                val offsetHeader = if (allMessages.size > visibleMessageCount) 1 else 0
+                                listState.animateScrollToItem((listIndex + offsetHeader).coerceAtLeast(0))
+                                searchHighlightedMessageId = targetMsgId
+                            } else {
+                                val fullIdx = allMessages.indexOfFirst { it.id == targetMsgId }
+                                if (fullIdx != -1) {
+                                    visibleMessageCount = (allMessages.size - fullIdx + 15).coerceAtLeast(visibleMessageCount)
+                                }
+                            }
+                        } else {
+                            currentSearchMatchIndex = 0
+                            searchHighlightedMessageId = null
+                        }
+                    }
+
+                    val scrollToMatch: (Int) -> Unit = { targetIdx ->
+                        if (matchingMessageIds.isNotEmpty()) {
+                            val boundedIdx = targetIdx.coerceIn(0, matchingMessageIds.lastIndex)
+                            currentSearchMatchIndex = boundedIdx
+                            val targetMsgId = matchingMessageIds[boundedIdx]
+                            coroutineScope.launch {
+                                val listIndex = activeChat.messages.indexOfFirst { it.id == targetMsgId }
+                                if (listIndex != -1) {
+                                    val offsetHeader = if (allMessages.size > visibleMessageCount) 1 else 0
+                                    listState.animateScrollToItem((listIndex + offsetHeader).coerceAtLeast(0))
+                                    searchHighlightedMessageId = targetMsgId
+                                } else {
+                                    val fullIdx = allMessages.indexOfFirst { it.id == targetMsgId }
+                                    if (fullIdx != -1) {
+                                        visibleMessageCount = (allMessages.size - fullIdx + 15).coerceAtLeast(visibleMessageCount)
+                                        delay(60L)
+                                        val updatedListIdx = activeChat.messages.indexOfFirst { it.id == targetMsgId }
+                                        if (updatedListIdx != -1) {
+                                            val offsetHeader = if (allMessages.size > visibleMessageCount) 1 else 0
+                                            listState.animateScrollToItem((updatedListIdx + offsetHeader).coerceAtLeast(0))
+                                            searchHighlightedMessageId = targetMsgId
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
 
 
 
@@ -2867,6 +2925,22 @@ private fun ChatScreenContent(
 
                                 searchMatchCount = searchMatches,
 
+                                currentSearchIndex = if (matchingMessageIds.isEmpty()) 0 else (currentSearchMatchIndex + 1),
+
+                                onNextSearchMatch = {
+                                    if (matchingMessageIds.isNotEmpty()) {
+                                        val next = if (currentSearchMatchIndex >= matchingMessageIds.lastIndex) 0 else currentSearchMatchIndex + 1
+                                        scrollToMatch(next)
+                                    }
+                                },
+
+                                onPrevSearchMatch = {
+                                    if (matchingMessageIds.isNotEmpty()) {
+                                        val prev = if (currentSearchMatchIndex <= 0) matchingMessageIds.lastIndex else currentSearchMatchIndex - 1
+                                        scrollToMatch(prev)
+                                    }
+                                },
+
                                 isCallActive = isCallBannerActive,
 
                                 callType = activeCallType,
@@ -2901,7 +2975,10 @@ private fun ChatScreenContent(
 
                                     isSearchInsideOpen = !isSearchInsideOpen
 
-                                    if (!isSearchInsideOpen) searchInsideQuery = ""
+                                    if (!isSearchInsideOpen) {
+                                        searchInsideQuery = ""
+                                        searchHighlightedMessageId = null
+                                    }
 
                                 },
 
@@ -3082,6 +3159,7 @@ private fun ChatScreenContent(
                         clipboardManager = clipboardManager,
                         showToast = ::showToast,
                         bubbleConfig = rememberedBubbleConfig,
+                        highlightedMessageId = searchHighlightedMessageId,
                         onChatsUpdate = { transform -> chats = transform(chats) },
                         onSelectContextMenuMessage = { msg -> selectedMessageForContextMenu = msg },
                         onStartReply = { msg ->
