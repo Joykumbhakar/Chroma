@@ -17,6 +17,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -970,7 +971,7 @@ fun SearchScreen(
     }
 
     // ── One UI Extended App Bar Height & State Persistence ────────────────────
-    val expandedHeightDp: Dp = 80.dp
+    val expandedHeightDp: Dp = 150.dp
     val maxCollapsePx = remember(density, expandedHeightDp) { with(density) { expandedHeightDp.toPx() } }
 
     // Restore exact collapsed/expanded fraction from SharedPreferences
@@ -993,9 +994,9 @@ fun SearchScreen(
     }
 
     // Authentic Samsung One UI Two-Stage Title Crossfade + Expanded Gradient Alpha
-    val largeTitleAlpha = (1f - (collapseProgress / 0.45f)).coerceIn(0f, 1f)
-    val subtitleAlpha = (1f - (collapseProgress / 0.35f)).coerceIn(0f, 1f)
-    val compactTitleAlpha = ((collapseProgress - 0.55f) / 0.45f).coerceIn(0f, 1f)
+    val largeTitleAlpha = (1f - (collapseProgress / 0.50f)).coerceIn(0f, 1f)
+    val subtitleAlpha = (1f - (collapseProgress / 0.40f)).coerceIn(0f, 1f)
+    val compactTitleAlpha = ((collapseProgress - 0.50f) / 0.50f).coerceIn(0f, 1f)
     val gradientAlpha = if (gradientStyle == OneUiGradientStyle.SOLID) {
         0f
     } else {
@@ -1023,6 +1024,8 @@ fun SearchScreen(
     LaunchedEffect(isSearchActive) {
         if (isSearchActive) {
             animateSnapTo(1f)
+        } else {
+            animateSnapTo(0f)
         }
     }
 
@@ -1147,8 +1150,8 @@ fun SearchScreen(
     val extendedTitleFontSize = remember(resolvedHeaderTitle) {
         when {
             resolvedHeaderTitle.length > 28 -> 22.sp
-            resolvedHeaderTitle.length > 18 -> 25.sp
-            else -> 28.sp
+            resolvedHeaderTitle.length > 18 -> 26.sp
+            else -> 34.sp
         }
     }
 
@@ -1178,66 +1181,6 @@ fun SearchScreen(
                     .background(screenBgColor.copy(alpha = toolbarBgAlpha))
             )
 
-            // =========================================================================
-            // 2. ONE UI EXTENDED APP BAR VIEWING AREA
-            // "Normally, the title of the app or page appears right in the center of the
-            // expanded app bar. Any additional info or notifications are shown below.
-            // Dynamic titles can have up to two action buttons below them."
-            // =========================================================================
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(currentExpandedHeightDp),
-                contentAlignment = Alignment.CenterStart
-            ) {
-                if (largeTitleAlpha > 0.01f) {
-                    Column(
-                        horizontalAlignment = Alignment.Start,
-                        verticalArrangement = Arrangement.Center,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp)
-                            .graphicsLayer {
-                                alpha = largeTitleAlpha
-                                translationY = -collapseProgress * with(density) { 10.dp.toPx() }
-                                val scale = 1f - (collapseProgress * 0.04f)
-                                scaleX = scale
-                                scaleY = scale
-                            }
-                    ) {
-                        // [2] Extended Title (Auto-resizing + Ellipsis fallback)
-                        Text(
-                            text = resolvedHeaderTitle,
-                            fontSize = extendedTitleFontSize,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = (-0.5).sp,
-                            color = textDark,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-
-                        Spacer(modifier = Modifier.height(2.dp))
-
-                        // Short clean subheading
-                        Text(
-                            text = if (isSearchActive) "Search creations & creators"
-                                   else if (useDynamicTitle) selectedCategory.lowercase().replaceFirstChar { it.uppercase() } + " creations"
-                                   else "Discover creations & creators",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Normal,
-                            color = textMuted,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.graphicsLayer { alpha = subtitleAlpha }
-                        )
-                    }
-                }
-            }
-
-            // =========================================================================
-            // 3. STICKY CONDENSED ONE UI APP BAR (56.dp Standard Height)
-            // Anatomy: [1] Back  [2] Condensed Title  [3] Action buttons (<=3)  [4] More
-            // =========================================================================
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1501,61 +1444,130 @@ fun SearchScreen(
                         }
                     }
                 }
+            }
 
-                // =====================================================================
-                // 4. PINNED ONE UI SEARCH BAR (Reachability-Optimized Header Bar)
-                // =====================================================================
+            // =========================================================================
+            // 2. ONE UI EXTENDED VIEWING AREA (Smoothly collapses from 150.dp to 0.dp)
+            // Grand title + subtitle with direct drag gestures & magnetic snap
+            // =========================================================================
+            if (currentExpandedHeightDp > 0.dp) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 6.dp)
+                        .height(currentExpandedHeightDp)
+                        .pointerInput(Unit) {
+                            detectVerticalDragGestures(
+                                onDragStart = { snapJob?.cancel() },
+                                onDragEnd = {
+                                    val progress = if (maxCollapsePx <= 0f) 0f else (collapseOffsetPx / maxCollapsePx)
+                                    val targetFraction = if (progress >= 0.5f) 1f else 0f
+                                    animateSnapTo(targetFraction)
+                                },
+                                onVerticalDrag = { change, dragAmount ->
+                                    change.consume()
+                                    collapseOffsetPx = (collapseOffsetPx - dragAmount).coerceIn(0f, maxCollapsePx)
+                                }
+                            )
+                        },
+                    contentAlignment = Alignment.CenterStart
                 ) {
-                    if (useGalaxyAiSearchBar) {
-                        GalaxyAiAuroraSearchBar(
-                            query = searchQuery,
-                            onQueryChange = { searchQuery = it },
-                            onSearchAction = { focusManager.clearFocus() },
-                            isDark = isDark,
-                            placeholder = "Search creations, styles, creators...",
-                            focusRequester = searchFocusRequester,
-                            onFocusChange = { focused ->
-                                isSearchFieldFocused = focused
-                            }
-                        )
-                    } else {
-                        OneUiSearchBarPill(
-                            query = searchQuery,
-                            onQueryChange = { searchQuery = it },
-                            onSearchAction = { focusManager.clearFocus() },
-                            isFocusedMode = isSearchFieldFocused || searchQuery.isNotBlank(),
-                            onExitFocusMode = {
-                                searchQuery = ""
-                                isSearchFieldFocused = false
-                                focusManager.clearFocus()
-                            },
-                            isDark = isDark,
-                            accentColor = activeAccent,
-                            placeholder = "Search artworks, styles, creators...",
-                            focusRequester = searchFocusRequester,
-                            onFocusChange = { focused ->
-                                isSearchFieldFocused = focused
-                            },
-                            onQuickAiToggle = {
-                                useGalaxyAiSearchBar = true
-                                prefs.edit().putBoolean("oneui_search_galaxy_ai_bar", true).apply()
-                            }
-                        )
+                    if (largeTitleAlpha > 0.01f) {
+                        Column(
+                            horizontalAlignment = Alignment.Start,
+                            verticalArrangement = Arrangement.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 6.dp)
+                                .graphicsLayer {
+                                    alpha = largeTitleAlpha
+                                    translationY = -collapseProgress * with(density) { 16.dp.toPx() }
+                                    val scale = 1f - (collapseProgress * 0.04f)
+                                    scaleX = scale
+                                    scaleY = scale
+                                }
+                        ) {
+                            Text(
+                                text = resolvedHeaderTitle,
+                                fontSize = extendedTitleFontSize,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = (-0.6).sp,
+                                color = textDark,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+
+                            Spacer(modifier = Modifier.height(3.dp))
+
+                            Text(
+                                text = if (isSearchActive) "Search creations & creators"
+                                       else if (useDynamicTitle) selectedCategory.lowercase().replaceFirstChar { it.uppercase() } + " creations"
+                                       else "Discover creations & creators",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Normal,
+                                color = textMuted,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.graphicsLayer { alpha = subtitleAlpha }
+                            )
+                        }
                     }
                 }
+            }
 
-                if (collapseProgress > 0.85f) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(0.6.dp)
-                            .background(dividerColor)
+            // =====================================================================
+            // 3. PINNED ONE UI SEARCH BAR (Docks cleanly under Top Bar when collapsed)
+            // =====================================================================
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(screenBgColor.copy(alpha = toolbarBgAlpha))
+                    .padding(horizontal = 14.dp, vertical = 6.dp)
+            ) {
+                if (useGalaxyAiSearchBar) {
+                    GalaxyAiAuroraSearchBar(
+                        query = searchQuery,
+                        onQueryChange = { searchQuery = it },
+                        onSearchAction = { focusManager.clearFocus() },
+                        isDark = isDark,
+                        placeholder = "Search creations, styles, creators...",
+                        focusRequester = searchFocusRequester,
+                        onFocusChange = { focused ->
+                            isSearchFieldFocused = focused
+                        }
+                    )
+                } else {
+                    OneUiSearchBarPill(
+                        query = searchQuery,
+                        onQueryChange = { searchQuery = it },
+                        onSearchAction = { focusManager.clearFocus() },
+                        isFocusedMode = isSearchFieldFocused || searchQuery.isNotBlank(),
+                        onExitFocusMode = {
+                            searchQuery = ""
+                            isSearchFieldFocused = false
+                            focusManager.clearFocus()
+                        },
+                        isDark = isDark,
+                        accentColor = activeAccent,
+                        placeholder = "Search artworks, styles, creators...",
+                        focusRequester = searchFocusRequester,
+                        onFocusChange = { focused ->
+                            isSearchFieldFocused = focused
+                        },
+                        onQuickAiToggle = {
+                            useGalaxyAiSearchBar = true
+                            prefs.edit().putBoolean("oneui_search_galaxy_ai_bar", true).apply()
+                        }
                     )
                 }
+            }
+
+            if (collapseProgress > 0.85f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(0.6.dp)
+                        .background(dividerColor)
+                )
             }
 
             // ── 5. Main Staggered Grid Content (One UI 26.dp Squircle Containers) ──
