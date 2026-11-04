@@ -185,16 +185,52 @@ fun AppleSwitch(
     activeTrackColor: Color = Color(0xFF0A84FF),
     inactiveTrackColor: Color = if (isAppInDark) Color(0xFF39393D) else Color(0xFFE9E9EA),
     hazeState: dev.chrisbanes.haze.HazeState? = null,
-    trackWidth: Dp = 52.dp,
-    trackHeight: Dp = 31.dp
+    trackWidth: Dp = 48.dp,
+    trackHeight: Dp = 28.dp
 ) {
-    AppleGlassToggle(
-        checked = checked,
-        onCheckedChange = onCheckedChange,
-        modifier = modifier,
-        trackWidth = trackWidth,
-        trackHeight = trackHeight
+    val haptic = LocalHapticFeedback.current
+    val thumbSize = (trackHeight - 4.dp).coerceAtLeast(10.dp)
+    val maxOffset = trackWidth - thumbSize - 2.dp
+
+    val trackColor by animateColorAsState(
+        targetValue = if (checked) activeTrackColor else inactiveTrackColor,
+        label = "appleSwitchTrackColor",
+        animationSpec = tween(220)
     )
+    val thumbOffset by animateDpAsState(
+        targetValue = if (checked) maxOffset else 2.dp,
+        label = "appleSwitchThumbOffset",
+        animationSpec = tween(220)
+    )
+
+    Box(
+        modifier = modifier
+            .size(width = trackWidth, height = trackHeight)
+            .clip(CircleShape)
+            .background(trackColor)
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() }
+            ) {
+                try { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Throwable) {}
+                onCheckedChange(!checked)
+            },
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Box(
+            modifier = Modifier
+                .offset(x = thumbOffset)
+                .shadow(
+                    elevation = 2.dp,
+                    shape = CircleShape,
+                    spotColor = Color.Black.copy(alpha = 0.18f),
+                    ambientColor = Color.Black.copy(alpha = 0.10f)
+                )
+                .size(thumbSize)
+                .clip(CircleShape)
+                .background(Color.White)
+        )
+    }
 }
 
 /**

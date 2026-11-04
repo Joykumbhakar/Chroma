@@ -762,13 +762,12 @@ fun SpringPillSwitch(
     trackHeight: Dp = 31.dp,
     showIoLabels: Boolean = false
 ) {
-    AppleGlassToggle(
+    AppleSwitch(
         checked = checked,
         onCheckedChange = onCheckedChange,
         modifier = modifier,
         trackWidth = trackWidth,
-        trackHeight = trackHeight,
-        showIoLabels = showIoLabels
+        trackHeight = trackHeight
     )
 }
 
