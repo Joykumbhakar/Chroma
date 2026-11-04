@@ -40,6 +40,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
@@ -970,9 +971,9 @@ fun SearchScreen(
         SoundManager.playReaction()
     }
 
-    // ── One UI Extended App Bar Height & State Persistence ────────────────────
-    val expandedHeightDp: Dp = 150.dp
-    val maxCollapsePx = remember(density, expandedHeightDp) { with(density) { expandedHeightDp.toPx() } }
+    // ── Samsung One UI 6/7 Expanded Header Metrics (Matching Community Tab) ────
+    val maxViewingHeight = 240.dp
+    val maxCollapsePx = remember(density) { with(density) { maxViewingHeight.toPx() } }
 
     // Restore exact collapsed/expanded fraction from SharedPreferences
     var collapseOffsetPx by remember(maxCollapsePx) {
@@ -988,20 +989,17 @@ fun SearchScreen(
         }
     }
 
-    // 0.0f = Extended App Bar, 1.0f = Condensed Standard App Bar
-    val collapseProgress = remember(collapseOffsetPx, maxCollapsePx) {
-        if (maxCollapsePx <= 0f) 0f else (collapseOffsetPx / maxCollapsePx).coerceIn(0f, 1f)
+    val collapseProgress by remember {
+        derivedStateOf {
+            if (maxCollapsePx <= 0f) 0f else (collapseOffsetPx / maxCollapsePx).coerceIn(0f, 1f)
+        }
     }
 
-    // Authentic Samsung One UI Two-Stage Title Crossfade + Expanded Gradient Alpha
-    val largeTitleAlpha = (1f - (collapseProgress / 0.50f)).coerceIn(0f, 1f)
-    val subtitleAlpha = (1f - (collapseProgress / 0.40f)).coerceIn(0f, 1f)
-    val compactTitleAlpha = ((collapseProgress - 0.50f) / 0.50f).coerceIn(0f, 1f)
-    val gradientAlpha = if (gradientStyle == OneUiGradientStyle.SOLID) {
-        0f
-    } else {
-        (1f - (collapseProgress / 0.85f)).coerceIn(0f, 1f)
-    }
+    // Samsung One UI 6/7 Expanded Header Metrics (Collapses smoothly on scroll)
+    val currentViewingHeight = (maxViewingHeight * (1f - collapseProgress)).coerceAtLeast(0.dp)
+    val largeTitleAlpha = (1f - (collapseProgress / 0.40f)).coerceIn(0f, 1f)
+    val subtitleAlpha = (1f - (collapseProgress / 0.30f)).coerceIn(0f, 1f)
+    val compactTitleAlpha = ((collapseProgress - 0.45f) / 0.55f).coerceIn(0f, 1f)
 
     fun animateSnapTo(targetFraction: Float) {
         val clamped = targetFraction.coerceIn(0f, 1f)
@@ -1012,7 +1010,7 @@ fun SearchScreen(
                 initialValue = collapseOffsetPx,
                 targetValue = targetPx,
                 animationSpec = spring(
-                    dampingRatio = 0.86f,
+                    dampingRatio = 0.85f,
                     stiffness = Spring.StiffnessMediumLow
                 )
             ) { value, _ ->
@@ -1029,6 +1027,8 @@ fun SearchScreen(
         }
     }
 
+    val gridState = androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState()
+
     // NestedScrollConnection with One UI Magnetic Auto-Snap Physics
     var snapJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     val nestedScrollConnection = remember(maxCollapsePx) {
@@ -1038,7 +1038,7 @@ fun SearchScreen(
                     snapJob?.cancel()
                 }
                 val deltaY = available.y
-                // When user scrolls down (finger moves up -> deltaY < 0): condense extended app bar first
+                // When user scrolls down (finger moves up -> deltaY < 0): collapse viewing area first
                 if (deltaY < 0f && collapseOffsetPx < maxCollapsePx) {
                     val newOffset = (collapseOffsetPx - deltaY).coerceIn(0f, maxCollapsePx)
                     val consumedY = -(newOffset - collapseOffsetPx)
@@ -1057,8 +1057,9 @@ fun SearchScreen(
                     snapJob?.cancel()
                 }
                 val deltaY = available.y
-                // When user scrolls up (finger moves down -> deltaY > 0): expand app bar again
-                if (deltaY > 0f && collapseOffsetPx > 0f) {
+                val isAtTop = gridState.firstVisibleItemIndex == 0 && gridState.firstVisibleItemScrollOffset == 0
+                // When user scrolls up (finger moves down -> deltaY > 0) and list is at the very top: expand header
+                if (deltaY > 0f && collapseOffsetPx > 0f && isAtTop) {
                     val newOffset = (collapseOffsetPx - deltaY).coerceIn(0f, maxCollapsePx)
                     val consumedY = -(newOffset - collapseOffsetPx)
                     collapseOffsetPx = newOffset
@@ -1076,7 +1077,7 @@ fun SearchScreen(
                             initialValue = collapseOffsetPx,
                             targetValue = maxCollapsePx,
                             animationSpec = spring(
-                                dampingRatio = 0.86f,
+                                dampingRatio = 0.85f,
                                 stiffness = Spring.StiffnessMediumLow
                             )
                         ) { value, _ ->
@@ -1091,10 +1092,11 @@ fun SearchScreen(
             override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
                 val progress = if (maxCollapsePx <= 0f) 0f else (collapseOffsetPx / maxCollapsePx)
                 if (progress > 0.01f && progress < 0.99f) {
+                    val isAtTop = gridState.firstVisibleItemIndex == 0 && gridState.firstVisibleItemScrollOffset == 0
                     val targetPx = when {
-                        available.y < -300f -> maxCollapsePx
-                        available.y > 300f -> 0f
-                        progress >= 0.5f -> maxCollapsePx
+                        available.y < -250f -> maxCollapsePx
+                        available.y > 250f && isAtTop -> 0f
+                        progress >= 0.45f -> maxCollapsePx
                         else -> 0f
                     }
                     val targetFraction = if (maxCollapsePx <= 0f) 0f else (targetPx / maxCollapsePx).coerceIn(0f, 1f)
@@ -1105,7 +1107,7 @@ fun SearchScreen(
                             initialValue = collapseOffsetPx,
                             targetValue = targetPx,
                             animationSpec = spring(
-                                dampingRatio = 0.86f,
+                                dampingRatio = 0.85f,
                                 stiffness = Spring.StiffnessMediumLow
                             )
                         ) { value, _ ->
@@ -1118,23 +1120,20 @@ fun SearchScreen(
         }
     }
 
-    // One UI Colors
-    val screenBgColor = if (!isDark) OneUiSurfaceLight else OneUiSurfaceDark
-    val cardBgColor = if (!isDark) OneUiCardLight else OneUiCardDark
+    // Community Tab / One UI Colors
+    val headerBgColor = if (isDark) Color(0xFF000000) else Color(0xFFF2F4F7)
+    val screenBgColor = headerBgColor
+    val textPrimary = if (isDark) Color.White else Color(0xFF0F172A)
+    val textDark = textPrimary
+    val textMuted = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+    val cardBgColor = if (isDark) Color(0xFF16161A) else Color.White
     val appleBorderBrush = rememberAppleStyleBorderBrush(isDark = isDark)
-    val dividerColor = if (!isDark) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.08f)
-    val textDark = if (!isDark) Color(0xFF1C1C1E) else Color(0xFFF2F2F7)
-    val textMuted = if (!isDark) Color(0xFF6C6C70) else Color(0xFF98989D)
+    val dividerColor = if (isDark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f)
     val activeAccent = if (gradientStyle == OneUiGradientStyle.SOLID) {
         if (isDark) OneUiBlueDark else OneUiBlueLight
     } else {
         gradientStyle.primaryColor
     }
-
-    val currentExpandedHeightDp = with(density) {
-        (maxCollapsePx - collapseOffsetPx).coerceAtLeast(0f).toDp()
-    }
-    val gridState = androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState()
 
     // Dynamic Title text & auto-resize handling per One UI guidelines
     val resolvedHeaderTitle = remember(isSearchActive, searchQuery, useDynamicTitle, filteredArtworks.size, selectedCategory) {
@@ -1149,9 +1148,9 @@ fun SearchScreen(
     // Auto-resize font size when title text is long (per One UI Title specification)
     val extendedTitleFontSize = remember(resolvedHeaderTitle) {
         when {
-            resolvedHeaderTitle.length > 28 -> 22.sp
-            resolvedHeaderTitle.length > 18 -> 26.sp
-            else -> 34.sp
+            resolvedHeaderTitle.length > 28 -> 26.sp
+            resolvedHeaderTitle.length > 18 -> 32.sp
+            else -> 38.sp
         }
     }
 
@@ -1161,45 +1160,94 @@ fun SearchScreen(
             .background(screenBgColor)
             .nestedScroll(nestedScrollConnection)
     ) {
-        // 1. Chroma Studio One UI System Gradient Backdrop
-        ChromaOneUiHeaderBackdrop(
-            expandedHeightDp = expandedHeightDp,
-            collapseProgress = collapseProgress,
-            gradientAlpha = gradientAlpha,
-            isDark = isDark,
-            screenBgColor = screenBgColor
-        )
-
         Column(modifier = Modifier.fillMaxSize()) {
-            val toolbarBgAlpha = (collapseProgress * 0.94f).coerceIn(0f, 0.94f)
-
-            // Top Status Bar Spacer
-            Spacer(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .windowInsetsTopHeight(WindowInsets.statusBars)
-                    .background(screenBgColor.copy(alpha = toolbarBgAlpha))
-            )
-
+            // ── Samsung One UI Header (Exact same layout & styling as Community Tab) ──
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(screenBgColor.copy(alpha = toolbarBgAlpha))
+                    .background(headerBgColor)
+                    .statusBarsPadding()
             ) {
-                Row(
+                // 1. EXPANDED VIEWING AREA (Matches Samsung One UI Settings & Community Tab reference geometry)
+                if (currentViewingHeight > 0.dp && !isSearchActive) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(currentViewingHeight)
+                            .pointerInput(Unit) {
+                                detectVerticalDragGestures(
+                                    onDragStart = { snapJob?.cancel() },
+                                    onDragEnd = {
+                                        val progress = if (maxCollapsePx <= 0f) 0f else (collapseOffsetPx / maxCollapsePx)
+                                        val targetFraction = if (progress >= 0.45f) 1f else 0f
+                                        animateSnapTo(targetFraction)
+                                    },
+                                    onVerticalDrag = { change, dragAmount ->
+                                        change.consume()
+                                        collapseOffsetPx = (collapseOffsetPx - dragAmount).coerceIn(0f, maxCollapsePx)
+                                    }
+                                )
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (largeTitleAlpha > 0.01f) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 24.dp)
+                                    .graphicsLayer {
+                                        alpha = largeTitleAlpha
+                                        translationY = -collapseProgress * with(density) { 24.dp.toPx() }
+                                        val scale = 1f - (collapseProgress * 0.06f)
+                                        scaleX = scale
+                                        scaleY = scale
+                                    }
+                            ) {
+                                Text(
+                                    text = resolvedHeaderTitle,
+                                    fontSize = extendedTitleFontSize,
+                                    fontWeight = FontWeight.SemiBold,
+                                    letterSpacing = (-0.6).sp,
+                                    color = textPrimary,
+                                    textAlign = TextAlign.Center
+                                )
+
+                                val subtitleText = if (isSearchActive) "Search creations & creators"
+                                else if (useDynamicTitle) "${selectedCategory.lowercase().replaceFirstChar { it.uppercase() }} creations"
+                                else "Discover creations & creators"
+
+                                if (subtitleText.isNotBlank()) {
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(
+                                        text = subtitleText,
+                                        fontSize = 13.5.sp,
+                                        fontWeight = FontWeight.Normal,
+                                        color = textMuted,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.graphicsLayer { alpha = subtitleAlpha }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 2. COMPACT ACTION BAR (Pinned 52dp height)
+                BoxWithConstraints(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(56.dp)
-                        .padding(horizontal = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                        .height(52.dp)
+                        .padding(horizontal = 14.dp),
+                    contentAlignment = Alignment.CenterStart
                 ) {
-                    // Left: Back button (active only in search mode) + Condensed Title
+                    // LEFT: Compact title (fades in when collapsing, matching One UI)
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
-                            .weight(1f)
-                            .padding(end = 8.dp)
+                            .align(Alignment.CenterStart)
+                            .graphicsLayer { alpha = if (isSearchActive) 1f else compactTitleAlpha },
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         if (isSearchActive) {
                             IconButton(
@@ -1208,13 +1256,13 @@ fun SearchScreen(
                                     isSearchFieldFocused = false
                                     focusManager.clearFocus()
                                 },
-                                modifier = Modifier.size(38.dp)
+                                modifier = Modifier.size(36.dp)
                             ) {
                                 Icon(
                                     imageVector = Lucide.ArrowLeft,
                                     contentDescription = "Exit search",
-                                    tint = textDark,
-                                    modifier = Modifier.size(22.dp)
+                                    tint = textPrimary,
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
                             Spacer(modifier = Modifier.width(4.dp))
@@ -1222,258 +1270,214 @@ fun SearchScreen(
 
                         Text(
                             text = resolvedHeaderTitle,
-                            fontSize = 19.sp,
+                            fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
-                            color = textDark,
+                            letterSpacing = (-0.5).sp,
+                            color = textPrimary,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.graphicsLayer {
-                                alpha = if (isSearchActive) 1f else compactTitleAlpha
-                                translationY = if (isSearchActive) 0f else (1f - compactTitleAlpha) * with(density) { 4.dp.toPx() }
-                            }
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
 
-                    // Right: More Options
-                    Box {
-                        IconButton(
-                            onClick = { showMoreOptionsMenu = true },
-                            modifier = Modifier.size(38.dp)
-                        ) {
-                            Icon(
-                                imageVector = Lucide.EllipsisVertical,
-                                contentDescription = "More options",
-                                tint = textDark,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-
-                        DropdownMenu(
-                            expanded = showMoreOptionsMenu,
-                            onDismissRequest = { showMoreOptionsMenu = false },
-                            offset = DpOffset(x = 0.dp, y = 6.dp),
-                            modifier = Modifier
-                                .width(240.dp)
-                                .background(
-                                    color = if (isDark) Color(0xFF2C2C2E) else Color.White,
-                                    shape = RoundedCornerShape(20.dp)
+                    // RIGHT: More options action button
+                    Row(
+                        modifier = Modifier.align(Alignment.CenterEnd),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(if (showMoreOptionsMenu) (if (isDark) Color(0xFF2C2C2E) else Color(0xFFE2E8F0)) else Color.Transparent)
+                                    .clickable { showMoreOptionsMenu = true },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Lucide.EllipsisVertical,
+                                    contentDescription = "More options",
+                                    tint = textPrimary,
+                                    modifier = Modifier.size(20.dp)
                                 )
-                        ) {
-                            Text(
-                                text = "EXPLORE SETTINGS",
-                                color = textMuted,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 0.6.sp,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
-                            )
+                            }
 
-                            OneUiMenuCheckboxItem(
-                                title = "Aurora glowing search bar",
-                                checked = useGalaxyAiSearchBar,
-                                accentColor = activeAccent,
-                                isDark = isDark,
-                                onCheckedChange = { checked ->
-                                    useGalaxyAiSearchBar = checked
-                                    prefs.edit().putBoolean("oneui_search_galaxy_ai_bar", checked).apply()
-                                }
-                            )
-
-                            HorizontalDivider(
-                                color = dividerColor,
-                                modifier = Modifier.padding(vertical = 4.dp)
-                            )
-
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        text = "Refresh Feed",
-                                        color = textDark,
-                                        fontSize = 13.5.sp,
-                                        fontWeight = FontWeight.Medium
+                            DropdownMenu(
+                                expanded = showMoreOptionsMenu,
+                                onDismissRequest = { showMoreOptionsMenu = false },
+                                offset = DpOffset(x = 0.dp, y = 6.dp),
+                                modifier = Modifier
+                                    .width(240.dp)
+                                    .background(
+                                        color = if (isDark) Color(0xFF16161A) else Color.White,
+                                        shape = RoundedCornerShape(12.dp)
                                     )
-                                },
-                                leadingIcon = {
-                                    Icon(Lucide.RotateCw, null, tint = activeAccent, modifier = Modifier.size(16.dp))
-                                },
-                                onClick = {
-                                    showMoreOptionsMenu = false
-                                    handleRefresh()
-                                }
-                            )
-
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        text = "Theme: ${gradientStyle.label}",
-                                        color = textDark,
-                                        fontSize = 13.5.sp,
-                                        fontWeight = FontWeight.Medium
+                                    .border(
+                                        width = 0.5.dp,
+                                        color = if (isDark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f),
+                                        shape = RoundedCornerShape(12.dp)
                                     )
-                                },
-                                leadingIcon = {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(12.dp)
-                                            .clip(CircleShape)
-                                            .background(
-                                                if (gradientStyle == OneUiGradientStyle.SOLID) OneUiBlueLight
-                                                else gradientStyle.orbColor
-                                            )
-                                    )
-                                },
-                                onClick = {
-                                    cycleGradientStyle()
-                                }
-                            )
+                            ) {
+                                Text(
+                                    text = "EXPLORE SETTINGS",
+                                    color = textMuted,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.6.sp,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                                )
 
-                            if (searchHistory.isNotEmpty()) {
+                                OneUiMenuCheckboxItem(
+                                    title = "Aurora glowing search bar",
+                                    checked = useGalaxyAiSearchBar,
+                                    accentColor = activeAccent,
+                                    isDark = isDark,
+                                    onCheckedChange = { checked ->
+                                        useGalaxyAiSearchBar = checked
+                                        prefs.edit().putBoolean("oneui_search_galaxy_ai_bar", checked).apply()
+                                    }
+                                )
+
+                                HorizontalDivider(
+                                    color = dividerColor,
+                                    modifier = Modifier.padding(vertical = 4.dp)
+                                )
+
                                 DropdownMenuItem(
                                     text = {
                                         Text(
-                                            text = "Clear Search History",
-                                            color = Color(0xFFFF3B30),
+                                            text = "Refresh Feed",
+                                            color = textPrimary,
                                             fontSize = 13.5.sp,
                                             fontWeight = FontWeight.Medium
                                         )
                                     },
                                     leadingIcon = {
-                                        Icon(Lucide.Trash2, null, tint = Color(0xFFFF3B30), modifier = Modifier.size(16.dp))
+                                        Icon(Lucide.RotateCw, null, tint = activeAccent, modifier = Modifier.size(16.dp))
                                     },
                                     onClick = {
                                         showMoreOptionsMenu = false
-                                        historyManager.clearHistory()
-                                        searchHistory = emptyList()
+                                        handleRefresh()
                                     }
                                 )
+
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = "Theme: ${gradientStyle.label}",
+                                            color = textPrimary,
+                                            fontSize = 13.5.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    },
+                                    leadingIcon = {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(12.dp)
+                                                .clip(CircleShape)
+                                                .background(
+                                                    if (gradientStyle == OneUiGradientStyle.SOLID) OneUiBlueLight
+                                                    else gradientStyle.orbColor
+                                                )
+                                        )
+                                    },
+                                    onClick = {
+                                        cycleGradientStyle()
+                                    }
+                                )
+
+                                if (searchHistory.isNotEmpty()) {
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                text = "Clear Search History",
+                                                color = Color(0xFFFF3B30),
+                                                fontSize = 13.5.sp,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        },
+                                        leadingIcon = {
+                                            Icon(Lucide.Trash2, null, tint = Color(0xFFFF3B30), modifier = Modifier.size(16.dp))
+                                        },
+                                        onClick = {
+                                            showMoreOptionsMenu = false
+                                            historyManager.clearHistory()
+                                            searchHistory = emptyList()
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            // =========================================================================
-            // 2. ONE UI EXTENDED VIEWING AREA (Smoothly collapses from 150.dp to 0.dp)
-            // Grand title + subtitle with direct drag gestures & magnetic snap
-            // =========================================================================
-            if (currentExpandedHeightDp > 0.dp) {
+                // 3. PINNED SEARCH BAR (Docks cleanly under compact bar)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(currentExpandedHeightDp)
-                        .pointerInput(Unit) {
-                            detectVerticalDragGestures(
-                                onDragStart = { snapJob?.cancel() },
-                                onDragEnd = {
-                                    val progress = if (maxCollapsePx <= 0f) 0f else (collapseOffsetPx / maxCollapsePx)
-                                    val targetFraction = if (progress >= 0.5f) 1f else 0f
-                                    animateSnapTo(targetFraction)
-                                },
-                                onVerticalDrag = { change, dragAmount ->
-                                    change.consume()
-                                    collapseOffsetPx = (collapseOffsetPx - dragAmount).coerceIn(0f, maxCollapsePx)
-                                }
-                            )
-                        },
-                    contentAlignment = Alignment.CenterStart
+                        .padding(horizontal = 14.dp, vertical = 6.dp)
                 ) {
-                    if (largeTitleAlpha > 0.01f) {
-                        Column(
-                            horizontalAlignment = Alignment.Start,
-                            verticalArrangement = Arrangement.Center,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 20.dp, vertical = 6.dp)
-                                .graphicsLayer {
-                                    alpha = largeTitleAlpha
-                                    translationY = -collapseProgress * with(density) { 16.dp.toPx() }
-                                    val scale = 1f - (collapseProgress * 0.04f)
-                                    scaleX = scale
-                                    scaleY = scale
-                                }
-                        ) {
-                            Text(
-                                text = resolvedHeaderTitle,
-                                fontSize = extendedTitleFontSize,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = (-0.6).sp,
-                                color = textDark,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-
-                            Spacer(modifier = Modifier.height(3.dp))
-
-                            Text(
-                                text = if (isSearchActive) "Search creations & creators"
-                                       else if (useDynamicTitle) selectedCategory.lowercase().replaceFirstChar { it.uppercase() } + " creations"
-                                       else "Discover creations & creators",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Normal,
-                                color = textMuted,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.graphicsLayer { alpha = subtitleAlpha }
-                            )
-                        }
+                    if (useGalaxyAiSearchBar) {
+                        GalaxyAiAuroraSearchBar(
+                            query = searchQuery,
+                            onQueryChange = { searchQuery = it },
+                            onSearchAction = { focusManager.clearFocus() },
+                            isDark = isDark,
+                            placeholder = "Search creations, styles, creators...",
+                            focusRequester = searchFocusRequester,
+                            onFocusChange = { focused ->
+                                isSearchFieldFocused = focused
+                            }
+                        )
+                    } else {
+                        OneUiSearchBarPill(
+                            query = searchQuery,
+                            onQueryChange = { searchQuery = it },
+                            onSearchAction = { focusManager.clearFocus() },
+                            isFocusedMode = isSearchFieldFocused || searchQuery.isNotBlank(),
+                            onExitFocusMode = {
+                                searchQuery = ""
+                                isSearchFieldFocused = false
+                                focusManager.clearFocus()
+                            },
+                            isDark = isDark,
+                            accentColor = activeAccent,
+                            placeholder = "Search artworks, styles, creators...",
+                            focusRequester = searchFocusRequester,
+                            onFocusChange = { focused ->
+                                isSearchFieldFocused = focused
+                            },
+                            onQuickAiToggle = {
+                                useGalaxyAiSearchBar = true
+                                prefs.edit().putBoolean("oneui_search_galaxy_ai_bar", true).apply()
+                            }
+                        )
                     }
                 }
-            }
 
-            // =====================================================================
-            // 3. PINNED ONE UI SEARCH BAR (Docks cleanly under Top Bar when collapsed)
-            // =====================================================================
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(screenBgColor.copy(alpha = toolbarBgAlpha))
-                    .padding(horizontal = 14.dp, vertical = 6.dp)
-            ) {
-                if (useGalaxyAiSearchBar) {
-                    GalaxyAiAuroraSearchBar(
-                        query = searchQuery,
-                        onQueryChange = { searchQuery = it },
-                        onSearchAction = { focusManager.clearFocus() },
-                        isDark = isDark,
-                        placeholder = "Search creations, styles, creators...",
-                        focusRequester = searchFocusRequester,
-                        onFocusChange = { focused ->
-                            isSearchFieldFocused = focused
-                        }
-                    )
-                } else {
-                    OneUiSearchBarPill(
-                        query = searchQuery,
-                        onQueryChange = { searchQuery = it },
-                        onSearchAction = { focusManager.clearFocus() },
-                        isFocusedMode = isSearchFieldFocused || searchQuery.isNotBlank(),
-                        onExitFocusMode = {
-                            searchQuery = ""
-                            isSearchFieldFocused = false
-                            focusManager.clearFocus()
-                        },
-                        isDark = isDark,
-                        accentColor = activeAccent,
-                        placeholder = "Search artworks, styles, creators...",
-                        focusRequester = searchFocusRequester,
-                        onFocusChange = { focused ->
-                            isSearchFieldFocused = focused
-                        },
-                        onQuickAiToggle = {
-                            useGalaxyAiSearchBar = true
-                            prefs.edit().putBoolean("oneui_search_galaxy_ai_bar", true).apply()
-                        }
+                // 4. SAMSUNG ONE UI / COMMUNITY TAB HEADER DIVIDER
+                if (collapseProgress > 0.80f || isSearchActive) {
+                    val dividerAlpha = if (isSearchActive) 1f else ((collapseProgress - 0.80f) / 0.20f).coerceIn(0f, 1f)
+                    HorizontalDivider(
+                        thickness = 0.5.dp,
+                        color = (if (isDark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f)).copy(alpha = dividerAlpha)
                     )
                 }
             }
 
-            if (collapseProgress > 0.85f) {
+            // Pull to Refresh / Active Refreshing Indicator
+            AnimatedVisibility(
+                visible = isRefreshing,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(0.6.dp)
-                        .background(dividerColor)
-                )
+                        .padding(vertical = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    OscellionLoadingSpinner(color = activeAccent, modifier = Modifier.size(20.dp))
+                }
             }
 
             // ── 5. Main Staggered Grid Content (One UI 26.dp Squircle Containers) ──
