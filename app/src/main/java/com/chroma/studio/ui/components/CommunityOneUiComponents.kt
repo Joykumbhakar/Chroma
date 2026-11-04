@@ -421,8 +421,8 @@ fun CommunityCategoryPills(
 }
 
 /**
- * Unified 26dp Squircle Card container for the Community Stories Section.
- * Matches the exact styling of the Messages Tab Stories Card.
+ * Seamless Stories Section for the Community Feed (no card/background).
+ * Renders directly on the screen background matching the seamless Conversations styling.
  */
 @Composable
 fun CommunityStoriesCard(
@@ -439,19 +439,11 @@ fun CommunityStoriesCard(
     modifier: Modifier = Modifier
 ) {
     val colors = LocalOscellionColors.current
-    val isDark = colors.isDark
-    val cardBgColor = if (!isDark) Color(0xFFF9FAFB) else Color(0xFF16181F)
-    val cardBorderColor = if (!isDark) Color.Black.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.08f)
-    val squircleShape = RoundedCornerShape(20.dp)
+    val screenBgColor = colors.bg
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 4.dp)
-            .shadow(2.dp, squircleShape, spotColor = Color.Black.copy(alpha = 0.04f))
-            .clip(squircleShape)
-            .background(cardBgColor)
-            .border(0.6.dp, cardBorderColor, squircleShape)
             .padding(vertical = 4.dp)
     ) {
         StoriesSection(
@@ -462,8 +454,8 @@ fun CommunityStoriesCard(
             myStoryGender = myStoryGender,
             myStoriesList = myStoriesList,
             isUploading = isUploading,
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-            gapColor = cardBgColor,
+            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 2.dp),
+            gapColor = screenBgColor,
             onMyStoryClick = onMyStoryClick,
             onAddStoryClick = onAddStoryClick,
             onStoryClick = onStoryClick
