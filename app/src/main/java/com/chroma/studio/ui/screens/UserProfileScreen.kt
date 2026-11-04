@@ -67,6 +67,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
@@ -671,7 +672,17 @@ fun UserProfileScreen(
             .fillMaxWidth()
             .align(Alignment.TopCenter)
             .background(topBarBg)
-            .border(width = 0.5.dp, color = topBarBorder)
+            .drawBehind {
+                if (topBarBorder.alpha > 0.02f) {
+                    val stroke = 0.5.dp.toPx()
+                    drawLine(
+                        color = topBarBorder,
+                        start = Offset(0f, size.height - stroke / 2f),
+                        end = Offset(size.width, size.height - stroke / 2f),
+                        strokeWidth = stroke
+                    )
+                }
+            }
             .padding(top = statusBarTop + 4.dp, bottom = 8.dp, start = 14.dp, end = 14.dp)
     ) {
         Row(

@@ -97,7 +97,7 @@ fun UserProfileHeroSection(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = 18.dp)
+            .padding(bottom = 8.dp)
     ) {
         // 1. Cinematic Banner with subtle bottom corner rounding & top scrim
         Box(
@@ -265,12 +265,23 @@ fun UserProfileHeroSection(
                 }
             }
 
-            // 3. Stats Card — Pure Only Blur Background Card
+            // 3. Stats Card — Elevated Frosted Glass Card with Adaptive Legibility & Spring Physics
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .padding(start = 14.dp)
+                    .shadow(
+                        elevation = 6.dp,
+                        shape = RoundedCornerShape(16.dp),
+                        clip = false,
+                        spotColor = Color.Black.copy(alpha = 0.18f),
+                        ambientColor = Color.Black.copy(alpha = 0.08f)
+                    )
                     .clip(RoundedCornerShape(16.dp))
+                    .background(
+                        if (colors.isDark) Color(0xFF14171E).copy(alpha = 0.78f)
+                        else Color(0xFFFFFFFF).copy(alpha = 0.88f)
+                    )
                     .hazeChild(
                         state = heroHazeState,
                         shape = RoundedCornerShape(16.dp),
@@ -288,14 +299,25 @@ fun UserProfileHeroSection(
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    val statNumberColor = if (colors.isDark) Color.White else Color(0xFF0F172A)
+                    val statLabelColor = if (colors.isDark) Color.White.copy(alpha = 0.75f) else Color(0xFF64748B)
+
                     // Posts Count
+                    val postsInteraction = remember { MutableInteractionSource() }
+                    val isPostsPressed by postsInteraction.collectIsPressedAsState()
+                    val postsScale by animateFloatAsState(
+                        targetValue = if (isPostsPressed) 0.94f else 1f,
+                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                        label = "postsScale"
+                    )
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(1.5.dp),
                         modifier = Modifier
                             .weight(1f)
+                            .scale(postsScale)
                             .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
+                                interactionSource = postsInteraction,
                                 indication = null
                             ) {
                                 onPostsClick?.invoke()
@@ -303,28 +325,16 @@ fun UserProfileHeroSection(
                     ) {
                         Text(
                             text = formatCount(worksCount),
-                            color = Color.White,
+                            color = statNumberColor,
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = (-0.02).em,
-                            style = TextStyle(
-                                shadow = androidx.compose.ui.graphics.Shadow(
-                                    color = Color.Black.copy(alpha = 0.35f),
-                                    blurRadius = 4f
-                                )
-                            )
+                            letterSpacing = (-0.02).em
                         )
                         Text(
                             text = "Posts",
-                            color = Color.White.copy(alpha = 0.85f),
+                            color = statLabelColor,
                             fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Medium,
-                            style = TextStyle(
-                                shadow = androidx.compose.ui.graphics.Shadow(
-                                    color = Color.Black.copy(alpha = 0.30f),
-                                    blurRadius = 3f
-                                )
-                            )
+                            fontWeight = FontWeight.Medium
                         )
                     }
 
@@ -333,17 +343,25 @@ fun UserProfileHeroSection(
                         modifier = Modifier
                             .height(20.dp)
                             .width(0.5.dp)
-                            .background(Color.White.copy(alpha = 0.25f))
+                            .background(if (colors.isDark) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.10f))
                     )
 
                     // Followers Count
+                    val followersInteraction = remember { MutableInteractionSource() }
+                    val isFollowersPressed by followersInteraction.collectIsPressedAsState()
+                    val followersScale by animateFloatAsState(
+                        targetValue = if (isFollowersPressed) 0.94f else 1f,
+                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                        label = "followersScale"
+                    )
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(1.5.dp),
                         modifier = Modifier
                             .weight(1f)
+                            .scale(followersScale)
                             .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
+                                interactionSource = followersInteraction,
                                 indication = null
                             ) {
                                 if (isRestricted) ToastManager.showToast("This account is private.")
@@ -352,28 +370,16 @@ fun UserProfileHeroSection(
                     ) {
                         Text(
                             text = formatCount(profile?.followersCount ?: 0),
-                            color = Color.White,
+                            color = statNumberColor,
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = (-0.02).em,
-                            style = TextStyle(
-                                shadow = androidx.compose.ui.graphics.Shadow(
-                                    color = Color.Black.copy(alpha = 0.35f),
-                                    blurRadius = 4f
-                                )
-                            )
+                            letterSpacing = (-0.02).em
                         )
                         Text(
                             text = "Followers",
-                            color = Color.White.copy(alpha = 0.85f),
+                            color = statLabelColor,
                             fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Medium,
-                            style = TextStyle(
-                                shadow = androidx.compose.ui.graphics.Shadow(
-                                    color = Color.Black.copy(alpha = 0.30f),
-                                    blurRadius = 3f
-                                )
-                            )
+                            fontWeight = FontWeight.Medium
                         )
                     }
 
@@ -382,17 +388,25 @@ fun UserProfileHeroSection(
                         modifier = Modifier
                             .height(20.dp)
                             .width(0.5.dp)
-                            .background(Color.White.copy(alpha = 0.25f))
+                            .background(if (colors.isDark) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.10f))
                     )
 
                     // Following Count
+                    val followingInteraction = remember { MutableInteractionSource() }
+                    val isFollowingPressed by followingInteraction.collectIsPressedAsState()
+                    val followingScale by animateFloatAsState(
+                        targetValue = if (isFollowingPressed) 0.94f else 1f,
+                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                        label = "followingScale"
+                    )
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(1.5.dp),
                         modifier = Modifier
                             .weight(1f)
+                            .scale(followingScale)
                             .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
+                                interactionSource = followingInteraction,
                                 indication = null
                             ) {
                                 if (isRestricted) ToastManager.showToast("This account is private.")
@@ -401,28 +415,16 @@ fun UserProfileHeroSection(
                     ) {
                         Text(
                             text = formatCount(profile?.followingCount ?: 0),
-                            color = Color.White,
+                            color = statNumberColor,
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = (-0.02).em,
-                            style = TextStyle(
-                                shadow = androidx.compose.ui.graphics.Shadow(
-                                    color = Color.Black.copy(alpha = 0.35f),
-                                    blurRadius = 4f
-                                )
-                            )
+                            letterSpacing = (-0.02).em
                         )
                         Text(
                             text = "Following",
-                            color = Color.White.copy(alpha = 0.85f),
+                            color = statLabelColor,
                             fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Medium,
-                            style = TextStyle(
-                                shadow = androidx.compose.ui.graphics.Shadow(
-                                    color = Color.Black.copy(alpha = 0.30f),
-                                    blurRadius = 3f
-                                )
-                            )
+                            fontWeight = FontWeight.Medium
                         )
                     }
                 }
@@ -484,7 +486,7 @@ fun UserProfileBioDetailsSection(
             )
         }
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(4.dp))
 
         // 1. Display Name + Verified Badge + Sleek QR Pass Icon Button
         Row(
@@ -499,8 +501,8 @@ fun UserProfileBioDetailsSection(
                 Text(
                     text = profile?.displayName ?: "Unknown",
                     color = colors.textMain,
-                    fontSize = 20.sp,
-                    lineHeight = 22.sp,
+                    fontSize = 21.sp,
+                    lineHeight = 24.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = (-0.02).em,
                     maxLines = 1,
@@ -512,20 +514,34 @@ fun UserProfileBioDetailsSection(
                 }
             }
 
-            // Sleek border-less Apple icon button for QR pass
+            // Sleek border-less Apple icon button for QR pass with spring touch feedback
+            val qrInteraction = remember { MutableInteractionSource() }
+            val isQrPressed by qrInteraction.collectIsPressedAsState()
+            val qrScale by animateFloatAsState(
+                targetValue = if (isQrPressed) 0.90f else 1f,
+                animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                label = "qrScale"
+            )
             Box(
                 modifier = Modifier
-                    .size(32.dp)
+                    .scale(qrScale)
+                    .size(34.dp)
                     .clip(CircleShape)
-                    .background(if (colors.isDark) Color(0xFF161A22) else Color.White)
-                    .clickable { onShowShareCard() },
+                    .background(if (colors.isDark) Color(0xFF1E222A) else Color(0xFFECEFF4))
+                    .clickable(
+                        interactionSource = qrInteraction,
+                        indication = null
+                    ) {
+                        com.chroma.studio.chat.sound.SoundManager.playReaction()
+                        onShowShareCard()
+                    },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     Lucide.QrCode,
                     contentDescription = "Show Pass",
                     tint = colors.textMain,
-                    modifier = Modifier.size(15.dp)
+                    modifier = Modifier.size(16.dp)
                 )
             }
         }
@@ -534,32 +550,32 @@ fun UserProfileBioDetailsSection(
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier.padding(top = 0.dp)
+            modifier = Modifier.padding(top = 3.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 modifier = Modifier
-                    .clip(RoundedCornerShape(4.dp))
+                    .clip(RoundedCornerShape(6.dp))
                     .clickable {
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                         val clip = ClipData.newPlainText("username", "@${profile?.username ?: ""}")
                         clipboard.setPrimaryClip(clip)
                         ToastManager.showToast("Username copied to clipboard")
                     }
-                    .padding(vertical = 1.dp)
+                    .padding(horizontal = 2.dp, vertical = 1.dp)
             ) {
                 Text(
                     text = "@${profile?.username ?: "unknown"}",
-                    color = Color(0xFF8E8E93),
-                    fontSize = 13.sp,
+                    color = colors.textMuted,
+                    fontSize = 13.5.sp,
                     fontWeight = FontWeight.Medium
                 )
                 Icon(
                     imageVector = Lucide.Copy,
                     contentDescription = "Copy username",
-                    tint = Color(0xFF8E8E93).copy(alpha = 0.5f),
-                    modifier = Modifier.size(11.dp)
+                    tint = colors.textMuted.copy(alpha = 0.6f),
+                    modifier = Modifier.size(11.5.dp)
                 )
             }
 
@@ -567,14 +583,14 @@ fun UserProfileBioDetailsSection(
             if (!roleText.isNullOrBlank()) {
                 Text(
                     text = "•",
-                    color = Color(0xFF8E8E93).copy(alpha = 0.45f),
+                    color = colors.textMuted.copy(alpha = 0.45f),
                     fontSize = 12.sp
                 )
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.5.dp)
                 ) {
-                    AiWaveSphereIcon(modifier = Modifier.size(12.5.dp))
+                    AiWaveSphereIcon(modifier = Modifier.size(13.dp))
                     Text(
                         text = roleText,
                         style = TextStyle(
@@ -635,8 +651,8 @@ fun UserProfileBioDetailsSection(
                                 append(word)
                             }
                         }
-                        withStyle(SpanStyle(color = Color(0xFF8E8E93))) {
-                            append("....")
+                        withStyle(SpanStyle(color = colors.textMuted)) {
+                            append("... ")
                         }
                         withStyle(SpanStyle(color = Color(0xFF0A84FF), fontWeight = FontWeight.Bold)) {
                             append("Read more")
@@ -707,24 +723,24 @@ fun UserProfileBioDetailsSection(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(999.dp))
-                            .background(if (colors.isDark) Color(0xFF161A22) else Color.White)
-                            .padding(horizontal = 10.dp, vertical = 5.dp)
+                            .background(if (colors.isDark) Color(0xFF1E222A) else Color(0xFFECEFF4))
+                            .padding(horizontal = 11.dp, vertical = 5.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.5.dp)
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
                         ) {
                             Icon(
                                 imageVector = icon,
                                 contentDescription = null,
-                                tint = Color(0xFF8E8E93),
-                                modifier = Modifier.size(12.dp)
+                                tint = if (colors.isDark) Color(0xFFA0A5B0) else Color(0xFF64748B),
+                                modifier = Modifier.size(12.5.dp)
                             )
                             Text(
                                 text = text,
-                                color = Color(0xFF8E8E93),
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.Normal,
+                                color = if (colors.isDark) Color(0xFFA0A5B0) else Color(0xFF475569),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
                                 letterSpacing = (-0.01).em
                             )
                         }
@@ -777,14 +793,14 @@ fun UserProfileBioDetailsSection(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(999.dp))
-                            .background(if (colors.isDark) Color(0xFF161A22) else Color.White)
-                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                            .background(if (colors.isDark) Color(0xFF1E222A) else Color(0xFFECEFF4))
+                            .padding(horizontal = 11.dp, vertical = 4.5.dp)
                     ) {
                         Text(
                             text = tag,
-                            color = Color(0xFF8E8E93),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Normal
+                            color = if (colors.isDark) Color(0xFFA0A5B0) else Color(0xFF475569),
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Medium
                         )
                     }
                 }
@@ -916,35 +932,28 @@ fun ProfileActionButton(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.97f else 1f,
+        targetValue = if (isPressed) 0.96f else 1f,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
         label = "profileBtnScale"
     )
 
-    val shape = RoundedCornerShape(22.dp)
+    val shape = RoundedCornerShape(14.dp)
     val background = if (isPrimary) {
-        if (isPressed) Color(0xFF0051D5) else Color(0xFF0A84FF)
+        if (isPressed) Color(0xFF0066E0) else Color(0xFF0A84FF)
     } else {
         if (isPressed) {
-            if (colors.isDark) Color(0xFF232A38) else Color(0xFFF1F5F9)
+            if (colors.isDark) Color(0xFF262A34) else Color(0xFFE2E6EE)
         } else {
-            if (colors.isDark) Color(0xFF161A22) else Color.White
+            if (colors.isDark) Color(0xFF1E222A) else Color(0xFFEFF2F6)
         }
-    }
-
-    val borderStroke = if (isPrimary) {
-        BorderStroke(1.dp, Color(0xFF0A84FF).copy(alpha = 0.5f))
-    } else {
-        BorderStroke(1.dp, if (colors.isDark) Color(0xFF232A38) else Color.Transparent)
     }
 
     Box(
         modifier = modifier
             .scale(scale)
-            .height(40.dp)
+            .height(42.dp)
             .clip(shape)
             .background(background)
-            .border(borderStroke.width, borderStroke.brush, shape)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -997,8 +1006,7 @@ fun UserProfileActionsStoriesSection(
             isCurrentUser = isCurrentUser,
             userId = userId
         )
-        Spacer(Modifier.height(10.dp))
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(12.dp))
 
         // Action Buttons Row (Apple iOS Squircle Buttons, 12dp radius, border-less!)
         Row(
@@ -1121,9 +1129,9 @@ fun UserProfileActionsStoriesSection(
                 Box(
                     modifier = Modifier
                         .scale(shareScale)
-                        .size(40.dp)
+                        .size(42.dp)
                         .clip(RoundedCornerShape(14.dp))
-                        .background(if (colors.isDark) Color(0xFF161A22) else Color.White)
+                        .background(if (colors.isDark) Color(0xFF1E222A) else Color(0xFFEFF2F6))
                         .clickable(
                             interactionSource = shareInteraction,
                             indication = null,

@@ -76,8 +76,7 @@ fun UserProfileStatusSection(
     }
     var showEditDialog by remember { mutableStateOf(false) }
 
-    val statusCardBg = if (isDark) Color(0xFF141416) else Color(0xFFF1F5F9)
-    val statusBorder = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f)
+    val statusCardBg = if (isDark) Color(0xFF181B22) else Color(0xFFF3F6FA)
 
     // Breathing glow animation for active dot
     val infiniteTransition = rememberInfiniteTransition(label = "onlinePulse")
@@ -94,9 +93,15 @@ fun UserProfileStatusSection(
     Box(
         modifier = modifier
             .fillMaxWidth()
+            .shadow(
+                elevation = 2.dp,
+                shape = RoundedCornerShape(16.dp),
+                clip = false,
+                spotColor = Color.Black.copy(alpha = if (isDark) 0.22f else 0.05f),
+                ambientColor = Color.Black.copy(alpha = if (isDark) 0.12f else 0.03f)
+            )
             .clip(RoundedCornerShape(16.dp))
             .background(statusCardBg)
-            .border(1.dp, statusBorder, RoundedCornerShape(16.dp))
             .clickable(enabled = isCurrentUser) {
                 SoundManager.playReaction()
                 showEditDialog = true
@@ -118,8 +123,7 @@ fun UserProfileStatusSection(
                     modifier = Modifier
                         .size(36.dp)
                         .clip(CircleShape)
-                        .background(if (isDark) Color(0xFF1E1E22) else Color.White)
-                        .border(0.5.dp, statusBorder, CircleShape),
+                        .background(if (isDark) Color(0xFF222630) else Color.White),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -393,14 +397,7 @@ fun UserProfileHighlightsSection(
                             modifier = Modifier
                                 .size(64.dp)
                                 .clip(CircleShape)
-                                .border(
-                                    width = 1.2.dp,
-                                    color = if (isDark) Color.White.copy(0.20f) else Color.Black.copy(0.12f),
-                                    shape = CircleShape
-                                )
-                                .padding(3.dp)
-                                .clip(CircleShape)
-                                .background(if (isDark) Color(0xFF1A1A1E) else Color(0xFFF1F5F9)),
+                                .background(if (isDark) Color(0xFF1E222A) else Color(0xFFEFF2F6)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
