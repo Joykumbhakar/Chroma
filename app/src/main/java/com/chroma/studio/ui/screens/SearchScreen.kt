@@ -1234,212 +1234,118 @@ fun SearchScreen(
                         )
                     }
 
-                    // Right: Action Buttons (Sort, Refresh, Theme, More)
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        // [3A] Sort Order Menu Button
-                        var showSortDropdown by remember { mutableStateOf(false) }
-                        Box {
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(if (!isDark) Color.Black.copy(0.05f) else Color.White.copy(0.08f))
-                                    .clickable { showSortDropdown = true }
-                                    .padding(horizontal = 9.dp, vertical = 6.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Lucide.ArrowUpDown,
-                                        contentDescription = "Sort",
-                                        tint = activeAccent,
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                    Text(
-                                        text = sortOrder.label,
-                                        color = textDark,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontFamily = InterFontFamily
-                                    )
-                                }
-                            }
-
-                            DropdownMenu(
-                                expanded = showSortDropdown,
-                                onDismissRequest = { showSortDropdown = false },
-                                offset = DpOffset(x = 0.dp, y = 6.dp),
-                                modifier = Modifier
-                                    .width(180.dp)
-                                    .background(
-                                        color = if (isDark) Color(0xFF2C2C2E) else Color.White,
-                                        shape = RoundedCornerShape(18.dp)
-                                    )
-                            ) {
-                                OneUiSortOrder.entries.forEach { option ->
-                                    DropdownMenuItem(
-                                        text = {
-                                            Text(
-                                                text = option.label,
-                                                color = if (sortOrder == option) activeAccent else textDark,
-                                                fontSize = 13.5.sp,
-                                                fontWeight = if (sortOrder == option) FontWeight.Bold else FontWeight.Normal
-                                            )
-                                        },
-                                        onClick = {
-                                            sortOrder = option
-                                            prefs.edit().putString("oneui_search_sort_order", option.name).apply()
-                                            showSortDropdown = false
-                                        }
-                                    )
-                                }
-                            }
-                        }
-
-                        // [3B] Refresh Button with Spin Animation
-                        val rotation by animateFloatAsState(
-                            targetValue = if (isRefreshing) 360f else 0f,
-                            animationSpec = if (isRefreshing) infiniteRepeatable(tween(800, easing = LinearEasing)) else tween(300),
-                            label = "refreshRotation"
-                        )
+                    // Right: More Options
+                    Box {
                         IconButton(
-                            onClick = { handleRefresh() },
+                            onClick = { showMoreOptionsMenu = true },
                             modifier = Modifier.size(38.dp)
                         ) {
                             Icon(
-                                imageVector = Lucide.RotateCw,
-                                contentDescription = "Refresh",
+                                imageVector = Lucide.EllipsisVertical,
+                                contentDescription = "More options",
                                 tint = textDark,
-                                modifier = Modifier
-                                    .size(19.dp)
-                                    .graphicsLayer { rotationZ = rotation }
+                                modifier = Modifier.size(20.dp)
                             )
                         }
 
-                        // [3C] Theme Style Pill Action Button
-                        Box(
+                        DropdownMenu(
+                            expanded = showMoreOptionsMenu,
+                            onDismissRequest = { showMoreOptionsMenu = false },
+                            offset = DpOffset(x = 0.dp, y = 6.dp),
                             modifier = Modifier
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(if (!isDark) Color.Black.copy(0.05f) else Color.White.copy(0.10f))
-                                .clickable { cycleGradientStyle() }
-                                .padding(horizontal = 9.dp, vertical = 6.dp),
-                            contentAlignment = Alignment.Center
+                                .width(240.dp)
+                                .background(
+                                    color = if (isDark) Color(0xFF2C2C2E) else Color.White,
+                                    shape = RoundedCornerShape(20.dp)
+                                )
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(5.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(7.dp)
-                                        .clip(CircleShape)
-                                        .background(
-                                            if (gradientStyle == OneUiGradientStyle.SOLID) OneUiBlueLight
-                                            else gradientStyle.orbColor
-                                        )
-                                )
-                                Text(
-                                    text = gradientStyle.label,
-                                    fontSize = 11.5.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = textDark
-                                )
-                            }
-                        }
+                            Text(
+                                text = "EXPLORE SETTINGS",
+                                color = textMuted,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.6.sp,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                            )
 
-                        // [4] More Options Button (Far Right)
-                        Box {
-                            IconButton(
-                                onClick = { showMoreOptionsMenu = true },
-                                modifier = Modifier.size(38.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Lucide.EllipsisVertical,
-                                    contentDescription = "More options",
-                                    tint = textDark,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
+                            OneUiMenuCheckboxItem(
+                                title = "Aurora glowing search bar",
+                                checked = useGalaxyAiSearchBar,
+                                accentColor = activeAccent,
+                                isDark = isDark,
+                                onCheckedChange = { checked ->
+                                    useGalaxyAiSearchBar = checked
+                                    prefs.edit().putBoolean("oneui_search_galaxy_ai_bar", checked).apply()
+                                }
+                            )
 
-                            DropdownMenu(
-                                expanded = showMoreOptionsMenu,
-                                onDismissRequest = { showMoreOptionsMenu = false },
-                                offset = DpOffset(x = 0.dp, y = 6.dp),
-                                modifier = Modifier
-                                    .width(240.dp)
-                                    .background(
-                                        color = if (isDark) Color(0xFF2C2C2E) else Color.White,
-                                        shape = RoundedCornerShape(20.dp)
+                            HorizontalDivider(
+                                color = dividerColor,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = "Refresh Feed",
+                                        color = textDark,
+                                        fontSize = 13.5.sp,
+                                        fontWeight = FontWeight.Medium
                                     )
-                            ) {
-                                Text(
-                                    text = "EXPLORE SETTINGS",
-                                    color = textMuted,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.6.sp,
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
-                                )
+                                },
+                                leadingIcon = {
+                                    Icon(Lucide.RotateCw, null, tint = activeAccent, modifier = Modifier.size(16.dp))
+                                },
+                                onClick = {
+                                    showMoreOptionsMenu = false
+                                    handleRefresh()
+                                }
+                            )
 
-                                OneUiMenuCheckboxItem(
-                                    title = "Aurora glowing search bar",
-                                    checked = useGalaxyAiSearchBar,
-                                    accentColor = activeAccent,
-                                    isDark = isDark,
-                                    onCheckedChange = { checked ->
-                                        useGalaxyAiSearchBar = checked
-                                        prefs.edit().putBoolean("oneui_search_galaxy_ai_bar", checked).apply()
-                                    }
-                                )
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = "Theme: ${gradientStyle.label}",
+                                        color = textDark,
+                                        fontSize = 13.5.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                },
+                                leadingIcon = {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(12.dp)
+                                            .clip(CircleShape)
+                                            .background(
+                                                if (gradientStyle == OneUiGradientStyle.SOLID) OneUiBlueLight
+                                                else gradientStyle.orbColor
+                                            )
+                                    )
+                                },
+                                onClick = {
+                                    cycleGradientStyle()
+                                }
+                            )
 
-                                HorizontalDivider(
-                                    color = dividerColor,
-                                    modifier = Modifier.padding(vertical = 4.dp)
-                                )
-
+                            if (searchHistory.isNotEmpty()) {
                                 DropdownMenuItem(
                                     text = {
                                         Text(
-                                            text = "Refresh Feed",
-                                            color = textDark,
+                                            text = "Clear Search History",
+                                            color = Color(0xFFFF3B30),
                                             fontSize = 13.5.sp,
                                             fontWeight = FontWeight.Medium
                                         )
                                     },
                                     leadingIcon = {
-                                        Icon(Lucide.RotateCw, null, tint = activeAccent, modifier = Modifier.size(16.dp))
+                                        Icon(Lucide.Trash2, null, tint = Color(0xFFFF3B30), modifier = Modifier.size(16.dp))
                                     },
                                     onClick = {
                                         showMoreOptionsMenu = false
-                                        handleRefresh()
+                                        historyManager.clearHistory()
+                                        searchHistory = emptyList()
                                     }
                                 )
-
-                                if (searchHistory.isNotEmpty()) {
-                                    DropdownMenuItem(
-                                        text = {
-                                            Text(
-                                                text = "Clear Search History",
-                                                color = Color(0xFFFF3B30),
-                                                fontSize = 13.5.sp,
-                                                fontWeight = FontWeight.Medium
-                                            )
-                                        },
-                                        leadingIcon = {
-                                            Icon(Lucide.Trash2, null, tint = Color(0xFFFF3B30), modifier = Modifier.size(16.dp))
-                                        },
-                                        onClick = {
-                                            showMoreOptionsMenu = false
-                                            historyManager.clearHistory()
-                                            searchHistory = emptyList()
-                                        }
-                                    )
-                                }
                             }
                         }
                     }
