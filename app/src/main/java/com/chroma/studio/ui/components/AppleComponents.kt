@@ -171,15 +171,10 @@ fun LiquidGlassKnob(
  * - Press states: unchecked -> -1px, checked -> 15px
  */
 /**
- * Authentic Apple iOS Toggle Switch matching user reference image:
- * - 51dp width x 31dp height pill track.
- * - Active track: Apple Blue #007AFF (or custom activeTrackColor).
- * - Inactive track: #E9E9EA (light) / #39393D (dark) with crisp subtle border.
- * - Knob: 27dp diameter solid white pill with soft depth shadow.
- * - Physics:
- *   - Fluid spring translation between unchecked (2dp) and checked (22dp).
- *   - Knob stretches horizontally during press / travel (27dp -> 31.5dp).
- *   - Bouncy Spring Zoom animation when user taps or presses (knob scales up to ~1.22x and springs back with realistic damping physics).
+ * Universal Apple HIG & Claymorphic Pill Toggle Switch.
+ * Powered by real-time second-order spring physics from [AppSpringPhysics.globalConfig],
+ * GPU RenderNode hardware acceleration (120 FPS), instant 1-tap responsiveness,
+ * fluid drag rubber-banding, tap/hold clay zoom plumping, and acoustic feedback.
  */
 @Composable
 fun AppleSwitch(
@@ -189,218 +184,21 @@ fun AppleSwitch(
     activeTrackColor: Color = Color(0xFF0A84FF),
     inactiveTrackColor: Color = if (isAppInDark) Color(0xFF39393D) else Color(0xFFE9E9EA),
     hazeState: dev.chrisbanes.haze.HazeState? = null,
-    trackWidth: Dp = 51.dp,
+    trackWidth: Dp = 52.dp,
     trackHeight: Dp = 31.dp
 ) {
-    val view = LocalView.current
-    val density = LocalDensity.current
-    val coroutineScope = rememberCoroutineScope()
-
-    // Geometry calculations adapt dynamically to track dimensions
-    val padding = 2.dp
-    val knobHeight = (trackHeight - padding * 2).coerceAtLeast(10.dp)
-    val restingKnobWidth = knobHeight
-    val stretchAmount = (trackWidth * 0.08f).coerceIn(3.dp, 5.dp)
-    val maxTravelDp = (trackWidth - knobHeight - padding * 2).coerceAtLeast(0.dp)
-    val maxTravelPx = with(density) { maxTravelDp.toPx() }
-
-    // Haptic & Sound Feedback helper
-    fun triggerFeedback(isTurnedOn: Boolean) {
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                val feedback = if (isTurnedOn) HapticFeedbackConstants.CONFIRM else HapticFeedbackConstants.CLOCK_TICK
-                if (!view.performHapticFeedback(feedback)) {
-                    view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-                }
-            } else {
-                view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            }
-        } catch (_: Exception) {}
-        try {
-            com.chroma.studio.chat.sound.SoundManager.playReaction()
-        } catch (_: Exception) {}
-    }
-
-    // Spring-driven fractional progress (0f = OFF, 1f = ON)
-    val animPosition = remember { Animatable(if (checked) 1f else 0f) }
-    // Press / touch stretch progress (0f = resting circle, 1f = stretched pill)
-    val pressAnim = remember { Animatable(0f) }
-
-    var isPressed by remember { mutableStateOf(false) }
-    var dragFraction by remember { mutableStateOf<Float?>(null) }
-
-    // Synchronize target with external 'checked' state changes smoothly
-    LaunchedEffect(checked) {
-        val target = if (checked) 1f else 0f
-        if (dragFraction == null && animPosition.targetValue != target) {
-            animPosition.animateTo(
-                targetValue = target,
-                animationSpec = spring(
-                    dampingRatio = 0.72f, // Velvety, organic Apple spring damping
-                    stiffness = 550f      // Snappy and responsive
-                )
-            )
-        }
-    }
-
-    // Real-time tracking when user drags
-    LaunchedEffect(dragFraction) {
-        dragFraction?.let { df ->
-            animPosition.snapTo(df)
-        }
-    }
-
-    // Touch press / stretch spring
-    LaunchedEffect(isPressed) {
-        pressAnim.animateTo(
-            targetValue = if (isPressed) 1f else 0f,
-            animationSpec = spring(
-                dampingRatio = 0.65f,
-                stiffness = 650f
-            )
-        )
-    }
-
-    val progress = animPosition.value.coerceIn(0f, 1f)
-    val pressProgress = pressAnim.value.coerceIn(0f, 1f)
-
-    // Current dynamic knob width during stretch
-    val currentKnobWidth = restingKnobWidth + stretchAmount * pressProgress
-
-    // Left offset calculation:
-    // When progress = 0: left = padding (knob pinned to left, stretches to the right)
-    // When progress = 1: left = trackWidth - padding - currentKnobWidth (knob pinned to right, stretches to the left)
-    val leftAtOff = padding
-    val leftAtOn = trackWidth - padding - currentKnobWidth
-    val knobLeftOffset = leftAtOff + (leftAtOn - leftAtOff) * progress
-
-    // Smooth interpolated track background color
-    val trackColor = lerp(inactiveTrackColor, activeTrackColor, progress)
-
-    // Unchecked subtle border alpha
-    val borderAlpha = ((1f - progress) * 0.12f).coerceIn(0f, 0.12f)
-    val borderColor = if (isAppInDark) Color.White.copy(alpha = borderAlpha * 1.2f) else Color.Black.copy(alpha = borderAlpha)
-
-    val trackShape = RoundedCornerShape(100.dp)
-    val knobShape = RoundedCornerShape(100.dp)
-
-    Box(
-        modifier = modifier
-            .size(width = trackWidth, height = trackHeight)
-            .clip(trackShape)
-            .background(trackColor)
-            .border(
-                width = 0.5.dp,
-                color = borderColor,
-                shape = trackShape
-            )
-            .semantics {
-                role = Role.Switch
-                toggleableState = ToggleableState(checked)
-                contentDescription = if (checked) "On" else "Off"
-            }
-            .pointerInput(checked, maxTravelPx) {
-                val touchSlop = viewConfiguration.touchSlop
-                awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = false)
-                    isPressed = true
-                    var totalDx = 0f
-                    var totalDy = 0f
-                    var isDragging = false
-                    var isCancelled = false
-                    val startFraction = if (checked) 1f else 0f
-
-                    while (true) {
-                        val event = awaitPointerEvent(PointerEventPass.Main)
-                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                        if (!change.pressed) {
-                            change.consume()
-                            break
-                        }
-
-                        val dx = change.positionChange().x
-                        val dy = change.positionChange().y
-                        totalDx += dx
-                        totalDy += dy
-
-                        if (!isDragging && !isCancelled) {
-                            if (abs(totalDy) > touchSlop && abs(totalDy) > abs(totalDx) * 1.3f) {
-                                // Vertical list scroll detected: cancel switch interaction smoothly
-                                isCancelled = true
-                                isPressed = false
-                            } else if (abs(totalDx) > touchSlop) {
-                                isDragging = true
-                            }
-                        }
-
-                        if (isDragging) {
-                            change.consume()
-                            val delta = totalDx / maxTravelPx.coerceAtLeast(1f)
-                            val rawTarget = (startFraction + delta).coerceIn(0f, 1f)
-                            dragFraction = rawTarget
-                        }
-                    }
-
-                    isPressed = false
-
-                    if (!isCancelled) {
-                        if (!isDragging) {
-                            // Effortless 1-TAP toggle!
-                            val nextState = !checked
-                            triggerFeedback(nextState)
-                            coroutineScope.launch {
-                                animPosition.animateTo(
-                                    targetValue = if (nextState) 1f else 0f,
-                                    animationSpec = spring(dampingRatio = 0.72f, stiffness = 550f)
-                                )
-                            }
-                            onCheckedChange(nextState)
-                        } else {
-                            // Drag / swipe release
-                            val finalFraction = dragFraction ?: (if (checked) 1f else 0f)
-                            val nextState = finalFraction >= 0.5f
-                            dragFraction = null
-                            if (nextState != checked) {
-                                triggerFeedback(nextState)
-                                coroutineScope.launch {
-                                    animPosition.animateTo(
-                                        targetValue = if (nextState) 1f else 0f,
-                                        animationSpec = spring(dampingRatio = 0.72f, stiffness = 550f)
-                                    )
-                                }
-                                onCheckedChange(nextState)
-                            } else {
-                                // Animate back to original state if not flipped
-                                coroutineScope.launch {
-                                    animPosition.animateTo(
-                                        targetValue = if (checked) 1f else 0f,
-                                        animationSpec = spring(dampingRatio = 0.72f, stiffness = 550f)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    dragFraction = null
-                }
-            }
-    ) {
-        // Pixel-Perfect Apple Knob with GPU RenderNode Shadow
-        Box(
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .offset { IntOffset(x = knobLeftOffset.roundToPx(), y = 0) }
-                .size(width = currentKnobWidth, height = knobHeight)
-                .shadow(
-                    elevation = (2.5.dp * (1f + 0.15f * pressProgress)).coerceAtLeast(2.dp),
-                    shape = knobShape,
-                    spotColor = Color.Black.copy(alpha = 0.22f),
-                    ambientColor = Color.Black.copy(alpha = 0.12f)
-                )
-                .clip(knobShape)
-                .background(Color.White)
-                .border(0.5.dp, Color.Black.copy(alpha = 0.04f), knobShape)
-        )
-    }
+    SpringPillSwitch(
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        modifier = modifier,
+        colors = PillSwitchColors(
+            offTrackColor = inactiveTrackColor,
+            onTrackColor = activeTrackColor,
+            thumbColor = Color.White
+        ),
+        trackWidth = trackWidth,
+        trackHeight = trackHeight
+    )
 }
 
 /**
