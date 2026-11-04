@@ -18,6 +18,7 @@ import com.chroma.studio.data.SavedAccount
 fun OnboardingFlow(
     onFinished: (OnboardingState) -> Unit,
     onGoogleSignIn: () -> Unit,
+    onAppleSignIn: () -> Unit = {},
     onContinueSaved: () -> Unit,
     onLoginSuccess: () -> Unit = {},
     onSignInExisting: () -> Unit = {},
@@ -26,6 +27,7 @@ fun OnboardingFlow(
     savedAccountName: String? = null,
     savedAccounts: List<SavedAccount> = emptyList(),
     googleLoading: Boolean = false,
+    appleLoading: Boolean = false,
     discoverRepo: DiscoverRepository? = null,
     modifier: Modifier = Modifier,
     vm: OnboardingViewModel = viewModel()
@@ -47,8 +49,10 @@ fun OnboardingFlow(
             ObStep.Welcome -> WelcomeScreen(
                 savedAccountName = savedAccountName,
                 googleLoading = googleLoading,
+                appleLoading = appleLoading,
                 onContinueSaved = onContinueSaved,
                 onGoogle = onGoogleSignIn,
+                onApple = onAppleSignIn,
                 onCreateAccount = { s.step = ObStep.Interests },
                 onSignInExisting = { s.step = ObStep.SignIn },
                 onExploreGuest = onExploreGuest,
@@ -59,6 +63,8 @@ fun OnboardingFlow(
                 onLoginSuccess = onLoginSuccess,
                 onCreateAccount = { s.step = ObStep.Interests },
                 onGoogleSignIn = onGoogleSignIn,
+                onAppleSignIn = onAppleSignIn,
+                appleLoading = appleLoading,
                 onExploreGuest = onExploreGuest,
                 onOpenTerms = onOpenTerms,
                 savedAccounts = savedAccounts,

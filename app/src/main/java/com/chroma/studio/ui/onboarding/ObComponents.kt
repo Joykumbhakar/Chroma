@@ -1,5 +1,8 @@
 package com.chroma.studio.ui.onboarding
 
+import androidx.compose.ui.res.painterResource
+import com.chroma.studio.R
+
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
@@ -374,6 +377,53 @@ fun ObPrimaryButton(
             leading?.let { it(); Spacer(Modifier.width(8.dp)) }
             Text(text, color = Color(0xFF090C22), fontSize = 14.5.sp, fontWeight = FontWeight.Bold)
             trailingIcon?.let { Spacer(Modifier.width(6.dp)); Icon(it, null, tint = Color(0xFF090C22), modifier = Modifier.size(18.dp)) }
+        }
+    }
+}
+
+
+/**
+ * Official Apple-style pill button following Apple Human Interface Guidelines:
+ * Midnight pitch-black container, pure white Apple logo, bold white typography.
+ */
+@Composable
+fun ObAppleButton(
+    text: String = "Sign in with Apple",
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    loading: Boolean = false,
+    height: Dp = 52.dp
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.97f else 1f, spring(0.5f, 400f), label = "apple_press")
+    val alpha by animateFloatAsState(if (enabled) 1f else 0.4f, label = "apple_alpha")
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(height)
+            .graphicsLayer { scaleX = scale; scaleY = scale; this.alpha = alpha }
+            .shadow(if (enabled) 10.dp else 0.dp, CircleShape, ambientColor = Color(0x60000000), spotColor = Color(0x90000000))
+            .clip(CircleShape)
+            .background(Color.Black)
+            .border(BorderStroke(1.dp, Color(0x33FFFFFF)), CircleShape)
+            .clickable(interactionSource = interaction, indication = null, enabled = enabled && !loading, role = Role.Button, onClick = onClick)
+            .padding(horizontal = 20.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (loading) {
+            CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
+        } else {
+            Icon(
+                painter = painterResource(R.drawable.ic_apple_logo),
+                contentDescription = "Apple logo",
+                tint = Color.White,
+                modifier = Modifier.size(19.dp)
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(text, color = Color.White, fontSize = 14.5.sp, fontWeight = FontWeight.Bold)
         }
     }
 }

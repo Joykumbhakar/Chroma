@@ -1599,7 +1599,7 @@ fun HomeScreen(
 
                                         } else {
 
-                                            showLoginScreen = true
+                                            onRequireLogin()
 
                                         }
 

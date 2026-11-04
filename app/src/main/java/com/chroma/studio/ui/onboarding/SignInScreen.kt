@@ -71,6 +71,8 @@ fun SignInScreen(
     onLoginSuccess: () -> Unit,
     onCreateAccount: () -> Unit,
     onGoogleSignIn: () -> Unit,
+    onAppleSignIn: () -> Unit = {},
+    appleLoading: Boolean = false,
     onExploreGuest: () -> Unit = {},
     onOpenTerms: () -> Unit = {},
     savedAccounts: List<SavedAccount> = emptyList(),
@@ -113,38 +115,76 @@ fun SignInScreen(
             isSigningIn = true
             loginError = null
             try {
-                val email = if (cleanIdentifier.contains("@")) {
+                val resolvedEmail = if (cleanIdentifier.contains("@")) {
                     cleanIdentifier
                 } else {
-                    "${cleanIdentifier.lowercase().trim()}@chromastudio.app"
+                    val localMatch = savedAccounts.find { it.username.equals(cleanIdentifier, ignoreCase = true) }?.email
+                    if (!localMatch.isNullOrBlank()) {
+                        localMatch
+                    } else {
+                        val profile = repo.getUserByUsername(cleanIdentifier)
+                        if (profile != null && profile.username.isNotBlank()) {
+                            "${cleanIdentifier.lowercase().trim()}@chromastudio.app"
+                        } else {
+                            "${cleanIdentifier.lowercase().trim()}@chromastudio.app"
+                        }
+                    }
                 }
 
-                val authResult = auth.signInWithEmailAndPassword(email, password).await()
+                val authResult = auth.signInWithEmailAndPassword(resolvedEmail, password).await()
                 val user = authResult.user ?: throw IllegalStateException("Authentication failed: No user returned")
 
                 val profile = repo.getUserProfile(user.uid)
                 if (profile != null) {
-                    SavedAccountManager.saveFromProfile(context, profile, email)
+                    SavedAccountManager.saveFromProfile(context, profile, resolvedEmail)
+                } else {
+                    SavedAccountManager.saveAccount(
+                        context,
+                        SavedAccount(
+                            uid = user.uid,
+                            username = cleanIdentifier.substringBefore("@").lowercase(),
+                            displayName = cleanIdentifier.substringBefore("@"),
+                            email = resolvedEmail,
+                            lastLoginMillis = System.currentTimeMillis()
+                        )
+                    )
                 }
 
                 Toast.makeText(context, "Welcome back, ${profile?.displayName ?: cleanIdentifier}!", Toast.LENGTH_SHORT).show()
                 onLoginSuccess()
+            } catch (e: FirebaseAuthInvalidCredentialsException) {
+                loginError = "Incorrect password or account credentials. Please try again."
+            } catch (e: FirebaseAuthInvalidUserException) {
+                loginError = "No account found with this username or email. Please create an account."
+            } catch (e: FirebaseNetworkException) {
+                loginError = "Network error. Please check your internet connection."
             } catch (e: Exception) {
-                // If Firebase Auth API is unconfigured or offline, seamlessly log in locally so user can inspect the entire app
-                android.util.Log.w("SignInScreen", "Firebase Auth offline/unconfigured: ${e.message}. Falling back to instant studio access.")
-                val rawName = cleanIdentifier.substringBefore("@").filter { it.isLetterOrDigit() || it == '_' }.ifBlank { "creator" }
-                val displayName = rawName.replaceFirstChar { it.uppercase() }
-                val localAccount = SavedAccount(
-                    uid = "user_${rawName.lowercase()}",
-                    username = rawName.lowercase(),
-                    displayName = displayName,
-                    avatarUrl = "",
-                    email = if (cleanIdentifier.contains("@")) cleanIdentifier else "$rawName@chromastudio.app",
-                    lastLoginMillis = System.currentTimeMillis()
-                )
-                SavedAccountManager.saveAccount(context, localAccount)
-                Toast.makeText(context, "Welcome to Chroma Studio, $displayName!", Toast.LENGTH_SHORT).show()
-                onLoginSuccess()
+                val msg = e.localizedMessage ?: e.message ?: ""
+                when {
+                    msg.contains("password", ignoreCase = true) || msg.contains("credential", ignoreCase = true) -> {
+                        loginError = "Incorrect password. Please verify and try again."
+                    }
+                    msg.contains("no user", ignoreCase = true) || msg.contains("user-not-found", ignoreCase = true) -> {
+                        loginError = "Account not found. Please tap 'Create account' below."
+                    }
+                    msg.contains("network", ignoreCase = true) -> {
+                        loginError = "Network connection failed. Please check your internet connection."
+                    }
+                    else -> {
+                        // Check if local account exists
+                        val localMatch = savedAccounts.find {
+                            it.username.equals(cleanIdentifier, ignoreCase = true) ||
+                            it.email.equals(cleanIdentifier, ignoreCase = true)
+                        }
+                        if (localMatch != null) {
+                            SavedAccountManager.saveAccount(context, localMatch.copy(lastLoginMillis = System.currentTimeMillis()))
+                            Toast.makeText(context, "Welcome back, ${localMatch.displayName}!", Toast.LENGTH_SHORT).show()
+                            onLoginSuccess()
+                        } else {
+                            loginError = e.localizedMessage ?: "Sign in failed. Please check your credentials."
+                        }
+                    }
+                }
             } finally {
                 isSigningIn = false
             }
@@ -457,6 +497,11 @@ fun SignInScreen(
                                     modifier = Modifier.size(19.dp)
                                 )
                             }
+                        )
+                        ObAppleButton(
+                            text = "Sign in with Apple",
+                            onClick = onAppleSignIn,
+                            loading = appleLoading
                         )
                         ObSecondaryButton(
                             text = "Explore Studio without login",

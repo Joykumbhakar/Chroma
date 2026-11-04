@@ -44,6 +44,7 @@ import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
+import com.google.firebase.auth.OAuthProvider
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -79,9 +80,55 @@ fun OscellionOnboardingScreen(
     val savedAccountName = primarySaved?.let { it.displayName.ifBlank { it.username } }
 
     var isGoogleLoading by remember { mutableStateOf(false) }
+    var isAppleLoading by remember { mutableStateOf(false) }
     var isCreatingAccount by remember { mutableStateOf(false) }
     var showTermsModal by remember { mutableStateOf(false) }
     var generalError by remember { mutableStateOf<String?>(null) }
+
+    suspend fun handleOAuthSuccess(user: com.google.firebase.auth.FirebaseUser, providerName: String) {
+        val existingProfile = discoverRepo.getUserProfile(user.uid)
+        if (existingProfile != null) {
+            SavedAccountManager.saveFromProfile(context, existingProfile, user.email)
+            com.chroma.studio.services.ChromaMessagingService.syncTokenForCurrentUser()
+            Toast.makeText(context, "Welcome back, ${existingProfile.displayName}!", Toast.LENGTH_SHORT).show()
+            onLoginSuccess()
+        } else {
+            // Brand new OAuth user: automatically initialize studio profile & sign in directly
+            val baseName = user.email?.substringBefore("@")?.filter { it.isLetterOrDigit() || it == '_' }?.lowercase()?.ifBlank { "creator" } ?: "creator"
+            var targetUsername = baseName
+            if (!discoverRepo.checkUsernameAvailable(targetUsername)) {
+                val suggestions = discoverRepo.suggestAvailableUsernames(baseName)
+                targetUsername = suggestions.firstOrNull() ?: "${baseName}${System.currentTimeMillis() % 1000}"
+            }
+            val displayName = user.displayName?.ifBlank { baseName } ?: baseName
+            val avatarUrl = user.photoUrl?.toString() ?: ""
+
+            val registered = discoverRepo.registerDetailedUser(
+                uid = user.uid,
+                displayName = displayName,
+                username = targetUsername,
+                dob = null,
+                avatarUrl = avatarUrl,
+                interests = listOf("Creative Studio", "Design", "Photography"),
+                gender = "UNSPECIFIED",
+                agreedToTermsAt = System.currentTimeMillis()
+            )
+
+            if (registered) {
+                val newProfile = discoverRepo.getUserProfile(user.uid)
+                if (newProfile != null) {
+                    SavedAccountManager.saveFromProfile(context, newProfile, user.email)
+                }
+                com.chroma.studio.services.ChromaMessagingService.syncTokenForCurrentUser()
+                Toast.makeText(context, "Welcome to Chroma Studio, $displayName!", Toast.LENGTH_SHORT).show()
+                onLoginSuccess()
+            } else {
+                val err = "Could not initialize studio profile for $providerName account."
+                generalError = err
+                Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
 
     // Google Sign-In Launcher
     val googleLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -96,51 +143,15 @@ fun OscellionOnboardingScreen(
                     val authResult = auth.signInWithCredential(credential).await()
                     val user = authResult.user
                     if (user != null) {
-                        val existingProfile = discoverRepo.getUserProfile(user.uid)
-                        if (existingProfile != null) {
-                            SavedAccountManager.saveFromProfile(context, existingProfile, user.email)
-                            com.chroma.studio.services.ChromaMessagingService.syncTokenForCurrentUser()
-                            Toast.makeText(context, "Welcome back, ${existingProfile.displayName}!", Toast.LENGTH_SHORT).show()
-                            onLoginSuccess()
-                        } else {
-                            // Brand new Google user: automatically create studio profile & sign in directly
-                            val baseName = user.email?.substringBefore("@")?.filter { it.isLetterOrDigit() || it == '_' }?.lowercase()?.ifBlank { "creator" } ?: "creator"
-                            var targetUsername = baseName
-                            if (!discoverRepo.checkUsernameAvailable(targetUsername)) {
-                                val suggestions = discoverRepo.suggestAvailableUsernames(baseName)
-                                targetUsername = suggestions.firstOrNull() ?: "${baseName}${System.currentTimeMillis() % 1000}"
-                            }
-                            val displayName = user.displayName?.ifBlank { baseName } ?: baseName
-                            val avatarUrl = user.photoUrl?.toString() ?: ""
-
-                            val registered = discoverRepo.registerDetailedUser(
-                                uid = user.uid,
-                                displayName = displayName,
-                                username = targetUsername,
-                                dob = null,
-                                avatarUrl = avatarUrl,
-                                interests = listOf("Creative Studio", "Design", "Photography"),
-                                gender = "UNSPECIFIED",
-                                agreedToTermsAt = System.currentTimeMillis()
-                            )
-
-                            if (registered) {
-                                val newProfile = discoverRepo.getUserProfile(user.uid)
-                                if (newProfile != null) {
-                                    SavedAccountManager.saveFromProfile(context, newProfile, user.email)
-                                }
-                                com.chroma.studio.services.ChromaMessagingService.syncTokenForCurrentUser()
-                                Toast.makeText(context, "Welcome to Chroma Studio, $displayName!", Toast.LENGTH_SHORT).show()
-                                onLoginSuccess()
-                            } else {
-                                generalError = "Could not initialize your studio profile. Please try again."
-                            }
-                        }
+                        handleOAuthSuccess(user, "Google")
                     } else {
                         generalError = "Google authentication failed"
+                        Toast.makeText(context, generalError, Toast.LENGTH_SHORT).show()
                     }
                 } catch (e: Exception) {
-                    generalError = e.message ?: "Sign in failed"
+                    val msg = e.localizedMessage ?: e.message ?: "Google Sign-In failed"
+                    generalError = msg
+                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
                 } finally {
                     isGoogleLoading = false
                 }
@@ -164,7 +175,77 @@ fun OscellionOnboardingScreen(
             }
         } catch (e: Exception) {
             isGoogleLoading = false
-            generalError = "Google Sign In setup error: ${e.message}"
+            val msg = "Google Sign In setup error: ${e.message}"
+            generalError = msg
+            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    fun launchAppleSignIn() {
+        isAppleLoading = true
+        generalError = null
+        val activity = context as? Activity
+        if (activity == null) {
+            isAppleLoading = false
+            Toast.makeText(context, "Sign in window unavailable", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val provider = OAuthProvider.newBuilder("apple.com")
+        provider.setScopes(listOf("email", "name"))
+
+        val pending = auth.pendingAuthResult
+        if (pending != null) {
+            pending.addOnSuccessListener { authResult ->
+                scope.launch {
+                    try {
+                        val user = authResult.user
+                        if (user != null) {
+                            handleOAuthSuccess(user, "Apple")
+                        } else {
+                            generalError = "Apple authentication failed: no user"
+                            Toast.makeText(context, generalError, Toast.LENGTH_SHORT).show()
+                        }
+                    } catch (e: Exception) {
+                        val msg = e.localizedMessage ?: "Apple authentication failed"
+                        generalError = msg
+                        Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                    } finally {
+                        isAppleLoading = false
+                    }
+                }
+            }.addOnFailureListener { e ->
+                isAppleLoading = false
+                val msg = e.localizedMessage ?: "Apple Sign-In failed"
+                generalError = msg
+                Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+            }
+        } else {
+            auth.startActivityForSignInWithProvider(activity, provider.build())
+                .addOnSuccessListener { authResult ->
+                    scope.launch {
+                        try {
+                            val user = authResult.user
+                            if (user != null) {
+                                handleOAuthSuccess(user, "Apple")
+                            } else {
+                                generalError = "Apple authentication failed: no user"
+                                Toast.makeText(context, generalError, Toast.LENGTH_SHORT).show()
+                            }
+                        } catch (e: Exception) {
+                            val msg = e.localizedMessage ?: "Apple authentication failed"
+                            generalError = msg
+                            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                        } finally {
+                            isAppleLoading = false
+                        }
+                    }
+                }
+                .addOnFailureListener { e ->
+                    isAppleLoading = false
+                    val msg = e.localizedMessage ?: "Apple Sign-In failed"
+                    generalError = msg
+                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                }
         }
     }
 
@@ -283,6 +364,8 @@ fun OscellionOnboardingScreen(
                 }
             },
             onGoogleSignIn = { launchGoogleSignIn() },
+            onAppleSignIn = { launchAppleSignIn() },
+            appleLoading = isAppleLoading,
             onContinueSaved = {
                 if (primarySaved != null) {
                     launchGoogleSignIn()

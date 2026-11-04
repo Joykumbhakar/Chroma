@@ -53,8 +53,10 @@ val TheSignatureFont = FontFamily(Font(R.font.thesignature))
 fun WelcomeScreen(
     savedAccountName: String?,
     googleLoading: Boolean,
+    appleLoading: Boolean = false,
     onContinueSaved: () -> Unit,
     onGoogle: () -> Unit,
+    onApple: () -> Unit = {},
     onCreateAccount: () -> Unit,
     onSignInExisting: () -> Unit = {},
     onExploreGuest: () -> Unit = {},
@@ -189,6 +191,11 @@ fun WelcomeScreen(
                                     modifier = Modifier.size(19.dp)
                                 )
                             }
+                        )
+                        ObAppleButton(
+                            text = "Sign in with Apple",
+                            onClick = onApple,
+                            loading = appleLoading
                         )
                         ObSecondaryButton("Create new account", onCreateAccount, icon = Icons.Rounded.PersonAdd)
                         ObSecondaryButton("Explore Studio (No login required)", onExploreGuest, icon = Icons.Rounded.Explore)
