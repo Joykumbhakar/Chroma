@@ -24,7 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.tasks.await
 import androidx.compose.runtime.rememberCoroutineScope
 import android.widget.Toast
@@ -317,6 +317,80 @@ private fun AuthenticatedRoute(
 
                 val hazeState = remember { dev.chrisbanes.haze.HazeState() }
 
+                // ── Lazy Loading & High-Refresh Tab Switching ────────────────────────────
+                var loadedTabs by remember {
+                    mutableStateOf(setOf(0))
+                }
+
+                // Dynamically mark pages as loaded when currentPage, targetPage, or swipe gestures touch them
+                androidx.compose.runtime.LaunchedEffect(pagerState.currentPage, pagerState.targetPage, pagerState.currentPageOffsetFraction) {
+                    val cur = pagerState.currentPage
+                    val tgt = pagerState.targetPage
+                    val frac = pagerState.currentPageOffsetFraction
+                    val adjacent = when {
+                        frac > 0.02f -> (cur + 1).coerceAtMost(4)
+                        frac < -0.02f -> (cur - 1).coerceAtLeast(0)
+                        else -> cur
+                    }
+                    val needed = setOf(cur, tgt, adjacent)
+                    if (!loadedTabs.containsAll(needed)) {
+                        loadedTabs = loadedTabs + needed
+                    }
+                }
+
+                val tabTransitionAlpha = remember { androidx.compose.animation.core.Animatable(1f) }
+                val tabTransitionScale = remember { androidx.compose.animation.core.Animatable(1f) }
+
+                val navigateToTab: (Int) -> Unit = { targetIndex ->
+                    if (targetIndex in 0..4) {
+                        if (currentRoute != "main") {
+                            navController.popBackStack("main", inclusive = false)
+                        }
+                        val currentIndex = pagerState.currentPage
+                        if (currentIndex != targetIndex) {
+                            loadedTabs = loadedTabs + targetIndex
+                            val distance = kotlin.math.abs(targetIndex - currentIndex)
+                            coroutineScope.launch {
+                                if (distance <= 1) {
+                                    // Adjacent tab: high-fidelity 280ms fluid slide
+                                    pagerState.animateScrollToPage(
+                                        page = targetIndex,
+                                        animationSpec = androidx.compose.animation.core.tween(
+                                            durationMillis = 280,
+                                            easing = androidx.compose.animation.core.FastOutSlowInEasing
+                                        )
+                                    )
+                                } else {
+                                    // Non-adjacent jump: sleek crossfade + subtle morph scale (avoids scrolling intermediate heavy tabs)
+                                    tabTransitionAlpha.animateTo(
+                                        targetValue = 0.65f,
+                                        animationSpec = androidx.compose.animation.core.tween(durationMillis = 75, easing = androidx.compose.animation.core.LinearEasing)
+                                    )
+                                    pagerState.scrollToPage(targetIndex)
+                                    kotlinx.coroutines.joinAll(
+                                        launch {
+                                            tabTransitionAlpha.animateTo(
+                                                targetValue = 1f,
+                                                animationSpec = androidx.compose.animation.core.tween(durationMillis = 150, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+                                            )
+                                        },
+                                        launch {
+                                            tabTransitionScale.snapTo(0.985f)
+                                            tabTransitionScale.animateTo(
+                                                targetValue = 1f,
+                                                animationSpec = androidx.compose.animation.core.spring(
+                                                    dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                                                    stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+                                                )
+                                            )
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // ── Flash editor pass-through state ────────────────────────
                 var flashPickerVideoUri by remember { mutableStateOf<Uri?>(null) }
                 var storyInitialPhotoUri by remember { mutableStateOf<Uri?>(null) }
@@ -354,9 +428,7 @@ private fun AuthenticatedRoute(
                                 showDeviceMusicTrimmer = true
                             }
                             com.chroma.studio.widget.OscellionQuickActionsWidgetProvider.ACTION_CHAT -> {
-                                coroutineScope.launch {
-                                    pagerState.animateScrollToPage(3)
-                                }
+                                navigateToTab(3)
                             }
                             com.chroma.studio.widget.OscellionQuickActionsWidgetProvider.ACTION_SWITCH_LAB -> {
                                 navController.navigate("switch_lab")
@@ -606,12 +678,12 @@ private fun AuthenticatedRoute(
 
                                     val activeTabX by animateFloatAsState(
                                         targetValue = tabPositions.getOrNull(pagerState.currentPage)?.value?.first ?: 0f,
-                                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+                                        animationSpec = spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow),
                                         label = "activeTabX"
                                     )
                                     val activeTabWidth by animateFloatAsState(
                                         targetValue = tabPositions.getOrNull(pagerState.currentPage)?.value?.second ?: 0f,
-                                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+                                        animationSpec = spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow),
                                         label = "activeTabWidth"
                                     )
 
@@ -755,10 +827,7 @@ private fun AuthenticatedRoute(
                                                                 navController.navigate("login")
                                                                 return@clickable
                                                             }
-                                                            if (currentRoute != "main") {
-                                                                navController.popBackStack("main", inclusive = false)
-                                                            }
-                                                            coroutineScope.launch { pagerState.animateScrollToPage(index) }
+                                                            navigateToTab(index)
                                                         },
                                                     contentAlignment = androidx.compose.ui.Alignment.Center
                                                 ) {
@@ -834,10 +903,7 @@ private fun AuthenticatedRoute(
                                                                     navController.navigate("login")
                                                                     return@detectDragGesturesAfterLongPress
                                                                 }
-                                                                if (currentRoute != "main") {
-                                                                    navController.popBackStack("main", inclusive = false)
-                                                                }
-                                                                coroutineScope.launch { pagerState.animateScrollToPage(closest) }
+                                                                navigateToTab(closest)
                                                             },
                                                             onDragCancel = {
                                                                 isDraggingPill = false
@@ -960,13 +1026,21 @@ private fun AuthenticatedRoute(
                             val discoverVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.DiscoverViewModel>()
                             val storyVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.StoryViewModel>()
                             androidx.activity.compose.BackHandler(enabled = pagerState.currentPage != 0) {
-                                coroutineScope.launch { pagerState.animateScrollToPage(0) }
+                                navigateToTab(0)
                             }
                         androidx.compose.foundation.pager.HorizontalPager(
                             state = pagerState,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer {
+                                    alpha = tabTransitionAlpha.value
+                                    scaleX = tabTransitionScale.value
+                                    scaleY = tabTransitionScale.value
+                                },
+                            key = { it }
                         ) { page ->
-                            when (page) {
+                            if (page in loadedTabs) {
+                                when (page) {
                                 0 -> {
                                     // ── Home Studio Screen ──────────────────────────────────────────
                                     HomeScreen(
@@ -1056,7 +1130,7 @@ private fun AuthenticatedRoute(
                                         onNavigateToSettings = { navController.navigate("settings") },
                                         onNavigateToBackgrounds = { navController.navigate("backgrounds") },
                                         onNavigateToDrafts = { navController.navigate("drafts_list") },
-                                        onNavigateToDiscover = { coroutineScope.launch { pagerState.animateScrollToPage(2) } },
+                                        onNavigateToDiscover = { navigateToTab(2) },
                                         onNavigateToTrash = { navController.navigate("trash") },
                                         onRequireLogin = { navController.navigate("login") },
                                         onSetAsBackground = { work ->
@@ -1109,7 +1183,7 @@ private fun AuthenticatedRoute(
                             onRemixWork = onRemixCommunityPost,
                             onRequireLogin = { navController.navigate("login") },
                             onBack = {
-                                coroutineScope.launch { pagerState.animateScrollToPage(0) }
+                                navigateToTab(0)
                             }
                         )
                                 }
@@ -1205,7 +1279,7 @@ private fun AuthenticatedRoute(
                                         com.chroma.studio.ui.screens.GuestProfilePlaceholderScreen(
                                             onSignInClick = { navController.navigate("login") },
                                             onExploreStudioClick = {
-                                                coroutineScope.launch { pagerState.animateScrollToPage(0) }
+                                                navigateToTab(0)
                                             }
                                         )
                                     } else {
@@ -1248,6 +1322,16 @@ private fun AuthenticatedRoute(
                                     }
                                 }
                             }
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(
+                                            if (vm.isDarkMode) androidx.compose.ui.graphics.Color(0xFF0F0F11)
+                                            else androidx.compose.ui.graphics.Color(0xFFF8F9FA)
+                                        )
+                                )
+                            }
                         }
                     }
 
@@ -1260,9 +1344,7 @@ private fun AuthenticatedRoute(
                                     flashImportedMediaUris = emptyList()
                                     flashPickerPhotoUris = emptyList()
                                     navController.popBackStack()
-                                    coroutineScope.launch {
-                                        pagerState.animateScrollToPage(2)
-                                    }
+                                    navigateToTab(2)
                                 },
                                 onClose = {
                                     flashImportedMediaUris = emptyList()
@@ -1282,9 +1364,7 @@ private fun AuthenticatedRoute(
                                     flashImportedMediaUris = emptyList()
                                     flashPickerPhotoUris = emptyList()
                                     navController.popBackStack()
-                                    coroutineScope.launch {
-                                        pagerState.animateScrollToPage(2)
-                                    }
+                                    navigateToTab(2)
                                 },
                                 onClose = {
                                     flashImportedMediaUris = emptyList()
@@ -1435,9 +1515,7 @@ private fun AuthenticatedRoute(
                                     navController.navigate("main") {
                                         popUpTo("main") { inclusive = false }
                                     }
-                                    coroutineScope.launch {
-                                        pagerState.animateScrollToPage(2)
-                                    }
+                                    navigateToTab(2)
                                 }
                             )
                         }
@@ -1466,9 +1544,7 @@ private fun AuthenticatedRoute(
                                 navController.navigate("main") {
                                     popUpTo("main") { inclusive = false }
                                 }
-                                coroutineScope.launch {
-                                    pagerState.animateScrollToPage(2)
-                                }
+                                navigateToTab(2)
                             }
                         )
                     }
@@ -1939,9 +2015,7 @@ private fun AuthenticatedRoute(
                                 }
                                 flashRemixPostId = null
                                 flashRemixAuthorUsername = null
-                                coroutineScope.launch {
-                                    pagerState.animateScrollToPage(2)
-                                }
+                                navigateToTab(2)
                             },
                             onBack = {
                                 flashImportedMediaUris = emptyList()
@@ -2177,9 +2251,7 @@ private fun AuthenticatedRoute(
                             }
                             com.chroma.studio.ui.components.SharedTargetAction.CHAT_MESSAGE -> {
                                 incomingSharedData = null
-                                coroutineScope.launch {
-                                    pagerState.animateScrollToPage(3)
-                                }
+                                navigateToTab(3)
                             }
                             com.chroma.studio.ui.components.SharedTargetAction.VIDEO_EDITOR -> {
                                 flashPickerVideoUri = shared.uris.firstOrNull()
