@@ -48,6 +48,7 @@ fun ChromaAppBar(
     onSave: () -> Unit = {},
     isRemix: Boolean = false,
     onPublish: () -> Unit = {},
+    onBack: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val colors = LocalOscellionColors.current
@@ -55,12 +56,14 @@ fun ChromaAppBar(
     GlassPanel(
         modifier = modifier
             .fillMaxWidth()
-            .height(64.dp),
+            .wrapContentHeight(),
         cornerRadius = 0
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
+                .statusBarsPadding()
+                .height(60.dp)
                 .padding(horizontal = 16.dp)
         ) {
             // ---- LEFT CONTROLS ----
@@ -69,6 +72,7 @@ fun ChromaAppBar(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                IconGhostButton(icon = Lucide.ChevronLeft, contentDesc = "Back", onClick = onBack)
                 IconGhostButton(icon = Lucide.Save, contentDesc = "Save", onClick = onSave)
                 
                 // Show Publish button only when editing a remixed work

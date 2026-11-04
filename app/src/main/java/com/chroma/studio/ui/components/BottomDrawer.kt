@@ -66,6 +66,9 @@ fun BottomDrawer(vm: ChromaViewModel, modifier: Modifier = Modifier) {
         label = "drawerHeight"
     )
     var dragAccum by remember { mutableStateOf(0f) }
+    val drawerBg = if (vm.isDarkMode) Color(0xFF18181B) else Color.White
+    val drawerBorder = if (vm.isDarkMode) Color(0xFF27272A) else Color(0xFFE5E7EB)
+    val handleColor = if (vm.isDarkMode) Color(0xFF3F3F46) else Color(0xFFD1D5DB)
 
     Box(
         modifier = modifier
@@ -73,8 +76,8 @@ fun BottomDrawer(vm: ChromaViewModel, modifier: Modifier = Modifier) {
             .height(animatedHeight)
             .shadow(elevation = 16.dp, shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp), ambientColor = Color(0x14000000), spotColor = Color(0x14000000))
             .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-            .background(Color.White)
-            .border(0.5.dp, Color(0xFFE5E7EB), RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+            .background(drawerBg)
+            .border(0.5.dp, drawerBorder, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
     ) {
         Column(Modifier.fillMaxWidth()) {
             // .drawer-handle — 36x4 grab bar, drag up/down cycles COLLAPSED/MID/FULL
@@ -118,7 +121,7 @@ fun BottomDrawer(vm: ChromaViewModel, modifier: Modifier = Modifier) {
                     Modifier
                         .size(width = 36.dp, height = 4.dp)
                         .clip(RoundedCornerShape(50))
-                        .background(Color(0xFFD1D5DB))
+                        .background(handleColor)
                 )
             }
 

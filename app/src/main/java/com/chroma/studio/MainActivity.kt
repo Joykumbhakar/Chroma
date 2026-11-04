@@ -9,6 +9,10 @@ import com.chroma.studio.ui.components.VerifiedBadge
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.activity.compose.BackHandler
+import com.chroma.studio.viewmodel.DrawerLevel
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
@@ -230,11 +234,25 @@ fun OscellionApp(vm: ChromaViewModel, workName: String, repository: com.chroma.s
     var publishStatus by remember { mutableStateOf(com.chroma.studio.ui.screens.ShareStatus.IDLE) }
     val publishScope = rememberCoroutineScope()
 
+    val onBackAction: () -> Unit = {
+        val prefs = context.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
+        vm.saveWork(repository, prefs)
+        (context as? android.app.Activity)?.finish()
+    }
+
+    BackHandler {
+        if (vm.drawerLevel != DrawerLevel.COLLAPSED) {
+            vm.updateDrawerLevel(DrawerLevel.COLLAPSED)
+        } else {
+            onBackAction()
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize().background(colors.bg)) {
 
         if (isDesktop) {
             // Desktop 3-column layout
-            Row(modifier = Modifier.fillMaxSize().padding(top = 76.dp, bottom = 16.dp)) {
+            Row(modifier = Modifier.fillMaxSize().statusBarsPadding().padding(top = 68.dp, bottom = 16.dp)) {
                 // Left Panel: Global FX
                 Box(modifier = Modifier.width(320.dp).fillMaxHeight().padding(start = 16.dp, end = 8.dp)) {
                     com.chroma.studio.ui.components.GlassPanel(modifier = Modifier.fillMaxSize(), cornerRadius = 16) {
@@ -388,6 +406,7 @@ fun OscellionApp(vm: ChromaViewModel, workName: String, repository: com.chroma.s
                         com.chroma.studio.ui.components.ToastManager.showToast("Project saved")
                     }
                 },
+                onBack = onBackAction,
                 modifier = Modifier.align(Alignment.TopCenter)
             )
 
@@ -397,7 +416,10 @@ fun OscellionApp(vm: ChromaViewModel, workName: String, repository: com.chroma.s
                 modifier = Modifier
                     .fillMaxSize()
                     .haze(hazeState)
-                    .padding(top = 76.dp, bottom = 76.dp),
+                    .statusBarsPadding()
+                    .padding(top = 68.dp)
+                    .navigationBarsPadding()
+                    .padding(bottom = 104.dp),
                 verticalArrangement = Arrangement.Top,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
@@ -532,6 +554,7 @@ fun OscellionApp(vm: ChromaViewModel, workName: String, repository: com.chroma.s
                         com.chroma.studio.ui.components.ToastManager.showToast("Project saved")
                     }
                 },
+                onBack = onBackAction,
                 modifier = Modifier.align(Alignment.TopCenter)
             )
 
@@ -540,6 +563,7 @@ fun OscellionApp(vm: ChromaViewModel, workName: String, repository: com.chroma.s
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
+                    .navigationBarsPadding()
                     .padding(horizontal = 12.dp, vertical = 8.dp)
             )
         }

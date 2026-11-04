@@ -1467,7 +1467,12 @@ fun HomeScreen(
 
                     Text("Gradient create", color = heroMutedColor, fontSize = 14.sp, fontWeight = FontWeight.Bold)
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { onNewWork() }
+                    ) {
 
                         Text("Get started", color = heroTextColor, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold)
 
@@ -1535,7 +1540,7 @@ fun HomeScreen(
 
                                 .border(1.dp, cardBorderColor, RoundedCornerShape(24.dp))
 
-                                .clickable { showCreatePostMenu = true },
+                                .clickable { onNewWork() },
 
                             horizontalAlignment = Alignment.CenterHorizontally,
 
