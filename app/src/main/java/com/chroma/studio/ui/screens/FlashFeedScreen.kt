@@ -694,7 +694,7 @@ private fun FlashVideoItem(
         ) {
             // Like (Heart icon)
             ReelsActionButton(
-                icon = if (isLiked) ChromaIcons.HeartFilled else Lucide.Heart,
+                icon = ChromaIcons.HeartFilled,
                 tint = if (isLiked) Color(0xFFFF3B30) else Color.White,
                 label = if (video.hideLikesCount) "" else formatCount(video.likesCount),
                 scale = likeScale,
@@ -1997,7 +1997,7 @@ fun YouTubeCommentCard(
                             .padding(horizontal = 6.dp, vertical = 4.dp)
                     ) {
                         Icon(
-                            imageVector = if (isLiked) ChromaIcons.ThumbsUpFilled else Lucide.ThumbsUp,
+                            imageVector = ChromaIcons.ThumbsUpFilled,
                             contentDescription = "Like",
                             tint = if (isLiked) Color(0xFF0F0F0F) else Color(0xFF606060),
                             modifier = Modifier.size(15.dp)
@@ -2071,7 +2071,7 @@ fun YouTubeCommentCard(
                                 .padding(horizontal = 4.dp, vertical = 2.dp)
                         ) {
                             Icon(
-                                imageVector = Lucide.Heart,
+                                imageVector = ChromaIcons.HeartFilled,
                                 contentDescription = "Heart as creator",
                                 tint = Color(0xFF9CA3AF),
                                 modifier = Modifier.size(14.dp)

@@ -43,6 +43,7 @@ import com.chroma.studio.ui.components.GlassIconButton
 import com.chroma.studio.ui.components.OscellionLoadingSpinner
 import com.chroma.studio.ui.components.AiWaveSphereIcon
 import com.chroma.studio.ui.theme.LocalOscellionColors
+import com.chroma.studio.ui.theme.ChromaIcons
 import com.chroma.studio.viewmodel.DiscoverViewModel
 import com.composables.icons.lucide.*
 import com.google.firebase.auth.FirebaseAuth
@@ -220,7 +221,7 @@ fun ActivityHistoryScreen(
                 ActivityTab.values().forEach { tab ->
                     val isSelected = selectedTab == tab
                     val tabIcon = when (tab) {
-                        ActivityTab.LIKED -> Lucide.Heart
+                        ActivityTab.LIKED -> ChromaIcons.HeartFilled
                         ActivityTab.SAVED -> Lucide.Bookmark
                         ActivityTab.SHARED -> Lucide.Share2
                     }
@@ -483,7 +484,7 @@ fun ActivityGridItem(
                 horizontalArrangement = Arrangement.spacedBy(3.dp)
             ) {
                 Icon(
-                    imageVector = Lucide.Heart,
+                    imageVector = ChromaIcons.HeartFilled,
                     contentDescription = null,
                     tint = Color.White,
                     modifier = Modifier.size(10.dp)

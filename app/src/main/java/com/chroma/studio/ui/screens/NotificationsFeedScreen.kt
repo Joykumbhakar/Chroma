@@ -113,6 +113,7 @@ import com.chroma.studio.ui.components.rememberAppleGraphicAnimationState
 import com.chroma.studio.ui.components.VerifiedBadge
 
 import com.chroma.studio.ui.theme.LocalOscellionColors
+import com.chroma.studio.ui.theme.ChromaIcons
 
 import com.composables.icons.lucide.*
 
@@ -148,7 +149,7 @@ enum class NotificationFilter(val label: String, val icon: ImageVector) {
 
     ALL("All", Lucide.LayoutGrid),
 
-    LIKES("Likes", Lucide.Heart),
+    LIKES("Likes", ChromaIcons.HeartFilled),
 
     COMMENTS("Comments", Lucide.MessageCircle),
 
@@ -266,7 +267,7 @@ private fun NotifAvatarWithBadge(
 
         NotificationActionType.LIKE_COMMENT,
 
-        NotificationActionType.STORY_LIKE  -> Triple(Color(0xFFFFE4E6), Color(0xFFE11D48), Lucide.Heart)
+        NotificationActionType.STORY_LIKE  -> Triple(Color(0xFFFFE4E6), Color(0xFFE11D48), ChromaIcons.HeartFilled)
 
         NotificationActionType.COMMENT,
 
@@ -1330,7 +1331,7 @@ private fun SwipeableNotificationCard(
 
                             Icon(
 
-                                imageVector = Lucide.Heart,
+                                imageVector = ChromaIcons.HeartFilled,
 
                                 contentDescription = "Like Comment",
 

@@ -44,7 +44,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Favorite
-import androidx.compose.material.icons.rounded.FavoriteBorder
+//
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Share
@@ -222,7 +222,7 @@ fun GalleryLightbox(
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             DarkPill(onClick = { onToggleFavorite(current) }) {
                                 Icon(
-                                    if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                                    Icons.Rounded.Favorite,
                                     if (isFavorite) "Remove favourite" else "Add favourite",
                                     tint = if (isFavorite) Color(0xFFFF3B30) else Color.White,
                                     modifier = Modifier.size(18.dp),

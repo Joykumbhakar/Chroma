@@ -79,7 +79,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.FavoriteBorder
+//
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.graphics.Brush
@@ -186,7 +186,7 @@ enum class CommunityFeedTab(val label: String, val icon: ImageVector) {
 
 enum class CommunitySortOrder(val label: String, val icon: ImageVector) {
     LATEST("Latest Drops", Lucide.Clock),
-    TOP_LIKED("Most Liked", Lucide.Heart),
+    TOP_LIKED("Most Liked", ChromaIcons.HeartFilled),
     MOST_REMIXED("Most Remixed", Lucide.Sparkles)
 }
 
@@ -2209,7 +2209,7 @@ fun CreatorFeedHeader(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Lucide.Heart,
+                            imageVector = ChromaIcons.HeartFilled,
                             contentDescription = "Notifications",
                             tint = colors.textMain,
                             modifier = Modifier.size(20.dp)
@@ -2860,7 +2860,7 @@ private fun FeedPostActionRow(
                     .padding(horizontal = 3.dp, vertical = 4.dp)
             ) {
                 Icon(
-                    imageVector = if (effectiveLiked) ChromaIcons.HeartFilled else Lucide.Heart,
+                    imageVector = ChromaIcons.HeartFilled,
                     contentDescription = if (effectiveLiked) "Liked" else "Like",
                     tint = if (effectiveLiked) Color(0xFFFF2D55) else colors.textMain,
                     modifier = Modifier.size(20.dp)
@@ -4335,7 +4335,7 @@ fun PostOptionsDrawerSheet(
                 HorizontalDivider(thickness = 0.5.dp, color = colors.glassBorder.copy(alpha = 0.5f))
 
                 DrawerActionItem(
-                    icon = Lucide.Heart,
+                    icon = ChromaIcons.HeartFilled,
                     title = "Interested",
                     subtitle = "Show more creations like this in your feed",
                     onClick = onInterested

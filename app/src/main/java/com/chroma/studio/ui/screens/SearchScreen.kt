@@ -96,6 +96,7 @@ import com.chroma.studio.model.UserProfile
 import com.chroma.studio.ui.components.*
 import com.chroma.studio.ui.theme.InterFontFamily
 import com.chroma.studio.ui.theme.LocalOscellionColors
+import com.chroma.studio.ui.theme.ChromaIcons
 import com.chroma.studio.viewmodel.DiscoverViewModel
 import com.composables.icons.lucide.*
 import kotlinx.coroutines.Dispatchers
@@ -2956,7 +2957,7 @@ fun ExploreQuickLookSheet(
                                     horizontalArrangement = Arrangement.spacedBy(5.dp)
                                 ) {
                                     Icon(
-                                        imageVector = Lucide.Heart,
+                                        imageVector = ChromaIcons.HeartFilled,
                                         contentDescription = null,
                                         tint = Color(0xFFFF2D55),
                                         modifier = Modifier.size(15.dp)
@@ -3101,7 +3102,7 @@ fun ExploreQuickLookSheet(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = Lucide.Heart,
+                                    imageVector = ChromaIcons.HeartFilled,
                                     contentDescription = "Like",
                                     tint = if (localIsLiked) Color(0xFFFF2D55) else (if (colors.isDark) Color.White.copy(alpha = 0.8f) else Color(0xFF334155)),
                                     modifier = Modifier.size(21.dp)
@@ -3447,7 +3448,7 @@ fun ExploreWorkGridCard(
                     horizontalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
                     Icon(
-                        imageVector = Lucide.Heart,
+                        imageVector = ChromaIcons.HeartFilled,
                         contentDescription = null,
                         tint = if (localIsLiked) Color(0xFFFF2D55) else Color(0xFF8E8E93),
                         modifier = Modifier.size(10.5.dp)

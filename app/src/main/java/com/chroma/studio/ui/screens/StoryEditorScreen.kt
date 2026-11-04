@@ -57,6 +57,7 @@ import com.chroma.studio.ui.theme.InterFontFamily
 import com.chroma.studio.ui.theme.LocalOscellionColors
 import com.chroma.studio.ui.theme.StoryFonts
 import com.chroma.studio.ui.theme.StoryFontItem
+import com.chroma.studio.ui.theme.ChromaIcons
 import com.chroma.studio.viewmodel.StoryViewModel
 import com.composables.icons.lucide.*
 import com.google.firebase.auth.FirebaseAuth
@@ -1359,7 +1360,7 @@ fun StoryEditorScreen(
                         ) {
                             Text("Send a message...", fontSize = 12.sp, color = currentEffectiveTextColor.copy(alpha = 0.6f))
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Icon(Lucide.Heart, null, tint = currentEffectiveTextColor, modifier = Modifier.size(16.dp))
+                                Icon(ChromaIcons.HeartFilled, null, tint = currentEffectiveTextColor, modifier = Modifier.size(16.dp))
                                 Icon(Lucide.Send, null, tint = currentEffectiveTextColor, modifier = Modifier.size(16.dp))
                             }
                         }

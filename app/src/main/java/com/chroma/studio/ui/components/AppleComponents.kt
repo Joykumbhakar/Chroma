@@ -51,6 +51,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.chroma.studio.ui.theme.InterFontFamily
 import com.chroma.studio.ui.theme.LocalOscellionColors
+import com.chroma.studio.ui.theme.ChromaIcons
 
 import com.composables.icons.lucide.*
 import dev.chrisbanes.haze.hazeChild
@@ -1477,7 +1478,7 @@ fun IosDynamicIslandHost(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.weight(1f, fill = false)
                                 ) {
-                                    Icon(Lucide.Heart, null, tint = Color(0xFFFF2D55), modifier = Modifier.size(18.dp))
+                                    Icon(ChromaIcons.HeartFilled, null, tint = Color(0xFFFF2D55), modifier = Modifier.size(18.dp))
                                     Spacer(Modifier.width(8.dp))
                                     Text(
                                         text = "${event.userName} liked your post",
@@ -1490,7 +1491,7 @@ fun IosDynamicIslandHost(
                                     )
                                 }
                                 Spacer(Modifier.width(6.dp))
-                                Icon(Lucide.Heart, null, tint = Color(0xFFFF2D55), modifier = Modifier.size(13.dp))
+                                Icon(ChromaIcons.HeartFilled, null, tint = Color(0xFFFF2D55), modifier = Modifier.size(13.dp))
                             }
                         }
 
@@ -1785,7 +1786,7 @@ fun IosDynamicIslandHost(
                                     modifier = Modifier.weight(1f),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Icon(Lucide.Heart, null, tint = Color(0xFFFF2D55), modifier = Modifier.size(26.dp))
+                                    Icon(ChromaIcons.HeartFilled, null, tint = Color(0xFFFF2D55), modifier = Modifier.size(26.dp))
 
                                     Spacer(Modifier.width(10.dp))
 

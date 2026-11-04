@@ -1,6 +1,7 @@
 package com.chroma.studio.ui.components
 
 import androidx.compose.runtime.Composable
+import com.chroma.studio.ui.theme.ChromaIcons
 import com.composables.icons.lucide.*
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -22,7 +23,7 @@ object ToastManager {
             message.contains("deleted", ignoreCase = true) || message.contains("removed", ignoreCase = true) -> Lucide.Trash2
             message.contains("error", ignoreCase = true) || message.contains("failed", ignoreCase = true) -> Lucide.Info
             message.contains("saved", ignoreCase = true) || message.contains("updated", ignoreCase = true) || message.contains("success", ignoreCase = true) -> Lucide.Check
-            message.contains("like", ignoreCase = true) -> Lucide.Heart
+            message.contains("like", ignoreCase = true) -> ChromaIcons.HeartFilled
             message.contains("follow", ignoreCase = true) -> Lucide.UserCheck
             message.contains("banner", ignoreCase = true) -> Lucide.Image
             message.contains("avatar", ignoreCase = true) -> Lucide.User

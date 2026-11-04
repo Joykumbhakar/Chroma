@@ -53,6 +53,7 @@ import com.chroma.studio.model.UserStoryGroup
 import com.chroma.studio.ui.screens.CommunityFeedTab
 import com.chroma.studio.ui.theme.InterFontFamily
 import com.chroma.studio.ui.theme.LocalOscellionColors
+import com.chroma.studio.ui.theme.ChromaIcons
 import com.composables.icons.lucide.*
 
 /**
@@ -207,7 +208,7 @@ fun CommunityOneUiHeader(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = Lucide.Heart,
+                                    imageVector = ChromaIcons.HeartFilled,
                                     contentDescription = "Notifications",
                                     tint = textDark,
                                     modifier = Modifier.size(20.dp)

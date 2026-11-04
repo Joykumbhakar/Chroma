@@ -69,6 +69,7 @@ import com.chroma.studio.chat.media.GalleryMediaItem
 import com.chroma.studio.chat.media.MediaStoreHelper
 import com.chroma.studio.chat.sound.SoundManager
 import com.chroma.studio.ui.theme.LocalOscellionColors
+import com.chroma.studio.ui.theme.ChromaIcons
 import com.composables.icons.lucide.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -2675,7 +2676,7 @@ private fun GalleryLightboxDialog(
                             modifier = Modifier.size(36.dp)
                         ) {
                             Icon(
-                                Lucide.Heart,
+                                ChromaIcons.HeartFilled,
                                 contentDescription = "Favorite",
                                 tint = if (isFavorite) Color(0xFFFF2D55) else Color.White,
                                 modifier = Modifier.size(19.dp)

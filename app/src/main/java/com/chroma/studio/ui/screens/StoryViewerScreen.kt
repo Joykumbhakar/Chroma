@@ -948,7 +948,7 @@ fun StoryViewerScreen(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
-                                        imageVector = if (isLiked) ChromaIcons.HeartFilled else Lucide.Heart,
+                                        imageVector = ChromaIcons.HeartFilled,
                                         contentDescription = if (isLiked) "Unlike" else "Like",
                                         tint = if (isLiked) Color(0xFFFF2D55) else Color.White,
                                         modifier = Modifier.size(22.dp)

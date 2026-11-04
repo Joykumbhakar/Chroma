@@ -2491,7 +2491,7 @@ fun ProfileWorkCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = if (isLiked) ChromaIcons.HeartFilled else Lucide.Heart,
+                    imageVector = ChromaIcons.HeartFilled,
                     contentDescription = null,
                     tint = if (isLiked) Color(0xFFFF2D55) else Color.White,
                     modifier = Modifier.size(11.dp)
