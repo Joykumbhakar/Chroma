@@ -959,26 +959,54 @@ fun ChromaPhotoEditorScreen(
                                         listOf(Color(0xFF007AFF), Color(0xFF5856D6))
                                     )
                                 )
-                                .clickable { showExportDialog = true }
+                                .clickable(enabled = !isExporting) {
+                                    if (exportButtonLabel == "Next") {
+                                        isExporting = true
+                                        scope.launch {
+                                            val savedUri = exportEditedPhotoToGallery(
+                                                context = context,
+                                                state = state
+                                            )
+                                            isExporting = false
+                                            if (savedUri != null) {
+                                                onExport(state)
+                                                onExportUri?.invoke(savedUri)
+                                                onExportSuccess?.invoke(savedUri)
+                                            } else {
+                                                onExportSuccess?.invoke(photoUri)
+                                            }
+                                        }
+                                    } else {
+                                        showExportDialog = true
+                                    }
+                                }
                                 .padding(horizontal = 14.dp, vertical = 7.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Lucide.Share,
-                                    contentDescription = exportButtonLabel,
+                            if (isExporting) {
+                                CircularProgressIndicator(
                                     modifier = Modifier.size(14.dp),
-                                    tint = Color.White
+                                    color = Color.White,
+                                    strokeWidth = 2.dp
                                 )
-                                Text(
-                                    text = exportButtonLabel,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 13.sp,
-                                    color = Color.White
-                                )
+                            } else {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (exportButtonLabel == "Next") Lucide.ArrowRight else Lucide.Share,
+                                        contentDescription = exportButtonLabel,
+                                        modifier = Modifier.size(14.dp),
+                                        tint = Color.White
+                                    )
+                                    Text(
+                                        text = exportButtonLabel,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 13.sp,
+                                        color = Color.White
+                                    )
+                                }
                             }
                         }
                     }

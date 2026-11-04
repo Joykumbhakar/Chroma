@@ -1,5 +1,7 @@
 package com.chroma.studio.ui.screens
 
+import android.net.Uri
+
 import com.chroma.studio.ui.components.GlassIconButton
 
 import com.chroma.studio.ui.components.OscellionBrandLockup
@@ -358,6 +360,8 @@ fun HomeScreen(
 
     onNavigateToCreatePost: (() -> Unit)? = null,
 
+    onNavigateToImageEditor: ((Uri) -> Unit)? = null,
+
     onNavigateToFlashPicker: (() -> Unit)? = null,
 
     onNavigateToCreateTextStatus: (() -> Unit)? = null,
@@ -417,6 +421,14 @@ fun HomeScreen(
     }
 
 
+
+    val photoEditorPicker = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            onNavigateToImageEditor?.invoke(uri)
+        }
+    }
 
     val importWorkLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
 
@@ -568,11 +580,15 @@ fun HomeScreen(
 
             }
 
-            ActionMenuType.VIDEO -> {
+            ActionMenuType.IMAGE_EDITOR -> {
 
                 if (!com.chroma.studio.data.SavedAccountManager.isGuest(context)) {
 
-                    onNavigateToFlashPicker?.invoke()
+                    photoEditorPicker.launch(
+                        androidx.activity.result.PickVisualMediaRequest(
+                            androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly
+                        )
+                    )
 
                 } else {
 

@@ -94,7 +94,7 @@ private val PressFeedbackEasing = CubicBezierEasing(0.22f, 1.0f, 0.36f, 1.0f)
 enum class ActionMenuType(val label: String) {
     GRADIENTS("Gradients"),
     POST("Post"),
-    VIDEO("Video"),
+    IMAGE_EDITOR("Image Editor"),
     STORY("Story"),
     AI_GENERATOR("Smart Generator")
 }
@@ -149,20 +149,20 @@ private fun getThemeForAction(type: ActionMenuType): GlassOptionTheme {
             )
         )
 
-        ActionMenuType.VIDEO -> GlassOptionTheme(
+        ActionMenuType.IMAGE_EDITOR -> GlassOptionTheme(
             fillStops = arrayOf(
-                0.00f to Color(0xFAFFFFFF), // rgba(255, 255, 255, 0.98)
-                0.52f to Color(0xEBF0FDFA), // rgba(240, 253, 250, 0.92)
-                1.00f to Color(0xDBCCFBF1)  // rgba(204, 251, 241, 0.86)
+                0.00f to Color(0xFAFFFFFF),
+                0.52f to Color(0xEBFDF2F8),
+                1.00f to Color(0xDBFCE7F3)
             ),
             borderStops = arrayOf(
-                0.00f to Color(0xFFFFFFFF), // rgba(255, 255, 255, 1.0)
-                0.52f to Color(0x8C5EEAD4), // rgba(94, 234, 212, 0.55)
-                1.00f to Color(0x5214B8A6)  // rgba(20, 184, 166, 0.32)
+                0.00f to Color(0xFFFFFFFF),
+                0.52f to Color(0x8CF472B6),
+                1.00f to Color(0x52EC4899)
             ),
             iconGradientStops = arrayOf(
-                0.00f to Color(0xFF14B8A6),
-                1.00f to Color(0xFF0F766E)
+                0.00f to Color(0xFFF43F5E),
+                1.00f to Color(0xFFE11D48)
             )
         )
 
@@ -751,14 +751,13 @@ private fun ActionNodeIcon(
             }
 
             // 3. Video (Customized Lucide Video Icon)
-            ActionMenuType.VIDEO -> {
-                // <rect width="14" height="12" x="2" y="6" rx="2.5" />
-                val rectTopLeft = Offset(2f * sx, 6f * sy)
-                val rectSize = Size(14f * sx, 12f * sy)
-                val cornerRadius = CornerRadius(2.5f * sx, 2.5f * sy)
-
+            // 3. Image Editor (Dedicated Apple-style Image Editor)
+            ActionMenuType.IMAGE_EDITOR -> {
+                val rectTopLeft = Offset(3f * sx, 4.5f * sy)
+                val rectSize = Size(18f * sx, 15f * sy)
+                val cornerRadius = CornerRadius(3.5f * sx, 3.5f * sy)
                 drawRoundRect(
-                    brush = fillBrushWithAlpha(0.14f),
+                    brush = fillBrushWithAlpha(0.12f),
                     topLeft = rectTopLeft,
                     size = rectSize,
                     cornerRadius = cornerRadius,
@@ -771,23 +770,34 @@ private fun ActionNodeIcon(
                     cornerRadius = cornerRadius,
                     style = strokeStyle
                 )
-
-                val lensPath = parseScaledSvgPath(
-                    pathData = "m16 10 4.523-2.261A.999.999 0 0 1 22 8.633v6.734a1 1 0 0 1-1.477.894L16 14v-4Z",
+                val circleCenter = Offset(8.5f * sx, 9.5f * sy)
+                val circleRadius = 2.2f * sx
+                drawCircle(
+                    brush = fillBrushWithAlpha(0.20f),
+                    radius = circleRadius,
+                    center = circleCenter
+                )
+                drawCircle(
+                    brush = strokeBrush,
+                    radius = circleRadius,
+                    center = circleCenter,
+                    style = strokeStyle
+                )
+                val landscapePath = parseScaledSvgPath(
+                    pathData = "M 4 17.5 L 8.5 13 L 13 16.2 L 16.5 13.5 L 20 16.5",
                     sx = sx,
                     sy = sy
                 )
-                drawPath(path = lensPath, brush = fillBrushWithAlpha(0.08f), style = Fill)
-                drawPath(path = lensPath, brush = strokeBrush, style = strokeStyle)
-
-                drawCircle(
-                    brush = strokeBrush,
-                    radius = 1.05f * sx,
-                    center = Offset(6.5f * sx, 10f * sy)
+                drawPath(path = landscapePath, brush = strokeBrush, style = strokeStyle)
+                val sparklePath = parseScaledSvgPath(
+                    pathData = "M 18 5.5 Q 18 8 15.5 8 Q 18 8 18 10.5 Q 18 8 20.5 8 Q 18 8 18 5.5 Z",
+                    sx = sx,
+                    sy = sy
                 )
+                drawPath(path = sparklePath, brush = strokeBrush, style = strokeStyle)
+                drawPath(path = sparklePath, brush = fillBrushWithAlpha(0.9f), style = Fill)
             }
 
-            // 4. Story (Customized Lucide Circle-Fading-Plus Icon)
             ActionMenuType.STORY -> {
                 drawCircle(
                     brush = fillBrushWithAlpha(0.14f),

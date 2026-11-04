@@ -253,7 +253,7 @@ private fun AuthenticatedRoute(
                     "backgrounds",
                     "flash_feed", "flash_picker", "flash_video_editor", "flash_photo_editor", "flash_post",
                     "create_post", "publish_work", "post_details", "creator_studio",
-                    "drafts_list",
+                    "drafts_list", "image_editor",
                     "terms_agreement", "privacy_terms", "login", "post_onboarding"
                 )
                 val isChatTabActive = isMain && pagerState.currentPage == 3
@@ -264,6 +264,8 @@ private fun AuthenticatedRoute(
                     fullRoute.startsWith("creator_studio") ||
                     currentRoute.startsWith("create_post") ||
                     fullRoute.startsWith("create_post") ||
+                    currentRoute.startsWith("image_editor") ||
+                    fullRoute.startsWith("image_editor") ||
                     currentRoute.startsWith("chat") ||
                     fullRoute.startsWith("chat") ||
                     currentRoute.startsWith("story") ||
@@ -990,6 +992,9 @@ private fun AuthenticatedRoute(
                                         },
                                         onNavigateToCreatePost = {
                                             navController.navigate("create_post")
+                                        },
+                                        onNavigateToImageEditor = { uri ->
+                                            navController.navigate("image_editor?uri=${android.net.Uri.encode(uri.toString())}")
                                         },
                                         onNavigateToFlashPicker = {
                                             flashRemixPostId = null
@@ -1777,8 +1782,12 @@ private fun AuthenticatedRoute(
                                 },
                                 onPhotosSelected = { uris ->
                                     flashImportedMediaUris = uris
-                                    flashMediaType = FlashMediaType.VIDEO
-                                    navController.navigate("flash_video_editor")
+                                    val firstUri = uris.firstOrNull()
+                                    if (firstUri != null) {
+                                        navController.navigate("image_editor?uri=${android.net.Uri.encode(firstUri.toString())}")
+                                    } else {
+                                        navController.popBackStack()
+                                    }
                                 },
                                 onBack = { navController.popBackStack() }
                             )
@@ -1843,12 +1852,51 @@ private fun AuthenticatedRoute(
                     }
 
                     composable("flash_photo_editor") {
-                        val uris = flashPickerPhotoUris.takeIf { it.isNotEmpty() } ?: run { navController.popBackStack(); return@composable }
-                        flashImportedMediaUris = uris
-                        flashMediaType = FlashMediaType.VIDEO
-                        navController.navigate("flash_video_editor") {
-                            popUpTo("flash_photo_editor") { inclusive = true }
-                        }
+                        val uris = flashPickerPhotoUris.takeIf { it.isNotEmpty() }
+                            ?: flashImportedMediaUris.takeIf { it.isNotEmpty() }
+                            ?: run { navController.popBackStack(); return@composable }
+                        val photoUri = uris.first()
+                        ChromaPhotoEditorScreen(
+                            photoUri = photoUri,
+                            exportButtonLabel = "Done",
+                            onExportSuccess = {
+                                navController.popBackStack()
+                            },
+                            onBack = {
+                                navController.popBackStack()
+                            }
+                        )
+                    }
+
+                    composable(
+                        route = "image_editor?uri={uri}",
+                        arguments = listOf(
+                            androidx.navigation.navArgument("uri") {
+                                type = androidx.navigation.NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            }
+                        )
+                    ) { backStackEntry ->
+                        val uriStr = backStackEntry.arguments?.getString("uri")
+                        val photoUri = uriStr?.let { Uri.parse(Uri.decode(it)) }
+                            ?: flashPickerPhotoUris.firstOrNull()
+                            ?: flashImportedMediaUris.firstOrNull()
+                            ?: run {
+                                navController.popBackStack()
+                                return@composable
+                            }
+
+                        ChromaPhotoEditorScreen(
+                            photoUri = photoUri,
+                            exportButtonLabel = "Done",
+                            onExportSuccess = {
+                                navController.popBackStack()
+                            },
+                            onBack = {
+                                navController.popBackStack()
+                            }
+                        )
                     }
 
                     composable("flash_post") {

@@ -87,7 +87,7 @@ import java.util.UUID
  */
 enum class PostCreationStep {
     MEDIA_PICKER,   // Stage 1: Select photo from gallery or camera
-    QUICK_FILTER,   // Stage 2: Fast Instagram-style filters & basic adjustment (+ Pro Editor portal)
+    IMAGE_EDITOR,   // Stage 2: Dedicated Apple-style Image Editor
     POST_DETAILS    // Stage 3: Caption, tags, creator mentions, location, audience & publishing
 }
 
@@ -219,7 +219,7 @@ fun PostCreationFlowScreen(
     // Navigation Step
     var currentStep by remember {
         mutableStateOf(
-            if (initialPhotoUri != null) PostCreationStep.QUICK_FILTER
+            if (initialPhotoUri != null) PostCreationStep.IMAGE_EDITOR
             else PostCreationStep.MEDIA_PICKER
         )
     }
@@ -341,7 +341,7 @@ fun PostCreationFlowScreen(
                 val success = withContext(Dispatchers.IO) {
                     if (selectedPhotoUris.size > 1) {
                         val bytesList = selectedPhotoUris.mapNotNull { rawUri ->
-                            val finalUri = editedPhotoUris[rawUri] ?: renderFilteredBitmap(rawUri)
+                            val finalUri = editedPhotoUris[rawUri] ?: rawUri
                             compressImageToUnder50KB(context, finalUri)
                         }
                         if (bytesList.isEmpty()) throw Exception("Failed to process images")
@@ -355,7 +355,7 @@ fun PostCreationFlowScreen(
                         )
                     } else {
                         val singleRaw = selectedPhotoUris.first()
-                        val finalToUploadUri = editedPhotoUris[singleRaw] ?: renderFilteredBitmap(singleRaw)
+                        val finalToUploadUri = editedPhotoUris[singleRaw] ?: singleRaw
                         val imageBytes = compressImageToUnder50KB(context, finalToUploadUri) ?: throw Exception("Failed to process image")
                         discoverRepo.uploadImagePost(
                             imageBytes = imageBytes,
@@ -385,34 +385,31 @@ fun PostCreationFlowScreen(
 
     // Back handling
     BackHandler {
-        if (showAdvanceEditor) {
-            showAdvanceEditor = false
-        } else {
-            when (currentStep) {
-                PostCreationStep.POST_DETAILS -> currentStep = PostCreationStep.QUICK_FILTER
-                PostCreationStep.QUICK_FILTER -> {
-                    if (initialPhotoUri != null) onClose()
-                    else currentStep = PostCreationStep.MEDIA_PICKER
-                }
-                PostCreationStep.MEDIA_PICKER -> onClose()
+        when (currentStep) {
+            PostCreationStep.POST_DETAILS -> currentStep = PostCreationStep.IMAGE_EDITOR
+            PostCreationStep.IMAGE_EDITOR -> {
+                if (initialPhotoUri != null) onClose()
+                else currentStep = PostCreationStep.MEDIA_PICKER
             }
+            PostCreationStep.MEDIA_PICKER -> onClose()
         }
     }
 
-    // If pro editor is opened, render it modally
-    if (showAdvanceEditor && rawPhotoUri != null) {
+    // Stage 2: Render dedicated Apple-style ChromaPhotoEditorScreen directly before upload steps
+    if (currentStep == PostCreationStep.IMAGE_EDITOR && rawPhotoUri != null) {
         val targetUri = editedPhotoUri ?: rawPhotoUri!!
         val activeRaw = rawPhotoUri!!
         ChromaPhotoEditorScreen(
             photoUri = targetUri,
-            exportButtonLabel = "Done",
+            exportButtonLabel = "Next",
             onExportSuccess = { proEditedUri ->
                 editedPhotoUris = editedPhotoUris + (activeRaw to proEditedUri)
-                showAdvanceEditor = false
                 SoundManager.playReaction()
+                currentStep = PostCreationStep.POST_DETAILS
             },
             onBack = {
-                showAdvanceEditor = false
+                if (initialPhotoUri != null) onClose()
+                else currentStep = PostCreationStep.MEDIA_PICKER
             }
         )
         return
@@ -427,8 +424,8 @@ fun PostCreationFlowScreen(
                 currentStep = currentStep,
                 onBack = {
                     when (currentStep) {
-                        PostCreationStep.POST_DETAILS -> currentStep = PostCreationStep.QUICK_FILTER
-                        PostCreationStep.QUICK_FILTER -> {
+                        PostCreationStep.POST_DETAILS -> currentStep = PostCreationStep.IMAGE_EDITOR
+                        PostCreationStep.IMAGE_EDITOR -> {
                             if (initialPhotoUri != null) onClose()
                             else currentStep = PostCreationStep.MEDIA_PICKER
                         }
@@ -440,11 +437,10 @@ fun PostCreationFlowScreen(
                         PostCreationStep.MEDIA_PICKER -> {
                             if (selectedPhotoUris.isNotEmpty()) {
                                 SoundManager.playReaction()
-                                currentStep = PostCreationStep.QUICK_FILTER
+                                currentStep = PostCreationStep.IMAGE_EDITOR
                             }
                         }
-                        PostCreationStep.QUICK_FILTER -> {
-                            SoundManager.playReaction()
+                        PostCreationStep.IMAGE_EDITOR -> {
                             currentStep = PostCreationStep.POST_DETAILS
                         }
                         PostCreationStep.POST_DETAILS -> executePublish()
@@ -452,7 +448,7 @@ fun PostCreationFlowScreen(
                 },
                 isNextEnabled = when (currentStep) {
                     PostCreationStep.MEDIA_PICKER -> selectedPhotoUris.isNotEmpty()
-                    PostCreationStep.QUICK_FILTER -> selectedPhotoUris.isNotEmpty()
+                    PostCreationStep.IMAGE_EDITOR -> selectedPhotoUris.isNotEmpty()
                     PostCreationStep.POST_DETAILS -> !isPublishing
                 },
                 isPublishing = isPublishing,
@@ -480,35 +476,15 @@ fun PostCreationFlowScreen(
                                 currentPhotoIndex = 0
                                 editedPhotoUris = emptyMap()
                                 SoundManager.playReaction()
-                                currentStep = PostCreationStep.QUICK_FILTER
+                                currentStep = PostCreationStep.IMAGE_EDITOR
                             }
                         },
                         onClose = onClose
                     )
                 }
 
-                PostCreationStep.QUICK_FILTER -> {
-                    // STAGE 2: INSTANT FILTERS & LIGHTWEIGHT EDITS (+ PRO EDITOR GATEWAY)
-                    PostQuickFilterView(
-                        photoUri = editedPhotoUri ?: rawPhotoUri!!,
-                        selectedPhotoUris = selectedPhotoUris,
-                        currentPhotoIndex = currentPhotoIndex,
-                        onSelectPhotoIndex = { currentPhotoIndex = it },
-                        aspectRatio = selectedAspectRatio,
-                        onAspectRatioChange = { selectedAspectRatio = it },
-                        selectedFilterIndex = selectedFilterIndex,
-                        onFilterSelect = { selectedFilterIndex = it },
-                        colorMatrix = activeColorMatrix,
-                        brightnessOffset = brightnessOffset,
-                        onBrightnessChange = { brightnessOffset = it },
-                        contrastScale = contrastScale,
-                        onContrastChange = { contrastScale = it },
-                        onOpenAdvanceEditor = {
-                            SoundManager.playReaction()
-                            showAdvanceEditor = true
-                        },
-                        isDark = isDark
-                    )
+                PostCreationStep.IMAGE_EDITOR -> {
+                    // Handled above before Scaffold
                 }
 
                 PostCreationStep.POST_DETAILS -> {
@@ -619,7 +595,7 @@ private fun OneUiPostCreationTopBar(
         ) {
             val stepIndex = when (currentStep) {
                 PostCreationStep.MEDIA_PICKER -> 0
-                PostCreationStep.QUICK_FILTER -> 1
+                PostCreationStep.IMAGE_EDITOR -> 1
                 PostCreationStep.POST_DETAILS -> 2
             }
             repeat(3) { index ->
