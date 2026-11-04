@@ -434,17 +434,6 @@ fun LiquidGlassPillChip(
             .scale(scale)
             .clip(shape)
             .background(bgColor)
-            .then(
-                if (isSelected) {
-                    Modifier
-                        .border(0.5.dp, Color(0x8C0051D5), shape)
-                        .border(1.dp, LiquidGlassTokens.AppleSpecularGlassBorder, shape)
-                } else {
-                    Modifier
-                        .border(0.5.dp, unselectedBorder, shape)
-                        .border(0.5.dp, LiquidGlassTokens.SurfaceSpecularGlassBorder, shape)
-                }
-            )
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -541,7 +530,6 @@ fun LiquidGlassPillBar(
         modifier = modifier
             .clip(RoundedCornerShape(LiquidGlassTokens.PillCornerRadius))
             .background(LiquidGlassTokens.CanvasBg)
-            .border(1.dp, LiquidGlassTokens.BorderFlat, RoundedCornerShape(LiquidGlassTokens.PillCornerRadius))
             .padding(horizontal = 4.dp, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -871,10 +859,14 @@ fun LiquidGlassInput(
             .fillMaxWidth()
             .clip(shape)
             .background(if (isFocused) Color.White else LiquidGlassTokens.CanvasBg)
-            .border(
-                1.dp,
-                if (isFocused) LiquidGlassTokens.AccentBlue else LiquidGlassTokens.BorderFlat,
-                shape
+            .then(
+                if (!isPill) {
+                    Modifier.border(
+                        1.dp,
+                        if (isFocused) LiquidGlassTokens.AccentBlue else LiquidGlassTokens.BorderFlat,
+                        shape
+                    )
+                } else Modifier
             )
             .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,

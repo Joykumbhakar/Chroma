@@ -7301,7 +7301,6 @@ private fun FcpTextLayerOverlay(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(50))
                                 .background(Color.Black.copy(alpha = 0.65f))
-                                .border(1.dp, layer.accentColor.copy(alpha = 0.7f), RoundedCornerShape(50))
                                 .padding(horizontal = 10.dp, vertical = 2.dp)
                         ) {
                             Text(

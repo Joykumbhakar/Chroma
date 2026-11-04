@@ -872,7 +872,6 @@ private fun StepGroupDetails(
                     modifier = Modifier
                         .clip(RoundedCornerShape(9999.dp))
                         .background(colors.iosBlueSubtle)
-                        .border(0.5.dp, colors.iosBlue.copy(alpha = 0.25f), RoundedCornerShape(9999.dp))
                         .padding(horizontal = 9.dp, vertical = 3.dp)
                 ) {
                     Text(

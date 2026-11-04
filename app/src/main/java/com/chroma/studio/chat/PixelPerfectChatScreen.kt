@@ -585,7 +585,6 @@ fun PixelPerfectChatScreen(
                 Surface(
                     shape = CircleShape,
                     color = Color(0xE6111827),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f)),
                     shadowElevation = 8.dp
                 ) {
                     Row(
@@ -916,7 +915,6 @@ private fun GlassHeader(
                 Surface(
                     shape = CircleShape,
                     color = colors.inputBg,
-                    border = BorderStroke(1.dp, colors.borderSubtle),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -1325,7 +1323,6 @@ private fun MessageRowItem(
                             onClick = { onReact(emoji) },
                             shape = CircleShape,
                             color = colors.appBg,
-                            border = BorderStroke(1.dp, colors.borderSubtle),
                             shadowElevation = 1.dp
                         ) {
                             Text(
@@ -1365,7 +1362,6 @@ private fun MessageActionPillBar(
     Surface(
         shape = CircleShape,
         color = colors.appBg,
-        border = BorderStroke(1.dp, colors.borderSubtle),
         shadowElevation = 3.dp,
         modifier = Modifier.padding(bottom = 6.dp)
     ) {
@@ -1630,11 +1626,6 @@ private fun FooterComposer(
                             .padding(start = leftMarginDp)
                             .clip(CircleShape)
                             .background(if (isExpandedInput) colors.appBg else colors.inputBg)
-                            .border(
-                                width = 1.dp,
-                                color = if (isExpandedInput) colors.iosBlue.copy(alpha = 0.35f) else colors.borderSubtle,
-                                shape = CircleShape
-                            )
                             .padding(start = 18.dp, end = 78.dp, top = 11.dp, bottom = 11.dp)
                     ) {
                         BasicTextField(
@@ -2141,7 +2132,6 @@ private fun DateSeparatorPill() {
         Surface(
             shape = CircleShape,
             color = colors.appBg.copy(alpha = 0.9f),
-            border = BorderStroke(1.dp, colors.borderSubtle),
             shadowElevation = 1.dp
         ) {
             Text(

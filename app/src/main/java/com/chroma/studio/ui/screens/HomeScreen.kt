@@ -3894,8 +3894,6 @@ fun WorkCard(
 
                                     .background(colors.glassBgHover.copy(alpha = 0.7f))
 
-                                    .border(0.5.dp, colors.glassBorder, RoundedCornerShape(9999.dp))
-
                                     .padding(horizontal = 8.dp, vertical = 2.5.dp)
 
                             ) {

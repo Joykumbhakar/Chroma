@@ -532,19 +532,7 @@ fun SpringPillSwitch(
                     cornerRadius = cornerRadius
                 )
 
-                // 2. Unchecked subtle boundary border
-                if (clampedX < 0.95f) {
-                    val borderAlpha = ((1f - clampedX) * 0.10f).coerceIn(0f, 0.12f)
-                    val borderColor = if (isDark) Color.White.copy(alpha = borderAlpha * 1.2f) else Color.Black.copy(alpha = borderAlpha)
-                    val strokeWidth = 0.5.dp.toPx()
-                    drawRoundRect(
-                        color = borderColor,
-                        topLeft = Offset(strokeWidth / 2f, strokeWidth / 2f),
-                        size = Size(size.width - strokeWidth, size.height - strokeWidth),
-                        cornerRadius = cornerRadius,
-                        style = Stroke(width = strokeWidth)
-                    )
-                }
+
             }
             .semantics {
                 role = Role.Switch
@@ -1079,7 +1067,6 @@ private fun ShowcaseHeader(
         Row(
             modifier = Modifier
                 .background(Color.White.copy(alpha = 0.06f), CircleShape)
-                .border(1.dp, Color.White.copy(alpha = 0.1f), CircleShape)
                 .padding(horizontal = 12.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -1494,12 +1481,6 @@ private fun SpringPhysicsLabCard(
                         .background(
                             if (isSelected) Color(0xFF6366F1).copy(alpha = 0.25f)
                             else Color.White.copy(alpha = 0.05f)
-                        )
-                        .border(
-                            width = 1.dp,
-                            color = if (isSelected) Color(0xFF6366F1).copy(alpha = 0.6f)
-                            else Color.White.copy(alpha = 0.1f),
-                            shape = CircleShape
                         )
                         .clickable { onSelectPreset(preset) }
                         .padding(horizontal = 10.dp, vertical = 6.dp)

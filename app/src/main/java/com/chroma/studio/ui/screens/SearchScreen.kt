@@ -2921,7 +2921,6 @@ fun ExploreQuickLookSheet(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             val statPillShape = RoundedCornerShape(14.dp)
-                            val statBorder = BorderStroke(0.5.dp, if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0))
 
                             Box(
                                 modifier = Modifier
@@ -3064,12 +3063,6 @@ fun ExploreQuickLookSheet(
                                         if (localIsLiked) Color(0xFFFF2D55).copy(alpha = 0.12f)
                                         else (if (colors.isDark) Color(0xFF1E2330) else Color(0xFFF1F5F9))
                                     )
-                                    .border(
-                                        1.dp,
-                                        if (localIsLiked) Color(0xFFFF2D55).copy(alpha = 0.35f)
-                                        else (if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0)),
-                                        CircleShape
-                                    )
                                     .clickable {
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                         val nextLiked = !localIsLiked
@@ -3151,11 +3144,6 @@ fun ExploreQuickLookSheet(
                                     }
                                     .clip(CircleShape)
                                     .background(if (colors.isDark) Color(0xFF1E2330) else Color(0xFFF1F5F9))
-                                    .border(
-                                        0.5.dp,
-                                        if (colors.isDark) Color.White.copy(alpha = 0.08f) else Color(0xFFE2E8F0),
-                                        CircleShape
-                                    )
                                     .clickable(
                                         interactionSource = viewPostButtonInteractionSource,
                                         indication = null

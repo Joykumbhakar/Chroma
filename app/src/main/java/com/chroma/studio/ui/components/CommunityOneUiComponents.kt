@@ -610,7 +610,6 @@ fun CommunityInteractiveEmptyState(
                                     if (!isDark) Color(0xFFF1F5F9)
                                     else Color(0xFF202024)
                                 )
-                                .border(0.8.dp, cardBorderColor, RoundedCornerShape(50))
                                 .clickable {
                                     SoundManager.playReaction()
                                     onTopicClick(tag)

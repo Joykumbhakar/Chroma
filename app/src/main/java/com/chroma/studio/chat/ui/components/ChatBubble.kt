@@ -376,11 +376,6 @@ private fun MessageReactionDock(
                 )
                 .clip(RoundedCornerShape(9999.dp))
                 .background(if (colors.isLight) Color(0xF8FFFFFF) else Color(0xF82C2C2E))
-                .border(
-                    0.5.dp,
-                    if (colors.isLight) Color(0x22000000) else Color(0x38FFFFFF),
-                    RoundedCornerShape(9999.dp)
-                )
                 .padding(horizontal = 8.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -841,7 +836,6 @@ private fun MessageReactionsPills(
                     )
                     .clip(pillShape)
                     .background(badgeBg)
-                    .border(badgeBorderWidth, badgeBorderColor, pillShape)
                     .clickable { onReactionClick(emoji) }
                     .defaultMinSize(minWidth = if (count > 1) 36.dp else 30.dp, minHeight = 22.dp)
                     .padding(
@@ -2146,11 +2140,6 @@ fun VoiceNotePlayer(
                     modifier = Modifier
                         .clip(speedPillShape)
                         .background(if (isOutgoing) Color.White.copy(alpha = 0.22f) else colors.surfaceSecondary)
-                        .border(
-                            0.5.dp,
-                            if (isOutgoing) Color.White.copy(alpha = 0.45f) else colors.iosBlue.copy(alpha = 0.25f),
-                            speedPillShape
-                        )
                         .clickable(
                             interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                             indication = null

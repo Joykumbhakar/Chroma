@@ -709,16 +709,7 @@ fun Modifier.appleGlassToggleTrackSurface(
 
             nativeCanvas.restore()
 
-            // 5. Crisp Specular Rim Border
-            nativeCanvas.drawRoundRect(
-                halfStroke,
-                halfStroke,
-                w - halfStroke,
-                h - halfStroke,
-                max(0f, radiusPx - halfStroke),
-                max(0f, radiusPx - halfStroke),
-                borderPaint
-            )
+            // 5. Borderless clean glass capsule track
         }
 
         // 6. Draw Glyphs & Liquid Thumb
@@ -819,18 +810,12 @@ fun Modifier.appleGlassThumbSurface(
             nativeCanvas.drawRoundRect(0f, 0f, w, h, radiusPx, radiusPx, lowerRefractionPaint)
         }
 
-        // 4. Top Dome Specular Glaze & Rim
+        // 4. Top Dome Specular Glaze
         drawRoundRect(
             brush = topGlossBrush,
             topLeft = Offset(topGlossInset, topGlossInset),
             size = androidx.compose.ui.geometry.Size(w - topGlossInset * 2, h - topGlossInset * 2),
             cornerRadius = CornerRadius(max(0f, radiusPx - topGlossInset))
-        )
-
-        drawRoundRect(
-            brush = borderBrush,
-            cornerRadius = CornerRadius(radiusPx),
-            style = Stroke(width = borderStrokePx)
         )
 
         drawContent()

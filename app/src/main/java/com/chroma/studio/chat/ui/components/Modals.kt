@@ -3843,15 +3843,6 @@ fun AppearanceSettingsModal(
                                         modifier = Modifier
                                             .clip(pillShape)
                                             .background(if (isSelected) com.chroma.studio.ui.components.LiquidGlassTokens.AppleSystemBlue else (if (colors.isLight) Color(0xFFF1F5F9) else Color(0xFF1E293B)))
-                                            .then(
-                                                if (isSelected) {
-                                                    Modifier
-                                                        .border(0.5.dp, Color(0x8C0051D5), pillShape)
-                                                        .border(1.dp, com.chroma.studio.ui.components.LiquidGlassTokens.AppleSpecularGlassBorder, pillShape)
-                                                } else {
-                                                    Modifier.border(0.5.dp, colors.borderSubtle, pillShape)
-                                                }
-                                            )
                                             .clickable { bubbleCategoryFilter = cat }
                                             .padding(horizontal = 12.dp, vertical = 5.dp)
                                     ) {
@@ -4462,8 +4453,6 @@ fun AppearanceSettingsModal(
                                             modifier = Modifier
                                                 .clip(RoundedCornerShape(9999.dp))
                                                 .background(colors.cardBg)
-                                                .border(0.5.dp, colors.borderSubtle, RoundedCornerShape(9999.dp))
-                                                .border(0.5.dp, com.chroma.studio.ui.components.LiquidGlassTokens.SurfaceSpecularGlassBorder, RoundedCornerShape(9999.dp))
                                                 .clickable { triggerReplay++ }
                                                 .padding(horizontal = 12.dp, vertical = 6.dp),
                                             contentAlignment = Alignment.Center

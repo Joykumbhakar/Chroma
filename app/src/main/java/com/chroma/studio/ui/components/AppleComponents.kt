@@ -1633,7 +1633,6 @@ fun IosDynamicIslandHost(
                                                 .height(28.dp)
                                                 .clip(emojiPillShape)
                                                 .background(Color(0xFF2C2C2E).copy(alpha = 0.85f))
-                                                .border(0.5.dp, Color.White.copy(alpha = 0.18f), emojiPillShape)
                                                 .clickable {
                                                     try { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Throwable) {}
                                                     if (event.onQuickReact != null) {
@@ -1663,7 +1662,6 @@ fun IosDynamicIslandHost(
                                             .height(34.dp)
                                             .clip(replyPillShape)
                                             .background(Color(0xFF242426))
-                                            .border(0.5.dp, Color.White.copy(alpha = 0.15f), replyPillShape)
                                             .padding(horizontal = 12.dp),
                                         contentAlignment = Alignment.CenterStart
                                     ) {
@@ -1701,8 +1699,6 @@ fun IosDynamicIslandHost(
                                                 .height(34.dp)
                                                 .clip(sendPillShape)
                                                 .background(com.chroma.studio.ui.components.LiquidGlassTokens.AppleSystemBlue)
-                                                .border(0.5.dp, Color(0x8C0051D5), sendPillShape)
-                                                .border(1.dp, com.chroma.studio.ui.components.LiquidGlassTokens.AppleSpecularGlassBorder, sendPillShape)
                                                 .clickable {
                                                     event.onReply?.invoke(replyText)
                                                     replyText = ""
@@ -1728,7 +1724,6 @@ fun IosDynamicIslandHost(
                                                     .height(34.dp)
                                                     .clip(markReadShape)
                                                     .background(Color(0xFF2C2C2E))
-                                                    .border(0.5.dp, Color.White.copy(alpha = 0.18f), markReadShape)
                                                     .clickable {
                                                         try { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) } catch (_: Throwable) {}
                                                         event.onMarkAsRead.invoke()
@@ -1754,8 +1749,6 @@ fun IosDynamicIslandHost(
                                                 .height(34.dp)
                                                 .clip(openPillShape)
                                                 .background(com.chroma.studio.ui.components.LiquidGlassTokens.AppleSystemBlue)
-                                                .border(0.5.dp, Color(0x8C0051D5), openPillShape)
-                                                .border(1.dp, com.chroma.studio.ui.components.LiquidGlassTokens.AppleSpecularGlassBorder, openPillShape)
                                                 .clickable {
                                                     event.onClick?.invoke()
                                                     dismissIsland()

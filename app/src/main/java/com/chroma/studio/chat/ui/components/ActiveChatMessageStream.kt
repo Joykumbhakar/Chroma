@@ -823,7 +823,6 @@ fun ActiveChatMessageStream(
                             .widthIn(min = 19.dp)
                             .shadow(2.dp, CircleShape)
                             .background(colors.iosBlue, CircleShape)
-                            .border(1.5.dp, if (colors.isLight) Color.White else Color(0xFF1E293B), CircleShape)
                             .padding(horizontal = 5.dp),
                         contentAlignment = Alignment.Center
                     ) {

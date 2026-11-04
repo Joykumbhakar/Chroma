@@ -146,7 +146,6 @@ fun ContentSafetyViolationDialog(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(9999.dp))
                                     .background(Color(0xFFEF4444).copy(alpha = 0.15f))
-                                    .border(0.5.dp, Color(0xFFEF4444).copy(alpha = 0.35f), RoundedCornerShape(9999.dp))
                                     .padding(horizontal = 8.dp, vertical = 2.5.dp)
                             ) {
                                 Text(

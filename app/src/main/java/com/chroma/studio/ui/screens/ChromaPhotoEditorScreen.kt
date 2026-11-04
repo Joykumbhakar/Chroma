@@ -899,7 +899,6 @@ fun ChromaPhotoEditorScreen(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(50))
                                 .background(colors.glassBgHover)
-                                .border(0.5.dp, colors.glassBorder, RoundedCornerShape(50))
                                 .padding(horizontal = 4.dp, vertical = 2.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {

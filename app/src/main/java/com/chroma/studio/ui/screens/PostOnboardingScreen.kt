@@ -583,8 +583,7 @@ private fun OneUiLiveStudioCanvas(
 
                 Surface(
                     shape = RoundedCornerShape(999.dp),
-                    color = activeAccent.copy(alpha = 0.22f),
-                    border = BorderStroke(0.5.dp, activeAccent.copy(alpha = 0.55f))
+                    color = activeAccent.copy(alpha = 0.22f)
                 ) {
                     Text(
                         text = "PRORES 422 HQ",

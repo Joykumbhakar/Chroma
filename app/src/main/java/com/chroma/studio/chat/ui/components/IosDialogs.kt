@@ -3524,7 +3524,6 @@ fun IosPollDetailsModal(
                                             modifier = Modifier
                                                 .clip(RoundedCornerShape(9999.dp))
                                                 .background(Color(0xFF34C759).copy(alpha = 0.2f))
-                                                .border(0.5.dp, Color(0xFF34C759).copy(alpha = 0.45f), RoundedCornerShape(9999.dp))
                                                 .padding(horizontal = 7.dp, vertical = 2.dp)
                                         ) {
                                             Text(
