@@ -975,9 +975,9 @@ fun SearchScreen(
     val maxViewingHeight = 240.dp
     val maxCollapsePx = remember(density) { with(density) { maxViewingHeight.toPx() } }
 
-    // Restore exact collapsed/expanded fraction from SharedPreferences
+    // Restore exact collapsed/expanded fraction from SharedPreferences (default: collapsed = 1f)
     var collapseOffsetPx by remember(maxCollapsePx) {
-        val savedFraction = prefs.getFloat("oneui_search_appbar_collapse_fraction", 0f).coerceIn(0f, 1f)
+        val savedFraction = prefs.getFloat("oneui_search_appbar_collapse_fraction", 1f).coerceIn(0f, 1f)
         mutableFloatStateOf(savedFraction * maxCollapsePx)
     }
 
@@ -1022,8 +1022,6 @@ fun SearchScreen(
     LaunchedEffect(isSearchActive) {
         if (isSearchActive) {
             animateSnapTo(1f)
-        } else {
-            animateSnapTo(0f)
         }
     }
 

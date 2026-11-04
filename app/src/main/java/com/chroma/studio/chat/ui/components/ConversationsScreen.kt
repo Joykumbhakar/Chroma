@@ -137,7 +137,7 @@ fun ConversationsScreen(
     val density = LocalDensity.current
     val expandedHeaderHeight = 88.dp
     val maxCollapseOffsetPx = with(density) { expandedHeaderHeight.toPx() }
-    var headerCollapseOffsetPx by remember { mutableFloatStateOf(0f) }
+    var headerCollapseOffsetPx by remember(maxCollapseOffsetPx) { mutableFloatStateOf(-maxCollapseOffsetPx) }
     var snapJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
     val nestedScrollConnection = remember(maxCollapseOffsetPx) {

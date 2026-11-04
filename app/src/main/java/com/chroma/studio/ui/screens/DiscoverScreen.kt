@@ -274,7 +274,7 @@ fun DiscoverScreen(
 
     val density = LocalDensity.current
     val maxCollapsePx = remember(density) { with(density) { 240.dp.toPx() } }
-    var collapseOffsetPx by remember { mutableFloatStateOf(0f) }
+    var collapseOffsetPx by remember(maxCollapsePx) { mutableFloatStateOf(maxCollapsePx) }
     var snapJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
     val nestedScrollConnection = remember(maxCollapsePx, listState) {

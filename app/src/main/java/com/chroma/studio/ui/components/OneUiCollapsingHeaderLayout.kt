@@ -56,6 +56,7 @@ fun OneUiCollapsingHeaderLayout(
     backIcon: ImageVector = Lucide.ArrowLeft,
     backContentDescription: String = "Back",
     expandedHeightDp: Dp = 240.dp,
+    initialCollapsed: Boolean = true,
     headerLeadingContent: (@Composable RowScope.(compactTitleAlpha: Float) -> Unit)? = null,
     headerActions: (@Composable RowScope.(compactTitleAlpha: Float) -> Unit)? = null,
     content: @Composable BoxScope.(
@@ -88,7 +89,9 @@ fun OneUiCollapsingHeaderLayout(
 
     // One UI Collapsing Engine
     val maxCollapsePx = remember(density, expandedHeightDp) { with(density) { expandedHeightDp.toPx() } }
-    var collapseOffsetPx by remember { mutableFloatStateOf(0f) }
+    var collapseOffsetPx by remember(maxCollapsePx, initialCollapsed) {
+        mutableFloatStateOf(if (initialCollapsed) maxCollapsePx else 0f)
+    }
     var snapJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
     val collapseProgress = remember(collapseOffsetPx, maxCollapsePx) {

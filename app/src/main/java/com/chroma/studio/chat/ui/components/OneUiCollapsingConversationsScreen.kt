@@ -212,7 +212,7 @@ fun OneUiCollapsingConversationsScreen(
     // One UI Expanded Viewing Area (~38% proportion)
     val expandedHeightDp: Dp = 240.dp
     val maxCollapsePx = remember(density) { with(density) { expandedHeightDp.toPx() } }
-    var collapseOffsetPx by remember { mutableFloatStateOf(0f) }
+    var collapseOffsetPx by remember(maxCollapsePx) { mutableFloatStateOf(maxCollapsePx) }
     var isSearchExpanded by remember { mutableStateOf(false) }
 
     val listState = rememberLazyListState()

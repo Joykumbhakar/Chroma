@@ -1002,7 +1002,7 @@ fun HomeScreen(
             val maxCollapseDp = expandedHeroHeight - collapsedHeroHeight
             val maxCollapsePx = remember(density, maxCollapseDp) { with(density) { maxCollapseDp.toPx() } }
 
-            var collapseOffsetPx by remember { mutableFloatStateOf(0f) }
+            var collapseOffsetPx by remember(maxCollapsePx) { mutableFloatStateOf(maxCollapsePx) }
             var snapJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
             val nestedScrollConnection = remember(maxCollapsePx, gridState) {

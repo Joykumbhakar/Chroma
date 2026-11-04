@@ -102,7 +102,7 @@ fun AccountCenterScreen(
     // One UI Collapsing Engine with Magnetic Auto-Snap
     val expandedHeightDp: Dp = 240.dp
     val maxCollapsePx = remember(density) { with(density) { expandedHeightDp.toPx() } }
-    var collapseOffsetPx by remember { mutableFloatStateOf(0f) }
+    var collapseOffsetPx by remember(maxCollapsePx) { mutableFloatStateOf(maxCollapsePx) }
     var snapJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
     val collapseProgress = remember(collapseOffsetPx, maxCollapsePx) {

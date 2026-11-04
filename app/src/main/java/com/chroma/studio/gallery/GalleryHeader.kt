@@ -57,9 +57,10 @@ import kotlinx.coroutines.launch
 @Stable
 class CollapsingHeaderState(
     val maxCollapsePx: Float,
-    var coroutineScope: CoroutineScope? = null
+    var coroutineScope: CoroutineScope? = null,
+    initialCollapsed: Boolean = true
 ) {
-    var offsetPx by mutableFloatStateOf(0f)
+    var offsetPx by mutableFloatStateOf(if (initialCollapsed) -maxCollapsePx else 0f)
         private set
 
     val progress: Float
