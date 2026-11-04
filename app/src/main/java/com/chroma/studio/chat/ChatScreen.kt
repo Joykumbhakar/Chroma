@@ -1983,6 +1983,7 @@ private fun ChatScreenContent(
                     currentUser = currentUser,
                     stories = stories,
                     storyGroups = storyGroups,
+                    myStories = myStories,
                     hasMyStory = myStories.isNotEmpty(),
                     chats = chats,
                     activeTab = activeTab,

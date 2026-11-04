@@ -128,11 +128,15 @@ fun ChatInputBar(
                     .background(colors.separator)
             )
 
+            val isImeOpen = WindowInsets.ime.getBottom(androidx.compose.ui.platform.LocalDensity.current) > 0
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp, vertical = 8.dp)
-                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .then(
+                        if (!isImeOpen) Modifier.windowInsetsPadding(WindowInsets.navigationBars)
+                        else Modifier
+                    )
             ) {
 
                 // ── Reply Preview Banner ──────────────────────────
@@ -376,7 +380,12 @@ fun ChatInputBar(
 
                     Box(
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (hasSendContent) colors.iosBlue
+                                else (if (colors.isLight) Color(0xFFF2F2F7) else Color(0xFF2C2C2E))
+                            )
                             .clickable {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 if (hasSendContent) {
@@ -432,12 +441,13 @@ fun ChatInputBar(
                                     scaleX = sendBtnScale.value
                                     scaleY = sendBtnScale.value
                                     rotationZ = sendBtnRotation.value
-                                }
+                                },
+                                contentAlignment = Alignment.Center
                             ) {
                                 if (hasText) {
-                                    PhosphorPaperPlaneTilt(tint = colors.iosBlue, size = 24.dp)
+                                    PhosphorPaperPlaneTilt(tint = Color.White, size = 19.dp)
                                 } else {
-                                    PhosphorVoiceMicIcon(tint = colors.iosBlue, size = 24.dp)
+                                    PhosphorVoiceMicIcon(tint = if (colors.isLight) colors.textDark else Color.White, size = 20.dp)
                                 }
                             }
                         }

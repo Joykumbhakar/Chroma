@@ -141,6 +141,7 @@ fun OneUiCollapsingConversationsScreen(
     currentUser: User,
     stories: List<Story> = emptyList(),
     storyGroups: List<UserStoryGroup> = emptyList(),
+    myStories: List<com.chroma.studio.model.Story> = emptyList(),
     hasMyStory: Boolean = false,
     chats: List<ChatConversation>,
     activeTab: String,
@@ -215,20 +216,18 @@ fun OneUiCollapsingConversationsScreen(
     var isSearchExpanded by remember { mutableStateOf(false) }
 
     val listState = rememberLazyListState()
-    var isFabVisible by remember { mutableStateOf(false) }
+    var isFabVisible by remember { mutableStateOf(true) }
     var isFabExpanded by remember { mutableStateOf(false) }
     var scrollSessionCount by remember { mutableIntStateOf(0) }
     var accumulatedScrollDelta by remember { mutableFloatStateOf(0f) }
     var autoHideJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
-    // Auto-hide inactivity timer (collapses and slides down out of view)
-    fun resetAutoHideTimer(customDelayMs: Long = 2800L) {
+    // Auto-collapse inactivity timer (collapses expanded action bar back to compact circular FAB)
+    fun resetAutoHideTimer(customDelayMs: Long = 3500L) {
         autoHideJob?.cancel()
         autoHideJob = coroutineScope.launch {
             delay(customDelayMs)
             isFabExpanded = false
-            delay(160L)
-            isFabVisible = false
             scrollSessionCount = 0
             accumulatedScrollDelta = 0f
         }
@@ -783,34 +782,24 @@ fun OneUiCollapsingConversationsScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // Stories Strip Card (One UI 26.dp Rounded Squircle)
-                // Unified High-Fidelity Stories Section (Shared with Community Tab)
+                // Stories Strip (Unified Seamless Stories Section)
                 item(key = "oneui_stories_card") {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(26.dp))
-                            .background(cardBgColor)
-                            .border(1.dp, cardBorderColor, RoundedCornerShape(26.dp))
-                            .padding(vertical = 4.dp)
-                    ) {
-                        StoriesSection(
-                            stories = storyGroups,
-                            isLoading = false,
-                            onAddStoryClick = onAddStoryClick,
-                            hasMyStory = hasMyStory,
-                            myStoryAvatarUrl = currentUser.avatar ?: "",
-                            myStoryGender = null,
-                            myStoriesList = emptyList(),
-                            isUploading = false,
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-                            gapColor = cardBgColor,
-                            onMyStoryClick = onMyStoryClick,
-                            onStoryClick = { groupIdx ->
-                                onStoryGroupClick?.invoke(groupIdx)
-                            }
-                        )
-                    }
+                    StoriesSection(
+                        stories = storyGroups,
+                        isLoading = false,
+                        onAddStoryClick = onAddStoryClick,
+                        hasMyStory = hasMyStory,
+                        myStoryAvatarUrl = currentUser.avatar ?: "",
+                        myStoryGender = null,
+                        myStoriesList = myStories,
+                        isUploading = false,
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+                        gapColor = screenBgColor,
+                        onMyStoryClick = onMyStoryClick,
+                        onStoryClick = { groupIdx ->
+                            onStoryGroupClick?.invoke(groupIdx)
+                        }
+                    )
                 }
 
                 item(key = "oneui_filter_tabs") {
@@ -863,23 +852,56 @@ fun OneUiCollapsingConversationsScreen(
                                 .clip(RoundedCornerShape(26.dp))
                                 .background(cardBgColor)
                                 .border(1.dp, cardBorderColor, RoundedCornerShape(26.dp))
-                                .padding(vertical = 48.dp, horizontal = 24.dp),
+                                .padding(vertical = 40.dp, horizontal = 24.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(54.dp)
+                                        .clip(CircleShape)
+                                        .background(colors.iosBlue.copy(alpha = 0.12f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    LucideEdit(tint = colors.iosBlue, size = 24.dp)
+                                }
+                                Spacer(modifier = Modifier.height(6.dp))
                                 Text(
-                                    text = "No conversations found",
-                                    fontSize = 16.sp,
+                                    text = if (activeTab != "all") "No ${activeTab.replaceFirstChar { it.uppercase() }} Chats" else "No conversations yet",
+                                    fontSize = 17.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = colors.textDark
                                 )
-                                Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = "Tap the New message button below to start chatting",
+                                    text = if (activeTab != "all") "No chats found in this folder." else "Connect with friends and start a new conversation.",
                                     fontSize = 13.sp,
                                     color = colors.textMuted,
                                     textAlign = TextAlign.Center
                                 )
+                                Spacer(modifier = Modifier.height(10.dp))
+                                androidx.compose.material3.Surface(
+                                    onClick = onNewMessageClick,
+                                    shape = RoundedCornerShape(20.dp),
+                                    color = colors.iosBlue,
+                                    shadowElevation = 2.dp
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        LucideEdit(tint = Color.White, size = 15.dp)
+                                        Text(
+                                            text = "New Message",
+                                            color = Color.White,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -989,13 +1011,11 @@ fun OneUiCollapsingConversationsScreen(
                 onGroupClick = {
                     SoundManager.playReaction()
                     isFabExpanded = false
-                    isFabVisible = false
                     onCreateGroupClick?.invoke() ?: onNewMessageClick()
                 },
                 onChatClick = {
                     SoundManager.playReaction()
                     isFabExpanded = false
-                    isFabVisible = false
                     onNewMessageClick()
                 },
                 modifier = Modifier
