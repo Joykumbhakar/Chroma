@@ -187,15 +187,10 @@ fun AppleSwitch(
     trackWidth: Dp = 52.dp,
     trackHeight: Dp = 31.dp
 ) {
-    SpringPillSwitch(
+    AppleGlassToggle(
         checked = checked,
         onCheckedChange = onCheckedChange,
         modifier = modifier,
-        colors = PillSwitchColors(
-            offTrackColor = inactiveTrackColor,
-            onTrackColor = activeTrackColor,
-            thumbColor = Color.White
-        ),
         trackWidth = trackWidth,
         trackHeight = trackHeight
     )

@@ -761,6 +761,7 @@ fun SpringPillSwitch(
 
 /**
  * Value-driven overload for standard Compose [checked] and [onCheckedChange] usage.
+ * Powered by Apple Blue Liquid Glass design with authentic iOS liquid thumb stretch.
  */
 @Composable
 fun SpringPillSwitch(
@@ -773,23 +774,10 @@ fun SpringPillSwitch(
     trackHeight: Dp = 31.dp,
     showIoLabels: Boolean = false
 ) {
-    val state = remember { SpringToggleState(initialChecked = checked) }
-
-    LaunchedEffect(checked) {
-        if (state.checked != checked) {
-            val impulse = if (checked) 3.2f else -3.2f
-            state.setCheckedState(checked, extraVelocity = impulse)
-            state.onPressStart(impulse = 5.0f)
-            state.onPressRelease()
-        }
-    }
-
-    SpringPillSwitch(
-        state = state,
-        modifier = modifier,
+    AppleGlassToggle(
+        checked = checked,
         onCheckedChange = onCheckedChange,
-        colors = colors,
-        config = config,
+        modifier = modifier,
         trackWidth = trackWidth,
         trackHeight = trackHeight,
         showIoLabels = showIoLabels
