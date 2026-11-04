@@ -3205,6 +3205,7 @@ private fun ChatScreenContent(
                         unreadMessageThreshold = unreadMessageThreshold,
                         typingStatuses = typingStatuses,
                         isTyping = isTyping,
+                        isVoiceRecording = isVoiceRecording,
                         isMessageSelectionMode = isMessageSelectionMode,
                         selectedMessageIds = selectedMessageIds,
                         starredMessageIds = starredMessageIds,

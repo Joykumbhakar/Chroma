@@ -30,6 +30,7 @@ class ChatViewModel : ViewModel() {
     private val discoverRepository = DiscoverRepository()
     private val presenceListeners = mutableMapOf<String, () -> Unit>()
     private var typingDebounceJob: kotlinx.coroutines.Job? = null
+    private var typingHeartbeatJob: kotlinx.coroutines.Job? = null
     private var lastTypingSendTime: Long = 0L
     private var recordingHeartbeatJob: kotlinx.coroutines.Job? = null
     private var currentActivityStatus: String? = null
@@ -659,26 +660,48 @@ class ChatViewModel : ViewModel() {
     }
 
     /**
-     * WhatsApp-grade typing indicator:
-     * - Throttles network writes with a 2500ms heartbeat while user is actively typing.
-     * - Resets a 3500ms inactivity timer that automatically clears status if user pauses.
-     * - Immediately clears status when input becomes blank or message is dispatched.
+     * Typing indicator with single-send + 3-second idle timeout:
+     * - Sends "typing" to Firebase ONCE when user starts typing (first keystroke).
+     * - Does NOT re-send on every subsequent keystroke to avoid excessive network writes.
+     * - Resets a 3-second inactivity timer on each keystroke; if no key is pressed
+     *   for 3 seconds, clears the indicator immediately.
+     * - A sparse 5-second heartbeat keeps the indicator alive on the receiver side
+     *   during long continuous typing sessions.
+     * - Immediately clears when input becomes blank or a message is dispatched.
      */
     fun setTypingStatus(isTyping: Boolean, roomIdOverride: String? = null) {
-        val now = System.currentTimeMillis()
         if (isTyping) {
-            if (currentActivityStatus != "typing" || (now - lastTypingSendTime > 1800L)) {
-                lastTypingSendTime = now
+            // Send "typing" ONLY when transitioning from non-typing to typing (first keystroke)
+            if (currentActivityStatus != "typing") {
                 setChatActivity("typing", force = true, roomIdOverride = roomIdOverride)
+                lastTypingSendTime = System.currentTimeMillis()
+                // Start sparse heartbeat to keep receiver indicator alive during long typing
+                typingHeartbeatJob?.cancel()
+                typingHeartbeatJob = viewModelScope.launch {
+                    while (isActive) {
+                        kotlinx.coroutines.delay(5000)
+                        if (currentActivityStatus == "typing") {
+                            lastTypingSendTime = System.currentTimeMillis()
+                            setChatActivity("typing", force = true, roomIdOverride = roomIdOverride)
+                        }
+                    }
+                }
             }
+            // Reset the 3-second inactivity timer on every keystroke (NO network write)
             typingDebounceJob?.cancel()
             typingDebounceJob = viewModelScope.launch {
                 kotlinx.coroutines.delay(3000)
+                // User stopped typing for 3 seconds — clear immediately
+                typingHeartbeatJob?.cancel()
+                typingHeartbeatJob = null
                 lastTypingSendTime = 0L
                 setChatActivity(null, roomIdOverride = roomIdOverride)
             }
         } else {
+            // Explicit clear (message sent, text cleared, etc.)
             typingDebounceJob?.cancel()
+            typingHeartbeatJob?.cancel()
+            typingHeartbeatJob = null
             lastTypingSendTime = 0L
             setChatActivity(null, roomIdOverride = roomIdOverride)
         }
@@ -692,6 +715,8 @@ class ChatViewModel : ViewModel() {
      */
     fun setRecordingStatus(isRecording: Boolean, roomIdOverride: String? = null) {
         typingDebounceJob?.cancel()
+        typingHeartbeatJob?.cancel()
+        typingHeartbeatJob = null
         recordingHeartbeatJob?.cancel()
         lastTypingSendTime = 0L
 
@@ -716,7 +741,6 @@ class ChatViewModel : ViewModel() {
         val normalizedRoomId = com.chroma.studio.data.OnlineStatusManager.normalizeRoomId(rawRoomId, currentUid, currentOtherUserId)
         viewModelScope.launch {
             com.chroma.studio.data.OnlineStatusManager.setChatActivity(normalizedRoomId, activity)
-            repository.setActivityStatus(normalizedRoomId, activity)
         }
     }
 
@@ -1015,6 +1039,15 @@ class ChatViewModel : ViewModel() {
     }
 
     fun closeChat() {
+        // Clear any active typing/recording indicators before leaving
+        typingDebounceJob?.cancel()
+        typingHeartbeatJob?.cancel()
+        typingHeartbeatJob = null
+        recordingHeartbeatJob?.cancel()
+        lastTypingSendTime = 0L
+        if (currentActivityStatus != null) {
+            setChatActivity(null)
+        }
         _activeRoomId.value = null
         com.chroma.studio.ui.components.DynamicIslandManager.currentlyActiveRoomId = null
         com.chroma.studio.ChatStateManager.clearActiveChat()
@@ -1384,7 +1417,7 @@ class ChatViewModel : ViewModel() {
                     val roomTimestamps = receivedActivityTimestamps.get(roomId) ?: continue
                     val filtered = roomActivities.filter { (uid, _) ->
                         val lastSeen = roomTimestamps[uid] ?: 0L
-                        (now - lastSeen) <= 4500L // Expire stale indicators after 4.5s
+                        (now - lastSeen) <= 7000L // Expire stale indicators after 7s (matches 5s sender heartbeat)
                     }
                     if (filtered.size != roomActivities.size) {
                         changed = true

@@ -121,6 +121,7 @@ fun ActiveChatMessageStream(
     unreadMessageThreshold: Int,
     typingStatuses: Map<String, Map<String, String>>,
     isTyping: Boolean,
+    isVoiceRecording: Boolean = false,
     isMessageSelectionMode: Boolean,
     selectedMessageIds: SnapshotStateList<String>,
     starredMessageIds: Set<String>,
@@ -556,13 +557,14 @@ fun ActiveChatMessageStream(
                 )
             }
 
-            // Realtime Typing & Recording Activity Indicators (Remote users only)
+            // Realtime Typing & Recording Activity Indicators (Remote users and local voice recording)
             val normalizedRoomId = com.chroma.studio.data.OnlineStatusManager.normalizeRoomId(activeChat.id, currentUid)
             val activeRoomTyping = typingStatuses[activeChat.id] ?: typingStatuses[normalizedRoomId] ?: emptyMap()
             val otherTypingUsers = activeRoomTyping.filterKeys { it != currentUid }
             val isRemoteRecording = otherTypingUsers.values.any { it == "recording" }
             val isRemoteTyping = otherTypingUsers.values.any { it == "typing" }
-            val shouldShowActivityBubble = isRemoteTyping || isRemoteRecording
+            val isRecordingActive = isRemoteRecording || isVoiceRecording
+            val shouldShowActivityBubble = isRemoteTyping || isRecordingActive
 
             item {
                 AnimatedVisibility(
@@ -575,18 +577,18 @@ fun ActiveChatMessageStream(
                     ) + fadeIn(tween(180)),
                     exit = shrinkVertically(tween(150)) + fadeOut(tween(120))
                 ) {
+                    val indicatorAvatar = if (isVoiceRecording && !isRemoteRecording) currentUser.avatar else activeChat.avatar
                     Row(
                         verticalAlignment = Alignment.Bottom,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.padding(start = 4.dp, top = 4.dp, bottom = 4.dp)
                     ) {
                         AsyncImage(
-                            model = activeChat.avatar,
+                            model = indicatorAvatar,
                             contentDescription = "Avatar",
                             modifier = Modifier
                                 .size(28.dp)
-                                .clip(CircleShape)
-                                .border(0.5.dp, colors.borderSubtle, CircleShape),
+                                .clip(CircleShape),
                             contentScale = ContentScale.Crop
                         )
                         Box(
@@ -595,7 +597,7 @@ fun ActiveChatMessageStream(
                                 .background(colors.bubbleGray)
                                 .padding(horizontal = 14.dp, vertical = 10.dp)
                         ) {
-                            if (isRemoteRecording) {
+                            if (isRecordingActive) {
                                 Row(
                                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                                     verticalAlignment = Alignment.CenterVertically
