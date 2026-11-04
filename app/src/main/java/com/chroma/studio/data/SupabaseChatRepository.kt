@@ -701,20 +701,8 @@ class SupabaseChatRepository {
 
     suspend fun setActivityStatus(roomId: String, activity: String?) = withContext(Dispatchers.IO) {
         val currentUser = auth.currentUser ?: return@withContext
-        try {
-            val db = OnlineStatusManager.getDatabase()
-            val ref = db.getReference("status/$roomId/${currentUser.uid}")
-            if (activity != null) {
-                ref.setValue(activity)
-                // Auto-clear on disconnect so stale indicators don't persist on crash
-                ref.onDisconnect().removeValue()
-            } else {
-                ref.removeValue()
-                ref.onDisconnect().cancel()
-            }
-        } catch (e: Exception) {
-            Log.e("SupabaseChatRepository", "Error updating activity status", e)
-        }
+        val normalizedRoomId = OnlineStatusManager.normalizeRoomId(roomId, currentUser.uid)
+        OnlineStatusManager.setChatActivity(normalizedRoomId, activity)
     }
 
     // Helper for uploading chat media to Cloudinary CDN (reserving Supabase exclusively for avatars/banners)

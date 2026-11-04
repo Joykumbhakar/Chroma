@@ -557,7 +557,8 @@ fun ActiveChatMessageStream(
             }
 
             // Realtime Typing & Recording Activity Indicators (Remote users only)
-            val activeRoomTyping = typingStatuses[activeChat.id] ?: emptyMap()
+            val normalizedRoomId = com.chroma.studio.data.OnlineStatusManager.normalizeRoomId(activeChat.id, currentUid)
+            val activeRoomTyping = typingStatuses[activeChat.id] ?: typingStatuses[normalizedRoomId] ?: emptyMap()
             val otherTypingUsers = activeRoomTyping.filterKeys { it != currentUid }
             val isRemoteRecording = otherTypingUsers.values.any { it == "recording" }
             val isRemoteTyping = otherTypingUsers.values.any { it == "typing" }

@@ -422,6 +422,19 @@ private fun ChatScreenContent(
     LaunchedEffect(isInsideChat, activeChatId) {
         if (isInsideChat && !activeChatId.isNullOrBlank()) {
             com.chroma.studio.ui.components.DynamicIslandManager.currentlyActiveRoomId = activeChatId
+            chatViewModel?.openChat(activeChatId)
+
+            val currentRoom = recentRooms.find { it.id == activeChatId }
+            val resolvedOtherUid = currentRoom?.participants?.firstOrNull { it != currentUid }
+                ?: if (!activeChatId.startsWith("group_")) {
+                    if (activeChatId.contains("_")) activeChatId.split("_").firstOrNull { it != currentUid }
+                    else activeChatId.removePrefix("direct_").takeIf { it != currentUid }
+                } else null
+
+            if (resolvedOtherUid != null) {
+                chatViewModel?.observeUserOnlineStatus(resolvedOtherUid)
+            }
+            chatViewModel?.observeRoomTyping(activeChatId)
         } else {
             com.chroma.studio.ui.components.DynamicIslandManager.currentlyActiveRoomId = null
         }
@@ -450,9 +463,13 @@ private fun ChatScreenContent(
 
             activeRoom.participants.firstOrNull { it != currentUid }
 
-        } else if (!activeChatId.startsWith("group_") && activeChatId.contains("_")) {
+        } else if (!activeChatId.startsWith("group_")) {
 
-            activeChatId.split("_").firstOrNull { it != currentUid }
+            if (activeChatId.contains("_")) {
+                activeChatId.split("_").firstOrNull { it != currentUid }
+            } else {
+                activeChatId.removePrefix("direct_").takeIf { it != currentUid }
+            }
 
         } else null
 
@@ -468,10 +485,10 @@ private fun ChatScreenContent(
 
     val activeLastSeen = otherLastSeen ?: activeRoomPresence?.lastOnline
 
-    val activeRoomTyping = remember(typingStatuses, activeChatId) {
-
-        typingStatuses[activeChatId] ?: emptyMap()
-
+    val activeRoomTyping = remember(typingStatuses, activeChatId, otherUid) {
+        val current = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: ""
+        val normalized = com.chroma.studio.data.OnlineStatusManager.normalizeRoomId(activeChatId, current, otherUid)
+        typingStatuses[activeChatId] ?: typingStatuses[normalized] ?: emptyMap()
     }
 
 
@@ -502,15 +519,30 @@ private fun ChatScreenContent(
 
         } else {
 
-            val otherProfile = userProfiles[activeChatId]
+            val resolvedTargetUid = otherUid ?: activeChatId.removePrefix("direct_")
+            val otherProfile = userProfiles[resolvedTargetUid]
             val resolvedName = otherProfile?.displayName?.ifBlank { otherProfile.username } ?: ""
+            val otherTyping = activeRoomTyping.filterKeys { it != currentUid }
+            val fallbackStatusText = if (otherTyping.isNotEmpty()) {
+                val firstActivity = otherTyping.values.firstOrNull()
+                if (firstActivity == "recording") "recording audio..." else "typing..."
+            } else {
+                when {
+                    isActiveOnline -> "online"
+                    activeLastSeen != null && activeLastSeen > 0 -> {
+                        com.chroma.studio.data.OnlineStatusManager.formatWhatsAppLastSeen(activeLastSeen)
+                    }
+                    else -> "Offline"
+                }
+            }
+
             ChatConversation(
                 id = activeChatId,
                 name = resolvedName,
                 type = "direct",
                 avatar = otherProfile?.avatarUrl ?: "",
                 online = isActiveOnline,
-                statusText = if (isActiveOnline) "Online" else if (activeLastSeen != null) "Last seen $activeLastSeen" else "",
+                statusText = fallbackStatusText,
                 phone = "",
                 bio = otherProfile?.bio ?: "",
                 unreadCount = 0,
@@ -526,13 +558,36 @@ private fun ChatScreenContent(
 
 
 
-    var chats by remember(recentRooms, userProfiles, isOtherOnline, otherLastSeen, onlineUsersPresence, typingStatuses, mutedChatIds, isInsideChat) {
+    var chats by remember(recentRooms, userProfiles, isOtherOnline, otherLastSeen, onlineUsersPresence, typingStatuses, mutedChatIds, isInsideChat, activeChatBase) {
 
         mutableStateOf(
 
-            if (isInsideChat && effectiveRoomId != null) {
+            if (isInsideChat) {
 
-                listOf(activeChatBase)
+                val found = recentRooms.find { it.id == activeChatId }
+                if (found != null) {
+                    recentRooms.map { room ->
+                        if (room.id == activeChatId) activeChatBase
+                        else {
+                            val oUid = if (!room.isGroup) room.participants.firstOrNull { it != currentUid } else null
+                            val presence = if (oUid != null) onlineUsersPresence[oUid] else null
+                            val isOnline = presence?.online == true
+                            val lastSeenTime = presence?.lastOnline
+                            val normalizedId = com.chroma.studio.data.OnlineStatusManager.normalizeRoomId(room.id, currentUid, oUid)
+                            val roomTyping = typingStatuses[room.id] ?: typingStatuses[normalizedId] ?: emptyMap()
+                            ChatAdapters.toChatConversation(
+                                room = room,
+                                currentUid = currentUid,
+                                userProfiles = userProfiles,
+                                isOnline = isOnline,
+                                lastSeenTime = lastSeenTime,
+                                typingMap = roomTyping
+                            ).copy(isMuted = mutedChatIds.contains(room.id))
+                        }
+                    }
+                } else {
+                    listOf(activeChatBase)
+                }
 
             } else {
 
@@ -546,7 +601,8 @@ private fun ChatScreenContent(
 
                     val lastSeenTime = presence?.lastOnline ?: if (room.id == activeChatId) otherLastSeen else null
 
-                    val roomTyping = typingStatuses[room.id] ?: emptyMap()
+                    val normalizedId = com.chroma.studio.data.OnlineStatusManager.normalizeRoomId(room.id, currentUid, oUid)
+                            val roomTyping = typingStatuses[room.id] ?: typingStatuses[normalizedId] ?: emptyMap()
 
                     ChatAdapters.toChatConversation(
 
@@ -1203,7 +1259,7 @@ private fun ChatScreenContent(
 
                 if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
 
-                    chatViewModel.setRecordingStatus(true)
+                    chatViewModel.setRecordingStatus(true, roomIdOverride = activeChatId)
 
                 }
 
@@ -1311,7 +1367,7 @@ private fun ChatScreenContent(
 
                 if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
 
-                    chatViewModel.setRecordingStatus(true)
+                    chatViewModel.setRecordingStatus(true, roomIdOverride = activeChatId)
 
                 }
 
@@ -1335,7 +1391,7 @@ private fun ChatScreenContent(
 
         if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
 
-            chatViewModel.setRecordingStatus(false)
+            chatViewModel.setRecordingStatus(false, roomIdOverride = activeChatId)
 
         }
 
@@ -1407,7 +1463,7 @@ private fun ChatScreenContent(
 
         if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
 
-            chatViewModel.setRecordingStatus(false)
+            chatViewModel.setRecordingStatus(false, roomIdOverride = activeChatId)
 
         }
 
@@ -3380,7 +3436,7 @@ private fun ChatScreenContent(
 
                                     if (chatViewModel != null && !activeChatId.startsWith("mock_")) {
 
-                                        chatViewModel.setTypingStatus(it.isNotBlank())
+                                        chatViewModel.setTypingStatus(it.isNotBlank(), roomIdOverride = activeChatId)
 
                                     }
 

@@ -93,6 +93,7 @@ object OnlineStatusManager {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val isOnline = snapshot.child("online").getValue(Boolean::class.java) ?: false
                 val lastSeen = snapshot.child("lastOnline").getValue(Long::class.java)
+                    ?: snapshot.child("lastSeen").getValue(Long::class.java)
                 onUpdate(UserPresence(online = isOnline, lastOnline = lastSeen))
             }
 
@@ -107,6 +108,89 @@ object OnlineStatusManager {
     /**
      * Explicitly update online/offline presence when app foregrounds or backgrounds.
      */
+    /**
+     * Sets real-time typing/recording activity for the current user in a specific chat room.
+     * Activity can be "typing", "recording", or null (to clear).
+     */
+    fun setChatActivity(roomId: String, activity: String?) {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        if (roomId.isBlank()) return
+        val db = getDatabase()
+        val ref = db.getReference("status/$roomId/$uid")
+        try {
+            if (activity != null) {
+                val payload = mapOf(
+                    "status" to activity,
+                    "timestamp" to com.google.firebase.database.ServerValue.TIMESTAMP
+                )
+                ref.setValue(payload)
+                ref.onDisconnect().removeValue()
+            } else {
+                ref.removeValue()
+                ref.onDisconnect().cancel()
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to update chat activity for $roomId: ${e.message}")
+        }
+    }
+
+    /**
+     * Observes real-time typing and recording activity for all users in a specific chat room.
+     * Automatically parses both map payloads and string payloads.
+     */
+    fun observeRoomActivity(roomId: String, onUpdate: (Map<String, String>) -> Unit): () -> Unit {
+        if (roomId.isBlank()) return {}
+        val db = getDatabase()
+        val ref = db.getReference("status/$roomId")
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val activityMap = mutableMapOf<String, String>()
+                for (userSnapshot in snapshot.children) {
+                    val userId = userSnapshot.key ?: continue
+                    val status = when (val value = userSnapshot.value) {
+                        is String -> value
+                        is Map<*, *> -> value["status"] as? String ?: value["activity"] as? String
+                        else -> null
+                    }
+                    if (!status.isNullOrBlank()) {
+                        activityMap[userId] = status
+                    }
+                }
+                onUpdate(activityMap)
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Log.w(TAG, "observeRoomActivity cancelled for $roomId: ${error.message}")
+            }
+        }
+        ref.addValueEventListener(listener)
+        return { ref.removeEventListener(listener) }
+    }
+
+    /**
+     * Computes the deterministic, shared room ID for a 1-on-1 direct chat between two users.
+     */
+    fun getDirectRoomId(uid1: String, uid2: String): String {
+        return if (uid1 < uid2) "${uid1}_$uid2" else "${uid2}_$uid1"
+    }
+
+    fun normalizeRoomId(roomId: String, currentUid: String, otherUid: String? = null): String {
+        if (roomId.startsWith("group_")) return roomId
+        if (roomId.contains("_")) {
+            val parts = roomId.split("_")
+            if (parts.size == 2) {
+                val u1 = parts[0]
+                val u2 = parts[1]
+                return if (u1 < u2) "${u1}_$u2" else "${u2}_$u1"
+            }
+        }
+        val targetUid = otherUid ?: roomId.removePrefix("direct_")
+        if (targetUid.isNotBlank() && currentUid.isNotBlank() && targetUid != currentUid) {
+            return if (currentUid < targetUid) "${currentUid}_$targetUid" else "${targetUid}_$currentUid"
+        }
+        return roomId
+    }
+
     fun setAppForegrounded(isForeground: Boolean) {
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
         val db = getDatabase()

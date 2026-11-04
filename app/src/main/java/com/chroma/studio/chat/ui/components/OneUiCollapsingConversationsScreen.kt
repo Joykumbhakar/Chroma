@@ -1651,10 +1651,10 @@ private fun OneUiSwipeableConversationItem(
                         text = snippet,
                         fontSize = 13.sp,
                         fontWeight = if (chat.unreadCount > 0) FontWeight.Medium else FontWeight.Normal,
-                        color = if (chat.statusText.contains("typing", ignoreCase = true)) {
-                            colors.iosBlue
-                        } else {
-                            colors.textMuted
+                        color = when {
+                            chat.statusText.contains("recording", ignoreCase = true) -> Color(0xFF34C759)
+                            chat.statusText.contains("typing", ignoreCase = true) -> colors.iosBlue
+                            else -> colors.textMuted
                         },
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
