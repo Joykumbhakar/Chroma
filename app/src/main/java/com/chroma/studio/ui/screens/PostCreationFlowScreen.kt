@@ -313,10 +313,15 @@ fun PostCreationFlowScreen(
             }
             canvas.drawBitmap(originalBitmap, 0f, 0f, paint)
 
-            val cacheFile = File(context.cacheDir, "post_filter_${UUID.randomUUID()}.jpg")
-            FileOutputStream(cacheFile).use { out ->
-                resultBitmap.compress(Bitmap.CompressFormat.JPEG, 92, out)
-            }
+            val compressedBytes = com.chroma.studio.utils.ImageUtils.compressPostBitmap(resultBitmap)
+                ?: run {
+                    val fb = java.io.ByteArrayOutputStream()
+                    resultBitmap.compress(Bitmap.CompressFormat.JPEG, 92, fb)
+                    fb.toByteArray()
+                }
+            val ext = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) "webp" else "jpg"
+            val cacheFile = File(context.cacheDir, "post_filter_${UUID.randomUUID()}.$ext")
+            cacheFile.writeBytes(compressedBytes)
             Uri.fromFile(cacheFile)
         } catch (_: Exception) {
             sourceUri
@@ -342,7 +347,7 @@ fun PostCreationFlowScreen(
                     if (selectedPhotoUris.size > 1) {
                         val bytesList = selectedPhotoUris.mapNotNull { rawUri ->
                             val finalUri = editedPhotoUris[rawUri] ?: rawUri
-                            compressImageToUnder50KB(context, finalUri)
+                            com.chroma.studio.utils.ImageUtils.compressPostImage(context, finalUri)
                         }
                         if (bytesList.isEmpty()) throw Exception("Failed to process images")
                         discoverRepo.uploadMultiImagePost(
@@ -356,7 +361,7 @@ fun PostCreationFlowScreen(
                     } else {
                         val singleRaw = selectedPhotoUris.first()
                         val finalToUploadUri = editedPhotoUris[singleRaw] ?: singleRaw
-                        val imageBytes = compressImageToUnder50KB(context, finalToUploadUri) ?: throw Exception("Failed to process image")
+                        val imageBytes = com.chroma.studio.utils.ImageUtils.compressPostImage(context, finalToUploadUri) ?: throw Exception("Failed to process image")
                         discoverRepo.uploadImagePost(
                             imageBytes = imageBytes,
                             caption = caption.ifBlank { "Untitled creation" },

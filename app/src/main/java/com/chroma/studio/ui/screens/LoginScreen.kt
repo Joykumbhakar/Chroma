@@ -706,7 +706,7 @@ fun LoginScreen(onLoginSuccess: () -> Unit, onCancel: () -> Unit) {
             onCropSuccess = { croppedUri ->
                 pendingCropUri = null
                 selectedAvatarUri = croppedUri
-                scope.launch { selectedAvatarBytes = compressImageToUnder50KB(context, croppedUri) }
+                scope.launch { selectedAvatarBytes = com.chroma.studio.utils.ImageUtils.compressAvatarForSupabase(context, croppedUri) }
             }
         )
     }

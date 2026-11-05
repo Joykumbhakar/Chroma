@@ -59,12 +59,24 @@ object CloudinaryClient {
                 val uploadUrl = "https://api.cloudinary.com/v1_1/$cloudName/image/upload"
                 val folderPath = if (folder.isNotBlank()) "posts/$folder" else "posts"
 
+                val isWebP = imageBytes.size >= 12 &&
+                    imageBytes[0] == 'R'.code.toByte() &&
+                    imageBytes[1] == 'I'.code.toByte() &&
+                    imageBytes[2] == 'F'.code.toByte() &&
+                    imageBytes[3] == 'F'.code.toByte() &&
+                    imageBytes[8] == 'W'.code.toByte() &&
+                    imageBytes[9] == 'E'.code.toByte() &&
+                    imageBytes[10] == 'B'.code.toByte() &&
+                    imageBytes[11] == 'P'.code.toByte()
+                val uploadExt = if (isWebP) "webp" else "jpg"
+                val uploadMime = if (isWebP) "image/webp" else "image/jpeg"
+
                 val requestBody = MultipartBody.Builder()
                     .setType(MultipartBody.FORM)
                     .addFormDataPart(
                         "file",
-                        "post_${System.currentTimeMillis()}.jpg",
-                        imageBytes.toRequestBody("image/jpeg".toMediaTypeOrNull())
+                        "post_${System.currentTimeMillis()}.$uploadExt",
+                        imageBytes.toRequestBody(uploadMime.toMediaTypeOrNull())
                     )
                     .addFormDataPart("upload_preset", uploadPreset)
                     .addFormDataPart("folder", folderPath)

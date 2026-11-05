@@ -145,7 +145,7 @@ fun PostDetailsScreen(
             } else {
                 // Publish Image Post
                 val imageBytes = withContext(Dispatchers.IO) {
-                    compressImageToUnder50KB(context, imageUri)
+                    com.chroma.studio.utils.ImageUtils.compressPostImage(context, imageUri)
                 } ?: throw Exception("Could not read image bytes")
 
                 val success = withContext(Dispatchers.IO) {
