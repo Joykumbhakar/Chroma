@@ -45,6 +45,12 @@ android {
                 signingConfig = signingConfigs.getByName("debugConfig")
             }
         }
+        release {
+            isMinifyEnabled = false
+            if (file("${rootDir}/debug.keystore").exists()) {
+                signingConfig = signingConfigs.getByName("debugConfig")
+            }
+        }
     }
 
     buildFeatures {

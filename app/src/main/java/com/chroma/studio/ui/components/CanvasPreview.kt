@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -119,7 +120,7 @@ fun CanvasPreview(
     val outerShape: Shape = remember(shape) {
         when (shape) {
             "circle" -> CircleShape
-            "full" -> RoundedCornerShape(0.dp)
+            "full" -> RectangleShape
             else -> RoundedCornerShape(16.dp)
         }
     }
@@ -174,7 +175,7 @@ fun CanvasPreview(
             .run {
                 if (shape == "full") this else border(1.dp, borderColor, outerShape)
             }
-            .background(if (shape == "circle" && borderColor == Color.Transparent) Color.Black else Color.White)
+            .background(if (shape == "full") Color.Transparent else if (shape == "circle" && borderColor == Color.Transparent) Color.Black else Color.White)
             .then(resolvedPostFxModifier)
             .graphicsLayer {
                 alpha = globalOpacity
@@ -479,13 +480,17 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawChromaLayer(
                 auroraShader.setFloatUniform("color4", floatArrayOf(c4.red, c4.green, c4.blue, c4.alpha))
                 
                 val brush = ShaderBrush(auroraShader)
+                val maxDim = kotlin.math.hypot(w.toDouble(), h.toDouble()).toFloat() * 1.5f
                 withTransform({
                     if (layer.angle != 90f && layer.angle != 0f) {
-                        scale(1.6f, pivot = Offset(w / 2f, h / 2f))
                         rotate(degrees = layer.angle - 90f, pivot = Offset(w / 2f, h / 2f))
                     }
                 }) {
-                    drawRect(brush)
+                    drawRect(
+                        brush = brush,
+                        topLeft = Offset((w - maxDim) / 2f, (h - maxDim) / 2f),
+                        size = androidx.compose.ui.geometry.Size(maxDim, maxDim)
+                    )
                 }
             } else {
                 val nW = minOf(6, sortedStops.size)

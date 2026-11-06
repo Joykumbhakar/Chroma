@@ -55,8 +55,15 @@ class DiscoverViewModel : ViewModel() {
             val uid = auth.currentUser?.uid
             if (!uid.isNullOrBlank()) {
                 refreshUserInteractions(uid)
+            } else {
+                resetUserInteractions()
             }
         }
+    }
+
+    fun resetUserInteractions() {
+        _likedWorkIds.value = emptySet()
+        _savedWorkIds.value = emptySet()
     }
 
     fun refreshUserInteractions(userId: String) {
@@ -64,7 +71,7 @@ class DiscoverViewModel : ViewModel() {
             try {
                 val currentWorks = _works.value
                 val instantLiked = currentWorks.filter { it.likedBy.contains(userId) }.map { it.id }.toSet()
-                _likedWorkIds.value = _likedWorkIds.value + instantLiked
+                _likedWorkIds.value = instantLiked
 
                 coroutineScope {
                     val likedAsync = async {
@@ -77,7 +84,7 @@ class DiscoverViewModel : ViewModel() {
                     val savedAsync = async {
                         repository.getSavedWorkIds(userId)
                     }
-                    _likedWorkIds.value = _likedWorkIds.value + likedAsync.await()
+                    _likedWorkIds.value = likedAsync.await()
                     _savedWorkIds.value = savedAsync.await()
                 }
             } catch (e: Exception) {

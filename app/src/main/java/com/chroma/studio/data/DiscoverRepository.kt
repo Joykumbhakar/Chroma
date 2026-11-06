@@ -1012,6 +1012,7 @@ class DiscoverRepository {
                 Log.w("DiscoverRepository", "Non-fatal error updating FirebaseAuth profile: ${e.message}")
             }
 
+            profileCache[uid] = updatedProfile
             Result.success(Unit)
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
@@ -1059,12 +1060,26 @@ class DiscoverRepository {
                 return@addSnapshotListener
             }
             if (snapshot != null && snapshot.exists()) {
-                trySend(snapshot.toObject(UserProfile::class.java))
+                val profile = snapshot.toObject(UserProfile::class.java)
+                if (profile != null) {
+                    profileCache[uid] = profile
+                }
+                trySend(profile)
             } else {
                 trySend(null)
             }
         }
         awaitClose { listener.remove() }
+    }
+
+    fun invalidateProfile(uid: String) {
+        if (uid.isNotBlank()) {
+            profileCache.remove(uid)
+        }
+    }
+
+    fun clearProfileCache() {
+        profileCache.clear()
     }
 
     suspend fun getSuggestedCreators(limit: Long = 10): List<UserProfile> {

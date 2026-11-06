@@ -273,107 +273,7 @@ fun DiscoverScreen(
     val listState = rememberLazyListState()
 
     val density = LocalDensity.current
-    val maxCollapsePx = remember(density) { with(density) { 240.dp.toPx() } }
-    var collapseOffsetPx by remember(maxCollapsePx) { mutableFloatStateOf(maxCollapsePx) }
-    var snapJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
-
-    val nestedScrollConnection = remember(maxCollapsePx, listState) {
-        object : NestedScrollConnection {
-            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                if (source == NestedScrollSource.Drag && snapJob?.isActive == true) {
-                    snapJob?.cancel()
-                }
-                val deltaY = available.y
-                // When user scrolls down (finger moves up -> deltaY < 0): collapse extended header first
-                if (deltaY < 0f && collapseOffsetPx < maxCollapsePx) {
-                    val newOffset = (collapseOffsetPx - deltaY).coerceIn(0f, maxCollapsePx)
-                    val consumedY = -(newOffset - collapseOffsetPx)
-                    collapseOffsetPx = newOffset
-                    return Offset(0f, consumedY)
-                }
-                return Offset.Zero
-            }
-
-            override fun onPostScroll(
-                consumed: Offset,
-                available: Offset,
-                source: NestedScrollSource
-            ): Offset {
-                if (source == NestedScrollSource.Drag && snapJob?.isActive == true) {
-                    snapJob?.cancel()
-                }
-                val deltaY = available.y
-                // When user scrolls up (finger moves down -> deltaY > 0): expand header when at top of list
-                if (deltaY > 0f && collapseOffsetPx > 0f) {
-                    val isAtTop = listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
-                    if (isAtTop) {
-                        val newOffset = (collapseOffsetPx - deltaY).coerceIn(0f, maxCollapsePx)
-                        val consumedY = -(newOffset - collapseOffsetPx)
-                        collapseOffsetPx = newOffset
-                        return Offset(0f, consumedY)
-                    }
-                }
-                return Offset.Zero
-            }
-
-            override suspend fun onPreFling(available: Velocity): Velocity {
-                val progress = if (maxCollapsePx <= 0f) 0f else (collapseOffsetPx / maxCollapsePx)
-                // If user flings upward (scrolling feed down) while header is partially open:
-                // Magnetically snap to fully collapsed before list starts scrolling,
-                // ensuring stories smoothly dock right beneath the header and never slide behind it!
-                if (available.y < -300f && progress < 0.99f && progress > 0.05f) {
-                    snapJob?.cancel()
-                    snapJob = coroutineScope.launch {
-                        animate(
-                            initialValue = collapseOffsetPx,
-                            targetValue = maxCollapsePx,
-                            animationSpec = spring(
-                                dampingRatio = 0.85f,
-                                stiffness = Spring.StiffnessMediumLow
-                            )
-                        ) { value, _ ->
-                            collapseOffsetPx = value
-                        }
-                    }
-                    return Velocity(0f, available.y)
-                }
-                return Velocity.Zero
-            }
-
-            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
-                val progress = if (maxCollapsePx <= 0f) 0f else (collapseOffsetPx / maxCollapsePx)
-                if (progress > 0.01f && progress < 0.99f) {
-                    val isAtTop = listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
-                    val targetPx = when {
-                        available.y < -250f -> maxCollapsePx
-                        available.y > 250f && isAtTop -> 0f
-                        progress >= 0.45f -> maxCollapsePx
-                        else -> 0f
-                    }
-                    snapJob?.cancel()
-                    snapJob = coroutineScope.launch {
-                        animate(
-                            initialValue = collapseOffsetPx,
-                            targetValue = targetPx,
-                            animationSpec = spring(
-                                dampingRatio = 0.85f,
-                                stiffness = Spring.StiffnessMediumLow
-                            )
-                        ) { value, _ ->
-                            collapseOffsetPx = value
-                        }
-                    }
-                }
-                return Velocity.Zero
-            }
-        }
-    }
-
-    val collapseProgress by remember {
-        derivedStateOf {
-            if (maxCollapsePx <= 0f) 0f else (collapseOffsetPx / maxCollapsePx).coerceIn(0f, 1f)
-        }
-    }
+    val collapseProgress = 0f
 
     // Global feed audio mute state (synced across all feed videos)
     var isFeedMuted by rememberSaveable { mutableStateOf(true) }
@@ -449,8 +349,6 @@ fun DiscoverScreen(
                 animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing)
             )
             hasPendingNewDrops = false
-            snapJob?.cancel()
-            collapseOffsetPx = 0f
             onRefresh()
             listState.animateScrollToItem(0)
             kotlinx.coroutines.delay(120)
@@ -529,7 +427,6 @@ fun DiscoverScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(if (colors.isDark) Color(0xFF000000) else Color(0xFFF2F4F7))
-            .nestedScroll(nestedScrollConnection)
     ) {
         BackHandler(enabled = isSearchExpanded) {
             isSearchExpanded = false
@@ -568,15 +465,25 @@ fun DiscoverScreen(
 
         val isFeedRefreshing = isRefreshing || refreshProgressAnim.value > 0f
 
-        Column(modifier = Modifier.fillMaxSize()) {
-            // Clean Expanded Header (Main Heading + Small Sub-text ONLY) + Compact Action Bar
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(if (colors.isDark) Color(0xFF000000) else Color.White)
+        ) {
+            // Top App Bar: "Community" Title, [+], [Notifications], [Refresh], [Search]
             CreatorFeedHeader(
                 title = "Community",
                 subtitle = headerSubtitle,
                 collapseProgress = collapseProgress,
                 selectedFeedTab = selectedFeedTab,
+                selectedSortOrder = selectedSortOrder,
+                savedCount = savedWorkIds.size,
                 onSelectFeedTab = { tab ->
                     selectedFeedTab = tab
+                    coroutineScope.launch { listState.animateScrollToItem(0) }
+                },
+                onSelectSortOrder = { sort ->
+                    selectedSortOrder = sort
                     coroutineScope.launch { listState.animateScrollToItem(0) }
                 },
                 isSearchExpanded = isSearchExpanded,
@@ -1150,8 +1057,7 @@ fun TrendingCard(
                 .padding(5.5.dp)
                 .clip(RoundedCornerShape(5.dp))
                 .background(Color.Black.copy(alpha = 0.55f))
-                .border(0.5.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(5.dp))
-                .padding(horizontal = 4.dp, vertical = 2.dp)
+                .padding(horizontal = 4.5.dp, vertical = 2.dp)
         ) {
             Icon(
                 imageVector = Lucide.Flame,
@@ -1174,8 +1080,7 @@ fun TrendingCard(
                     .padding(5.5.dp)
                     .size(16.dp)
                     .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.55f))
-                    .border(0.5.dp, Color.White.copy(alpha = 0.22f), CircleShape),
+                    .background(Color.Black.copy(alpha = 0.55f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -1279,102 +1184,142 @@ fun CommunityFeedTabBar(
     onSelectSort: (CommunitySortOrder) -> Unit
 ) {
     val colors = LocalOscellionColors.current
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     var showSortMenu by remember { mutableStateOf(false) }
+
+    val tabs = remember {
+        listOf(
+            CommunityFeedTab.ALL to "Latest",
+            CommunityFeedTab.TRENDING to "Trending",
+            CommunityFeedTab.FLASH to "Flash",
+            CommunityFeedTab.FOLLOWING to "Following",
+            CommunityFeedTab.SAVED to "Saved"
+        )
+    }
+
+    val isDark = colors.isDark
+    val barBg = if (isDark) Color(0xFF000000) else Color.White
+    val textPrimary = if (isDark) Color.White else Color(0xFF0F172A)
+    val textMuted = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+    val activeBlue = Color(0xFF0A84FF)
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(if (colors.isDark) Color(0xFF16161A) else Color.White)
+            .background(barBg)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 4.dp, bottom = 2.dp),
+                .height(44.dp)
+                .padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Scrollable Category Tabs
             Row(
                 modifier = Modifier
                     .weight(1f)
                     .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 14.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    .padding(horizontal = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(18.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                CommunityFeedTab.values().forEach { tab ->
+                tabs.forEach { (tab, label) ->
                     val isSelected = selectedTab == tab
-                    val activeColor = if (isSelected) Color(0xFF0A84FF) else colors.textMuted
+                    val tabColor = if (isSelected) activeBlue else textMuted
 
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null
-                            ) { onSelectTab(tab) }
-                            .padding(vertical = 2.dp)
+                            ) {
+                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                                com.chroma.studio.chat.sound.SoundManager.playReaction()
+                                onSelectTab(tab)
+                            }
+                            .padding(vertical = 4.dp, horizontal = 2.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
                         ) {
                             Icon(
                                 imageVector = tab.icon,
-                                contentDescription = tab.label,
-                                tint = activeColor,
+                                contentDescription = label,
+                                tint = tabColor,
                                 modifier = Modifier.size(14.dp)
                             )
                             Text(
-                                text = tab.label,
-                                color = if (isSelected) colors.textMain else colors.textMuted,
-                                fontSize = 12.5.sp,
-                                lineHeight = 14.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                text = label,
+                                color = if (isSelected) textPrimary else textMuted,
+                                fontSize = 13.sp,
+                                lineHeight = 15.sp,
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium
                             )
                             if (tab == CommunityFeedTab.SAVED && savedCount > 0) {
                                 Text(
                                     text = "($savedCount)",
-                                    color = if (isSelected) Color(0xFF0A84FF) else colors.textMuted,
+                                    color = activeBlue,
                                     fontSize = 11.sp,
-                                    fontWeight = FontWeight.SemiBold
+                                    fontWeight = FontWeight.Bold
                                 )
                             }
                         }
 
-                        Spacer(Modifier.height(5.dp))
+                        Spacer(Modifier.height(4.dp))
 
                         val indicatorWidth by animateDpAsState(
-                            targetValue = if (isSelected) 28.dp else 0.dp,
-                            animationSpec = tween(280, easing = FluidCubicBezier),
+                            targetValue = if (isSelected) 26.dp else 0.dp,
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessMediumLow
+                            ),
                             label = "tabIndicatorWidth"
                         )
                         Box(
                             modifier = Modifier
                                 .width(indicatorWidth)
-                                .height(2.dp)
-                                .background(if (isSelected) Color(0xFF0A84FF) else Color.Transparent)
+                                .height(2.5.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(if (isSelected) activeBlue else Color.Transparent)
                         )
                     }
                 }
             }
 
+            // Hairline separator between tabs and sort button
+            Box(
+                modifier = Modifier
+                    .height(20.dp)
+                    .width(0.5.dp)
+                    .background(colors.glassBorder)
+            )
+
             // Quick Sort Dropdown Action
             Box(
-                modifier = Modifier.padding(end = 10.dp)
+                modifier = Modifier.padding(start = 4.dp, end = 8.dp)
             ) {
                 Row(
                     modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null
-                        ) { showSortMenu = true }
-                        .padding(horizontal = 6.dp, vertical = 4.dp),
+                        ) {
+                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                            showSortMenu = true
+                        }
+                        .padding(horizontal = 6.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Icon(
                         imageVector = Lucide.ArrowUpDown,
                         contentDescription = "Sort Feed",
-                        tint = colors.textMuted,
+                        tint = if (selectedSort != CommunitySortOrder.LATEST) activeBlue else textMuted,
                         modifier = Modifier.size(13.dp)
                     )
                     Text(
@@ -1383,10 +1328,10 @@ fun CommunityFeedTabBar(
                             CommunitySortOrder.TOP_LIKED -> "Liked"
                             CommunitySortOrder.MOST_REMIXED -> "Remixed"
                         },
-                        fontSize = 11.sp,
-                        lineHeight = 13.sp,
+                        fontSize = 11.5.sp,
+                        lineHeight = 14.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = colors.textMuted
+                        color = if (selectedSort != CommunitySortOrder.LATEST) activeBlue else textMuted
                     )
                 }
 
@@ -1394,27 +1339,39 @@ fun CommunityFeedTabBar(
                     expanded = showSortMenu,
                     onDismissRequest = { showSortMenu = false },
                     modifier = Modifier
-                        .background(colors.glassBg)
-                        .border(0.5.dp, colors.glassBorder, RoundedCornerShape(12.dp))
+                        .shadow(16.dp, RoundedCornerShape(14.dp), ambientColor = Color.Black.copy(alpha = 0.12f), spotColor = Color.Black.copy(alpha = 0.08f))
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(if (isDark) Color(0xFF1C1C1E) else Color.White)
                 ) {
                     CommunitySortOrder.values().forEach { sort ->
+                        val isSortSelected = selectedSort == sort
                         DropdownMenuItem(
                             text = {
                                 Text(
                                     sort.label,
                                     fontSize = 13.sp,
-                                    fontWeight = if (selectedSort == sort) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (selectedSort == sort) Color(0xFF0A84FF) else colors.textMain
+                                    fontWeight = if (isSortSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isSortSelected) activeBlue else textPrimary
                                 )
                             },
                             leadingIcon = {
                                 Icon(
                                     imageVector = sort.icon,
                                     contentDescription = sort.label,
-                                    tint = if (selectedSort == sort) Color(0xFF0A84FF) else colors.textMuted,
+                                    tint = if (isSortSelected) activeBlue else textMuted,
                                     modifier = Modifier.size(16.dp)
                                 )
                             },
+                            trailingIcon = if (isSortSelected) {
+                                {
+                                    Icon(
+                                        imageVector = Lucide.Check,
+                                        contentDescription = "Selected",
+                                        tint = activeBlue,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            } else null,
                             onClick = {
                                 onSelectSort(sort)
                                 showSortMenu = false
@@ -1918,12 +1875,75 @@ data class CreatorProfileInfo(
 )
 
 @Composable
+private fun CommunityHeadingDropdownRow(
+    icon: ImageVector,
+    label: String,
+    badgeText: String? = null,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    val colors = LocalOscellionColors.current
+    val isDark = colors.isDark
+    val textPrimary = if (isDark) Color.White else Color(0xFF0F172A)
+    val textMuted = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+    val activeBlue = Color(0xFF0A84FF)
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 8.5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = if (isSelected) activeBlue else textMuted,
+                modifier = Modifier.size(17.dp)
+            )
+            Text(
+                text = label,
+                color = if (isSelected) activeBlue else textPrimary,
+                fontSize = 13.5.sp,
+                lineHeight = 16.sp,
+                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium
+            )
+            if (!badgeText.isNullOrEmpty()) {
+                Text(
+                    text = badgeText,
+                    color = activeBlue,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
+        if (isSelected) {
+            Icon(
+                imageVector = Lucide.Check,
+                contentDescription = "Selected",
+                tint = activeBlue,
+                modifier = Modifier.size(16.dp)
+            )
+        }
+    }
+}
+
+@Composable
 fun CreatorFeedHeader(
     title: String = "Community",
     subtitle: String = "Fresh creations & stories",
     collapseProgress: Float = 0f,
     selectedFeedTab: CommunityFeedTab = CommunityFeedTab.ALL,
+    selectedSortOrder: CommunitySortOrder = CommunitySortOrder.LATEST,
+    savedCount: Int = 0,
     onSelectFeedTab: (CommunityFeedTab) -> Unit = {},
+    onSelectSortOrder: (CommunitySortOrder) -> Unit = {},
     isSearchExpanded: Boolean,
     searchQuery: String,
     isPlusMenuOpen: Boolean,
@@ -1940,13 +1960,6 @@ fun CreatorFeedHeader(
     createMenuContent: @Composable () -> Unit
 ) {
     val colors = LocalOscellionColors.current
-    var isFeedMenuOpen by remember { mutableStateOf(false) }
-
-    val chevronRotation by animateFloatAsState(
-        targetValue = if (isFeedMenuOpen) 180f else 0f,
-        animationSpec = tween(260, easing = FluidCubicBezier),
-        label = "chevronRotation"
-    )
 
     val plusRotation by animateFloatAsState(
         targetValue = if (isPlusMenuOpen) 45f else 0f,
@@ -1984,16 +1997,9 @@ fun CreatorFeedHeader(
 
     val density = LocalDensity.current
     val isDark = colors.isDark
-    val headerBgColor = if (isDark) Color(0xFF000000) else Color(0xFFF2F4F7)
+    val headerBgColor = if (isDark) Color(0xFF000000) else Color.White
     val textPrimary = if (isDark) Color.White else Color(0xFF0F172A)
     val textMuted = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
-
-    // Samsung One UI 6/7 Expanded Header Metrics (Collapses smoothly on scroll)
-    val maxViewingHeight = 240.dp
-    val currentViewingHeight = (maxViewingHeight * (1f - collapseProgress)).coerceAtLeast(0.dp)
-    val largeTitleAlpha = (1f - (collapseProgress / 0.40f)).coerceIn(0f, 1f)
-    val subtitleAlpha = (1f - (collapseProgress / 0.30f)).coerceIn(0f, 1f)
-    val compactTitleAlpha = ((collapseProgress - 0.45f) / 0.55f).coerceIn(0f, 1f)
 
     Column(
         modifier = Modifier
@@ -2001,171 +2007,187 @@ fun CreatorFeedHeader(
             .background(headerBgColor)
             .statusBarsPadding()
     ) {
-        // 1. EXPANDED VIEWING AREA (Matches Samsung One UI Settings & Pictures reference geometry)
-        if (currentViewingHeight > 0.dp && !isSearchExpanded) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(currentViewingHeight),
-                contentAlignment = Alignment.Center
-            ) {
-                if (largeTitleAlpha > 0.01f) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 24.dp)
-                            .graphicsLayer {
-                                alpha = largeTitleAlpha
-                                translationY = -collapseProgress * with(density) { 24.dp.toPx() }
-                                val scale = 1f - (collapseProgress * 0.06f)
-                                scaleX = scale
-                                scaleY = scale
-                            }
-                    ) {
-                        Text(
-                            text = title,
-                            fontSize = 38.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            letterSpacing = (-0.6).sp,
-                            color = textPrimary,
-                            textAlign = TextAlign.Center
-                        )
-
-                        if (subtitle.isNotBlank()) {
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = subtitle,
-                                fontSize = 13.5.sp,
-                                fontWeight = FontWeight.Normal,
-                                color = textMuted,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.graphicsLayer { alpha = subtitleAlpha }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // 2. COMPACT ACTION BAR (Pinned 52dp height)
+        // Compact, Tightened Top Action Bar (54dp height)
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(52.dp)
+                .height(54.dp)
                 .padding(horizontal = 14.dp),
             contentAlignment = Alignment.CenterStart
         ) {
             val maxHeaderWidth = maxWidth
 
-            // LEFT BRAND HEADING: "Community" (Fades in when collapsing, matching One UI)
-            Row(
+            var showFeedMenu by remember { mutableStateOf(false) }
+            val chevronRotation by animateFloatAsState(
+                targetValue = if (showFeedMenu) 180f else 0f,
+                animationSpec = tween(250, easing = FluidCubicBezier),
+                label = "chevronRotation"
+            )
+            val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+
+            LaunchedEffect(isSearchExpanded) {
+                if (isSearchExpanded) {
+                    showFeedMenu = false
+                }
+            }
+
+            // Brand Title & Feed/Sort Switcher: "Community ▾" (Apple-inspired interactive heading)
+            val activeBlue = Color(0xFF0A84FF)
+            Box(
                 modifier = Modifier
                     .align(Alignment.CenterStart)
+                    .widthIn(max = (maxHeaderWidth - 156.dp).coerceAtLeast(100.dp))
                     .offset(x = headerItemsOffset)
-                    .alpha(headerItemsAlpha * compactTitleAlpha),
-                verticalAlignment = Alignment.CenterVertically
+                    .alpha(headerItemsAlpha)
             ) {
-                Box {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable(enabled = !isSearchExpanded) {
-                                isFeedMenuOpen = !isFeedMenuOpen
-                            }
-                            .padding(vertical = 4.dp, horizontal = 2.dp)
-                    ) {
-                        Text(
-                            text = "Community",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = (-0.5).sp,
-                            color = textPrimary
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Icon(
-                            imageVector = Lucide.ChevronDown,
-                            contentDescription = "Switch Feed",
-                            tint = textPrimary.copy(alpha = 0.85f),
-                            modifier = Modifier
-                                .size(16.dp)
-                                .rotate(chevronRotation)
-                        )
-                    }
-
-                    DropdownMenu(
-                        expanded = isFeedMenuOpen,
-                        onDismissRequest = { isFeedMenuOpen = false },
-                        offset = DpOffset(x = 0.dp, y = 6.dp),
-                        modifier = Modifier
-                            .width(200.dp)
-                            .background(
-                                color = if (colors.isDark) Color(0xFF16161A) else Color.White,
-                                shape = RoundedCornerShape(12.dp)
-                            )
-                            .border(
-                                width = 0.5.dp,
-                                color = colors.glassBorder,
-                                shape = RoundedCornerShape(12.dp)
-                            )
-                    ) {
-                        val feedTabs = listOf(
-                            CommunityFeedTab.ALL,
-                            CommunityFeedTab.FOLLOWING,
-                            CommunityFeedTab.SAVED,
-                            CommunityFeedTab.FLASH,
-                            CommunityFeedTab.TRENDING
-                        )
-
-                        feedTabs.forEachIndexed { index, tab ->
-                            val isSelected = selectedFeedTab == tab
-                            DropdownMenuItem(
-                                text = {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = tab.icon,
-                                            contentDescription = null,
-                                            tint = if (isSelected) colors.primary else colors.textMain,
-                                            modifier = Modifier.size(17.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(10.dp))
-                                        Text(
-                                            text = tab.label,
-                                            fontSize = 14.sp,
-                                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                            color = if (isSelected) colors.primary else colors.textMain,
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                        if (isSelected) {
-                                            Icon(
-                                                imageVector = Lucide.Check,
-                                                contentDescription = "Selected",
-                                                tint = colors.primary,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                        }
-                                    }
-                                },
-                                onClick = {
-                                    isFeedMenuOpen = false
-                                    onSelectFeedTab(tab)
-                                },
-                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
-                            )
-
-                            if (index < feedTabs.lastIndex) {
-                                HorizontalDivider(
-                                    thickness = 0.5.dp,
-                                    color = colors.glassBorder.copy(alpha = 0.6f)
-                                )
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) {
+                            if (!isSearchExpanded) {
+                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                                showFeedMenu = !showFeedMenu
                             }
                         }
+                        .padding(vertical = 4.dp, horizontal = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.Center) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Text(
+                                text = title,
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = (-0.6).sp,
+                                color = textPrimary
+                            )
+                            Icon(
+                                imageVector = Lucide.ChevronDown,
+                                contentDescription = "Switch feed or sort",
+                                tint = if (showFeedMenu) activeBlue else textMuted,
+                                modifier = Modifier
+                                    .size(17.dp)
+                                    .rotate(chevronRotation)
+                            )
+                        }
+
+                        val activeSubtitle = buildString {
+                            if (selectedFeedTab != CommunityFeedTab.ALL) {
+                                append(selectedFeedTab.label)
+                            }
+                            if (selectedSortOrder != CommunitySortOrder.LATEST) {
+                                if (isNotEmpty()) append(" • ")
+                                append(selectedSortOrder.label)
+                            }
+                        }
+                        if (activeSubtitle.isNotEmpty()) {
+                            Text(
+                                text = activeSubtitle,
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = activeBlue,
+                                lineHeight = 13.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
+                }
+
+                DropdownMenu(
+                    expanded = showFeedMenu,
+                    onDismissRequest = { showFeedMenu = false },
+                    offset = DpOffset(x = 0.dp, y = 8.dp),
+                    modifier = Modifier
+                        .width(235.dp)
+                        .shadow(
+                            elevation = 16.dp,
+                            shape = RoundedCornerShape(20.dp),
+                            ambientColor = Color.Black.copy(alpha = 0.12f),
+                            spotColor = Color.Black.copy(alpha = 0.08f)
+                        )
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(if (isDark) Color(0xFF1C1C1E) else Color.White)
+                ) {
+                    // --- SECTION 1: FEEDS ---
+                    Text(
+                        text = "FEEDS",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = textMuted,
+                        letterSpacing = 0.6.sp,
+                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 4.dp)
+                    )
+
+                    val feedTabs = listOf(
+                        CommunityFeedTab.ALL to "Latest",
+                        CommunityFeedTab.TRENDING to "Trending",
+                        CommunityFeedTab.FLASH to "Flash",
+                        CommunityFeedTab.FOLLOWING to "Following",
+                        CommunityFeedTab.SAVED to "Saved"
+                    )
+
+                    feedTabs.forEach { (tab, label) ->
+                        val isSelected = selectedFeedTab == tab
+                        CommunityHeadingDropdownRow(
+                            icon = tab.icon,
+                            label = label,
+                            badgeText = if (tab == CommunityFeedTab.SAVED && savedCount > 0) "($savedCount)" else null,
+                            isSelected = isSelected,
+                            onClick = {
+                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                                com.chroma.studio.chat.sound.SoundManager.playReaction()
+                                onSelectFeedTab(tab)
+                                showFeedMenu = false
+                            }
+                        )
+                    }
+
+                    HorizontalDivider(
+                        color = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.06f),
+                        thickness = 0.5.dp,
+                        modifier = Modifier.padding(vertical = 6.dp)
+                    )
+
+                    // --- SECTION 2: SORT BY ---
+                    Text(
+                        text = "SORT BY",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = textMuted,
+                        letterSpacing = 0.6.sp,
+                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 4.dp)
+                    )
+
+                    val sortOrders = listOf(
+                        CommunitySortOrder.LATEST to "Latest Drops",
+                        CommunitySortOrder.TOP_LIKED to "Most Liked",
+                        CommunitySortOrder.MOST_REMIXED to "Most Remixed"
+                    )
+
+                    sortOrders.forEach { (sort, sortLabel) ->
+                        val isSelected = selectedSortOrder == sort
+                        CommunityHeadingDropdownRow(
+                            icon = sort.icon,
+                            label = sortLabel,
+                            isSelected = isSelected,
+                            onClick = {
+                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                                com.chroma.studio.chat.sound.SoundManager.playReaction()
+                                onSelectSortOrder(sort)
+                                showFeedMenu = false
+                            }
+                        )
+                    }
+
+                    Spacer(Modifier.height(6.dp))
                 }
             }
 
@@ -2282,7 +2304,7 @@ fun CreatorFeedHeader(
                 label = "searchBorderColor"
             )
 
-            val searchShape = if (isSearchExpanded) RoundedCornerShape(10.dp) else CircleShape
+            val searchShape = if (isSearchExpanded) RoundedCornerShape(12.dp) else CircleShape
             Box(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
@@ -2290,7 +2312,6 @@ fun CreatorFeedHeader(
                     .height(36.dp)
                     .clip(searchShape)
                     .background(searchBgColor)
-                    .border(0.5.dp, searchBorderColor, searchShape)
             ) {
                 Row(
                     modifier = Modifier.fillMaxSize(),
@@ -2428,12 +2449,11 @@ fun PlusCreatePopoverMenu(
             .shadow(
                 elevation = 20.dp,
                 shape = RoundedCornerShape(16.dp),
-                ambientColor = Color.Black.copy(alpha = 0.22f),
-                spotColor = Color.Black.copy(alpha = 0.12f)
+                ambientColor = Color.Black.copy(alpha = 0.16f),
+                spotColor = Color.Black.copy(alpha = 0.10f)
             )
             .clip(RoundedCornerShape(16.dp))
-            .background(colors.glassBg)
-            .border(0.5.dp, colors.glassBorder, RoundedCornerShape(16.dp))
+            .background(if (colors.isDark) Color(0xFF1C1C1E) else Color.White)
     ) {
         val menuItems = listOf(
             Pair("Post", Lucide.Images),

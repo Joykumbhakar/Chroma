@@ -21,6 +21,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -436,14 +439,14 @@ fun ProfileIdentityScreen(
             Surface(
                 color = if (isDark) Color(0xFF161618).copy(alpha = 0.94f) else Color.White.copy(alpha = 0.94f),
                 shadowElevation = 8.dp,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.ime))
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .imePadding()
-                        .navigationBarsPadding()
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                        .padding(horizontal = 16.dp, vertical = 10.dp)
                 ) {
                     ChromaPillButton(
                         onClick = { handleSave() },
@@ -488,8 +491,8 @@ fun ProfileIdentityScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .imePadding()
                 .verticalScroll(rememberScrollState())
+                .imeNestedScroll()
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -1348,6 +1351,8 @@ fun ProfileIdentityScreen(
                     }
                 }
             }
+
+            Spacer(Modifier.height(36.dp))
         }
     }
 
@@ -1581,6 +1586,7 @@ data class PickerSheetConfig(
 /**
  * Authentic Apple Inset Settings Text Field Row with Inline Input
  */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun AppleSettingsTextFieldRow(
     icon: ImageVector? = null,
@@ -1599,11 +1605,14 @@ fun AppleSettingsTextFieldRow(
 ) {
     val colors = LocalOscellionColors.current
     val isDark = isSystemInDarkTheme()
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    val coroutineScope = rememberCoroutineScope()
 
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .bringIntoViewRequester(bringIntoViewRequester)
             .padding(horizontal = 16.dp, vertical = if (singleLine) 10.dp else 12.dp)
     ) {
         Row(
@@ -1678,7 +1687,15 @@ fun AppleSettingsTextFieldRow(
                             singleLine = false,
                             maxLines = maxLines,
                             cursorBrush = SolidColor(Color(0xFF0A84FF)),
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .onFocusChanged { focusState ->
+                                    if (focusState.isFocused) {
+                                        coroutineScope.launch {
+                                            bringIntoViewRequester.bringIntoView()
+                                        }
+                                    }
+                                },
                             decorationBox = { innerTextField ->
                                 if (value.isEmpty() && placeholder.isNotEmpty()) {
                                     Text(
@@ -1721,7 +1738,15 @@ fun AppleSettingsTextFieldRow(
                             singleLine = true,
                             maxLines = 1,
                             cursorBrush = SolidColor(Color(0xFF0A84FF)),
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier
+                                .weight(1f)
+                                .onFocusChanged { focusState ->
+                                    if (focusState.isFocused) {
+                                        coroutineScope.launch {
+                                            bringIntoViewRequester.bringIntoView()
+                                        }
+                                    }
+                                },
                             decorationBox = { innerTextField ->
                                 if (value.isEmpty() && placeholder.isNotEmpty()) {
                                     Text(

@@ -40,6 +40,11 @@ object OptimisticFollowManager {
         return _followerCountDeltas.value[userId] ?: 0
     }
 
+    fun reset() {
+        _followingUserIds.value = emptySet()
+        _followerCountDeltas.value = emptyMap()
+    }
+
     fun toggleFollow(
         currentUserId: String,
         targetUserId: String,

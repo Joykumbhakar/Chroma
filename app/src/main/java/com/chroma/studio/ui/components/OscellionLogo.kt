@@ -43,7 +43,8 @@ fun OscellionLogo(
 fun OscellionBrandLockup(
     modifier: Modifier = Modifier,
     iconSize: Dp = 28.dp,
-    fontSize: Dp = 20.dp
+    fontSize: Dp = 20.dp,
+    textColor: Color? = null
 ) {
     val colors = LocalOscellionColors.current
     Row(
@@ -61,7 +62,7 @@ fun OscellionBrandLockup(
                 fontSize = fontSize.value.sp,
                 fontWeight = FontWeight.Bold,
                 fontFamily = InterFontFamily,
-                color = colors.textMain,
+                color = textColor ?: colors.textMain,
                 letterSpacing = (-0.5).sp
             )
             Text(

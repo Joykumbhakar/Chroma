@@ -46,6 +46,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.StrokeCap
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -80,9 +85,12 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import com.chroma.studio.ui.components.IosAvatarView
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
@@ -110,11 +118,23 @@ import com.google.firebase.firestore.FieldValue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
-import androidx.compose.ui.text.TextStyle
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+@Suppress("DEPRECATION")
+private val ScreenTightPlatformStyle = PlatformTextStyle(includeFontPadding = false)
+
+private val ScreenLineHeightStyle = LineHeightStyle(
+    alignment = LineHeightStyle.Alignment.Center,
+    trim = LineHeightStyle.Trim.Both
+)
+
+private val ScreenTightTextStyle = TextStyle(
+    platformStyle = ScreenTightPlatformStyle,
+    lineHeightStyle = ScreenLineHeightStyle
+)
 
 private fun getProfileRoleIcon(role: String?): ImageVector {
     if (role.isNullOrBlank()) return AiWaveSphereVector
@@ -207,9 +227,10 @@ fun UserProfileScreen(
     val likedWorkIds by discoverVm.likedWorkIds.collectAsState()
     val savedWorkIds by discoverVm.savedWorkIds.collectAsState()
 
-    val currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
-    val isCurrentUser = currentUserId == userId
     val context = LocalContext.current
+    val currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+        ?: com.chroma.studio.data.SavedAccountManager.getActiveAccount(context)?.uid
+    val isCurrentUser = currentUserId == userId
     val scope = rememberCoroutineScope()
     val storyMediaPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
@@ -237,6 +258,7 @@ fun UserProfileScreen(
     var isSavedLoading by remember { mutableStateOf(false) }
     var isUploadingBanner by remember { mutableStateOf(false) }
     var isUploadingAvatar by remember { mutableStateOf(false) }
+    var isRefreshing by remember { mutableStateOf(false) }
 
     var pendingEditorUri by remember { mutableStateOf<Uri?>(null) }
     var pendingEditorTarget by remember { mutableStateOf(ProfileCropTarget.AVATAR) }
@@ -301,8 +323,12 @@ fun UserProfileScreen(
             }
         }
 
-        discoverVm.repository.getUserProfileFlow(userId).collect { newProfile ->
-            profile = newProfile
+        try {
+            discoverVm.repository.getUserProfileFlow(userId).collect { newProfile ->
+                profile = newProfile
+                isLoading = false
+            }
+        } catch (_: Exception) {
             isLoading = false
         }
     }
@@ -310,8 +336,61 @@ fun UserProfileScreen(
     val isRestricted = profile?.isPrivateAccount == true && !isCurrentUser && !isFollowingEffective
 
     if (isLoading) {
-        SkeletonUserProfile(onBack = { if (showBackButton) onBack() })
+        SkeletonUserProfile(showBackButton = showBackButton, onBack = onBack)
         return
+    }
+
+    if (profile == null) {
+        UserProfileErrorState(
+            showBackButton = showBackButton,
+            onBack = onBack,
+            onRetry = {
+                isLoading = true
+                scope.launch {
+                    try {
+                        discoverVm.repository.getUserProfileFlow(userId).collect { newProfile ->
+                            profile = newProfile
+                            isLoading = false
+                        }
+                    } catch (_: Exception) {
+                        isLoading = false
+                    }
+                }
+            }
+        )
+        return
+    }
+
+    val refreshProfile: () -> Unit = {
+        scope.launch {
+            isRefreshing = true
+            launch {
+                isWorksLoading = true
+                works = discoverVm.repository.getWorksByUser(userId)
+                isWorksLoading = false
+            }
+            launch {
+                isFlashesLoading = true
+                val flashRepo = com.chroma.studio.data.FlashRepository()
+                userFlashes = flashRepo.getFlashesByUser(userId)
+                isFlashesLoading = false
+            }
+            launch {
+                storyVm.loadUserStories(userId)
+            }
+            if (isCurrentUser && currentUserId != null) {
+                launch {
+                    isSavedLoading = true
+                    try {
+                        savedWorks = discoverVm.repository.getSavedWorks(currentUserId)
+                    } catch (_: Exception) {}
+                    isSavedLoading = false
+                }
+            }
+            delay(650)
+            isRefreshing = false
+            ToastManager.showToast("Profile refreshed")
+        }
     }
 
     var isBioExpanded by remember { mutableStateOf(false) }
@@ -726,7 +805,7 @@ fun UserProfileScreen(
                 if (scrollProgress > 0.08f) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy((-1).dp),
+                        verticalArrangement = Arrangement.spacedBy(0.5.dp),
                         modifier = Modifier.graphicsLayer {
                             alpha = ((scrollProgress - 0.2f) / 0.8f).coerceIn(0f, 1f)
                             translationY = (1f - scrollProgress) * 8f
@@ -738,18 +817,20 @@ fun UserProfileScreen(
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 15.5.sp,
                             fontFamily = InterFontFamily,
-                            lineHeight = 18.sp,
+                            lineHeight = 17.5.sp,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
+                            style = ScreenTightTextStyle
                         )
                         Text(
                             text = "@${profile?.username ?: ""}",
                             color = if (isSysDark) Color(0xFF94A3B8) else Color(0xFF64748B),
                             fontSize = 11.5.sp,
                             fontFamily = InterFontFamily,
-                            lineHeight = 14.sp,
+                            lineHeight = 13.5.sp,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
+                            style = ScreenTightTextStyle
                         )
                     }
                 }
@@ -855,6 +936,27 @@ fun UserProfileScreen(
                     }
                 }
             }
+        }
+    }
+
+    // Floating Wheel Spinner for Pull-To-Refresh / Syncing State
+    androidx.compose.animation.AnimatedVisibility(
+        visible = isRefreshing,
+        enter = fadeIn() + expandVertically(),
+        exit = fadeOut() + shrinkVertically(),
+        modifier = Modifier
+            .align(Alignment.TopCenter)
+            .statusBarsPadding()
+            .padding(top = 52.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .shadow(elevation = 6.dp, shape = CircleShape)
+                .clip(CircleShape)
+                .background(if (colors.isDark) Color(0xFF1E222A) else Color.White)
+                .padding(8.dp)
+        ) {
+            OscellionWheelSpinner(size = 20.dp, strokeWidth = 2.2.dp, color = Color(0xFF0A84FF))
         }
     }
 
@@ -1976,7 +2078,8 @@ private fun UserProfileModalsAndSheets(
                                             val uid = currentUserId ?: return@clickable
                                             scope.launch {
                                                 try {
-                                                    com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users").document(uid).update("bannerUrl", preset.id).await()
+                                                    com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users").document(uid).set(mapOf("bannerUrl" to preset.id), com.google.firebase.firestore.SetOptions.merge()).await()
+                                                    com.chroma.studio.data.DiscoverRepository.getInstance().invalidateProfile(uid)
                                                     onBannerUrlUpdated(preset.id)
                                                     ToastManager.showToast("Banner set to ${preset.name}")
                                                 } catch (e: Exception) {
@@ -2314,10 +2417,25 @@ fun AppleEmptyTabState(
                 Icon(icon, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(36.dp))
             }
         }
-        Spacer(Modifier.height(16.dp))
-        Text(title, color = colors.textMain, fontSize = 18.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-        Spacer(Modifier.height(6.dp))
-        Text(subtitle, color = colors.textMuted, fontSize = 13.sp, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(14.dp))
+        Text(
+            text = title,
+            color = colors.textMain,
+            fontSize = 17.5.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            lineHeight = 21.sp,
+            style = ScreenTightTextStyle
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = subtitle,
+            color = colors.textMuted,
+            fontSize = 13.sp,
+            textAlign = TextAlign.Center,
+            lineHeight = 17.sp,
+            style = ScreenTightTextStyle
+        )
     }
 }
 
@@ -2484,11 +2602,20 @@ fun ProfileWorkCard(
             AsyncImage(
                 model = work.imageUrl,
                 contentDescription = work.title,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RectangleShape),
                 contentScale = ContentScale.Crop
             )
         } else if (layers != null) {
-            CanvasPreview(layers = layers!!, shape = "full", borderColor = Color.Transparent)
+            CanvasPreview(
+                layers = layers!!,
+                shape = "full",
+                borderColor = Color.Transparent,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RectangleShape)
+            )
         }
 
         if (work.likesCount > 0) {
@@ -2529,65 +2656,522 @@ fun ProfileWorkCard(
     }
 }
 
+/**
+ * Sleek Apple / Material 3 style smooth rotating wheel progress spinner
+ */
 @Composable
-fun SkeletonUserProfile(onBack: () -> Unit) {
+fun OscellionWheelSpinner(
+    modifier: Modifier = Modifier,
+    size: Dp = 26.dp,
+    strokeWidth: Dp = 2.5.dp,
+    color: Color = Color(0xFF0A84FF),
+    trackColor: Color = color.copy(alpha = 0.15f)
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "wheelSpinner")
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(850, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "spinnerRotation"
+    )
+
+    CircularProgressIndicator(
+        modifier = modifier
+            .size(size)
+            .rotate(rotation),
+        color = color,
+        strokeWidth = strokeWidth,
+        trackColor = trackColor,
+        strokeCap = StrokeCap.Round
+    )
+}
+
+/**
+ * Centered sub-tab loading state with wheel spinner
+ */
+@Composable
+fun ProfileTabLoadingState(
+    message: String = "Loading creations...",
+    modifier: Modifier = Modifier
+) {
     val colors = LocalOscellionColors.current
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 44.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            OscellionWheelSpinner(size = 28.dp, strokeWidth = 2.5.dp, color = Color(0xFF0A84FF))
+            Text(
+                text = message,
+                color = colors.textMuted,
+                fontSize = 12.5.sp,
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
+
+/**
+ * Modern Error State when Profile fails to load or offline
+ */
+@Composable
+fun UserProfileErrorState(
+    showBackButton: Boolean = false,
+    onBack: () -> Unit = {},
+    onRetry: () -> Unit = {}
+) {
+    val colors = LocalOscellionColors.current
+    val isDark = colors.isDark
+
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {},
-                navigationIcon = {
-                    GlassIconButton(onClick = onBack) {
-                        Icon(Lucide.ChevronLeft, contentDescription = "Back", tint = colors.textMain)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (showBackButton) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(if (isDark) Color(0xFF1E222A) else Color(0xFFEFF2F6))
+                            .clickable(onClick = onBack),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Lucide.ChevronLeft,
+                            contentDescription = "Back",
+                            tint = colors.textMain,
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
-            )
+                }
+            }
         },
         containerColor = colors.bg
     ) { innerPadding ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .padding(horizontal = 32.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(68.dp)
+                        .clip(CircleShape)
+                        .background(if (isDark) Color(0xFF1E222A) else Color(0xFFEFF4F9)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Lucide.WifiOff,
+                        contentDescription = null,
+                        tint = colors.textMuted,
+                        modifier = Modifier.size(30.dp)
+                    )
+                }
+
+                Text(
+                    text = "Profile Unavailable",
+                    color = colors.textMain,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    lineHeight = 22.sp,
+                    style = ScreenTightTextStyle
+                )
+
+                Text(
+                    text = "We couldn't load this profile. Please check your network connection and try again.",
+                    color = colors.textMuted,
+                    fontSize = 13.5.sp,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 18.sp,
+                    style = ScreenTightTextStyle
+                )
+
+                Spacer(Modifier.height(4.dp))
+
+                val retryInteraction = remember { MutableInteractionSource() }
+                val isRetryPressed by retryInteraction.collectIsPressedAsState()
+                val retryScale by animateFloatAsState(
+                    targetValue = if (isRetryPressed) 0.95f else 1f,
+                    label = "retryScale"
+                )
+
+                Box(
+                    modifier = Modifier
+                        .scale(retryScale)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF0A84FF))
+                        .clickable(
+                            interactionSource = retryInteraction,
+                            indication = null,
+                            onClick = onRetry
+                        )
+                        .padding(horizontal = 24.dp, vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Try Again",
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Photorealistic Full Skeleton Screen mirroring our exact Profile Layout
+ */
+@Composable
+fun SkeletonUserProfile(
+    showBackButton: Boolean = false,
+    onBack: () -> Unit = {}
+) {
+    val colors = LocalOscellionColors.current
+    val isDark = colors.isDark
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(colors.bg)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
                 .verticalScroll(rememberScrollState())
         ) {
+            // 1. Cinematic Banner Skeleton (height 145dp)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(200.dp)
+                    .height(145.dp)
+                    .shimmerEffect()
+            )
+
+            // 2. Overlapping Avatar & Stats Card Row
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .offset(y = (-45).dp)
             ) {
-                SkeletonBanner()
                 Row(
-                    modifier = Modifier.padding(top = 118.dp, start = 16.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Box(contentAlignment = Alignment.BottomEnd) {
-                        Box(
-                            modifier = Modifier
-                                .size(84.dp)
-                                .clip(CircleShape)
-                                .background(colors.bg)
-                                .border(4.dp, colors.bg, CircleShape),
-                            contentAlignment = Alignment.Center
+                    // Avatar Skeleton (86dp circle with theme background separation mask)
+                    Box(
+                        modifier = Modifier
+                            .size(86.dp)
+                            .clip(CircleShape)
+                            .background(colors.bg)
+                            .padding(3.dp)
+                            .clip(CircleShape)
+                            .shimmerEffect()
+                    )
+
+                    // Stats Card Skeleton (elevated card matching our layout)
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(start = 14.dp)
+                            .height(68.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(if (isDark) Color(0xFF14171E).copy(alpha = 0.78f) else Color.White.copy(alpha = 0.90f))
+                            .padding(horizontal = 8.dp, vertical = 10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Box(modifier = Modifier.size(84.dp).clip(CircleShape).shimmerEffect())
+                            repeat(3) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(5.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .width(28.dp)
+                                            .height(16.dp)
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .shimmerEffect()
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .width(42.dp)
+                                            .height(11.dp)
+                                            .clip(RoundedCornerShape(3.dp))
+                                            .shimmerEffect()
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.End) {
-                Box(modifier = Modifier.height(36.dp).width(100.dp).clip(RoundedCornerShape(18.dp)).shimmerEffect())
+
+            // 3. Details Section Skeleton
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .offset(y = (-37).dp)
+                    .padding(horizontal = 16.dp)
+            ) {
+                // Name & @username row with QR pass button placeholder
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Box(
+                            modifier = Modifier
+                                .width(150.dp)
+                                .height(20.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .shimmerEffect()
+                        )
+                        Box(
+                            modifier = Modifier
+                                .width(95.dp)
+                                .height(13.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .shimmerEffect()
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(CircleShape)
+                            .shimmerEffect()
+                    )
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                // Metadata Pills Skeleton (Role, Location, Year)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .width(86.dp)
+                            .height(26.dp)
+                            .clip(RoundedCornerShape(999.dp))
+                            .shimmerEffect()
+                    )
+                    Box(
+                        modifier = Modifier
+                            .width(115.dp)
+                            .height(26.dp)
+                            .clip(RoundedCornerShape(999.dp))
+                            .shimmerEffect()
+                    )
+                    Box(
+                        modifier = Modifier
+                            .width(76.dp)
+                            .height(26.dp)
+                            .clip(RoundedCornerShape(999.dp))
+                            .shimmerEffect()
+                    )
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                // Website Link Pill Skeleton
+                Box(
+                    modifier = Modifier
+                        .width(165.dp)
+                        .height(26.dp)
+                        .clip(RoundedCornerShape(999.dp))
+                        .shimmerEffect()
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                // Status Line Skeleton
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .shimmerEffect()
+                    )
+                    Box(
+                        modifier = Modifier
+                            .width(190.dp)
+                            .height(13.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .shimmerEffect()
+                    )
+                }
+
+                Spacer(Modifier.height(14.dp))
+
+                // Action Buttons Skeleton (Edit Profile, Share Card)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(38.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .shimmerEffect()
+                    )
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(38.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .shimmerEffect()
+                    )
+                }
+
+                Spacer(Modifier.height(14.dp))
+
+                // Highlights / Stories Skeleton (5 circles with label lines)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    repeat(5) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(54.dp)
+                                    .clip(CircleShape)
+                                    .shimmerEffect()
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .width(36.dp)
+                                    .height(10.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .shimmerEffect()
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                // Tab Switcher Skeleton
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp),
+                    horizontalArrangement = Arrangement.SpaceAround,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    repeat(5) {
+                        Box(
+                            modifier = Modifier
+                                .size(22.dp)
+                                .clip(RoundedCornerShape(5.dp))
+                                .shimmerEffect()
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(4.dp))
+
+                // Grid / Content Items Skeleton (3x3 grid of square tiles)
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    repeat(3) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            repeat(3) {
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .aspectRatio(1f)
+                                        .clip(RectangleShape)
+                                        .shimmerEffect()
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(100.dp))
             }
-            Spacer(modifier = Modifier.height(16.dp))
-            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                Box(modifier = Modifier.height(24.dp).width(150.dp).shimmerEffect())
-                Spacer(modifier = Modifier.height(4.dp))
-                Box(modifier = Modifier.height(16.dp).width(100.dp).shimmerEffect())
-                Spacer(modifier = Modifier.height(12.dp))
-                Box(modifier = Modifier.height(16.dp).width(250.dp).shimmerEffect())
-                Spacer(modifier = Modifier.height(4.dp))
-                Box(modifier = Modifier.height(16.dp).width(200.dp).shimmerEffect())
+        }
+
+        // Top Header Bar Skeleton (overlay on top of banner)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (showBackButton) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.22f))
+                        .clickable(onClick = onBack),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Lucide.ChevronLeft,
+                        contentDescription = "Back",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            } else {
+                Spacer(Modifier.size(36.dp))
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.22f))
+                )
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.22f))
+                )
             }
         }
     }
@@ -2606,25 +3190,33 @@ fun SkeletonWorkCard() {
 fun Modifier.shimmerEffect(): Modifier = composed {
     var size by remember { mutableStateOf(IntSize.Zero) }
     val transition = rememberInfiniteTransition(label = "shimmer")
+    val colors = LocalOscellionColors.current
+    val isDark = colors.isDark
+
+    val widthPx = if (size.width > 0) size.width.toFloat() else 1000f
+
     val startOffsetX by transition.animateFloat(
-        initialValue = -2 * size.width.toFloat(),
-        targetValue = 2 * size.width.toFloat(),
+        initialValue = -widthPx * 1.5f,
+        targetValue = widthPx * 1.5f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1000)
+            animation = tween(durationMillis = 1300, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
         ),
         label = "shimmer_anim"
     )
-    val colors = LocalOscellionColors.current
+
+    val baseColor = if (isDark) Color(0xFF1E222A) else Color(0xFFE8EDF3)
+    val highlightColor = if (isDark) Color(0xFF2C323E) else Color(0xFFF7F9FC)
 
     background(
         brush = Brush.linearGradient(
             colors = listOf(
-                colors.glassBgHover.copy(alpha = 0.2f),
-                colors.glassBgHover.copy(alpha = 0.6f),
-                colors.glassBgHover.copy(alpha = 0.2f),
+                baseColor,
+                highlightColor,
+                baseColor
             ),
             start = Offset(startOffsetX, 0f),
-            end = Offset(startOffsetX + size.width.toFloat(), size.height.toFloat())
+            end = Offset(startOffsetX + widthPx * 0.75f, if (size.height > 0) size.height.toFloat() else 300f)
         )
     ).onGloballyPositioned { size = it.size }
 }

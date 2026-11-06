@@ -18,6 +18,9 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.animation.core.*
+import androidx.compose.ui.draw.scale
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -629,17 +632,37 @@ fun OscellionApp(vm: ChromaViewModel, workName: String, repository: com.chroma.s
 @Composable
 private fun ShapePill(label: String, active: Boolean, onClick: () -> Unit) {
     val colors = LocalOscellionColors.current
-    val shape = remember { RoundedCornerShape(50) }
+    val shape = remember { RoundedCornerShape(999.dp) }
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.94f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "pillScale"
+    )
+
     Text(
         text = label,
-        fontSize = 11.sp,
-        fontWeight = FontWeight.SemiBold,
-        color = if (active) colors.onPrimary else colors.textMuted,
+        fontSize = 12.sp,
+        fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
+        color = if (active) Color.White else colors.textMuted,
         modifier = Modifier
+            .scale(scale)
             .clip(shape)
-            .background(if (active) colors.primary else colors.glassBg, shape)
-            .clickable(indication = null, interactionSource = androidx.compose.runtime.remember { MutableInteractionSource() }) { onClick() }
-            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .background(
+                if (active) Color(0xFF0062FF)
+                else if (colors.isDark) Color(0xFF1E222A)
+                else Color(0xFFF1F4F8),
+                shape
+            )
+            .clickable(
+                indication = null,
+                interactionSource = interactionSource
+            ) { 
+                com.chroma.studio.chat.sound.SoundManager.playReaction()
+                onClick() 
+            }
+            .padding(horizontal = 16.dp, vertical = 7.dp)
     )
 }
 

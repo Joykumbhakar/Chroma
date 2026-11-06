@@ -423,7 +423,15 @@ fun PostVideoSlideView(
         }
     }
 
-    // Lifecycle observer: pause on background
+    // Player release lifecycle
+    DisposableEffect(player) {
+        onDispose {
+            player.stop()
+            player.release()
+        }
+    }
+
+    // Lifecycle observer: pause on background without prematurely destroying player
     DisposableEffect(lifecycleOwner, player) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_PAUSE || event == Lifecycle.Event.ON_STOP) {
@@ -434,8 +442,6 @@ fun PostVideoSlideView(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
-            player.stop()
-            player.release()
         }
     }
 

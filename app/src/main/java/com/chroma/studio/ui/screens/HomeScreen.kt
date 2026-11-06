@@ -85,7 +85,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 
 import androidx.compose.ui.draw.clip
-
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 
 import androidx.compose.ui.draw.scale
@@ -1124,324 +1124,259 @@ fun HomeScreen(
                         .clipToBounds()
                         .background(
                             if (topBarBackdropAlpha > 0.01f) {
-                                if (colors.isDark) Color(0xFF000000).copy(alpha = 0.88f * topBarBackdropAlpha)
-                                else Color(0xFF0A1128).copy(alpha = 0.88f * topBarBackdropAlpha)
+                                if (colors.isDark) Color(0xFF000000).copy(alpha = 0.92f * topBarBackdropAlpha)
+                                else Color(0xFF0A1128).copy(alpha = 0.92f * topBarBackdropAlpha)
                             } else {
                                 Color.Transparent
                             }
                         )
+                        .drawBehind {
+                            if (topBarBackdropAlpha > 0.1f) {
+                                val stroke = 0.5.dp.toPx()
+                                drawLine(
+                                    color = Color.White.copy(alpha = 0.10f * topBarBackdropAlpha),
+                                    start = Offset(0f, size.height - stroke / 2f),
+                                    end = Offset(size.width, size.height - stroke / 2f),
+                                    strokeWidth = stroke
+                                )
+                            }
+                        }
                         .padding(
                             start = 20.dp,
                             end = 20.dp,
-                            top = if (showHeader) 16.dp else 12.dp,
+                            top = if (showHeader) (16.dp - (4.dp * collapseProgress)).coerceAtLeast(12.dp) else 12.dp,
                             bottom = if (showHeader) currentBottomPadding else 12.dp
                         )
                 ) {
 
-                    
-
                     val heroTextColor = Color.White
-
                     val heroMutedColor = Color.White.copy(alpha = 0.9f)
-
-                    val heroIconBg = Color.White.copy(alpha = 0.15f)
-
+                    val heroIconBg = Color.White.copy(alpha = 0.16f)
                     val heroIconBorder = Color.White.copy(alpha = 0.4f)
 
-
-
                     // Top Bar with Animated Search
-
                     if (showHeader) {
-
                     Row(
-
                         modifier = Modifier.fillMaxWidth().height(48.dp),
-
                         horizontalArrangement = Arrangement.SpaceBetween,
-
                         verticalAlignment = Alignment.CenterVertically
-
                     ) {
-
                         // Left side: Menu -> Oscellion Brand
-
                         AnimatedVisibility(
-
                             visible = !searchActive,
-
                             enter = fadeIn() + expandHorizontally(),
-
                             exit = fadeOut() + shrinkHorizontally()
-
                         ) {
-
                             Row(
-
                                 verticalAlignment = Alignment.CenterVertically,
-
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
-
                             ) {
-
-                                Icon(
-
-                                    Lucide.Menu,
-
-                                    contentDescription = "Menu",
-
-                                    tint = heroTextColor.copy(alpha = 0.9f),
-
-                                    modifier = Modifier
-
-                                        .size(28.dp)
-
-                                        .clickable { scope.launch { drawerState.open() } }
-
-                                        .padding(end = 4.dp)
-
+                                val menuInteraction = remember { MutableInteractionSource() }
+                                val isMenuPressed by menuInteraction.collectIsPressedAsState()
+                                val menuScale by animateFloatAsState(
+                                    targetValue = if (isMenuPressed) 0.92f else 1f,
+                                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                                    label = "menuScale"
                                 )
-
-                                OscellionBrandLockup(
-
-                                    iconSize = 22.dp,
-
-                                    fontSize = 18.dp
-
-                                )
-
-                            }
-
-                        }
-
-                        
-
-                        // Right side: ViewMode + Search
-
-                        Row(
-
-                            verticalAlignment = Alignment.CenterVertically,
-
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-
-                            modifier = Modifier
-
-                                .animateContentSize()
-
-                                .then(if (searchActive) Modifier.fillMaxWidth() else Modifier.wrapContentWidth())
-
-                        ) {
-
-                            if (!searchActive) {
-
                                 Box(
-
                                     modifier = Modifier
-
                                         .size(36.dp)
-
-                                        .clickable { 
-
-                                            importWorkLauncher.launch(arrayOf("application/json", "*/*"))
-
-                                        },
-
+                                        .scale(menuScale)
+                                        .clip(CircleShape)
+                                        .background(heroIconBg)
+                                        .clickable(
+                                            interactionSource = menuInteraction,
+                                            indication = null
+                                        ) { scope.launch { drawerState.open() } },
                                     contentAlignment = Alignment.Center
-
                                 ) {
-
-                                    Icon(Lucide.Upload, "Import JSON File", tint = heroTextColor, modifier = Modifier.size(16.dp))
-
+                                    Icon(
+                                        Lucide.Menu,
+                                        contentDescription = "Menu",
+                                        tint = heroTextColor,
+                                        modifier = Modifier.size(19.dp)
+                                    )
                                 }
 
-                                
+                                OscellionBrandLockup(
+                                    iconSize = 22.dp,
+                                    fontSize = 18.dp,
+                                    textColor = heroTextColor
+                                )
+                            }
+                        }
+
+                        // Right side: ViewMode + Search
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier
+                                .animateContentSize()
+                                .then(if (searchActive) Modifier.fillMaxWidth() else Modifier.wrapContentWidth())
+                        ) {
+                            if (!searchActive) {
+                                val importInteraction = remember { MutableInteractionSource() }
+                                val isImportPressed by importInteraction.collectIsPressedAsState()
+                                val importScale by animateFloatAsState(
+                                    targetValue = if (isImportPressed) 0.92f else 1f,
+                                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                                    label = "importScale"
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .scale(importScale)
+                                        .clip(CircleShape)
+                                        .background(heroIconBg)
+                                        .clickable(
+                                            interactionSource = importInteraction,
+                                            indication = null
+                                        ) { 
+                                            importWorkLauncher.launch(arrayOf("application/json", "*/*"))
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Lucide.Upload, "Import JSON File", tint = heroTextColor, modifier = Modifier.size(16.dp))
+                                }
 
                                 val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
-
+                                val pasteInteraction = remember { MutableInteractionSource() }
+                                val isPastePressed by pasteInteraction.collectIsPressedAsState()
+                                val pasteScale by animateFloatAsState(
+                                    targetValue = if (isPastePressed) 0.92f else 1f,
+                                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                                    label = "pasteScale"
+                                )
                                 Box(
-
                                     modifier = Modifier
-
                                         .size(36.dp)
-
-                                        .clickable { 
-
+                                        .scale(pasteScale)
+                                        .clip(CircleShape)
+                                        .background(heroIconBg)
+                                        .clickable(
+                                            interactionSource = pasteInteraction,
+                                            indication = null
+                                        ) { 
                                             val clipboardText = clipboardManager.getText()?.text
-
                                             if (clipboardText.isNullOrBlank()) {
-
                                                 com.chroma.studio.ui.components.ToastManager.showToast("Clipboard is empty")
-
                                             } else {
-
                                                 try {
-
                                                     val importedWork = gson.fromJson(clipboardText, com.chroma.studio.model.ChromaWork::class.java)
-
                                                     if (importedWork != null && importedWork.layersJson.isNotEmpty()) {
-
                                                         val newWork = importedWork.copy(
-
                                                             id = java.util.UUID.randomUUID().toString(),
-
                                                             name = importedWork.name + " (Pasted)",
-
                                                             createdAt = System.currentTimeMillis(),
-
                                                             lastModifiedAt = System.currentTimeMillis()
-
                                                         )
-
                                                         repository.save(newWork)
-
                                                         com.chroma.studio.ui.components.ToastManager.showToast("Pasted JSON successfully")
-
                                                     } else {
-
                                                         com.chroma.studio.ui.components.ToastManager.showToast("Invalid Oscellion JSON format")
-
                                                     }
-
                                                 } catch (e: Exception) {
-
                                                     com.chroma.studio.ui.components.ToastManager.showToast("Failed to parse JSON")
-
                                                 }
-
                                             }
-
                                         },
-
                                     contentAlignment = Alignment.Center
-
                                 ) {
-
                                     Icon(Lucide.ClipboardPaste, "Paste JSON", tint = heroTextColor, modifier = Modifier.size(16.dp))
-
                                 }
 
                                 val haptic = LocalHapticFeedback.current
-
+                                val viewModeInteraction = remember { MutableInteractionSource() }
+                                val isViewModePressed by viewModeInteraction.collectIsPressedAsState()
+                                val viewModeScale by animateFloatAsState(
+                                    targetValue = if (isViewModePressed) 0.92f else 1f,
+                                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                                    label = "viewModeScale"
+                                )
                                 Box(
-
                                     modifier = Modifier
-
                                         .size(36.dp)
-
+                                        .scale(viewModeScale)
+                                        .clip(CircleShape)
+                                        .background(heroIconBg)
                                         .combinedClickable(
-
+                                            interactionSource = viewModeInteraction,
+                                            indication = null,
                                             onClick = { 
-
                                                 viewMode = viewMode.next()
-
                                                 onViewModeChanged(viewMode)
-
                                             },
-
                                             onLongClick = {
-
                                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-
                                                 showViewModeSheet = true
-
                                             }
-
                                         ),
-
                                     contentAlignment = Alignment.Center
-
                                 ) {
-
                                     Icon(viewMode.icon, "View Mode: ${viewMode.title}", tint = heroTextColor, modifier = Modifier.size(16.dp))
-
                                 }
-
                             }
-
-                            
 
                             if (searchActive) {
-
                                 androidx.compose.foundation.text.BasicTextField(
-
                                     value = searchQuery,
-
                                     onValueChange = { searchQuery = it },
-
                                     textStyle = androidx.compose.ui.text.TextStyle(color = heroTextColor, fontSize = 16.sp),
-
                                     cursorBrush = androidx.compose.ui.graphics.SolidColor(heroTextColor),
-
                                     singleLine = true,
-
                                     modifier = Modifier
-
                                         .fillMaxWidth()
-
                                         .clip(CircleShape)
-
                                         .background(heroIconBg)
-
                                         .padding(horizontal = 16.dp, vertical = 8.dp),
-
                                     decorationBox = { innerTextField ->
-
                                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-
                                             Icon(Lucide.Search, null, tint = heroTextColor, modifier = Modifier.size(18.dp))
-
                                             Box(modifier = Modifier.weight(1f)) {
-
                                                 if (searchQuery.isEmpty()) {
-
                                                     Text("Search works...", color = heroMutedColor, fontSize = 14.sp)
-
                                                 }
-
                                                 innerTextField()
-
                                             }
-
-                                            Icon(Lucide.X, null, tint = heroTextColor, modifier = Modifier.size(18.dp).clickable { 
-
-                                                if (searchQuery.isEmpty()) searchActive = false else searchQuery = "" 
-
-                                            })
-
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(28.dp)
+                                                    .clip(CircleShape)
+                                                    .clickable { 
+                                                        if (searchQuery.isEmpty()) searchActive = false else searchQuery = "" 
+                                                    },
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(Lucide.X, "Clear or close search", tint = heroTextColor, modifier = Modifier.size(16.dp))
+                                            }
                                         }
-
                                     }
-
                                 )
-
                             } else {
-
+                                val searchInteraction = remember { MutableInteractionSource() }
+                                val isSearchPressed by searchInteraction.collectIsPressedAsState()
+                                val searchScale by animateFloatAsState(
+                                    targetValue = if (isSearchPressed) 0.92f else 1f,
+                                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                                    label = "searchScale"
+                                )
                                 Box(
-
                                     modifier = Modifier
-
                                         .size(36.dp)
-
+                                        .scale(searchScale)
                                         .clip(CircleShape)
-
                                         .background(heroIconBg)
-
-                                        .clickable { searchActive = true },
-
+                                        .clickable(
+                                            interactionSource = searchInteraction,
+                                            indication = null
+                                        ) { searchActive = true },
                                     contentAlignment = Alignment.Center
-
                                 ) {
-
                                     Icon(Lucide.Search, "Search", tint = heroTextColor, modifier = Modifier.size(18.dp))
-
                                 }
-
                             }
-
                         }
-
                     }
-
                     }
 
 

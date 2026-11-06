@@ -224,11 +224,19 @@ private fun AuthenticatedRoute(
 
                 val isMain = currentRoute == "main"
                 val pagerState = androidx.compose.foundation.pager.rememberPagerState(initialPage = 0, pageCount = { 5 })
+                val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+                var loadedTabs by remember { mutableStateOf(setOf(0)) }
 
                 val handleLogout: () -> Unit = {
                     // Optimistic instant UI transition directly to Login screen (never blank)
                     prefs.edit().putBoolean("is_first_launch", true).apply()
                     com.chroma.studio.data.SavedAccountManager.clearAllAccounts(this@HomeActivity)
+                    com.chroma.studio.data.DiscoverRepository.getInstance().clearProfileCache()
+                    com.chroma.studio.data.mutation.OptimisticFollowManager.reset()
+                    coroutineScope.launch {
+                        pagerState.scrollToPage(0)
+                    }
+                    loadedTabs = setOf(0)
                     navController.navigate("login") {
                         popUpTo(0) { inclusive = true }
                         launchSingleTop = true
@@ -313,14 +321,7 @@ private fun AuthenticatedRoute(
                     (currentRoute == "user_list" && !isRouteHidingBottomNav)
                 ) && !isRouteHidingBottomNav && !isBottomOptionsVisible
                 val chatVm = androidx.lifecycle.viewmodel.compose.viewModel<com.chroma.studio.viewmodel.ChatViewModel>()
-                val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
-
                 val hazeState = remember { dev.chrisbanes.haze.HazeState() }
-
-                // ── Lazy Loading & High-Refresh Tab Switching ────────────────────────────
-                var loadedTabs by remember {
-                    mutableStateOf(setOf(0))
-                }
 
                 // Dynamically mark pages as loaded when currentPage, targetPage, or swipe gestures touch them
                 androidx.compose.runtime.LaunchedEffect(pagerState.currentPage, pagerState.targetPage, pagerState.currentPageOffsetFraction) {
@@ -588,13 +589,16 @@ private fun AuthenticatedRoute(
                 var showOldHomeSheet by remember { mutableStateOf(false) }
 
                 // ── In-App Dynamic Island Notification HUD ──────────────────
-                val currentAuthUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+                val currentAuthUidState = com.chroma.studio.ChatStateManager.currentUserId.collectAsState()
+                val currentAuthUid = currentAuthUidState.value
+                val activeUidKey = currentAuthUid
 
-                LaunchedEffect(currentAuthUid) {
-                    if (currentAuthUid != null) {
+                LaunchedEffect(activeUidKey) {
+                    val uidToListen = activeUidKey
+                    if (uidToListen != null) {
                         var isInitialSnapshot = true
                         val registration = com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("chats")
-                            .whereArrayContains("participants", currentAuthUid)
+                            .whereArrayContains("participants", uidToListen)
                             .addSnapshotListener { snapshot, _ ->
                                 if (isInitialSnapshot) {
                                     isInitialSnapshot = false
@@ -605,7 +609,7 @@ private fun AuthenticatedRoute(
                                         change.type == com.google.firebase.firestore.DocumentChange.Type.ADDED
                                     ) {
                                         val room = change.document.toObject(com.chroma.studio.model.ChatRoom::class.java)
-                                        val unread = room.unreadCount[currentAuthUid] ?: 0
+                                        val unread = room.unreadCount[activeUidKey] ?: 0
                                         if (unread > 0 && room.lastMessage.isNotBlank()) {
                                             val currentBackStack = navController.currentBackStackEntry
                                             val currentRoute = currentBackStack?.destination?.route
@@ -618,7 +622,7 @@ private fun AuthenticatedRoute(
                                                 (chatVm.activeRoomId.value == room.id || com.chroma.studio.ui.components.DynamicIslandManager.currentlyActiveRoomId == room.id)
                                             val isUserViewingThisRoom = isViewingInChatRoute || isViewingInChatTab || (com.chroma.studio.ui.components.DynamicIslandManager.currentlyActiveRoomId == room.id)
 
-                                            if (!isUserViewingThisRoom && room.lastSender != currentAuthUid) {
+                                            if (!isUserViewingThisRoom && room.lastSender != activeUidKey) {
                                                 val senderId: String? = room.lastSender
                                                 val senderProfile: com.chroma.studio.model.UserProfile? = if (senderId != null) chatVm.getUserProfile(senderId) else null
                                                 val senderName = senderProfile?.displayName?.ifBlank { null } ?: if (room.isGroup) (room.name ?: "Group") else "New Message"
@@ -977,6 +981,10 @@ private fun AuthenticatedRoute(
                                     prefs.edit().putBoolean("has_accepted_terms", true).apply()
                                     prefs.edit().putBoolean("has_completed_post_onboarding", true).apply()
                                     Toast.makeText(this@HomeActivity, "Welcome to Chroma Studio", Toast.LENGTH_SHORT).show()
+                                    coroutineScope.launch {
+                                        pagerState.scrollToPage(0)
+                                    }
+                                    loadedTabs = setOf(0)
                                     navController.navigate("main") {
                                         popUpTo("login") { inclusive = true }
                                     }
@@ -1274,7 +1282,7 @@ private fun AuthenticatedRoute(
                                     val isGuest = com.chroma.studio.data.SavedAccountManager.isGuest(this@HomeActivity)
                                     val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
                                     val activeSaved = com.chroma.studio.data.SavedAccountManager.getActiveAccount(this@HomeActivity)
-                                    val activeUid = auth.currentUser?.uid ?: activeSaved?.uid
+                                    val activeUid = activeUidKey ?: auth.currentUser?.uid ?: activeSaved?.uid
                                     if (isGuest || activeUid == null || com.chroma.studio.data.SavedAccountManager.isGuestUid(activeUid)) {
                                         com.chroma.studio.ui.screens.GuestProfilePlaceholderScreen(
                                             onSignInClick = { navController.navigate("login") },
@@ -1667,9 +1675,11 @@ private fun AuthenticatedRoute(
                                         profile = profile!!,
                                         works = works,
                                         onSave = { updatedProfile ->
-                                            discoverVm.updateUserProfile(updatedProfile)
-                                            com.chroma.studio.data.SavedAccountManager.saveFromProfile(this@HomeActivity, updatedProfile)
-                                            Result.success(Unit)
+                                            val res = discoverVm.updateUserProfile(updatedProfile)
+                                            if (res.isSuccess) {
+                                                com.chroma.studio.data.SavedAccountManager.saveFromProfile(this@HomeActivity, updatedProfile)
+                                            }
+                                            res
                                         },
                                         onBack = { navController.popBackStack() }
                                     )

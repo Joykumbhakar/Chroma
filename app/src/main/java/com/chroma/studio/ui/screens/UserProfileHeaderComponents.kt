@@ -2,12 +2,14 @@ package com.chroma.studio.ui.screens
 
 import com.chroma.studio.ui.components.UserProfileStatusSection
 import com.chroma.studio.ui.components.UserProfileHighlightsSection
+import com.chroma.studio.ui.components.ProfileSeamlessTabBar
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -48,10 +50,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import com.chroma.studio.ui.components.IosAvatarView
 import com.chroma.studio.ui.components.AppleStatusVibrantGradient
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
@@ -75,6 +79,19 @@ import com.composables.icons.lucide.*
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+@Suppress("DEPRECATION")
+val ProfileTightPlatformStyle = PlatformTextStyle(includeFontPadding = false)
+
+val ProfileLineHeightStyle = LineHeightStyle(
+    alignment = LineHeightStyle.Alignment.Center,
+    trim = LineHeightStyle.Trim.Both
+)
+
+val ProfileTightTextStyle = TextStyle(
+    platformStyle = ProfileTightPlatformStyle,
+    lineHeightStyle = ProfileLineHeightStyle
+)
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -265,23 +282,12 @@ fun UserProfileHeroSection(
                 }
             }
 
-            // 3. Stats Card — Elevated Frosted Glass Card with Adaptive Legibility & Spring Physics
+            // 3. Stats Card — Apple / One UI Frosted Blur Background Card
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .padding(start = 14.dp)
-                    .shadow(
-                        elevation = 6.dp,
-                        shape = RoundedCornerShape(16.dp),
-                        clip = false,
-                        spotColor = Color.Black.copy(alpha = 0.18f),
-                        ambientColor = Color.Black.copy(alpha = 0.08f)
-                    )
                     .clip(RoundedCornerShape(16.dp))
-                    .background(
-                        if (colors.isDark) Color(0xFF14171E).copy(alpha = 0.78f)
-                        else Color(0xFFFFFFFF).copy(alpha = 0.88f)
-                    )
                     .hazeChild(
                         state = heroHazeState,
                         shape = RoundedCornerShape(16.dp),
@@ -291,6 +297,10 @@ fun UserProfileHeroSection(
                             noiseFactor = 0f
                         )
                     )
+                    .background(
+                        if (colors.isDark) Color(0xFF1C1C1E).copy(alpha = 0.55f)
+                        else Color.White.copy(alpha = 0.70f)
+                    )
             ) {
                 Row(
                     modifier = Modifier
@@ -299,8 +309,8 @@ fun UserProfileHeroSection(
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val statNumberColor = if (colors.isDark) Color.White else Color(0xFF0F172A)
-                    val statLabelColor = if (colors.isDark) Color.White.copy(alpha = 0.75f) else Color(0xFF64748B)
+                    val statNumberColor = colors.textMain
+                    val statLabelColor = colors.textMuted
 
                     // Posts Count
                     val postsInteraction = remember { MutableInteractionSource() }
@@ -312,7 +322,7 @@ fun UserProfileHeroSection(
                     )
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(1.5.dp),
+                        verticalArrangement = Arrangement.spacedBy(1.dp),
                         modifier = Modifier
                             .weight(1f)
                             .scale(postsScale)
@@ -328,13 +338,17 @@ fun UserProfileHeroSection(
                             color = statNumberColor,
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = (-0.02).em
+                            letterSpacing = (-0.02).em,
+                            lineHeight = 19.sp,
+                            style = ProfileTightTextStyle
                         )
                         Text(
                             text = "Posts",
                             color = statLabelColor,
                             fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.Medium,
+                            lineHeight = 13.5.sp,
+                            style = ProfileTightTextStyle
                         )
                     }
 
@@ -343,7 +357,7 @@ fun UserProfileHeroSection(
                         modifier = Modifier
                             .height(20.dp)
                             .width(0.5.dp)
-                            .background(if (colors.isDark) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.10f))
+                            .background(if (colors.isDark) Color.White.copy(alpha = 0.20f) else Color.Black.copy(alpha = 0.15f))
                     )
 
                     // Followers Count
@@ -356,7 +370,7 @@ fun UserProfileHeroSection(
                     )
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(1.5.dp),
+                        verticalArrangement = Arrangement.spacedBy(1.dp),
                         modifier = Modifier
                             .weight(1f)
                             .scale(followersScale)
@@ -373,13 +387,17 @@ fun UserProfileHeroSection(
                             color = statNumberColor,
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = (-0.02).em
+                            letterSpacing = (-0.02).em,
+                            lineHeight = 19.sp,
+                            style = ProfileTightTextStyle
                         )
                         Text(
                             text = "Followers",
                             color = statLabelColor,
                             fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.Medium,
+                            lineHeight = 13.5.sp,
+                            style = ProfileTightTextStyle
                         )
                     }
 
@@ -388,7 +406,7 @@ fun UserProfileHeroSection(
                         modifier = Modifier
                             .height(20.dp)
                             .width(0.5.dp)
-                            .background(if (colors.isDark) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.10f))
+                            .background(if (colors.isDark) Color.White.copy(alpha = 0.20f) else Color.Black.copy(alpha = 0.15f))
                     )
 
                     // Following Count
@@ -401,7 +419,7 @@ fun UserProfileHeroSection(
                     )
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(1.5.dp),
+                        verticalArrangement = Arrangement.spacedBy(1.dp),
                         modifier = Modifier
                             .weight(1f)
                             .scale(followingScale)
@@ -418,13 +436,17 @@ fun UserProfileHeroSection(
                             color = statNumberColor,
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = (-0.02).em
+                            letterSpacing = (-0.02).em,
+                            lineHeight = 19.sp,
+                            style = ProfileTightTextStyle
                         )
                         Text(
                             text = "Following",
                             color = statLabelColor,
                             fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.Medium,
+                            lineHeight = 13.5.sp,
+                            style = ProfileTightTextStyle
                         )
                     }
                 }
@@ -488,29 +510,64 @@ fun UserProfileBioDetailsSection(
 
         Spacer(Modifier.height(4.dp))
 
-        // 1. Display Name + Verified Badge + Sleek QR Pass Icon Button
+        // 1. Identity Block: Display Name & @username tightly paired, with Sleek QR Pass Icon Button on the right
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f, fill = false)
+            Column(
+                modifier = Modifier.weight(1f, fill = false),
+                verticalArrangement = Arrangement.spacedBy(1.dp)
             ) {
-                Text(
-                    text = profile?.displayName ?: "Unknown",
-                    color = colors.textMain,
-                    fontSize = 21.sp,
-                    lineHeight = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = (-0.02).em,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (profile?.verified == true) {
-                    Spacer(Modifier.width(6.dp))
-                    VerifiedBadge(size = 18.dp, showGlow = true)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = profile?.displayName ?: "Unknown",
+                        color = colors.textMain,
+                        fontSize = 20.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = (-0.02).em,
+                        lineHeight = 23.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = ProfileTightTextStyle
+                    )
+                    if (profile?.verified == true) {
+                        Spacer(Modifier.width(6.dp))
+                        VerifiedBadge(size = 18.dp, showGlow = true)
+                    }
+                }
+
+                // Subtitle Row: @username
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable {
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            val clip = ClipData.newPlainText("username", "@${profile?.username ?: ""}")
+                            clipboard.setPrimaryClip(clip)
+                            ToastManager.showToast("Username copied to clipboard")
+                        }
+                        .padding(horizontal = 2.dp, vertical = 0.dp)
+                ) {
+                    Text(
+                        text = "@${profile?.username ?: "unknown"}",
+                        color = colors.textMuted,
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        lineHeight = 15.5.sp,
+                        style = ProfileTightTextStyle
+                    )
+                    Icon(
+                        imageVector = Lucide.Copy,
+                        contentDescription = "Copy username",
+                        tint = colors.textMuted.copy(alpha = 0.6f),
+                        modifier = Modifier.size(12.5.dp)
+                    )
                 }
             }
 
@@ -546,68 +603,254 @@ fun UserProfileBioDetailsSection(
             }
         }
 
-        // 2. Subtitle Row: @username • Role (Clean, compact, on 1 line)
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier.padding(top = 3.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier
-                    .clip(RoundedCornerShape(6.dp))
-                    .clickable {
-                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        val clip = ClipData.newPlainText("username", "@${profile?.username ?: ""}")
-                        clipboard.setPrimaryClip(clip)
-                        ToastManager.showToast("Username copied to clipboard")
-                    }
-                    .padding(horizontal = 2.dp, vertical = 1.dp)
-            ) {
-                Text(
-                    text = "@${profile?.username ?: "unknown"}",
-                    color = colors.textMuted,
-                    fontSize = 13.5.sp,
-                    fontWeight = FontWeight.Medium
-                )
-                Icon(
-                    imageVector = Lucide.Copy,
-                    contentDescription = "Copy username",
-                    tint = colors.textMuted.copy(alpha = 0.6f),
-                    modifier = Modifier.size(11.5.dp)
-                )
+        // 3. Combined Role & Metadata Pills Row (FlowRow, Border-less)
+        val roleText = profile?.role?.trim()?.takeIf { it.isNotBlank() }
+        val metadataItems = remember(locationVisible, office, home, country, dobVisible, genderVisible, profile) {
+            val list = mutableListOf<Pair<ImageVector, String>>()
+
+            if (locationVisible) {
+                val locText = when {
+                    !office.isNullOrBlank() && !country.isNullOrBlank() -> "$office, $country"
+                    !office.isNullOrBlank() -> office
+                    !country.isNullOrBlank() -> country
+                    !home.isNullOrBlank() -> home
+                    else -> null
+                }
+                if (!locText.isNullOrBlank()) {
+                    list.add(Lucide.MapPin to locText)
+                }
             }
 
-            val roleText = profile?.role
-            if (!roleText.isNullOrBlank()) {
-                Text(
-                    text = "•",
-                    color = colors.textMuted.copy(alpha = 0.45f),
-                    fontSize = 12.sp
-                )
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.5.dp)
-                ) {
-                    AiWaveSphereIcon(modifier = Modifier.size(13.dp))
-                    Text(
-                        text = roleText,
-                        style = TextStyle(
-                            brush = roleAnimatedBrush,
-                            fontSize = 12.5.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            letterSpacing = (-0.01).em
-                        )
-                    )
+            val dob = profile?.dateOfBirthAsLong
+            if (dobVisible && dob != null && dob > 0L) {
+                val yr = SimpleDateFormat("yyyy", Locale.getDefault()).format(Date(dob))
+                list.add(Lucide.Calendar to "Born $yr")
+            }
+
+            if (genderVisible && !profile?.gender.isNullOrBlank()) {
+                list.add(Lucide.User to profile.gender.trim())
+            }
+
+            list
+        }
+
+        val hasPills = roleText != null || metadataItems.isNotEmpty()
+        if (hasPills) {
+            Spacer(Modifier.height(6.dp))
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                // Role Pill
+                if (roleText != null) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(if (colors.isDark) Color(0xFF0A84FF).copy(alpha = 0.18f) else Color(0xFFF1F5FE))
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.5.dp)
+                        ) {
+                            Icon(
+                                imageVector = Lucide.Code,
+                                contentDescription = null,
+                                tint = Color(0xFF0062FF),
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Text(
+                                text = roleText,
+                                color = Color(0xFF0062FF),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                letterSpacing = (-0.01).em,
+                                lineHeight = 14.sp,
+                                style = ProfileTightTextStyle
+                            )
+                        }
+                    }
+                }
+
+                // Other Metadata Pills
+                metadataItems.forEach { (icon, text) ->
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(if (colors.isDark) Color(0xFF1E222A) else Color(0xFFEFF4F9))
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.5.dp)
+                        ) {
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = null,
+                                tint = if (colors.isDark) Color(0xFFA0A5B0) else Color(0xFF20314A),
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Text(
+                                text = text,
+                                color = if (colors.isDark) Color(0xFFA0A5B0) else Color(0xFF20314A),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                letterSpacing = (-0.01).em,
+                                lineHeight = 14.sp,
+                                style = ProfileTightTextStyle
+                            )
+                        }
+                    }
                 }
             }
         }
 
-        // 3. Bio Text with ....Read more
+        // 4. Sleek Website Link Chip & Social Handles (Fixing lone icon into cohesive chip)
+        val socialLinksMap = profile?.socialLinks ?: emptyMap()
+        val ghUrl = socialLinksMap["github"]?.trim()?.takeIf { it.isNotBlank() }
+        val igUrl = socialLinksMap["instagram"]?.trim()?.takeIf { it.isNotBlank() }
+        val webUrl = socialLinksMap["website"]?.trim()?.takeIf { it.isNotBlank() }
+
+        val hasSocials = ghUrl != null || igUrl != null || webUrl != null
+        if (hasSocials) {
+            Spacer(Modifier.height(8.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                // Website Link Chip
+                if (webUrl != null) {
+                    val displayDomain = webUrl
+                        .removePrefix("https://")
+                        .removePrefix("http://")
+                        .removePrefix("www.")
+                        .removeSuffix("/")
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(if (colors.isDark) Color(0xFF0A84FF).copy(alpha = 0.15f) else Color(0xFFEFF5FF))
+                            .clickable {
+                                try {
+                                    val target = if (webUrl.startsWith("http://") || webUrl.startsWith("https://")) webUrl else "https://$webUrl"
+                                    com.chroma.studio.ui.components.InAppBrowserManager.openUrl(target)
+                                } catch (_: Exception) {
+                                    ToastManager.showToast("Could not open link")
+                                }
+                            }
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Icon(
+                                imageVector = Lucide.Link2,
+                                contentDescription = "Website",
+                                tint = Color(0xFF0062FF),
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Text(
+                                text = displayDomain,
+                                color = Color(0xFF0062FF),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                letterSpacing = (-0.01).em,
+                                lineHeight = 14.sp,
+                                style = ProfileTightTextStyle
+                            )
+                            Icon(
+                                imageVector = Lucide.ArrowUpRight,
+                                contentDescription = null,
+                                tint = Color(0xFF0062FF).copy(alpha = 0.6f),
+                                modifier = Modifier.size(11.dp)
+                            )
+                        }
+                    }
+                }
+
+                // GitHub Chip
+                if (ghUrl != null) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(if (colors.isDark) Color(0xFF1E222A) else Color(0xFFEFF4F9))
+                            .clickable {
+                                try {
+                                    val target = if (ghUrl.startsWith("http://") || ghUrl.startsWith("https://")) ghUrl else "https://$ghUrl"
+                                    com.chroma.studio.ui.components.InAppBrowserManager.openUrl(target)
+                                } catch (_: Exception) {
+                                    ToastManager.showToast("Could not open GitHub")
+                                }
+                            }
+                            .padding(horizontal = 9.dp, vertical = 4.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Image(
+                                painter = painterResource(id = R.drawable.ic_social_github),
+                                contentDescription = "GitHub",
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Text(
+                                text = "GitHub",
+                                color = if (colors.isDark) Color(0xFFA0A5B0) else Color(0xFF20314A),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                lineHeight = 14.sp,
+                                style = ProfileTightTextStyle
+                            )
+                        }
+                    }
+                }
+
+                // Instagram Chip
+                if (igUrl != null) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(if (colors.isDark) Color(0xFF1E222A) else Color(0xFFEFF4F9))
+                            .clickable {
+                                try {
+                                    val target = if (igUrl.startsWith("http://") || igUrl.startsWith("https://")) igUrl else "https://$igUrl"
+                                    com.chroma.studio.ui.components.InAppBrowserManager.openUrl(target)
+                                } catch (_: Exception) {
+                                    ToastManager.showToast("Could not open Instagram")
+                                }
+                            }
+                            .padding(horizontal = 9.dp, vertical = 4.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Image(
+                                painter = painterResource(id = R.drawable.ic_social_instagram),
+                                contentDescription = "Instagram",
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Text(
+                                text = "Instagram",
+                                color = if (colors.isDark) Color(0xFFA0A5B0) else Color(0xFF20314A),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                lineHeight = 14.sp,
+                                style = ProfileTightTextStyle
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // 5. Bio Text with smooth Read more / Show less & clickable @mentions
         val bioText = profile?.bio?.trim() ?: ""
         if (bioText.isNotBlank()) {
-            Spacer(Modifier.height(5.dp))
+            Spacer(Modifier.height(8.dp))
             val isBioLong = remember(bioText) {
                 bioText.length > 75 || bioText.contains("\n")
             }
@@ -618,7 +861,7 @@ fun UserProfileBioDetailsSection(
                         val words = bioText.split(Regex("(?<=\\s)|(?=\\s)|\\n"))
                         for (word in words) {
                             if (word.startsWith("@") || word.startsWith("#")) {
-                                withStyle(SpanStyle(color = Color(0xFF0A84FF), fontWeight = FontWeight.SemiBold)) {
+                                withStyle(SpanStyle(color = Color(0xFF0062FF), fontWeight = FontWeight.SemiBold)) {
                                     append(word)
                                 }
                             } else {
@@ -626,7 +869,7 @@ fun UserProfileBioDetailsSection(
                             }
                         }
                         if (isBioLong && isBioExpanded) {
-                            withStyle(SpanStyle(color = Color(0xFF0A84FF), fontWeight = FontWeight.Bold)) {
+                            withStyle(SpanStyle(color = Color(0xFF0062FF), fontWeight = FontWeight.Bold)) {
                                 append(" Show less")
                             }
                         }
@@ -644,7 +887,7 @@ fun UserProfileBioDetailsSection(
                         val words = preview.split(Regex("(?<=\\s)|(?=\\s)|\\n"))
                         for (word in words) {
                             if (word.startsWith("@") || word.startsWith("#")) {
-                                withStyle(SpanStyle(color = Color(0xFF0A84FF), fontWeight = FontWeight.SemiBold)) {
+                                withStyle(SpanStyle(color = Color(0xFF0062FF), fontWeight = FontWeight.SemiBold)) {
                                     append(word)
                                 }
                             } else {
@@ -654,7 +897,7 @@ fun UserProfileBioDetailsSection(
                         withStyle(SpanStyle(color = colors.textMuted)) {
                             append("... ")
                         }
-                        withStyle(SpanStyle(color = Color(0xFF0A84FF), fontWeight = FontWeight.Bold)) {
+                        withStyle(SpanStyle(color = Color(0xFF0062FF), fontWeight = FontWeight.Bold)) {
                             append("Read more")
                         }
                     }
@@ -665,8 +908,16 @@ fun UserProfileBioDetailsSection(
                 text = displayedBio,
                 color = colors.textMain,
                 fontSize = 13.5.sp,
-                lineHeight = 18.5.sp,
-                maxLines = if (isBioExpanded) Int.MAX_VALUE else 2,
+                lineHeight = 18.sp,
+                letterSpacing = (-0.01).em,
+                style = TextStyle(
+                    platformStyle = ProfileTightPlatformStyle,
+                    lineHeightStyle = LineHeightStyle(
+                        alignment = LineHeightStyle.Alignment.Center,
+                        trim = LineHeightStyle.Trim.None
+                    )
+                ),
+                maxLines = if (isBioExpanded) Int.MAX_VALUE else 3,
                 overflow = TextOverflow.Clip,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -680,149 +931,7 @@ fun UserProfileBioDetailsSection(
             )
         }
 
-        // 4. Clean Grouped Metadata (NO MORE PILL SOUP / CAPSULES!)
-        // Smartly consolidates location and details into cohesive Apple squircle chips
-        val metadataItems = remember(locationVisible, office, home, country, dobVisible, genderVisible, profile) {
-            val list = mutableListOf<Pair<ImageVector, String>>()
 
-            if (locationVisible) {
-                val locParts = listOfNotNull(
-                    office?.takeIf { it.isNotBlank() },
-                    country?.takeIf { it.isNotBlank() }
-                )
-                if (locParts.isNotEmpty()) {
-                    list.add(Lucide.MapPin to locParts.joinToString(", "))
-                } else if (!home.isNullOrBlank()) {
-                    list.add(Lucide.House to home)
-                }
-            }
-
-            if (dobVisible) {
-                val dobStr = profile?.dateOfBirthAsLong?.let {
-                    SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(it))
-                }
-                if (!dobStr.isNullOrBlank()) {
-                    list.add(Lucide.Calendar to "Born $dobStr")
-                }
-            }
-
-            if (genderVisible && !profile?.gender.isNullOrBlank()) {
-                list.add(Lucide.User to profile!!.gender)
-            }
-            list
-        }
-
-        if (metadataItems.isNotEmpty()) {
-            Spacer(Modifier.height(5.dp))
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                metadataItems.forEach { (icon, text) ->
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(999.dp))
-                            .background(if (colors.isDark) Color(0xFF1E222A) else Color(0xFFECEFF4))
-                            .padding(horizontal = 11.dp, vertical = 5.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp)
-                        ) {
-                            Icon(
-                                imageVector = icon,
-                                contentDescription = null,
-                                tint = if (colors.isDark) Color(0xFFA0A5B0) else Color(0xFF64748B),
-                                modifier = Modifier.size(12.5.dp)
-                            )
-                            Text(
-                                text = text,
-                                color = if (colors.isDark) Color(0xFFA0A5B0) else Color(0xFF475569),
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium,
-                                letterSpacing = (-0.01).em
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // 5. Social Links (Clean Squircle Dock)
-        val profileLinks = profile?.socialLinks ?: emptyMap()
-        if (profileLinks.isNotEmpty()) {
-            Spacer(Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                profileLinks.forEach { (platform, url) ->
-                    ProfileSquircleSocialButton(
-                        platform = platform,
-                        url = url,
-                        onClick = {
-                            try {
-                                val targetUri = if (!url.startsWith("http://") && !url.startsWith("https://")) "https://$url" else url
-                                com.chroma.studio.ui.components.InAppBrowserManager.openUrl(targetUri)
-                            } catch (_: Exception) {
-                                ToastManager.showToast("Could not open link")
-                            }
-                        }
-                    )
-                }
-            }
-        }
-
-        // 6. Content Tags (Clean Border-less Squircles)
-        val hasContentTags = profile?.contentTags?.isNotEmpty() == true
-        if (hasContentTags) {
-            Spacer(Modifier.height(8.dp))
-            var areTagsExpanded by remember { mutableStateOf(false) }
-            val allTags = profile!!.contentTags
-            val visibleTags = if (areTagsExpanded || allTags.size <= 4) allTags else allTags.take(4)
-
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
-                verticalArrangement = Arrangement.spacedBy(5.dp)
-            ) {
-                visibleTags.forEach { rawTag ->
-                    val tag = if (rawTag.startsWith("#")) rawTag else "#$rawTag"
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(999.dp))
-                            .background(if (colors.isDark) Color(0xFF1E222A) else Color(0xFFECEFF4))
-                            .padding(horizontal = 11.dp, vertical = 4.5.dp)
-                    ) {
-                        Text(
-                            text = tag,
-                            color = if (colors.isDark) Color(0xFFA0A5B0) else Color(0xFF475569),
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-
-                if (allTags.size > 4) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(7.dp))
-                            .background(Color(0x120A84FF))
-                            .clickable { areTagsExpanded = !areTagsExpanded }
-                            .padding(horizontal = 7.5.dp, vertical = 3.5.dp)
-                    ) {
-                        Text(
-                            text = if (areTagsExpanded) "Show less" else "+${allTags.size - 4} more",
-                            color = Color(0xFF0A84FF),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-            }
-        }
 
         // 7. Mutual Connections Group
         if (mutualFollowers.isNotEmpty()) {
@@ -937,21 +1046,21 @@ fun ProfileActionButton(
         label = "profileBtnScale"
     )
 
-    val shape = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(999.dp)
     val background = if (isPrimary) {
-        if (isPressed) Color(0xFF0066E0) else Color(0xFF0A84FF)
+        if (isPressed) Color(0xFF0056D6) else Color(0xFF0062FF)
     } else {
         if (isPressed) {
-            if (colors.isDark) Color(0xFF262A34) else Color(0xFFE2E6EE)
+            if (colors.isDark) Color(0xFF262A34) else Color(0xFFDFE7FD)
         } else {
-            if (colors.isDark) Color(0xFF1E222A) else Color(0xFFEFF2F6)
+            if (colors.isDark) Color(0xFF1E222A) else Color(0xFFECF1FE)
         }
     }
 
     Box(
         modifier = modifier
             .scale(scale)
-            .height(42.dp)
+            .height(38.dp)
             .clip(shape)
             .background(background)
             .clickable(
@@ -971,6 +1080,7 @@ fun ProfileActionButton(
         )
     }
 }
+
 
 @Composable
 fun UserProfileActionsStoriesSection(
@@ -1000,6 +1110,8 @@ fun UserProfileActionsStoriesSection(
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
     ) {
+        Spacer(Modifier.height(6.dp))
+
         // Dedicated Designed Status Section
         UserProfileStatusSection(
             profile = profile,
@@ -1015,6 +1127,7 @@ fun UserProfileActionsStoriesSection(
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (isCurrentUser) {
+                val secondaryBtnColor = if (colors.isDark) Color(0xFF3892F6) else Color(0xFF0062FF)
                 ProfileActionButton(
                     onClick = onNavigateToEditProfile,
                     isPrimary = true,
@@ -1024,14 +1137,16 @@ fun UserProfileActionsStoriesSection(
                         imageVector = Lucide.Pencil,
                         contentDescription = null,
                         tint = Color.White,
-                        modifier = Modifier.size(14.5.dp)
+                        modifier = Modifier.size(14.dp)
                     )
                     Text(
                         text = "Edit Profile",
                         color = Color.White,
                         fontWeight = FontWeight.SemiBold,
-                        fontSize = 13.5.sp,
-                        letterSpacing = (-0.01).em
+                        fontSize = 13.sp,
+                        letterSpacing = (-0.01).em,
+                        lineHeight = 15.sp,
+                        style = ProfileTightTextStyle
                     )
                 }
 
@@ -1041,17 +1156,19 @@ fun UserProfileActionsStoriesSection(
                     modifier = Modifier.weight(1f)
                 ) {
                     Icon(
-                        imageVector = Lucide.QrCode,
+                        imageVector = Lucide.Share2,
                         contentDescription = null,
-                        tint = colors.textMain,
-                        modifier = Modifier.size(14.5.dp)
+                        tint = secondaryBtnColor,
+                        modifier = Modifier.size(14.dp)
                     )
                     Text(
                         text = "Share Card",
-                        color = colors.textMain,
+                        color = secondaryBtnColor,
                         fontWeight = FontWeight.SemiBold,
-                        fontSize = 13.5.sp,
-                        letterSpacing = (-0.01).em
+                        fontSize = 13.sp,
+                        letterSpacing = (-0.01).em,
+                        lineHeight = 15.sp,
+                        style = ProfileTightTextStyle
                     )
                 }
             } else {
@@ -1072,7 +1189,9 @@ fun UserProfileActionsStoriesSection(
                             color = colors.textMain,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 13.5.sp,
-                            letterSpacing = (-0.01).em
+                            letterSpacing = (-0.01).em,
+                            lineHeight = 15.5.sp,
+                            style = ProfileTightTextStyle
                         )
                     }
                 } else {
@@ -1092,7 +1211,9 @@ fun UserProfileActionsStoriesSection(
                             color = Color.White,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 13.5.sp,
-                            letterSpacing = (-0.01).em
+                            letterSpacing = (-0.01).em,
+                            lineHeight = 15.5.sp,
+                            style = ProfileTightTextStyle
                         )
                     }
                 }
@@ -1113,7 +1234,9 @@ fun UserProfileActionsStoriesSection(
                         color = colors.textMain,
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 13.5.sp,
-                        letterSpacing = (-0.01).em
+                        letterSpacing = (-0.01).em,
+                        lineHeight = 15.5.sp,
+                        style = ProfileTightTextStyle
                     )
                 }
 
@@ -1152,6 +1275,8 @@ fun UserProfileActionsStoriesSection(
             }
         }
 
+        Spacer(Modifier.height(14.dp))
+
         // Saved Story Highlights Showcase (Instagram-style)
         UserProfileHighlightsSection(
             userId = userId,
@@ -1164,7 +1289,10 @@ fun UserProfileActionsStoriesSection(
                 }
             }
         )
-        // Samsung One UI 7.0 Seamless Tab Switcher (Works, Photos, Flash Videos, Remixes)
+
+        Spacer(Modifier.height(12.dp))
+
+        // Seamless Tab Switcher (Works, Posts, Flash Videos, Remixes, Saved)
         ProfileSeamlessTabBar(
             icons = profileTabIcons,
             selectedIndex = selectedTabIndex,
@@ -1172,7 +1300,7 @@ fun UserProfileActionsStoriesSection(
                 com.chroma.studio.chat.sound.SoundManager.playReaction()
                 onTabSelected(it)
             },
-            selectedColor = Color(0xFF0A84FF),
+            selectedColor = Color(0xFF0062FF),
             modifier = Modifier.padding(horizontal = 2.dp)
         )
 
@@ -1280,24 +1408,30 @@ fun ProfileAvatarActionBottomSheet(
                     }
                 }
 
-                Column(modifier = Modifier.weight(1f)) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(1.dp)
+                ) {
                     Text(
                         text = profile?.displayName.orEmpty().ifBlank { profile?.username ?: "User" },
                         color = colors.textMain,
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = (-0.3).sp,
+                        lineHeight = 19.sp,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        style = ProfileTightTextStyle
                     )
-                    Spacer(Modifier.height(2.dp))
                     Text(
                         text = "@${profile?.username.orEmpty().ifBlank { "user" }}",
                         color = colors.textMuted,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Normal,
+                        lineHeight = 15.sp,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        style = ProfileTightTextStyle
                     )
                 }
             }
@@ -1364,12 +1498,17 @@ fun ProfileAvatarActionBottomSheet(
 
                     Spacer(Modifier.width(14.dp))
 
-                    Column(modifier = Modifier.weight(1f)) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(1.dp)
+                    ) {
                         Text(
                             text = "View Story",
                             color = if (hasActiveStories) colors.textMain else colors.textMuted,
                             fontSize = 15.5.sp,
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight = FontWeight.SemiBold,
+                            lineHeight = 18.sp,
+                            style = ProfileTightTextStyle
                         )
                         Text(
                             text = if (hasActiveStories) {
@@ -1377,7 +1516,9 @@ fun ProfileAvatarActionBottomSheet(
                                 else "Watch active stories"
                             } else "No active stories",
                             color = colors.textMuted,
-                            fontSize = 12.5.sp
+                            fontSize = 12.5.sp,
+                            lineHeight = 15.sp,
+                            style = ProfileTightTextStyle
                         )
                     }
 
@@ -1452,17 +1593,24 @@ fun ProfileAvatarActionBottomSheet(
 
                     Spacer(Modifier.width(14.dp))
 
-                    Column(modifier = Modifier.weight(1f)) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(1.dp)
+                    ) {
                         Text(
                             text = "View Profile Photo",
                             color = colors.textMain,
                             fontSize = 15.5.sp,
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight = FontWeight.SemiBold,
+                            lineHeight = 18.sp,
+                            style = ProfileTightTextStyle
                         )
                         Text(
                             text = "See full-size profile picture",
                             color = colors.textMuted,
-                            fontSize = 12.5.sp
+                            fontSize = 12.5.sp,
+                            lineHeight = 15.sp,
+                            style = ProfileTightTextStyle
                         )
                     }
 
@@ -1522,17 +1670,24 @@ fun ProfileAvatarActionBottomSheet(
 
                         Spacer(Modifier.width(14.dp))
 
-                        Column(modifier = Modifier.weight(1f)) {
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(1.dp)
+                        ) {
                             Text(
                                 text = "Change Profile Photo",
                                 color = colors.textMain,
                                 fontSize = 15.5.sp,
-                                fontWeight = FontWeight.SemiBold
+                                fontWeight = FontWeight.SemiBold,
+                                lineHeight = 18.sp,
+                                style = ProfileTightTextStyle
                             )
                             Text(
                                 text = "Upload new avatar from device",
                                 color = colors.textMuted,
-                                fontSize = 12.5.sp
+                                fontSize = 12.5.sp,
+                                lineHeight = 15.sp,
+                                style = ProfileTightTextStyle
                             )
                         }
 

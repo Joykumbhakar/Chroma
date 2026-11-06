@@ -686,6 +686,17 @@ fun ProfileSeamlessTabBar(
     selectedColor: Color = Color(0xFF007AFF),
     unselectedColor: Color = Color(0xFF8E8E93)
 ) {
+    val tabCount = icons.size
+    val safeIndex = if (tabCount > 0) selectedIndex.coerceIn(0, tabCount - 1) else 0
+    val animatedIndex by animateFloatAsState(
+        targetValue = safeIndex.toFloat(),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioLowBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "tab_indicator_anim"
+    )
+
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -700,22 +711,12 @@ fun ProfileSeamlessTabBar(
                 )
             }
     ) {
-        val tabCount = icons.size
-        val animatedIndex by animateFloatAsState(
-            targetValue = selectedIndex.toFloat(),
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioLowBouncy,
-                stiffness = Spring.StiffnessMediumLow
-            ),
-            label = "tab_indicator_anim"
-        )
-
         Row(
             modifier = Modifier.fillMaxSize(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             icons.forEachIndexed { index, icon ->
-                val isSelected = selectedIndex == index
+                val isSelected = safeIndex == index
                 val iconColor by animateColorAsState(
                     targetValue = if (isSelected) selectedColor else unselectedColor,
                     animationSpec = tween(180),
@@ -752,21 +753,23 @@ fun ProfileSeamlessTabBar(
             }
         }
 
-        // Smooth sliding active underline indicator
-        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            val tabWidth = maxWidth / tabCount
-            val indicatorWidth = tabWidth * 0.45f
-            val indicatorOffset = (tabWidth * animatedIndex) + ((tabWidth - indicatorWidth) / 2f)
+        if (tabCount > 0) {
+            // Smooth sliding active underline indicator
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                val tabWidth = maxWidth / tabCount
+                val indicatorWidth = tabWidth * 0.45f
+                val indicatorOffset = (tabWidth * animatedIndex) + ((tabWidth - indicatorWidth) / 2f)
 
-            Box(
-                modifier = Modifier
-                    .offset(x = indicatorOffset)
-                    .width(indicatorWidth)
-                    .height(2.5.dp)
-                    .align(Alignment.BottomStart)
-                    .clip(RoundedCornerShape(topStart = 2.dp, topEnd = 2.dp))
-                    .background(selectedColor)
-            )
+                Box(
+                    modifier = Modifier
+                        .offset(x = indicatorOffset)
+                        .width(indicatorWidth)
+                        .height(2.5.dp)
+                        .align(Alignment.BottomStart)
+                        .clip(RoundedCornerShape(topStart = 2.dp, topEnd = 2.dp))
+                        .background(selectedColor)
+                )
+            }
         }
     }
 }
@@ -793,12 +796,14 @@ fun IosIconSegmentedControl(
 @Composable
 fun VoiceWaveform(isRecording: Boolean) {
     val infiniteTransition = rememberInfiniteTransition(label = "waveform")
+    val targetHeights = remember(isRecording) {
+        List(5) { if (isRecording) (10..24).random().toFloat() else 4f }
+    }
     val heights = List(5) { index ->
-        val target = if (isRecording) (10..24).random().toFloat() else 4f
         val delay = index * 100
         infiniteTransition.animateFloat(
             initialValue = 4f,
-            targetValue = target,
+            targetValue = targetHeights[index],
             animationSpec = infiniteRepeatable(
                 animation = tween(durationMillis = 400 + delay, easing = FastOutSlowInEasing),
                 repeatMode = RepeatMode.Reverse
