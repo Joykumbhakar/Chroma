@@ -39,6 +39,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import com.chroma.studio.R
 import com.chroma.studio.model.UserProfile
+import com.chroma.studio.ui.components.doubleEdgeGlassBorder
+import com.chroma.studio.ui.components.VerifiedBadge
+import com.chroma.studio.ui.theme.InterFontFamily
 import com.composables.icons.lucide.ArrowRight
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.User
@@ -138,32 +141,33 @@ fun AccountConfirmationScreen(
                 Text(
                     text = "Is this your account?",
                     color = Color.White,
-                    fontSize = 28.sp,
+                    fontSize = 32.sp,
                     fontWeight = FontWeight.Bold,
+                    fontFamily = InterFontFamily,
                     letterSpacing = (-0.6).sp,
                     textAlign = TextAlign.Center
                 )
 
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(6.dp))
 
                 Text(
                     text = "Continue with this account",
                     color = Color(0xFF94A3B8),
-                    fontSize = 15.sp,
+                    fontSize = 14.sp,
+                    fontFamily = InterFontFamily,
                     fontWeight = FontWeight.Normal,
                     letterSpacing = (-0.2).sp,
                     textAlign = TextAlign.Center
                 )
             }
 
-            // ── MIDDLE: USER PROFILE PREVIEW CARD ───────────────────────────
+            // ── SAMSUNG ONE UI USER PROFILE PREVIEW CARD (DOUBLE EDGE GLASS BORDER) ──
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .shadow(16.dp, RoundedCornerShape(24.dp), ambientColor = Color.Black.copy(alpha = 0.5f))
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(Color(0xFF0F1422))
-                    .border(BorderStroke(1.dp, Color(0x2EFFFFFF)), RoundedCornerShape(24.dp))
+                    .clip(RoundedCornerShape(26.dp))
+                    .background(Color(0xFF10141E))
+                    .doubleEdgeGlassBorder(cornerRadius = 26.dp)
                     .padding(horizontal = 24.dp, vertical = 28.dp)
             ) {
                 Column(

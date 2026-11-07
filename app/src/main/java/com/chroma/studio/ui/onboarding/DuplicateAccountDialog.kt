@@ -27,6 +27,8 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Warning
 import com.chroma.studio.R
+import com.chroma.studio.ui.components.doubleEdgeGlassBorder
+import com.chroma.studio.ui.theme.InterFontFamily
 import com.composables.icons.lucide.ArrowRight
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.RefreshCw
@@ -53,26 +55,26 @@ fun DuplicateAccountDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Surface(
+        // Samsung One UI Dialog with Iconic Double Edge Glass Border
+        Box(
             modifier = Modifier
                 .fillMaxWidth(0.92f)
-                .clip(RoundedCornerShape(26.dp)),
-            color = Color(0xFF101420),
-            border = BorderStroke(1.dp, Color(0x33FFFFFF)),
-            shadowElevation = 24.dp
+                .clip(RoundedCornerShape(28.dp))
+                .background(Color(0xFF10141E))
+                .doubleEdgeGlassBorder(cornerRadius = 28.dp)
+                .padding(24.dp)
         ) {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(24.dp),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Warning badge icon
+                // Warning badge icon with double edge glass border
                 Box(
                     modifier = Modifier
-                        .size(54.dp)
-                        .clip(CircleShape)
-                        .background(Color(0x22F59E0B)),
+                        .size(58.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(Color(0x22F59E0B))
+                        .doubleEdgeGlassBorder(cornerRadius = 20.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -90,6 +92,7 @@ fun DuplicateAccountDialog(
                     color = Color.White,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
+                    fontFamily = InterFontFamily,
                     letterSpacing = (-0.4).sp,
                     textAlign = TextAlign.Center
                 )
@@ -100,6 +103,7 @@ fun DuplicateAccountDialog(
                     text = "An account with this Google email already exists. Please log in instead or choose another account.",
                     color = Color(0xFF94A3B8),
                     fontSize = 14.sp,
+                    fontFamily = InterFontFamily,
                     lineHeight = 20.sp,
                     textAlign = TextAlign.Center
                 )

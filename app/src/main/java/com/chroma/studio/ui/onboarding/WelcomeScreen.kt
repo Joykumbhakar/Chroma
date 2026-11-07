@@ -20,6 +20,7 @@ import androidx.compose.material.icons.rounded.PersonAdd
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,6 +46,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.chroma.studio.R
 import com.chroma.studio.ui.components.OscellionAppIcon
+import com.chroma.studio.ui.components.OneUiGlassCard
+import com.chroma.studio.ui.components.doubleEdgeGlassBorder
 import com.composables.icons.lucide.Globe
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Palette
@@ -138,18 +141,16 @@ fun WelcomeScreen(
                             .padding(top = 16.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // 3D Milled App Icon with subtle halo
+                        // Samsung One UI Hero App Icon with Double Edge Glass Border
                         Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier.size(92.dp)
+                            modifier = Modifier
+                                .size(88.dp)
+                                .clip(RoundedCornerShape(26.dp))
+                                .background(Color(0xFF10141E))
+                                .doubleEdgeGlassBorder(cornerRadius = 26.dp),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(86.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFF2563EB).copy(alpha = 0.16f))
-                            )
-                            OscellionAppIcon(size = 72.dp)
+                            OscellionAppIcon(size = 64.dp)
                         }
 
                         Spacer(Modifier.height(18.dp))
@@ -177,15 +178,12 @@ fun WelcomeScreen(
 
                         Spacer(Modifier.height(28.dp))
 
-                        // ── TIGHTENED VALUE PROPOSITION CARDS ────────────────
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(Color(0x0CFFFFFF))
-                                .border(BorderStroke(1.dp, Color(0x18FFFFFF)), RoundedCornerShape(20.dp))
-                                .padding(horizontal = 18.dp, vertical = 18.dp),
-                            verticalArrangement = Arrangement.spacedBy(14.dp)
+                        // ── SAMSUNG ONE UI VALUE PROPOSITION CARD (DOUBLE EDGE GLASS BORDER) ──
+                        OneUiGlassCard(
+                            cornerRadius = 26.dp,
+                            useDoubleEdgeGlassBorder = true,
+                            backgroundColor = Color(0xFF10141E),
+                            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 20.dp)
                         ) {
                             WelcomeFeatureRow(
                                 icon = Lucide.Palette,
@@ -193,11 +191,10 @@ fun WelcomeScreen(
                                 title = "Creative Canvas",
                                 description = "Multi-layer studio with real-time shader rendering"
                             )
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(0.6.dp)
-                                    .background(Color(0x14FFFFFF))
+                            HorizontalDivider(
+                                color = Color(0x14FFFFFF),
+                                thickness = 0.5.dp,
+                                modifier = Modifier.padding(vertical = 12.dp)
                             )
                             WelcomeFeatureRow(
                                 icon = Lucide.Globe,
@@ -205,11 +202,10 @@ fun WelcomeScreen(
                                 title = "Global Community",
                                 description = "Explore trending masterworks, video drops & remixes"
                             )
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(0.6.dp)
-                                    .background(Color(0x14FFFFFF))
+                            HorizontalDivider(
+                                color = Color(0x14FFFFFF),
+                                thickness = 0.5.dp,
+                                modifier = Modifier.padding(vertical = 12.dp)
                             )
                             WelcomeFeatureRow(
                                 icon = Lucide.ShieldCheck,

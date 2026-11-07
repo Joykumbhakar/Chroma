@@ -1,27 +1,42 @@
 package com.chroma.studio.ui.screens
 
-import androidx.compose.animation.*
-import androidx.compose.foundation.*
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.chroma.studio.ui.components.OscellionBackground
 import com.chroma.studio.ui.components.LiquidGlassCheckbox
+import com.chroma.studio.ui.components.OneUiGlassCard
+import com.chroma.studio.ui.components.doubleEdgeGlassBorder
 import com.chroma.studio.ui.theme.InterFontFamily
 import com.chroma.studio.ui.theme.LocalOscellionColors
+import com.composables.icons.lucide.ChevronLeft
 import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.*
+import com.composables.icons.lucide.ShieldCheck
 
+/**
+ * Samsung One UI 7.0 Privacy Policy & Terms Acceptance Screen
+ * Styled with exact Samsung One UI hierarchy and our iconic double edge glass border.
+ */
 @Composable
 fun PrivacyPolicyTermsScreen(
     isFirstLaunch: Boolean = true,
@@ -30,210 +45,254 @@ fun PrivacyPolicyTermsScreen(
     onBack: () -> Unit = {}
 ) {
     val colors = LocalOscellionColors.current
+    val isDark = colors.isDark
+    val screenBg = if (isDark) Color(0xFF000000) else Color(0xFFF2F4F7)
+
     var selectedTab by remember { mutableIntStateOf(0) } // 0 = Privacy Policy, 1 = Terms & Conditions
     var hasAgreed by remember { mutableStateOf(!isFirstLaunch) }
 
-    OscellionBackground {
-        Scaffold(
-            containerColor = Color.Transparent,
-            topBar = {
+    Scaffold(
+        containerColor = screenBg,
+        topBar = {
+            if (!isFirstLaunch) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .statusBarsPadding()
-                        .height(54.dp)
-                        .padding(horizontal = 16.dp),
+                        .height(52.dp)
+                        .padding(horizontal = 14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (!isFirstLaunch) {
-                        IconButton(
-                            onClick = onBack,
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                imageVector = Lucide.ChevronLeft,
-                                contentDescription = "Back",
-                                tint = colors.primary,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                    } else {
-                        Spacer(Modifier.width(8.dp))
+                    IconButton(
+                        onClick = onBack,
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = Lucide.ChevronLeft,
+                            contentDescription = "Back",
+                            tint = if (isDark) Color.White else Color(0xFF0F172A),
+                            modifier = Modifier.size(24.dp)
+                        )
                     }
-
                     Text(
                         text = "Legal & Agreement",
-                        fontSize = 17.sp,
+                        fontSize = 18.sp,
                         fontWeight = FontWeight.SemiBold,
                         fontFamily = InterFontFamily,
-                        color = colors.textMain,
-                        modifier = Modifier.weight(1f),
-                        textAlign = if (!isFirstLaunch) TextAlign.Start else TextAlign.Center
+                        color = if (isDark) Color.White else Color(0xFF0F172A)
                     )
-
-                    if (isFirstLaunch) {
-                        Spacer(Modifier.width(8.dp))
-                    }
                 }
-            },
-            bottomBar = {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .navigationBarsPadding()
-                        .padding(horizontal = 24.dp, vertical = 14.dp)
-                ) {
-                    if (isFirstLaunch) {
-                        // Agreement Checkbox Row
+            }
+        },
+        bottomBar = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 20.dp, vertical = 12.dp)
+            ) {
+                if (isFirstLaunch) {
+                    // Checkbox Agreement Card with Iconic Double Edge Glass Border
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(if (isDark) Color(0xFF10141E) else Color.White)
+                            .doubleEdgeGlassBorder(cornerRadius = 18.dp)
+                            .clickable { hasAgreed = !hasAgreed }
+                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                    ) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { hasAgreed = !hasAgreed }
-                                .padding(vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             LiquidGlassCheckbox(
                                 checked = hasAgreed,
                                 onCheckedChange = { hasAgreed = it }
                             )
-                            Spacer(Modifier.width(10.dp))
                             Text(
-                                text = "I have read and agree to the Privacy Policy and Terms & Conditions",
+                                text = "I agree to the Privacy Policy and Terms of Service",
                                 fontSize = 13.5.sp,
-                                color = colors.textMain,
+                                color = if (isDark) Color(0xFFCBD5E1) else Color(0xFF334155),
                                 lineHeight = 18.sp,
                                 fontFamily = InterFontFamily,
+                                fontWeight = FontWeight.Medium,
                                 modifier = Modifier.weight(1f)
                             )
                         }
+                    }
 
-                        Spacer(Modifier.height(14.dp))
+                    Spacer(Modifier.height(14.dp))
 
-                        // Accept Button - Professional Clean Rectangular Button (No Pill, No Shadow)
-                        Button(
-                            onClick = onAccept,
-                            enabled = hasAgreed,
-                            shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFF007AFF),
-                                disabledContainerColor = Color(0xFF007AFF).copy(alpha = 0.4f)
+                    // Primary Action: Samsung One UI Pill Button (Borderless per standing rule)
+                    val continueInteraction = remember { MutableInteractionSource() }
+                    val continuePressed by continueInteraction.collectIsPressedAsState()
+                    val continueScale by animateFloatAsState(
+                        targetValue = if (continuePressed) 0.975f else 1f,
+                        animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f),
+                        label = "agree_btn_press"
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp)
+                            .graphicsLayer {
+                                scaleX = continueScale
+                                scaleY = continueScale
+                            }
+                            .shadow(8.dp, CircleShape, ambientColor = Color(0x40000000), spotColor = Color(0x60000000))
+                            .clip(CircleShape)
+                            .background(
+                                if (hasAgreed) Brush.horizontalGradient(listOf(Color(0xFF0066FF), Color(0xFF0052CC)))
+                                else Brush.horizontalGradient(listOf(Color(0xFF334155), Color(0xFF1E293B)))
+                            )
+                            .clickable(
+                                interactionSource = continueInteraction,
+                                indication = null,
+                                enabled = hasAgreed,
+                                role = Role.Button,
+                                onClick = onAccept
                             ),
-                            elevation = ButtonDefaults.buttonElevation(0.dp, 0.dp, 0.dp, 0.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp)
-                        ) {
-                            Text(
-                                text = "Agree & Continue",
-                                fontSize = 15.5.sp,
-                                color = Color.White,
-                                fontWeight = FontWeight.SemiBold,
-                                fontFamily = InterFontFamily
-                            )
-                        }
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Agree & Continue",
+                            fontSize = 16.sp,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = InterFontFamily,
+                            letterSpacing = (-0.2).sp
+                        )
+                    }
 
-                        Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(8.dp))
 
-                        // Decline Button
-                        TextButton(
-                            onClick = onDecline,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                text = "Decline & Exit App",
-                                fontSize = 14.sp,
-                                color = Color(0xFFFF3B30),
-                                fontWeight = FontWeight.Medium,
-                                fontFamily = InterFontFamily
-                            )
-                        }
-                    } else {
-                        Button(
-                            onClick = onBack,
-                            shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA)
-                            ),
-                            elevation = ButtonDefaults.buttonElevation(0.dp, 0.dp, 0.dp, 0.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp)
-                        ) {
-                            Text(
-                                text = "Close",
-                                fontSize = 15.sp,
-                                color = colors.textMain,
-                                fontWeight = FontWeight.SemiBold,
-                                fontFamily = InterFontFamily
-                            )
-                        }
+                    // Decline Link
+                    TextButton(
+                        onClick = onDecline,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "Decline & Exit App",
+                            fontSize = 13.5.sp,
+                            color = Color(0xFFEF4444),
+                            fontWeight = FontWeight.Medium,
+                            fontFamily = InterFontFamily
+                        )
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF0066FF))
+                            .clickable(role = Role.Button, onClick = onBack),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Close",
+                            fontSize = 15.sp,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = InterFontFamily
+                        )
                     }
                 }
             }
-        ) { paddingValues ->
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
-                contentPadding = PaddingValues(horizontal = 24.dp, vertical = 6.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                item {
-                    // Header Section with Clean Vector Graphic (No Shadows, No Pills)
-                    Column(
+        }
+    ) { paddingValues ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues),
+            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Samsung One UI 7.0 Viewing Area
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = if (isFirstLaunch) 20.dp else 4.dp, bottom = 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Shield specular icon badge with double edge glass border
+                    Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 12.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                            .size(62.dp)
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(
+                                Brush.linearGradient(
+                                    listOf(
+                                        Color(0xFF0066FF).copy(alpha = 0.22f),
+                                        Color(0xFF38BDF8).copy(alpha = 0.12f)
+                                    )
+                                )
+                            )
+                            .doubleEdgeGlassBorder(cornerRadius = 20.dp),
+                        contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Lucide.ShieldCheck,
                             contentDescription = null,
-                            tint = Color(0xFF007AFF),
-                            modifier = Modifier.size(38.dp)
-                        )
-
-                        Spacer(Modifier.height(12.dp))
-
-                        Text(
-                            text = "Privacy Policy & Terms",
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = InterFontFamily,
-                            color = colors.textMain,
-                            textAlign = TextAlign.Center
-                        )
-
-                        Spacer(Modifier.height(6.dp))
-
-                        Text(
-                            text = "Please review how we protect your data and the terms governing your experience in Chroma Studio.",
-                            fontSize = 14.sp,
-                            color = colors.textMuted,
-                            textAlign = TextAlign.Center,
-                            lineHeight = 20.sp,
-                            fontFamily = InterFontFamily,
-                            modifier = Modifier.padding(horizontal = 8.dp)
+                            tint = Color(0xFF38BDF8),
+                            modifier = Modifier.size(32.dp)
                         )
                     }
-                }
 
-                item {
-                    // Segmented Control Tabs (Clean Rectangular, No Pills)
+                    Spacer(Modifier.height(14.dp))
+
+                    Text(
+                        text = "Legal & Privacy",
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = InterFontFamily,
+                        color = if (isDark) Color.White else Color(0xFF0F172A),
+                        letterSpacing = (-0.6).sp,
+                        textAlign = TextAlign.Center
+                    )
+
+                    Spacer(Modifier.height(6.dp))
+
+                    Text(
+                        text = "Please review how Oscillom protects your creative rights, encrypted data, and privacy.",
+                        fontSize = 13.5.sp,
+                        color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
+                        textAlign = TextAlign.Center,
+                        lineHeight = 19.sp,
+                        fontFamily = InterFontFamily,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                }
+            }
+
+            // Samsung One UI Segmented Tab Bar inside a double edge glass container
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(if (isDark) Color(0xFF10141E) else Color(0xFFE2E8F0))
+                        .doubleEdgeGlassBorder(cornerRadius = 18.dp)
+                        .padding(4.dp)
+                ) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(9.dp))
-                            .background(if (colors.isDark) Color(0xFF1C1C1E) else Color(0xFFE5E5EA))
-                            .padding(2.5.dp)
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
+                        // Privacy Policy Tab
+                        val privacyActive = selectedTab == 0
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .height(34.dp)
-                                .clip(RoundedCornerShape(7.dp))
+                                .height(38.dp)
+                                .clip(RoundedCornerShape(14.dp))
                                 .background(
-                                    if (selectedTab == 0) (if (colors.isDark) Color(0xFF2C2C2E) else Color.White)
+                                    if (privacyActive) Color(0xFF0066FF)
                                     else Color.Transparent
                                 )
                                 .clickable { selectedTab = 0 },
@@ -242,105 +301,110 @@ fun PrivacyPolicyTermsScreen(
                             Text(
                                 text = "Privacy Policy",
                                 fontSize = 13.5.sp,
-                                fontWeight = if (selectedTab == 0) FontWeight.SemiBold else FontWeight.Normal,
-                                color = if (selectedTab == 0) colors.textMain else colors.textMuted,
+                                fontWeight = if (privacyActive) FontWeight.Bold else FontWeight.Medium,
+                                color = if (privacyActive) Color.White else (if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)),
                                 fontFamily = InterFontFamily
                             )
                         }
 
+                        // Terms & Conditions Tab
+                        val termsActive = selectedTab == 1
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .height(34.dp)
-                                .clip(RoundedCornerShape(7.dp))
+                                .height(38.dp)
+                                .clip(RoundedCornerShape(14.dp))
                                 .background(
-                                    if (selectedTab == 1) (if (colors.isDark) Color(0xFF2C2C2E) else Color.White)
+                                    if (termsActive) Color(0xFF0066FF)
                                     else Color.Transparent
                                 )
                                 .clickable { selectedTab = 1 },
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "Terms & Conditions",
+                                text = "Terms of Service",
                                 fontSize = 13.5.sp,
-                                fontWeight = if (selectedTab == 1) FontWeight.SemiBold else FontWeight.Normal,
-                                color = if (selectedTab == 1) colors.textMain else colors.textMuted,
+                                fontWeight = if (termsActive) FontWeight.Bold else FontWeight.Medium,
+                                color = if (termsActive) Color.White else (if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)),
                                 fontFamily = InterFontFamily
                             )
                         }
                     }
                 }
+            }
 
-                if (selectedTab == 0) {
-                    // Privacy Policy Content (Clean Typography, No Icons, No Numbers/Bullets)
-                    item {
-                        LegalParagraphSection(
+            // Legal Content Body inside a 26dp Squircle Card with Iconic Double Edge Glass Border
+            item {
+                OneUiGlassCard(
+                    cornerRadius = 26.dp,
+                    useDoubleEdgeGlassBorder = true,
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 18.dp)
+                ) {
+                    if (selectedTab == 0) {
+                        // Privacy Policy Content
+                        OneUiLegalItem(
                             title = "Information We Collect",
-                            description = "When you sign in with Google or create an account, we collect your display name, username, email address, profile avatar, and user bio. We do not collect unnecessary background telemetries or private device identifiers."
+                            description = "When you authenticate with Google, we securely receive your verified email, Google ID, display name, and avatar picture. We never collect or sell private device telemetry or advertising identifiers."
                         )
-                    }
-
-                    item {
-                        LegalParagraphSection(
+                        HorizontalDivider(
+                            color = if (isDark) Color(0x1FFFFFFF) else Color(0x14000000),
+                            thickness = 0.5.dp,
+                            modifier = Modifier.padding(vertical = 12.dp)
+                        )
+                        OneUiLegalItem(
                             title = "End-to-End Encryption",
-                            description = "Your chat messages, direct communications, and private voice notes are protected by client-side End-to-End Encryption (AES-GCM & RSA-2048). Chroma Studio servers and administrators cannot read or inspect your private conversations."
+                            description = "Direct chat communications and private audio notes are encrypted client-side using cryptographic standards (AES-GCM & RSA-2048). Oscillom servers cannot inspect your private direct conversations."
                         )
-                    }
-
-                    item {
-                        LegalParagraphSection(
-                            title = "Cloud Storage Architecture",
-                            description = "We securely utilize Firebase Firestore & Realtime Database for real-time presence and instant updates, Supabase for authenticated profile assets, and Cloudinary for optimized media delivery and gradient storage."
+                        HorizontalDivider(
+                            color = if (isDark) Color(0x1FFFFFFF) else Color(0x14000000),
+                            thickness = 0.5.dp,
+                            modifier = Modifier.padding(vertical = 12.dp)
                         )
-                    }
-
-                    item {
-                        LegalParagraphSection(
-                            title = "Zero Third-Party Tracking",
-                            description = "We will never sell, rent, or trade your personal data, artwork, or behavioral information to third-party data brokers or advertising networks. Your creative data belongs exclusively to you."
+                        OneUiLegalItem(
+                            title = "Secure Cloud Infrastructure",
+                            description = "User profiles and gradient works are safely stored on Google Cloud Firestore with strict security rules. High-resolution canvas renders are cached through encrypted media pipelines."
                         )
-                    }
-
-                    item {
-                        LegalParagraphSection(
-                            title = "Account & Data Deletion",
-                            description = "You have full sovereignty over your data. You can delete individual posts, clear your chat history, or request a complete permanent account purge from the Account Center settings at any time."
+                        HorizontalDivider(
+                            color = if (isDark) Color(0x1FFFFFFF) else Color(0x14000000),
+                            thickness = 0.5.dp,
+                            modifier = Modifier.padding(vertical = 12.dp)
                         )
-                    }
-                } else {
-                    // Terms & Conditions Content (Clean Typography, No Icons, No Numbers/Bullets)
-                    item {
-                        LegalParagraphSection(
+                        OneUiLegalItem(
+                            title = "Your Rights & Account Deletion",
+                            description = "You hold full sovereignty over your account. You can export your artworks, wipe chat logs, or permanently delete your entire profile and identity at any time from Settings."
+                        )
+                    } else {
+                        // Terms of Service Content
+                        OneUiLegalItem(
                             title = "Acceptance of Terms",
-                            description = "By creating an account or accessing Chroma Studio, you agree to abide by these Terms of Service. If you disagree with any part of these terms, please discontinue using the application."
+                            description = "By entering Oscillom or Chroma Studio, you agree to these Terms. If you disagree with any portion of the service terms, you may decline and exit the application."
                         )
-                    }
-
-                    item {
-                        LegalParagraphSection(
-                            title = "Creative Rights & Intellectual Property",
-                            description = "You retain 100% intellectual property ownership of any gradient artworks, visual compositions, flashes, and designs you produce. By publishing your work publicly, you grant other users permission to view and interact according to your remix preferences."
+                        HorizontalDivider(
+                            color = if (isDark) Color(0x1FFFFFFF) else Color(0x14000000),
+                            thickness = 0.5.dp,
+                            modifier = Modifier.padding(vertical = 12.dp)
                         )
-                    }
-
-                    item {
-                        LegalParagraphSection(
-                            title = "Community Safety & Conduct",
-                            description = "Chroma Studio is a creative and respectful space. Harassment, hate speech, unlawful media, impersonation, or intellectual property infringement are strictly prohibited and will lead to immediate account suspension."
+                        OneUiLegalItem(
+                            title = "Artistic Ownership & Copyright",
+                            description = "You retain 100% intellectual property ownership of every gradient, visual composition, story, and artwork you create. You decide your sharing, remix, and download permissions."
                         )
-                    }
-
-                    item {
-                        LegalParagraphSection(
-                            title = "Remix & Collaboration Guidelines",
-                            description = "When remixing another creator's published gradient work, proper artistic attribution is automatically maintained. You may not misrepresent original collaborative works as solely your own."
+                        HorizontalDivider(
+                            color = if (isDark) Color(0x1FFFFFFF) else Color(0x14000000),
+                            thickness = 0.5.dp,
+                            modifier = Modifier.padding(vertical = 12.dp)
                         )
-                    }
-
-                    item {
-                        LegalParagraphSection(
-                            title = "Service Availability & Modifications",
-                            description = "We continually enhance Chroma Studio. We reserve the right to update features, improve security protocols, or revise terms with reasonable notice to our creator community."
+                        OneUiLegalItem(
+                            title = "Community Safety & Mutual Respect",
+                            description = "Oscillom is dedicated to creative excellence. Harassment, unauthorized automated scraping, hate speech, or malicious content will result in immediate profile suspension."
+                        )
+                        HorizontalDivider(
+                            color = if (isDark) Color(0x1FFFFFFF) else Color(0x14000000),
+                            thickness = 0.5.dp,
+                            modifier = Modifier.padding(vertical = 12.dp)
+                        )
+                        OneUiLegalItem(
+                            title = "Platform Evolution",
+                            description = "We continuously refine rendering pipelines, real-time filters, and cloud synchronization. Terms may be updated periodically with in-app notice."
                         )
                     }
                 }
@@ -349,43 +413,29 @@ fun PrivacyPolicyTermsScreen(
     }
 }
 
-// ─── Professional Clean Legal Paragraph Section ───────────────────────
-// No icons, no numbers, no bullets, clean typography and minimal hairline divider.
-
 @Composable
-private fun LegalParagraphSection(
+private fun OneUiLegalItem(
     title: String,
     description: String
 ) {
-    val colors = LocalOscellionColors.current
+    val isDark = LocalOscellionColors.current.isDark
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp)
-    ) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = title,
-            fontSize = 15.5.sp,
+            fontSize = 15.sp,
             fontWeight = FontWeight.SemiBold,
-            color = colors.textMain,
-            fontFamily = InterFontFamily
+            color = if (isDark) Color.White else Color(0xFF0F172A),
+            fontFamily = InterFontFamily,
+            letterSpacing = (-0.2).sp
         )
-
-        Spacer(Modifier.height(5.dp))
-
+        Spacer(Modifier.height(4.dp))
         Text(
             text = description,
-            fontSize = 13.5.sp,
-            color = colors.textMuted,
-            lineHeight = 20.sp,
+            fontSize = 13.sp,
+            color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
+            lineHeight = 19.sp,
             fontFamily = InterFontFamily
-        )
-
-        Spacer(Modifier.height(12.dp))
-        HorizontalDivider(
-            color = if (colors.isDark) Color(0xFF2C2C2E) else Color(0xFFE5E5EA),
-            thickness = 0.5.dp
         )
     }
 }

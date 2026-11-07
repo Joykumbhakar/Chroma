@@ -37,6 +37,7 @@ import com.chroma.studio.chat.ui.components.OneUiGradientStyle
 import com.chroma.studio.ui.components.AppleSwitch
 import com.chroma.studio.ui.components.OneUiIconBadge
 import com.chroma.studio.ui.components.OneUiSettingsGroup
+import com.chroma.studio.ui.components.doubleEdgeGlassBorder
 import com.chroma.studio.ui.components.VerifiedBadge
 import com.chroma.studio.ui.theme.InterFontFamily
 import com.chroma.studio.ui.theme.LocalOscellionColors
@@ -346,7 +347,10 @@ private fun OneUiAestheticStep(
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(18.dp))
                             .background(itemBg)
-                            .border(1.dp, itemBorder, RoundedCornerShape(18.dp))
+                            .then(
+                                if (isSelected) Modifier.doubleEdgeGlassBorder(cornerRadius = 18.dp)
+                                else Modifier.border(1.dp, itemBorder, RoundedCornerShape(18.dp))
+                            )
                             .clickable { onSelectAccent(index) }
                             .padding(horizontal = 14.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -552,7 +556,7 @@ private fun OneUiLiveStudioCanvas(
                 .height(130.dp)
                 .clip(RoundedCornerShape(18.dp))
                 .background(if (isDarkMode) Color(0xFF0A0D14) else Color(0xFF0F172A))
-                .border(1.dp, activeAccent.copy(alpha = 0.25f), RoundedCornerShape(18.dp))
+                .doubleEdgeGlassBorder(cornerRadius = 18.dp)
                 .padding(12.dp)
         ) {
             // Top HUD

@@ -17,6 +17,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -232,18 +236,123 @@ fun OneUiStickyTopBar(
 }
 
 /**
- * Samsung One UI 7.0 Settings Group Container (26dp Squircle)
+ * Iconic Double Edge Glass Border Tokens & Modifier
+ * Signature Oscillom / Samsung One UI multi-layer specular rim
+ */
+val IconicGlassBorderOuterBrush = Brush.linearGradient(
+    0.00f to Color.White.copy(alpha = 0.58f),
+    0.28f to Color(0xFF38BDF8).copy(alpha = 0.42f),
+    0.65f to Color(0xFF0066FF).copy(alpha = 0.28f),
+    1.00f to Color.White.copy(alpha = 0.38f),
+    start = Offset.Zero,
+    end = Offset.Infinite
+)
+
+val IconicGlassBorderInnerBrush = Brush.linearGradient(
+    0.00f to Color.White.copy(alpha = 0.32f),
+    0.50f to Color.Transparent,
+    1.00f to Color(0xFF38BDF8).copy(alpha = 0.22f),
+    start = Offset.Zero,
+    end = Offset.Infinite
+)
+
+/**
+ * Iconic Double Edge Glass Border:
+ * Multi-layer specular glass rim combining:
+ * 1. Outer hairline stroke: Multi-stop linear gradient from crisp white specular catch (0.58f)
+ *    to cyan lens bloom (0.42f) and Galaxy AI deep blue (0.28f).
+ * 2. Inner refracted stroke: Inset specular meniscus highlight creating the signature double-edge refraction.
+ *
+ * Designed for Samsung One UI cards, squircle containers, dialogs, and panels.
+ * (Note: Never applied to pill/capsule shapes per standing user rules).
+ */
+fun Modifier.doubleEdgeGlassBorder(
+    cornerRadius: Dp = 26.dp,
+    outerWidth: Dp = 1.dp,
+    innerWidth: Dp = 1.dp,
+    inset: Dp = 1.2.dp,
+    outerBorderBrush: Brush = IconicGlassBorderOuterBrush,
+    innerBorderBrush: Brush = IconicGlassBorderInnerBrush
+): Modifier = this.drawWithCache {
+    val cornerRadiusPx = cornerRadius.toPx()
+    val outerStrokePx = outerWidth.toPx()
+    val innerStrokePx = innerWidth.toPx()
+    val halfOuter = outerStrokePx / 2f
+    val insetPx = outerStrokePx + inset.toPx()
+
+    onDrawWithContent {
+        drawContent()
+
+        // 1. Outer crisp specular rim
+        drawRoundRect(
+            brush = outerBorderBrush,
+            topLeft = Offset(halfOuter, halfOuter),
+            size = Size(size.width - outerStrokePx, size.height - outerStrokePx),
+            cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx),
+            style = Stroke(width = outerStrokePx)
+        )
+
+        // 2. Inner refracted glass edge (the iconic second edge)
+        if (size.width > insetPx * 2 && size.height > insetPx * 2) {
+            val innerCornerRadiusPx = (cornerRadiusPx - insetPx).coerceAtLeast(0f)
+            drawRoundRect(
+                brush = innerBorderBrush,
+                topLeft = Offset(insetPx, insetPx),
+                size = Size(size.width - insetPx * 2, size.height - insetPx * 2),
+                cornerRadius = CornerRadius(innerCornerRadiusPx, innerCornerRadiusPx),
+                style = Stroke(width = innerStrokePx)
+            )
+        }
+    }
+}
+
+/**
+ * Samsung One UI Glass Card:
+ * 26dp squircle container with deep frosted glass background and the iconic double edge glass border.
+ */
+@Composable
+fun OneUiGlassCard(
+    modifier: Modifier = Modifier,
+    cornerRadius: Dp = 26.dp,
+    backgroundColor: Color? = null,
+    useDoubleEdgeGlassBorder: Boolean = true,
+    contentPadding: PaddingValues = PaddingValues(16.dp),
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val isDark = isAppInDark
+    val cardBg = backgroundColor ?: if (isDark) Color(0xFF10141E) else Color(0xFFFFFFFF)
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(cornerRadius))
+            .background(cardBg)
+            .then(
+                if (useDoubleEdgeGlassBorder) {
+                    Modifier.doubleEdgeGlassBorder(cornerRadius = cornerRadius)
+                } else {
+                    Modifier
+                }
+            )
+            .padding(contentPadding),
+        content = content
+    )
+}
+
+/**
+ * Samsung One UI 7.0 Settings Group Container (26dp Squircle) with Iconic Double Edge Glass Border
  */
 @Composable
 fun OneUiSettingsGroup(
     title: String = "",
     header: String = title,
     modifier: Modifier = Modifier,
+    cornerRadius: Dp = 26.dp,
+    useDoubleEdgeGlassBorder: Boolean = true,
     content: @Composable ColumnScope.() -> Unit
 ) {
     val isDark = isAppInDark
-    val cardBg = if (isDark) Color(0xFF12141A) else Color(0xFFFFFFFF)
-    val cardBorder = if (isDark) Color(0xFF1F2430) else Color.Transparent
+    val cardBg = if (isDark) Color(0xFF10141E) else Color(0xFFFFFFFF)
     val textMuted = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
 
     val displayTitle = if (title.isNotEmpty()) title else header
@@ -264,9 +373,15 @@ fun OneUiSettingsGroup(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(26.dp))
+                .clip(RoundedCornerShape(cornerRadius))
                 .background(cardBg)
-                .border(1.dp, cardBorder, RoundedCornerShape(26.dp)),
+                .then(
+                    if (useDoubleEdgeGlassBorder) {
+                        Modifier.doubleEdgeGlassBorder(cornerRadius = cornerRadius)
+                    } else {
+                        Modifier.border(1.dp, if (isDark) Color(0xFF1F2430) else Color.Transparent, RoundedCornerShape(cornerRadius))
+                    }
+                ),
             content = content
         )
     }

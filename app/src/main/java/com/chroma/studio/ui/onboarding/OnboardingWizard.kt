@@ -36,6 +36,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.chroma.studio.data.DiscoverRepository
+import com.chroma.studio.ui.components.OneUiGlassCard
+import com.chroma.studio.ui.components.doubleEdgeGlassBorder
+import com.chroma.studio.ui.theme.InterFontFamily
 import com.composables.icons.lucide.*
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -404,8 +407,8 @@ fun OnboardingWizard(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clip(RoundedCornerShape(14.dp))
-                                            .background(Color(0xFF101420))
-                                            .border(BorderStroke(1.dp, Color(0x33FFFFFF)), RoundedCornerShape(14.dp))
+                                            .background(Color(0xFF0F1422))
+                                            .doubleEdgeGlassBorder(cornerRadius = 16.dp)
                                             .padding(horizontal = 16.dp, vertical = 14.dp)
                                     ) {
                                         BasicTextField(
@@ -582,8 +585,8 @@ fun OnboardingWizard(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clip(RoundedCornerShape(14.dp))
-                                            .background(Color(0xFF101420))
-                                            .border(BorderStroke(1.dp, Color(0x33FFFFFF)), RoundedCornerShape(14.dp))
+                                            .background(Color(0xFF0F1422))
+                                            .doubleEdgeGlassBorder(cornerRadius = 16.dp)
                                             .clickable { showDatePicker = true }
                                             .padding(horizontal = 16.dp, vertical = 14.dp)
                                     ) {
@@ -632,8 +635,8 @@ fun OnboardingWizard(
                                             .fillMaxWidth()
                                             .height(100.dp)
                                             .clip(RoundedCornerShape(14.dp))
-                                            .background(Color(0xFF101420))
-                                            .border(BorderStroke(1.dp, Color(0x33FFFFFF)), RoundedCornerShape(14.dp))
+                                            .background(Color(0xFF0F1422))
+                                            .doubleEdgeGlassBorder(cornerRadius = 16.dp)
                                             .padding(horizontal = 16.dp, vertical = 12.dp)
                                     ) {
                                         if (bio.isEmpty()) {
@@ -689,15 +692,9 @@ fun OnboardingWizard(
                                         val isSelected = selectedInterests.contains(tag)
                                         Box(
                                             modifier = Modifier
-                                                .clip(RoundedCornerShape(14.dp))
-                                                .background(if (isSelected) Color(0xFF0066FF) else Color(0xFF101420))
-                                                .border(
-                                                    BorderStroke(
-                                                        1.dp,
-                                                        if (isSelected) Color(0xFF60A5FA) else Color(0x2EFFFFFF)
-                                                    ),
-                                                    RoundedCornerShape(14.dp)
-                                                )
+                                                .clip(RoundedCornerShape(18.dp))
+                                                .background(if (isSelected) Color(0xFF0066FF) else Color(0xFF10141E))
+                                                .doubleEdgeGlassBorder(cornerRadius = 18.dp)
                                                 .clickable {
                                                     if (isSelected) {
                                                         if (selectedInterests.size > 1) selectedInterests.remove(tag)
